@@ -1,0 +1,10 @@
+{
+	"name": "afora-playground",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "bun build.ts && bun ../dist/playground/server.js --project .. --source",
+		"check": "bun check",
+		"test": "bun test ./runner.test.ts"
+	}
+}

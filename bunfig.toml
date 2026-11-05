@@ -1,0 +1,3 @@
+[test]
+# examples/ have their own dependencies: run them with `bun run test:interop`
+root = "src"

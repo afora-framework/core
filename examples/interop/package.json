@@ -1,0 +1,15 @@
+{
+	"name": "afora-interop",
+	"private": true,
+	"type": "module",
+	"devDependencies": {
+		"@hono/standard-validator": "^0.4.1",
+		"@standard-schema/utils": "^0.3.0",
+		"@tanstack/form-core": "^1.33.5",
+		"@trpc/server": "11",
+		"@types/bun": "^1.4.4",
+		"hono": "^4.13.14",
+		"slugify": "^1.6.9",
+		"typebox": "1.4.3"
+	}
+}

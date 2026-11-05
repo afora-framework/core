@@ -1,0 +1,32 @@
+import { blueprintBuilderOf } from "../core/blueprint/blueprint";
+import { entityBuilderOf } from "../core/entity/entity";
+import { Id } from "./properties/identity";
+import { CreatedAt, DeletedAt, UpdatedAt } from "./properties/time";
+import { StdRecordPlugins } from "./record-plugins";
+import { generateId } from "./runtime";
+
+/** The identity of every `std` entity. */
+const Identity = blueprintBuilderOf()(() => ({
+	id: Id,
+	createdAt: CreatedAt,
+	updatedAt: UpdatedAt,
+	deletedAt: DeletedAt,
+}));
+
+/**
+ * An entity of `blueprint`: a record with an `id` (a UUID v7, in
+ * `options.unique`) and a `createdAt`, both made when missing from its value,
+ * an `updatedAt` set by each change, and a `deletedAt` set by `destroy`, after
+ * which it no longer changes, e.g.
+ * `class User extends entityOf(blueprintOf((ctx) => ({ name: ctx.string }))) {}`.
+ * As a record, the class can be a field of another blueprint, e.g.
+ * `{ author: User }`, with `optionalOf` and `listOf`. `options.plugins` picks
+ * from the standard plugins, as `(ctx) => [ctx.publishable]`, or takes any
+ * plugin made by `recordPluginOf`.
+ */
+export const entityOf = entityBuilderOf({
+	identity: Identity,
+	generateId,
+	now: () => new Date().toISOString(),
+	plugins: [StdRecordPlugins],
+});

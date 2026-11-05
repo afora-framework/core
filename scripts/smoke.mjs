@@ -1,0 +1,88 @@
+// Runs the built package on plain Node: `bun run smoke`.
+import assert from "node:assert/strict";
+import { Type } from "typebox";
+import {
+	blueprintOf,
+	DeletedEntity,
+	entityOf,
+	Id,
+	MASK,
+	Password,
+	PasswordHasherRequired,
+	propertyOf,
+	recordOf,
+} from "../dist/index.js";
+
+// property
+const Name = propertyOf({
+	name: "name",
+	schema: Type.String({ minLength: 3 }),
+	default: "Demo",
+});
+assert.equal(new Name("Ana").value, "Ana");
+assert.throws(() => new Name("a"));
+
+// blueprint
+const Address = blueprintOf((ctx) => ({ street: ctx.string, zip: ctx.string }));
+const UserBlueprint = blueprintOf((ctx) => ({
+	id: ctx.id,
+	email: ctx.email,
+	address: Address,
+	password: ctx.password,
+}));
+assert.deepEqual(Object.keys(UserBlueprint.properties).sort(), [
+	"address",
+	"email",
+	"id",
+	"password",
+]);
+
+// id
+const first = Id.generate().value;
+const second = Id.generate().value;
+assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-/);
+assert.ok(first < second);
+
+// password: native argon2 needs Node >= 24.7
+let hash = Password.demo().value;
+try {
+	const password = await Password.hash("Str0ng!pass");
+	hash = password.value;
+	assert.match(hash, /^\$argon2id\$v=19\$m=65536,t=2,p=1\$/);
+	assert.equal(await password.verify("Str0ng!pass"), true);
+	assert.equal(await password.verify("wrong"), false);
+	assert.equal(password.verifySync("Str0ng!pass"), true);
+	console.log("password: native argon2 used");
+} catch (error) {
+	assert.ok(error instanceof PasswordHasherRequired);
+	console.log("password: native argon2 missing, explicit exception thrown");
+}
+
+// record with a nested blueprint and masking
+class User extends recordOf(UserBlueprint) {}
+const user = new User({
+	id: first,
+	email: "ana@example.com",
+	address: { street: "Main St", zip: "01310-100" },
+	password: hash,
+});
+assert.equal(user.address.street, "Main St");
+const json = JSON.parse(JSON.stringify(user));
+assert.equal(json.password, MASK);
+assert.equal(json.email, "ana@example.com");
+
+// entity with identity, as a field of another entity
+class Author extends entityOf(
+	blueprintOf((ctx) => ({ name: ctx.string })),
+	{ change: ["name"] },
+) {}
+class Post extends entityOf(blueprintOf(() => ({ author: Author }))) {}
+const post = new Post({ author: { name: "Ana" } });
+assert.match(post.author.id, /^[0-9a-f]{8}-[0-9a-f]{4}-7/);
+assert.equal(post.author.updatedAt, undefined);
+post.author.change.name("Bia");
+assert.equal(typeof post.author.updatedAt, "string");
+post.author.destroy();
+assert.throws(() => post.author.change.name("Cy"), DeletedEntity);
+
+console.log(`smoke ok on node ${process.version}`);

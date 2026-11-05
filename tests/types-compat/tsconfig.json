@@ -1,0 +1,9 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		// consumer.ts imports the packed package; in the editor, point it at the source
+		"paths": { "@afora/core": ["../../src/index.ts"] }
+	},
+	"include": ["**/*.ts"],
+	"exclude": ["node_modules"]
+}

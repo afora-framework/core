@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>afora — playground</title>
+	<link rel="stylesheet" href="/client.css" />
+	<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+	<header class="topbar">
+		<div class="brand">afora<span class="brand-dot">.</span><span class="brand-label">playground</span></div>
+		<div class="project-badge"><span class="live-dot"></span><span id="project-name">Conectando ao projeto…</span><span class="local-label">LOCAL</span></div>
+		<button type="button" id="refresh" class="quiet" title="Reler package.json, tsconfig e dependências">↻ Atualizar projeto</button>
+	</header>
+	<div class="workspace">
+		<aside>
+			<div class="section-label">SEU LABORATÓRIO</div>
+			<h1>Ideias em código.</h1>
+			<p class="intro">Explore os tipos.<br />Execute. Veja acontecer.</p>
+			<div class="section-heading"><h2>EXPERIMENTOS</h2><button type="button" id="new" class="icon-button" aria-label="Novo experimento">+</button></div>
+			<div id="examples" class="example-list"></div>
+			<div class="section-heading"><h2>SALVOS NO PROJETO</h2></div>
+			<div id="saved" class="saved-list"><p class="muted">Seus experimentos aparecem aqui.</p></div>
+			<details class="project-details" open>
+				<summary>Dependências do projeto <span id="dependency-count"></span></summary>
+				<p class="muted" id="dependency-note">Versões de node_modules</p>
+				<div id="dependencies"></div>
+				<details class="manifest-details"><summary>Ver package.json</summary><pre id="manifest"></pre></details>
+			</details>
+			<div class="sidebar-footer"><span class="live-dot"></span><span id="runtime-label">Bun · execução local</span></div>
+		</aside>
+		<main>
+			<div class="editor-toolbar">
+				<div class="file-label"><span class="ts-icon">TS</span><input id="experiment-name" aria-label="Nome do experimento" value="Primeiros passos" maxlength="80" /><span id="save-state">rascunho automático</span></div>
+				<div class="actions"><button type="button" id="save" class="quiet">Salvar</button><button type="button" id="stop" class="stop" hidden>■ Parar</button><button type="button" id="run" class="primary" disabled>▶ Executar <kbd>⌘ ↵</kbd></button></div>
+			</div>
+			<div class="panes">
+				<section class="code-pane" aria-label="Editor de código TypeScript"><div id="editor"><div class="loading">Preparando seu editor…</div></div></section>
+				<section class="output-pane" aria-label="Resultado da execução">
+					<div class="output-toolbar"><div class="tabs"><button type="button" id="console-tab" class="tab active">Console <span id="log-count">0</span></button><button type="button" id="problems-tab" class="tab">Problemas <span id="problem-count">0</span></button></div><button type="button" id="clear" class="icon-button" aria-label="Limpar console" title="Limpar console">⌫</button></div>
+					<div id="console" class="output-scroll"><div class="empty-state"><div class="empty-symbol">›_</div><h2>Espaço para experimentar.</h2><p>Execute seu código para explorar<br />valores, objetos e exceções.</p><span>⌘ / Ctrl + Enter para executar</span></div></div>
+					<div id="problems" class="output-scroll" hidden></div>
+				</section>
+			</div>
+			<footer class="statusbar"><span id="status" role="status">Carregando…</span><span>TypeScript <span class="divider">/</span> <span id="cursor">Ln 1, Col 1</span></span></footer>
+		</main>
+	</div>
+	<div id="toast" role="status" hidden></div>
+	<script type="module" src="/client.js"></script>
+</body>
+</html>
