@@ -1,0 +1,63 @@
+{
+	"name": "@afora/codegen",
+	"version": "0.0.1",
+	"description": "Generates idiomatic @afora/core TypeScript from an afora.json spec, and extracts the spec back from an application.",
+	"keywords": [
+		"afora",
+		"codegen",
+		"domain-modeling",
+		"typebox",
+		"json-schema"
+	],
+	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
+	"license": "MIT",
+	"homepage": "https://github.com/Hoyasumii/afora/tree/main/packages/codegen#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Hoyasumii/afora.git",
+		"directory": "packages/codegen"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./afora.schema.json": "./afora.schema.json",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"afora.schema.json"
+	],
+	"bin": {
+		"afora-codegen": "./dist/cli.js"
+	},
+	"engines": {
+		"bun": ">=1.4.4",
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"typecheck": "bun check",
+		"schema": "bun scripts/schema.ts",
+		"build": "rm -rf dist && bun scripts/schema.ts && bun build ./src/index.ts ./src/cli.ts --outdir ./dist --target node --format esm --packages external --tsconfig-override tsconfig.build.json && tsc -p tsconfig.build.json && bun ../../scripts/add-dts-extensions.ts dist",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"typebox": "^1.4.3"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.4.4"
+	},
+	"peerDependencies": {
+		"@afora/core": ">=0.0.2"
+	}
+}

@@ -1,0 +1,515 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"type": "object",
+	"required": [
+		"version"
+	],
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"version": {
+			"type": "number",
+			"const": 1
+		},
+		"name": {
+			"type": "string",
+			"description": "The name of the generated application."
+		},
+		"extends": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			},
+			"description": "Other specs whose declarations this one uses: relative paths to their afora.json, or package names."
+		},
+		"output": {
+			"type": "object",
+			"required": [
+				"dir"
+			],
+			"properties": {
+				"dir": {
+					"type": "string",
+					"description": "Where the code is generated, relative to the project. src/domain by default."
+				}
+			},
+			"additionalProperties": false
+		},
+		"properties": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"anyOf": [
+						{
+							"type": "object",
+							"required": [
+								"base"
+							],
+							"properties": {
+								"base": {
+									"type": "string",
+									"description": "A Std property (lowercase) or another declared property."
+								},
+								"with": {
+									"type": "object",
+									"patternProperties": {
+										"^.*$": {}
+									},
+									"description": "Options of the property: title, description, examples, deprecated, readOnly, writeOnly, default; min, max, pattern for strings; min, max, exclusiveMin, exclusiveMax, multipleOf for numbers. See afora_catalog for what each property takes."
+								},
+								"optional": {
+									"type": "boolean"
+								}
+							},
+							"additionalProperties": false
+						},
+						{
+							"type": "object",
+							"required": [
+								"enum"
+							],
+							"properties": {
+								"enum": {
+									"type": "array",
+									"items": {
+										"anyOf": [
+											{
+												"type": "string"
+											},
+											{
+												"type": "number"
+											}
+										]
+									},
+									"minItems": 1,
+									"uniqueItems": true
+								},
+								"name": {
+									"type": "string"
+								},
+								"default": {
+									"anyOf": [
+										{
+											"type": "string"
+										},
+										{
+											"type": "number"
+										}
+									]
+								},
+								"optional": {
+									"type": "boolean"
+								}
+							},
+							"additionalProperties": false
+						},
+						{
+							"type": "object",
+							"required": [
+								"opaque",
+								"import"
+							],
+							"properties": {
+								"opaque": {
+									"type": "boolean",
+									"const": true
+								},
+								"ref": {
+									"type": "string",
+									"description": "The exported name; the declared name by default."
+								},
+								"import": {
+									"type": "string",
+									"description": "The module it is exported from, relative to the output directory."
+								}
+							},
+							"additionalProperties": false
+						}
+					],
+					"description": "A custom property: `base` + `with` (a refined Std property), an `enum`, or an `opaque` import of a hand-written property."
+				}
+			},
+			"additionalProperties": false,
+			"description": "Custom properties, by PascalCase name."
+		},
+		"blueprints": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": [
+						"fields"
+					],
+					"properties": {
+						"fields": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"$ref": "#/$defs/Field"
+								}
+							},
+							"additionalProperties": false,
+							"description": "Fields by key."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Object shapes without identity, by name."
+		},
+		"records": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": [
+						"fields"
+					],
+					"properties": {
+						"fields": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"$ref": "#/$defs/Field"
+								}
+							},
+							"additionalProperties": false,
+							"description": "Fields by key."
+						},
+						"sensitive": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Keys always masked by toJSON(); `password` properties already are."
+						},
+						"unique": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Keys that are unique (repositories get findBy<Key>); `slug` properties already are."
+						},
+						"change": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Keys that get a change.<key>(value) method."
+						},
+						"plugins": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Std record plugins: publishable, archivable, taggable, ownable, authenticatable."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Value objects (records), by name."
+		},
+		"entities": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": [
+						"fields"
+					],
+					"properties": {
+						"fields": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"$ref": "#/$defs/Field"
+								}
+							},
+							"additionalProperties": false,
+							"description": "Fields by key."
+						},
+						"sensitive": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Keys always masked by toJSON(); `password` properties already are."
+						},
+						"unique": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Keys that are unique (repositories get findBy<Key>); `slug` properties already are."
+						},
+						"change": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Keys that get a change.<key>(value) method."
+						},
+						"plugins": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Std record plugins: publishable, archivable, taggable, ownable, authenticatable."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Entities (a record plus id, createdAt, updatedAt, deletedAt), by name."
+		},
+		"environments": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": [
+						"fields"
+					],
+					"properties": {
+						"fields": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"$ref": "#/$defs/Field"
+								}
+							},
+							"additionalProperties": false,
+							"description": "Fields by key."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Environment variables, read from process.env, by name."
+		},
+		"repositories": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": [
+						"entity",
+						"actions"
+					],
+					"properties": {
+						"entity": {
+							"type": "string",
+							"description": "The entity it stores."
+						},
+						"actions": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), create, update, delete, count."
+						},
+						"relations": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Repositories of every entity the entity holds, at any depth."
+						},
+						"environments": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Environments it depends on."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Repositories of entities, by name."
+		},
+		"useCases": {
+			"description": "Reserved. Not supported in v1."
+		}
+	},
+	"additionalProperties": false,
+	"title": "afora.json",
+	"$defs": {
+		"Field": {
+			"anyOf": [
+				{
+					"type": "string",
+					"pattern": "^[A-Za-z][A-Za-z0-9]*(\\[\\])?\\??$",
+					"description": "Shorthand: a Std property (\"email\"), a declaration (\"Address\"), \"Age?\" for optional, \"string[]\" for a list, \"User[]?\" for an optional list."
+				},
+				{
+					"type": "object",
+					"required": [
+						"type"
+					],
+					"properties": {
+						"type": {
+							"type": "string",
+							"pattern": "^[A-Za-z][A-Za-z0-9]*$",
+							"description": "A Std property (lowercase: email, text, integer...) or a declaration of this spec (PascalCase)."
+						},
+						"with": {
+							"type": "object",
+							"patternProperties": {
+								"^.*$": {}
+							},
+							"description": "Options of the property: title, description, examples, deprecated, readOnly, writeOnly, default; min, max, pattern for strings; min, max, exclusiveMin, exclusiveMax, multipleOf for numbers. See afora_catalog for what each property takes."
+						},
+						"optional": {
+							"type": "boolean",
+							"description": "The key may be absent."
+						},
+						"list": {
+							"anyOf": [
+								{
+									"type": "boolean"
+								},
+								{
+									"type": "object",
+									"properties": {
+										"minItems": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"maxItems": {
+											"type": "integer",
+											"minimum": 0
+										}
+									},
+									"additionalProperties": false,
+									"description": "Bounds of a list."
+								}
+							],
+							"description": "A list of the type (the options in `with` apply to each item). `true` or { minItems, maxItems }."
+						}
+					},
+					"additionalProperties": false
+				},
+				{
+					"type": "object",
+					"required": [
+						"enum"
+					],
+					"properties": {
+						"enum": {
+							"type": "array",
+							"items": {
+								"anyOf": [
+									{
+										"type": "string"
+									},
+									{
+										"type": "number"
+									}
+								]
+							},
+							"minItems": 1,
+							"uniqueItems": true
+						},
+						"name": {
+							"type": "string"
+						},
+						"default": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "number"
+								}
+							]
+						},
+						"optional": {
+							"type": "boolean",
+							"description": "The key may be absent."
+						},
+						"list": {
+							"anyOf": [
+								{
+									"type": "boolean"
+								},
+								{
+									"type": "object",
+									"properties": {
+										"minItems": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"maxItems": {
+											"type": "integer",
+											"minimum": 0
+										}
+									},
+									"additionalProperties": false,
+									"description": "Bounds of a list."
+								}
+							],
+							"description": "A list of the type (the options in `with` apply to each item). `true` or { minItems, maxItems }."
+						}
+					},
+					"additionalProperties": false
+				},
+				{
+					"type": "object",
+					"required": [
+						"fields"
+					],
+					"properties": {
+						"fields": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"$ref": "#/$defs/Field"
+								}
+							},
+							"additionalProperties": false,
+							"description": "Fields by key."
+						},
+						"optional": {
+							"type": "boolean",
+							"description": "The key may be absent."
+						},
+						"list": {
+							"anyOf": [
+								{
+									"type": "boolean"
+								},
+								{
+									"type": "object",
+									"properties": {
+										"minItems": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"maxItems": {
+											"type": "integer",
+											"minimum": 0
+										}
+									},
+									"additionalProperties": false,
+									"description": "Bounds of a list."
+								}
+							],
+							"description": "A list of the type (the options in `with` apply to each item). `true` or { minItems, maxItems }."
+						}
+					},
+					"additionalProperties": false,
+					"description": "A nested object, declared in place."
+				}
+			],
+			"description": "A field of a blueprint, record, entity or environment."
+		}
+	}
+}

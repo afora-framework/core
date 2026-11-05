@@ -1,0 +1,251 @@
+import { type TSchema, Type } from "typebox";
+
+const NAME = "^[A-Z][A-Za-z0-9]*$";
+const KEY = "^[A-Za-z_$][A-Za-z0-9_$]*$";
+
+const Bounds = Type.Object(
+	{
+		minItems: Type.Optional(Type.Integer({ minimum: 0 })),
+		maxItems: Type.Optional(Type.Integer({ minimum: 0 })),
+	},
+	{ additionalProperties: false, description: "Bounds of a list." },
+);
+
+const Modifiers = {
+	optional: Type.Optional(
+		Type.Boolean({ description: "The key may be absent." }),
+	),
+	list: Type.Optional(
+		Type.Union([Type.Boolean(), Bounds], {
+			description:
+				"A list of the type (the options in `with` apply to each item). `true` or { minItems, maxItems }.",
+		}),
+	),
+};
+
+const EnumValues = Type.Array(Type.Union([Type.String(), Type.Number()]), {
+	minItems: 1,
+	uniqueItems: true,
+});
+
+const WithOptions = Type.Record(Type.String(), Type.Unknown(), {
+	description:
+		"Options of the property: title, description, examples, deprecated, readOnly, writeOnly, default; min, max, pattern for strings; min, max, exclusiveMin, exclusiveMax, multipleOf for numbers. See afora_catalog for what each property takes.",
+});
+
+const FieldRef = Type.Ref("#/$defs/Field");
+
+const FieldsOf = Type.Record(Type.String({ pattern: KEY }), FieldRef, {
+	additionalProperties: false,
+	description: "Fields by key.",
+});
+
+/** A field: shorthand string, or the object form. */
+export const fieldDefinition = Type.Union(
+	[
+		Type.String({
+			pattern: "^[A-Za-z][A-Za-z0-9]*(\\[\\])?\\??$",
+			description:
+				'Shorthand: a Std property ("email"), a declaration ("Address"), "Age?" for optional, "string[]" for a list, "User[]?" for an optional list.',
+		}),
+		Type.Object(
+			{
+				type: Type.String({
+					pattern: "^[A-Za-z][A-Za-z0-9]*$",
+					description:
+						"A Std property (lowercase: email, text, integer...) or a declaration of this spec (PascalCase).",
+				}),
+				with: Type.Optional(WithOptions),
+				...Modifiers,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				enum: EnumValues,
+				name: Type.Optional(Type.String()),
+				default: Type.Optional(Type.Union([Type.String(), Type.Number()])),
+				...Modifiers,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{ fields: FieldsOf, ...Modifiers },
+			{
+				additionalProperties: false,
+				description: "A nested object, declared in place.",
+			},
+		),
+	],
+	{ description: "A field of a blueprint, record, entity or environment." },
+);
+
+const Fields = FieldsOf;
+
+const Names = (schema: TSchema, description: string) =>
+	Type.Record(Type.String({ pattern: NAME }), schema, {
+		additionalProperties: false,
+		description,
+	});
+
+const Property = Type.Union(
+	[
+		Type.Object(
+			{
+				base: Type.String({
+					description:
+						"A Std property (lowercase) or another declared property.",
+				}),
+				with: Type.Optional(WithOptions),
+				optional: Type.Optional(Type.Boolean()),
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				enum: EnumValues,
+				name: Type.Optional(Type.String()),
+				default: Type.Optional(Type.Union([Type.String(), Type.Number()])),
+				optional: Type.Optional(Type.Boolean()),
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				opaque: Type.Literal(true),
+				ref: Type.Optional(
+					Type.String({
+						description: "The exported name; the declared name by default.",
+					}),
+				),
+				import: Type.String({
+					description:
+						"The module it is exported from, relative to the output directory.",
+				}),
+			},
+			{ additionalProperties: false },
+		),
+	],
+	{
+		description:
+			"A custom property: `base` + `with` (a refined Std property), an `enum`, or an `opaque` import of a hand-written property.",
+	},
+);
+
+const StringList = (description: string) =>
+	Type.Array(Type.String(), { description });
+
+const RecordDeclaration = Type.Object(
+	{
+		fields: Fields,
+		sensitive: Type.Optional(
+			StringList(
+				"Keys always masked by toJSON(); `password` properties already are.",
+			),
+		),
+		unique: Type.Optional(
+			StringList(
+				"Keys that are unique (repositories get findBy<Key>); `slug` properties already are.",
+			),
+		),
+		change: Type.Optional(
+			StringList("Keys that get a change.<key>(value) method."),
+		),
+		plugins: Type.Optional(
+			StringList(
+				"Std record plugins: publishable, archivable, taggable, ownable, authenticatable.",
+			),
+		),
+	},
+	{ additionalProperties: false },
+);
+
+const RepositoryDeclaration = Type.Object(
+	{
+		entity: Type.String({ description: "The entity it stores." }),
+		actions: Type.Array(Type.String(), {
+			description:
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), create, update, delete, count.",
+		}),
+		relations: Type.Optional(
+			StringList(
+				"Repositories of every entity the entity holds, at any depth.",
+			),
+		),
+		environments: Type.Optional(StringList("Environments it depends on.")),
+	},
+	{ additionalProperties: false },
+);
+
+/** The JSON Schema of `afora.json`, version 1. */
+export const specSchema = Type.Object(
+	{
+		$schema: Type.Optional(Type.String()),
+		version: Type.Literal(1),
+		name: Type.Optional(
+			Type.String({ description: "The name of the generated application." }),
+		),
+		extends: Type.Optional(
+			Type.Array(Type.String(), {
+				description:
+					"Other specs whose declarations this one uses: relative paths to their afora.json, or package names.",
+			}),
+		),
+		output: Type.Optional(
+			Type.Object(
+				{
+					dir: Type.String({
+						description:
+							"Where the code is generated, relative to the project. src/domain by default.",
+					}),
+				},
+				{ additionalProperties: false },
+			),
+		),
+		properties: Type.Optional(
+			Names(Property, "Custom properties, by PascalCase name."),
+		),
+		blueprints: Type.Optional(
+			Names(
+				Type.Object({ fields: Fields }, { additionalProperties: false }),
+				"Object shapes without identity, by name.",
+			),
+		),
+		records: Type.Optional(
+			Names(RecordDeclaration, "Value objects (records), by name."),
+		),
+		entities: Type.Optional(
+			Names(
+				RecordDeclaration,
+				"Entities (a record plus id, createdAt, updatedAt, deletedAt), by name.",
+			),
+		),
+		environments: Type.Optional(
+			Names(
+				Type.Object({ fields: Fields }, { additionalProperties: false }),
+				"Environment variables, read from process.env, by name.",
+			),
+		),
+		repositories: Type.Optional(
+			Names(RepositoryDeclaration, "Repositories of entities, by name."),
+		),
+		useCases: Type.Optional(
+			Type.Unknown({ description: "Reserved. Not supported in v1." }),
+		),
+	},
+	{
+		additionalProperties: false,
+		title: "afora.json",
+		$defs: { Field: fieldDefinition },
+	},
+);
+
+/** The schema of one declaration, by kind (as `afora_spec_upsert` takes it). */
+export const declarationSchemas = {
+	property: Property,
+	blueprint: Type.Object({ fields: Fields }, { additionalProperties: false }),
+	record: RecordDeclaration,
+	entity: RecordDeclaration,
+	environment: Type.Object({ fields: Fields }, { additionalProperties: false }),
+	repository: RepositoryDeclaration,
+} as const;

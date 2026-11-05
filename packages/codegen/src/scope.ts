@@ -1,0 +1,196 @@
+import { catalog } from "./catalog";
+import { isDeclarationName, isObject } from "./spec/field";
+import {
+	COLLECTIONS,
+	type DeclKind,
+	KIND_OF,
+	type ResolvedSpec,
+	type SpecIssue,
+} from "./spec/types";
+
+/** A declaration of the spec, or of one it extends. */
+export interface Decl {
+	readonly kind: DeclKind;
+	readonly name: string;
+	/** The declaration as written (compared by identity to tell two apart). */
+	readonly spec: Record<string, unknown>;
+	/** The label of the spec that declares it. */
+	readonly origin: string;
+	/** For an inherited declaration: the reference of the extended spec it comes through. */
+	readonly via?: string;
+}
+
+export interface Scope {
+	readonly decls: ReadonlyMap<string, Decl>;
+	/** The extended specs, by reference, in order. */
+	readonly extended: ReadonlyMap<string, ResolvedSpec>;
+}
+
+export function issue(
+	path: readonly (string | number)[],
+	code: string,
+	message: string,
+): SpecIssue {
+	return { path, code, message };
+}
+
+function labelOf(resolved: ResolvedSpec, ref: string): string {
+	return typeof resolved.spec?.name === "string" ? resolved.spec.name : ref;
+}
+
+/** Every declaration `resolved` declares or inherits, in order. */
+function declarationsOf(
+	resolved: ResolvedSpec,
+	ref: string,
+	seen: Set<ResolvedSpec>,
+): Decl[] {
+	if (seen.has(resolved)) return [];
+	seen.add(resolved);
+	const found: Decl[] = [];
+	for (const [childRef, child] of Object.entries(resolved.extends ?? {})) {
+		found.push(...declarationsOf(child, childRef, seen));
+	}
+	const spec = resolved.spec as unknown as Record<string, unknown>;
+	for (const collection of COLLECTIONS) {
+		const declared = spec?.[collection];
+		if (!isObject(declared)) continue;
+		for (const [name, value] of Object.entries(declared)) {
+			if (!isObject(value)) continue;
+			found.push({
+				kind: KIND_OF[collection],
+				name,
+				spec: value,
+				origin: labelOf(resolved, ref),
+			});
+		}
+	}
+	return found;
+}
+
+/**
+ * The declarations in scope: those of `spec` and of the specs it extends.
+ * Reports what `applicationOf` would throw for: a name taken twice, or by
+ * different declarations of different specs.
+ */
+export function scopeOf(
+	spec: Record<string, unknown>,
+	extended: Readonly<Record<string, ResolvedSpec>>,
+	issues: SpecIssue[],
+): Scope {
+	const decls = new Map<string, Decl>();
+	const byObject = new Map<object, Decl>();
+	const extendedRefs = new Map<string, ResolvedSpec>();
+	const reserved = new Set(catalog().reservedDeclarationNames);
+
+	const refs = Array.isArray(spec.extends) ? spec.extends : [];
+	const seen = new Set<ResolvedSpec>();
+	for (const [index, ref] of refs.entries()) {
+		if (typeof ref !== "string") continue;
+		const resolved = Object.hasOwn(extended, ref) ? extended[ref] : undefined;
+		if (!resolved) {
+			issues.push(
+				issue(
+					["extends", index],
+					"unresolved_extends",
+					`The spec "${ref}" that this one extends was not loaded. Give a relative path to its afora.json or a package that ships one.`,
+				),
+			);
+			continue;
+		}
+		extendedRefs.set(ref, resolved);
+		for (const decl of declarationsOf(resolved, ref, seen)) {
+			const same = decls.get(decl.name);
+			if (same) {
+				if (same.spec === decl.spec) continue;
+				issues.push(
+					issue(
+						["extends", index],
+						"extends_conflict",
+						`${decl.kind} "${decl.name}" of "${decl.origin}" is a different declaration from the ${same.kind} "${same.name}" of "${same.origin}". Rename one of them.`,
+					),
+				);
+				continue;
+			}
+			const other = byObject.get(decl.spec);
+			if (other) {
+				issues.push(
+					issue(
+						["extends", index],
+						"extends_conflict",
+						`The same ${decl.kind} is "${other.name}" in "${other.origin}" and "${decl.name}" in "${decl.origin}".`,
+					),
+				);
+				continue;
+			}
+			const inherited: Decl = { ...decl, via: ref };
+			decls.set(decl.name, inherited);
+			byObject.set(decl.spec, inherited);
+		}
+	}
+
+	for (const collection of COLLECTIONS) {
+		const declared = spec[collection];
+		if (declared === undefined) continue;
+		if (!isObject(declared)) {
+			issues.push(
+				issue(
+					[collection],
+					"invalid_collection",
+					`"${collection}" must be an object of declarations by name.`,
+				),
+			);
+			continue;
+		}
+		for (const [name, value] of Object.entries(declared)) {
+			const path = [collection, name];
+			if (!isDeclarationName(name)) {
+				issues.push(
+					issue(
+						path,
+						"invalid_name",
+						`"${name}" is not a valid declaration name: use PascalCase (letters and digits, starting with a capital), as Std properties are lowercase.`,
+					),
+				);
+				continue;
+			}
+			if (reserved.has(name)) {
+				issues.push(
+					issue(
+						path,
+						"reserved_name",
+						`"${name}" is exported by @afora/core (or is "App") and the generated code imports or exports it. Pick another name.`,
+					),
+				);
+				continue;
+			}
+			if (!isObject(value)) {
+				issues.push(
+					issue(path, "invalid_declaration", `"${name}" must be an object.`),
+				);
+				continue;
+			}
+			const same = decls.get(name);
+			if (same) {
+				issues.push(
+					issue(
+						path,
+						"name_collision",
+						same.via === undefined
+							? `"${name}" is already declared as a ${same.kind}; names are shared by every kind of declaration.`
+							: `"${name}" is already declared by "${same.origin}" (extended); rename it.`,
+					),
+				);
+				continue;
+			}
+			const decl: Decl = {
+				kind: KIND_OF[collection],
+				name,
+				spec: value,
+				origin: typeof spec.name === "string" ? spec.name : "this spec",
+			};
+			decls.set(name, decl);
+			byObject.set(value, decl);
+		}
+	}
+	return { decls, extended: extendedRefs };
+}
