@@ -147,6 +147,23 @@ export interface DeclaredExceptionClass<Details = undefined> {
 	from: typeof Exception.from;
 }
 
+const declarations = new WeakMap<object, { readonly message: unknown }>();
+
+/** Whether `value` is a class made by `exceptionOf`. */
+export function isDeclaredException(
+	value: unknown,
+): value is DeclaredExceptionClass<never> {
+	return typeof value === "function" && declarations.has(value);
+}
+
+/** The message `exceptionOf` got, when it was a string; `undefined` otherwise. */
+export function declaredMessageOf(
+	Declared: DeclaredExceptionClass<never>,
+): string | undefined {
+	const { message } = declarations.get(Declared) ?? {};
+	return typeof message === "string" ? message : undefined;
+}
+
 /**
  * Declares an exception of `layer`, e.g.
  * `throw new PropertyRequired({ source: "email" })`. Its `details` are typed
@@ -182,6 +199,7 @@ export function exceptionOf<Details = undefined>({
 	}
 
 	Object.defineProperty(DeclaredException, "name", { value: name });
+	declarations.set(DeclaredException, { message });
 
 	return DeclaredException;
 }

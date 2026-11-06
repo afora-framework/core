@@ -6,6 +6,7 @@ import type {
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
 import { isEntityClass } from "../entity/entity";
+import { type ExecutionScope, scopedProvider } from "../use-case/scope";
 import {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
@@ -187,8 +188,9 @@ export type ReferenceSession = Map<RepositoryState, Map<string, object>>;
 function loadByIds(
 	state: RepositoryState,
 	ids: readonly string[],
+	scope: ExecutionScope | undefined,
 ): Promise<readonly RepositoryData[]> {
-	return state.provider.findMany(contextOf(state), {
+	return scopedProvider(scope, state.provider).findMany(contextOf(state), {
 		where: { id: { in: ids } },
 		withDeleted: state.deletion === "hard",
 	});
@@ -199,12 +201,14 @@ function loadByIds(
  * entity they hold replaced by the entity, loaded in one batch for each
  * relation. An entity loaded twice in `session` is the same instance. Throws
  * `InvalidRepositoryData`, caused by `RepositoryEntityNotFound`, for an id
- * with no entity.
+ * with no entity. The providers of the `scope` of the call, if any, replace
+ * those of the relations.
  */
 export async function resolveReferences(
 	state: RepositoryState,
 	datas: readonly RepositoryData[],
 	session: ReferenceSession,
+	scope?: ExecutionScope,
 ): Promise<readonly RepositoryData[]> {
 	if (state.relations.size === 0) return datas;
 	const { properties } = state.entity.blueprint;
@@ -227,8 +231,8 @@ export async function resolveReferences(
 		const missing = [...ids].filter((id) => !loaded.has(id));
 		if (missing.length === 0) continue;
 
-		const found = await loadByIds(relation, missing);
-		const resolved = await resolveReferences(relation, found, session);
+		const found = await loadByIds(relation, missing, scope);
+		const resolved = await resolveReferences(relation, found, session, scope);
 		for (const data of resolved) {
 			const id = data.id as string;
 			if (!loaded.has(id)) loaded.set(id, parseEntity(relation, data));

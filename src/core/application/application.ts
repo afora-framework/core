@@ -10,6 +10,8 @@ import type {
 import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
 import { isEnvironment } from "../environment/environment";
+import { declaredMessageOf, isDeclaredException } from "../exception/exception";
+import { isExportedException } from "../exception/exported";
 import { plainOf } from "../openapi/openapi";
 import { isProperty } from "../property/is-property";
 import { type PropertyLineage, propertyLineageOf } from "../property/lineage";
@@ -22,12 +24,14 @@ import {
 } from "../repository/state";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import { type AnyUseCaseClass, isUseCaseClass } from "../use-case/use-case";
 import {
 	ApplicationConflict,
 	DuplicateApplicationDeclaration,
 	InvalidApplicationDeclaration,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
+	UnregisteredUseCaseDependency,
 } from "./exceptions";
 import type {
 	AnyApplication,
@@ -52,6 +56,8 @@ const KEYS = [
 	"entities",
 	"environments",
 	"repositories",
+	"useCases",
+	"exceptions",
 ] as const satisfies readonly ApplicationCollectionKey[];
 
 /** One registered declaration. */
@@ -77,6 +83,8 @@ const KIND_OF: Readonly<Record<ApplicationCollectionKey, string>> = {
 	entities: "entity",
 	environments: "environment",
 	repositories: "repository",
+	useCases: "use case",
+	exceptions: "exception",
 };
 
 /** Whether `value` is an application made by `applicationOf`. */
@@ -107,6 +115,10 @@ function isOfKind(collection: ApplicationCollectionKey, value: unknown) {
 			return isEnvironment(value);
 		case "repositories":
 			return inspectRepository(value) !== undefined;
+		case "useCases":
+			return isUseCaseClass(value);
+		case "exceptions":
+			return isDeclaredException(value);
 	}
 }
 
@@ -213,6 +225,18 @@ function resolve(
 					`${collection}.${name} is not a ${KIND_OF[collection]} (${collection} takes ${KIND_OF[collection]} declarations).`,
 				);
 			}
+			const declaredName =
+				collection === "useCases"
+					? (value as AnyUseCaseClass).useCaseName
+					: collection === "exceptions"
+						? (value as { name: string }).name
+						: name;
+			if (declaredName !== name) {
+				invalid(
+					source,
+					`${collection}.${name} must be keyed by its name, "${declaredName}".`,
+				);
+			}
 			add({
 				collection,
 				name,
@@ -302,6 +326,65 @@ function validate(source: string, registry: Registry): void {
 			if (!environments.has(environment)) {
 				unregistered(entry.name, "an environment");
 			}
+		}
+	}
+}
+
+/** Checks the use cases of the resolved set: dependencies, records and errors. */
+function validateUseCases(source: string, registry: Registry): void {
+	const registered = new Set<object>([
+		...[...registry.records.values()].map((entry) => entry.key),
+		...[...registry.entities.values()].map((entry) => entry.key),
+	]);
+	const known = (collection: ApplicationCollectionKey) =>
+		new Set([...registry[collection].values()].map((entry) => entry.key));
+	const useCases = known("useCases");
+	const repositories = known("repositories");
+	const environments = known("environments");
+	const exceptions = known("exceptions");
+	for (const entry of registry.useCases.values()) {
+		const UseCase = entry.value as AnyUseCaseClass;
+		for (const [key, dependency] of Object.entries(UseCase.dependencies)) {
+			const found = isUseCaseClass(dependency)
+				? useCases.has(dependency)
+				: isEnvironment(dependency)
+					? environments.has(dependency)
+					: repositories.has(
+							(inspectRepository(dependency) as RepositoryInspection).state,
+						);
+			if (!found) {
+				throw new UnregisteredUseCaseDependency({
+					source,
+					details: { useCase: `"${entry.name}"`, dependency: `"${key}"` },
+				});
+			}
+		}
+		for (const [part, blueprint] of [
+			["blueprint", UseCase.blueprint],
+			["response", UseCase.response],
+			["context", UseCase.context],
+		] as const) {
+			if (blueprint === undefined) continue;
+			for (const record of recordsIn(blueprint.properties)) {
+				if (registered.has(record)) continue;
+				throw new UnregisteredApplicationReference({
+					source,
+					details: {
+						holder: `the ${part} of use case "${entry.name}"`,
+						reference: `${isEntityClass(record) ? "entity" : "record"} "${(record as { name: string }).name}"`,
+					},
+				});
+			}
+		}
+		for (const Thrown of UseCase.errors) {
+			if (exceptions.has(Thrown) || isExportedException(Thrown)) continue;
+			throw new UnregisteredApplicationReference({
+				source,
+				details: {
+					holder: `use case "${entry.name}"`,
+					reference: `exception "${Thrown.name}"`,
+				},
+			});
 		}
 	}
 }
@@ -498,6 +581,9 @@ function describeRegistry(
 		entities: referencesOf(registry, "entities"),
 	};
 	const repositories = referencesOf(registry, "repositories");
+	const environmentRefs = referencesOf(registry, "environments");
+	const useCaseRefs = referencesOf(registry, "useCases");
+	const exceptionRefs = referencesOf(registry, "exceptions");
 	const each = <Result>(
 		collection: ApplicationCollectionKey,
 		describe: (entry: Entry) => Result,
@@ -546,12 +632,65 @@ function describeRegistry(
 					(relation) => repositories.get(relation) as string,
 				),
 				environments: info.environments.map(
-					(environment) =>
-						referencesOf(registry, "environments").get(environment) as string,
+					(environment) => environmentRefs.get(environment) as string,
 				),
 				...(info.provider === undefined
 					? {}
 					: { provider: providerDescriptionOf(info.provider) }),
+			};
+		}),
+		useCases: each("useCases", (entry) => {
+			const UseCase = entry.value as AnyUseCaseClass;
+			return {
+				from: entry.from,
+				name: UseCase.useCaseName,
+				...(UseCase.description === undefined
+					? {}
+					: { description: UseCase.description }),
+				tags: UseCase.tags,
+				deprecated: UseCase.deprecated,
+				input: fieldsDescriptionOf(UseCase.blueprint.properties, scope),
+				response: fieldsDescriptionOf(UseCase.response.properties, scope),
+				...(UseCase.context === undefined
+					? {}
+					: {
+							context: fieldsDescriptionOf(UseCase.context.properties, scope),
+						}),
+				errors: UseCase.errors.map((Thrown) => {
+					const ref = exceptionRefs.get(Thrown);
+					return ref === undefined
+						? { kind: "core" as const, name: Thrown.name }
+						: { kind: "exception" as const, ref };
+				}),
+				dependencies: Object.fromEntries(
+					Object.entries(UseCase.dependencies).map(([key, dependency]) => [
+						key,
+						isUseCaseClass(dependency)
+							? { kind: "use-case", ref: useCaseRefs.get(dependency) as string }
+							: isEnvironment(dependency)
+								? {
+										kind: "environment",
+										ref: environmentRefs.get(dependency) as string,
+									}
+								: {
+										kind: "repository",
+										ref: repositories.get(
+											(inspectRepository(dependency) as RepositoryInspection)
+												.state,
+										) as string,
+									},
+					]),
+				),
+				implementation: { kind: "opaque" },
+			};
+		}),
+		exceptions: each("exceptions", (entry) => {
+			const Declared = entry.value as Parameters<typeof declaredMessageOf>[0];
+			const message = declaredMessageOf(Declared);
+			return {
+				from: entry.from,
+				layer: Declared.layer,
+				...(message === undefined ? {} : { message }),
 			};
 		}),
 	};
@@ -599,6 +738,14 @@ export function applicationOf<
 		never,
 		never
 	>,
+	const UseCases extends ApplicationCollections["useCases"] = Record<
+		never,
+		never
+	>,
+	const Exceptions extends ApplicationCollections["exceptions"] = Record<
+		never,
+		never
+	>,
 >(
 	settings: ApplicationSettings<
 		Name,
@@ -610,6 +757,8 @@ export function applicationOf<
 			entities: Entities;
 			environments: Environments;
 			repositories: Repositories;
+			useCases: UseCases;
+			exceptions: Exceptions;
 		}
 	>,
 ): IApplication<
@@ -622,6 +771,8 @@ export function applicationOf<
 			entities: Entities;
 			environments: Environments;
 			repositories: Repositories;
+			useCases: UseCases;
+			exceptions: Exceptions;
 		},
 		Extended
 	>
@@ -636,6 +787,7 @@ export function applicationOf<
 	}
 	const registry = resolve(settings);
 	validate(name, registry);
+	validateUseCases(name, registry);
 
 	const provider: IRepositoryProvider | undefined =
 		settings.provider ??
@@ -652,6 +804,7 @@ export function applicationOf<
 		);
 
 	const bound = new Map<unknown, unknown>();
+	const boundByState = new Map<object, unknown>();
 	const repositories: Record<string, unknown> = {};
 	for (const entry of registry.repositories.values()) {
 		const repository =
@@ -659,7 +812,44 @@ export function applicationOf<
 				? entry.value
 				: bindRepository(entry.value as object, provider);
 		bound.set(entry.value, repository);
+		boundByState.set(entry.key, repository);
 		repositories[entry.name] = repository;
+	}
+
+	// A use case is bound once: a subclass whose dependencies are the bound
+	// repositories and the bound use cases, never mutating the declared class.
+	const boundUseCases = new Map<AnyUseCaseClass, AnyUseCaseClass>();
+	const bindUseCase = (UseCase: AnyUseCaseClass): AnyUseCaseClass => {
+		if (provider === undefined) return UseCase;
+		const done = boundUseCases.get(UseCase);
+		if (done) return done;
+		const Declared = UseCase as unknown as new (...args: never[]) => object;
+		class Bound extends Declared {}
+		Object.defineProperty(Bound, "name", { value: Declared.name });
+		boundUseCases.set(UseCase, Bound as unknown as AnyUseCaseClass);
+		const dependencies = Object.fromEntries(
+			Object.entries(UseCase.dependencies).map(([key, dependency]) => [
+				key,
+				isUseCaseClass(dependency)
+					? bindUseCase(dependency)
+					: isEnvironment(dependency)
+						? dependency
+						: (boundByState.get(
+								(inspectRepository(dependency) as RepositoryInspection).state,
+							) ?? dependency),
+			]),
+		);
+		Object.defineProperty(Bound, "dependencies", {
+			value: Object.freeze(dependencies),
+		});
+		return Bound as unknown as AnyUseCaseClass;
+	};
+	const useCases: Record<string, unknown> = {};
+	const boundUseCaseOf = new Map<unknown, unknown>();
+	for (const entry of registry.useCases.values()) {
+		const bound = bindUseCase(entry.value as AnyUseCaseClass);
+		boundUseCaseOf.set(entry.value, bound);
+		useCases[entry.name] = bound;
 	}
 
 	const application = Object.freeze({
@@ -673,6 +863,14 @@ export function applicationOf<
 		entities: collection("entities"),
 		environments: collection("environments"),
 		repositories: Object.freeze(repositories),
+		useCases: Object.freeze(useCases),
+		exceptions: collection("exceptions"),
+		useCase(useCase: unknown) {
+			if (!boundUseCaseOf.has(useCase)) {
+				invalid(name, "Expected a use case registered in the application.");
+			}
+			return boundUseCaseOf.get(useCase);
+		},
 		repository(repository: unknown) {
 			if (!bound.has(repository)) {
 				invalid(name, "Expected a repository registered in the application.");

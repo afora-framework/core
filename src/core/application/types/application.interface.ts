@@ -1,4 +1,5 @@
 import type { AnyEnvironment } from "../../environment/environment";
+import type { ExceptionLayers } from "../../exception/enums/exception-layers";
 import type { RecordPluginDescriptor } from "../../record/types/plugin.interface";
 import type { ProviderDescription } from "../../repository/types/query.interface";
 import type {
@@ -6,6 +7,10 @@ import type {
 	IRepositoryProvider,
 } from "../../repository/types/repository.interface";
 import type { Kind } from "../../symbols/kind";
+import type {
+	AnyExceptionClass,
+	AnyUseCaseClass,
+} from "../../use-case/use-case";
 
 type Named<Value> = Readonly<Record<string, Value>>;
 
@@ -17,6 +22,8 @@ export interface ApplicationCollections {
 	readonly entities: Named<unknown>;
 	readonly environments: Named<AnyEnvironment>;
 	readonly repositories: Named<AnyRepository>;
+	readonly useCases: Named<AnyUseCaseClass>;
+	readonly exceptions: Named<AnyExceptionClass>;
 }
 
 /**
@@ -41,6 +48,10 @@ export interface ApplicationSettings<
 	readonly entities?: Collections["entities"];
 	readonly environments?: Collections["environments"];
 	readonly repositories?: Collections["repositories"];
+	/** Use cases, keyed by their `useCaseName`. */
+	readonly useCases?: Collections["useCases"];
+	/** Exceptions made by `exceptionOf`, keyed by their `name`. */
+	readonly exceptions?: Collections["exceptions"];
 	/**
 	 * The provider of the repositories that did not declare one; the
 	 * repositories of the application read and write through it.
@@ -90,10 +101,20 @@ export interface IApplication<
 	 * write through that provider (unless they declared their own).
 	 */
 	readonly repositories: Collections["repositories"];
+	/**
+	 * Its use cases. With a `provider` they are subclasses whose repositories
+	 * are the bound ones, through child use cases too; the same subclass every
+	 * time. Without one they are the declared classes.
+	 */
+	readonly useCases: Collections["useCases"];
+	/** Its exceptions. */
+	readonly exceptions: Collections["exceptions"];
 	/** The bound version of a repository registered in the application. */
 	repository<Repository extends AnyRepository>(
 		repository: Repository,
 	): Repository;
+	/** The bound version of a use case registered in the application. */
+	useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase;
 	/** A new application with the declarations of `others` too; this one is left as it is. */
 	extend<const Others extends readonly AnyApplication[]>(
 		...others: Others
@@ -183,6 +204,40 @@ export interface RecordDescription {
 	readonly plugins: readonly RecordPluginDescriptor[];
 }
 
+/** What a use case depends on, by the name it has in the application. */
+export interface UseCaseDependencyDescription {
+	readonly kind: "use-case" | "repository" | "environment";
+	readonly ref: string;
+}
+
+/** A use case: its metadata, fields and what it depends on. */
+export interface UseCaseDescription {
+	readonly from: string;
+	/** The `useCaseName`, equal to its key. */
+	readonly name: string;
+	readonly description?: string;
+	readonly tags: readonly string[];
+	readonly deprecated: boolean;
+	readonly input: FieldsDescription;
+	readonly response: FieldsDescription;
+	readonly context?: FieldsDescription;
+	/** A registered exception, or one exported by the package, by name. */
+	readonly errors: readonly (
+		| { readonly kind: "exception"; readonly ref: string }
+		| { readonly kind: "core"; readonly name: string }
+	)[];
+	readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>;
+	/** How it runs: only `opaque`, the hand-written `execute`, for now. */
+	readonly implementation: { readonly kind: "opaque" };
+}
+
+/** An exception: its layer and, when declared as a string, its message. */
+export interface ExceptionDescription {
+	readonly from: string;
+	readonly layer: ExceptionLayers;
+	readonly message?: string;
+}
+
 /** The graph `describe` gives: every declaration by name, with its origin in `from`. */
 export interface ApplicationDescription {
 	readonly name: string;
@@ -224,4 +279,6 @@ export interface ApplicationDescription {
 			}
 		>
 	>;
+	readonly useCases: Readonly<Record<string, UseCaseDescription>>;
+	readonly exceptions: Readonly<Record<string, ExceptionDescription>>;
 }

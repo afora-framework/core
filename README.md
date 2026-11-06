@@ -644,6 +644,32 @@ Dependencies default to `{}`. Each dependency function creates a fresh child, re
 
 Events from managed children move to the parent when each child finishes, including on failure and when the parent's response omits the child result. Then the validated parent response is traversed through declared records, entities, nested blueprints and lists. Repeated object references are visited once; separately emitted duplicate events are preserved. Child events follow completion order, followed by remaining response events. No handlers run automatically. `pullEvents()` immediately drains the queue, which remains available after failure. Invalid responses are not drained. Overrides contribute events from their returned entities; hidden operations inside an override must expose their events separately.
 
+#### Context and metadata
+
+A use case can declare a `context`, a blueprint for what the caller supplies with each call (the signed-in user, a request id), and metadata that tools can read:
+
+```ts
+const RegisterBase = useCaseOf({
+	name: "Register",
+	blueprint: UserInput,
+	response: UserResponse,
+	context: blueprintOf((ctx) => ({ userId: ctx.id, requestId: ctx.string })),
+	description: "Signs a user up.", // optional
+	tags: ["users"], // optional, default []
+	deprecated: false, // optional, default false
+	errors: [UserAlreadyExists, RepositoryUniqueViolation], // exceptionOf classes a caller should expect
+});
+
+const operation = new Register(input, { context: { userId, requestId } });
+operation.context; // Readonly<{ userId: string; requestId: string }>, parsed and frozen
+```
+
+With a declared `context`, the second constructor argument is required by type and validated by its blueprint; a missing or invalid one throws `InvalidUseCaseContext` (`UseCase` layer, `details.issues`). Without one, `options.context` is not accepted and `this.context` is `undefined`. `UseCaseContext<typeof Register>` extracts the type, and `UseCaseOptions` is the type of the second argument.
+
+A child called through a dependency function receives its parent's context narrowed to the keys of its own `context` blueprint and validated by it. A child with no context gets none; a child that declares one under a parent without context fails with `InvalidUseCaseContext`. Overrides passed to `execute` keep the signature `(input) => response`.
+
+The class gets the frozen statics `context`, `description`, `tags`, `deprecated` and `errors`, beside `useCaseName`, `blueprint`, `response` and `dependencies`. `context` is a non-optional blueprint, `tags` are distinct non-empty strings, and `errors` are distinct classes made by `exceptionOf`; anything else throws `InvalidUseCaseDeclaration`. `errors` documents what to expect and changes nothing at runtime: an exception that is not listed still propagates.
+
 `UseCaseInput`, `UseCaseResponse` and `UseCaseDependencies` extract a declaration's types. `isUseCase` identifies instances; `isUseCaseClass` identifies concrete declarations with a prototype `execute`. UseCases carry their own kind and cannot be used as fields of ordinary data blueprints. Validation errors carry `details.issues`; errors crossing an execution boundary preserve their cause and gain a `UseCase` trace frame using the declared name.
 
 ### Repositories
@@ -838,9 +864,13 @@ It checks the set as a whole when declared: one object under two names (`Duplica
 
 `extends: [Auth]`, or `Blog.extend(Billing)`, which returns a new application, inherits declarations; the extended ones stay usable alone and are never changed. The same object under the same name is registered once; one name for different objects, or one object under two names, throws `ApplicationConflict` naming both origins. References may cross applications (a `Post` of `Blog` holding the `User` of `Auth`), and validation runs on the resolved set.
 
+Use cases are registered by name too: `useCases: { Register, CreateUser }` (concrete classes, keyed by their `useCaseName`) and `exceptions: { UserAlreadyExists }` (made by `exceptionOf`, keyed by their `name`); another key throws `InvalidApplicationDeclaration`. The resolved set (extended applications included) is checked: every dependency of a use case must be registered, a use case, repository or environment (`UnregisteredUseCaseDependency`, with `details.useCase` and `details.dependency`); records and entities held by its `blueprint`, `response` or `context` must be registered (`UnregisteredApplicationReference`); and each class in `errors` must be in `exceptions`, unless it is an exception exported by `@afora/core` such as `RepositoryUniqueViolation` (`UnregisteredApplicationReference` otherwise).
+
+With a `provider`, `app.useCases.Register` is a subclass of `Register` whose `dependencies` swap each repository for the application's bound one, through child use cases too; it is the same subclass every time, and `Register` itself is never changed. Without a provider, `app.useCases.Register === Register`. `app.useCase(Register)` gives the same class from the original, as `app.repository(Users)` does.
+
 Repositories are module-level and may be shared, so an application does not change them: `app.repositories.Users` shares the declaration of `Users` but reads and writes through the `provider` of the application (or of the last application it extends that has one), unless `Users` declared its own. Two applications with different providers do not share data. Without a `provider`, `app.repositories.Users` is `Users` itself, and records, entities and repositories work the same outside any application.
 
-`app.describe()` gives a JSON-serializable graph, with the `from` of each declaration (the application that registered it): properties (name, flags, JSON Schema and `lineage`), blueprints, records and entities (fields, `options`, plugin descriptors), environments, and repositories (entity, actions, `relations` and `environments` by name). A field is a reference by name (`{ kind: "entity", ref: "User" }`) when it holds a registered declaration. A property's `lineage` comes from `propertyLineageOf(Property)`: `Integer.with({ min: 0 })` is `{ kind: "refined", base, options }`, `optionalOf` is `{ kind: "optional", base }` and `enumOf` is `{ kind: "factory", factory: "enumOf", args: { values } }`. A root property (declared with `propertyOf`) has no lineage and is identified by its `name`; one with custom handlers is described with what is known (name and schema), never an error.
+`app.describe()` gives a JSON-serializable graph, with the `from` of each declaration (the application that registered it): properties (name, flags, JSON Schema and `lineage`), blueprints, records and entities (fields, `options`, plugin descriptors), environments, repositories (entity, actions, `relations` and `environments` by name), use cases (`name`, `description`, `tags`, `deprecated`, `input`, `response`, optional `context`, `errors` as `{ kind: "exception", ref }` or `{ kind: "core", name }`, `dependencies` as `{ kind, ref }`, and `implementation: { kind: "opaque" }`) and exceptions (`layer` and, when declared as a string, `message`). A field is a reference by name (`{ kind: "entity", ref: "User" }`) when it holds a registered declaration. A property's `lineage` comes from `propertyLineageOf(Property)`: `Integer.with({ min: 0 })` is `{ kind: "refined", base, options }`, `optionalOf` is `{ kind: "optional", base }` and `enumOf` is `{ kind: "factory", factory: "enumOf", args: { values } }`. A root property (declared with `propertyOf`) has no lineage and is identified by its `name`; one with custom handlers is described with what is known (name and schema), never an error.
 
 ### Exceptions
 

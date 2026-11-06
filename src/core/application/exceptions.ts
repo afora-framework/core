@@ -65,3 +65,17 @@ export const UnregisteredRepositoryDependency = exceptionOf({
 	}) =>
 		`Repository ${repository} depends on ${dependency}, which is not registered in the application.`,
 });
+
+/** A dependency of a use case of the application (a use case, repository or environment) is not registered in it. */
+export const UnregisteredUseCaseDependency = exceptionOf({
+	layer: ExceptionLayers.Application,
+	name: "UnregisteredUseCaseDependency",
+	message: ({
+		useCase,
+		dependency,
+	}: {
+		readonly useCase: string;
+		readonly dependency: string;
+	}) =>
+		`Use case ${useCase} depends on ${dependency}, which is not registered in the application.`,
+});
