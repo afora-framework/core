@@ -166,7 +166,7 @@ async function build(spec: Spec, extra: Record<string, string> = EXTRA) {
 async function exercise(domain: {
 	App: {
 		useCases: Record<
-			string,
+			"Register" | "Login" | "Greet",
 			new (
 				input: unknown,
 				options?: unknown,

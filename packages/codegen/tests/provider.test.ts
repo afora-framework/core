@@ -313,7 +313,7 @@ describe("normalization", () => {
 		const normalized = forms.map((provider) =>
 			normalizeSpec(spec({ provider } as never)),
 		);
-		for (const each of normalized) expect(each).toEqual(normalized[0]);
+		for (const each of normalized) expect(each).toEqual(normalized[0] as never);
 		expect(normalized[0]?.provider).toEqual({ use: "inMemory", options: {} });
 		expect(generate(spec({ provider: "inMemory" }))).toEqual(
 			generate(spec({ provider: { use: "inMemory", options: {} } })),
@@ -536,7 +536,7 @@ describe("hand-written -> extract -> generate", () => {
 		expect(await exercise(App)).toEqual(EXPECTED);
 		expect(App.describe().provider).toBeUndefined();
 		expect(App.describe().repositories.Users.provider).toEqual(
-			original.describe().repositories.Users.provider,
+			original.describe().repositories.Users?.provider,
 		);
 		expect(generate(extractSpec(App))).toEqual(generate(extracted));
 	});
