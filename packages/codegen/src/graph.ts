@@ -86,6 +86,29 @@ function dependenciesOf(decl: Decl, scope: Scope): string[] {
 		case "useCase":
 			names = useCaseNamesOf(decl);
 			break;
+		case "command": {
+			const context = decl.spec.context;
+			if (typeof context === "string") names.push(context);
+			else if (context && typeof context === "object") {
+				const fields = parseFields(
+					(context as { fields?: unknown }).fields,
+					[],
+					[],
+				);
+				if (fields) names.push(...typesIn(fields));
+			}
+			if (decl.spec.useCases && typeof decl.spec.useCases === "object") {
+				names.push(
+					...Object.values(decl.spec.useCases).filter(
+						(value): value is string => typeof value === "string",
+					),
+				);
+			}
+			break;
+		}
+		case "output":
+			names = stringsOf(decl.spec.commands);
+			break;
 		default: {
 			const fields = fieldsOfDecl(decl);
 			names = fields ? typesIn(fields) : [];

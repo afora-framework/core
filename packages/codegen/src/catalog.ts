@@ -45,6 +45,14 @@ export interface FactoryInfo {
 	readonly spec: string;
 }
 
+/** A stage `@afora/core` ships in `StdStages`. */
+interface StageInfo {
+	/** The name `transform` or `sink` refers to in a pipe. */
+	readonly name: string;
+	readonly kind: "transform" | "sink";
+	readonly builtin: true;
+}
+
 export interface Catalog {
 	readonly properties: readonly StdPropertyInfo[];
 	readonly factories: readonly FactoryInfo[];
@@ -61,6 +69,8 @@ export interface Catalog {
 	readonly exceptionLayers: readonly string[];
 	/** Exceptions `@afora/core` exports: a use case may list them in `errors` and `ensure` them without declaring them. */
 	readonly coreExceptions: readonly string[];
+	/** The built-in stages (`StdStages`) a pipe may name; others come from the `stages` option. */
+	readonly stages: readonly StageInfo[];
 	/** Everything `@afora/core` exports; a declaration cannot take one of these names. */
 	readonly reservedDeclarationNames: readonly string[];
 }
@@ -211,6 +221,13 @@ function build(): Catalog {
 			)
 			.map(([name]) => name)
 			.sort(),
+		stages: Object.entries(core.StdStages.stages)
+			.map(([name, factory]) => ({
+				name,
+				kind: core.stageKindOf(factory) as "transform" | "sink",
+				builtin: true as const,
+			}))
+			.sort((a, b) => (a.name < b.name ? -1 : 1)),
 		reservedDeclarationNames: [...Object.keys(core), "App"].sort(),
 	};
 }

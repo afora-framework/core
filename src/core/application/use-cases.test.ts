@@ -330,6 +330,14 @@ describe("applicationOf useCases and exceptions", () => {
 		expect(() => JSON.stringify(description)).not.toThrow();
 	});
 
+	test("describe names the registered blueprints used as input, response and context", () => {
+		const app = make({ blueprints: { Input, Context } });
+		const { Register: register, Child: child } = app.describe().useCases;
+		expect(register?.refs).toEqual({ input: "Input", context: "Context" });
+		expect(register?.input.name).toBeDefined();
+		expect(child).not.toHaveProperty("refs");
+	});
+
 	test("an exception declared with a function has no message in describe", () => {
 		const app = applicationOf({
 			name: "x",

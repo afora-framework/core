@@ -182,6 +182,7 @@ export {
 	sinkOf,
 	stageCatalogOf,
 	stageDescriptionOf,
+	stageKindOf,
 	transformOf,
 } from "./core/output/stage";
 export { statusOf } from "./core/output/status";

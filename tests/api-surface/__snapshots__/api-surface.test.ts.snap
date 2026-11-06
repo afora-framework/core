@@ -411,7 +411,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type CallableProperty<Property extends { readonly type: IPropertyType<TSchema>; }> = Property & { (options?: OptionsOfProperty<Property>): Property; readonly [Callable]: Property; };",
   ],
   "CommandDescription": [
-    "export interface CommandDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly context?: FieldsDescription; readonly operations: Readonly<Record<string, { readonly ref: string; }>>; readonly transaction: boolean; readonly events: "after-commit" | "manual" | { readonly kind: "opaque"; }; readonly onEventError?: { readonly kind: "opaque"; }; }",
+    "export interface CommandDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly context?: FieldsDescription; readonly refs?: { readonly context?: string; }; readonly operations: Readonly<Record<string, { readonly ref: string; }>>; readonly transaction: boolean; readonly events: "after-commit" | "manual" | { readonly kind: "opaque"; }; readonly onEventError?: { readonly kind: "opaque"; }; }",
   ],
   "CommandEventErrorHandler": [
     "export type CommandEventErrorHandler = (error: unknown, event: EntityEvent) => void | Promise<void>;",
@@ -1196,7 +1196,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface UseCaseDependencyDescription { readonly kind: "use-case" | "repository" | "environment"; readonly ref: string; }",
   ],
   "UseCaseDescription": [
-    "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly context?: FieldsDescription; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; }",
+    "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly context?: FieldsDescription; readonly refs?: { readonly input?: string; readonly response?: string; readonly context?: string; }; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; }",
   ],
   "UseCaseInput": [
     "export type UseCaseInput<Class extends Declaration> = BlueprintInput<Class["blueprint"]["properties"]>;",
@@ -1392,6 +1392,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "stageDescriptionOf": [
     "export declare function stageDescriptionOf(stage: Stage): StageDescription;",
+  ],
+  "stageKindOf": [
+    "export declare function stageKindOf(factory: StageFactory): "transform" | "sink" | undefined;",
   ],
   "statusOf": [
     "export declare function statusOf(error: unknown, operation?: Pick<OperationDescriptor, "errors">, statuses?: OutputStatuses): number;",
@@ -2272,6 +2275,118 @@ exports[`afora.json schema 1`] = `
       },
       "type": "object",
     },
+    "commands": {
+      "additionalProperties": false,
+      "description": "Commands (commandOf), by name.",
+      "patternProperties": {
+        "^[A-Z][A-Za-z0-9]*$": {
+          "additionalProperties": false,
+          "properties": {
+            "context": {
+              "anyOf": [
+                {
+                  "description": "The name of a declared blueprint.",
+                  "pattern": "^[A-Z][A-Za-z0-9]*$",
+                  "type": "string",
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fields": {
+                      "additionalProperties": false,
+                      "description": "Fields by key.",
+                      "patternProperties": {
+                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                          "$ref": "#/$defs/Field",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "fields",
+                  ],
+                  "type": "object",
+                },
+              ],
+              "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
+            },
+            "description": {
+              "type": "string",
+            },
+            "events": {
+              "anyOf": [
+                {
+                  "const": "after-commit",
+                  "type": "string",
+                },
+                {
+                  "const": "manual",
+                  "type": "string",
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "import": {
+                      "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                      "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "import",
+                  ],
+                  "type": "object",
+                },
+              ],
+              "default": "after-commit",
+              "description": ""after-commit" (default), "manual" or { "import": "./events.ts#dispatch" } (a handler written by hand).",
+            },
+            "onEventError": {
+              "additionalProperties": false,
+              "properties": {
+                "import": {
+                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "import",
+              ],
+              "type": "object",
+            },
+            "tags": {
+              "description": "Tags, for documentation.",
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "transaction": {
+              "default": false,
+              "description": "Runs every call in a transaction of the provider of the repositories (checked when the code runs: the provider must support it).",
+              "type": "boolean",
+            },
+            "useCases": {
+              "description": "Operation name -> name of a declared use case (e.g. { "register": "Register" }).",
+              "minProperties": 1,
+              "patternProperties": {
+                "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                  "type": "string",
+                },
+              },
+              "type": "object",
+            },
+          },
+          "required": [
+            "useCases",
+          ],
+          "type": "object",
+        },
+      },
+      "type": "object",
+    },
     "entities": {
       "additionalProperties": false,
       "description": "Entities (a record plus id, createdAt, updatedAt, deletedAt), by name.",
@@ -2398,6 +2513,107 @@ exports[`afora.json schema 1`] = `
       "required": [
         "dir",
       ],
+      "type": "object",
+    },
+    "outputs": {
+      "additionalProperties": false,
+      "description": "Outputs (outputOf), by name.",
+      "patternProperties": {
+        "^[A-Z][A-Za-z0-9]*$": {
+          "additionalProperties": false,
+          "properties": {
+            "commands": {
+              "description": "Names of declared commands.",
+              "items": {
+                "pattern": "^[A-Z][A-Za-z0-9]*$",
+                "type": "string",
+              },
+              "minItems": 1,
+              "type": "array",
+              "uniqueItems": true,
+            },
+            "pipe": {
+              "description": "Transforms, then at most one sink as the last stage.",
+              "items": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "options": {
+                        "description": "JSON options of the stage factory.",
+                        "patternProperties": {
+                          "^.*$": {},
+                        },
+                        "type": "object",
+                      },
+                      "transform": {
+                        "description": "A transform of the stage catalog (afora_catalog stages).",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "transform",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "options": {
+                        "description": "JSON options of the stage factory.",
+                        "patternProperties": {
+                          "^.*$": {},
+                        },
+                        "type": "object",
+                      },
+                      "sink": {
+                        "description": "A sink of the stage catalog; only the last stage.",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "sink",
+                    ],
+                    "type": "object",
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "import": {
+                        "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                        "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "import",
+                    ],
+                    "type": "object",
+                  },
+                ],
+                "description": "{ "transform": name, "options"? }, { "sink": name, "options"? } or { "import": "./stages.ts#auth" } (a stage written by hand).",
+              },
+              "type": "array",
+            },
+            "statuses": {
+              "description": "HTTP-style status by exception name (declared or exported by @afora/core).",
+              "patternProperties": {
+                "^.*$": {
+                  "maximum": 599,
+                  "minimum": 400,
+                  "type": "integer",
+                },
+              },
+              "type": "object",
+            },
+          },
+          "required": [
+            "commands",
+            "pipe",
+          ],
+          "type": "object",
+        },
+      },
       "type": "object",
     },
     "properties": {

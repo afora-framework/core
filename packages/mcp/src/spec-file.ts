@@ -3,6 +3,7 @@ import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
 	COLLECTION_KEYS,
+	type CodegenOptions,
 	confinePath,
 	type ProviderCatalogEntry,
 	type ResolvedSpec,
@@ -10,6 +11,7 @@ import {
 	type Spec,
 	type SpecIssue,
 	SpecLoadError,
+	type StageCatalogEntry,
 	validateSpec,
 } from "@afora/codegen";
 import { ToolError } from "./extract";
@@ -23,6 +25,16 @@ export interface Project {
 	readonly app?: string;
 	/** External providers `use` may name in the spec (`inMemory` is built in). */
 	readonly providers?: readonly ProviderCatalogEntry[];
+	/** External stages an output's `pipe` may name (`select` and `openapi` are built in). */
+	readonly stages?: readonly StageCatalogEntry[];
+}
+
+/** What codegen needs from the project besides the spec. */
+export function codegenOptionsOf(project: Project): CodegenOptions {
+	return {
+		...(project.providers ? { providers: project.providers } : {}),
+		...(project.stages ? { stages: project.stages } : {}),
+	};
 }
 
 /** The project directory, resolved; it must exist. */
@@ -30,6 +42,7 @@ export async function openProject(
 	directory: string,
 	app?: string,
 	providers?: readonly ProviderCatalogEntry[],
+	stages?: readonly StageCatalogEntry[],
 ): Promise<Project> {
 	let root: string;
 	try {
@@ -41,6 +54,7 @@ export async function openProject(
 		root,
 		...(app ? { app } : {}),
 		...(providers ? { providers } : {}),
+		...(stages ? { stages } : {}),
 	};
 }
 
@@ -131,11 +145,7 @@ export async function validateInProject(
 		typeof spec === "object" && spec !== null
 			? await extendedOf(project, spec as Spec)
 			: { extended: {}, issues: [] };
-	const issues = validateSpec(
-		spec,
-		loaded.extended,
-		project.providers ? { providers: project.providers } : {},
-	);
+	const issues = validateSpec(spec, loaded.extended, codegenOptionsOf(project));
 	const known = new Set(
 		issues.map((issue) => `${issue.code}@${issue.path.join(".")}`),
 	);

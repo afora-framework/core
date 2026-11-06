@@ -130,6 +130,16 @@ export function stageDescriptionOf(stage: Stage): StageDescription {
 	return descriptions.get(stage) ?? opaque;
 }
 
+/**
+ * Whether a factory made by `transformOf` or `sinkOf` builds transforms or
+ * sinks, without calling it; `undefined` for any other function.
+ */
+export function stageKindOf(
+	factory: StageFactory,
+): "transform" | "sink" | undefined {
+	return factories.get(factory)?.kind;
+}
+
 /** Whether `value` is shaped as a stage (made by a factory or written by hand). */
 export function isStage(value: unknown): value is Stage {
 	if (typeof value !== "object" || value === null) return false;

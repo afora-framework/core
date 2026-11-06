@@ -118,4 +118,38 @@ a file of your own.
 - Values: \`"$input.key"\`, \`"$context.key"\`, \`"$env.<dependency>.VAR"\`, \`"$name.path.0"\` (a bound result); a literal; \`{ "literal": "$5" }\` for a string that
   starts with $; or an object/array of values. No expressions: compute with \`run\`.
 - \`afora_extract\` needs \`imports\` for \`useCases.<Name>\` (hand-written execute) and \`useCases.<Name>.run.<name>\` (run functions).
+
+## Commands and outputs
+
+\`\`\`json
+{
+  "commands": {
+    "Users": {
+      "description": "Accounts.", "tags": ["public"],
+      "context": { "fields": { "userId": "id?" } },
+      "useCases": { "register": "Register" },
+      "transaction": true
+    }
+  },
+  "outputs": {
+    "Api": {
+      "commands": ["Users"],
+      "statuses": { "UserAlreadyExists": 409 },
+      "pipe": [
+        { "transform": "select", "options": { "tags": ["public"] } },
+        { "sink": "openapi", "options": { "info": { "title": "Blog", "version": "1.0.0" } } }
+      ]
+    }
+  }
+}
+\`\`\`
+
+- \`commands\`: \`useCases\` maps an operation name (an identifier) to a declared use case; \`context\` is a blueprint name or \`{ "fields": {...} }\`.
+  \`transaction: true\` runs each call in a transaction of the repositories' provider: it is checked when the code runs, not by the validator
+  (the provider is unknown then). \`events\` is \`"after-commit"\` (default), \`"manual"\` or \`{ "import": "./events.ts#dispatch" }\` (a handler);
+  \`onEventError\` is an import and only with \`after-commit\`. Defaults (\`transaction: false\`, \`events: "after-commit"\`, no tags) are not written.
+- \`outputs\`: \`commands\` are declared commands; \`statuses\` maps an exception name (declared or exported by @afora/core) to a status from 400 to 599;
+  \`pipe\` is transforms and, last, at most one sink, each \`{ "transform" | "sink": name, "options"?: {...JSON} }\` with a name from the \`stages\` of
+  \`afora_catalog\` (\`select\`, \`openapi\`, plus the ones given to the server with \`--stages\`), or \`{ "import": "./stages.ts#auth" }\` for a stage written by hand.
+- \`afora_extract\` needs \`imports\` for \`commands.<Name>.events\`, \`commands.<Name>.onEventError\` and \`outputs.<Name>.pipe.<index>\` (hand-written ones).
 `;

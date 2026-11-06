@@ -419,6 +419,91 @@ const UseCaseDeclaration = Type.Object(
 	{ additionalProperties: false },
 );
 
+const CommandDeclaration = Type.Object(
+	{
+		description: Type.Optional(Type.String()),
+		tags: Type.Optional(StringList("Tags, for documentation.")),
+		context: Type.Optional(BlueprintRef),
+		useCases: Type.Record(Type.String({ pattern: KEY }), Type.String(), {
+			minProperties: 1,
+			description:
+				'Operation name -> name of a declared use case (e.g. { "register": "Register" }).',
+		}),
+		transaction: Type.Optional(
+			Type.Boolean({
+				default: false,
+				description:
+					"Runs every call in a transaction of the provider of the repositories (checked when the code runs: the provider must support it).",
+			}),
+		),
+		events: Type.Optional(
+			Type.Union(
+				[Type.Literal("after-commit"), Type.Literal("manual"), ImportRef],
+				{
+					default: "after-commit",
+					description:
+						'"after-commit" (default), "manual" or { "import": "./events.ts#dispatch" } (a handler written by hand).',
+				},
+			),
+		),
+		onEventError: Type.Optional(ImportRef),
+	},
+	{ additionalProperties: false },
+);
+
+const StageOptions = Type.Record(Type.String(), Type.Unknown(), {
+	description: "JSON options of the stage factory.",
+});
+
+const PipeEntry = Type.Union(
+	[
+		Type.Object(
+			{
+				transform: Type.String({
+					description:
+						"A transform of the stage catalog (afora_catalog stages).",
+				}),
+				options: Type.Optional(StageOptions),
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				sink: Type.String({
+					description: "A sink of the stage catalog; only the last stage.",
+				}),
+				options: Type.Optional(StageOptions),
+			},
+			{ additionalProperties: false },
+		),
+		ImportRef,
+	],
+	{
+		description:
+			'{ "transform": name, "options"? }, { "sink": name, "options"? } or { "import": "./stages.ts#auth" } (a stage written by hand).',
+	},
+);
+
+const OutputDeclaration = Type.Object(
+	{
+		commands: Type.Array(Type.String({ pattern: NAME }), {
+			minItems: 1,
+			uniqueItems: true,
+			description: "Names of declared commands.",
+		}),
+		statuses: Type.Optional(
+			Type.Record(Type.String(), Type.Integer({ minimum: 400, maximum: 599 }), {
+				description:
+					"HTTP-style status by exception name (declared or exported by @afora/core).",
+			}),
+		),
+		pipe: Type.Array(PipeEntry, {
+			description: "Transforms, then at most one sink as the last stage.",
+		}),
+	},
+	{ additionalProperties: false },
+);
+
 /** The JSON Schema of `afora.json`, version 1. */
 export const specSchema = Type.Object(
 	{
@@ -476,6 +561,12 @@ export const specSchema = Type.Object(
 			Names(Exception, "Exceptions (exceptionOf), by name."),
 		),
 		useCases: Type.Optional(Names(UseCaseDeclaration, "Use cases, by name.")),
+		commands: Type.Optional(
+			Names(CommandDeclaration, "Commands (commandOf), by name."),
+		),
+		outputs: Type.Optional(
+			Names(OutputDeclaration, "Outputs (outputOf), by name."),
+		),
 	},
 	{
 		additionalProperties: false,
@@ -494,4 +585,6 @@ export const declarationSchemas = {
 	repository: RepositoryDeclaration,
 	exception: Exception,
 	useCase: UseCaseDeclaration,
+	command: CommandDeclaration,
+	output: OutputDeclaration,
 } as const;

@@ -4,6 +4,7 @@ import { catalog, stdProperty } from "../catalog";
 import { fieldsOfDecl, orderOf } from "../graph";
 import { type Field, parseFields } from "../model";
 import { defaultMessageOf, normalizeSpec } from "../normalize";
+import { pipeKindOf } from "../output";
 import { isImportObject, parseImportRef } from "../provider";
 import { type Decl, type Scope, scopeOf } from "../scope";
 import { isIdentifier } from "../spec/field";
@@ -14,6 +15,7 @@ import {
 	type ResolvedSpec,
 	type Spec,
 	type SpecIssue,
+	type StageCatalogEntry,
 } from "../spec/types";
 import { errorNameOf, isImported } from "../use-case";
 import { validateSpec } from "../validate";
@@ -49,6 +51,8 @@ export const GENERATED_FILES = [
 	"repositories.ts",
 	"exceptions.ts",
 	"use-cases.ts",
+	"commands.ts",
+	"outputs.ts",
 	"application.ts",
 	"index.ts",
 ] as const;
@@ -73,7 +77,9 @@ type KindFile =
 	| "environments.ts"
 	| "repositories.ts"
 	| "exceptions.ts"
-	| "use-cases.ts";
+	| "use-cases.ts"
+	| "commands.ts"
+	| "outputs.ts";
 
 const FILE_OF_KIND: Readonly<Record<Decl["kind"], KindFile>> = {
 	property: "properties.ts",
@@ -84,6 +90,8 @@ const FILE_OF_KIND: Readonly<Record<Decl["kind"], KindFile>> = {
 	repository: "repositories.ts",
 	exception: "exceptions.ts",
 	useCase: "use-cases.ts",
+	command: "commands.ts",
+	output: "outputs.ts",
 };
 
 /** Where a file merged into another one goes: the later in this order. */
@@ -430,6 +438,8 @@ function environmentDoc(decl: Decl, e: Emitter): Doc {
 /** What provider expressions need: the catalog and the names an import must not take. */
 interface Providers {
 	readonly catalog: ReadonlyMap<string, ProviderCatalogEntry>;
+	/** The stage factories supplied to codegen, by name. */
+	readonly stages: ReadonlyMap<string, StageCatalogEntry>;
 	readonly taken: ReadonlySet<string>;
 }
 
@@ -487,7 +497,7 @@ function repositoryDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 }
 
 /** A list of identifiers, such as `[Users, Posts]`. */
-function listDoc(names: readonly string[]): Doc {
+function listDoc(names: readonly Doc[]): Doc {
 	return group([
 		"[",
 		indent([softline, join([",", line], names)]),
@@ -639,6 +649,133 @@ function useCaseDoc(
 		" extends ",
 		callWithObject(maker, objectDoc(props, true)),
 		" {}",
+	];
+}
+
+// ---------------------------------------------------------------- commands and outputs
+
+/** A reference to a use case: its class, or the hand-written one when it has no steps. */
+function useCaseRefDoc(
+	name: string,
+	e: Emitter,
+	scope: Scope,
+	providers: Providers,
+): string {
+	const decl = scope.decls.get(name) as Decl;
+	if (decl.via === undefined && isImported(decl.spec)) {
+		const { module, name: exported } = parseImportRef(
+			(decl.spec.implementation as { import: string }).import,
+		) as { module: string; name: string };
+		const taken = new Set(providers.taken);
+		taken.delete(name);
+		return e.bind(module, exported, taken);
+	}
+	return e.ref(name);
+}
+
+/** A hand-written function or stage, imported as it is. */
+function importedDoc(value: unknown, e: Emitter, providers: Providers): string {
+	const { module, name } = parseImportRef(
+		(value as { import: string }).import,
+	) as { module: string; name: string };
+	return e.bind(module, name, providers.taken);
+}
+
+function commandDoc(
+	decl: Decl,
+	e: Emitter,
+	scope: Scope,
+	providers: Providers,
+): Doc {
+	const { spec } = decl;
+	const props: [string, Doc][] = [["name", literal(decl.name)]];
+	if (typeof spec.description === "string") {
+		props.push(["description", literal(spec.description)]);
+	}
+	if (Array.isArray(spec.tags) && spec.tags.length > 0) {
+		props.push(["tags", literal(spec.tags)]);
+	}
+	if (spec.context !== undefined) {
+		props.push(["context", blueprintRefDoc(spec.context, e)]);
+	}
+	props.push([
+		"useCases",
+		objectDoc(
+			Object.entries(spec.useCases as Record<string, string>).map(
+				([op, name]) => [op, useCaseRefDoc(name, e, scope, providers)] as const,
+			),
+			false,
+			true,
+		),
+	]);
+	if (spec.transaction === true) props.push(["transaction", "true"]);
+	if (spec.events !== undefined) {
+		props.push([
+			"events",
+			spec.events === "manual"
+				? literal("manual")
+				: importedDoc(spec.events, e, providers),
+		]);
+	}
+	if (spec.onEventError !== undefined) {
+		props.push(["onEventError", importedDoc(spec.onEventError, e, providers)]);
+	}
+	return [
+		"export const ",
+		decl.name,
+		" = ",
+		callWithObject(e.use("commandOf"), objectDoc(props, true)),
+		";",
+	];
+}
+
+/** `select({ tags: ["public"] })`, `openapi({ ... })` or the imported stage. */
+function stageDoc(
+	entry: Record<string, unknown>,
+	e: Emitter,
+	providers: Providers,
+): Doc {
+	if (pipeKindOf(entry) === "import") return importedDoc(entry, e, providers);
+	const name = (entry.transform ?? entry.sink) as string;
+	const supplied = providers.stages.get(name);
+	const factory = supplied
+		? e.bind(supplied.module, supplied.export, providers.taken)
+		: e.use(name);
+	const options = entry.options as Record<string, unknown> | undefined;
+	return options && Object.keys(options).length > 0
+		? callWithObject(factory, literal(options))
+		: `${factory}()`;
+}
+
+function outputDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
+	const { spec } = decl;
+	const props: [string, Doc][] = [
+		["name", literal(decl.name)],
+		[
+			"commands",
+			listDoc((spec.commands as string[]).map((name) => e.ref(name))),
+		],
+	];
+	const statuses = spec.statuses as Record<string, number> | undefined;
+	if (statuses && Object.keys(statuses).length > 0) {
+		props.push(["statuses", literal(statuses)]);
+	}
+	props.push([
+		"pipe",
+		(spec.pipe as Record<string, unknown>[]).length === 0
+			? "[]"
+			: listDoc(
+					(spec.pipe as Record<string, unknown>[]).map((entry) =>
+						stageDoc(entry, e, providers),
+					),
+				),
+	]);
+	return [
+		"export const ",
+		decl.name,
+		" = ",
+		callWithObject(e.use("outputOf"), objectDoc(props, true)),
+		";",
 	];
 }
 
@@ -807,6 +944,7 @@ export function generate(
 		catalog: new Map(
 			(options.providers ?? []).map((entry) => [entry.name, entry]),
 		),
+		stages: new Map((options.stages ?? []).map((entry) => [entry.name, entry])),
 		taken: new Set([
 			...catalog().reservedDeclarationNames,
 			...takenNames,
@@ -866,6 +1004,12 @@ export function generate(
 				break;
 			case "useCase":
 				body.push(useCaseDoc(decl, e, scope, providers));
+				break;
+			case "command":
+				body.push(commandDoc(decl, e, scope, providers));
+				break;
+			case "output":
+				body.push(outputDoc(decl, e, providers));
 				break;
 		}
 	}
@@ -938,6 +1082,8 @@ export function generate(
 		["repositories", "repository"],
 		["exceptions", "exception"],
 		["useCases", "useCase"],
+		["commands", "command"],
+		["outputs", "output"],
 	] as const) {
 		const entries = own
 			.filter((decl) => decl.kind === kind)
