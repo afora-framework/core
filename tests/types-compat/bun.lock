@@ -8,7 +8,7 @@
         "slugify": "^1.6.9",
         "ts5": "npm:typescript@5",
         "ts55": "npm:typescript@5.5.4",
-        "typebox": "1.4.3",
+        "typebox": "^1",
       },
     },
   },

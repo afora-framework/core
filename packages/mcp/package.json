@@ -50,13 +50,14 @@
 	},
 	"dependencies": {
 		"@afora/codegen": "workspace:*",
-		"@modelcontextprotocol/sdk": "^1.32.0",
-		"typebox": "^1.4.3"
+		"@modelcontextprotocol/sdk": "^1.32.0"
 	},
 	"devDependencies": {
-		"@types/bun": "^1.4.4"
+		"@types/bun": "^1.4.4",
+		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.2"
+		"@afora/core": ">=0.0.2",
+		"typebox": "^1"
 	}
 }

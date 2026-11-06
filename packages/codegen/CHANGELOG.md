@@ -4,6 +4,7 @@
 
 ### Changed
 
+- TypeBox (`^1`) is a required peer dependency, shared with `@afora/core` and the generated application's own schemas.
 - Record and entity fields may now be named `blueprint` and `options`, following the core's move of instance metadata to `Meta`. Covered by generation, persistence and extraction round trips; the spec shape is unchanged.
 
 ### Added

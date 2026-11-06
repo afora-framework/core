@@ -6,7 +6,6 @@
       "name": "afora",
       "dependencies": {
         "slugify": "^1.6.9",
-        "typebox": "^1.4.3",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.6.3",
@@ -15,10 +14,12 @@
         "@types/bun": "^1.4.4",
         "husky": "^9.1.7",
         "knip": "^6.43.0",
+        "typebox": "^1.4.3",
         "typescript": "^7.0.2",
         "typescript-language-service": "npm:typescript@5.9.3",
       },
       "peerDependencies": {
+        "typebox": "^1",
         "typescript": ">=5.5",
       },
       "optionalPeers": [
@@ -31,14 +32,13 @@
       "bin": {
         "afora-codegen": "./dist/cli.js",
       },
-      "dependencies": {
-        "typebox": "^1.4.3",
-      },
       "devDependencies": {
         "@types/bun": "^1.4.4",
+        "typebox": "^1.4.3",
       },
       "peerDependencies": {
         "@afora/core": ">=0.0.2",
+        "typebox": "^1",
       },
     },
     "packages/mcp": {
@@ -50,13 +50,14 @@
       "dependencies": {
         "@afora/codegen": "workspace:*",
         "@modelcontextprotocol/sdk": "^1.32.0",
-        "typebox": "^1.4.3",
       },
       "devDependencies": {
         "@types/bun": "^1.4.4",
+        "typebox": "^1.4.3",
       },
       "peerDependencies": {
         "@afora/core": ">=0.0.2",
+        "typebox": "^1",
       },
     },
     "packages/playground": {

@@ -1,5 +1,6 @@
 // Runs the built package on plain Node: `bun run smoke`.
 import assert from "node:assert/strict";
+// The application supplies the TypeBox peer used by these schemas and core.
 import { Type } from "typebox";
 import {
 	blueprintOf,
