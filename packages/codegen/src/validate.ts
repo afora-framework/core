@@ -12,6 +12,7 @@ import {
 	type ResolvedSpec,
 	type SpecIssue,
 } from "./spec/types";
+import { checkException, checkUseCase } from "./use-case";
 
 const TOP_LEVEL_KEYS = [
 	"$schema",
@@ -20,7 +21,6 @@ const TOP_LEVEL_KEYS = [
 	"extends",
 	"output",
 	"provider",
-	"useCases",
 	...COLLECTIONS,
 ];
 
@@ -908,15 +908,6 @@ function check(
 			issue(["version"], "unsupported_version", '"version" must be 1.'),
 		);
 	}
-	if (input.useCases !== undefined) {
-		issues.push(
-			issue(
-				["useCases"],
-				"use_cases_not_supported",
-				'"useCases" is reserved: use cases are not supported in v1. Remove it.',
-			),
-		);
-	}
 	if (
 		input.name !== undefined &&
 		(typeof input.name !== "string" || input.name === "")
@@ -989,6 +980,25 @@ function check(
 				break;
 			case "repository":
 				checkRepository(decl, scope, providers, issues);
+				break;
+			case "exception":
+				checkException(decl, issues);
+				break;
+			case "useCase":
+				checkUseCase(
+					decl,
+					scope,
+					(value, path) => {
+						const fields = parseFields(value, path, issues);
+						if (!fields) return undefined;
+						checkKeys(fields, path, "inline", issues);
+						for (const [key, field] of Object.entries(fields)) {
+							checkField(field, [...path, key], scope, "inline", issues);
+						}
+						return fields;
+					},
+					issues,
+				);
 				break;
 		}
 	}

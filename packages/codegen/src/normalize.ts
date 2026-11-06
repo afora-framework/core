@@ -11,6 +11,7 @@ import {
 	type Spec,
 	type SpecIssue,
 } from "./spec/types";
+import { errorNameOf } from "./use-case";
 
 type Json = Record<string, unknown>;
 
@@ -145,6 +146,70 @@ function canonicalProvider(value: unknown): unknown {
 	return value;
 }
 
+/** The default message of a declared exception without one. */
+export const defaultMessageOf = (name: string): string => `${name}.`;
+
+function canonicalException(name: string, value: Json): Json {
+	return {
+		layer: value.layer,
+		...(typeof value.message === "string" &&
+		value.message !== defaultMessageOf(name)
+			? { message: value.message }
+			: {}),
+	};
+}
+
+/** A blueprint reference as written: a name stays a name, fields get canonical. */
+function canonicalBlueprintRef(value: unknown): unknown {
+	return isObject(value) ? { fields: fieldsOf(value.fields) } : value;
+}
+
+function cloneJson<Value>(value: Value): Value {
+	return JSON.parse(JSON.stringify(value)) as Value;
+}
+
+/** A core exception is `{ core }` in a step; a declared one is its name. */
+function canonicalStep(step: unknown): unknown {
+	if (!isObject(step)) return step;
+	const copy = cloneJson(step) as Json;
+	if (Object.hasOwn(copy, "ensure")) {
+		const name = errorNameOf(copy.error);
+		if (name !== undefined && catalog().coreExceptions.includes(name)) {
+			copy.error = { core: name };
+		}
+	}
+	return copy;
+}
+
+function canonicalUseCase(value: Json): Json {
+	const tags = keep(value.tags);
+	const errors = keep(value.errors);
+	const dependencies =
+		isObject(value.dependencies) && Object.keys(value.dependencies).length > 0
+			? { dependencies: { ...value.dependencies } }
+			: {};
+	const implementation = isObject(value.implementation)
+		? Array.isArray(value.implementation.steps)
+			? { steps: value.implementation.steps.map(canonicalStep) }
+			: { ...value.implementation }
+		: value.implementation;
+	return {
+		...(typeof value.description === "string"
+			? { description: value.description }
+			: {}),
+		...(tags ? { tags } : {}),
+		...(value.deprecated === true ? { deprecated: true } : {}),
+		input: canonicalBlueprintRef(value.input),
+		response: canonicalBlueprintRef(value.response),
+		...(value.context === undefined
+			? {}
+			: { context: canonicalBlueprintRef(value.context) }),
+		...dependencies,
+		...(errors ? { errors } : {}),
+		implementation,
+	};
+}
+
 const providerOf = (value: unknown): Json =>
 	value === undefined ? {} : { provider: canonicalProvider(value) };
 
@@ -194,6 +259,10 @@ export function normalizeSpec(
 							name,
 							canonicalRecord(name, value, collection === "entities", scope),
 						];
+					case "exceptions":
+						return [name, canonicalException(name, value)];
+					case "useCases":
+						return [name, canonicalUseCase(value)];
 					default: {
 						const relations = keep(value.relations);
 						const environments = keep(value.environments);
@@ -282,6 +351,15 @@ export function compactSpec(normalized: Spec): Spec {
 		if (!isObject(declared)) continue;
 		for (const value of Object.values(declared)) {
 			if (isObject(value)) value.fields = compactFields(value.fields);
+		}
+	}
+	if (isObject(spec.useCases)) {
+		for (const value of Object.values(spec.useCases)) {
+			if (!isObject(value)) continue;
+			for (const key of ["input", "response", "context"]) {
+				const ref = value[key];
+				if (isObject(ref)) ref.fields = compactFields(ref.fields);
+			}
 		}
 	}
 	return spec as unknown as Spec;

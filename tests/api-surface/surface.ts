@@ -58,15 +58,13 @@ export function apiSurface(entry: string): Record<string, string[]> {
 					for (const declaration of symbol.declarations ?? []) {
 						if (visited.has(declaration)) continue;
 						const file = declaration.getSourceFile().fileName;
-						if (!file.startsWith(distRoot) || !file.endsWith(".d.ts"))
-							continue;
+						if (!file.startsWith(distRoot) || !file.endsWith(".d.ts")) continue;
 						if (!isTopLevelDeclaration(declaration)) continue;
 						if (!exportedDeclarations.has(declaration)) {
 							const key = `(internal) ${symbol.name}`;
 							const text = normalize(declaration);
 							const known = surface[key] ?? [];
-							if (!known.includes(text))
-								surface[key] = [...known, text].sort();
+							if (!known.includes(text)) surface[key] = [...known, text].sort();
 						}
 						queue.push(declaration);
 					}

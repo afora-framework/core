@@ -22,7 +22,9 @@ export interface ExtractOptions {
 	 * Where a property that cannot be recreated is imported from, by its name
 	 * (`./opaque` by default). A provider created without `providerOf` cannot be
 	 * described: it needs an entry `"./db.ts#provider"` under the key `provider`
-	 * (the application's) or `repositories.<Name>.provider`.
+	 * (the application's) or `repositories.<Name>.provider`. A use case with a
+	 * hand-written `execute` needs `useCases.<Name>`, and a `run` function of a
+	 * steps use case `useCases.<Name>.run.<name>`, both `"./file.ts#export"`.
 	 */
 	readonly imports?: Readonly<Record<string, string>>;
 }
@@ -87,6 +89,8 @@ class Extraction {
 			...Object.keys(description.entities),
 			...Object.keys(description.environments),
 			...Object.keys(description.repositories),
+			...Object.keys(description.exceptions),
+			...Object.keys(description.useCases),
 		]);
 	}
 
@@ -246,6 +250,20 @@ class Extraction {
 	}
 }
 
+function importFor(
+	imports: Readonly<Record<string, string>> | undefined,
+	key: string,
+	what: string,
+): string {
+	const reference = imports?.[key];
+	if (reference === undefined) {
+		throw new ExtractionError(
+			`${what} cannot be described. Pass imports: { "${key}": "./path/to/file.ts#exportName" } to import it as it is.`,
+		);
+	}
+	return reference;
+}
+
 /**
  * The `afora.json` of an application: the inverse of `generate`. Only the
  * declarations the application registered itself are included; those it
@@ -332,6 +350,73 @@ export function extractSpec(
 			: {}),
 	}));
 
+	const exceptions = entries(description.exceptions, (value, name) => ({
+		layer: value.layer,
+		// Declared with a function as its message: not recreated, so the default one is used.
+		...(value.message === undefined || value.message === `${name}.`
+			? {}
+			: { message: value.message }),
+	}));
+	const useCases = entries(description.useCases, (value, name) => {
+		const steps =
+			value.implementation.kind === "steps"
+				? value.implementation.steps.map((step) => {
+						if ("run" in step && "fn" in step) {
+							const key = `useCases.${name}.run.${step.run}`;
+							return {
+								...step,
+								fn: {
+									import: importFor(
+										options.imports,
+										key,
+										`The function of the step run "${step.run}" of the use case "${name}"`,
+									),
+								},
+							};
+						}
+						return { ...step };
+					})
+				: undefined;
+		return {
+			...(value.description === undefined
+				? {}
+				: { description: value.description }),
+			...(value.tags.length > 0 ? { tags: [...value.tags] } : {}),
+			...(value.deprecated ? { deprecated: true } : {}),
+			input: { fields: extraction.json(value.input) },
+			response: { fields: extraction.json(value.response) },
+			...(value.context === undefined
+				? {}
+				: { context: { fields: extraction.json(value.context) } }),
+			...(Object.keys(value.dependencies).length > 0
+				? {
+						dependencies: Object.fromEntries(
+							Object.entries(value.dependencies).map(([key, dep]) => [
+								key,
+								dep.ref,
+							]),
+						),
+					}
+				: {}),
+			...(value.errors.length > 0
+				? {
+						errors: value.errors.map((error) =>
+							error.kind === "core" ? error.name : error.ref,
+						),
+					}
+				: {}),
+			implementation: steps
+				? { steps }
+				: {
+						import: importFor(
+							options.imports,
+							`useCases.${name}`,
+							`The use case "${name}" has a hand-written execute, so it`,
+						),
+					},
+		};
+	});
+
 	const allProperties = { ...extraction.generated, ...properties };
 	const spec: Json = {
 		version: 1,
@@ -361,6 +446,8 @@ export function extractSpec(
 		...(Object.keys(entities).length > 0 ? { entities } : {}),
 		...(Object.keys(environments).length > 0 ? { environments } : {}),
 		...(Object.keys(repositories).length > 0 ? { repositories } : {}),
+		...(Object.keys(exceptions).length > 0 ? { exceptions } : {}),
+		...(Object.keys(useCases).length > 0 ? { useCases } : {}),
 	};
 	return compactSpec(spec as unknown as Spec);
 }

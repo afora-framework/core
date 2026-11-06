@@ -760,3 +760,186 @@ export const App = applicationOf({ name: "notes", entities: { Note }, repositori
 		expect(ok.data.spec.provider).toEqual({ import: "../app#anonymous" });
 	}, 60_000);
 });
+
+describe("exceptions and use cases", () => {
+	const hashTs =
+		"export const hashPassword = (plain: unknown) => String(plain);\n";
+	const greetTs = `import { GreetBase } from "../domain/use-cases";
+export class Greet extends GreetBase {
+	override async execute() {
+		return { greeting: \`Hello, \${this.input.name}!\` };
+	}
+}
+`;
+	const declarations = [
+		{
+			kind: "entity",
+			name: "User",
+			declaration: {
+				fields: { name: "text", email: "email", hash: "string" },
+				unique: ["email"],
+				sensitive: ["hash"],
+			},
+		},
+		{
+			kind: "repository",
+			name: "Users",
+			declaration: { entity: "User", actions: ["findByEmail", "create"] },
+		},
+		{
+			kind: "exception",
+			name: "UserAlreadyExists",
+			declaration: { layer: "use-case", message: "Taken." },
+		},
+		{
+			kind: "useCase",
+			name: "Register",
+			declaration: {
+				input: {
+					fields: { name: "text", email: "email", plainPassword: "string" },
+				},
+				response: { fields: { user: "User" } },
+				dependencies: { users: "Users" },
+				errors: ["UserAlreadyExists"],
+				implementation: {
+					steps: [
+						{
+							find: "users.findByEmail",
+							args: ["$input.email"],
+							as: "existing",
+						},
+						{
+							ensure: "absent",
+							value: "$existing",
+							error: "UserAlreadyExists",
+						},
+						{
+							run: "hashPassword",
+							fn: { import: "../hash#hashPassword" },
+							args: ["$input.plainPassword"],
+							as: "hash",
+						},
+						{
+							build: "User",
+							values: {
+								name: "$input.name",
+								email: "$input.email",
+								hash: "$hash",
+							},
+							as: "user",
+						},
+						{ create: "users", value: "$user", as: "saved" },
+						{ return: { user: "$saved" } },
+					],
+				},
+			},
+		},
+		{
+			kind: "useCase",
+			name: "Greet",
+			declaration: {
+				input: { fields: { name: "text" } },
+				response: { fields: { greeting: "string" } },
+				implementation: { import: "../handlers/greet#Greet" },
+			},
+		},
+	];
+
+	test("the catalog and the guide teach them", async () => {
+		const { client } = await setup();
+		const catalog = await client.call("afora_catalog");
+		expect(catalog.data.exceptionLayers).toContain("use-case");
+		expect(catalog.data.coreExceptions).toContain("RepositoryUniqueViolation");
+		const guide = (
+			await client.client.readResource({ uri: "afora://spec/guide" })
+		).contents[0] as { text: string };
+		expect(guide.text).toContain("Exceptions and use cases");
+		expect(guide.text).not.toContain("not supported yet");
+	});
+
+	test("authors, generates, runs and extracts them; invalid ones are not written", async () => {
+		const { dir, client } = await setup({
+			"src/hash.ts": hashTs,
+			"src/handlers/greet.ts": greetTs,
+		});
+		for (const declaration of declarations) {
+			const result = await client.call("afora_spec_upsert", declaration);
+			expect(result.data.written, JSON.stringify(result.data)).toBe(true);
+		}
+		const spec = JSON.parse(await readFile(join(dir, "afora.json"), "utf8"));
+		expect(Object.keys(spec)).toEqual([
+			"version",
+			"entities",
+			"repositories",
+			"exceptions",
+			"useCases",
+		]);
+
+		const before = await readFile(join(dir, "afora.json"), "utf8");
+		const bad = await client.call("afora_spec_upsert", {
+			kind: "useCase",
+			name: "Broken",
+			declaration: {
+				input: { fields: {} },
+				response: { fields: {} },
+				implementation: { steps: [{ find: "users.findByEmail", as: "x" }] },
+			},
+		});
+		expect(bad.data.written).toBe(false);
+		expect(bad.data.issues.map((i: { code: string }) => i.code)).toEqual(
+			expect.arrayContaining(["unknown_dependency", "missing_return"]),
+		);
+		expect(await readFile(join(dir, "afora.json"), "utf8")).toBe(before);
+
+		const generated = await client.call("afora_generate");
+		expect(generated.data.generated, JSON.stringify(generated.data)).toBe(true);
+		expect(generated.data.typecheck).toMatchObject({
+			ok: true,
+			diagnostics: [],
+		});
+		expect(await exists(join(dir, "src/domain/exceptions.ts"))).toBe(true);
+		expect(await exists(join(dir, "src/domain/use-cases.ts"))).toBe(true);
+
+		const missing = await client.call("afora_extract", {
+			app: "src/domain/index.ts#App",
+		});
+		expect(missing.isError).toBe(true);
+		expect(missing.data).toContain("useCases.");
+		const extracted = await client.call("afora_extract", {
+			app: "src/domain/index.ts#App",
+			imports: {
+				"useCases.Register.run.hashPassword": "../hash#hashPassword",
+				"useCases.Greet": "../handlers/greet#Greet",
+			},
+		});
+		expect(extracted.isError, JSON.stringify(extracted.data)).toBe(false);
+		expect(extracted.data.valid).toBe(true);
+		expect(extracted.data.spec.useCases.Greet.implementation).toEqual({
+			import: "../handlers/greet#Greet",
+		});
+		expect(extracted.data.spec.exceptions.UserAlreadyExists).toEqual({
+			layer: "use-case",
+			message: "Taken.",
+		});
+		expect(extracted.data.spec.useCases.Register).toEqual(
+			spec.useCases.Register,
+		);
+	}, 120_000);
+
+	test("removing an exception a use case lists is refused", async () => {
+		const { dir, client } = await setup({
+			"src/hash.ts": hashTs,
+			"src/handlers/greet.ts": greetTs,
+		});
+		for (const declaration of declarations) {
+			await client.call("afora_spec_upsert", declaration);
+		}
+		const before = await readFile(join(dir, "afora.json"), "utf8");
+		const removed = await client.call("afora_spec_remove", {
+			kind: "exception",
+			name: "UserAlreadyExists",
+		});
+		expect(removed.data.written).toBe(false);
+		expect(await readFile(join(dir, "afora.json"), "utf8")).toBe(before);
+	});
+});

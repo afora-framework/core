@@ -15,18 +15,18 @@ claude mcp add afora -- bunx @afora/mcp --project .
 
 ## Tools
 
-| Tool                  | What it does                                                                                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `afora_catalog`       | What a spec can use, read from `@afora/core`: Std properties (flags and the `with` options each takes), record plugins, reserved keys, repository action rules.                            |
-| `afora_spec_read`     | Reads `afora.json` with its issues; with no file and an `--app`, the spec extracted from that code (not written).                                                                          |
-| `afora_extract`       | Extracts the spec of an `Application` of the project (a Bun subprocess imports it). Writes nothing.                                                                                        |
-| `afora_spec_validate` | Validates a draft `spec`, or the file on disk; returns `{ valid, issues }`.                                                                                                                |
-| `afora_spec_upsert`   | Adds or replaces one declaration (`kind` + `name` + `declaration`); validates the whole spec and writes only if it is valid.                                                               |
-| `afora_spec_remove`   | Removes one declaration; writes only if the spec stays valid.                                                                                                                              |
-| `afora_spec_write`    | Replaces the whole spec (validated first).                                                                                                                                                 |
-| `afora_generate`      | `dryRun: true` returns the files. Otherwise writes them, then runs `bunx tsc --noEmit -p <project>` if there is a `tsconfig.json` and returns only the diagnostics of the generated files. |
+| Tool                  | What it does                                                                                                                                                                                       |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `afora_catalog`       | What a spec can use, read from `@afora/core`: Std properties (flags and the `with` options each takes), record plugins, reserved keys, repository action rules, exception layers, core exceptions. |
+| `afora_spec_read`     | Reads `afora.json` with its issues; with no file and an `--app`, the spec extracted from that code (not written).                                                                                  |
+| `afora_extract`       | Extracts the spec of an `Application` of the project (a Bun subprocess imports it). Writes nothing.                                                                                                |
+| `afora_spec_validate` | Validates a draft `spec`, or the file on disk; returns `{ valid, issues }`.                                                                                                                        |
+| `afora_spec_upsert`   | Adds or replaces one declaration (`kind` + `name` + `declaration`; kinds include `exception` and `useCase`, with steps); validates the whole spec and writes only if it is valid.                  |
+| `afora_spec_remove`   | Removes one declaration; writes only if the spec stays valid.                                                                                                                                      |
+| `afora_spec_write`    | Replaces the whole spec (validated first).                                                                                                                                                         |
+| `afora_generate`      | `dryRun: true` returns the files. Otherwise writes them, then runs `bunx tsc --noEmit -p <project>` if there is a `tsconfig.json` and returns only the diagnostics of the generated files.         |
 
-Resources: `afora://spec/schema` (JSON Schema of `afora.json`), `afora://catalog` and `afora://spec/guide` (a short guide for the agent: workflow, shape, rules). The `inputSchema` of each tool is JSON Schema derived from the same TypeBox schema as the spec.
+`afora_extract` takes `imports` (`useCases.<Name>`, `useCases.<Name>.run.<name>`) for hand-written use cases and `run` functions. Resources: `afora://spec/schema` (JSON Schema of `afora.json`), `afora://catalog` and `afora://spec/guide` (a short guide for the agent: workflow, shape, rules). The `inputSchema` of each tool is JSON Schema derived from the same TypeBox schema as the spec.
 
 ## Safety
 
