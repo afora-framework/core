@@ -2,6 +2,8 @@
 
 An [MCP](https://modelcontextprotocol.io) server (stdio) that lets an agent build a domain with afora: discover the catalog, edit an `afora.json`, validate it, generate the code with [`@afora/codegen`](../codegen/README.md) and get the TypeScript diagnostics of what was generated.
 
+The project needs `@afora/core` and TypeBox (`typebox: ^1`) as peer dependencies; install them with `bun add @afora/core typebox`.
+
 ```bash
 claude mcp add afora -- bunx @afora/mcp --project .
 # or: afora-mcp --project <dir> [--app src/app.ts#App]

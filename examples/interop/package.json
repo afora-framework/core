@@ -10,6 +10,6 @@
 		"@types/bun": "^1.4.4",
 		"hono": "^4.13.14",
 		"slugify": "^1.6.9",
-		"typebox": "1.4.3"
+		"typebox": "^1"
 	}
 }

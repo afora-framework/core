@@ -51,13 +51,12 @@
 		"build": "rm -rf dist && bun scripts/schema.ts && bun build ./src/index.ts ./src/cli.ts --outdir ./dist --target node --format esm --packages external --tsconfig-override tsconfig.build.json && tsc -p tsconfig.build.json && bun ../../scripts/add-dts-extensions.ts dist",
 		"test": "bun test"
 	},
-	"dependencies": {
+	"devDependencies": {
+		"@types/bun": "^1.4.4",
 		"typebox": "^1.4.3"
 	},
-	"devDependencies": {
-		"@types/bun": "^1.4.4"
-	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.2"
+		"@afora/core": ">=0.0.2",
+		"typebox": "^1"
 	}
 }

@@ -3,8 +3,11 @@
 Describe a domain in an `afora.json` and generate the idiomatic [`@afora/core`](../../README.md) TypeScript for it: the code someone would write by hand (`blueprintOf`, `entityOf`, `recordOf`, `repositoryOf`, `environmentOf`, `applicationOf`), committed, readable and reviewable. It is codegen, not interpretation at runtime. The inverse works too: `extractSpec(app)` gives the `afora.json` of an `Application`.
 
 ```bash
-bun add -d @afora/codegen   # needs @afora/core (a peer dependency) in the project
+bun add @afora/core typebox
+bun add -d @afora/codegen
 ```
+
+`@afora/core` and TypeBox (`typebox: ^1`) are peer dependencies. Generated files use the application's dependencies; codegen does not generate a package manifest.
 
 ```bash
 afora-codegen check [afora.json]                 # validate
