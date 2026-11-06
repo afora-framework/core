@@ -24,11 +24,14 @@ export {
 export { compactSpec, normalizeSpec } from "./normalize";
 export { declarationSchemas, fieldDefinition, specSchema } from "./spec/schema";
 export type {
+	BlueprintRefSpec,
 	BlueprintSpec,
 	CodegenOptions,
+	CoreExceptionRef,
 	EnumField,
 	EnumValue,
 	EnvironmentSpec,
+	ExceptionSpec,
 	FieldSpec,
 	FieldsSpec,
 	ImportRef,
@@ -43,7 +46,11 @@ export type {
 	ResolvedSpec,
 	Spec,
 	SpecIssue,
+	StepSpec,
+	StepValueSpec,
 	TypeField,
+	UseCaseImplementationSpec,
+	UseCaseSpec,
 	WithOptions,
 } from "./spec/types";
 export { COLLECTIONS as COLLECTION_KEYS } from "./spec/types";

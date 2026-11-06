@@ -237,6 +237,188 @@ const RepositoryDeclaration = Type.Object(
 	{ additionalProperties: false },
 );
 
+const BlueprintRef = Type.Union(
+	[
+		Type.String({
+			pattern: NAME,
+			description: "The name of a declared blueprint.",
+		}),
+		Type.Object({ fields: Fields }, { additionalProperties: false }),
+	],
+	{
+		description:
+			'A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).',
+	},
+);
+
+const Exception = Type.Object(
+	{
+		layer: Type.String({
+			description:
+				"One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output (see afora_catalog).",
+		}),
+		message: Type.Optional(
+			Type.String({ description: 'The message. "<Name>." when omitted.' }),
+		),
+	},
+	{ additionalProperties: false },
+);
+
+const StepValue = Type.Unknown({
+	description:
+		'A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.',
+});
+const StepArgs = Type.Optional(Type.Array(StepValue));
+const StepAs = Type.Optional(Type.String({ description: "Binds the result." }));
+const StepErrorRef = Type.Union([
+	Type.String(),
+	Type.Object({ core: Type.String() }, { additionalProperties: false }),
+]);
+
+const Step = Type.Union(
+	[
+		Type.Object(
+			{
+				find: Type.String({
+					description:
+						'"<repository>.<read action>", e.g. "users.findByEmail".',
+				}),
+				args: StepArgs,
+				as: StepAs,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				ensure: Type.Union(
+					[
+						Type.Literal("exists"),
+						Type.Literal("absent"),
+						Type.Literal("equals"),
+						Type.Literal("notEquals"),
+						Type.Literal("true"),
+						Type.Literal("false"),
+					],
+					{ description: "What to check; throws `error` when it fails." },
+				),
+				value: StepValue,
+				other: Type.Optional(StepValue),
+				error: StepErrorRef,
+				details: Type.Optional(StepValue),
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				build: Type.String({ description: "A declared record or entity." }),
+				values: StepValue,
+				as: Type.String(),
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				change: Type.String({ description: "A $reference to a record." }),
+				key: Type.String(),
+				value: StepValue,
+				as: StepAs,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				invoke: Type.String({ description: "A $reference to a record." }),
+				method: Type.String(),
+				args: StepArgs,
+				as: StepAs,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				create: Type.String({ description: "A repository dependency." }),
+				value: StepValue,
+				as: StepAs,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				update: Type.String({ description: "A repository dependency." }),
+				value: StepValue,
+				as: StepAs,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				delete: Type.String({ description: "A repository dependency." }),
+				value: StepValue,
+				as: StepAs,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				call: Type.String({ description: "A use case dependency." }),
+				input: StepValue,
+				as: StepAs,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				run: Type.String({ description: "A name, unique in the use case." }),
+				fn: ImportRef,
+				args: StepArgs,
+				as: StepAs,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object({ return: StepValue }, { additionalProperties: false }),
+	],
+	{
+		description:
+			"A step: find, ensure, build, change, invoke, create, update, delete, call, run or return (exactly one, last).",
+	},
+);
+
+const UseCaseDeclaration = Type.Object(
+	{
+		description: Type.Optional(Type.String()),
+		tags: Type.Optional(StringList("Tags, for documentation.")),
+		deprecated: Type.Optional(Type.Boolean({ default: false })),
+		input: BlueprintRef,
+		response: BlueprintRef,
+		context: Type.Optional(BlueprintRef),
+		dependencies: Type.Optional(
+			Type.Record(Type.String({ pattern: KEY }), Type.String(), {
+				description:
+					"Key -> name of a declared use case, repository or environment.",
+			}),
+		),
+		errors: Type.Optional(
+			StringList(
+				"Declared exceptions, or exceptions exported by @afora/core (afora_catalog coreExceptions), a caller should expect.",
+			),
+		),
+		implementation: Type.Union(
+			[
+				Type.Object(
+					{ steps: Type.Array(Step, { minItems: 1 }) },
+					{ additionalProperties: false },
+				),
+				ImportRef,
+			],
+			{
+				description:
+					'{ "steps": [...] } (complete, no hand-written file) or { "import": "./file.ts#Class" } (a class extending the generated <Name>Base).',
+			},
+		),
+	},
+	{ additionalProperties: false },
+);
+
 /** The JSON Schema of `afora.json`, version 1. */
 export const specSchema = Type.Object(
 	{
@@ -290,9 +472,10 @@ export const specSchema = Type.Object(
 		repositories: Type.Optional(
 			Names(RepositoryDeclaration, "Repositories of entities, by name."),
 		),
-		useCases: Type.Optional(
-			Type.Unknown({ description: "Reserved. Not supported in v1." }),
+		exceptions: Type.Optional(
+			Names(Exception, "Exceptions (exceptionOf), by name."),
 		),
+		useCases: Type.Optional(Names(UseCaseDeclaration, "Use cases, by name.")),
 	},
 	{
 		additionalProperties: false,
@@ -309,4 +492,6 @@ export const declarationSchemas = {
 	entity: RecordDeclaration,
 	environment: Type.Object({ fields: Fields }, { additionalProperties: false }),
 	repository: RepositoryDeclaration,
+	exception: Exception,
+	useCase: UseCaseDeclaration,
 } as const;

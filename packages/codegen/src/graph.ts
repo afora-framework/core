@@ -37,6 +37,36 @@ function stringsOf(value: unknown): string[] {
 		: [];
 }
 
+/** Everything a use case declaration refers to by name: blueprints, types of inline fields, dependencies, errors and the classes of its steps. */
+function useCaseNamesOf(decl: Decl): string[] {
+	const { spec } = decl;
+	const names: string[] = [];
+	for (const key of ["input", "response", "context"]) {
+		const ref = spec[key];
+		if (typeof ref === "string") names.push(ref);
+		else if (ref && typeof ref === "object") {
+			const fields = parseFields((ref as { fields?: unknown }).fields, [], []);
+			if (fields) names.push(...typesIn(fields));
+		}
+	}
+	if (spec.dependencies && typeof spec.dependencies === "object") {
+		names.push(
+			...Object.values(spec.dependencies).filter(
+				(value): value is string => typeof value === "string",
+			),
+		);
+	}
+	names.push(...stringsOf(spec.errors));
+	const implementation = spec.implementation as { steps?: unknown } | undefined;
+	if (Array.isArray(implementation?.steps)) {
+		for (const step of implementation.steps as Record<string, unknown>[]) {
+			if (step && typeof step.build === "string") names.push(step.build);
+			if (step && typeof step.error === "string") names.push(step.error);
+		}
+	}
+	return names;
+}
+
 /** The declarations (by name, in scope) that `decl` needs to be declared first. */
 function dependenciesOf(decl: Decl, scope: Scope): string[] {
 	let names: string[] = [];
@@ -50,6 +80,11 @@ function dependenciesOf(decl: Decl, scope: Scope): string[] {
 				...stringsOf(decl.spec.relations),
 				...stringsOf(decl.spec.environments),
 			];
+			break;
+		case "exception":
+			break;
+		case "useCase":
+			names = useCaseNamesOf(decl);
 			break;
 		default: {
 			const fields = fieldsOfDecl(decl);

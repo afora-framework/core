@@ -77,5 +77,45 @@ a file of your own.
   records, blueprints and nested objects), not through another entity.
 - Environments hold properties only (no lists, no objects).
 - \`extends\`: other specs (relative path to their afora.json, or a package) whose declarations you can reference;
-  the same name for different declarations is a conflict. \`useCases\` is reserved (not supported yet).
+  the same name for different declarations is a conflict.
+
+## Exceptions and use cases
+
+\`\`\`json
+{
+  "exceptions": { "UserAlreadyExists": { "layer": "use-case", "message": "A user with this email already exists." } },
+  "useCases": {
+    "Register": {
+      "description": "Signs a user up.", "tags": ["users"],
+      "input": { "fields": { "name": "text", "email": "email", "plainPassword": "string" } },
+      "response": { "fields": { "user": "User" } },
+      "dependencies": { "users": "Users" },
+      "errors": ["UserAlreadyExists", "RepositoryUniqueViolation"],
+      "implementation": { "steps": [
+        { "find": "users.findByEmail", "args": ["$input.email"], "as": "existing" },
+        { "ensure": "absent", "value": "$existing", "error": "UserAlreadyExists" },
+        { "run": "hashPassword", "fn": { "import": "../hash#hashPassword" }, "args": ["$input.plainPassword"], "as": "hash" },
+        { "build": "User", "values": { "name": "$input.name", "email": "$input.email", "password": "$hash" }, "as": "user" },
+        { "create": "users", "value": "$user", "as": "saved" },
+        { "return": { "user": "$saved" } }
+      ] }
+    }
+  }
+}
+\`\`\`
+
+- \`exceptions\`: \`{ layer, message? }\`; \`layer\` is one of \`exceptionLayers\` of \`afora_catalog\`; the message is "<Name>." when omitted.
+- \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`. \`dependencies\` map a key to a use case, repository
+  or environment. \`errors\` are declared exceptions or exceptions exported by @afora/core (\`coreExceptions\` of \`afora_catalog\`).
+- \`implementation\` is \`{ "steps": [...] }\` (generated complete, no hand-written file) or \`{ "import": "../handlers/x.ts#Name" }\`:
+  the generated file has \`abstract class <Name>Base\`; write \`class Name extends <Name>Base\` with \`execute\` at that path.
+  A use case cannot list an imported (hand-written) use case as a dependency.
+- Steps run in order and \`return\` is last, exactly once: \`find\` ("<repo>.<read action>"), \`ensure\` (exists | absent | equals | notEquals | true | false;
+  \`other\` for the comparisons, \`error\` a declared exception name or a core one, listed in \`errors\`; optional \`details\`), \`build\` (a record or
+  entity name, \`values\`, \`as\`), \`change\` ($ref, \`key\` in the class's change keys, \`value\`), \`invoke\` ($ref, \`method\`, \`args\`),
+  \`create\` / \`update\` / \`delete\` (repository key, \`value\`), \`call\` (use case key, \`input\`) and \`run\` (a unique name, \`fn\` is
+  \`{ "import": "../x.ts#fn" }\`, \`args\`; the function gets (...args, { context })). \`as\` binds the result.
+- Values: \`"$input.key"\`, \`"$context.key"\`, \`"$env.<dependency>.VAR"\`, \`"$name.path.0"\` (a bound result); a literal; \`{ "literal": "$5" }\` for a string that
+  starts with $; or an object/array of values. No expressions: compute with \`run\`.
+- \`afora_extract\` needs \`imports\` for \`useCases.<Name>\` (hand-written execute) and \`useCases.<Name>.run.<name>\` (run functions).
 `;

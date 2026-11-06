@@ -1,8 +1,9 @@
 import { posix } from "node:path";
+import { ExceptionLayers } from "@afora/core";
 import { catalog, stdProperty } from "../catalog";
 import { fieldsOfDecl, orderOf } from "../graph";
-import type { Field } from "../model";
-import { normalizeSpec } from "../normalize";
+import { type Field, parseFields } from "../model";
+import { defaultMessageOf, normalizeSpec } from "../normalize";
 import { isImportObject, parseImportRef } from "../provider";
 import { type Decl, type Scope, scopeOf } from "../scope";
 import { isIdentifier } from "../spec/field";
@@ -14,6 +15,7 @@ import {
 	type Spec,
 	type SpecIssue,
 } from "../spec/types";
+import { errorNameOf, isImported } from "../use-case";
 import { validateSpec } from "../validate";
 import {
 	type Doc,
@@ -45,6 +47,8 @@ export const GENERATED_FILES = [
 	"entities.ts",
 	"environments.ts",
 	"repositories.ts",
+	"exceptions.ts",
+	"use-cases.ts",
 	"application.ts",
 	"index.ts",
 ] as const;
@@ -67,7 +71,9 @@ type KindFile =
 	| "records.ts"
 	| "entities.ts"
 	| "environments.ts"
-	| "repositories.ts";
+	| "repositories.ts"
+	| "exceptions.ts"
+	| "use-cases.ts";
 
 const FILE_OF_KIND: Readonly<Record<Decl["kind"], KindFile>> = {
 	property: "properties.ts",
@@ -76,6 +82,8 @@ const FILE_OF_KIND: Readonly<Record<Decl["kind"], KindFile>> = {
 	entity: "entities.ts",
 	environment: "environments.ts",
 	repository: "repositories.ts",
+	exception: "exceptions.ts",
+	useCase: "use-cases.ts",
 };
 
 /** Where a file merged into another one goes: the later in this order. */
@@ -489,6 +497,151 @@ function listDoc(names: readonly string[]): Doc {
 	]);
 }
 
+// ---------------------------------------------------------------- exceptions and use cases
+
+function exceptionDoc(decl: Decl, e: Emitter): Doc {
+	const layer = Object.entries(ExceptionLayers).find(
+		([, value]) => value === decl.spec.layer,
+	)?.[0] as string;
+	const message =
+		typeof decl.spec.message === "string"
+			? decl.spec.message
+			: defaultMessageOf(decl.name);
+	return [
+		"export const ",
+		decl.name,
+		" = ",
+		callWithObject(
+			e.use("exceptionOf"),
+			objectDoc(
+				[
+					["layer", `${e.use("ExceptionLayers")}.${layer}`],
+					["name", literal(decl.name)],
+					["message", literal(message)],
+				],
+				true,
+			),
+		),
+		";",
+	];
+}
+
+/** `input`, `response` or `context`: a blueprint by name, or the blueprint of fields in place. */
+function blueprintRefDoc(ref: unknown, e: Emitter): Doc {
+	if (typeof ref === "string") return e.ref(ref);
+	const fields = parseFields(
+		(ref as { fields: unknown }).fields,
+		[],
+		[],
+	) as Record<string, Field>;
+	return blueprintDoc(fields, e, false);
+}
+
+/** A step as the class expression the TypeScript form takes: classes and functions in place of names. */
+function stepDoc(
+	step: Record<string, unknown>,
+	e: Emitter,
+	scope: Scope,
+	providers: Providers,
+): Doc {
+	const props = Object.entries(step).map(([key, value]): [string, Doc] => {
+		if (key === "build") return [key, e.ref(value as string)];
+		if (key === "error" && Object.hasOwn(step, "ensure")) {
+			const name = errorNameOf(value) as string;
+			return [
+				key,
+				scope.decls.get(name)?.kind === "exception" ? e.ref(name) : e.use(name),
+			];
+		}
+		if (key === "fn" && Object.hasOwn(step, "run")) {
+			const { module, name } = parseImportRef(
+				(value as { import: string }).import,
+			) as { module: string; name: string };
+			return [key, e.bind(module, name, providers.taken)];
+		}
+		return [key, literal(value)];
+	});
+	return objectDoc(props);
+}
+
+function useCaseDoc(
+	decl: Decl,
+	e: Emitter,
+	scope: Scope,
+	providers: Providers,
+): Doc {
+	const { spec } = decl;
+	const props: [string, Doc][] = [
+		["name", literal(decl.name)],
+		["blueprint", blueprintRefDoc(spec.input, e)],
+		["response", blueprintRefDoc(spec.response, e)],
+	];
+	if (spec.context !== undefined) {
+		props.push(["context", blueprintRefDoc(spec.context, e)]);
+	}
+	const dependencies = Object.entries(
+		(spec.dependencies as Record<string, string> | undefined) ?? {},
+	);
+	if (dependencies.length > 0) {
+		props.push([
+			"dependencies",
+			objectDoc(
+				dependencies.map(([key, name]) => [key, e.ref(name)] as const),
+				false,
+				true,
+			),
+		]);
+	}
+	const errors = ((spec.errors as string[] | undefined) ?? []).map((name) =>
+		scope.decls.get(name)?.kind === "exception" ? e.ref(name) : e.use(name),
+	);
+	if (errors.length > 0) props.push(["errors", listDoc(errors)]);
+	if (typeof spec.description === "string") {
+		props.push(["description", literal(spec.description)]);
+	}
+	if (Array.isArray(spec.tags) && spec.tags.length > 0) {
+		props.push(["tags", literal(spec.tags)]);
+	}
+	if (spec.deprecated === true) props.push(["deprecated", "true"]);
+	const implementation = spec.implementation as {
+		steps?: Record<string, unknown>[];
+	};
+	const maker = e.use("useCaseOf");
+	if (implementation.steps) {
+		const steps = implementation.steps;
+		const docs = steps.map((step) => stepDoc(step, e, scope, providers));
+		const forced =
+			steps.length > 1 && steps.every((step) => Object.keys(step).length > 1);
+		props.push([
+			"steps",
+			group(
+				[
+					"[",
+					indent([softline, join([",", line], docs)]),
+					ifBreak(","),
+					softline,
+					"]",
+				],
+				forced,
+			),
+		]);
+		return [
+			"export class ",
+			decl.name,
+			" extends ",
+			callWithObject(maker, objectDoc(props, true)),
+			" {}",
+		];
+	}
+	return [
+		"export abstract class ",
+		`${decl.name}Base`,
+		" extends ",
+		callWithObject(maker, objectDoc(props, true)),
+		" {}",
+	];
+}
+
 // ---------------------------------------------------------------- files
 
 function compareSpecifiers(a: string, b: string): number {
@@ -654,7 +807,13 @@ export function generate(
 		catalog: new Map(
 			(options.providers ?? []).map((entry) => [entry.name, entry]),
 		),
-		taken: new Set([...catalog().reservedDeclarationNames, ...takenNames]),
+		taken: new Set([
+			...catalog().reservedDeclarationNames,
+			...takenNames,
+			...own
+				.filter((decl) => decl.kind === "useCase" && isImported(decl.spec))
+				.map((decl) => `${decl.name}Base`),
+		]),
 	};
 
 	const emitters = new Map<string, Emitter>();
@@ -701,6 +860,12 @@ export function generate(
 				break;
 			case "repository":
 				body.push(repositoryDoc(decl, e, providers));
+				break;
+			case "exception":
+				body.push(exceptionDoc(decl, e));
+				break;
+			case "useCase":
+				body.push(useCaseDoc(decl, e, scope, providers));
 				break;
 		}
 	}
@@ -771,21 +936,28 @@ export function generate(
 		["entities", "entity"],
 		["environments", "environment"],
 		["repositories", "repository"],
+		["exceptions", "exception"],
+		["useCases", "useCase"],
 	] as const) {
-		const names = own
+		const entries = own
 			.filter((decl) => decl.kind === kind)
 			.map((decl) => decl.name)
 			.sort()
-			.map((name) => app.ref(name));
-		if (names.length > 0) {
-			props.push([
-				key,
-				objectDoc(
-					names.map((n) => [n, n] as const),
-					false,
-					true,
-				),
-			]);
+			.map((name): readonly [string, Doc] => {
+				const decl = scope.decls.get(name) as Decl;
+				if (kind === "useCase" && isImported(decl.spec)) {
+					// The hand-written class, imported under its own name when free.
+					const { module, name: exported } = parseImportRef(
+						(decl.spec.implementation as { import: string }).import,
+					) as { module: string; name: string };
+					const taken = new Set(providers.taken);
+					taken.delete(name);
+					return [name, app.bind(module, exported, taken)];
+				}
+				return [name, app.ref(name)];
+			});
+		if (entries.length > 0) {
+			props.push([key, objectDoc(entries, false, true)]);
 		}
 	}
 	const sortedAppImports = importsFor(app, extendedInfo);
@@ -816,6 +988,19 @@ export function generate(
 	for (const [ref, names] of inheritedByRef) {
 		const info = extendedInfo.get(ref) as { from: string };
 		exportsList.push([info.from, exportFromDoc(names, info.from)]);
+	}
+	const handlers = new Map<string, Set<string>>();
+	for (const decl of own) {
+		if (decl.kind !== "useCase" || !isImported(decl.spec)) continue;
+		const { module, name } = parseImportRef(
+			(decl.spec.implementation as { import: string }).import,
+		) as { module: string; name: string };
+		const names = handlers.get(module) ?? new Set<string>();
+		names.add(name === decl.name ? name : `${name} as ${decl.name}`);
+		handlers.set(module, names);
+	}
+	for (const [module, names] of handlers) {
+		exportsList.push([module, exportFromDoc(names, module)]);
 	}
 	exportsList.sort(([a], [b]) => compareSources(a, b));
 	out.push({

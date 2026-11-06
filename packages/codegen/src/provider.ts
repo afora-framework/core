@@ -25,7 +25,7 @@ export const isImportObject = (
 ): value is { readonly import: unknown } =>
 	isObject(value) && Object.hasOwn(value, "import");
 
-function checkImport(
+export function checkImport(
 	value: Readonly<Record<string, unknown>>,
 	path: Path,
 	issues: SpecIssue[],

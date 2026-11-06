@@ -138,6 +138,104 @@ export interface RepositorySpec {
 	readonly environments?: readonly string[];
 }
 
+/** A declared exception (`exceptionOf`). */
+export interface ExceptionSpec {
+	/** One of the `ExceptionLayers` values: `use-case`, `repository`, `command`, ... */
+	readonly layer: string;
+	/** `"<Name>."` when omitted. */
+	readonly message?: string;
+}
+
+/** A blueprint by name, or declared in place. */
+export type BlueprintRefSpec = string | { readonly fields: FieldsSpec };
+
+/** A value of a step: a `$reference`, a JSON literal (`{ "literal": x }` escapes a `$`) or a mapping. */
+export type StepValueSpec = unknown;
+
+/** A core exception named in a step: `{ "core": "RepositoryUniqueViolation" }`. */
+export interface CoreExceptionRef {
+	readonly core: string;
+}
+
+/** One step of the DSL, as JSON: see `docs/plans/T15-design.md`. */
+export type StepSpec =
+	| {
+			readonly find: string;
+			readonly args?: readonly StepValueSpec[];
+			readonly as?: string;
+	  }
+	| {
+			readonly ensure: string;
+			readonly value: StepValueSpec;
+			readonly other?: StepValueSpec;
+			readonly error: string | CoreExceptionRef;
+			readonly details?: StepValueSpec;
+	  }
+	| {
+			readonly build: string;
+			readonly values: StepValueSpec;
+			readonly as: string;
+	  }
+	| {
+			readonly change: string;
+			readonly key: string;
+			readonly value: StepValueSpec;
+			readonly as?: string;
+	  }
+	| {
+			readonly invoke: string;
+			readonly method: string;
+			readonly args?: readonly StepValueSpec[];
+			readonly as?: string;
+	  }
+	| {
+			readonly create: string;
+			readonly value: StepValueSpec;
+			readonly as?: string;
+	  }
+	| {
+			readonly update: string;
+			readonly value: StepValueSpec;
+			readonly as?: string;
+	  }
+	| {
+			readonly delete: string;
+			readonly value: StepValueSpec;
+			readonly as?: string;
+	  }
+	| {
+			readonly call: string;
+			readonly input: StepValueSpec;
+			readonly as?: string;
+	  }
+	| {
+			readonly run: string;
+			/** The function, imported as it is. */
+			readonly fn: ImportRef;
+			readonly args?: readonly StepValueSpec[];
+			readonly as?: string;
+	  }
+	| { readonly return: StepValueSpec };
+
+/** How a use case is implemented: the steps DSL, or a hand-written class. */
+export type UseCaseImplementationSpec =
+	| { readonly steps: readonly StepSpec[] }
+	| ImportRef;
+
+export interface UseCaseSpec {
+	readonly description?: string;
+	readonly tags?: readonly string[];
+	readonly deprecated?: boolean;
+	readonly input: BlueprintRefSpec;
+	readonly response: BlueprintRefSpec;
+	readonly context?: BlueprintRefSpec;
+	/** Key -> name of a use case, repository or environment. */
+	readonly dependencies?: Readonly<Record<string, string>>;
+	/** Declared exceptions or core exceptions (by class name) a caller should expect. */
+	readonly errors?: readonly string[];
+	readonly implementation: UseCaseImplementationSpec;
+}
+
 /** The afora.json document. */
 export interface Spec {
 	readonly $schema?: string;
@@ -155,8 +253,8 @@ export interface Spec {
 	readonly entities?: Readonly<Record<string, RecordSpec>>;
 	readonly environments?: Readonly<Record<string, EnvironmentSpec>>;
 	readonly repositories?: Readonly<Record<string, RepositorySpec>>;
-	/** Reserved: not supported in v1. */
-	readonly useCases?: unknown;
+	readonly exceptions?: Readonly<Record<string, ExceptionSpec>>;
+	readonly useCases?: Readonly<Record<string, UseCaseSpec>>;
 }
 
 /** A spec with the specs it extends, already loaded, by the reference it uses. */
@@ -182,6 +280,8 @@ export const COLLECTIONS = [
 	"entities",
 	"environments",
 	"repositories",
+	"exceptions",
+	"useCases",
 ] as const;
 
 export type CollectionKey = (typeof COLLECTIONS)[number];
@@ -192,7 +292,9 @@ export type DeclKind =
 	| "record"
 	| "entity"
 	| "environment"
-	| "repository";
+	| "repository"
+	| "exception"
+	| "useCase";
 
 export const KIND_OF: Readonly<Record<CollectionKey, DeclKind>> = {
 	properties: "property",
@@ -201,6 +303,8 @@ export const KIND_OF: Readonly<Record<CollectionKey, DeclKind>> = {
 	entities: "entity",
 	environments: "environment",
 	repositories: "repository",
+	exceptions: "exception",
+	useCases: "useCase",
 };
 
 export const DEFAULT_OUTPUT_DIR = "src/domain";

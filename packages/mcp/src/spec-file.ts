@@ -84,7 +84,6 @@ const TOP_ORDER = [
 	"output",
 	"provider",
 	...COLLECTION_KEYS,
-	"useCases",
 ];
 
 function ordered(spec: Spec): Spec {

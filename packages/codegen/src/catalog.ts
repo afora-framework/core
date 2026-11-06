@@ -57,6 +57,10 @@ export interface Catalog {
 	readonly identityKeys: readonly string[];
 	/** The actions a repository can list, and the rule of each. */
 	readonly repositoryActions: readonly { action: string; rule: string }[];
+	/** The values of `ExceptionLayers`: what an exception's `layer` may be. */
+	readonly exceptionLayers: readonly string[];
+	/** Exceptions `@afora/core` exports: a use case may list them in `errors` and `ensure` them without declaring them. */
+	readonly coreExceptions: readonly string[];
 	/** Everything `@afora/core` exports; a declaration cannot take one of these names. */
 	readonly reservedDeclarationNames: readonly string[];
 }
@@ -197,6 +201,16 @@ function build(): Catalog {
 				rule: "Gives { items, total, limit, offset } for a query (limit 20 by default). Needs no key.",
 			},
 		],
+		exceptionLayers: Object.values(core.ExceptionLayers),
+		coreExceptions: exportsOf
+			.filter(
+				([name, value]) =>
+					name !== "Exception" &&
+					typeof value === "function" &&
+					value.prototype instanceof core.Exception,
+			)
+			.map(([name]) => name)
+			.sort(),
 		reservedDeclarationNames: [...Object.keys(core), "App"].sort(),
 	};
 }

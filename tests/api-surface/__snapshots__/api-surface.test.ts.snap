@@ -2352,6 +2352,30 @@ exports[`afora.json schema 1`] = `
       },
       "type": "object",
     },
+    "exceptions": {
+      "additionalProperties": false,
+      "description": "Exceptions (exceptionOf), by name.",
+      "patternProperties": {
+        "^[A-Z][A-Za-z0-9]*$": {
+          "additionalProperties": false,
+          "properties": {
+            "layer": {
+              "description": "One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output (see afora_catalog).",
+              "type": "string",
+            },
+            "message": {
+              "description": "The message. "<Name>." when omitted.",
+              "type": "string",
+            },
+          },
+          "required": [
+            "layer",
+          ],
+          "type": "object",
+        },
+      },
+      "type": "object",
+    },
     "extends": {
       "description": "Other specs whose declarations this one uses: relative paths to their afora.json, or package names.",
       "items": {
@@ -2750,7 +2774,474 @@ exports[`afora.json schema 1`] = `
       "type": "object",
     },
     "useCases": {
-      "description": "Reserved. Not supported in v1.",
+      "additionalProperties": false,
+      "description": "Use cases, by name.",
+      "patternProperties": {
+        "^[A-Z][A-Za-z0-9]*$": {
+          "additionalProperties": false,
+          "properties": {
+            "context": {
+              "anyOf": [
+                {
+                  "description": "The name of a declared blueprint.",
+                  "pattern": "^[A-Z][A-Za-z0-9]*$",
+                  "type": "string",
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fields": {
+                      "additionalProperties": false,
+                      "description": "Fields by key.",
+                      "patternProperties": {
+                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                          "$ref": "#/$defs/Field",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "fields",
+                  ],
+                  "type": "object",
+                },
+              ],
+              "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
+            },
+            "dependencies": {
+              "description": "Key -> name of a declared use case, repository or environment.",
+              "patternProperties": {
+                "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                  "type": "string",
+                },
+              },
+              "type": "object",
+            },
+            "deprecated": {
+              "default": false,
+              "type": "boolean",
+            },
+            "description": {
+              "type": "string",
+            },
+            "errors": {
+              "description": "Declared exceptions, or exceptions exported by @afora/core (afora_catalog coreExceptions), a caller should expect.",
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "implementation": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "steps": {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "args": {
+                                "items": {
+                                  "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                },
+                                "type": "array",
+                              },
+                              "as": {
+                                "description": "Binds the result.",
+                                "type": "string",
+                              },
+                              "find": {
+                                "description": ""<repository>.<read action>", e.g. "users.findByEmail".",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "find",
+                            ],
+                            "type": "object",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "details": {
+                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              },
+                              "ensure": {
+                                "anyOf": [
+                                  {
+                                    "const": "exists",
+                                    "type": "string",
+                                  },
+                                  {
+                                    "const": "absent",
+                                    "type": "string",
+                                  },
+                                  {
+                                    "const": "equals",
+                                    "type": "string",
+                                  },
+                                  {
+                                    "const": "notEquals",
+                                    "type": "string",
+                                  },
+                                  {
+                                    "const": "true",
+                                    "type": "string",
+                                  },
+                                  {
+                                    "const": "false",
+                                    "type": "string",
+                                  },
+                                ],
+                                "description": "What to check; throws \`error\` when it fails.",
+                              },
+                              "error": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                  },
+                                  {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "core": {
+                                        "type": "string",
+                                      },
+                                    },
+                                    "required": [
+                                      "core",
+                                    ],
+                                    "type": "object",
+                                  },
+                                ],
+                              },
+                              "other": {
+                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              },
+                              "value": {
+                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              },
+                            },
+                            "required": [
+                              "ensure",
+                              "value",
+                              "error",
+                            ],
+                            "type": "object",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "as": {
+                                "type": "string",
+                              },
+                              "build": {
+                                "description": "A declared record or entity.",
+                                "type": "string",
+                              },
+                              "values": {
+                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              },
+                            },
+                            "required": [
+                              "build",
+                              "values",
+                              "as",
+                            ],
+                            "type": "object",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "as": {
+                                "description": "Binds the result.",
+                                "type": "string",
+                              },
+                              "change": {
+                                "description": "A $reference to a record.",
+                                "type": "string",
+                              },
+                              "key": {
+                                "type": "string",
+                              },
+                              "value": {
+                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              },
+                            },
+                            "required": [
+                              "change",
+                              "key",
+                              "value",
+                            ],
+                            "type": "object",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "args": {
+                                "items": {
+                                  "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                },
+                                "type": "array",
+                              },
+                              "as": {
+                                "description": "Binds the result.",
+                                "type": "string",
+                              },
+                              "invoke": {
+                                "description": "A $reference to a record.",
+                                "type": "string",
+                              },
+                              "method": {
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "invoke",
+                              "method",
+                            ],
+                            "type": "object",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "as": {
+                                "description": "Binds the result.",
+                                "type": "string",
+                              },
+                              "create": {
+                                "description": "A repository dependency.",
+                                "type": "string",
+                              },
+                              "value": {
+                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              },
+                            },
+                            "required": [
+                              "create",
+                              "value",
+                            ],
+                            "type": "object",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "as": {
+                                "description": "Binds the result.",
+                                "type": "string",
+                              },
+                              "update": {
+                                "description": "A repository dependency.",
+                                "type": "string",
+                              },
+                              "value": {
+                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              },
+                            },
+                            "required": [
+                              "update",
+                              "value",
+                            ],
+                            "type": "object",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "as": {
+                                "description": "Binds the result.",
+                                "type": "string",
+                              },
+                              "delete": {
+                                "description": "A repository dependency.",
+                                "type": "string",
+                              },
+                              "value": {
+                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              },
+                            },
+                            "required": [
+                              "delete",
+                              "value",
+                            ],
+                            "type": "object",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "as": {
+                                "description": "Binds the result.",
+                                "type": "string",
+                              },
+                              "call": {
+                                "description": "A use case dependency.",
+                                "type": "string",
+                              },
+                              "input": {
+                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              },
+                            },
+                            "required": [
+                              "call",
+                              "input",
+                            ],
+                            "type": "object",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "args": {
+                                "items": {
+                                  "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                },
+                                "type": "array",
+                              },
+                              "as": {
+                                "description": "Binds the result.",
+                                "type": "string",
+                              },
+                              "fn": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "run": {
+                                "description": "A name, unique in the use case.",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "run",
+                              "fn",
+                            ],
+                            "type": "object",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "return": {
+                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              },
+                            },
+                            "required": [
+                              "return",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                        "description": "A step: find, ensure, build, change, invoke, create, update, delete, call, run or return (exactly one, last).",
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "steps",
+                  ],
+                  "type": "object",
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "import": {
+                      "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                      "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "import",
+                  ],
+                  "type": "object",
+                },
+              ],
+              "description": "{ "steps": [...] } (complete, no hand-written file) or { "import": "./file.ts#Class" } (a class extending the generated <Name>Base).",
+            },
+            "input": {
+              "anyOf": [
+                {
+                  "description": "The name of a declared blueprint.",
+                  "pattern": "^[A-Z][A-Za-z0-9]*$",
+                  "type": "string",
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fields": {
+                      "additionalProperties": false,
+                      "description": "Fields by key.",
+                      "patternProperties": {
+                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                          "$ref": "#/$defs/Field",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "fields",
+                  ],
+                  "type": "object",
+                },
+              ],
+              "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
+            },
+            "response": {
+              "anyOf": [
+                {
+                  "description": "The name of a declared blueprint.",
+                  "pattern": "^[A-Z][A-Za-z0-9]*$",
+                  "type": "string",
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fields": {
+                      "additionalProperties": false,
+                      "description": "Fields by key.",
+                      "patternProperties": {
+                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                          "$ref": "#/$defs/Field",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "fields",
+                  ],
+                  "type": "object",
+                },
+              ],
+              "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
+            },
+            "tags": {
+              "description": "Tags, for documentation.",
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+          },
+          "required": [
+            "input",
+            "response",
+            "implementation",
+          ],
+          "type": "object",
+        },
+      },
+      "type": "object",
     },
     "version": {
       "const": 1,

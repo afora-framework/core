@@ -22,8 +22,10 @@ Usage:
 
 --providers is a module exporting \`providers\` (or a default export): an array of
 { name, module, export } entries for the providers "use" may name (inMemory is built in).
---import maps a provider created without providerOf ("provider" or
-"repositories.<Name>.provider") to the export it is imported from.
+--import maps what cannot be described to the export it is imported from: a provider
+created without providerOf ("provider" or "repositories.<Name>.provider"), a use case
+with a hand-written execute ("useCases.<Name>") or a run function of a steps use case
+("useCases.<Name>.run.<name>").
 extract imports the file: use Bun, or Node >= 23.6 for TypeScript files.`;
 
 /** The provider catalog exported by a module: `providers`, or the default export. */
