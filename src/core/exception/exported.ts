@@ -7,6 +7,7 @@ import * as OpenAPI from "../openapi/exceptions";
 import * as Property from "../property/exceptions";
 import * as RecordKeys from "../record/exceptions";
 import * as Repository from "../repository/exceptions";
+import * as UseCaseSteps from "../use-case/exceptions";
 import * as UseCase from "../use-case/use-case";
 import { isDeclaredException } from "./exception";
 
@@ -41,6 +42,7 @@ export function isExportedException(Declared: unknown): boolean {
 			RecordKeys,
 			Repository,
 			UseCase,
+			UseCaseSteps,
 		]) {
 			markExported(...Object.values(module));
 		}
