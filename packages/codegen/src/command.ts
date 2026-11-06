@@ -1,5 +1,5 @@
 import { checkImport, isImportObject } from "./provider";
-import { type Decl, issue, type Scope } from "./scope";
+import { checkEnvironmentNames, type Decl, issue, type Scope } from "./scope";
 import { isIdentifier, isObject } from "./spec/field";
 import type { SpecIssue } from "./spec/types";
 import { checkBlueprintRef, type InlineChecker } from "./use-case";
@@ -12,6 +12,7 @@ const COMMAND_KEYS = [
 	"context",
 	"useCases",
 	"transaction",
+	"environments",
 	"events",
 	"onEventError",
 ];
@@ -67,6 +68,12 @@ export function checkCommand(
 			),
 		);
 	}
+	checkEnvironmentNames(
+		spec.environments,
+		[...path, "environments"],
+		scope,
+		issues,
+	);
 	if (spec.tags !== undefined) {
 		const { tags } = spec;
 		if (

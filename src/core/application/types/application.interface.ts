@@ -287,6 +287,8 @@ export interface CommandDescription {
 	/** Each operation and the name of its use case in the application. */
 	readonly operations: Readonly<Record<string, { readonly ref: string }>>;
 	readonly transaction: boolean;
+	/** The names of its environments, when it declares any. */
+	readonly environments?: readonly string[];
 	readonly events: "after-commit" | "manual" | { readonly kind: "opaque" };
 	readonly onEventError?: { readonly kind: "opaque" };
 }

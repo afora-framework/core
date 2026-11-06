@@ -446,6 +446,9 @@ export function extractSpec(
 			]),
 		),
 		...(value.transaction ? { transaction: true } : {}),
+		...(value.environments && value.environments.length > 0
+			? { environments: [...value.environments] }
+			: {}),
 		...(value.events === "after-commit"
 			? {}
 			: {

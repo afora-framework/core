@@ -431,9 +431,11 @@ export abstract class AbstractUseCase<
 				continue;
 			}
 			if (isEnvironment(dependency)) {
-				// Read on use, so that a use case is built without its environment.
+				// Read on use, so that a use case is built without its environment;
+				// a command running the call may give its variables instead.
 				Object.defineProperty(state.dependencies, key, {
-					get: () => dependency.load(),
+					get: () =>
+						state.scope?.environments?.get(dependency) ?? dependency.load(),
 					enumerable: true,
 				});
 				continue;

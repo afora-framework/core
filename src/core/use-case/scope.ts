@@ -7,6 +7,14 @@ import type { IRepositoryProvider } from "../repository/types/repository.interfa
 export interface ExecutionScope {
 	/** Provider used by the call for each provider the repositories declared. */
 	readonly providers: ReadonlyMap<IRepositoryProvider, IRepositoryProvider>;
+	/**
+	 * The variables a command gives the call in place of those an environment
+	 * loads, by environment: a use case that declares it gets these.
+	 */
+	readonly environments?: ReadonlyMap<
+		object,
+		Readonly<Record<string, unknown>>
+	>;
 }
 
 /**

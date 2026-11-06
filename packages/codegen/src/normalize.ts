@@ -222,6 +222,9 @@ function canonicalCommand(value: Json): Json {
 			: { context: canonicalBlueprintRef(value.context) }),
 		useCases: isObject(value.useCases) ? { ...value.useCases } : value.useCases,
 		...(value.transaction === true ? { transaction: true } : {}),
+		...(Array.isArray(value.environments) && value.environments.length > 0
+			? { environments: [...value.environments] }
+			: {}),
 		...(value.events !== undefined && value.events !== "after-commit"
 			? { events: cloneJson(value.events) }
 			: {}),

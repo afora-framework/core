@@ -980,6 +980,13 @@
 							"default": false,
 							"description": "Runs every call in a transaction of the provider of the repositories (checked when the code runs: the provider must support it)."
 						},
+						"environments": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Environments it depends on: command.env, the event handlers and the use cases that declare them get their variables."
+						},
 						"events": {
 							"anyOf": [
 								{

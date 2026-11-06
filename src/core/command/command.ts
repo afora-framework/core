@@ -1,6 +1,12 @@
 import { isBlueprint } from "../blueprint/is-blueprint";
 import type { IBlueprintCollection } from "../blueprint/types/blueprint.interface";
 import type { EntityEvent } from "../entity/event";
+import {
+	type AnyEnvironment,
+	type EnvironmentDependencies,
+	isEnvironment,
+	loadEnvironments,
+} from "../environment/environment";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { guard } from "../exception/guard";
 import { isRepository } from "../repository/repository";
@@ -13,11 +19,13 @@ import {
 	CommandEventFailed,
 	InvalidCommandContext,
 	InvalidCommandDeclaration,
+	InvalidCommandEnvironment,
 	UnknownCommandOperation,
 } from "./exceptions";
 import type {
 	AnyCommand,
 	CommandEventErrorHandler,
+	CommandEventInfo,
 	CommandEvents,
 	CommandExecution,
 	CommandOf,
@@ -132,6 +140,80 @@ function narrowed(
 	return picked;
 }
 
+/** What the `env` of a call gives: the variables of each environment, and all merged. */
+interface CallEnvironment {
+	readonly byEnvironment: ReadonlyMap<
+		object,
+		Readonly<Record<string, unknown>>
+	>;
+	readonly merged: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The variables of each of `environments` with `given` over them, validated
+ * by its blueprint. An environment whose every key is given is not loaded.
+ */
+function callEnvironment(
+	source: string,
+	environments: readonly AnyEnvironment[],
+	given: unknown,
+): CallEnvironment {
+	if (typeof given !== "object" || given === null || Array.isArray(given)) {
+		throw new InvalidCommandEnvironment({
+			source,
+			details: { keys: [], issues: [] },
+		});
+	}
+	const values = given as Record<string, unknown>;
+	const unknownKeys = Object.keys(values).filter(
+		(key) =>
+			!environments.some((environment) =>
+				Object.hasOwn(environment.blueprint.properties, key),
+			),
+	);
+	if (unknownKeys.length > 0) {
+		throw new InvalidCommandEnvironment({
+			source,
+			details: { keys: unknownKeys, issues: [] },
+		});
+	}
+	const byEnvironment = new Map<object, Readonly<Record<string, unknown>>>();
+	const merged: Record<string, unknown> = {};
+	for (const environment of environments) {
+		const keys = Object.keys(environment.blueprint.properties);
+		const picked: Record<string, unknown> = {};
+		for (const key of keys) {
+			if (Object.hasOwn(values, key)) picked[key] = values[key];
+		}
+		const complete = keys.every((key) => Object.hasOwn(picked, key));
+		const base =
+			Object.keys(picked).length === 0 || !complete ? environment.load() : {};
+		if (Object.keys(picked).length === 0) {
+			Object.assign(merged, base);
+			continue;
+		}
+		const parsed = environment.blueprint.safeParse({ ...base, ...picked });
+		if (parsed.issues) {
+			throw new InvalidCommandEnvironment({
+				source,
+				details: {
+					keys: [
+						...new Set(
+							parsed.issues.map((issue) => String(issue.path[0] ?? "")),
+						),
+					],
+					issues: parsed.issues,
+				},
+				cause: parsed.issues.find((issue) => issue.cause)?.cause,
+			});
+		}
+		const value = Object.freeze(parsed.value as Record<string, unknown>);
+		byEnvironment.set(environment, value);
+		Object.assign(merged, value);
+	}
+	return { byEnvironment, merged: Object.freeze(merged) };
+}
+
 /**
  * Groups use cases under operation names and is the boundary of a call: the
  * context is validated once, a transaction can wrap the use case, and the
@@ -140,7 +222,10 @@ function narrowed(
 export function commandOf<
 	const UseCases extends CommandUseCases,
 	Context extends IBlueprintCollection | undefined = undefined,
->(settings: CommandSettings<UseCases, Context>): CommandOf<UseCases, Context> {
+	Environment extends EnvironmentDependencies | undefined = undefined,
+>(
+	settings: CommandSettings<UseCases, Context, Environment>,
+): CommandOf<UseCases, Context, Environment> {
 	const { name, description, context, useCases, onEventError } = settings;
 	const source = typeof name === "string" ? name : "commandOf";
 	const invalid = (reason: string): never => {
@@ -187,6 +272,24 @@ export function commandOf<
 	if (typeof transaction !== "boolean") {
 		invalid("Expected transaction to be a boolean.");
 	}
+	const declaredEnvironments: unknown = settings.environmentDependencies;
+	const environments: readonly AnyEnvironment[] = Object.freeze(
+		declaredEnvironments === undefined
+			? []
+			: isEnvironment(declaredEnvironments)
+				? [declaredEnvironments]
+				: Array.isArray(declaredEnvironments)
+					? [...declaredEnvironments]
+					: [null as never],
+	);
+	if (
+		!environments.every(isEnvironment) ||
+		new Set(environments).size !== environments.length
+	) {
+		invalid(
+			"Expected environmentDependencies to be distinct environments made by environmentOf.",
+		);
+	}
 	const events: CommandEvents =
 		settings.events === undefined ? "after-commit" : settings.events;
 	if (
@@ -221,11 +324,12 @@ export function commandOf<
 	const perform = async (
 		op: string,
 		input: unknown,
-		options: { context?: unknown } | undefined,
+		options: { context?: unknown; env?: unknown } | undefined,
 	): Promise<{
 		value: unknown;
 		events: EntityEvent[];
 		context: unknown;
+		env: () => Readonly<Record<string, unknown>>;
 	}> => {
 		if (typeof op !== "string" || !Object.hasOwn(frozenUseCases, op)) {
 			throw new UnknownCommandOperation({
@@ -249,7 +353,21 @@ export function commandOf<
 			callContext = checked.value;
 			given = narrowed(UseCase, callContext);
 		}
-		const run = async (scope: ExecutionScope | undefined) => {
+		const overrides =
+			options?.env === undefined
+				? undefined
+				: callEnvironment(where, environments, options.env);
+		const withEnvironments = (
+			scope: ExecutionScope | undefined,
+		): ExecutionScope | undefined =>
+			overrides === undefined || overrides.byEnvironment.size === 0
+				? scope
+				: {
+						providers: scope?.providers ?? new Map(),
+						environments: overrides.byEnvironment,
+					};
+		const run = async (declared: ExecutionScope | undefined) => {
+			const scope = withEnvironments(declared);
 			const useCase = new UseCase(input, { context: given, [ScopeKey]: scope });
 			const value = await useCase.execute();
 			return { value, events: useCase.pullEvents() };
@@ -264,7 +382,11 @@ export function commandOf<
 						)
 					: run(undefined),
 		);
-		return { ...outcome, context: callContext };
+		return {
+			...outcome,
+			context: callContext,
+			env: () => overrides?.merged ?? loadEnvironments(environments),
+		};
 	};
 
 	const command = {
@@ -275,18 +397,31 @@ export function commandOf<
 		context,
 		useCases: frozenUseCases,
 		transaction,
+		environments,
+		get env() {
+			return loadEnvironments(environments);
+		},
 		events,
 		onEventError,
 		operations,
-		async execute(op: string, input: unknown, options?: { context?: unknown }) {
+		async execute(
+			op: string,
+			input: unknown,
+			options?: { context?: unknown; env?: unknown },
+		) {
 			const { value, events } = await perform(op, input, options);
 			return { value, events } satisfies CommandExecution<unknown>;
 		},
-		async run(op: string, input: unknown, options?: { context?: unknown }) {
+		async run(
+			op: string,
+			input: unknown,
+			options?: { context?: unknown; env?: unknown },
+		) {
 			const {
 				value,
 				events: raised,
 				context: callContext,
+				env,
 			} = await perform(op, input, options);
 			await applyPolicy(
 				command as unknown as AnyCommand,
@@ -296,6 +431,7 @@ export function commandOf<
 					operation: op,
 					raised,
 					context: callContext,
+					env,
 				},
 			);
 			return value;
@@ -303,7 +439,7 @@ export function commandOf<
 	};
 	Object.freeze(command);
 	verifiers.set(command, providerOfCall);
-	return command as unknown as CommandOf<UseCases, Context>;
+	return command as unknown as CommandOf<UseCases, Context, Environment>;
 }
 
 /** Step 6: what the command does with the events of a call that succeeded. */
@@ -315,18 +451,24 @@ async function applyPolicy(
 		readonly operation: string;
 		readonly raised: readonly EntityEvent[];
 		readonly context: unknown;
+		readonly env: () => Readonly<Record<string, unknown>>;
 	},
 ): Promise<void> {
 	const { operation, raised } = call;
 	const source = `${command.commandName}.${operation}`;
 	if (policy === "manual") return;
+	// The variables are read only when a handler reads them.
+	const info: CommandEventInfo = {
+		command,
+		operation,
+		context: call.context,
+		get env() {
+			return call.env();
+		},
+	};
 	if (typeof policy === "function") {
 		try {
-			await policy(raised, {
-				command,
-				operation,
-				context: call.context,
-			});
+			await policy(raised, info);
 		} catch (cause) {
 			throw new CommandEventFailed({
 				source,
@@ -353,7 +495,7 @@ async function applyPolicy(
 				});
 			}
 			try {
-				await onEventError(cause, event);
+				await onEventError(cause, event, info);
 			} catch (failure) {
 				throw new CommandEventFailed({
 					source,

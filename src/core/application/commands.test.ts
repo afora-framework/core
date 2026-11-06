@@ -6,6 +6,7 @@ import {
 	commandOf,
 	ExceptionLayers,
 	entityOf,
+	environmentOf,
 	exceptionOf,
 	InvalidApplicationDeclaration,
 	InvalidCommandDeclaration,
@@ -361,5 +362,44 @@ describe("transactions over repositories an application binds", () => {
 				provider: plain as never,
 			}),
 		).toThrow(InvalidCommandDeclaration);
+	});
+});
+
+describe("environments", () => {
+	const Queue = environmentOf(
+		blueprintOf((ctx) => ({ QUEUE_URL: ctx.url })),
+		{ source: () => ({ QUEUE_URL: "https://queue.example.com" }) },
+	);
+	const Queued = commandOf({
+		name: "Queued",
+		useCases: { count: Count },
+		environmentDependencies: Queue,
+	});
+
+	test("the environments of a command must be registered", () => {
+		try {
+			applicationOf({ name: "a", ...base, commands: { Queued } });
+			throw new Error("did not throw");
+		} catch (error) {
+			expect(error).toBeInstanceOf(UnregisteredApplicationReference);
+			expect((error as { details: { command: string } }).details.command).toBe(
+				"Queued",
+			);
+		}
+	});
+
+	test("are kept when rebuilt over a provider, and described by name", () => {
+		const app = applicationOf({
+			name: "a",
+			...base,
+			environments: { Queue },
+			commands: { Queued },
+			provider: inMemoryProvider(),
+		});
+		const bound = app.commands.Queued;
+		expect(bound).not.toBe(Queued);
+		expect(bound.environments).toEqual([Queue]);
+		expect(bound.env.QUEUE_URL).toBe("https://queue.example.com");
+		expect(app.describe().commands.Queued?.environments).toEqual(["Queue"]);
 	});
 });

@@ -4,6 +4,11 @@ import type {
 	IBlueprintCollection,
 } from "../../blueprint/types/blueprint.interface";
 import type { EntityEvent } from "../../entity/event";
+import type {
+	AnyEnvironment,
+	EnvironmentDependencies,
+	MergedEnvironment,
+} from "../../environment/environment";
 import type { Kind } from "../../symbols/kind";
 import type {
 	AnyUseCaseClass,
@@ -21,6 +26,8 @@ export interface CommandEventInfo {
 	readonly operation: string;
 	/** The context of the call, validated by the command's blueprint if it has one. */
 	readonly context: unknown;
+	/** The variables of the command's environments, with the `env` of the call over them. */
+	readonly env: Readonly<Record<string, unknown>>;
 }
 
 /** Handles all the events of a call, once it succeeded. */
@@ -40,11 +47,13 @@ export type CommandEvents = "after-commit" | "manual" | CommandEventHandler;
 export type CommandEventErrorHandler = (
 	error: unknown,
 	event: EntityEvent,
+	info: CommandEventInfo,
 ) => void | Promise<void>;
 
 export interface CommandSettings<
 	UseCases extends CommandUseCases,
 	Context extends IBlueprintCollection | undefined = undefined,
+	Environment extends EnvironmentDependencies | undefined = undefined,
 > {
 	readonly name: string;
 	readonly description?: string;
@@ -54,6 +63,12 @@ export interface CommandSettings<
 	readonly useCases: UseCases;
 	/** Runs every call in a transaction of the provider of the repositories. Default `false`. */
 	readonly transaction?: boolean;
+	/**
+	 * One environment, or a list merged in order: read on first use as
+	 * `command.env`, given to the event handlers, and to the use cases that
+	 * declare the same environment, with the `env` of a call over them.
+	 */
+	readonly environmentDependencies?: Environment;
 	readonly events?: CommandEvents;
 	readonly onEventError?: CommandEventErrorHandler;
 }
@@ -81,11 +96,28 @@ export type CommandResponse<
 export type CommandOptions<
 	Class extends AnyUseCaseClass,
 	Context extends IBlueprintCollection | undefined,
+	Environment extends EnvironmentDependencies | undefined = undefined,
 > = Context extends IBlueprintCollection
-	? [options: { readonly context: BlueprintInput<Context> }]
+	? [
+			options: {
+				readonly context: BlueprintInput<Context>;
+			} & CommandEnvOption<Environment>,
+		]
 	: Class["context"] extends IBlueprint<infer Properties>
-		? [options: UseCaseOptions<Properties>]
-		: [];
+		? [options: UseCaseOptions<Properties> & CommandEnvOption<Environment>]
+		: Environment extends undefined
+			? []
+			: [options?: CommandEnvOption<Environment>];
+
+/**
+ * The `env` a call can give, when the command declares environments: some of
+ * their variables, in place of the loaded ones for this call.
+ */
+export type CommandEnvOption<
+	Environment extends EnvironmentDependencies | undefined,
+> = Environment extends undefined
+	? { readonly env?: undefined }
+	: { readonly env?: Partial<MergedEnvironment<Environment>> };
 
 /** What `execute` gives: the response and the events, with no policy applied. */
 export interface CommandExecution<Value> {
@@ -97,6 +129,8 @@ export interface CommandExecution<Value> {
 export interface CommandOf<
 	UseCases extends CommandUseCases,
 	Context extends IBlueprintCollection | undefined = undefined,
+	// Declared, so that TypeScript does not measure it on every command (costly).
+	in out Environment extends EnvironmentDependencies | undefined = undefined,
 > {
 	readonly [Kind]: "command";
 	readonly commandName: string;
@@ -107,6 +141,10 @@ export interface CommandOf<
 		: undefined;
 	readonly useCases: Readonly<UseCases>;
 	readonly transaction: boolean;
+	/** The environments of `environmentDependencies`, as a list. */
+	readonly environments: readonly AnyEnvironment[];
+	/** Their variables, merged; read and validated on first use (`InvalidEnvironment`). */
+	readonly env: MergedEnvironment<Environment>;
 	readonly events: CommandEvents;
 	readonly onEventError: CommandEventErrorHandler | undefined;
 	readonly operations: readonly (keyof UseCases & string)[];
@@ -114,16 +152,16 @@ export interface CommandOf<
 	run<Op extends keyof UseCases & string>(
 		op: Op,
 		input: UseCaseInput<UseCases[Op]>,
-		...options: CommandOptions<UseCases[Op], Context>
+		...options: CommandOptions<UseCases[Op], Context, Environment>
 	): Promise<UseCaseResponse<UseCases[Op]>>;
 	/** Runs `op` and gives the response and the events, without applying the policy. */
 	execute<Op extends keyof UseCases & string>(
 		op: Op,
 		input: UseCaseInput<UseCases[Op]>,
-		...options: CommandOptions<UseCases[Op], Context>
+		...options: CommandOptions<UseCases[Op], Context, Environment>
 	): Promise<CommandExecution<UseCaseResponse<UseCases[Op]>>>;
 }
 
 /** Any command. */
 // biome-ignore lint/suspicious/noExplicitAny: heterogeneous commands
-export type AnyCommand = CommandOf<any, any>;
+export type AnyCommand = CommandOf<any, any, any>;

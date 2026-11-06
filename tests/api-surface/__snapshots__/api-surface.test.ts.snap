@@ -312,7 +312,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type AnyBlueprintList = IBlueprintList<any, boolean>;",
   ],
   "AnyCommand": [
-    "export type AnyCommand = CommandOf<any, any>;",
+    "export type AnyCommand = CommandOf<any, any, any>;",
   ],
   "AnyEntityClass": [
     "export type AnyEntityClass = (abstract new (value: never) => object) & { readonly [EntityClassBrand]: true; };",
@@ -411,10 +411,13 @@ exports[`exports of the package and their declarations 1`] = `
     "export type CallableProperty<Property extends { readonly type: IPropertyType<TSchema>; }> = Property & { (options?: OptionsOfProperty<Property>): Property; readonly [Callable]: Property; };",
   ],
   "CommandDescription": [
-    "export interface CommandDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly context?: FieldsDescription; readonly refs?: { readonly context?: string; }; readonly operations: Readonly<Record<string, { readonly ref: string; }>>; readonly transaction: boolean; readonly events: "after-commit" | "manual" | { readonly kind: "opaque"; }; readonly onEventError?: { readonly kind: "opaque"; }; }",
+    "export interface CommandDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly context?: FieldsDescription; readonly refs?: { readonly context?: string; }; readonly operations: Readonly<Record<string, { readonly ref: string; }>>; readonly transaction: boolean; readonly environments?: readonly string[]; readonly events: "after-commit" | "manual" | { readonly kind: "opaque"; }; readonly onEventError?: { readonly kind: "opaque"; }; }",
+  ],
+  "CommandEnvOption": [
+    "export type CommandEnvOption<Environment extends EnvironmentDependencies | undefined> = Environment extends undefined ? { readonly env?: undefined; } : { readonly env?: Partial<MergedEnvironment<Environment>>; };",
   ],
   "CommandEventErrorHandler": [
-    "export type CommandEventErrorHandler = (error: unknown, event: EntityEvent) => void | Promise<void>;",
+    "export type CommandEventErrorHandler = (error: unknown, event: EntityEvent, info: CommandEventInfo) => void | Promise<void>;",
   ],
   "CommandEventFailed": [
     "CommandEventFailed: import("../../index.js").DeclaredExceptionClass<{ readonly operation: string; readonly event?: string; readonly handled: number; readonly remaining: number; }>",
@@ -423,7 +426,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type CommandEventHandler = (events: readonly EntityEvent[], info: CommandEventInfo) => void | Promise<void>;",
   ],
   "CommandEventInfo": [
-    "export interface CommandEventInfo { readonly command: AnyCommand; readonly operation: string; readonly context: unknown; }",
+    "export interface CommandEventInfo { readonly command: AnyCommand; readonly operation: string; readonly context: unknown; readonly env: Readonly<Record<string, unknown>>; }",
   ],
   "CommandEvents": [
     "export type CommandEvents = "after-commit" | "manual" | CommandEventHandler;",
@@ -435,19 +438,19 @@ exports[`exports of the package and their declarations 1`] = `
     "export type CommandInput<Command extends { readonly useCases: CommandUseCases; }, Op extends CommandOperation<Command>> = UseCaseInput<Command["useCases"][Op]>;",
   ],
   "CommandOf": [
-    "export interface CommandOf<UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined = undefined> { readonly [Kind]: "command"; readonly commandName: string; readonly description: string | undefined; readonly tags: readonly string[]; readonly context: Context extends IBlueprintCollection ? IBlueprint<Context> : undefined; readonly useCases: Readonly<UseCases>; readonly transaction: boolean; readonly events: CommandEvents; readonly onEventError: CommandEventErrorHandler | undefined; readonly operations: readonly (keyof UseCases & string)[]; run<Op extends keyof UseCases & string>(op: Op, input: UseCaseInput<UseCases[Op]>, ...options: CommandOptions<UseCases[Op], Context>): Promise<UseCaseResponse<UseCases[Op]>>; execute<Op extends keyof UseCases & string>(op: Op, input: UseCaseInput<UseCases[Op]>, ...options: CommandOptions<UseCases[Op], Context>): Promise<CommandExecution<UseCaseResponse<UseCases[Op]>>>; }",
+    "export interface CommandOf<UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined = undefined, in out Environment extends EnvironmentDependencies | undefined = undefined> { readonly [Kind]: "command"; readonly commandName: string; readonly description: string | undefined; readonly tags: readonly string[]; readonly context: Context extends IBlueprintCollection ? IBlueprint<Context> : undefined; readonly useCases: Readonly<UseCases>; readonly transaction: boolean; readonly environments: readonly AnyEnvironment[]; readonly env: MergedEnvironment<Environment>; readonly events: CommandEvents; readonly onEventError: CommandEventErrorHandler | undefined; readonly operations: readonly (keyof UseCases & string)[]; run<Op extends keyof UseCases & string>(op: Op, input: UseCaseInput<UseCases[Op]>, ...options: CommandOptions<UseCases[Op], Context, Environment>): Promise<UseCaseResponse<UseCases[Op]>>; execute<Op extends keyof UseCases & string>(op: Op, input: UseCaseInput<UseCases[Op]>, ...options: CommandOptions<UseCases[Op], Context, Environment>): Promise<CommandExecution<UseCaseResponse<UseCases[Op]>>>; }",
   ],
   "CommandOperation": [
     "export type CommandOperation<Command extends { readonly useCases: object; }> = keyof Command["useCases"] & string;",
   ],
   "CommandOptions": [
-    "export type CommandOptions<Class extends AnyUseCaseClass, Context extends IBlueprintCollection | undefined> = Context extends IBlueprintCollection ? [ options: { readonly context: BlueprintInput<Context>; } ] : Class["context"] extends IBlueprint<infer Properties> ? [ options: UseCaseOptions<Properties> ] : [ ];",
+    "export type CommandOptions<Class extends AnyUseCaseClass, Context extends IBlueprintCollection | undefined, Environment extends EnvironmentDependencies | undefined = undefined> = Context extends IBlueprintCollection ? [ options: { readonly context: BlueprintInput<Context>; } & CommandEnvOption<Environment> ] : Class["context"] extends IBlueprint<infer Properties> ? [ options: UseCaseOptions<Properties> & CommandEnvOption<Environment> ] : Environment extends undefined ? [ ] : [ options?: CommandEnvOption<Environment> ];",
   ],
   "CommandResponse": [
     "export type CommandResponse<Command extends { readonly useCases: CommandUseCases; }, Op extends CommandOperation<Command>> = UseCaseResponse<Command["useCases"][Op]>;",
   ],
   "CommandSettings": [
-    "export interface CommandSettings<UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined = undefined> { readonly name: string; readonly description?: string; readonly tags?: readonly string[]; readonly context?: IBlueprint<Exclude<Context, undefined>>; readonly useCases: UseCases; readonly transaction?: boolean; readonly events?: CommandEvents; readonly onEventError?: CommandEventErrorHandler; }",
+    "export interface CommandSettings<UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined = undefined, Environment extends EnvironmentDependencies | undefined = undefined> { readonly name: string; readonly description?: string; readonly tags?: readonly string[]; readonly context?: IBlueprint<Exclude<Context, undefined>>; readonly useCases: UseCases; readonly transaction?: boolean; readonly environmentDependencies?: Environment; readonly events?: CommandEvents; readonly onEventError?: CommandEventErrorHandler; }",
   ],
   "CommandUseCases": [
     "export type CommandUseCases = Readonly<Record<string, AnyUseCaseClass>>;",
@@ -691,6 +694,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "InvalidCommandDeclaration": [
     "InvalidCommandDeclaration: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
+  "InvalidCommandEnvironment": [
+    "InvalidCommandEnvironment: import("../../index.js").DeclaredExceptionClass<{ readonly keys: readonly string[]; readonly issues: readonly Issue[]; }>",
   ],
   "InvalidEnvironment": [
     "InvalidEnvironment: import("../../index.js").DeclaredExceptionClass<{ readonly keys: readonly string[]; }>",
@@ -1239,7 +1245,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function blueprintPluginOf<Properties extends IBlueprintCollection>(name: string, properties: Properties): IBlueprintPlugin<Properties, Record<never, never>> & { readonly factories: Record<never, never>; };",
   ],
   "commandOf": [
-    "export declare function commandOf<const UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined = undefined>(settings: CommandSettings<UseCases, Context>): CommandOf<UseCases, Context>;",
+    "export declare function commandOf<const UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined = undefined, Environment extends EnvironmentDependencies | undefined = undefined>(settings: CommandSettings<UseCases, Context, Environment>): CommandOf<UseCases, Context, Environment>;",
   ],
   "configure": [
     "export declare function configure(services: RuntimeServices): void;",
@@ -2325,6 +2331,13 @@ exports[`afora.json schema 1`] = `
             },
             "description": {
               "type": "string",
+            },
+            "environments": {
+              "description": "Environments it depends on: command.env, the event handlers and the use cases that declare them get their variables.",
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
             },
             "events": {
               "anyOf": [

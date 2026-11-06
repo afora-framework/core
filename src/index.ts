@@ -73,10 +73,12 @@ export {
 	CommandEventFailed,
 	InvalidCommandContext,
 	InvalidCommandDeclaration,
+	InvalidCommandEnvironment,
 	UnknownCommandOperation,
 } from "./core/command/exceptions";
 export type {
 	AnyCommand,
+	CommandEnvOption,
 	CommandEventErrorHandler,
 	CommandEventHandler,
 	CommandEventInfo,

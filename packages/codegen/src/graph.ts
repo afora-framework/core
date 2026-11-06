@@ -97,6 +97,7 @@ function dependenciesOf(decl: Decl, scope: Scope): string[] {
 				);
 				if (fields) names.push(...typesIn(fields));
 			}
+			names.push(...stringsOf(decl.spec.environments));
 			if (decl.spec.useCases && typeof decl.spec.useCases === "object") {
 				names.push(
 					...Object.values(decl.spec.useCases).filter(

@@ -26,6 +26,19 @@ export const InvalidCommandContext = exceptionOf({
 });
 
 /**
+ * The `env` of a call holds a key no environment of the command declares, or
+ * a value its blueprint rejects. It is configuration, not input.
+ */
+export const InvalidCommandEnvironment = exceptionOf({
+	layer: ExceptionLayers.Command,
+	name: "InvalidCommandEnvironment",
+	message: (_details: {
+		readonly keys: readonly string[];
+		readonly issues: readonly Issue[];
+	}) => "Invalid Command environment.",
+});
+
+/**
  * An event handler failed after the call succeeded (and, with a
  * transaction, committed). `handled` events ran before the failure and
  * `remaining` events after it were not handled.

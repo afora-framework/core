@@ -194,3 +194,41 @@ export function scopeOf(
 	}
 	return { decls, extended: extendedRefs };
 }
+
+/**
+ * Checks `value` as the `environments` of a declaration at `path`: a list of
+ * distinct names of declared environments. Gives the names, when a list.
+ */
+export function checkEnvironmentNames(
+	value: unknown,
+	path: readonly (string | number)[],
+	scope: Scope,
+	issues: SpecIssue[],
+): string[] {
+	if (value === undefined) return [];
+	if (
+		!Array.isArray(value) ||
+		!value.every((item) => typeof item === "string")
+	) {
+		issues.push(issue(path, "invalid_option", "Must be an array of strings."));
+		return [];
+	}
+	for (const [index, name] of value.entries()) {
+		const here = [...path, index];
+		const other = scope.decls.get(name);
+		if (other?.kind !== "environment") {
+			issues.push(
+				issue(
+					here,
+					"unknown_environment",
+					`"${name}" is not a declared environment.`,
+				),
+			);
+		} else if (value.indexOf(name) !== index) {
+			issues.push(
+				issue(here, "duplicate_environment", `"${name}" is listed twice.`),
+			);
+		}
+	}
+	return value;
+}

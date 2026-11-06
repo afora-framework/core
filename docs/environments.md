@@ -20,4 +20,6 @@ const Posts = repositoryOf({
 
 A variable is converted when its property does not take a string: to `true` or `false` (from `"true"` and `"false"`) for a boolean, and to a number for a number, e.g. `PORT: ctx.integer` reads `"3000"` as `3000`, and `DEBUG: ctx.boolean` reads `"true"` as `true`. A property that takes a string keeps the variable as is, so `"10"` stays a string for `ctx.string`. A value that does not convert is left for the blueprint to reject.
 
+As `environmentDependencies` of a command, `command.env` gives the variables, the event handlers get them as `info.env`, and a call can replace some of them with `run(op, input, { env })` for the use cases that declare the same environment (see [Commands](commands.md#environments)).
+
 An application registers environments in `environments` and `app.describe()` lists them ([Applications](applications.md)).

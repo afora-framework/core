@@ -354,8 +354,22 @@ function validateCommands(source: string, registry: Registry): void {
 	const useCases = new Set(
 		[...registry.useCases.values()].map((entry) => entry.key),
 	);
+	const environments = new Set(
+		[...registry.environments.values()].map((entry) => entry.key),
+	);
 	for (const entry of registry.commands.values()) {
 		const command = entry.value as AnyCommand;
+		for (const environment of command.environments) {
+			if (environments.has(environment)) continue;
+			throw new UnregisteredApplicationReference({
+				source,
+				details: {
+					holder: `command "${entry.name}"`,
+					reference: "an environment",
+					command: entry.name,
+				} as { holder: string; reference: string },
+			});
+		}
 		for (const UseCase of Object.values(command.useCases)) {
 			if (useCases.has(UseCase)) continue;
 			throw new UnregisteredApplicationReference({
@@ -838,6 +852,13 @@ function describeRegistry(
 					]),
 				),
 				transaction: command.transaction,
+				...(command.environments.length === 0
+					? {}
+					: {
+							environments: command.environments.map(
+								(environment) => environmentRefs.get(environment) as string,
+							),
+						}),
 				events:
 					typeof command.events === "function"
 						? ({ kind: "opaque" } as const)
@@ -1060,6 +1081,7 @@ export function applicationOf<
 							]),
 						),
 						transaction: declared.transaction,
+						environmentDependencies: declared.environments,
 						events: declared.events,
 						onEventError: declared.onEventError,
 					} as never);

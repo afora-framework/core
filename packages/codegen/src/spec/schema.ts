@@ -436,6 +436,11 @@ const CommandDeclaration = Type.Object(
 					"Runs every call in a transaction of the provider of the repositories (checked when the code runs: the provider must support it).",
 			}),
 		),
+		environments: Type.Optional(
+			StringList(
+				"Environments it depends on: command.env, the event handlers and the use cases that declare them get their variables.",
+			),
+		),
 		events: Type.Optional(
 			Type.Union(
 				[Type.Literal("after-commit"), Type.Literal("manual"), ImportRef],

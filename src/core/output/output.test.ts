@@ -612,6 +612,9 @@ describe("statusOf", () => {
 		expect(statusOf(named("InvalidUseCaseContext"))).toBe(400);
 		expect(statusOf(named("InvalidCommandContext"))).toBe(400);
 		expect(statusOf(named("Anything", { issues: [] }))).toBe(400);
+		expect(
+			statusOf(named("InvalidCommandEnvironment", { keys: [], issues: [] })),
+		).toBe(500);
 		expect(statusOf(named("Anything", { issues: "no" }))).toBe(500);
 		expect(statusOf(named("RepositoryEntityNotFound"))).toBe(404);
 		expect(

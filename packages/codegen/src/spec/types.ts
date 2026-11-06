@@ -259,6 +259,8 @@ export interface CommandSpec {
 	readonly useCases: Readonly<Record<string, string>>;
 	/** `false` by default. */
 	readonly transaction?: boolean;
+	/** The environments it depends on, given to its use cases and event handlers. */
+	readonly environments?: readonly string[];
 	/** `"after-commit"` by default; a handler is written by hand. */
 	readonly events?: "after-commit" | "manual" | ImportRef;
 	readonly onEventError?: ImportRef;

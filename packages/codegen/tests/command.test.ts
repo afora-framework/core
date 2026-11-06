@@ -400,3 +400,61 @@ export const Hand = applicationOf({
 		expect(await run(domain.App)).toBe("ana@example.com");
 	});
 });
+
+describe("commands: environments", () => {
+	const mailer = edit((c) => {
+		c.environments = {
+			Queue: { fields: { QUEUE_URL: "url" } },
+			Mail: { fields: { FROM: "email" } },
+		};
+		c.commands.Notifier.environments = ["Queue", "Mail"];
+	});
+
+	test("valid, fits the schema, and checks each name", () => {
+		expect(validateSpec(mailer)).toEqual([]);
+		expect(Value.Check(specSchema, mailer)).toBe(true);
+		const bad = (environments: unknown) =>
+			codes(
+				edit((c) => {
+					c.environments = { Queue: { fields: { QUEUE_URL: "url" } } };
+					c.commands.Notifier.environments = environments;
+				}),
+			);
+		expect(bad(["Nope"])).toContain(
+			"unknown_environment@commands.Notifier.environments.0",
+		);
+		expect(bad(["Users"])).toContain(
+			"unknown_environment@commands.Notifier.environments.0",
+		);
+		expect(bad(["Queue", "Queue"])).toContain(
+			"duplicate_environment@commands.Notifier.environments.1",
+		);
+		expect(bad("Queue")).toContain(
+			"invalid_option@commands.Notifier.environments",
+		);
+	});
+
+	test("normalization drops an empty list", () => {
+		const empty = edit((c) => (c.commands.Notifier.environments = []));
+		expect((canonical(empty) as Draft).commands.Notifier.environments).toBe(
+			undefined,
+		);
+	});
+
+	test("generates environmentDependencies and extracts them back", async () => {
+		const files = generate(mailer);
+		const commands = files.find((f) => f.path.endsWith("commands.ts"));
+		expect(commands?.contents).toContain(
+			"environmentDependencies: [Queue, Mail]",
+		);
+		expect(commands?.contents).toContain('from "./environments"');
+		const { domain } = await build(mailer);
+		expect(domain.Notifier.environments).toEqual([domain.Queue, domain.Mail]);
+		const extracted = extractSpec(domain.App, { imports: IMPORTS });
+		expect(extracted.commands?.Notifier?.environments).toEqual([
+			"Queue",
+			"Mail",
+		]);
+		expect(canonical(extracted)).toEqual(canonical(mailer));
+	});
+});

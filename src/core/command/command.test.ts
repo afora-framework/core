@@ -9,10 +9,13 @@ import {
 	type EventDefinition,
 	ExceptionLayers,
 	entityOf,
+	environmentOf,
 	eventOf,
 	exceptionOf,
 	InvalidCommandContext,
 	InvalidCommandDeclaration,
+	InvalidCommandEnvironment,
+	InvalidEnvironment,
 	type IRepositoryProvider,
 	inMemoryProvider,
 	isCommand,
@@ -222,6 +225,7 @@ describe("declaration", () => {
 			InvalidCommandDeclaration,
 			UnknownCommandOperation,
 			InvalidCommandContext,
+			InvalidCommandEnvironment,
 			CommandEventFailed,
 		]) {
 			expect(Declared.layer).toBe(ExceptionLayers.Command);
@@ -832,5 +836,276 @@ describe("execute", () => {
 		await expect(loose(Users).execute("x", {})).rejects.toBeInstanceOf(
 			UnknownCommandOperation,
 		);
+	});
+});
+
+describe("environments", () => {
+	const Mail = environmentOf(
+		blueprintOf((ctx) => ({ FROM: ctx.email, RETRIES: ctx.integer })),
+		{ source: () => ({ FROM: "app@example.com", RETRIES: "3" }) },
+	);
+	const Queue = environmentOf(
+		blueprintOf((ctx) => ({ QUEUE_URL: ctx.url })),
+		{ source: () => ({ QUEUE_URL: "https://queue.example.com" }) },
+	);
+	const Missing = environmentOf(
+		blueprintOf((ctx) => ({ TOKEN: ctx.string })),
+		{
+			source: () => ({}),
+		},
+	);
+	const Sent = blueprintOf((ctx) => ({
+		from: ctx.string,
+		retries: ctx.integer,
+	}));
+
+	class Child extends useCaseOf({
+		name: "Child",
+		blueprint: Empty,
+		response: Sent,
+		dependencies: { mail: Mail },
+	}) {
+		override async execute({ mail = this.dependencies.mail } = {}) {
+			return { from: mail.FROM, retries: mail.RETRIES };
+		}
+	}
+	class Notify extends useCaseOf({
+		name: "Notify",
+		blueprint: Empty,
+		response: Sent,
+		dependencies: { child: Child },
+	}) {
+		override async execute({ child = this.dependencies.child } = {}) {
+			return await child({});
+		}
+	}
+	class Steps extends useCaseOf({
+		name: "Steps",
+		blueprint: Empty,
+		response: blueprintOf((ctx) => ({ from: ctx.string })),
+		dependencies: { mail: Mail },
+		steps: [{ return: { from: "$env.mail.FROM" } }],
+	}) {}
+
+	test("command.env merges the variables of its environments, read on use", () => {
+		const Command = commandOf({
+			name: "Mailer",
+			useCases: { notify: Notify },
+			environmentDependencies: [Mail, Queue],
+		});
+		expect(Command.environments).toEqual([Mail, Queue]);
+		expect(Object.isFrozen(Command.environments)).toBe(true);
+		expect(Command.env).toEqual({
+			FROM: "app@example.com",
+			RETRIES: 3,
+			QUEUE_URL: "https://queue.example.com",
+		});
+		expectTypeOf(Command.env.QUEUE_URL).toEqualTypeOf<string>();
+		expectTypeOf(Command.env.RETRIES).toEqualTypeOf<number>();
+
+		const Single = commandOf({
+			name: "Single",
+			useCases: { notify: Notify },
+			environmentDependencies: Queue,
+		});
+		expect(Single.environments).toEqual([Queue]);
+		expect(Single.env).toEqual({ QUEUE_URL: "https://queue.example.com" });
+	});
+
+	test("an environment is read on use, not on declaration", () => {
+		const Command = commandOf({
+			name: "Lazy",
+			useCases: { notify: Notify },
+			environmentDependencies: Missing,
+		});
+		expect(() => Command.env).toThrow(InvalidEnvironment);
+	});
+
+	test("without environments, env is empty", () => {
+		const Command = commandOf({ name: "None", useCases: { notify: Notify } });
+		expect(Command.environments).toEqual([]);
+		expect(Command.env).toEqual({});
+	});
+
+	test("rejects what is not a list of distinct environments", () => {
+		const bad = (environmentDependencies: unknown) => () =>
+			commandOf({
+				name: "Bad",
+				useCases: { notify: Notify },
+				// biome-ignore lint/suspicious/noExplicitAny: invalid on purpose
+				environmentDependencies: environmentDependencies as any,
+			});
+		for (const value of [{}, "Mail", [Mail, {}], [Mail, Mail], null]) {
+			expect(bad(value)).toThrow(InvalidCommandDeclaration);
+		}
+	});
+
+	test("the env of a call reaches the use cases that declare it, children included", async () => {
+		const Command = commandOf({
+			name: "Mailer",
+			useCases: { notify: Notify, steps: Steps },
+			environmentDependencies: [Mail, Queue],
+		});
+		expect(await Command.run("notify", {})).toEqual({
+			from: "app@example.com",
+			retries: 3,
+		});
+		expect(
+			await Command.run("notify", {}, { env: { FROM: "test@example.com" } }),
+		).toEqual({ from: "test@example.com", retries: 3 });
+		expect(
+			await Command.run("steps", {}, { env: { FROM: "steps@example.com" } }),
+		).toEqual({ from: "steps@example.com" });
+		const { value } = await Command.execute(
+			"notify",
+			{},
+			{ env: { RETRIES: 5 } },
+		);
+		expect(value).toEqual({ from: "app@example.com", retries: 5 });
+		// the declared variables are not changed by a call
+		expect(Command.env.FROM).toBe("app@example.com");
+	});
+
+	test("an environment fully given by the call is not loaded", async () => {
+		const Needs = environmentOf(
+			blueprintOf((ctx) => ({ TOKEN: ctx.string })),
+			{ source: () => ({}) },
+		);
+		class UsesToken extends useCaseOf({
+			name: "UsesToken",
+			blueprint: Empty,
+			response: blueprintOf((ctx) => ({ token: ctx.string })),
+			dependencies: { needs: Needs },
+		}) {
+			override async execute({ needs = this.dependencies.needs } = {}) {
+				return { token: needs.TOKEN };
+			}
+		}
+		const Command = commandOf({
+			name: "Token",
+			useCases: { use: UsesToken },
+			environmentDependencies: Needs,
+		});
+		expect(await Command.run("use", {}, { env: { TOKEN: "t" } })).toEqual({
+			token: "t",
+		});
+		await expect(Command.run("use", {})).rejects.toMatchObject({
+			name: InvalidEnvironment.name,
+		});
+	});
+
+	test("an override of execute still wins over the env of the call", async () => {
+		const Command = commandOf({
+			name: "Mailer",
+			useCases: { notify: Notify },
+			environmentDependencies: Mail,
+		});
+		const child = new Child({});
+		expect(
+			await child.execute({ mail: { FROM: "own@example.com", RETRIES: 1 } }),
+		).toEqual({ from: "own@example.com", retries: 1 });
+		expect(
+			await Command.run("notify", {}, { env: { FROM: "call@example.com" } }),
+		).toEqual({ from: "call@example.com", retries: 3 });
+	});
+
+	test("an unknown key or a rejected value throws InvalidCommandEnvironment", async () => {
+		const Command = commandOf({
+			name: "Mailer",
+			useCases: { notify: Notify },
+			environmentDependencies: Mail,
+		});
+		const failure = async (env: unknown) => {
+			try {
+				// biome-ignore lint/suspicious/noExplicitAny: invalid on purpose
+				await Command.run("notify", {}, { env } as any);
+			} catch (error) {
+				expect(error).toBeInstanceOf(InvalidCommandEnvironment);
+				return (error as { details: { keys: string[] } }).details;
+			}
+			throw new Error("did not throw");
+		};
+		expect((await failure({ OTHER: "x" })).keys).toEqual(["OTHER"]);
+		const rejected = await failure({ FROM: "not an email" });
+		expect(rejected.keys).toEqual(["FROM"]);
+		expect(
+			(rejected as unknown as { issues: unknown[] }).issues.length,
+		).toBeGreaterThan(0);
+		expect((await failure("x")).keys).toEqual([]);
+
+		const Plain = commandOf({ name: "Plain", useCases: { notify: Notify } });
+		const run = Plain.run as (
+			op: string,
+			input: unknown,
+			options: unknown,
+		) => Promise<unknown>;
+		await expect(
+			run("notify", {}, { env: { FROM: "a@b.co" } }),
+		).rejects.toThrow(InvalidCommandEnvironment);
+	});
+
+	test("event handlers get the env of the call", async () => {
+		const seen: unknown[] = [];
+		class Raise extends useCaseOf({
+			name: "Raise",
+			blueprint: Name,
+			response: blueprintOf(() => ({ account: Account })),
+		}) {
+			override async execute() {
+				return { account: new Account(this.input) };
+			}
+		}
+		const Handled = commandOf({
+			name: "Handled",
+			useCases: { raise: Raise },
+			environmentDependencies: [Mail, Queue],
+			events: async (_events, info) => {
+				seen.push(info.env.QUEUE_URL, info.env.FROM);
+			},
+		});
+		await Handled.run("raise", { name: "Ana" }, { env: { FROM: "x@y.co" } });
+		expect(seen).toEqual(["https://queue.example.com", "x@y.co"]);
+
+		seen.length = 0;
+		failOn = "registered";
+		const Failing = commandOf({
+			name: "Failing",
+			useCases: { raise: Raise },
+			environmentDependencies: Queue,
+			onEventError: async (_error, event, info) => {
+				seen.push(event.name, info.operation, info.env.QUEUE_URL);
+			},
+		});
+		try {
+			await Failing.run("raise", { name: "Ana" });
+		} finally {
+			failOn = undefined;
+		}
+		expect(seen).toEqual(["registered", "raise", "https://queue.example.com"]);
+	});
+
+	test("types of the env option", () => {
+		const Command = commandOf({
+			name: "Mailer",
+			useCases: { notify: Notify },
+			environmentDependencies: [Mail, Queue],
+		});
+		const Plain = commandOf({ name: "Plain", useCases: { notify: Notify } });
+		const never = () => {
+			void Command.run("notify", {});
+			void Command.run(
+				"notify",
+				{},
+				{ env: { FROM: "a@b.co", QUEUE_URL: "x" } },
+			);
+			// @ts-expect-error RETRIES is a number
+			void Command.run("notify", {}, { env: { RETRIES: "3" } });
+			// @ts-expect-error not a variable of the environments
+			void Command.run("notify", {}, { env: { OTHER: "x" } });
+			void Plain.run("notify", {});
+			// @ts-expect-error a command without environments takes no env
+			void Plain.run("notify", {}, { env: { FROM: "a@b.co" } });
+		};
+		expect(never).toBeFunction();
 	});
 });

@@ -709,6 +709,12 @@ function commandDoc(
 		),
 	]);
 	if (spec.transaction === true) props.push(["transaction", "true"]);
+	const environments = (
+		Array.isArray(spec.environments) ? (spec.environments as string[]) : []
+	).map((name) => e.ref(name));
+	if (environments.length > 0) {
+		props.push(["environmentDependencies", listDoc(environments)]);
+	}
 	if (spec.events !== undefined) {
 		props.push([
 			"events",

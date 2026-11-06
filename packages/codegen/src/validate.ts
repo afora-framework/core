@@ -4,7 +4,13 @@ import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
 import { checkCatalog, checkProvider } from "./provider";
-import { type Decl, issue, type Scope, scopeOf } from "./scope";
+import {
+	checkEnvironmentNames,
+	type Decl,
+	issue,
+	type Scope,
+	scopeOf,
+} from "./scope";
 import { isIdentifier, isObject } from "./spec/field";
 import {
 	COLLECTIONS,
@@ -840,25 +846,12 @@ function checkRepository(
 		}
 	}
 
-	const environments =
-		checkStringList(spec.environments, [...path, "environments"], issues) ?? [];
-	for (const [index, name] of environments.entries()) {
-		const here = [...path, "environments", index];
-		const other = scope.decls.get(name);
-		if (other?.kind !== "environment") {
-			issues.push(
-				issue(
-					here,
-					"unknown_environment",
-					`"${name}" is not a declared environment.`,
-				),
-			);
-		} else if (environments.indexOf(name) !== index) {
-			issues.push(
-				issue(here, "duplicate_environment", `"${name}" is listed twice.`),
-			);
-		}
-	}
+	checkEnvironmentNames(
+		spec.environments,
+		[...path, "environments"],
+		scope,
+		issues,
+	);
 }
 
 /** Everything that makes `input` an invalid `afora.json`, never throwing. */
