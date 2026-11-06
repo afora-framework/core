@@ -4,6 +4,7 @@ updates:
     directories:
       - /
       - /examples/interop
+      - /examples/blog
       - /tests/types-compat
       - /bench
     schedule:

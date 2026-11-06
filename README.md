@@ -32,6 +32,10 @@ const hasher: PasswordHasher = {
 configure({ hasher, idGenerator: () => myUuidV7() }); // both optional; `resetRuntime()` restores the defaults
 ```
 
+## Example
+
+`examples/blog` is a blog (users with the `authenticatable` plugin, posts with soft deletion, use cases written as steps, a Hono API on Drizzle and SQLite) whose whole `src/domain` is generated from one `afora.json` by `@afora/codegen`. Only the database, the schema, the provider, a password hashing function and the server are hand-written. Its tests check that the committed code is what the spec generates, drive the API end to end and extract the spec back from the application: `bun run test:blog`.
+
 ## Quick start
 
 A `User` record created from an HTTP body through Standard Schema, saved by a repository that reads `User.options.unique`, returned with its password masked; and an error that keeps the layers it crossed. This is the code of `examples/interop/quickstart.ts`, run by `bun run test:interop` (there the import is the local source instead of `"@afora/core"`).

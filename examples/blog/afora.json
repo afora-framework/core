@@ -1,0 +1,465 @@
+{
+	"$schema": "../../packages/codegen/afora.schema.json",
+	"version": 1,
+	"name": "blog",
+	"output": {
+		"dir": "src/domain"
+	},
+	"provider": {
+		"import": "../provider.ts#provider"
+	},
+	"properties": {
+		"Title": {
+			"base": "string",
+			"with": {
+				"min": 3,
+				"max": 120,
+				"description": "A post title"
+			}
+		},
+		"Status": {
+			"enum": ["draft", "published"]
+		}
+	},
+	"entities": {
+		"User": {
+			"fields": {
+				"name": "text"
+			},
+			"plugins": ["authenticatable"]
+		},
+		"Post": {
+			"fields": {
+				"title": "Title",
+				"content": "text",
+				"status": "Status",
+				"author": "User"
+			},
+			"change": ["status"],
+			"plugins": ["taggable", "publishable"]
+		}
+	},
+	"repositories": {
+		"Users": {
+			"entity": "User",
+			"actions": ["findById", "findByEmail", "create"],
+			"provider": {
+				"import": "../provider.ts#provider"
+			}
+		},
+		"Posts": {
+			"entity": "Post",
+			"actions": [
+				"findById",
+				"findMany",
+				"findPage",
+				"create",
+				"update",
+				"delete"
+			],
+			"deletion": "soft",
+			"relations": ["Users"],
+			"provider": {
+				"import": "../provider.ts#provider"
+			}
+		}
+	},
+	"exceptions": {
+		"UserAlreadyExists": {
+			"layer": "use-case",
+			"message": "A user with this email already exists."
+		},
+		"InvalidCredentials": {
+			"layer": "use-case",
+			"message": "Wrong email or password."
+		},
+		"PostNotFound": {
+			"layer": "use-case",
+			"message": "Post not found."
+		}
+	},
+	"useCases": {
+		"Register": {
+			"description": "Signs a user up.",
+			"input": {
+				"fields": {
+					"name": "text",
+					"email": "email",
+					"plainPassword": "string"
+				}
+			},
+			"response": {
+				"fields": {
+					"user": "User"
+				}
+			},
+			"dependencies": {
+				"users": "Users"
+			},
+			"errors": ["UserAlreadyExists"],
+			"implementation": {
+				"steps": [
+					{
+						"find": "users.findByEmail",
+						"args": ["$input.email"],
+						"as": "existing"
+					},
+					{
+						"ensure": "absent",
+						"value": "$existing",
+						"error": "UserAlreadyExists"
+					},
+					{
+						"run": "hashPassword",
+						"fn": {
+							"import": "../handlers/password.ts#hashPassword"
+						},
+						"args": ["$input.plainPassword"],
+						"as": "hash"
+					},
+					{
+						"build": "User",
+						"values": {
+							"name": "$input.name",
+							"email": "$input.email",
+							"password": "$hash"
+						},
+						"as": "user"
+					},
+					{
+						"create": "users",
+						"value": "$user",
+						"as": "saved"
+					},
+					{
+						"return": {
+							"user": "$saved"
+						}
+					}
+				]
+			}
+		},
+		"Login": {
+			"description": "Checks credentials.",
+			"input": {
+				"fields": {
+					"email": "email",
+					"plainPassword": "string"
+				}
+			},
+			"response": {
+				"fields": {
+					"user": "User"
+				}
+			},
+			"dependencies": {
+				"users": "Users"
+			},
+			"errors": ["InvalidCredentials"],
+			"implementation": {
+				"steps": [
+					{
+						"find": "users.findByEmail",
+						"args": ["$input.email"],
+						"as": "user"
+					},
+					{
+						"ensure": "exists",
+						"value": "$user",
+						"error": "InvalidCredentials"
+					},
+					{
+						"invoke": "$user",
+						"method": "verifyPassword",
+						"args": ["$input.plainPassword"],
+						"as": "ok"
+					},
+					{
+						"ensure": "true",
+						"value": "$ok",
+						"error": "InvalidCredentials"
+					},
+					{
+						"return": {
+							"user": "$user"
+						}
+					}
+				]
+			}
+		},
+		"CreatePost": {
+			"description": "Writes a draft as the caller.",
+			"input": {
+				"fields": {
+					"title": "Title",
+					"content": "text",
+					"tags": "string[]?"
+				}
+			},
+			"response": {
+				"fields": {
+					"post": "Post"
+				}
+			},
+			"context": {
+				"fields": {
+					"userId": "id"
+				}
+			},
+			"dependencies": {
+				"users": "Users",
+				"posts": "Posts"
+			},
+			"errors": ["InvalidCredentials"],
+			"implementation": {
+				"steps": [
+					{
+						"find": "users.findById",
+						"args": ["$context.userId"],
+						"as": "author"
+					},
+					{
+						"ensure": "exists",
+						"value": "$author",
+						"error": "InvalidCredentials"
+					},
+					{
+						"build": "Post",
+						"values": {
+							"title": "$input.title",
+							"content": "$input.content",
+							"status": "draft",
+							"author": "$author",
+							"tags": "$input.tags"
+						},
+						"as": "post"
+					},
+					{
+						"create": "posts",
+						"value": "$post",
+						"as": "saved"
+					},
+					{
+						"return": {
+							"post": "$saved"
+						}
+					}
+				]
+			}
+		},
+		"Publish": {
+			"description": "Publishes a post of the caller.",
+			"input": {
+				"fields": {
+					"postId": "id"
+				}
+			},
+			"response": {
+				"fields": {
+					"post": "Post"
+				}
+			},
+			"context": {
+				"fields": {
+					"userId": "id"
+				}
+			},
+			"dependencies": {
+				"posts": "Posts"
+			},
+			"errors": ["PostNotFound"],
+			"implementation": {
+				"steps": [
+					{
+						"find": "posts.findById",
+						"args": ["$input.postId"],
+						"as": "post"
+					},
+					{
+						"ensure": "exists",
+						"value": "$post",
+						"error": "PostNotFound"
+					},
+					{
+						"ensure": "equals",
+						"value": "$post.author.id",
+						"other": "$context.userId",
+						"error": "PostNotFound"
+					},
+					{
+						"change": "$post",
+						"key": "status",
+						"value": "published"
+					},
+					{
+						"invoke": "$post",
+						"method": "publish"
+					},
+					{
+						"update": "posts",
+						"value": "$post",
+						"as": "saved"
+					},
+					{
+						"return": {
+							"post": "$saved"
+						}
+					}
+				]
+			}
+		},
+		"ListPosts": {
+			"description": "A page of posts.",
+			"input": {
+				"fields": {
+					"limit": "integer?",
+					"offset": "integer?"
+				}
+			},
+			"response": {
+				"fields": {
+					"items": "Post[]",
+					"total": "integer",
+					"limit": "integer",
+					"offset": "integer"
+				}
+			},
+			"dependencies": {
+				"posts": "Posts"
+			},
+			"implementation": {
+				"steps": [
+					{
+						"find": "posts.findPage",
+						"args": [
+							{
+								"orderBy": [
+									{
+										"key": "createdAt",
+										"direction": "desc"
+									}
+								],
+								"limit": "$input.limit",
+								"offset": "$input.offset"
+							}
+						],
+						"as": "page"
+					},
+					{
+						"return": {
+							"items": "$page.items",
+							"total": "$page.total",
+							"limit": "$page.limit",
+							"offset": "$page.offset"
+						}
+					}
+				]
+			}
+		},
+		"DeletePost": {
+			"description": "Deletes a post of the caller.",
+			"input": {
+				"fields": {
+					"postId": "id"
+				}
+			},
+			"response": {
+				"fields": {
+					"post": "Post"
+				}
+			},
+			"context": {
+				"fields": {
+					"userId": "id"
+				}
+			},
+			"dependencies": {
+				"posts": "Posts"
+			},
+			"errors": ["PostNotFound"],
+			"implementation": {
+				"steps": [
+					{
+						"find": "posts.findById",
+						"args": ["$input.postId"],
+						"as": "post"
+					},
+					{
+						"ensure": "exists",
+						"value": "$post",
+						"error": "PostNotFound"
+					},
+					{
+						"ensure": "equals",
+						"value": "$post.author.id",
+						"other": "$context.userId",
+						"error": "PostNotFound"
+					},
+					{
+						"delete": "posts",
+						"value": "$post",
+						"as": "deleted"
+					},
+					{
+						"return": {
+							"post": "$deleted"
+						}
+					}
+				]
+			}
+		}
+	},
+	"commands": {
+		"Accounts": {
+			"useCases": {
+				"register": "Register",
+				"login": "Login"
+			},
+			"transaction": true
+		},
+		"Blog": {
+			"useCases": {
+				"createPost": "CreatePost",
+				"publish": "Publish",
+				"listPosts": "ListPosts",
+				"deletePost": "DeletePost"
+			},
+			"transaction": true
+		}
+	},
+	"outputs": {
+		"Api": {
+			"commands": ["Accounts", "Blog"],
+			"statuses": {
+				"UserAlreadyExists": 409,
+				"InvalidCredentials": 401,
+				"PostNotFound": 404
+			},
+			"pipe": [
+				{
+					"sink": "hono",
+					"options": {
+						"basePath": "/api",
+						"route": {
+							"Blog.listPosts": {
+								"method": "get"
+							}
+						},
+						"docs": {
+							"path": "/openapi.json",
+							"info": {
+								"title": "Blog",
+								"version": "1.0.0"
+							}
+						},
+						"context": {
+							"headers": {
+								"userId": "x-user-id"
+							}
+						}
+					}
+				}
+			]
+		}
+	}
+}
