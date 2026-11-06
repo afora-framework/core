@@ -22,6 +22,7 @@
 
 ### Added
 
+- `examples/blog`: a blog generated entirely from an `afora.json` (steps use cases, commands with transactions, a Hono API with OpenAPI on Drizzle and SQLite), tested for drift, end to end and by extracting the spec back; `bun run test:blog`, also run by CI.
 - `operationRoutes(operations, { basePath?, route? })`, `routeOptionsIssue` and the types `OperationRoute` and `RouteOptions`: the routing of the `openapi` sink (`POST {basePath}/{command}/{operation}`, `route` overrides), shared with the sinks that serve HTTP such as `@afora/hono`. The `openapi` sink behaves as before.
 - `app.describe()` use cases gain `refs?: { input?, response?, context? }` and commands `refs?: { context? }`: the names of the registered blueprints that are the `input`, `response` or `context` (the fields stay described), so codegen can extract `"input": "RegisterInput"` instead of inline fields. They are absent for blueprints that are not registered.
 - `stageKindOf(factory)`: whether a factory made by `transformOf` or `sinkOf` builds a transform or a sink, without calling it.

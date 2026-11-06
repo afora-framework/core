@@ -78,6 +78,7 @@
 		"test:type-perf": "bun run build && bun test ./tests/type-perf",
 		"test:api": "bun run build && bun test ./tests/api-surface",
 		"test:interop": "cd examples/interop && bun install && bun test",
+		"test:blog": "cd examples/blog && bun install && bun test",
 		"prepare": "husky",
 		"prepublishOnly": "bun run typecheck && bun test && bun run smoke",
 		"test:codegen": "bun run --cwd packages/codegen test",
