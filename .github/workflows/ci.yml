@@ -55,6 +55,17 @@ jobs:
       - run: bun test
       - run: bun run test:interop
 
+  api-surface:
+    name: Public API surface
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run test:api
+
   packages:
     name: Packages (codegen, mcp)
     runs-on: ubuntu-latest

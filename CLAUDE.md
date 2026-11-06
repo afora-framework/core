@@ -18,6 +18,7 @@ bun check                                # type check (reads tsconfig.json)
 bun run lint                             # biome lint
 bun run fmt                              # biome format + fix (tabs, double quotes, organized imports)
 bun run build                            # dist/: bun build (ESM, node target, deps external) + tsc declarations, then scripts/add-dts-extensions.ts
+bun run test:api                         # tests/api-surface: snapshot of every export of dist/ with its declaration, and of packages/codegen/afora.schema.json (the public contract); update with -u on purpose
 bun run test:interop                     # examples/interop: real Hono, tRPC, TanStack Form tests, incl. the README quick start
 bun run test:types                       # packs the package and type-checks tests/types-compat on TS 5.5, latest 5.x and 7, bundler + nodenext
 bun run test:type-perf                   # tests/type-perf: per-edit type instantiations of README code (budgeted) + snapshot of hovers/completions/diagnostics, src and dist
