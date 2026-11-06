@@ -889,6 +889,10 @@ bun run build:packages # build the core, then packages/codegen and packages/mcp
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org) (`feat(repository): …`, `fix: …`), checked by commitlint in a Husky `commit-msg` hook; the `pre-commit` hook runs Biome and Knip. CI runs lint, Knip, type checks, unit and interop tests, the build and the Node smoke test on every push and pull request. Pushing a `v*` tag that matches `package.json` publishes to npm with provenance.
 
+## Versioning
+
+What is stable, what may break and how deprecations work is in [VERSIONING.md](VERSIONING.md).
+
 ## License
 
 MIT
