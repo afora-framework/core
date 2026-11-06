@@ -284,12 +284,25 @@ export { Demo } from "./core/symbols/demo";
 export { Kind } from "./core/symbols/kind";
 export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
+export { InvalidUseCaseStep } from "./core/use-case/exceptions";
+export type {
+	StepEnsureKind,
+	StepErrorDescription,
+	StepFindTarget,
+	StepReadAction,
+	StepReference,
+	StepRepositoryWith,
+	StepValue,
+	UseCaseStep,
+	UseCaseStepDescription,
+} from "./core/use-case/steps/types/steps.interface";
 export type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
 	DependencyFunctions,
 	DependencyOf,
 	DependencyOverrides,
+	StepsUseCaseConstructor,
 	UseCaseCollection,
 	UseCaseConstructor,
 	UseCaseContext,
@@ -299,6 +312,7 @@ export type {
 	UseCaseOptions,
 	UseCaseResponse,
 	UseCaseSettings,
+	UseCaseStepsSettings,
 } from "./core/use-case/use-case";
 export {
 	AbstractUseCase,

@@ -24,6 +24,8 @@ import {
 } from "../repository/state";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import { describeSteps } from "../use-case/steps/describe";
+import { interpretedStepsOf } from "../use-case/steps/run";
 import { type AnyUseCaseClass, isUseCaseClass } from "../use-case/use-case";
 import {
 	ApplicationConflict,
@@ -386,6 +388,31 @@ function validateUseCases(source: string, registry: Registry): void {
 				},
 			});
 		}
+		for (const [index, step] of (interpretedStepsOf(UseCase) ?? []).entries()) {
+			const holder = `step ${index} of use case "${entry.name}"`;
+			if (step.build !== undefined && !registered.has(step.build as object)) {
+				throw new UnregisteredApplicationReference({
+					source,
+					details: {
+						holder,
+						reference: `${isEntityClass(step.build) ? "entity" : "record"} "${(step.build as { name: string }).name}"`,
+					},
+				});
+			}
+			const Thrown = step.error as
+				| AnyUseCaseClass["errors"][number]
+				| undefined;
+			if (
+				Thrown !== undefined &&
+				!exceptions.has(Thrown) &&
+				!isExportedException(Thrown)
+			) {
+				throw new UnregisteredApplicationReference({
+					source,
+					details: { holder, reference: `exception "${Thrown.name}"` },
+				});
+			}
+		}
 	}
 }
 
@@ -584,6 +611,25 @@ function describeRegistry(
 	const environmentRefs = referencesOf(registry, "environments");
 	const useCaseRefs = referencesOf(registry, "useCases");
 	const exceptionRefs = referencesOf(registry, "exceptions");
+	const describeImplementation = (UseCase: AnyUseCaseClass) => {
+		const steps = interpretedStepsOf(UseCase);
+		return steps === undefined
+			? ({ kind: "opaque" } as const)
+			: ({
+					kind: "steps",
+					steps: describeSteps(steps, {
+						record: (Class) =>
+							(scope.entities.get(Class as object) ??
+								scope.records.get(Class as object)) as string,
+						error: (Class) => {
+							const ref = exceptionRefs.get(Class as object);
+							return ref === undefined
+								? { core: (Class as { name: string }).name }
+								: ref;
+						},
+					}),
+				} as const);
+	};
 	const each = <Result>(
 		collection: ApplicationCollectionKey,
 		describe: (entry: Entry) => Result,
@@ -681,7 +727,7 @@ function describeRegistry(
 									},
 					]),
 				),
-				implementation: { kind: "opaque" },
+				implementation: describeImplementation(UseCase),
 			};
 		}),
 		exceptions: each("exceptions", (entry) => {

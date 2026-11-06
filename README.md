@@ -672,6 +672,57 @@ The class gets the frozen statics `context`, `description`, `tags`, `deprecated`
 
 `UseCaseInput`, `UseCaseResponse` and `UseCaseDependencies` extract a declaration's types. `isUseCase` identifies instances; `isUseCaseClass` identifies concrete declarations with a prototype `execute`. UseCases carry their own kind and cannot be used as fields of ordinary data blueprints. Validation errors carry `details.issues`; errors crossing an execution boundary preserve their cause and gain a `UseCase` trace frame using the declared name.
 
+#### Steps
+
+Instead of writing `execute`, a use case can declare `steps`: plain data that the use case interprets. The class is concrete, so it needs no body, and `describe()` reports the steps (a hand-written `execute` is `{ kind: "opaque" }`).
+
+```ts
+class Register extends useCaseOf({
+	name: "Register",
+	blueprint: RegisterInput, // { name, email, plainPassword }
+	response: UserResponse, // { user: User }
+	dependencies: { users: Users },
+	errors: [UserAlreadyExists],
+	steps: [
+		{ find: "users.findByEmail", args: ["$input.email"], as: "existing" },
+		{ ensure: "absent", value: "$existing", error: UserAlreadyExists },
+		{ run: "hashPassword", fn: hashPassword, args: ["$input.plainPassword"], as: "hash" },
+		{ build: User, values: { name: "$input.name", email: "$input.email", password: "$hash" }, as: "user" },
+		{ create: "users", value: "$user", as: "saved" },
+		{ return: { user: "$saved" } },
+	],
+}) {}
+```
+
+The steps are the same objects in TypeScript and in JSON, except for the class of `build`, the exception class of `ensure.error` and the function of `run`, which the descriptor names or marks `opaque`. TypeScript checks the dependency and action names (`"users.findByEmail"` only exists if `Users` has that read action); the values are checked at execution by the blueprints. Steps run in order, each awaited, and every repository and use case call goes through the same dependency functions as a hand-written `execute`: execution scope, events, trace frames, `UseCaseAlreadyExecuted` and `execute({ ...overrides })` behave identically.
+
+A *value* is a reference, a literal or a mapping:
+
+| Value | Meaning |
+|---|---|
+| `"$input.email"` | the parsed input; a path of identifiers and indices follows the root (`$saved.tags.0`); a missing segment is `undefined` |
+| `"$context.userId"` | the parsed context (only if the use case declares one) |
+| `"$env.mail.FROM"` | a variable of an environment dependency |
+| `"$name"` | the result of an earlier step bound with `as` |
+| `"text"`, `1`, `true`, `null` | a JSON literal; write `{ literal: "$5" }` for a string that starts with `$` |
+| `{ user: "$saved" }`, `["$a", 2]` | a mapping, resolved recursively |
+
+There are no operators or interpolation: anything computed goes through `run`. The names `input`, `context`, `env` and `literal` are reserved.
+
+| Step | Does | Result (`as`) |
+|---|---|---|
+| `{ find: "<repo>.<action>", args?, as? }` | a read action: `findBy*`, `findManyBy*`, `findMany`, `exists`, `findPage`, `count` | its result |
+| `{ ensure, value, other?, error, details? }` | `ensure` is `exists`, `absent`, `equals`, `notEquals` (`other` required, structural equality as in queries), `true` or `false`; on failure throws `new error({ source, details })` | none |
+| `{ build: Class, values, as }` | `new Class(values)`, a record or entity | the instance |
+| `{ change: "$ref", key, value, as? }` | `record.change[key](value)`; `key` must be a change key | the record |
+| `{ invoke: "$ref", method, args?, as? }` | a public method of a record or entity (`publish`, `verifyPassword`...), awaited | its result |
+| `{ create \| update \| delete: "<repo>", value, as? }` | the repository action of that name | its result |
+| `{ call: "<useCase>", input, as? }` | the use case dependency: validated child, inherited context, events moved up | its response |
+| `{ run: "<name>", fn, args?, as? }` | `await fn(...args, { context })`; `name` is unique in the use case | its result |
+| `{ return: value }` | the response, validated by the response blueprint; required, last, once | none |
+
+`useCaseOf` validates the steps at declaration and throws `InvalidUseCaseStep` (`UseCase` layer, `details: { index, reason, code }`) for an unknown or malformed step, a bad or repeated `as`, a reference to an unbound name, a `$context` without a declared context, a first-level `$input.<key>` or `$context.<key>` the blueprint lacks, an unknown repository, action, use case or environment, a `find` of a write action, a `build` that is not a record class, an `ensure.error` missing from `errors`, a `change.key` that is not a change key of the class `build` made, and a missing, repeated or misplaced `return`. A `change` or `invoke` on something that is not a record, or on a member it lacks, throws `InvalidUseCaseStep` with the `index` while the steps run. In an application, the classes of `build` and `ensure.error` must be registered (`UnregisteredApplicationReference`); `describe()` gives `implementation: { kind: "steps", steps }` with them by name (`"User"`, `"UserAlreadyExists"`, or `{ core: "RepositoryUniqueViolation" }` for an exported exception) and `run.fn` as `{ kind: "opaque" }`. A subclass that overrides `execute` is hand-written, so it is `{ kind: "opaque" }`.
+
 ### Repositories
 
 `repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `count`, and the queries `findMany`, `exists` and `findPage`. Every method is async.
@@ -870,7 +921,7 @@ With a `provider`, `app.useCases.Register` is a subclass of `Register` whose `de
 
 Repositories are module-level and may be shared, so an application does not change them: `app.repositories.Users` shares the declaration of `Users` but reads and writes through the `provider` of the application (or of the last application it extends that has one), unless `Users` declared its own. Two applications with different providers do not share data. Without a `provider`, `app.repositories.Users` is `Users` itself, and records, entities and repositories work the same outside any application.
 
-`app.describe()` gives a JSON-serializable graph, with the `from` of each declaration (the application that registered it): properties (name, flags, JSON Schema and `lineage`), blueprints, records and entities (fields, `options`, plugin descriptors), environments, repositories (entity, actions, `relations` and `environments` by name), use cases (`name`, `description`, `tags`, `deprecated`, `input`, `response`, optional `context`, `errors` as `{ kind: "exception", ref }` or `{ kind: "core", name }`, `dependencies` as `{ kind, ref }`, and `implementation: { kind: "opaque" }`) and exceptions (`layer` and, when declared as a string, `message`). A field is a reference by name (`{ kind: "entity", ref: "User" }`) when it holds a registered declaration. A property's `lineage` comes from `propertyLineageOf(Property)`: `Integer.with({ min: 0 })` is `{ kind: "refined", base, options }`, `optionalOf` is `{ kind: "optional", base }` and `enumOf` is `{ kind: "factory", factory: "enumOf", args: { values } }`. A root property (declared with `propertyOf`) has no lineage and is identified by its `name`; one with custom handlers is described with what is known (name and schema), never an error.
+`app.describe()` gives a JSON-serializable graph, with the `from` of each declaration (the application that registered it): properties (name, flags, JSON Schema and `lineage`), blueprints, records and entities (fields, `options`, plugin descriptors), environments, repositories (entity, actions, `relations` and `environments` by name), use cases (`name`, `description`, `tags`, `deprecated`, `input`, `response`, optional `context`, `errors` as `{ kind: "exception", ref }` or `{ kind: "core", name }`, `dependencies` as `{ kind, ref }`, and `implementation`: `{ kind: "steps", steps }` or `{ kind: "opaque" }`) and exceptions (`layer` and, when declared as a string, `message`). A field is a reference by name (`{ kind: "entity", ref: "User" }`) when it holds a registered declaration. A property's `lineage` comes from `propertyLineageOf(Property)`: `Integer.with({ min: 0 })` is `{ kind: "refined", base, options }`, `optionalOf` is `{ kind: "optional", base }` and `enumOf` is `{ kind: "factory", factory: "enumOf", args: { values } }`. A root property (declared with `propertyOf`) has no lineage and is identified by its `name`; one with custom handlers is described with what is known (name and schema), never an error.
 
 ### Exceptions
 

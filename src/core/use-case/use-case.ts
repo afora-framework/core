@@ -29,6 +29,10 @@ import { AbstractRepository, isRepository } from "../repository/repository";
 import type { AnyRepository } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
 import { type ExecutionScope, ScopeKey } from "./scope";
+import { freezeData } from "./steps/references";
+import { executeSteps } from "./steps/run";
+import type { UseCaseStep } from "./steps/types/steps.interface";
+import { validateSteps } from "./steps/validate";
 
 /** A concrete UseCase declaration, usable as a dependency. */
 export interface AnyUseCaseClass {
@@ -145,6 +149,20 @@ export interface UseCaseSettings<
 	readonly deprecated?: boolean;
 	/** The exceptions (made by `exceptionOf`) a caller should expect; documentation only. */
 	readonly errors?: readonly AnyExceptionClass[];
+}
+
+/** `UseCaseSettings` with the `steps` that are its `execute`. */
+export interface UseCaseStepsSettings<
+	Input extends IBlueprintCollection,
+	Output extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined = undefined,
+> extends UseCaseSettings<Input, Output, Dependencies, Context> {
+	/**
+	 * What the use case does, as data (see `UseCaseStep`): validated here,
+	 * interpreted by its `execute`, and described by `describe()`.
+	 */
+	readonly steps: readonly UseCaseStep<NoInfer<Dependencies>>[];
 }
 
 export const InvalidUseCaseDeclaration = exceptionOf({
@@ -538,20 +556,13 @@ export abstract class AbstractUseCase<
 	}
 }
 
-export type UseCaseConstructor<
+/** What every use case class carries, abstract or not. */
+type UseCaseStatics<
 	Input extends IBlueprintCollection,
 	Output extends IBlueprintCollection,
 	Dependencies extends UseCaseCollection,
-	Context extends IBlueprintCollection | undefined = undefined,
-> = (abstract new (
-	input: BlueprintInput<Input>,
-	...options: OptionsArgs<Context>
-) => AbstractUseCase<Input, Output, Dependencies> & {
-	/** What the caller supplied with the call, parsed and frozen; `undefined` without a declared context. */
-	readonly context: Context extends IBlueprintCollection
-		? Readonly<BlueprintValue<Context>>
-		: undefined;
-}) & {
+	Context extends IBlueprintCollection | undefined,
+> = {
 	readonly [Kind]: "use-case";
 	readonly useCaseName: string;
 	readonly blueprint: IBlueprint<Input>;
@@ -568,7 +579,60 @@ export type UseCaseConstructor<
 	readonly errors: readonly AnyExceptionClass[];
 };
 
-/** Declares an abstract operation. Extend it and implement an async execute method. */
+/** What a use case instance carries beyond `AbstractUseCase`. */
+type UseCaseInstanceContext<Context extends IBlueprintCollection | undefined> =
+	{
+		/** What the caller supplied with the call, parsed and frozen; `undefined` without a declared context. */
+		readonly context: Context extends IBlueprintCollection
+			? Readonly<BlueprintValue<Context>>
+			: undefined;
+	};
+
+export type UseCaseConstructor<
+	Input extends IBlueprintCollection,
+	Output extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined = undefined,
+> = (abstract new (
+	input: BlueprintInput<Input>,
+	...options: OptionsArgs<Context>
+) => AbstractUseCase<Input, Output, Dependencies> &
+	UseCaseInstanceContext<Context>) &
+	UseCaseStatics<Input, Output, Dependencies, Context>;
+
+/**
+ * What `useCaseOf` gives with `steps`: concrete, its `execute` interprets the
+ * steps. A subclass may still override `execute`.
+ */
+export type StepsUseCaseConstructor<
+	Input extends IBlueprintCollection,
+	Output extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined = undefined,
+> = (new (
+	input: BlueprintInput<Input>,
+	...options: OptionsArgs<Context>
+) => Omit<AbstractUseCase<Input, Output, Dependencies>, "execute"> &
+	UseCaseInstanceContext<Context> & {
+		execute(
+			dependencies?: DependencyOverrides<Dependencies>,
+		): Promise<BlueprintValue<Output>>;
+	}) &
+	UseCaseStatics<Input, Output, Dependencies, Context>;
+
+/**
+ * Declares an operation. With `steps` the class is concrete: its `execute`
+ * interprets them. Without, it is abstract: extend it and implement an async
+ * execute method.
+ */
+export function useCaseOf<
+	Input extends IBlueprintCollection,
+	Output extends IBlueprintCollection,
+	const Dependencies extends UseCaseCollection = Record<never, never>,
+	Context extends IBlueprintCollection | undefined = undefined,
+>(
+	settings: UseCaseStepsSettings<Input, Output, Dependencies, Context>,
+): StepsUseCaseConstructor<Input, Output, Dependencies, Context>;
 export function useCaseOf<
 	Input extends IBlueprintCollection,
 	Output extends IBlueprintCollection,
@@ -576,7 +640,19 @@ export function useCaseOf<
 	Context extends IBlueprintCollection | undefined = undefined,
 >(
 	settings: UseCaseSettings<Input, Output, Dependencies, Context>,
-): UseCaseConstructor<Input, Output, Dependencies, Context> {
+): UseCaseConstructor<Input, Output, Dependencies, Context>;
+export function useCaseOf(
+	settings: UseCaseSettings<
+		IBlueprintCollection,
+		IBlueprintCollection,
+		UseCaseCollection,
+		IBlueprintCollection | undefined
+	> & { readonly steps?: unknown },
+): unknown {
+	type Input = IBlueprintCollection;
+	type Output = IBlueprintCollection;
+	type Dependencies = UseCaseCollection;
+	type Context = IBlueprintCollection | undefined;
 	const { name, blueprint, response, context } = settings;
 	const { description, deprecated = false } = settings;
 	const tags = settings.tags === undefined ? [] : settings.tags;
@@ -635,6 +711,12 @@ export function useCaseOf<
 			"Expected errors to be distinct classes made by exceptionOf.",
 		);
 	}
+	if (settings.steps !== undefined) {
+		validateSteps(
+			{ name, blueprint, context, dependencies, errors },
+			settings.steps,
+		);
+	}
 	abstract class DeclaredUseCase extends AbstractUseCase<
 		Input,
 		Output,
@@ -658,12 +740,17 @@ export function useCaseOf<
 		]) as readonly AnyExceptionClass[];
 	}
 	Object.defineProperty(DeclaredUseCase, "name", { value: name });
-	return DeclaredUseCase as unknown as UseCaseConstructor<
-		Input,
-		Output,
-		Dependencies,
-		Context
-	>;
+	if (settings.steps !== undefined) {
+		Object.defineProperty(DeclaredUseCase, "steps", {
+			value: freezeData(settings.steps),
+		});
+		Object.defineProperty(DeclaredUseCase.prototype, "execute", {
+			value: executeSteps,
+			writable: true,
+			configurable: true,
+		});
+	}
+	return DeclaredUseCase;
 }
 
 /** Whether `value` can be a dependency of a use case. */

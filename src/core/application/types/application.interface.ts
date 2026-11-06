@@ -7,6 +7,7 @@ import type {
 	IRepositoryProvider,
 } from "../../repository/types/repository.interface";
 import type { Kind } from "../../symbols/kind";
+import type { UseCaseStepDescription } from "../../use-case/steps/types/steps.interface";
 import type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
@@ -227,8 +228,16 @@ export interface UseCaseDescription {
 		| { readonly kind: "core"; readonly name: string }
 	)[];
 	readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>;
-	/** How it runs: only `opaque`, the hand-written `execute`, for now. */
-	readonly implementation: { readonly kind: "opaque" };
+	/**
+	 * How it runs: `steps` when `execute` is the interpreter of the declared
+	 * steps, `opaque` for a hand-written `execute`.
+	 */
+	readonly implementation:
+		| {
+				readonly kind: "steps";
+				readonly steps: readonly UseCaseStepDescription[];
+		  }
+		| { readonly kind: "opaque" };
 }
 
 /** An exception: its layer and, when declared as a string, its message. */
