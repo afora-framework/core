@@ -785,6 +785,9 @@ exports[`exports of the package and their declarations 1`] = `
   "OperationPatch": [
     "export interface OperationPatch { readonly meta?: Readonly<Record<string, unknown>>; readonly tags?: readonly string[]; readonly description?: string | undefined; readonly deprecated?: boolean; readonly invoke?: OperationDescriptor["invoke"]; }",
   ],
+  "OperationRoute": [
+    "export interface OperationRoute { readonly method: OpenAPIMethod; readonly path: string; }",
+  ],
   "OptionalBlueprint": [
     "export type OptionalBlueprint<Blueprint extends AnyBlueprint> = Blueprint extends IBlueprint<infer Properties, boolean> ? IBlueprint<Properties, true> : never;",
   ],
@@ -1037,6 +1040,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "ReservedRecordKey": [
     "ReservedRecordKey: import("../../index.js").DeclaredExceptionClass<{ readonly key: string; }>",
+  ],
+  "RouteOptions": [
+    "export interface RouteOptions { readonly basePath?: string; readonly route?: OpenAPISinkOptions["route"]; }",
   ],
   "RuntimeServices": [
     "export interface RuntimeServices { hasher?: PasswordHasher; idGenerator?: IdGenerator; }",
@@ -1323,6 +1329,9 @@ exports[`exports of the package and their declarations 1`] = `
   "operationOf": [
     "export declare function operationOf(operation: OperationDescriptor, patch: OperationPatch): OperationDescriptor;",
   ],
+  "operationRoutes": [
+    "export declare function operationRoutes(operations: readonly OperationDescriptor[], options: RouteOptions, source?: string): ReadonlyMap<string, OperationRoute>;",
+  ],
   "optionalOf": [
     "export declare function optionalOf(field: BlueprintField): BlueprintField;",
     "export declare function optionalOf<Blueprint extends AnyBlueprint>(blueprint: Blueprint): OptionalBlueprint<Blueprint>;",
@@ -1377,6 +1386,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "resetRuntime": [
     "export declare function resetRuntime(): void;",
+  ],
+  "routeOptionsIssue": [
+    "export declare function routeOptionsIssue(options: RouteOptions, where: string): string | undefined;",
   ],
   "schemaOf": [
     "export declare function schemaOf<SchemaType extends TSchema>(name: string, schema: SchemaType): SchemaClass<SchemaType>;",

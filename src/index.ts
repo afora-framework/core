@@ -168,8 +168,14 @@ export type {
 	OpenAPIDocument,
 	OpenAPIMethod,
 	OpenAPISinkOptions,
+	OperationRoute,
+	RouteOptions,
 } from "./core/output/openapi-sink";
-export { openapi } from "./core/output/openapi-sink";
+export {
+	openapi,
+	operationRoutes,
+	routeOptionsIssue,
+} from "./core/output/openapi-sink";
 export { isOutput, operationOf, outputOf } from "./core/output/output";
 export {
 	outputValueOf,

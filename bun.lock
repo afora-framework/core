@@ -42,6 +42,21 @@
         "typebox": "^1",
       },
     },
+    "packages/hono": {
+      "name": "@afora/hono",
+      "version": "0.0.1",
+      "devDependencies": {
+        "@seriousme/openapi-schema-validator": "2.11.0",
+        "@types/bun": "^1.4.4",
+        "hono": "^4.13.14",
+        "typebox": "^1.4.3",
+      },
+      "peerDependencies": {
+        "@afora/core": ">=0.0.2",
+        "hono": "^4.13.14",
+        "typebox": "^1",
+      },
+    },
     "packages/mcp": {
       "name": "@afora/mcp",
       "version": "0.0.1",
@@ -84,6 +99,8 @@
     "@afora/codegen": ["@afora/codegen@workspace:packages/codegen"],
 
     "@afora/core": ["@afora/core@link:.", { "hasInstallScript": true }],
+
+    "@afora/hono": ["@afora/hono@workspace:packages/hono"],
 
     "@afora/mcp": ["@afora/mcp@workspace:packages/mcp"],
 

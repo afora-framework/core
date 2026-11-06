@@ -1,0 +1,8 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"paths": { "@afora/core": ["../../src/index.ts"] }
+	},
+	"include": ["src", "scripts", "tests"],
+	"exclude": ["node_modules", "dist", "tests/.tmp"]
+}
