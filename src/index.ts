@@ -5,12 +5,14 @@ export {
 	InvalidApplicationDeclaration,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
+	UnregisteredUseCaseDependency,
 } from "./core/application/exceptions";
 export type {
 	AnyApplication,
 	ApplicationCollections,
 	ApplicationDescription,
 	ApplicationSettings,
+	ExceptionDescription,
 	FieldDescription,
 	FieldsDescription,
 	IApplication,
@@ -18,6 +20,8 @@ export type {
 	PropertyLineageDescription,
 	PropertyReference,
 	RecordDescription,
+	UseCaseDependencyDescription,
+	UseCaseDescription,
 } from "./core/application/types/application.interface";
 export { blueprintBuilderOf } from "./core/blueprint/blueprint";
 export { blueprintPluginOf } from "./core/blueprint/blueprint-plugin";
@@ -281,15 +285,18 @@ export { Kind } from "./core/symbols/kind";
 export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
 export type {
+	AnyExceptionClass,
 	AnyUseCaseClass,
 	DependencyFunctions,
 	DependencyOf,
 	DependencyOverrides,
 	UseCaseCollection,
 	UseCaseConstructor,
+	UseCaseContext,
 	UseCaseDependencies,
 	UseCaseDependency,
 	UseCaseInput,
+	UseCaseOptions,
 	UseCaseResponse,
 	UseCaseSettings,
 } from "./core/use-case/use-case";

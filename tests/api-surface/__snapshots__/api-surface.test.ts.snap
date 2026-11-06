@@ -116,6 +116,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) OptionalProperties": [
     "export type OptionalProperties<Properties> = { readonly [Key in keyof Properties]: Properties[Key] extends AnyPropertyConstructor ? OptionalProperty<Properties[Key]> : Properties[Key] extends AnyBlueprint ? OptionalBlueprint<Properties[Key]> : Properties[Key] extends AnyBlueprintList ? OptionalBlueprintList<Properties[Key]> : Properties[Key] extends AnyRecordClass ? OptionalRecord<Properties[Key]> : Properties[Key] extends AnyOptionalRecord ? Properties[Key] : never; };",
   ],
+  "(internal) OptionsArgs": [
+    "type OptionsArgs<Context extends IBlueprintCollection | undefined> = Context extends IBlueprintCollection ? [ options: UseCaseOptions<Context> ] : [ ];",
+  ],
   "(internal) OptionsOfProperty": [
     "type OptionsOfProperty<Property> = Property extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? PropertyOptions<SchemaType, Value> : PropertyOptions<TSchema>;",
   ],
@@ -270,7 +273,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare abstract class AbstractRepository<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment> { get [Kind](): "repository"; get entity(): Entity; get actions(): Actions; protected get provider(): IRepositoryProvider<Environment>; protected get context(): RepositoryContext<Environment>; protected get env(): Environment; protected hydrate(data: RepositoryData): Promise<EntityInstanceOf<Entity>>; protected hydrateMany(list: readonly RepositoryData[]): Promise<EntityInstanceOf<Entity>[]>; protected dataOf(entity: EntityInstanceOf<Entity>): RepositoryData; }",
   ],
   "AbstractUseCase": [
-    "export declare abstract class AbstractUseCase<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection> { readonly input: Readonly<BlueprintValue<Input>>; constructor(input: BlueprintInput<Input>); get dependencies(): DependencyFunctions<Dependencies>; abstract execute(dependencies?: DependencyOverrides<Dependencies>): Promise<BlueprintValue<Output>>; pullEvents(): EntityEvent[]; }",
+    "export declare abstract class AbstractUseCase<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection> { readonly input: Readonly<BlueprintValue<Input>>; constructor(input: BlueprintInput<Input>, ...args: unknown[]); get dependencies(): DependencyFunctions<Dependencies>; abstract execute(dependencies?: DependencyOverrides<Dependencies>): Promise<BlueprintValue<Output>>; pullEvents(): EntityEvent[]; }",
   ],
   "AnyApplication": [
     "export type AnyApplication = IApplication<string, any>;",
@@ -286,6 +289,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "AnyEnvironment": [
     "export type AnyEnvironment = IEnvironment<any>;",
+  ],
+  "AnyExceptionClass": [
+    "export type AnyExceptionClass = DeclaredExceptionClass<any>;",
   ],
   "AnyOptionalRecord": [
     "export type AnyOptionalRecord = OptionalRecord<AnyRecordClass>;",
@@ -306,19 +312,19 @@ exports[`exports of the package and their declarations 1`] = `
     "export type AnyRepositoryEntity = AnyRecordClass & AnyEntityClass & { readonly [EntityUniqueKeys]: readonly string[]; readonly options: RecordSettings<any>; };",
   ],
   "AnyUseCaseClass": [
-    "export interface AnyUseCaseClass { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: AnyBlueprint; readonly response: AnyBlueprint; readonly dependencies: UseCaseCollection; new (input: any): { execute(): Promise<unknown>; pullEvents(): EntityEvent[]; }; }",
+    "export interface AnyUseCaseClass { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: AnyBlueprint; readonly response: AnyBlueprint; readonly dependencies: UseCaseCollection; readonly context: AnyBlueprint | undefined; readonly description: string | undefined; readonly tags: readonly string[]; readonly deprecated: boolean; readonly errors: readonly AnyExceptionClass[]; new (input: any, ...options: any[]): { execute(): Promise<unknown>; pullEvents(): EntityEvent[]; }; }",
   ],
   "ApplicationCollections": [
-    "export interface ApplicationCollections { readonly properties: Named<unknown>; readonly blueprints: Named<unknown>; readonly records: Named<unknown>; readonly entities: Named<unknown>; readonly environments: Named<AnyEnvironment>; readonly repositories: Named<AnyRepository>; }",
+    "export interface ApplicationCollections { readonly properties: Named<unknown>; readonly blueprints: Named<unknown>; readonly records: Named<unknown>; readonly entities: Named<unknown>; readonly environments: Named<AnyEnvironment>; readonly repositories: Named<AnyRepository>; readonly useCases: Named<AnyUseCaseClass>; readonly exceptions: Named<AnyExceptionClass>; }",
   ],
   "ApplicationConflict": [
     "ApplicationConflict: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; readonly origins: readonly [ string, string ]; readonly declarations: readonly [ string, string ]; }>",
   ],
   "ApplicationDescription": [
-    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription; }>>; }",
+    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
   ],
   "ApplicationSettings": [
-    "export interface ApplicationSettings<Name extends string, Extended extends readonly AnyApplication[], Collections extends ApplicationCollections> { readonly name: Name; readonly extends?: Extended; readonly properties?: Collections["properties"]; readonly blueprints?: Collections["blueprints"]; readonly records?: Collections["records"]; readonly entities?: Collections["entities"]; readonly environments?: Collections["environments"]; readonly repositories?: Collections["repositories"]; readonly provider?: IRepositoryProvider; }",
+    "export interface ApplicationSettings<Name extends string, Extended extends readonly AnyApplication[], Collections extends ApplicationCollections> { readonly name: Name; readonly extends?: Extended; readonly properties?: Collections["properties"]; readonly blueprints?: Collections["blueprints"]; readonly records?: Collections["records"]; readonly entities?: Collections["entities"]; readonly environments?: Collections["environments"]; readonly repositories?: Collections["repositories"]; readonly useCases?: Collections["useCases"]; readonly exceptions?: Collections["exceptions"]; readonly provider?: IRepositoryProvider; }",
   ],
   "Archivable": [
     "Archivable: import("../index.js").IRecordPlugin<typeof ArchivableRecord, "archivable">",
@@ -500,6 +506,9 @@ exports[`exports of the package and their declarations 1`] = `
   "ExceptionDeclaration": [
     "export interface ExceptionDeclaration<Details> { readonly layer: ExceptionLayers; readonly name: string; readonly message: ExceptionMessage<Details>; }",
   ],
+  "ExceptionDescription": [
+    "export interface ExceptionDescription { readonly from: string; readonly layer: ExceptionLayers; readonly message?: string; }",
+  ],
   "ExceptionFrame": [
     "export interface ExceptionFrame<Details = unknown> extends ExceptionScope { readonly name: string; readonly message: string; readonly details: Details; }",
   ],
@@ -525,7 +534,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
   ],
   "IApplication": [
-    "export interface IApplication<Name extends string, Collections extends ApplicationCollections> { readonly [Kind]: "application"; readonly name: Name; readonly extends: readonly AnyApplication[]; readonly provider: IRepositoryProvider | undefined; readonly properties: Collections["properties"]; readonly blueprints: Collections["blueprints"]; readonly records: Collections["records"]; readonly entities: Collections["entities"]; readonly environments: Collections["environments"]; readonly repositories: Collections["repositories"]; repository<Repository extends AnyRepository>(repository: Repository): Repository; extend<const Others extends readonly AnyApplication[]>(...others: Others): IApplication<Name, MergedCollections<Collections, Others>>; describe(): ApplicationDescription; }",
+    "export interface IApplication<Name extends string, Collections extends ApplicationCollections> { readonly [Kind]: "application"; readonly name: Name; readonly extends: readonly AnyApplication[]; readonly provider: IRepositoryProvider | undefined; readonly properties: Collections["properties"]; readonly blueprints: Collections["blueprints"]; readonly records: Collections["records"]; readonly entities: Collections["entities"]; readonly environments: Collections["environments"]; readonly repositories: Collections["repositories"]; readonly useCases: Collections["useCases"]; readonly exceptions: Collections["exceptions"]; repository<Repository extends AnyRepository>(repository: Repository): Repository; useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; extend<const Others extends readonly AnyApplication[]>(...others: Others): IApplication<Name, MergedCollections<Collections, Others>>; describe(): ApplicationDescription; }",
   ],
   "IBlueprint": [
     "export interface IBlueprint<Properties extends IBlueprintCollection, Optional extends boolean = false> { readonly [Kind]: "blueprint"; readonly plugins: readonly IBlueprintPlugin[]; readonly properties: Properties; readonly schema: ISchema<BlueprintSchema<Properties>, BlueprintData<Properties>>; readonly optional: Optional; safeParse(value: unknown): ParseResult<Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; readonly "~standard": StandardSchemaV1.Props<Optional extends true ? BlueprintInput<Properties> | undefined : BlueprintInput<Properties>, Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; join<const Blueprints extends readonly AnyBlueprint[]>(...blueprints: Blueprints): IBlueprint<JoinedProperties<readonly [ { readonly properties: Properties; }, ...Blueprints ]>>; }",
@@ -624,10 +633,10 @@ exports[`exports of the package and their declarations 1`] = `
     "InvalidRepositoryQuery: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
   ],
   "InvalidUseCaseDeclaration": [
-    "InvalidUseCaseDeclaration: import("../../index.js").DeclaredExceptionClass<{ reason: string; }>",
+    "InvalidUseCaseDeclaration: DeclaredExceptionClass<{ reason: string; }>",
   ],
   "InvalidUseCaseDependencies": [
-    "InvalidUseCaseDependencies: import("../../index.js").DeclaredExceptionClass<undefined>",
+    "InvalidUseCaseDependencies: DeclaredExceptionClass<undefined>",
   ],
   "Ip": [
     "Ip: import("../../index.js").PropertyClass<Type.TUnion<[ Type.TString, Type.TString ]>, string>",
@@ -949,6 +958,9 @@ exports[`exports of the package and their declarations 1`] = `
   "UnregisteredRepositoryDependency": [
     "UnregisteredRepositoryDependency: import("../../index.js").DeclaredExceptionClass<{ readonly repository: string; readonly dependency: string; }>",
   ],
+  "UnregisteredUseCaseDependency": [
+    "UnregisteredUseCaseDependency: import("../../index.js").DeclaredExceptionClass<{ readonly useCase: string; readonly dependency: string; }>",
+  ],
   "UpdatedAt": [
     "export declare class UpdatedAt extends UpdatedAt_base { }",
   ],
@@ -956,13 +968,16 @@ exports[`exports of the package and their declarations 1`] = `
     "Url: import("../../index.js").PropertyClass<Type.TString, string>",
   ],
   "UseCaseAlreadyExecuted": [
-    "UseCaseAlreadyExecuted: import("../../index.js").DeclaredExceptionClass<undefined>",
+    "UseCaseAlreadyExecuted: DeclaredExceptionClass<undefined>",
   ],
   "UseCaseCollection": [
     "export type UseCaseCollection = Readonly<Record<string, UseCaseDependency>>;",
   ],
   "UseCaseConstructor": [
-    "export type UseCaseConstructor<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection> = (abstract new (input: BlueprintInput<Input>) => AbstractUseCase<Input, Output, Dependencies>) & { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: IBlueprint<Input>; readonly response: IBlueprint<Output>; readonly dependencies: Dependencies; };",
+    "export type UseCaseConstructor<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> = (abstract new (input: BlueprintInput<Input>, ...options: OptionsArgs<Context>) => AbstractUseCase<Input, Output, Dependencies> & { readonly context: Context extends IBlueprintCollection ? Readonly<BlueprintValue<Context>> : undefined; }) & { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: IBlueprint<Input>; readonly response: IBlueprint<Output>; readonly dependencies: Dependencies; readonly context: Context extends IBlueprintCollection ? IBlueprint<Context> : undefined; readonly description: string | undefined; readonly tags: readonly string[]; readonly deprecated: boolean; readonly errors: readonly AnyExceptionClass[]; };",
+  ],
+  "UseCaseContext": [
+    "export type UseCaseContext<Class extends { readonly context: unknown; }> = Class["context"] extends IBlueprint<infer Properties> ? Readonly<BlueprintValue<Properties>> : undefined;",
   ],
   "UseCaseDependencies": [
     "export type UseCaseDependencies<Class extends Declaration> = DependencyFunctions<Class["dependencies"]>;",
@@ -970,17 +985,26 @@ exports[`exports of the package and their declarations 1`] = `
   "UseCaseDependency": [
     "export type UseCaseDependency = AnyUseCaseClass | AnyRepository | AnyEnvironment;",
   ],
+  "UseCaseDependencyDescription": [
+    "export interface UseCaseDependencyDescription { readonly kind: "use-case" | "repository" | "environment"; readonly ref: string; }",
+  ],
+  "UseCaseDescription": [
+    "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly context?: FieldsDescription; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "opaque"; }; }",
+  ],
   "UseCaseInput": [
     "export type UseCaseInput<Class extends Declaration> = BlueprintInput<Class["blueprint"]["properties"]>;",
+  ],
+  "UseCaseOptions": [
+    "export type UseCaseOptions<Context extends IBlueprintCollection | undefined = undefined> = Context extends IBlueprintCollection ? { readonly context: BlueprintInput<Context>; } : { readonly context?: undefined; };",
   ],
   "UseCaseResponse": [
     "export type UseCaseResponse<Class extends Declaration> = BlueprintValue<Class["response"]["properties"]>;",
   ],
   "UseCaseSettings": [
-    "export interface UseCaseSettings<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection> { readonly name: string; readonly blueprint: IBlueprint<Input>; readonly response: IBlueprint<Output>; readonly dependencies?: Dependencies; }",
+    "export interface UseCaseSettings<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> { readonly name: string; readonly blueprint: IBlueprint<Input>; readonly response: IBlueprint<Output>; readonly dependencies?: Dependencies; readonly context?: IBlueprint<Exclude<Context, undefined>>; readonly description?: string; readonly tags?: readonly string[]; readonly deprecated?: boolean; readonly errors?: readonly AnyExceptionClass[]; }",
   ],
   "applicationOf": [
-    "export declare function applicationOf<const Name extends string, const Extended extends readonly AnyApplication[] = readonly [ ], const Properties extends ApplicationCollections["properties"] = Record<never, never>, const Blueprints extends ApplicationCollections["blueprints"] = Record<never, never>, const Records extends ApplicationCollections["records"] = Record<never, never>, const Entities extends ApplicationCollections["entities"] = Record<never, never>, const Environments extends ApplicationCollections["environments"] = Record<never, never>, const Repositories extends ApplicationCollections["repositories"] = Record<never, never>>(settings: ApplicationSettings<Name, Extended, { properties: Properties; blueprints: Blueprints; records: Records; entities: Entities; environments: Environments; repositories: Repositories; }>): IApplication<Name, MergedCollections<{ properties: Properties; blueprints: Blueprints; records: Records; entities: Entities; environments: Environments; repositories: Repositories; }, Extended>>;",
+    "export declare function applicationOf<const Name extends string, const Extended extends readonly AnyApplication[] = readonly [ ], const Properties extends ApplicationCollections["properties"] = Record<never, never>, const Blueprints extends ApplicationCollections["blueprints"] = Record<never, never>, const Records extends ApplicationCollections["records"] = Record<never, never>, const Entities extends ApplicationCollections["entities"] = Record<never, never>, const Environments extends ApplicationCollections["environments"] = Record<never, never>, const Repositories extends ApplicationCollections["repositories"] = Record<never, never>, const UseCases extends ApplicationCollections["useCases"] = Record<never, never>, const Exceptions extends ApplicationCollections["exceptions"] = Record<never, never>>(settings: ApplicationSettings<Name, Extended, { properties: Properties; blueprints: Blueprints; records: Records; entities: Entities; environments: Environments; repositories: Repositories; useCases: UseCases; exceptions: Exceptions; }>): IApplication<Name, MergedCollections<{ properties: Properties; blueprints: Blueprints; records: Records; entities: Entities; environments: Environments; repositories: Repositories; useCases: UseCases; exceptions: Exceptions; }, Extended>>;",
   ],
   "blueprintBuilderOf": [
     "export declare function blueprintBuilderOf<const Base extends readonly BlueprintSource[]>(...base: Base): BlueprintBuilder<Base>;",
@@ -1122,7 +1146,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function toOpenAPI<const Models extends Record<string, BlueprintField>>(models: Models, options?: OpenAPIOptions): OpenAPIComponents<keyof Models & string>;",
   ],
   "useCaseOf": [
-    "export declare function useCaseOf<Input extends IBlueprintCollection, Output extends IBlueprintCollection, const Dependencies extends UseCaseCollection = Record<never, never>>(settings: UseCaseSettings<Input, Output, Dependencies>): UseCaseConstructor<Input, Output, Dependencies>;",
+    "export declare function useCaseOf<Input extends IBlueprintCollection, Output extends IBlueprintCollection, const Dependencies extends UseCaseCollection = Record<never, never>, Context extends IBlueprintCollection | undefined = undefined>(settings: UseCaseSettings<Input, Output, Dependencies, Context>): UseCaseConstructor<Input, Output, Dependencies, Context>;",
   ],
 }
 `;

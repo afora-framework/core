@@ -14,6 +14,7 @@ import {
 	recordFieldDataOf,
 } from "../record/abstract-record";
 import { Kind } from "../symbols/kind";
+import { type ExecutionScope, ScopeKey } from "../use-case/scope";
 import {
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
@@ -119,7 +120,8 @@ export abstract class AbstractRepository<
 		list: readonly RepositoryData[],
 	): Promise<EntityInstanceOf<Entity>[]> {
 		const state = stateOf(this);
-		const resolved = await resolveReferences(state, list, new Map());
+		const scope = (this as { [ScopeKey]?: ExecutionScope })[ScopeKey];
+		const resolved = await resolveReferences(state, list, new Map(), scope);
 		return resolved.map((data) =>
 			parseEntity(state, data),
 		) as EntityInstanceOf<Entity>[];

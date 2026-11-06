@@ -1,5 +1,6 @@
 import { ExceptionLayers } from "../core/exception/enums/exception-layers";
 import { exceptionOf } from "../core/exception/exception";
+import { markExported } from "../core/exception/exported";
 
 /** Hashes and checks passwords. `verifySync` is optional. */
 export interface PasswordHasher {
@@ -40,6 +41,9 @@ export const UnsupportedPasswordHash = exceptionOf({
 	message: ({ version }: { readonly version: number }) =>
 		`The password hash uses argon2 version ${version}, but native argon2 (node:crypto) only derives version ${ARGON2_VERSION}. Verify it with Bun.password or configure({ hasher }).`,
 });
+
+// The two the package exports count as core exceptions for `useCaseOf({ errors })`.
+markExported(PasswordHasherRequired, SyncVerifyUnsupported);
 
 /** The only argon2 version `node:crypto` derives. */
 const ARGON2_VERSION = 19;
