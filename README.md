@@ -233,6 +233,8 @@ const document = {
 
 What `Property.with` (or `ctx.<property>(options)`) gives, `description`, `examples`, bounds and the rest, is kept. Sensitive keys (`Password`, `options.sensitive`) are `writeOnly`, the identity of an entity (`id`, `createdAt`, `updatedAt`, `deletedAt`) is `readOnly`, optional keys are left out of `required`, and every object has `additionalProperties: false`, since blueprints reject undeclared keys. Records not named among the models are inline; `refPrefix` changes where a `$ref` points (`"#/components/schemas/"` by default). A model that is not a field throws `InvalidOpenAPIModel`.
 
+To document commands rather than models, the [`openapi` sink](#outputs) of an output builds the whole document, paths included, reusing `toOpenAPI` for the schemas.
+
 ## Concepts
 
 ### Properties
@@ -686,8 +688,17 @@ class Register extends useCaseOf({
 	steps: [
 		{ find: "users.findByEmail", args: ["$input.email"], as: "existing" },
 		{ ensure: "absent", value: "$existing", error: UserAlreadyExists },
-		{ run: "hashPassword", fn: hashPassword, args: ["$input.plainPassword"], as: "hash" },
-		{ build: User, values: { name: "$input.name", email: "$input.email", password: "$hash" }, as: "user" },
+		{
+			run: "hashPassword",
+			fn: hashPassword,
+			args: ["$input.plainPassword"],
+			as: "hash",
+		},
+		{
+			build: User,
+			values: { name: "$input.name", email: "$input.email", password: "$hash" },
+			as: "user",
+		},
 		{ create: "users", value: "$user", as: "saved" },
 		{ return: { user: "$saved" } },
 	],
@@ -696,30 +707,30 @@ class Register extends useCaseOf({
 
 The steps are the same objects in TypeScript and in JSON, except for the class of `build`, the exception class of `ensure.error` and the function of `run`, which the descriptor names or marks `opaque`. TypeScript checks the dependency and action names (`"users.findByEmail"` only exists if `Users` has that read action); the values are checked at execution by the blueprints. Steps run in order, each awaited, and every repository and use case call goes through the same dependency functions as a hand-written `execute`: execution scope, events, trace frames, `UseCaseAlreadyExecuted` and `execute({ ...overrides })` behave identically.
 
-A *value* is a reference, a literal or a mapping:
+A _value_ is a reference, a literal or a mapping:
 
-| Value | Meaning |
-|---|---|
-| `"$input.email"` | the parsed input; a path of identifiers and indices follows the root (`$saved.tags.0`); a missing segment is `undefined` |
-| `"$context.userId"` | the parsed context (only if the use case declares one) |
-| `"$env.mail.FROM"` | a variable of an environment dependency |
-| `"$name"` | the result of an earlier step bound with `as` |
-| `"text"`, `1`, `true`, `null` | a JSON literal; write `{ literal: "$5" }` for a string that starts with `$` |
-| `{ user: "$saved" }`, `["$a", 2]` | a mapping, resolved recursively |
+| Value                             | Meaning                                                                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `"$input.email"`                  | the parsed input; a path of identifiers and indices follows the root (`$saved.tags.0`); a missing segment is `undefined` |
+| `"$context.userId"`               | the parsed context (only if the use case declares one)                                                                   |
+| `"$env.mail.FROM"`                | a variable of an environment dependency                                                                                  |
+| `"$name"`                         | the result of an earlier step bound with `as`                                                                            |
+| `"text"`, `1`, `true`, `null`     | a JSON literal; write `{ literal: "$5" }` for a string that starts with `$`                                              |
+| `{ user: "$saved" }`, `["$a", 2]` | a mapping, resolved recursively                                                                                          |
 
 There are no operators or interpolation: anything computed goes through `run`. The names `input`, `context`, `env` and `literal` are reserved.
 
-| Step | Does | Result (`as`) |
-|---|---|---|
-| `{ find: "<repo>.<action>", args?, as? }` | a read action: `findBy*`, `findManyBy*`, `findMany`, `exists`, `findPage`, `count` | its result |
-| `{ ensure, value, other?, error, details? }` | `ensure` is `exists`, `absent`, `equals`, `notEquals` (`other` required, structural equality as in queries), `true` or `false`; on failure throws `new error({ source, details })` | none |
-| `{ build: Class, values, as }` | `new Class(values)`, a record or entity | the instance |
-| `{ change: "$ref", key, value, as? }` | `record.change[key](value)`; `key` must be a change key | the record |
-| `{ invoke: "$ref", method, args?, as? }` | a public method of a record or entity (`publish`, `verifyPassword`...), awaited | its result |
-| `{ create \| update \| delete: "<repo>", value, as? }` | the repository action of that name | its result |
-| `{ call: "<useCase>", input, as? }` | the use case dependency: validated child, inherited context, events moved up | its response |
-| `{ run: "<name>", fn, args?, as? }` | `await fn(...args, { context })`; `name` is unique in the use case | its result |
-| `{ return: value }` | the response, validated by the response blueprint; required, last, once | none |
+| Step                                                   | Does                                                                                                                                                                               | Result (`as`) |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `{ find: "<repo>.<action>", args?, as? }`              | a read action: `findBy*`, `findManyBy*`, `findMany`, `exists`, `findPage`, `count`                                                                                                 | its result    |
+| `{ ensure, value, other?, error, details? }`           | `ensure` is `exists`, `absent`, `equals`, `notEquals` (`other` required, structural equality as in queries), `true` or `false`; on failure throws `new error({ source, details })` | none          |
+| `{ build: Class, values, as }`                         | `new Class(values)`, a record or entity                                                                                                                                            | the instance  |
+| `{ change: "$ref", key, value, as? }`                  | `record.change[key](value)`; `key` must be a change key                                                                                                                            | the record    |
+| `{ invoke: "$ref", method, args?, as? }`               | a public method of a record or entity (`publish`, `verifyPassword`...), awaited                                                                                                    | its result    |
+| `{ create \| update \| delete: "<repo>", value, as? }` | the repository action of that name                                                                                                                                                 | its result    |
+| `{ call: "<useCase>", input, as? }`                    | the use case dependency: validated child, inherited context, events moved up                                                                                                       | its response  |
+| `{ run: "<name>", fn, args?, as? }`                    | `await fn(...args, { context })`; `name` is unique in the use case                                                                                                                 | its result    |
+| `{ return: value }`                                    | the response, validated by the response blueprint; required, last, once                                                                                                            | none          |
 
 `useCaseOf` validates the steps at declaration and throws `InvalidUseCaseStep` (`UseCase` layer, `details: { index, reason, code }`) for an unknown or malformed step, a bad or repeated `as`, a reference to an unbound name, a `$context` without a declared context, a first-level `$input.<key>` or `$context.<key>` the blueprint lacks, an unknown repository, action, use case or environment, a `find` of a write action, a `build` that is not a record class, an `ensure.error` missing from `errors`, a `change.key` that is not a change key of the class `build` made, and a missing, repeated or misplaced `return`. A `change` or `invoke` on something that is not a record, or on a member it lacks, throws `InvalidUseCaseStep` with the `index` while the steps run. In an application, the classes of `build` and `ensure.error` must be registered (`UnregisteredApplicationReference`); `describe()` gives `implementation: { kind: "steps", steps }` with them by name (`"User"`, `"UserAlreadyExists"`, or `{ core: "RepositoryUniqueViolation" }` for an exported exception) and `run.fn` as `{ kind: "opaque" }`. A subclass that overrides `execute` is hand-written, so it is `{ kind: "opaque" }`.
 
@@ -804,7 +815,11 @@ const ids = sinkOf({
 		operations.map(({ id }) => `${options.prefix ?? ""}${output.name}/${id}`),
 });
 
-outputOf({ name: "Api", commands: [Users], pipe: [hide({ tag: "internal" }), ids()] });
+outputOf({
+	name: "Api",
+	commands: [Users],
+	pipe: [hide({ tag: "internal" }), ids()],
+});
 ```
 
 `apply` and `build` also get `{ output: { name, statuses } }`. `stageDescriptionOf(stage)` gives `{ kind, name, options }` for a stage made by a factory and `{ kind: "opaque" }` for a hand-written object of the stage shape (accepted at runtime). `stageCatalogOf(...factories)` resolves names to stages (`catalog.resolve("select", options)`), and `StdStages` holds the built-in ones. `select` keeps the operations that match `tags` (any of), `operations` (ids to keep) and `exclude` (ids to drop).
@@ -812,6 +827,32 @@ outputOf({ name: "Api", commands: [Users], pipe: [hide({ tag: "internal" }), ids
 **Errors at the boundary.** `statusOf(error, operation?, statuses?)` gives an HTTP-style status: `statuses[error.name]` if given; 400 for `InvalidUseCaseInput`, `InvalidUseCaseContext`, `InvalidCommandContext` and any exception whose `details.issues` is a list; 404 for `RepositoryEntityNotFound` and `UnknownCommandOperation`; 409 for `RepositoryUniqueViolation`; 422 for an exception listed in `operation.errors`; 500 for anything else, including `CommandEventFailed` (the call committed, but the response cannot claim success) and errors that are not exceptions. `problemOf(error, { status, debug? })` returns an RFC 9457 object (`type: "urn:afora:exception:<name>"`, `title`, `status`, `detail`, `layer`), served as `PROBLEM_MEDIA_TYPE` (`application/problem+json`). `issues` (`path`, `code`, `message`; no values, no causes) only appears for a 400, `trace` only with `debug: true`, and the `detail` of a 5xx is `"Internal error."` unless `debug` is set, so internal messages do not leak.
 
 **Masking.** `outputValueOf(value)` is `JSON.parse(JSON.stringify(value))`: every record goes through its `toJSON`, so sensitive values (a `Password` always) are masked at any depth. A sink must send its response values through it.
+
+**The `openapi` sink.** `openapi({ info, servers?, basePath?, route? })` (in `StdStages`) builds an OpenAPI 3.1 document from the operations:
+
+```ts
+import { openapi, outputOf } from "@afora/core";
+
+const Docs = outputOf({
+	name: "Blog",
+	commands: [Users, Posts],
+	statuses: { UserAlreadyExists: 409 },
+	pipe: [
+		openapi({
+			info: { title: "Blog", version: "1.0.0" },
+			basePath: "/api",
+			route: { "Posts.list": { method: "get" } },
+		}),
+	],
+});
+
+Docs.build(); // { openapi: "3.1.0", info, paths, components: { schemas } }
+```
+
+- **Routes.** `POST {basePath}/{kebab(command)}/{kebab(operation)}`, e.g. `/api/users/change-password`; `route` changes `method` (`get`, `post`, `put`, `patch`, `delete`) or `path` (no parameters) per operation id. Two operations on one method and path, or a `route` for an unknown id, throw `InvalidOutputStage`.
+- **Operations.** `operationId` is the id with an underscore for the dot (`Users_register`; a collision throws), `summary` is the id, plus `description`, `tags` and `deprecated` from the descriptor. `post`, `put` and `patch` send the input as a JSON body (omitted when it has no fields); `get` and `delete` send it as query parameters, which needs every field to be a scalar property, otherwise the build throws `InvalidOutputStage` (route it with `post`). The `context` is transport-specific and not in the document: sinks that serve HTTP map it (headers, middleware).
+- **Responses.** `200` with the response schema (sensitive keys are `writeOnly`), `400` and `500` always, and one response per status of the declared `errors`, given by `statusOf` with the output `statuses` (422 by default). An operation does not expose its repository dependencies, so `404` and `409` are documented when a declared error maps to them. Errors are `application/problem+json` with `components.schemas.Problem` (RFC 9457 plus `layer` and `issues`).
+- **Models.** Records and entities reachable from inputs and responses are `components.schemas` named by class name and referenced with `$ref` (see [OpenAPI](#openapi)). Two different classes with one name, an anonymous class or a class named `Problem` throw `InvalidOutputStage`.
 
 ### Repositories
 
