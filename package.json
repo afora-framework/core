@@ -19,13 +19,13 @@
 	],
 	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
 	"license": "MIT",
-	"homepage": "https://github.com/Hoyasumii/afora#readme",
+	"homepage": "https://github.com/afora-framework/core#readme",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/Hoyasumii/afora.git"
+		"url": "git+https://github.com/afora-framework/core.git"
 	},
 	"bugs": {
-		"url": "https://github.com/Hoyasumii/afora/issues"
+		"url": "https://github.com/afora-framework/core/issues"
 	},
 	"type": "module",
 	"workspaces": [
