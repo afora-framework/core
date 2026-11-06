@@ -33,7 +33,6 @@
 		"tests/types-compat",
 		"examples/interop",
 		"bench",
-		"playground",
 		"packages"
 	]
 }
