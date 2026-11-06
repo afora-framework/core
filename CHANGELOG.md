@@ -18,6 +18,7 @@
 
 ### Added
 
+- Provider v2 design types: `RepositoryQuery`, `RepositoryWhere`, `RepositoryOrder`, `RepositoryPage`, `RepositoryFindMany`, `RepositoryExists`, `RepositoryFindPage`, and JSON provider descriptor/settings types. Runtime integration and JSON codegen follow in T10–T12; the design and typed sandbox are checked in.
 - `afora.json` repositories support `deletion: "hard" | "soft"`, including generation and extraction; explicit hard deletion normalizes to the default. MCP authoring tools accept and validate the setting.
 - `repositoryOf({ deletion: "hard" | "soft" })`, defaulting to hard deletion. Soft deletion persists `deletedAt`, hides deleted rows from finds, counts and relations, and appears in `app.describe()`. Unique values of retained rows remain occupied.
 - `VERSIONING.md`: the semver policy, what is and is not the contract, what counts as additive or breaking, the deprecation process, supported ranges and how they are enforced.

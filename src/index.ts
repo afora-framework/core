@@ -233,6 +233,20 @@ export {
 	repositoryOf,
 } from "./core/repository/repository";
 export type {
+	ProviderCapabilities,
+	ProviderDescription,
+	ProviderOption,
+	ProviderOptions,
+	ProviderSettings,
+	RepositoryExists,
+	RepositoryFindMany,
+	RepositoryFindPage,
+	RepositoryOrder,
+	RepositoryPage,
+	RepositoryQuery,
+	RepositoryWhere,
+} from "./core/repository/types/query.interface";
+export type {
 	AnyRepository,
 	AnyRepositoryEntity,
 	EntityInstanceOf,

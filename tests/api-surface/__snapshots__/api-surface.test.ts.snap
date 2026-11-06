@@ -155,6 +155,12 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) PublishableRecord_base": [
     "PublishableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ publishedAt: import("../index.js").CallableProperty<Omit<typeof import("../index.js").DateTime, "prototype" | "safeParse" | "type" | "~standard" | typeof import("../core/property/types/property-options.interface.js").Callable> & { new (value: string | undefined): import("../index.js").AbstractProperty<import("typebox").TOptional<import("typebox").TString>, string> & Omit<import("../index.js").DateTime, keyof import("../index.js").AbstractProperty<import("typebox").TSchema, unknown>>; readonly type: import("../index.js").IPropertyType<import("typebox").TOptional<import("typebox").TString>, string>; safeParse(value: unknown): import("../index.js").ParseResult<string | undefined>; readonly "~standard": import("../index.js").StandardSchemaV1.Props<string | undefined, string | undefined>; }>; }>, [ ], never, unknown>",
   ],
+  "(internal) QueryKey": [
+    "type QueryKey<Entity> = unknown extends Entity ? string : EntityKeyOf<Entity>;",
+  ],
+  "(internal) QueryValue": [
+    "type QueryValue<Entity, Key extends string> = Key extends keyof EntityValueOf<Entity> ? QueryValueOf<EntityValueOf<Entity>[Key]> : unknown;",
+  ],
   "(internal) ReadonlyKeys": [
     "type ReadonlyKeys<Schemas> = { [Key in keyof Schemas]: Schemas[Key] extends TReadonly<TSchema> ? Schemas[Key] extends TOptional<Schemas[Key]> ? never : Key : never; }[keyof Schemas];",
   ],
@@ -728,6 +734,21 @@ exports[`exports of the package and their declarations 1`] = `
   "PropertyValue": [
     "export type PropertyValue<SchemaType extends TSchema, Value = Static<SchemaType>> = SchemaType extends TOptional<TSchema> ? Value | undefined : Value;",
   ],
+  "ProviderCapabilities": [
+    "export interface ProviderCapabilities { readonly operators?: readonly string[]; readonly transactions?: boolean; }",
+  ],
+  "ProviderDescription": [
+    "export type ProviderDescription = { readonly kind: "provider"; readonly name: string; readonly options: ProviderOptions; } | { readonly kind: "opaque"; };",
+  ],
+  "ProviderOption": [
+    "export type ProviderOption = null | boolean | number | string | readonly ProviderOption[] | { readonly [key: string]: ProviderOption; };",
+  ],
+  "ProviderOptions": [
+    "export type ProviderOptions = Readonly<Record<string, ProviderOption>>;",
+  ],
+  "ProviderSettings": [
+    "export interface ProviderSettings<Options extends ProviderOptions = ProviderOptions, Provider extends IRepositoryProvider = IRepositoryProvider> { readonly name: string; readonly options?: Options; readonly create: (options: Options) => Provider; }",
+  ],
   "Publishable": [
     "Publishable: import("../index.js").IRecordPlugin<typeof PublishableRecord, "publishable">",
   ],
@@ -815,15 +836,33 @@ exports[`exports of the package and their declarations 1`] = `
   "RepositoryEntityNotFound": [
     "RepositoryEntityNotFound: import("../../index.js").DeclaredExceptionClass<{ readonly id: string; }>",
   ],
+  "RepositoryExists": [
+    "export interface RepositoryExists<Entity> { exists(query?: RepositoryQuery<Entity>): Promise<boolean>; }",
+  ],
   "RepositoryFindBy": [
     "export type RepositoryFindBy<Entity, Actions extends string = string> = { readonly [Key in EntityUniqueKeyOf<Entity> as \`findBy\${Capitalize<Key>}\` extends Actions ? \`findBy\${Capitalize<Key>}\` : never]: (value: QueryValueOf<NonNullable<ValueAt<Entity, Key>>>) => Promise<EntityInstanceOf<Entity> | undefined>; };",
+  ],
+  "RepositoryFindMany": [
+    "export interface RepositoryFindMany<Entity> { findMany(query?: RepositoryQuery<Entity>): Promise<EntityInstanceOf<Entity>[]>; }",
   ],
   "RepositoryFindManyBy": [
     "export type RepositoryFindManyBy<Entity, Actions extends string = string> = { readonly [Key in EntityNonUniqueKeyOf<Entity> as \`findManyBy\${Capitalize<Key>}\` extends Actions ? \`findManyBy\${Capitalize<Key>}\` : never]: (value: QueryValueOf<ValueAt<Entity, Key>>) => Promise<EntityInstanceOf<Entity>[]>; };",
   ],
+  "RepositoryFindPage": [
+    "export interface RepositoryFindPage<Entity> { findPage(query?: RepositoryQuery<Entity>): Promise<RepositoryPage<Entity>>; }",
+  ],
   "RepositoryOf": [
     "export declare function RepositoryOf<Repository extends AnyRepository>(repository: Repository): new () => Repository;",
     "export type RepositoryOf<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment = Readonly<Record<never, never>>> = RepositoryType<Entity, Actions, Environment>;",
+  ],
+  "RepositoryOrder": [
+    "export interface RepositoryOrder<Key extends string = string> { readonly key: Key; readonly direction?: "asc" | "desc"; }",
+  ],
+  "RepositoryPage": [
+    "export interface RepositoryPage<Entity> { readonly items: readonly EntityInstanceOf<Entity>[]; readonly total: number; readonly limit: number; readonly offset: number; }",
+  ],
+  "RepositoryQuery": [
+    "export interface RepositoryQuery<Entity = unknown> { readonly where?: RepositoryWhere<Entity>; readonly orderBy?: readonly RepositoryOrder<QueryKey<Entity>>[]; readonly limit?: number; readonly offset?: number; readonly withDeleted?: boolean; }",
   ],
   "RepositorySettings": [
     "export interface RepositorySettings<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment extends EnvironmentDependencies | undefined> { readonly entity: Entity; readonly actions: Actions; readonly deletion?: "hard" | "soft"; readonly provider?: IRepositoryProvider<MergedEnvironment<Environment>>; readonly environmentDependencies?: Environment; readonly relations?: readonly AnyRepository[]; }",
@@ -833,6 +872,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "RepositoryUpdate": [
     "export interface RepositoryUpdate<Entity> { update(entity: EntityInstanceOf<Entity>): Promise<EntityInstanceOf<Entity>>; }",
+  ],
+  "RepositoryWhere": [
+    "export type RepositoryWhere<Entity = unknown> = { readonly [Key in QueryKey<Entity>]?: QueryValue<Entity, Key> | { readonly in: readonly QueryValue<Entity, Key>[]; }; };",
   ],
   "ReservedBlueprintKey": [
     "ReservedBlueprintKey: import("../../index.js").DeclaredExceptionClass<{ readonly key: string; }>",
