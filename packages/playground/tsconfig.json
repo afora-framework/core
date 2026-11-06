@@ -1,9 +1,9 @@
 {
-	"extends": "../tsconfig.json",
+	"extends": "../../tsconfig.json",
 	"compilerOptions": {
 		"lib": ["ESNext", "DOM", "DOM.Iterable"],
-		"paths": { "@afora/core": ["../src/index.ts"] }
+		"paths": { "@afora/core": ["../../src/index.ts"] }
 	},
-	"include": ["*.ts"],
+	"include": ["src", "scripts"],
 	"exclude": ["node_modules", "dist", ".runs"]
 }

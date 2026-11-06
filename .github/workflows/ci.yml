@@ -28,6 +28,7 @@ jobs:
       - run: bun run typecheck
       - run: bun run --cwd packages/codegen typecheck
       - run: bun run --cwd packages/mcp typecheck
+      - run: bun run --cwd packages/playground typecheck
 
   commitlint:
     name: Commit messages
@@ -56,7 +57,7 @@ jobs:
       - run: bun run test:interop
 
   packages:
-    name: Packages (codegen, mcp)
+    name: Packages (codegen, mcp, playground)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -68,8 +69,10 @@ jobs:
       - run: bun run build
       - run: bun run test:codegen
       - run: bun run test:mcp
+      - run: bun run test:playground
       - run: bun run --cwd packages/codegen build
       - run: bun run --cwd packages/mcp build
+      - run: bun run --cwd packages/playground build
 
   build:
     name: Build and smoke (Node ${{ matrix.node }})

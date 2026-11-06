@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Breaking: the playground and the `afora` CLI moved to the new package `@afora/playground` (`packages/playground`). `@afora/core` no longer ships `dist/playground` (about 10 MB) or a `bin`, so `afora playground` from `@afora/core` is gone: install `@afora/playground` as a dev dependency instead. `bun run playground` and `bun run test:playground` in this repository keep working.
 - Breaking: the `change<Key>` methods are now a `change` namespace, `user.change.name(value)` instead of `user.changeName(value)`, with the same validation, `updatedAt` and effects. `change.<key>` is bound to its record, so `const { change } = user` works, and it returns the record. `change` only exists when `options.change` (or a plugin) lists keys, and then a blueprint key named `change` throws `ReservedRecordKey` (a plugin member named `change` throws `RecordPluginConflict`). The standard `authenticatable` plugin now has `change.password(hash)`.
 - `recordOf` is now the `std` one, `recordBuilderOf(StdRecordPlugins)`, so that `options.plugins` can pick standard plugins; its classes have a static `plugins`. `change` keys are resolved in the order of the blueprint, as `sensitive` and `unique` are.
 
@@ -25,7 +26,7 @@
 - The properties of a blueprint context, `ctx.optional.*` included, can be called with those options, as `ctx.number({ min: 1 })` or `ctx.optional.string({ max: 20 })`; used as they are, they are the property classes. A blueprint, `listOf` and `optionalOf` store the class itself. `CallableProperty`, `CallableProperties`, `StoredField` and `StoredFields` types.
 - Playground experiments are saved as `.afora/sandbox/**/*.sandbox.ts` in the selected project, with nested folders, renaming, deletion, disk reload and migration of browser-local experiments.
 
-- Local TypeScript playground and packaged `afora playground` CLI with project-aware completion, hover types, diagnostics, Bun execution, examples and browser-local saved experiments. Reads the consuming project's manifest, TypeScript configuration and installed dependencies; source mode supports developing afora itself.
+- Local TypeScript playground and `afora playground` CLI (now `@afora/playground`) with project-aware completion, hover types, diagnostics, Bun execution, examples and browser-local saved experiments. Reads the consuming project's manifest, TypeScript configuration and installed dependencies; source mode supports developing afora itself.
 - `EntityNonUniqueKeyOf` type: the keys of an entity that are not unique.
 
 ## 0.0.2 — 2026-10-28

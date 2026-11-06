@@ -8,7 +8,7 @@ import { createProject, projectInfo } from "./project";
 import { execute, type RunEvent } from "./runner";
 import { snapshot } from "./serialize";
 
-const root = resolve(import.meta.dir, "..");
+const root = resolve(import.meta.dir, "../../..");
 const fixture = await mkdtemp(join(tmpdir(), "afora-consumer-"));
 await mkdir(join(fixture, "node_modules/@afora"), { recursive: true });
 await symlink(root, join(fixture, "node_modules/@afora/core"));

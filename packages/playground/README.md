@@ -1,10 +1,10 @@
-# afora playground
+# @afora/playground
 
 A local TypeScript playground for the project you launch it from. Its Monaco editor uses a local TypeScript language service to resolve the project's actual installed dependencies and `tsconfig.json` (including path aliases). The `package.json` panel shows declared and installed versions; **Atualizar projeto** reloads the manifest and language service after dependency/configuration changes.
 
 ## Developing afora
 
-From the repository root:
+From the root of the afora repository:
 
 ```sh
 bun install
@@ -15,7 +15,7 @@ Open http://127.0.0.1:4317. This command builds the playground and uses `src/ind
 
 ## Using it in another project
 
-Once a version containing the playground is installed, add this script to that project's `package.json`:
+Install `@afora/playground` as a dev dependency (next to `@afora/core`) and add this script to that project's `package.json`:
 
 ```json
 {
@@ -25,7 +25,7 @@ Once a version containing the playground is installed, add this script to that p
 }
 ```
 
-Run `bun run playground` (or `npm run playground` with Bun on your PATH). The CLI is included in `@afora/core`; no separate editor installation is needed. Bun >= 1.4.4 is required to launch it, including for projects that normally run on Node. The library itself retains its Node support.
+Run `bun run playground` (or `npm run playground` with Bun on your PATH). Bun >= 1.4.4 is required to launch it, including for projects that normally run on Node. The library itself retains its Node support.
 
 The CLI defaults to the current directory. Optional flags:
 
@@ -36,8 +36,8 @@ afora playground --project /absolute/path/to/project --port 4318
 Before publishing, test a consumer directly from this checkout:
 
 ```sh
-bun run build
-bun dist/playground/server.js --project /absolute/path/to/project
+bun run --cwd packages/playground build
+bun packages/playground/dist/server.js --project /absolute/path/to/project
 ```
 
 The consumer must already have its dependencies installed. The editor does not install packages or change `package.json`. A dependency without TypeScript declarations needs its usual `@types` package. The language service bundled with this version is TypeScript 5.9.3; it reads the project configuration but does not switch compiler versions to match the project. Framework-specific compiler plugins and newer TypeScript-only features are outside this initial version.
@@ -57,8 +57,7 @@ This is a development tool for code you trust. It binds to loopback and checks r
 
 ```sh
 bun run test:playground
-cd playground
-bun check
+bun run --cwd packages/playground typecheck
 ```
 
 Tests cover source/installed afora completion, a separate consumer's dependencies and aliases, example diagnostics/execution, serialization, cancellation and timeouts.

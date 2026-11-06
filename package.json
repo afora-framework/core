@@ -45,9 +45,6 @@
 	"files": [
 		"dist"
 	],
-	"bin": {
-		"afora": "./dist/playground/server.js"
-	},
 	"engines": {
 		"bun": ">=1.4.4",
 		"node": ">=22"
@@ -62,9 +59,9 @@
 		"fmt": "biome check --write .",
 		"knip": "knip",
 		"build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target node --format esm --packages external && tsc -p tsconfig.build.json",
-		"postbuild": "bun scripts/add-dts-extensions.ts && bun playground/build.ts",
-		"playground": "bun playground/build.ts && bun dist/playground/server.js --source",
-		"test:playground": "bun test ./playground/runner.test.ts ./playground/scheduler.test.ts",
+		"postbuild": "bun scripts/add-dts-extensions.ts",
+		"playground": "bun run --cwd packages/playground dev",
+		"test:playground": "bun run --cwd packages/playground test",
 		"bench": "cd bench && bun install && bun run.ts",
 		"smoke": "bun run build && node scripts/smoke.mjs",
 		"test:types": "bun run build && bun tests/types-compat/run.ts",
@@ -74,7 +71,7 @@
 		"prepublishOnly": "bun run typecheck && bun test && bun run smoke",
 		"test:codegen": "bun test --cwd packages/codegen",
 		"test:mcp": "bun test --cwd packages/mcp",
-		"build:packages": "bun run build && bun run --cwd packages/codegen build && bun run --cwd packages/mcp build"
+		"build:packages": "bun run build && bun run --cwd packages/codegen build && bun run --cwd packages/mcp build && bun run --cwd packages/playground build"
 	},
 	"dependencies": {
 		"slugify": "^1.6.9",
@@ -87,7 +84,6 @@
 		"@types/bun": "^1.4.4",
 		"husky": "^9.1.7",
 		"knip": "^6.43.0",
-		"monaco-editor": "0.52.2",
 		"typescript": "^7.0.2",
 		"typescript-language-service": "npm:typescript@5.9.3"
 	},

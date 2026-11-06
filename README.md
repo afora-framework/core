@@ -857,13 +857,13 @@ Where the others win: Zod and Valibot are faster, have far larger ecosystems and
 
 ## Local playground
 
-Try the library in a TypeScript editor with IntelliSense, executable examples and an expandable console:
+Try the library in a TypeScript editor with IntelliSense, executable examples and an expandable console. It lives in its own package, `@afora/playground`, which provides the `afora` CLI (`afora playground`); `@afora/core` carries no editor:
 
 ```bash
 bun run playground
 ```
 
-In this repository it uses the current `src/`. The published package also includes an `afora playground` CLI: run it through a package script in a consuming project to use that project's `package.json`, `tsconfig.json` and installed dependencies. Saved experiments live in `.afora/sandbox/**/*.sandbox.ts` inside the selected project. Bun is required for the playground. See [playground/README.md](playground/README.md) for setup, project selection and execution limits.
+In this repository that uses the current `src/`. In a project that depends on `@afora/core`, install `@afora/playground` as a dev dependency and run `afora playground` through a package script to use that project's `package.json`, `tsconfig.json` and installed dependencies. Saved experiments live in `.afora/sandbox/**/*.sandbox.ts` inside the selected project. Bun is required for the playground. See [packages/playground](packages/playground/README.md) for setup, project selection and execution limits.
 
 ## Scripts
 
@@ -882,7 +882,9 @@ bun run fmt           # biome format + fix
 bun run build         # build dist/ (ESM + .d.ts)
 bun run test:codegen  # tests of packages/codegen
 bun run test:mcp      # tests of packages/mcp
-bun run build:packages # build the core, then packages/codegen and packages/mcp
+bun run test:playground # tests of packages/playground
+bun run playground    # the local playground, on this repository's src/
+bun run build:packages # build the core, then packages/codegen, packages/mcp and packages/playground
 ```
 
 ## Contributing
