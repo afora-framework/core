@@ -38,14 +38,26 @@ export function createProject(directory: string, source = false) {
 				"@afora/core": [join(root, "src/index.ts")],
 			};
 		}
+		// Only the editor buffer changes between queries. Dependency files keep a
+		// fixed version (and a cached snapshot) until `reload()`, so TypeScript
+		// reuses their parsed source files instead of rebuilding the whole program
+		// on every keystroke.
+		const snapshots = new Map<string, ts.IScriptSnapshot | undefined>();
 		const host: ts.LanguageServiceHost = {
 			getScriptFileNames: () => [fileName],
-			getScriptVersion: () => String(version),
+			getScriptVersion: (file) => (file === fileName ? String(version) : "0"),
 			getScriptSnapshot: (file) => {
-				const contents = file === fileName ? text : ts.sys.readFile(file);
-				return contents === undefined
-					? undefined
-					: ts.ScriptSnapshot.fromString(contents);
+				if (file === fileName) return ts.ScriptSnapshot.fromString(text);
+				if (!snapshots.has(file)) {
+					const contents = ts.sys.readFile(file);
+					snapshots.set(
+						file,
+						contents === undefined
+							? undefined
+							: ts.ScriptSnapshot.fromString(contents),
+					);
+				}
+				return snapshots.get(file);
 			},
 			getCurrentDirectory: () => root,
 			getCompilationSettings: () => options,
