@@ -1,6 +1,6 @@
 {
 	"name": "@afora/hono",
-	"version": "1.0.0",
+	"version": "0.0.1",
 	"description": "A Hono sink for afora outputs: one route per operation, problem+json errors, sensitive data masked and an optional OpenAPI document.",
 	"keywords": [
 		"afora",
@@ -53,7 +53,7 @@
 		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": "^1.0.0",
+		"@afora/core": ">=0.0.1",
 		"hono": "^4.13.14",
 		"typebox": "^1"
 	}
