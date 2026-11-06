@@ -4,6 +4,7 @@
 
 ### Changed
 
+- A relation to a soft-deleted entity loads it (deleted, read-only) instead of failing the read with `InvalidRepositoryData`: a reference is data, so an order keeps its deleted product.
 - Breaking: TypeBox is now a required peer dependency (`typebox: ^1`) instead of a runtime dependency. Install it alongside `@afora/core`; companion packages and generated applications share the application's TypeBox installation.
 - Breaking: record and entity instance metadata moved from `.blueprint` and `.options` to `[Meta].blueprint` and `[Meta].options`. Class statics keep their names. `blueprint` and `options` are now legal domain fields, including plugin fields, and metadata no longer appears in spread or `Object.keys`. Reserved record and entity names are covered by fixed contract tests.
 - Breaking: `CallableProperties`, `StoredField`, `StoredFields`, `BlueprintPropertySchema`, `JoinedProperties`, `ListProperties`, `OptionalProperties`, `PluginMembers`, `WithPluginProperties`, `RecordPluginsByName`, `RecordPluginContext`, `BlueprintFactoryContext`, `MergedCollections`, `ApplicationCollectionKey`, `MergedEnvironment` and `RepositoryMethods` were removed from the exports (internal helpers, now marked `@internal`). They still appear inside the declarations of the exported types.

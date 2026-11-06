@@ -111,7 +111,7 @@ test("soft actions require update and findOne, without requiring remove", async 
 	).toThrow(InvalidRepositoryDeclaration);
 });
 
-test("soft-deleted references are missing", async () => {
+test("soft-deleted references still load, deleted", async () => {
 	const memory = inMemoryProvider();
 	const provider = memory;
 	const Items = repositoryOf({
@@ -131,9 +131,10 @@ test("soft-deleted references are missing", async () => {
 	const holder = await Holders.create({ item });
 	expect((await Holders.findById(holder.id))?.item.id).toBe(item.id);
 	await Items.delete(item);
-	await expect(Holders.findById(holder.id)).rejects.toMatchObject({
-		name: "InvalidRepositoryData",
-	});
+	const loaded = (await Holders.findById(holder.id))?.item;
+	expect(loaded?.id).toBe(item.id);
+	expect(loaded?.isDeleted).toBe(true);
+	expect(await Items.findById(item.id)).toBeUndefined();
 });
 
 test("application binding preserves deletion mode and describes it", async () => {
