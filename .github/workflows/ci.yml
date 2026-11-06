@@ -28,6 +28,8 @@ jobs:
       - run: bun run typecheck
       - run: bun run --cwd packages/codegen typecheck
       - run: bun run --cwd packages/mcp typecheck
+      - run: bun run --cwd packages/hono typecheck
+      - run: bun run --cwd packages/drizzle typecheck
       - run: bun run --cwd packages/playground typecheck
 
   commitlint:
@@ -68,7 +70,7 @@ jobs:
       - run: bun run test:api
 
   packages:
-    name: Packages (codegen, mcp, hono, playground)
+    name: Packages (codegen, mcp, hono, drizzle, playground)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -81,10 +83,12 @@ jobs:
       - run: bun run test:codegen
       - run: bun run test:mcp
       - run: bun run test:hono
+      - run: bun run test:drizzle
       - run: bun run test:playground
       - run: bun run --cwd packages/codegen build
       - run: bun run --cwd packages/mcp build
       - run: bun run --cwd packages/hono build
+      - run: bun run --cwd packages/drizzle build
       - run: bun run --cwd packages/playground build
 
   build:
