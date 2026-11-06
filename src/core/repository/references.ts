@@ -195,12 +195,19 @@ async function loadByIds(
 	const context = contextOf(state);
 	const { provider } = state;
 	if (typeof provider.findIn === "function") {
-		return provider.findIn(context, "id", ids);
+		const rows = await provider.findIn(context, "id", ids);
+		return rows.filter(
+			(data) => state.deletion !== "soft" || data.deletedAt === undefined,
+		);
 	}
 	const found = await Promise.all(
 		ids.map((id) => provider.findOne(context, "id", id)),
 	);
-	return found.filter((data) => data !== undefined);
+	return found.filter(
+		(data): data is RepositoryData =>
+			data !== undefined &&
+			(state.deletion !== "soft" || data.deletedAt === undefined),
+	);
 }
 
 /**

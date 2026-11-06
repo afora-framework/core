@@ -536,6 +536,7 @@ function describeRegistry(
 				from: entry.from,
 				entity: scope.entities.get(info.entity) as string,
 				actions: info.actions,
+				deletion: info.deletion,
 				relations: info.relations.map(
 					(relation) => repositories.get(relation) as string,
 				),

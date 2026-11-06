@@ -43,6 +43,8 @@ export interface RepositorySettings<
 	readonly entity: Entity;
 	/** Its methods, e.g. `["findById", "findByEmail", "findManyByName", "create"]`. */
 	readonly actions: Actions;
+	/** Physically remove rows (default), or retain them with `deletedAt`. */
+	readonly deletion?: "hard" | "soft";
 	/** How it reads and writes; a new `inMemoryProvider()` by default. */
 	readonly provider?: IRepositoryProvider<MergedEnvironment<Environment>>;
 	/** The environments the provider gets, merged, as `context.env`. */
@@ -169,7 +171,9 @@ const findBy = (key: string): Method =>
 			key,
 			queryOf(self.context, key, value),
 		);
-		return data === undefined ? undefined : await self.hydrate(data);
+		return data === undefined || !visible(self, data)
+			? undefined
+			: await self.hydrate(data);
 	});
 
 const findManyBy = (key: string): Method =>
@@ -179,7 +183,7 @@ const findManyBy = (key: string): Method =>
 			key,
 			queryOf(self.context, key, value),
 		);
-		return self.hydrateMany(list);
+		return self.hydrateMany(list.filter((data) => visible(self, data)));
 	});
 
 const create = action(async (self, input: unknown) => {
@@ -202,7 +206,7 @@ const remove = action(async (self, target: unknown) => {
 	let entity = target;
 	if (typeof target === "string") {
 		const data = await self.provider.findOne(context, "id", target);
-		if (data === undefined) {
+		if (data === undefined || !visible(self, data)) {
 			throw new RepositoryEntityNotFound({
 				source: context.name,
 				details: { id: target },
@@ -216,11 +220,29 @@ const remove = action(async (self, target: unknown) => {
 		destroy(): void;
 	};
 	if (!destroyable.isDeleted) destroyable.destroy();
-	await self.provider.remove(context, data.id as string);
+	if (stateOf(self).deletion === "soft") {
+		await self.provider.update(context, self.dataOf(entity));
+	} else {
+		await self.provider.remove(context, data.id as string);
+	}
 	return entity;
 });
 
-const count = action(async (self) => self.provider.count(self.context));
+/** Soft-deleted records are absent from the repository's read view. */
+function visible(self: object, data: RepositoryData): boolean {
+	return stateOf(self).deletion !== "soft" || data.deletedAt === undefined;
+}
+
+const count = action(async (self) => {
+	if (stateOf(self).deletion !== "soft")
+		return self.provider.count(self.context);
+	const rows = await self.provider.findMany(
+		self.context,
+		"deletedAt",
+		undefined,
+	);
+	return rows.filter((data) => visible(self, data)).length;
+});
 
 /** The provider methods each action calls. */
 const NEEDS: Readonly<Record<string, readonly (keyof IRepositoryProvider)[]>> =
@@ -285,6 +307,10 @@ export function repositoryOf<
 		invalid("repositoryOf", "Expected an entity class made by entityOf.");
 	}
 	const name = `${entity.name}Repository`;
+	const deletion = settings.deletion ?? "hard";
+	if (deletion !== "hard" && deletion !== "soft") {
+		invalid(name, 'Expected deletion to be "hard" or "soft".');
+	}
 	const provider = (settings.provider ??
 		inMemoryProvider()) as IRepositoryProvider;
 	if (!Array.isArray(actions) || actions.length === 0) {
@@ -328,7 +354,13 @@ export function repositoryOf<
 		if (!method)
 			invalid(name, unknownAction(entity.name, String(name_), methods));
 		const [kind, implementation] = method;
-		for (const need of NEEDS[kind] ?? []) {
+		const needs =
+			deletion === "soft" && kind === "delete"
+				? (["findOne", "update"] as const)
+				: deletion === "soft" && kind === "count"
+					? (["findMany"] as const)
+					: (NEEDS[kind] ?? []);
+		for (const need of needs) {
 			if (typeof provider?.[need] !== "function") {
 				invalid(name, `The provider has no "${need}" for "${name_}".`);
 			}
@@ -344,6 +376,7 @@ export function repositoryOf<
 		name,
 		entity,
 		actions: Object.freeze([...new Set(actions as readonly string[])]),
+		deletion,
 		provider,
 		explicitProvider: settings.provider !== undefined,
 		environment: environmentDependencies,
