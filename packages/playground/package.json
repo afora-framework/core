@@ -1,6 +1,6 @@
 {
 	"name": "@afora/playground",
-	"version": "0.0.1",
+	"version": "1.0.0",
 	"description": "Local TypeScript playground for @afora/core: the afora CLI with a Monaco editor, project-aware IntelliSense and Bun execution.",
 	"keywords": [
 		"afora",
@@ -44,6 +44,6 @@
 		"typescript-language-service": "npm:typescript@5.9.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.2"
+		"@afora/core": "^1.0.0"
 	}
 }

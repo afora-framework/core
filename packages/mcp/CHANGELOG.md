@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 — unreleased (draft: dated when it is published)
 
 ### Added
 

@@ -68,7 +68,7 @@ export async function createServer(
 		options.stages,
 	);
 	const server = new Server(
-		{ name: "afora", version: "0.0.1" },
+		{ name: "afora", version: "1.0.0" },
 		{
 			capabilities: { tools: {}, resources: {} },
 			instructions:
