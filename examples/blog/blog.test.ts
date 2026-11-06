@@ -166,15 +166,14 @@ describe("round trip", () => {
 		const extracted = extractSpec(App, {
 			imports: {
 				provider: "../provider.ts#provider",
-				"repositories.Users.provider": "../provider.ts#provider",
-				"repositories.Posts.provider": "../provider.ts#provider",
 				"useCases.Register.run.hashPassword":
 					"../handlers/password.ts#hashPassword",
 			},
 		});
 		const expected = normalizeSpec(spec);
 		const actual = normalizeSpec(extracted);
-		// the provider is opaque: its options are not recoverable from the app
+		// a drizzle provider is opaque (db and tables are not JSON): extraction
+		// needs it mapped to an import, and gives back that import
 		expect(actual.provider).toEqual({ import: "../provider.ts#provider" });
 		expect({ ...actual, provider: undefined }).toEqual({
 			...expected,

@@ -6,7 +6,15 @@
 		"dir": "src/domain"
 	},
 	"provider": {
-		"import": "../provider.ts#provider"
+		"use": "drizzle",
+		"options": {
+			"db": {
+				"import": "../db.ts#db"
+			},
+			"tables": {
+				"import": "../schema.ts#tables"
+			}
+		}
 	},
 	"properties": {
 		"Title": {
@@ -42,10 +50,7 @@
 	"repositories": {
 		"Users": {
 			"entity": "User",
-			"actions": ["findById", "findByEmail", "create"],
-			"provider": {
-				"import": "../provider.ts#provider"
-			}
+			"actions": ["findById", "findByEmail", "create"]
 		},
 		"Posts": {
 			"entity": "Post",
@@ -58,10 +63,7 @@
 				"delete"
 			],
 			"deletion": "soft",
-			"relations": ["Users"],
-			"provider": {
-				"import": "../provider.ts#provider"
-			}
+			"relations": ["Users"]
 		}
 	},
 	"exceptions": {
