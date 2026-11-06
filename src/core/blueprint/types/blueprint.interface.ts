@@ -163,7 +163,10 @@ type CollectionSchema<
 	[Key in keyof Properties]: FieldSchema<Properties[Key], Mode>;
 }>;
 
-/** The schema of a single field of a blueprint; a record is its blueprint's object. */
+/**
+ * The schema of a single field of a blueprint; a record is its blueprint's object.
+ * @internal
+ */
 export type BlueprintPropertySchema<Field> = FieldSchema<Field, "data">;
 
 /** The object schema described by a collection, one key per field. */
@@ -313,6 +316,7 @@ export type BlueprintPluginContext<
 /**
  * The field factories of every plugin source, in order; a later source
  * replaces a factory of an earlier one with the same name.
+ * @internal
  */
 export type BlueprintFactoryContext<
 	Sources extends readonly BlueprintSource[],
@@ -333,7 +337,10 @@ export type BlueprintFactoryContext<
 		>
 	: Record<never, never>;
 
-/** The fields of the joined blueprints; a later one replaces a key of an earlier one. */
+/**
+ * The fields of the joined blueprints; a later one replaces a key of an earlier one.
+ * @internal
+ */
 export type JoinedProperties<
 	Blueprints extends readonly { readonly properties: IBlueprintCollection }[],
 > =
@@ -342,7 +349,10 @@ export type JoinedProperties<
 		? Properties
 		: never;
 
-/** A list of every field of a collection, e.g. `{ tags: IBlueprintList<Tag> }`. */
+/**
+ * A list of every field of a collection, e.g. `{ tags: IBlueprintList<Tag> }`.
+ * @internal
+ */
 export type ListProperties<Properties> = {
 	readonly [Key in keyof Properties]: Properties[Key] extends BlueprintField
 		? IBlueprintList<Properties[Key]>
@@ -386,6 +396,7 @@ export type BlueprintContext<Sources extends readonly BlueprintSource[]> =
 /**
  * Every field of a collection, its properties callable with options, as
  * `ctx.number({ min: 1 })`.
+ * @internal
  */
 export type CallableProperties<Fields> = {
 	readonly [Key in keyof Fields]: Fields[Key] extends AnyPropertyConstructor
@@ -393,7 +404,10 @@ export type CallableProperties<Fields> = {
 		: Fields[Key];
 };
 
-/** The optional version of every field of a collection, blueprints and records included. */
+/**
+ * The optional version of every field of a collection, blueprints and records included.
+ * @internal
+ */
 export type OptionalProperties<Properties> = {
 	readonly [Key in keyof Properties]: Properties[Key] extends AnyPropertyConstructor
 		? OptionalProperty<Properties[Key]>

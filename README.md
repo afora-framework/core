@@ -342,10 +342,12 @@ A plugin can also take factories, functions that make a field from their argumen
 
 ### Slicing
 
+Slicing is experimental: it lives in `@afora/core/experimental`, may change in any release and is not covered by [`VERSIONING.md`](VERSIONING.md).
+
 `sliceOf(blueprint, selector)` gives a new blueprint with only the fields `selector` names, recursively into nested blueprints, records and lists. Optional fields stay optional and lists stay lists. A property is kept with its flags (`sensitive`, `unique`, ...); a nested record stays a record, with the `sensitive`, `unique` and `change` keys it declares among the keys kept, so it still masks its sensitive keys and is still `writeOnly` in `toOpenAPI`. The selector is a mask, `true` keeping a field whole and an object keeping only its keys, or a blueprint or record class, whose keys, at any depth, are the mask.
 
 ```ts
-import { sliceOf, sliceValue } from "@afora/core";
+import { sliceOf, sliceValue } from "@afora/core/experimental";
 
 const Card = sliceOf(Person, { name: true, address: { city: true } });
 const Same = sliceOf(Person, CardBlueprint); // keys of another blueprint or record class

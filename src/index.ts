@@ -8,14 +8,12 @@ export {
 } from "./core/application/exceptions";
 export type {
 	AnyApplication,
-	ApplicationCollectionKey,
 	ApplicationCollections,
 	ApplicationDescription,
 	ApplicationSettings,
 	FieldDescription,
 	FieldsDescription,
 	IApplication,
-	MergedCollections,
 	PropertyDescription,
 	PropertyLineageDescription,
 	PropertyReference,
@@ -35,7 +33,6 @@ export {
 	isRecordClass,
 	recordFieldOf,
 } from "./core/blueprint/record-field";
-export { sliceOf, sliceValue } from "./core/blueprint/slice";
 export type {
 	AnyBlueprint,
 	AnyBlueprintList,
@@ -45,25 +42,19 @@ export type {
 	BlueprintContext,
 	BlueprintData,
 	BlueprintDefinition,
-	BlueprintFactoryContext,
 	BlueprintField,
 	BlueprintHelpers,
 	BlueprintInput,
 	BlueprintListOptions,
 	BlueprintPluginContext,
-	BlueprintPropertySchema,
 	BlueprintSchema,
 	BlueprintSource,
 	BlueprintValue,
-	CallableProperties,
 	IBlueprint,
 	IBlueprintCollection,
 	IBlueprintList,
-	JoinedProperties,
-	ListProperties,
 	OptionalBlueprint,
 	OptionalBlueprintList,
-	OptionalProperties,
 	OptionalRecord,
 } from "./core/blueprint/types/blueprint.interface";
 export type {
@@ -71,12 +62,6 @@ export type {
 	IBlueprintFactories,
 	IBlueprintPlugin,
 } from "./core/blueprint/types/blueprint-plugin.interface";
-export type {
-	SlicedBlueprint,
-	SlicedValue,
-	SliceMask,
-	ValueMask,
-} from "./core/blueprint/types/slice.interface";
 export {
 	AbstractEntity,
 	ENTITY_IDENTITY_KEYS,
@@ -116,7 +101,6 @@ export type {
 	EnvironmentSource,
 	EnvironmentValue,
 	IEnvironment,
-	MergedEnvironment,
 } from "./core/environment/environment";
 export {
 	environmentOf,
@@ -179,8 +163,6 @@ export type {
 	NumberConstraints,
 	PropertyMetadata,
 	PropertyOptions,
-	StoredField,
-	StoredFields,
 	StringConstraints,
 } from "./core/property/types/property-options.interface";
 export type {
@@ -214,16 +196,12 @@ export type {
 	AnyRecordPlugin,
 	IRecordPlugin,
 	IRecordPluginCatalog,
-	PluginMembers,
 	PluginUniqueKey,
-	RecordPluginContext,
 	RecordPluginDescriptor,
 	RecordPluginOptions,
 	RecordPluginReference,
 	RecordPluginRequirement,
-	RecordPluginsByName,
 	RecordPluginsOption,
-	WithPluginProperties,
 } from "./core/record/types/plugin.interface";
 export type {
 	DeclaredRecordInstance,
@@ -273,7 +251,6 @@ export type {
 	RepositoryDelete,
 	RepositoryFindBy,
 	RepositoryFindManyBy,
-	RepositoryMethods,
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
 export type { SchemaClass } from "./core/schema/schema";

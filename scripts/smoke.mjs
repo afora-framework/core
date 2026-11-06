@@ -12,6 +12,7 @@ import {
 	propertyOf,
 	recordOf,
 } from "../dist/index.js";
+import { sliceOf, sliceValue } from "../dist/experimental.js";
 
 // property
 const Name = propertyOf({
@@ -84,5 +85,21 @@ post.author.change.name("Bia");
 assert.equal(typeof post.author.updatedAt, "string");
 post.author.destroy();
 assert.throws(() => post.author.change.name("Cy"), DeletedEntity);
+
+// experimental entry shares module state with the main one
+const Card = sliceOf(UserBlueprint, { email: true, address: { zip: true } });
+assert.deepEqual(Object.keys(Card.properties).sort(), ["address", "email"]);
+assert.deepEqual(sliceValue(user, { email: true, password: true }), {
+	email: "ana@example.com",
+	password: MASK,
+});
+class Slim extends entityOf(blueprintOf((ctx) => ({ title: ctx.string }))) {}
+class Wrapper extends recordOf(blueprintOf(() => ({ slim: Slim }))) {}
+const wrapped = new Wrapper({ slim: { title: "x" } });
+assert.deepEqual(sliceValue(wrapped, { slim: { title: true } }), {
+	slim: { title: "x" },
+});
+const Only = sliceOf(Wrapper.blueprint, { slim: true });
+assert.ok(Only.properties.slim === Slim);
 
 console.log(`smoke ok on node ${process.version}`);

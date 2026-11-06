@@ -129,6 +129,7 @@ export type RepositoryFindManyBy<Entity, Actions extends string = string> = {
 /**
  * The methods of `Actions` for `Entity`. Declared as methods, not properties,
  * so that a class extending a repository can override them.
+ * @internal
  */
 export type RepositoryMethods<
 	Entity,

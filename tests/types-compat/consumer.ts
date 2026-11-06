@@ -16,6 +16,7 @@ import {
 	recordOf,
 	type StandardSchemaV1,
 } from "@afora/core";
+import { type SliceMask, sliceOf } from "@afora/core/experimental";
 import { Type } from "typebox";
 
 type Equals<A, B> =
@@ -341,3 +342,11 @@ void sameUsers;
 void extendedUsers;
 // @ts-expect-error an unregistered name
 ChildApp.repositories.Nope;
+
+// the experimental subpath
+const SlicedAddress = sliceOf(Address, { zip: true });
+export const slicedKeys: Equals<
+	keyof typeof SlicedAddress.properties,
+	"zip"
+> = true;
+export type AddressMask = SliceMask<typeof Address.properties>;

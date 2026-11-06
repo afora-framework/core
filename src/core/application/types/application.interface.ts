@@ -18,7 +18,10 @@ export interface ApplicationCollections {
 	readonly repositories: Named<AnyRepository>;
 }
 
-/** The keys of `ApplicationCollections`. */
+/**
+ * The keys of `ApplicationCollections`.
+ * @internal
+ */
 export type ApplicationCollectionKey = keyof ApplicationCollections;
 
 /** What `applicationOf` takes. */
@@ -52,7 +55,10 @@ type UnionToIntersection<Union> = (
 	? Intersection
 	: never;
 
-/** `Own` with the declarations of `Extended` merged in. */
+/**
+ * `Own` with the declarations of `Extended` merged in.
+ * @internal
+ */
 export type MergedCollections<
 	Own extends ApplicationCollections,
 	Extended extends readonly AnyApplication[],

@@ -88,14 +88,20 @@ type OptionsOfProperty<Property> = Property extends {
 	? PropertyOptions<SchemaType, Value>
 	: PropertyOptions<TSchema>;
 
-/** `Field`, or the property it stands for when it is a `CallableProperty`, as a blueprint stores it. */
+/**
+ * `Field`, or the property it stands for when it is a `CallableProperty`, as a blueprint stores it.
+ * @internal
+ */
 export type StoredField<Field> = Field extends {
 	readonly [Callable]: infer Property;
 }
 	? Property
 	: Field;
 
-/** `StoredField` of every field of a collection. */
+/**
+ * `StoredField` of every field of a collection.
+ * @internal
+ */
 export type StoredFields<Fields> = {
 	[Key in keyof Fields]: StoredField<Fields[Key]>;
 };

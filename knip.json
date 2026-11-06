@@ -2,9 +2,15 @@
 	"$schema": "https://unpkg.com/knip@6/schema.json",
 	"ignore": ["examples/**"],
 	"ignoreBinaries": ["run.ts"],
+	"tags": ["-@internal"],
 	"workspaces": {
 		".": {
-			"entry": ["src/index.ts", "src/**/*.sandbox.ts", "scripts/*.{ts,mjs}"],
+			"entry": [
+				"src/index.ts",
+				"src/experimental.ts",
+				"src/**/*.sandbox.ts",
+				"scripts/*.{ts,mjs}"
+			],
 			"project": ["src/**/*.ts", "scripts/**/*.{ts,mjs}"]
 		},
 		"packages/codegen": {
