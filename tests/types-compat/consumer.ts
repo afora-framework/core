@@ -8,6 +8,7 @@ import {
 	exceptionOf,
 	guard,
 	listOf,
+	Meta,
 	optionalOf,
 	propertyOf,
 	type RecordChange,
@@ -44,6 +45,33 @@ const UserBlueprint = blueprintOf((ctx) => ({
 }));
 
 class User extends recordOf(UserBlueprint, { change: ["name", "tags"] }) {}
+
+const MetadataFields = blueprintOf((ctx) => ({
+	blueprint: ctx.string,
+	options: ctx.integer,
+}));
+class MetadataRecord extends recordOf(MetadataFields, {
+	change: ["options"],
+}) {}
+const metadataRecord = new MetadataRecord({ blueprint: "draft", options: 1 });
+metadataRecord.change.options(2);
+export const metadataBlueprint: Equals<
+	(typeof metadataRecord)[typeof Meta]["blueprint"],
+	typeof MetadataFields
+> = true;
+export const metadataValue: Equals<
+	RecordValue<MetadataRecord>,
+	{ blueprint: string; options: number }
+> = true;
+export const metadataStaticValue: Equals<
+	RecordValue<typeof MetadataRecord>,
+	RecordValue<MetadataRecord>
+> = true;
+// @ts-expect-error metadata cannot be replaced
+metadataRecord[Meta] = {
+	blueprint: MetadataFields,
+	options: MetadataRecord.options,
+};
 
 const user = new User({
 	name: "Jane",
@@ -345,8 +373,6 @@ ChildApp.repositories.Nope;
 
 // the experimental subpath
 const SlicedAddress = sliceOf(Address, { zip: true });
-export const slicedKeys: Equals<
-	keyof typeof SlicedAddress.properties,
-	"zip"
-> = true;
+export const slicedKeys: Equals<keyof typeof SlicedAddress.properties, "zip"> =
+	true;
 export type AddressMask = SliceMask<typeof Address.properties>;

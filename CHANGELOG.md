@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Breaking: record and entity instance metadata moved from `.blueprint` and `.options` to `[Meta].blueprint` and `[Meta].options`. Class statics keep their names. `blueprint` and `options` are now legal domain fields, including plugin fields, and metadata no longer appears in spread or `Object.keys`. Reserved record and entity names are covered by fixed contract tests.
 - Breaking: `CallableProperties`, `StoredField`, `StoredFields`, `BlueprintPropertySchema`, `JoinedProperties`, `ListProperties`, `OptionalProperties`, `PluginMembers`, `WithPluginProperties`, `RecordPluginsByName`, `RecordPluginContext`, `BlueprintFactoryContext`, `MergedCollections`, `ApplicationCollectionKey`, `MergedEnvironment` and `RepositoryMethods` were removed from the exports (internal helpers, now marked `@internal`). They still appear inside the declarations of the exported types.
 - Breaking: `sliceOf`, `sliceValue` and the `SliceMask`, `ValueMask`, `SlicedBlueprint` and `SlicedValue` types moved to the new subpath `@afora/core/experimental`, which is not covered by the compatibility policy.
 - Breaking: the playground and the `afora` CLI moved to the new package `@afora/playground` (`packages/playground`). `@afora/core` no longer ships `dist/playground` (about 10 MB) or a `bin`, so `afora playground` from `@afora/core` is gone: install `@afora/playground` as a dev dependency instead. `bun run playground` and `bun run test:playground` in this repository keep working.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Record and entity fields may now be named `blueprint` and `options`, following the core's move of instance metadata to `Meta`. Covered by generation, persistence and extraction round trips; the spec shape is unchanged.
+
 ### Added
 
 - First version. `afora.json` (version 1): `properties` (`base` + `with`, `enum`, `opaque` imports), `blueprints`, `records`, `entities`, `environments`, `repositories`, `extends` and `output.dir`; `useCases` is reserved. Fields in shorthand (`"Age?"`, `"string[]"`) or object form.

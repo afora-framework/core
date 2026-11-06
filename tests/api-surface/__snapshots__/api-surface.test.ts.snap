@@ -6,7 +6,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type AcceptedBy<Record> = Record extends { readonly [RecordAccepts]?: infer Accepts; } ? unknown extends Accepts ? never : NonNullable<Accepts> : never;",
   ],
   "(internal) AnyRecordShape": [
-    "type AnyRecordShape = { readonly blueprint: IBlueprint<any>; };",
+    "type AnyRecordShape = { readonly blueprint: AnyBlueprint; } | { readonly [Meta]: { readonly blueprint: AnyBlueprint; }; };",
   ],
   "(internal) ApplicationCollectionKey": [
     "export type ApplicationCollectionKey = keyof ApplicationCollections;",
@@ -170,6 +170,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) RecordChangeNamespace": [
     "interface RecordChangeNamespace<Properties extends IBlueprintCollection, Change extends readonly string[]> { readonly change: RecordChangeMethods<this, Properties, Change[number]>; }",
   ],
+  "(internal) RecordDeclaration": [
+    "interface RecordDeclaration<Properties extends IBlueprintCollection> { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }",
+  ],
   "(internal) RecordInput": [
     "type RecordInput<Record extends AnyRecordClass> = ConstructorParameters<Record>[0] extends infer Input ? 0 extends 1 & Input ? object : Input : never;",
   ],
@@ -255,7 +258,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type AbstractPropertyConstructor<SchemaType extends TSchema, Value = Static<SchemaType>> = { new (value: PropertyValue<SchemaType, Value>): AbstractProperty<SchemaType, Value>; readonly type: IPropertyType<SchemaType, Value>; demo(): AbstractProperty<SchemaType, Value>; safeParse(value: unknown): ParseResult<PropertyValue<SchemaType, Value>>; readonly "~standard": StandardSchemaV1.Props<PropertyValue<SchemaType, Value>, PropertyValue<SchemaType, Value>>; };",
   ],
   "AbstractRecord": [
-    "export declare abstract class AbstractRecord<Properties extends IBlueprintCollection> implements IRecord<Properties> { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; constructor(value: BlueprintInput<Properties>); static safeParse<Self extends new (value: never) => object>(this: Self, value: unknown): ParseResult<InstanceType<Self>>; static get "~standard"(): StandardSchemaV1.Props; toJSON(): Readonly<Partial<BlueprintData<Properties>>>; protected set<Key extends keyof BlueprintValue<Properties>>(key: Key, value: BlueprintValue<Properties>[Key]): this; protected onSetAll(_change: RecordChange<IRecord<Properties>>): void; protected onSet(): RecordEffects<IRecord<Properties>>; }",
+    "export declare abstract class AbstractRecord<Properties extends IBlueprintCollection> implements IRecord<Properties> { get [Meta](): RecordDeclaration<Properties>; constructor(value: BlueprintInput<Properties>); static safeParse<Self extends new (value: never) => object>(this: Self, value: unknown): ParseResult<InstanceType<Self>>; static get "~standard"(): StandardSchemaV1.Props; toJSON(): Readonly<Partial<BlueprintData<Properties>>>; protected set<Key extends keyof BlueprintValue<Properties>>(key: Key, value: BlueprintValue<Properties>[Key]): this; protected onSetAll(_change: RecordChange<IRecord<Properties>>): void; protected onSet(): RecordEffects<IRecord<Properties>>; }",
   ],
   "AbstractRepository": [
     "export declare abstract class AbstractRepository<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment> { get [Kind](): "repository"; get entity(): Entity; get actions(): Actions; protected get provider(): IRepositoryProvider<Environment>; protected get context(): RepositoryContext<Environment>; protected get env(): Environment; protected hydrate(data: RepositoryData): Promise<EntityInstanceOf<Entity>>; protected hydrateMany(list: readonly RepositoryData[]): Promise<EntityInstanceOf<Entity>[]>; protected dataOf(entity: EntityInstanceOf<Entity>): RepositoryData; }",
@@ -552,7 +555,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; }",
   ],
   "IRecord": [
-    "export interface IRecord<Properties extends IBlueprintCollection> { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; toJSON(): Readonly<Partial<BlueprintData<Properties>>>; }",
+    "export interface IRecord<Properties extends IBlueprintCollection> { readonly [Meta]: { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }; toJSON(): Readonly<Partial<BlueprintData<Properties>>>; }",
   ],
   "IRecordPlugin": [
     "export interface IRecordPlugin<Record extends AnyRecordClass = AnyRecordClass, Name extends string = string> { readonly [Kind]: "record-plugin"; readonly name: Name; readonly version: string; readonly description?: string; readonly record: Record; readonly keys: readonly string[]; readonly members: readonly string[]; readonly options: RecordSettings<IBlueprintCollection>; readonly requires: readonly AnyRecordPlugin[]; is(value: unknown): value is InstanceType<Record>; toJSON(): RecordPluginDescriptor; }",
@@ -634,6 +637,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "MarkedUniqueKey": [
     "export type MarkedUniqueKey<Properties extends IBlueprintCollection> = { [Key in keyof Properties]-?: Properties[Key] extends { readonly type: { readonly unique: true; }; } ? Key : never; }[keyof Properties] & string;",
+  ],
+  "Meta": [
+    "Meta: unique symbol",
   ],
   "NumberConstraints": [
     "export interface NumberConstraints { readonly min?: number; readonly max?: number; readonly exclusiveMin?: number; readonly exclusiveMax?: number; readonly multipleOf?: number; }",
@@ -783,7 +789,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface RecordSettings<Properties extends IBlueprintCollection> { readonly sensitive: readonly RecordKey<Properties>[]; readonly unique: readonly RecordKey<Properties>[]; readonly change: readonly RecordKey<Properties>[]; }",
   ],
   "RecordValue": [
-    "export type RecordValue<Record extends AnyRecordShape> = Record["blueprint"] extends IBlueprint<infer Properties> ? BlueprintValue<Properties> : never;",
+    "export type RecordValue<Record extends AnyRecordShape> = Record extends { readonly [Meta]: { readonly blueprint: IBlueprint<infer Properties>; }; } ? BlueprintValue<Properties> : Record extends { readonly blueprint: IBlueprint<infer Properties>; } ? BlueprintValue<Properties> : never;",
   ],
   "RepositoryAction": [
     "export type RepositoryAction<Entity> = keyof RepositoryFindBy<Entity> | keyof RepositoryFindManyBy<Entity> | "create" | "update" | "delete" | "count";",
@@ -1079,7 +1085,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export declare abstract class AbstractProperty<SchemaType extends TSchema, Value = Static<SchemaType>> implements IProperty<SchemaType, Value> { get [State](): PropertyStates; readonly definition: AbstractDefineProperty<SchemaType, Value>; readonly value: PropertyValue<SchemaType, Value>; constructor(value: PropertyValue<SchemaType, Value>); static demo<Self extends AbstractProperty<any>>(this: new (value: never) => Self): Self; static safeParse<Self extends new (value: never) => AbstractProperty<any>>(this: Self, value: unknown): ParseResult<InstanceType<Self>["value"]>; static with<Self extends AnyPropertyConstructor>(this: Self, options: Self["type"] extends IPropertyType<infer SchemaType, infer Value> ? PropertyOptions<SchemaType, Value> : never): Self; static get "~standard"(): StandardSchemaV1.Props<any, any>; protected abstract createDefinition(): AbstractDefineProperty<SchemaType, Value>; }",
   ],
   "(internal) AbstractRecord": [
-    "export declare abstract class AbstractRecord<Properties extends IBlueprintCollection> implements IRecord<Properties> { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; constructor(value: BlueprintInput<Properties>); static safeParse<Self extends new (value: never) => object>(this: Self, value: unknown): ParseResult<InstanceType<Self>>; static get "~standard"(): StandardSchemaV1.Props; toJSON(): Readonly<Partial<BlueprintData<Properties>>>; protected set<Key extends keyof BlueprintValue<Properties>>(key: Key, value: BlueprintValue<Properties>[Key]): this; protected onSetAll(_change: RecordChange<IRecord<Properties>>): void; protected onSet(): RecordEffects<IRecord<Properties>>; }",
+    "export declare abstract class AbstractRecord<Properties extends IBlueprintCollection> implements IRecord<Properties> { get [Meta](): RecordDeclaration<Properties>; constructor(value: BlueprintInput<Properties>); static safeParse<Self extends new (value: never) => object>(this: Self, value: unknown): ParseResult<InstanceType<Self>>; static get "~standard"(): StandardSchemaV1.Props; toJSON(): Readonly<Partial<BlueprintData<Properties>>>; protected set<Key extends keyof BlueprintValue<Properties>>(key: Key, value: BlueprintValue<Properties>[Key]): this; protected onSetAll(_change: RecordChange<IRecord<Properties>>): void; protected onSet(): RecordEffects<IRecord<Properties>>; }",
   ],
   "(internal) AcceptedBy": [
     "type AcceptedBy<Record> = Record extends { readonly [RecordAccepts]?: infer Accepts; } ? unknown extends Accepts ? never : NonNullable<Accepts> : never;",
@@ -1103,7 +1109,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type AnyRecordPlugin = IRecordPlugin<AnyRecordClass, string>;",
   ],
   "(internal) AnyRecordShape": [
-    "type AnyRecordShape = { readonly blueprint: IBlueprint<any>; };",
+    "type AnyRecordShape = { readonly blueprint: AnyBlueprint; } | { readonly [Meta]: { readonly blueprint: AnyBlueprint; }; };",
   ],
   "(internal) AsBlueprint": [
     "type AsBlueprint<Properties, Optional extends boolean> = IBlueprint<Extract<Properties, IBlueprintCollection>, Optional>;",
@@ -1214,7 +1220,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; }",
   ],
   "(internal) IRecord": [
-    "export interface IRecord<Properties extends IBlueprintCollection> { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; toJSON(): Readonly<Partial<BlueprintData<Properties>>>; }",
+    "export interface IRecord<Properties extends IBlueprintCollection> { readonly [Meta]: { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }; toJSON(): Readonly<Partial<BlueprintData<Properties>>>; }",
   ],
   "(internal) IRecordPlugin": [
     "export interface IRecordPlugin<Record extends AnyRecordClass = AnyRecordClass, Name extends string = string> { readonly [Kind]: "record-plugin"; readonly name: Name; readonly version: string; readonly description?: string; readonly record: Record; readonly keys: readonly string[]; readonly members: readonly string[]; readonly options: RecordSettings<IBlueprintCollection>; readonly requires: readonly AnyRecordPlugin[]; is(value: unknown): value is InstanceType<Record>; toJSON(): RecordPluginDescriptor; }",
@@ -1252,6 +1258,9 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "(internal) MaskOf": [
     "export type MaskOf<Selector> = Selector extends AnyRecordClass ? MaskOf<Selector["blueprint"]> : Selector extends AnyBlueprint ? { readonly [Key in keyof Selector["properties"]]: FieldMaskOf<Selector["properties"][Key]>; } : never;",
+  ],
+  "(internal) Meta": [
+    "Meta: unique symbol",
   ],
   "(internal) NumberConstraints": [
     "export interface NumberConstraints { readonly min?: number; readonly max?: number; readonly exclusiveMin?: number; readonly exclusiveMax?: number; readonly multipleOf?: number; }",
@@ -1313,6 +1322,9 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) RecordConstructor": [
     "export type RecordConstructor<Properties extends IBlueprintCollection, Change extends readonly string[], Unique extends string = never, Members = unknown, Accepts = never> = { new (value: BlueprintInput<Properties>): DeclaredRecordInstance<Properties, Change, Members>; readonly "~standard": StandardSchemaV1.Props<BlueprintInput<Properties>, DeclaredRecordInstance<Properties, Change, Members>>; safeParse<Self extends new (value: never) => object>(this: Self, value: unknown): ParseResult<InstanceType<Self>>; readonly [Kind]: "record"; readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; readonly plugins: readonly AnyRecordPlugin[]; readonly [RecordUniqueKeys]?: Unique; readonly [RecordAccepts]?: Accepts; };",
   ],
+  "(internal) RecordDeclaration": [
+    "interface RecordDeclaration<Properties extends IBlueprintCollection> { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }",
+  ],
   "(internal) RecordEffect": [
     "export type RecordEffect<Value> = (value: Value, previous: Value) => void;",
   ],
@@ -1341,7 +1353,7 @@ exports[`experimental entry (not contract) 1`] = `
     "RecordUniqueKeys: unique symbol",
   ],
   "(internal) RecordValue": [
-    "export type RecordValue<Record extends AnyRecordShape> = Record["blueprint"] extends IBlueprint<infer Properties> ? BlueprintValue<Properties> : never;",
+    "export type RecordValue<Record extends AnyRecordShape> = Record extends { readonly [Meta]: { readonly blueprint: IBlueprint<infer Properties>; }; } ? BlueprintValue<Properties> : Record extends { readonly blueprint: IBlueprint<infer Properties>; } ? BlueprintValue<Properties> : never;",
   ],
   "(internal) RecordValueOf": [
     "type RecordValueOf<Record extends AnyRecordClass, Mode extends FieldMode> = Mode extends "value" ? InstanceType<Record> : Mode extends "input" ? InstanceType<Record> | RecordInput<Record> | AcceptedBy<Record> : Record["blueprint"] extends IBlueprint<infer Properties, boolean> ? CollectionValue<Properties, "data"> : never;",
@@ -1359,7 +1371,7 @@ exports[`experimental entry (not contract) 1`] = `
     "type SlicedProperties<Properties, Mask> = { [Key in keyof Mask & keyof Properties]: Mask[Key] extends true ? Properties[Key] : SliceField<Properties[Key], Mask[Key]>; };",
   ],
   "(internal) SlicedRecord": [
-    "type SlicedRecord<Original extends AnyRecordClass, Mask> = SlicedProperties<Original["blueprint"]["properties"], Mask> extends infer Properties extends IBlueprintCollection ? RecordConstructor<Properties, KeptChange<InstanceType<Original>, keyof Properties>[], KeptUnique<Original, keyof Properties>, unknown, { readonly blueprint: Original["blueprint"]; }> : never;",
+    "type SlicedRecord<Original extends AnyRecordClass, Mask> = SlicedProperties<Original["blueprint"]["properties"], Mask> extends infer Properties extends IBlueprintCollection ? RecordConstructor<Properties, KeptChange<InstanceType<Original>, keyof Properties>[], KeptUnique<Original, keyof Properties>, unknown, { readonly [Meta]: { readonly blueprint: Original["blueprint"]; }; }> : never;",
   ],
   "(internal) StandardSchemaV1": [
     "export interface StandardSchemaV1<Input = unknown, Output = Input> { readonly "~standard": StandardSchemaV1.Props<Input, Output>; }",
@@ -1383,7 +1395,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type SlicedBlueprint<Properties, Mask> = AsBlueprint<SlicedProperties<Properties, Mask>, false>;",
   ],
   "SlicedValue": [
-    "export type SlicedValue<Value, Mask> = Value extends readonly (infer Item)[] ? SlicedValue<Item, Mask>[] : Value extends { readonly blueprint: IBlueprint<infer Properties, boolean>; toJSON(): unknown; } ? SlicedValue<BlueprintData<Properties>, Mask> : Value extends { toJSON(): infer Json; } ? SlicedValue<Json, Mask> : Value extends object ? { [Key in keyof Value as Key extends keyof Mask ? Key : never]: Key extends keyof Mask ? Mask[Key] extends true ? Value[Key] : SlicedValue<Value[Key], Mask[Key]> : never; } : Value;",
+    "export type SlicedValue<Value, Mask> = Value extends readonly (infer Item)[] ? SlicedValue<Item, Mask>[] : Value extends { readonly [Meta]: { readonly blueprint: IBlueprint<infer Properties, boolean>; }; toJSON(): unknown; } ? SlicedValue<BlueprintData<Properties>, Mask> : Value extends { toJSON(): infer Json; } ? SlicedValue<Json, Mask> : Value extends object ? { [Key in keyof Value as Key extends keyof Mask ? Key : never]: Key extends keyof Mask ? Mask[Key] extends true ? Value[Key] : SlicedValue<Value[Key], Mask[Key]> : never; } : Value;",
   ],
   "ValueMask": [
     "export interface ValueMask { readonly [key: string]: true | ValueMask | undefined; }",

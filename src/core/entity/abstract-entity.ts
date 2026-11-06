@@ -8,6 +8,7 @@ import {
 	runRecordEffects,
 	storeRecordValue,
 } from "../record/abstract-record";
+import { Meta } from "../symbols/meta";
 import {
 	type EntityEvent,
 	type EventDefinition,
@@ -133,7 +134,7 @@ export abstract class AbstractEntity<
 	equals(other: unknown): boolean {
 		return (
 			other instanceof AbstractEntity &&
-			other.blueprint === this.blueprint &&
+			other[Meta].blueprint === this[Meta].blueprint &&
 			identityOf(other).id === identityOf(this).id
 		);
 	}

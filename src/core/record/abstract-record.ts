@@ -14,6 +14,7 @@ import { parseCollection, parseField } from "../parse/parse";
 import type { Issue, ParseResult } from "../parse/types/parse.interface";
 import { standardOfClass } from "../standard/standard";
 import type { StandardSchemaV1 } from "../standard/standard-schema";
+import { Meta } from "../symbols/meta";
 import {
 	InvalidRecordValue,
 	ReservedRecordKey,
@@ -38,19 +39,29 @@ interface RecordDeclaration<Properties extends IBlueprintCollection> {
  * the blueprint can be one of its members.
  */
 const values = new WeakMap<object, Readonly<Record<string, unknown>>>();
+const metadata = new WeakMap<object, RecordDeclaration<IBlueprintCollection>>();
 
 /**
  * The names of the record's own members, and of those every object inherits
  * (`toString`, `valueOf`, `__proto__`...), which no key of a blueprint can take.
  */
 export const RESERVED_RECORD_KEYS: readonly string[] = Object.freeze([
-	"blueprint",
-	"options",
 	"onSet",
 	"onSetAll",
 	"set",
 	"toJSON",
-	...Object.getOwnPropertyNames(Object.prototype),
+	"toString",
+	"toLocaleString",
+	"valueOf",
+	"hasOwnProperty",
+	"propertyIsEnumerable",
+	"isPrototypeOf",
+	"__defineGetter__",
+	"__defineSetter__",
+	"__lookupGetter__",
+	"__lookupSetter__",
+	"__proto__",
+	"constructor",
 ]);
 
 /** Makes each of `keys` a member of the records of `prototype`, e.g. `user.name`. */
@@ -203,7 +214,7 @@ export function recordDataOf(
 	record: object,
 	options?: RecordDataOptions,
 ): Readonly<Record<string, unknown>> {
-	const { properties } = (record as AbstractRecord<IBlueprintCollection>)
+	const { properties } = (record as AbstractRecord<IBlueprintCollection>)[Meta]
 		.blueprint;
 	return dataOfCollection(
 		properties,
@@ -258,12 +269,16 @@ export function recordFieldDataOf(
  * and the one it replaced.
  */
 export function storeRecordValue(
-	record: { readonly blueprint: { readonly properties: IBlueprintCollection } },
+	record: {
+		readonly [Meta]: {
+			readonly blueprint: { readonly properties: IBlueprintCollection };
+		};
+	},
 	key: string,
 	value: unknown,
 ): { readonly next: unknown; readonly previous: unknown } {
 	const source = record.constructor.name;
-	const { properties } = record.blueprint;
+	const { properties } = record[Meta].blueprint;
 	if (!Object.hasOwn(properties, key)) {
 		throw exceptionOfIssues(
 			[
@@ -341,17 +356,24 @@ export function runRecordEffects<Self extends object>(
 export abstract class AbstractRecord<Properties extends IBlueprintCollection>
 	implements IRecord<Properties>
 {
-	readonly blueprint: IBlueprint<Properties>;
-	readonly options: RecordSettings<Properties>;
+	get [Meta](): RecordDeclaration<Properties> {
+		const Class = this.constructor;
+		let declaration = metadata.get(Class);
+		if (!declaration) {
+			const { blueprint, options } =
+				Class as unknown as RecordDeclaration<IBlueprintCollection>;
+			declaration = Object.freeze({ blueprint, options });
+			metadata.set(Class, declaration);
+		}
+		return declaration as unknown as RecordDeclaration<Properties>;
+	}
 
 	constructor(value: BlueprintInput<Properties>) {
-		({ blueprint: this.blueprint, options: this.options } = this
-			.constructor as unknown as RecordDeclaration<Properties>);
-		checkMembers(this, Object.keys(this.blueprint.properties));
+		checkMembers(this, Object.keys(this[Meta].blueprint.properties));
 
 		const source = this.constructor.name;
 		const result = parseCollection(
-			this.blueprint.properties,
+			this[Meta].blueprint.properties,
 			value,
 			[],
 			source,
@@ -388,9 +410,9 @@ export abstract class AbstractRecord<Properties extends IBlueprintCollection>
 	 */
 	toJSON(): Readonly<Partial<BlueprintData<Properties>>> {
 		return maskCollection(
-			this.blueprint.properties,
+			this[Meta].blueprint.properties,
 			recordValue(this),
-			this.options.sensitive,
+			this[Meta].options.sensitive,
 		) as Partial<BlueprintData<Properties>>;
 	}
 

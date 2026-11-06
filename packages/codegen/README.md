@@ -16,6 +16,8 @@ afora-codegen extract src/app.ts#App > afora.json
 
 ## The spec
 
+`blueprint` and `options` are valid field names in records and entities. Their instance metadata lives under the core's `Meta` symbol; the JSON spec and class statics keep their existing shape.
+
 ```jsonc
 {
 	"$schema": "./node_modules/@afora/codegen/afora.schema.json",

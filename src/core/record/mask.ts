@@ -18,7 +18,7 @@ export const MASK = "********";
 function maskAll(value: unknown): unknown {
 	if (value === undefined || value === null) return value;
 	if (Array.isArray(value)) return Object.freeze(value.map(maskAll));
-	// A record's own members are `blueprint` and `options`, not its keys.
+	// Record keys are prototype getters; metadata is stored under a symbol.
 	if (typeof value === "object" && isRecordClass(value.constructor)) {
 		return maskAll((value as { toJSON(): unknown }).toJSON());
 	}
