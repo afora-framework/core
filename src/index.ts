@@ -163,6 +163,12 @@ export {
 	DuplicateOperation,
 	InvalidOutputStage,
 } from "./core/output/exceptions";
+export type {
+	OpenAPIDocument,
+	OpenAPIMethod,
+	OpenAPISinkOptions,
+} from "./core/output/openapi-sink";
+export { openapi } from "./core/output/openapi-sink";
 export { isOutput, operationOf, outputOf } from "./core/output/output";
 export {
 	outputValueOf,

@@ -113,6 +113,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) ListShape": [
     "type ListShape<Item, Mode extends FieldMode, Optional extends boolean> = Optional extends true ? FieldValue<Item, Mode>[] | undefined : FieldValue<Item, Mode>[];",
   ],
+  "(internal) METHODS": [
+    "METHODS: readonly [ "get", "post", "put", "patch", "delete" ]",
+  ],
   "(internal) MergedCollections": [
     "export type MergedCollections<Own extends ApplicationCollections, Extended extends readonly AnyApplication[]> = { readonly [Key in ApplicationCollectionKey]: Own[Key] & UnionToIntersection<Extended[number][Key]>; };",
   ],
@@ -758,11 +761,20 @@ exports[`exports of the package and their declarations 1`] = `
   "OpenAPIComponents": [
     "export interface OpenAPIComponents<Name extends PropertyKey = string> { readonly schemas: { readonly [Key in Name]: OpenAPISchema; }; }",
   ],
+  "OpenAPIDocument": [
+    "export interface OpenAPIDocument { readonly openapi: "3.1.0"; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; readonly paths: { readonly [path: string]: Record<string, unknown>; }; readonly components: { readonly schemas: { readonly [name: string]: OpenAPISchema; }; }; }",
+  ],
+  "OpenAPIMethod": [
+    "export type OpenAPIMethod = (typeof METHODS)[number];",
+  ],
   "OpenAPIOptions": [
     "export interface OpenAPIOptions { readonly refPrefix?: string; }",
   ],
   "OpenAPISchema": [
     "export interface OpenAPISchema { readonly type?: string | readonly string[]; readonly properties?: { readonly [key: string]: OpenAPISchema; }; readonly required?: readonly string[]; readonly additionalProperties?: boolean | OpenAPISchema; readonly items?: OpenAPISchema; readonly $ref?: string; readonly title?: string; readonly description?: string; readonly examples?: readonly unknown[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly [keyword: string]: unknown; }",
+  ],
+  "OpenAPISinkOptions": [
+    "export interface OpenAPISinkOptions { readonly info: { readonly title: string; readonly version: string; readonly description?: string; }; readonly servers?: readonly { readonly url: string; readonly description?: string; }[]; readonly basePath?: string; readonly route?: { readonly [operationId: string]: { readonly method?: OpenAPIMethod; readonly path?: string; }; }; }",
   ],
   "OperationCallOptions": [
     "export interface OperationCallOptions { readonly context?: unknown; }",
@@ -1295,6 +1307,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "listOf": [
     "export declare function listOf<Item extends BlueprintField>(item: Item, { minItems, maxItems }?: BlueprintListOptions): IBlueprintList<StoredField<Item>>;",
+  ],
+  "openapi": [
+    "openapi: import("./types/output.interface.js").SinkFactory<OpenAPIDocument, OpenAPISinkOptions>",
   ],
   "operationOf": [
     "export declare function operationOf(operation: OperationDescriptor, patch: OperationPatch): OperationDescriptor;",

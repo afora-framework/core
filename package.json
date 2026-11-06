@@ -91,12 +91,13 @@
 		"@biomejs/biome": "^2.6.3",
 		"@commitlint/cli": "^21.2.4",
 		"@commitlint/config-conventional": "^21.2.4",
+		"@seriousme/openapi-schema-validator": "2.11.0",
 		"@types/bun": "^1.4.4",
 		"husky": "^9.1.7",
 		"knip": "^6.43.0",
+		"typebox": "^1.4.3",
 		"typescript": "^7.0.2",
-		"typescript-language-service": "npm:typescript@5.9.3",
-		"typebox": "^1.4.3"
+		"typescript-language-service": "npm:typescript@5.9.3"
 	},
 	"peerDependencies": {
 		"typescript": ">=5.5",
