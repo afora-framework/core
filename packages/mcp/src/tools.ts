@@ -123,14 +123,24 @@ export const tools: readonly ToolDefinition[] = [
 	{
 		name: "afora_catalog",
 		description:
-			"What an afora.json can use, read from @afora/core: the Std properties (type, flags sensitive/unique/optional, and the `with` options each accepts), factories (enum), the Std record plugins (keys they add, unique/sensitive/change keys, methods), reserved record/entity keys, identity keys and the repository action rules. Call this first; do not guess property names.",
+			"What an afora.json can use, read from @afora/core: the Std properties (type, flags sensitive/unique/optional, and the `with` options each accepts), factories (enum), the Std record plugins (keys they add, unique/sensitive/change keys, methods), reserved record/entity keys, identity keys and the repository action rules. The `providers` list is what `provider.use` may name. Call this first; do not guess property names.",
 		inputSchema: {
 			type: "object",
 			properties: {},
 			additionalProperties: false,
 		},
 		readOnly: true,
-		handle: async () => catalog(),
+		handle: async (_args, project) => ({
+			...catalog(),
+			providers: [
+				{
+					name: "inMemory",
+					builtin: true,
+					note: 'provider: "inMemory" (or { "use": "inMemory" }), no options.',
+				},
+				...(project.providers ?? []),
+			],
+		}),
 	},
 	{
 		name: "afora_spec_read",
@@ -187,6 +197,12 @@ export const tools: readonly ToolDefinition[] = [
 							description: "output.dir for the spec; src/domain by default.",
 						}),
 					),
+					imports: Type.Optional(
+						Type.Record(Type.String(), Type.String(), {
+							description:
+								'Where what cannot be described is imported from: a property name -> module, and for a provider not created with providerOf, "provider" (the application) or "repositories.<Name>.provider" -> "./file.ts#export" (relative to output.dir). Without it extraction fails with an error naming the key.',
+						}),
+					),
 				},
 				{ additionalProperties: false },
 			),
@@ -201,7 +217,13 @@ export const tools: readonly ToolDefinition[] = [
 			}
 			const outputDir =
 				typeof args.outputDir === "string" ? args.outputDir : undefined;
-			const spec = await extractFromApp(project.root, app, outputDir);
+			const imports =
+				typeof args.imports === "object" &&
+				args.imports !== null &&
+				!Array.isArray(args.imports)
+					? (args.imports as Record<string, string>)
+					: undefined;
+			const spec = await extractFromApp(project.root, app, outputDir, imports);
 			const { issues } = await validateInProject(project, spec);
 			return { source: "app", app, spec, ...issuesResult(issues) };
 		},
@@ -209,7 +231,7 @@ export const tools: readonly ToolDefinition[] = [
 	{
 		name: "afora_spec_validate",
 		description:
-			"Validates a spec without writing anything and returns the issues ({ path, code, message }). Pass `spec` to check a draft, or omit it to check the afora.json on disk. Rules covered: unknown references, name collisions, cycles, reserved and identity keys, unique/sensitive/change naming missing keys, repository action rules (findBy only for unique keys, findManyBy only for non-unique), relations covering the entities held, invalid `with` options.",
+			"Validates a spec without writing anything and returns the issues ({ path, code, message }). Pass `spec` to check a draft, or omit it to check the afora.json on disk. Rules covered: unknown references, name collisions, cycles, reserved and identity keys, unique/sensitive/change naming missing keys, repository action rules (findBy only for unique keys, findManyBy only for non-unique; findMany, exists, findPage need no key), providers (unknown_provider, invalid_provider, invalid_import), relations covering the entities held, invalid `with` options.",
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -250,7 +272,7 @@ export const tools: readonly ToolDefinition[] = [
 				},
 				declaration: {
 					description:
-						"The declaration. property: { base, with? } | { enum } | { opaque, import }. blueprint/environment: { fields }. record/entity: { fields, unique?, sensitive?, change?, plugins? }. repository: { entity, actions, deletion?: hard | soft, relations?, environments? }.",
+						'The declaration. property: { base, with? } | { enum } | { opaque, import }. blueprint/environment: { fields }. record/entity: { fields, unique?, sensitive?, change?, plugins? }. repository: { entity, actions, provider?, deletion?: hard | soft, relations?, environments? }. provider: "inMemory" | { use, options? } | { import: "./file.ts#name" } (the application provider is the top-level `provider` of the spec: afora_spec_write).',
 					anyOf: Object.values(declarationSchemas).map((schema) =>
 						json(schema),
 					),
@@ -379,7 +401,11 @@ export const tools: readonly ToolDefinition[] = [
 				return { generated: false, ...issuesResult(issues) };
 			let files: ReturnType<typeof generate>;
 			try {
-				files = generate(spec, extended);
+				files = generate(
+					spec,
+					extended,
+					project.providers ? { providers: project.providers } : {},
+				);
 			} catch (error) {
 				if (error instanceof InvalidSpecError) {
 					return { generated: false, ...issuesResult([...error.issues]) };

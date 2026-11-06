@@ -1,6 +1,6 @@
 # @afora/mcp
 
-Repository declarations accept `deletion: "hard" | "soft"` (default `hard`). The tools validate the setting and preserve soft deletion when generating or extracting an application.
+Repository declarations accept `deletion: "hard" | "soft"` (default `hard`), the actions `findMany`, `exists` and `findPage`, and a `provider` (`"inMemory"`, `{ use, options }` or `{ import }`); the application's provider is the top-level `provider` of the spec (`afora_spec_write`). An invalid provider is an issue (`unknown_provider`, `invalid_provider`, `invalid_import`) and nothing is written. `afora_extract` takes `imports` (`provider`, `repositories.<Name>.provider`) for a provider created without `providerOf`. The tools validate the setting and preserve soft deletion when generating or extracting an application.
 
 An [MCP](https://modelcontextprotocol.io) server (stdio) that lets an agent build a domain with afora: discover the catalog, edit an `afora.json`, validate it, generate the code with [`@afora/codegen`](../codegen/README.md) and get the TypeScript diagnostics of what was generated.
 
@@ -8,10 +8,10 @@ The project needs `@afora/core` and TypeBox (`typebox: ^1`) as peer dependencies
 
 ```bash
 claude mcp add afora -- bunx @afora/mcp --project .
-# or: afora-mcp --project <dir> [--app src/app.ts#App]
+# or: afora-mcp --project <dir> [--app src/app.ts#App] [--providers afora.providers.ts]
 ```
 
-`--project` is the project directory (the current one by default); every write stays inside it. `--app` names an `Application` (`file.ts#Export`) to extract the spec from when the project has no `afora.json`. Importing the application needs Bun on `PATH`.
+`--project` is the project directory (the current one by default); every write stays inside it. `--app` names an `Application` (`file.ts#Export`) to extract the spec from when the project has no `afora.json`. Importing the application needs Bun on `PATH`. `--providers` is a module (a path from the project) exporting `providers`, or a default export: an array of `{ name, module, export }` that `provider.use` may name besides the built-in `inMemory`; `afora_catalog` lists them.
 
 ## Tools
 
@@ -39,6 +39,11 @@ Resources: `afora://spec/schema` (JSON Schema of `afora.json`), `afora://catalog
 ```ts
 import { createServer } from "@afora/mcp";
 
-const server = await createServer({ project: "/path/to/project" });
+const server = await createServer({
+	project: "/path/to/project",
+	providers: [
+		{ name: "drizzle", module: "@acme/drizzle", export: "drizzleProvider" },
+	],
+});
 await server.connect(transport); // any transport of the MCP SDK
 ```

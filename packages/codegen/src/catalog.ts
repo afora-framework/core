@@ -180,7 +180,22 @@ function build(): Catalog {
 			},
 			{ action: "update", rule: "Saves a changed entity." },
 			{ action: "delete", rule: "Destroys an entity (soft delete)." },
-			{ action: "count", rule: "Counts the entities." },
+			{
+				action: "count",
+				rule: "Counts the entities; takes an optional query to count only the matching ones.",
+			},
+			{
+				action: "findMany",
+				rule: "Queries with { where?, orderBy?, limit?, offset? }. Needs no key.",
+			},
+			{
+				action: "exists",
+				rule: "Tells whether some entity matches a query (true or false). Needs no key.",
+			},
+			{
+				action: "findPage",
+				rule: "Gives { items, total, limit, offset } for a query (limit 20 by default). Needs no key.",
+			},
 		],
 		reservedDeclarationNames: [...Object.keys(core), "App"].sort(),
 	};

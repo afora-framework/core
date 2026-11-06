@@ -9,3 +9,6 @@ await Bun.write(
 	new URL("../afora.schema.json", import.meta.url),
 	`${JSON.stringify(schema, null, "\t")}\n`,
 );
+
+// Keep the committed file formatted as the rest of the repository (Biome).
+await Bun.$`bunx biome format --write ${new URL("../afora.schema.json", import.meta.url).pathname}`.quiet();

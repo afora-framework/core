@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import {
 	COLLECTION_KEYS,
 	confinePath,
+	type ProviderCatalogEntry,
 	type ResolvedSpec,
 	resolveExtended,
 	type Spec,
@@ -20,12 +21,15 @@ export interface Project {
 	readonly root: string;
 	/** `src/app.ts#App`: where to extract the spec from when there is no afora.json. */
 	readonly app?: string;
+	/** External providers `use` may name in the spec (`inMemory` is built in). */
+	readonly providers?: readonly ProviderCatalogEntry[];
 }
 
 /** The project directory, resolved; it must exist. */
 export async function openProject(
 	directory: string,
 	app?: string,
+	providers?: readonly ProviderCatalogEntry[],
 ): Promise<Project> {
 	let root: string;
 	try {
@@ -33,7 +37,11 @@ export async function openProject(
 	} catch {
 		throw new Error(`The project directory ${directory} does not exist.`);
 	}
-	return { root, ...(app ? { app } : {}) };
+	return {
+		root,
+		...(app ? { app } : {}),
+		...(providers ? { providers } : {}),
+	};
 }
 
 /** The spec on disk, or undefined when there is none. */
@@ -74,6 +82,7 @@ const TOP_ORDER = [
 	"name",
 	"extends",
 	"output",
+	"provider",
 	...COLLECTION_KEYS,
 	"useCases",
 ];
@@ -123,7 +132,11 @@ export async function validateInProject(
 		typeof spec === "object" && spec !== null
 			? await extendedOf(project, spec as Spec)
 			: { extended: {}, issues: [] };
-	const issues = validateSpec(spec, loaded.extended);
+	const issues = validateSpec(
+		spec,
+		loaded.extended,
+		project.providers ? { providers: project.providers } : {},
+	);
 	const known = new Set(
 		issues.map((issue) => `${issue.code}@${issue.path.join(".")}`),
 	);

@@ -2190,6 +2190,89 @@ exports[`afora.json schema 1`] = `
       },
       "type": "object",
     },
+    "provider": {
+      "anyOf": [
+        {
+          "const": "inMemory",
+          "type": "string",
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "options": {
+              "description": "Options passed to the provider factory.",
+              "patternProperties": {
+                "^.*$": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                    },
+                    {
+                      "type": "number",
+                    },
+                    {
+                      "type": "boolean",
+                    },
+                    {
+                      "type": "null",
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "import": {
+                          "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                          "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "import",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "items": {},
+                      "type": "array",
+                    },
+                    {
+                      "patternProperties": {
+                        "^.*$": {},
+                      },
+                      "type": "object",
+                    },
+                  ],
+                  "description": "A JSON value, or { "import": "./file.ts#name" } for a value created by hand (nested at any depth).",
+                },
+              },
+              "type": "object",
+            },
+            "use": {
+              "description": "A provider of the catalog given to codegen (inMemory is built in).",
+              "type": "string",
+            },
+          },
+          "required": [
+            "use",
+          ],
+          "type": "object",
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "import": {
+              "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+              "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string",
+            },
+          },
+          "required": [
+            "import",
+          ],
+          "type": "object",
+        },
+      ],
+      "description": ""inMemory", { "use": "<catalog name>", "options": {...} } or { "import": "./file.ts#provider" }.",
+    },
     "records": {
       "additionalProperties": false,
       "description": "Value objects (records), by name.",
@@ -2252,7 +2335,7 @@ exports[`afora.json schema 1`] = `
           "additionalProperties": false,
           "properties": {
             "actions": {
-              "description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), create, update, delete, count.",
+              "description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, create, update, delete, count.",
               "items": {
                 "type": "string",
               },
@@ -2282,6 +2365,89 @@ exports[`afora.json schema 1`] = `
                 "type": "string",
               },
               "type": "array",
+            },
+            "provider": {
+              "anyOf": [
+                {
+                  "const": "inMemory",
+                  "type": "string",
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "options": {
+                      "description": "Options passed to the provider factory.",
+                      "patternProperties": {
+                        "^.*$": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                            },
+                            {
+                              "type": "number",
+                            },
+                            {
+                              "type": "boolean",
+                            },
+                            {
+                              "type": "null",
+                            },
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            {
+                              "items": {},
+                              "type": "array",
+                            },
+                            {
+                              "patternProperties": {
+                                "^.*$": {},
+                              },
+                              "type": "object",
+                            },
+                          ],
+                          "description": "A JSON value, or { "import": "./file.ts#name" } for a value created by hand (nested at any depth).",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "use": {
+                      "description": "A provider of the catalog given to codegen (inMemory is built in).",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "use",
+                  ],
+                  "type": "object",
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "import": {
+                      "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                      "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "import",
+                  ],
+                  "type": "object",
+                },
+              ],
+              "description": ""inMemory", { "use": "<catalog name>", "options": {...} } or { "import": "./file.ts#provider" }.",
             },
             "relations": {
               "description": "Repositories of every entity the entity holds, at any depth.",

@@ -131,6 +131,24 @@ function canonicalProperty(name: string, value: Json): Json {
 }
 
 /**
+ * A provider in its long form: `"inMemory"` is `{ use: "inMemory", options: {} }`.
+ * A provider that is not declared stays undeclared: it is never the same as a shared one.
+ */
+function canonicalProvider(value: unknown): unknown {
+	if (value === "inMemory") return { use: "inMemory", options: {} };
+	if (isObject(value) && typeof value.use === "string") {
+		return {
+			use: value.use,
+			options: isObject(value.options) ? value.options : {},
+		};
+	}
+	return value;
+}
+
+const providerOf = (value: unknown): Json =>
+	value === undefined ? {} : { provider: canonicalProvider(value) };
+
+/**
  * The spec in a canonical form, where equivalent specs are equal: every field
  * in object form, defaults left out, `unique`/`sensitive` without what a
  * property or plugin already implies, and `output.dir` filled in. Two specs
@@ -154,6 +172,7 @@ export function normalizeSpec(
 				? spec.output.dir
 				: DEFAULT_OUTPUT_DIR,
 	};
+	Object.assign(out, providerOf(spec.provider));
 	for (const collection of COLLECTIONS) {
 		const declared = spec[collection];
 		if (!isObject(declared)) continue;
@@ -183,6 +202,7 @@ export function normalizeSpec(
 							{
 								entity: value.entity,
 								actions: Array.isArray(value.actions) ? [...value.actions] : [],
+								...providerOf(value.provider),
 								...(value.deletion === "soft" ? { deletion: "soft" } : {}),
 								...(relations ? { relations } : {}),
 								...(environments ? { environments } : {}),
@@ -223,9 +243,28 @@ function compactField(field: Json): FieldSpec {
 	} as unknown as FieldSpec;
 }
 
+/** A provider in its shortest form: `"inMemory"`, or `{ use }` without empty options. */
+function compactProvider(value: unknown): unknown {
+	if (!isObject(value) || typeof value.use !== "string") return value;
+	const empty =
+		!isObject(value.options) || Object.keys(value.options).length === 0;
+	if (!empty) return { use: value.use, options: value.options };
+	return value.use === "inMemory" ? "inMemory" : { use: value.use };
+}
+
 /** A normalized spec with its fields in shorthand wherever the shorthand says the same. */
 export function compactSpec(normalized: Spec): Spec {
 	const spec = JSON.parse(JSON.stringify(normalized)) as Json;
+	if (spec.provider !== undefined) {
+		spec.provider = compactProvider(spec.provider);
+	}
+	if (isObject(spec.repositories)) {
+		for (const value of Object.values(spec.repositories)) {
+			if (isObject(value) && value.provider !== undefined) {
+				value.provider = compactProvider(value.provider);
+			}
+		}
+	}
 	const compactFields = (value: unknown): Json =>
 		Object.fromEntries(
 			Object.entries(isObject(value) ? value : {}).map(([key, field]) => [

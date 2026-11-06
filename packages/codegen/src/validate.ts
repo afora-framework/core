@@ -1,11 +1,14 @@
 import { catalog, recordPlugin } from "./catalog";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
+import { checkCatalog, checkProvider } from "./provider";
 import { type Decl, issue, type Scope, scopeOf } from "./scope";
 import { isIdentifier, isObject } from "./spec/field";
 import {
 	COLLECTIONS,
+	type CodegenOptions,
 	KIND_OF,
+	type ProviderCatalogEntry,
 	type ResolvedSpec,
 	type SpecIssue,
 } from "./spec/types";
@@ -16,6 +19,7 @@ const TOP_LEVEL_KEYS = [
 	"name",
 	"extends",
 	"output",
+	"provider",
 	"useCases",
 	...COLLECTIONS,
 ];
@@ -639,23 +643,36 @@ function checkRecord(
 	}
 }
 
-function checkRepository(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
+function checkRepository(
+	decl: Decl,
+	scope: Scope,
+	providers: readonly ProviderCatalogEntry[],
+	issues: SpecIssue[],
+): void {
 	const path = ["repositories", decl.name];
 	const { spec } = decl;
 	for (const key of Object.keys(spec)) {
 		if (
-			!["entity", "actions", "deletion", "relations", "environments"].includes(
-				key,
-			)
+			![
+				"entity",
+				"actions",
+				"provider",
+				"deletion",
+				"relations",
+				"environments",
+			].includes(key)
 		) {
 			issues.push(
 				issue(
 					[...path, key],
 					"unknown_key",
-					`"${key}" is not valid here. Valid keys: entity, actions, deletion, relations, environments.`,
+					`"${key}" is not valid here. Valid keys: entity, actions, provider, deletion, relations, environments.`,
 				),
 			);
 		}
+	}
+	if (spec.provider !== undefined) {
+		checkProvider(spec.provider, [...path, "provider"], providers, issues);
 	}
 	if (
 		spec.deletion !== undefined &&
@@ -709,14 +726,25 @@ function checkRepository(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 				continue;
 			}
 			seen.add(action);
-			if (["create", "update", "delete", "count"].includes(action)) continue;
+			if (
+				[
+					"create",
+					"update",
+					"delete",
+					"count",
+					"findMany",
+					"exists",
+					"findPage",
+				].includes(action)
+			)
+				continue;
 			const match = /^(findBy|findManyBy)(.+)$/.exec(action);
 			if (!match) {
 				issues.push(
 					issue(
 						here,
 						"unknown_action",
-						`"${action}" is not an action. Use create, update, delete, count, findBy<Key> or findManyBy<Key>.`,
+						`"${action}" is not an action. Use create, update, delete, count, findMany, exists, findPage, findBy<Key> or findManyBy<Key>.`,
 					),
 				);
 				continue;
@@ -834,13 +862,14 @@ function checkRepository(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 export function validateSpec(
 	input: unknown,
 	extended: Readonly<Record<string, ResolvedSpec>> = {},
+	options: CodegenOptions = {},
 ): SpecIssue[] {
 	const issues: SpecIssue[] = [];
 	if (!isObject(input)) {
 		return [issue([], "invalid_spec", "The spec must be a JSON object.")];
 	}
 	try {
-		check(input, extended, issues);
+		check(input, extended, options.providers ?? [], issues);
 	} catch (error) {
 		issues.push(
 			issue(
@@ -856,8 +885,13 @@ export function validateSpec(
 function check(
 	input: Record<string, unknown>,
 	extended: Readonly<Record<string, ResolvedSpec>>,
+	providers: readonly ProviderCatalogEntry[],
 	issues: SpecIssue[],
 ): void {
+	checkCatalog(providers, issues);
+	if (input.provider !== undefined) {
+		checkProvider(input.provider, ["provider"], providers, issues);
+	}
 	for (const key of Object.keys(input)) {
 		if (!TOP_LEVEL_KEYS.includes(key)) {
 			issues.push(
@@ -954,7 +988,7 @@ function check(
 				checkFieldsOf(decl, "environments", "environment", scope, issues);
 				break;
 			case "repository":
-				checkRepository(decl, scope, issues);
+				checkRepository(decl, scope, providers, issues);
 				break;
 		}
 	}
