@@ -648,6 +648,8 @@ Events from managed children move to the parent when each child finishes, includ
 
 ### Repositories
 
+The [provider v2 design](docs/plans/T09-design.md) defines typed `RepositoryQuery<Entity>`, query actions, transaction scope and JSON provider descriptions for the upcoming provider contract migration. The query/descriptor types are exported now; runtime support follows in T10–T12.
+
 `repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete` and `count`. Every method is async.
 
 ```ts
