@@ -1,14 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import type { RepositoryContext, RepositoryData } from "../index";
-import { RepositoryEntityNotFound, RepositoryUniqueViolation } from "../index";
+import type {
+	IRepositoryProvider,
+	RepositoryContext,
+	RepositoryData,
+	RepositoryQuery,
+} from "../index";
 import {
-	type ContractQuery,
-	type ProviderV2,
-	providerContract,
-} from "./provider-contract";
-
-// T10: also run providerContract against inMemoryProvider() once provider v2
-// is merged, and drop this reference provider if it becomes redundant.
+	inMemoryProvider,
+	RepositoryEntityNotFound,
+	RepositoryUniqueViolation,
+} from "../index";
+import { providerContract } from "./provider-contract";
 
 type Tables = Map<object, RepositoryData[]>;
 
@@ -29,7 +31,7 @@ function compare(a: unknown, b: unknown): number {
 
 function select(
 	rows: readonly RepositoryData[],
-	query: ContractQuery = {},
+	query: RepositoryQuery = {},
 	paginate = true,
 ): RepositoryData[] {
 	let result = rows.filter((data) => {
@@ -75,7 +77,7 @@ function select(
 }
 
 /** Array-based reference provider, correct per docs/plans/T09-design.md. */
-function referenceProvider(): ProviderV2 {
+function referenceProvider(): IRepositoryProvider {
 	let committed: Tables = new Map();
 	let queue: Promise<unknown> = Promise.resolve();
 
@@ -84,7 +86,7 @@ function referenceProvider(): ProviderV2 {
 		set: (tables: Tables) => void,
 		wrap: <R>(run: () => Promise<R>) => Promise<R>,
 		alive: () => boolean,
-	): ProviderV2 => {
+	): IRepositoryProvider => {
 		const rowsOf = (context: RepositoryContext) => {
 			if (!alive()) throw new Error("transaction scope used after it ended");
 			const tables = get();
@@ -152,7 +154,7 @@ function referenceProvider(): ProviderV2 {
 					rows.splice(index, 1);
 				}),
 			// Snapshot of the tables, swapped back in only on success.
-			transaction: <R>(run: (provider: ProviderV2) => Promise<R>) =>
+			transaction: <R>(run: (provider: IRepositoryProvider) => Promise<R>) =>
 				wrap(async () => {
 					const snapshot: Tables = new Map(
 						[...get()].map(([entity, rows]) => [entity, clone(rows)]),
@@ -195,6 +197,9 @@ function referenceProvider(): ProviderV2 {
 }
 
 providerContract({ describe, it, expect }, referenceProvider);
+describe("inMemoryProvider", () => {
+	providerContract({ describe, it, expect }, () => inMemoryProvider());
+});
 
 describe("providerContract options", () => {
 	it("skips the transaction cases when told to", () => {

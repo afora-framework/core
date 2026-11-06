@@ -69,12 +69,11 @@ test("soft deletion persists timestamps and hides rows from every read", async (
 	expect(await Items.count()).toBe(0);
 });
 
-test("soft actions require update and findMany, without requiring remove or count", async () => {
+test("soft actions require update and findOne, without requiring remove", async () => {
 	const memory = inMemoryProvider();
 	const provider = {
 		...memory,
 		remove: undefined,
-		count: undefined,
 	} as unknown as IRepositoryProvider;
 	const Items = repositoryOf({
 		entity: Item,
@@ -103,7 +102,7 @@ test("soft actions require update and findMany, without requiring remove or coun
 			deletion: "soft",
 			provider: {
 				...memory,
-				findMany: undefined,
+				count: undefined,
 			} as unknown as IRepositoryProvider,
 		}),
 	).toThrow(InvalidRepositoryDeclaration);
@@ -112,32 +111,30 @@ test("soft actions require update and findMany, without requiring remove or coun
 	).toThrow(InvalidRepositoryDeclaration);
 });
 
-for (const batch of [true, false]) {
-	test(`soft-deleted references are missing with batch=${batch}`, async () => {
-		const memory = inMemoryProvider();
-		const provider = batch ? memory : { ...memory, findIn: undefined };
-		const Items = repositoryOf({
-			entity: Item,
-			actions,
-			provider,
-			deletion: "soft",
-		});
-		class Holder extends entityOf(blueprintOf(() => ({ item: Item }))) {}
-		const Holders = repositoryOf({
-			entity: Holder,
-			actions: ["create", "findById"],
-			relations: [Items],
-			provider,
-		});
-		const item = await Items.create({ name: "a", email: "a@example.com" });
-		const holder = await Holders.create({ item });
-		expect((await Holders.findById(holder.id))?.item.id).toBe(item.id);
-		await Items.delete(item);
-		await expect(Holders.findById(holder.id)).rejects.toMatchObject({
-			name: "InvalidRepositoryData",
-		});
+test("soft-deleted references are missing", async () => {
+	const memory = inMemoryProvider();
+	const provider = memory;
+	const Items = repositoryOf({
+		entity: Item,
+		actions,
+		provider,
+		deletion: "soft",
 	});
-}
+	class Holder extends entityOf(blueprintOf(() => ({ item: Item }))) {}
+	const Holders = repositoryOf({
+		entity: Holder,
+		actions: ["create", "findById"],
+		relations: [Items],
+		provider,
+	});
+	const item = await Items.create({ name: "a", email: "a@example.com" });
+	const holder = await Holders.create({ item });
+	expect((await Holders.findById(holder.id))?.item.id).toBe(item.id);
+	await Items.delete(item);
+	await expect(Holders.findById(holder.id)).rejects.toMatchObject({
+		name: "InvalidRepositoryData",
+	});
+});
 
 test("application binding preserves deletion mode and describes it", async () => {
 	const Items = repositoryOf({ entity: Item, actions, deletion: "soft" });

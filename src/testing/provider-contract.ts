@@ -1,53 +1,13 @@
 import {
 	blueprintOf,
 	entityOf,
-	type ProviderCapabilities,
+	type IRepositoryProvider,
 	type RepositoryContext,
 	type RepositoryData,
 	RepositoryEntityNotFound,
+	type RepositoryQuery,
 	RepositoryUniqueViolation,
 } from "../index";
-
-/**
- * The bare `ContractQuery` of query.interface.ts, spelled structurally: its
- * `where` values currently infer as `never` for an unknown entity, which would
- * reject every stored value.
- * T10: use `ContractQuery` once its bare form accepts stored values.
- */
-export interface ContractQuery {
-	readonly where?: Readonly<Record<string, unknown>>;
-	readonly orderBy?: readonly {
-		readonly key: string;
-		readonly direction?: "asc" | "desc";
-	}[];
-	readonly limit?: number;
-	readonly offset?: number;
-	readonly withDeleted?: boolean;
-}
-
-/**
- * The provider v2 contract of docs/plans/T09-design.md, spelled out so this kit
- * does not depend on the runtime interface.
- * T10: replace with the real `IRepositoryProvider` once provider v2 is merged.
- */
-export interface ProviderV2 {
-	findOne(
-		context: RepositoryContext,
-		query?: ContractQuery,
-	): Promise<RepositoryData | undefined>;
-	findMany(
-		context: RepositoryContext,
-		query?: ContractQuery,
-	): Promise<readonly RepositoryData[]>;
-	count(context: RepositoryContext, query?: ContractQuery): Promise<number>;
-	insert(context: RepositoryContext, data: RepositoryData): Promise<void>;
-	update(context: RepositoryContext, data: RepositoryData): Promise<void>;
-	remove(context: RepositoryContext, id: string): Promise<void>;
-	transaction?<Result>(
-		run: (provider: ProviderV2) => Promise<Result>,
-	): Promise<Result>;
-	readonly capabilities?: ProviderCapabilities;
-}
 
 /** The parts of a test runner the kit uses; `bun:test`, vitest and jest fit. */
 export interface ContractRunner {
@@ -106,7 +66,7 @@ const ids = (rows: readonly RepositoryData[]) => rows.map((r) => r.id);
  */
 export function providerContract(
 	runner: ContractRunner,
-	makeProvider: () => ProviderV2 | Promise<ProviderV2>,
+	makeProvider: () => IRepositoryProvider | Promise<IRepositoryProvider>,
 	options: ProviderContractOptions = {},
 ): void {
 	const { describe, it, expect } = runner;
@@ -328,7 +288,10 @@ export function providerContract(
 		});
 
 		describe("orderBy", () => {
-			const order = async (rows: Row[], orderBy: ContractQuery["orderBy"]) => {
+			const order = async (
+				rows: Row[],
+				orderBy: RepositoryQuery["orderBy"],
+			) => {
 				const { provider, context, seed } = await fixture();
 				await seed(...rows);
 				return ids(await provider.findMany(context, { orderBy }));
@@ -659,15 +622,17 @@ export function providerContract(
 				"rejects the scoped provider after the callback",
 				async () => {
 					const { context, transaction } = await open();
-					let scoped: ProviderV2 | undefined;
+					let scoped: IRepositoryProvider | undefined;
 					await transaction(async (tx) => {
 						scoped = tx;
 					});
 					const error = await failure(
-						(scoped as ProviderV2).insert(context, row()),
+						(scoped as IRepositoryProvider).insert(context, row()),
 					);
 					expect(error instanceof Error).toBe(true);
-					const read = await failure((scoped as ProviderV2).count(context));
+					const read = await failure(
+						(scoped as IRepositoryProvider).count(context),
+					);
 					expect(read instanceof Error).toBe(true);
 				},
 			);

@@ -14,6 +14,7 @@ import { plainOf } from "../openapi/openapi";
 import { isProperty } from "../property/is-property";
 import { type PropertyLineage, propertyLineageOf } from "../property/lineage";
 import { pluginsOf } from "../record/plugin";
+import { providerDescriptionOf } from "../repository/provider";
 import {
 	bindRepository,
 	inspectRepository,
@@ -488,6 +489,7 @@ function describeRegistry(
 	name: string,
 	extended: readonly AnyApplication[],
 	registry: Registry,
+	provider: IRepositoryProvider | undefined,
 ): ApplicationDescription {
 	const scope: Scope = {
 		properties: referencesOf(registry, "properties"),
@@ -510,6 +512,9 @@ function describeRegistry(
 	return {
 		name,
 		extends: extended.map((other) => other.name),
+		...(provider === undefined
+			? {}
+			: { provider: providerDescriptionOf(provider) }),
 		properties: each("properties", (entry) => ({
 			from: entry.from,
 			...propertyDescriptionOf(entry.value as BlueprintField, scope),
@@ -544,7 +549,9 @@ function describeRegistry(
 					(environment) =>
 						referencesOf(registry, "environments").get(environment) as string,
 				),
-				provider: info.explicitProvider,
+				...(info.provider === undefined
+					? {}
+					: { provider: providerDescriptionOf(info.provider) }),
 			};
 		}),
 	};
@@ -679,7 +686,7 @@ export function applicationOf<
 				...(provider === undefined ? {} : { provider }),
 			} as never);
 		},
-		describe: () => describeRegistry(name, extended, registry),
+		describe: () => describeRegistry(name, extended, registry, provider),
 	});
 	internals.set(application, registry);
 	return application as never;

@@ -7,12 +7,11 @@ import type {
 } from "./repository.interface";
 
 type QueryKey<Entity> = unknown extends Entity ? string : EntityKeyOf<Entity>;
-type QueryValue<
-	Entity,
-	Key extends string,
-> = Key extends keyof EntityValueOf<Entity>
-	? QueryValueOf<EntityValueOf<Entity>[Key]>
-	: unknown;
+type QueryValue<Entity, Key extends string> = unknown extends Entity
+	? unknown
+	: Key extends keyof EntityValueOf<Entity>
+		? QueryValueOf<EntityValueOf<Entity>[Key]>
+		: unknown;
 
 /** Equality, or membership in a list. Conditions on different keys are ANDed. */
 export type RepositoryWhere<Entity = unknown> = {

@@ -1,5 +1,6 @@
 import type { AnyEnvironment } from "../../environment/environment";
 import type { RecordPluginDescriptor } from "../../record/types/plugin.interface";
+import type { ProviderDescription } from "../../repository/types/query.interface";
 import type {
 	AnyRepository,
 	IRepositoryProvider,
@@ -187,6 +188,8 @@ export interface ApplicationDescription {
 	readonly name: string;
 	/** The names of the applications it extends directly. */
 	readonly extends: readonly string[];
+	/** The provider of the application (or of the last extended one), present only when configured. */
+	readonly provider?: ProviderDescription;
 	readonly properties: Readonly<
 		Record<string, PropertyDescription & { readonly from: string }>
 	>;
@@ -216,8 +219,8 @@ export interface ApplicationDescription {
 				readonly relations: readonly string[];
 				/** The names of its `environmentDependencies`. */
 				readonly environments: readonly string[];
-				/** Whether it declared a provider of its own. */
-				readonly provider: boolean;
+				/** Its own provider, present only when it declared one. */
+				readonly provider?: ProviderDescription;
 			}
 		>
 	>;

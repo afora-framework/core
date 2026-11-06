@@ -7,6 +7,7 @@ import {
 	eventOf,
 	exceptionOf,
 	guard,
+	type IRepositoryProvider,
 	listOf,
 	Meta,
 	optionalOf,
@@ -18,11 +19,7 @@ import {
 	type StandardSchemaV1,
 } from "@afora/core";
 import { type SliceMask, sliceOf } from "@afora/core/experimental";
-import {
-	type ContractRunner,
-	type ProviderV2,
-	providerContract,
-} from "@afora/core/testing";
+import { type ContractRunner, providerContract } from "@afora/core/testing";
 import { Type } from "typebox";
 
 type Equals<A, B> =
@@ -384,5 +381,5 @@ export type AddressMask = SliceMask<typeof Address.properties>;
 
 // The provider contract kit is runner-agnostic.
 declare const runner: ContractRunner;
-declare const makeProvider: () => ProviderV2;
+declare const makeProvider: () => IRepositoryProvider;
 providerContract(runner, makeProvider, { transactions: false });
