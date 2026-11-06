@@ -1,5 +1,5 @@
 /**
- * Code as users write it, from the README. `perf` cases are valid code whose
+ * Code as users write it, from the README and the docs. `perf` cases are valid code whose
  * edit cost is budgeted; every case records what the editor shows at its
  * probes (`/*@hover*\/`, `/*@complete*\/`, `/*@signature*\/`) and its
  * diagnostics, so that type changes keep the writing experience.

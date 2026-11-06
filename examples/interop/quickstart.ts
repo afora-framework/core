@@ -1,88 +1,95 @@
-import { sValidator } from "@hono/standard-validator";
-import { Hono } from "hono";
 import {
 	blueprintOf,
+	commandOf,
 	ExceptionLayers,
+	entityOf,
 	exceptionOf,
-	guard,
-	listOf,
+	outputOf,
 	Password,
-	recordOf,
-	type StandardSchemaV1,
-} from "../../src/index.ts";
+	repositoryOf,
+	useCaseOf,
+} from "@afora/core";
+import { hono } from "@afora/hono";
 
-// Domain: a record with invariants, a sensitive key and unique intent
-const Address = blueprintOf((ctx) => ({ street: ctx.string, zip: ctx.string }));
+// Entity: invariants, a sensitive key and a unique key
+export class User extends entityOf(
+	blueprintOf((ctx) => ({
+		name: ctx.text,
+		email: ctx.email, // trimmed and lowercased
+		password: ctx.password, // only an argon2 hash is accepted; always masked
+	})),
+	{ unique: ["email"] },
+) {}
 
-const UserBlueprint = blueprintOf((ctx) => ({
-	email: ctx.email, // trimmed and lowercased
-	slug: ctx.slug, // slugified; unique by declaration
-	password: ctx.password, // only an argon2 hash is accepted; always masked
-	address: Address,
-	tags: listOf(ctx.string, { maxItems: 5 }),
-}));
-
-export class User extends recordOf(UserBlueprint, {
-	unique: ["email"], // `slug` is unique already, as a Slug
-	change: ["password"], // generates change.password(value)
-}) {}
-
-// Input: the HTTP body carries a plain password, which never enters the record
-const SignUpBody = blueprintOf((ctx) => ({
-	email: ctx.email,
-	slug: ctx.slug,
-	plainPassword: ctx.string,
-	address: Address,
-	tags: listOf(ctx.string, { maxItems: 5 }),
-}));
-
-// Repository: enforces what User.options.unique declares
-const UserAlreadyExists = exceptionOf({
-	layer: ExceptionLayers.Repository,
-	name: "UserAlreadyExists",
-	message: "A user with this email or slug already exists.",
+// Repository: only the actions you choose; the provider is in memory by default
+const Users = repositoryOf({
+	entity: User,
+	actions: ["findByEmail", "create"],
 });
 
-class UserRepository {
-	readonly #users: User[] = [];
+const UserAlreadyExists = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "UserAlreadyExists",
+	message: "A user with this email already exists.",
+});
 
-	save(user: User): User {
-		for (const key of User.options.unique) {
-			if (this.#users.some((saved) => saved[key] === user[key])) {
-				throw new UserAlreadyExists({ source: "UserRepository" });
-			}
-		}
-		this.#users.push(user);
-		return user;
-	}
+async function hashPassword(plain: string) {
+	return (await Password.hash(plain)).value;
 }
 
-// Use case and HTTP route
-const users = new UserRepository();
+// Use case: the steps are data, so they can also live in an afora.json
+class Register extends useCaseOf({
+	name: "Register",
+	blueprint: blueprintOf((ctx) => ({
+		name: ctx.text,
+		email: ctx.email,
+		plainPassword: ctx.string,
+	})),
+	response: blueprintOf(() => ({ user: User })),
+	dependencies: { users: Users },
+	errors: [UserAlreadyExists],
+	steps: [
+		{ find: "users.findByEmail", args: ["$input.email"], as: "existing" },
+		{ ensure: "absent", value: "$existing", error: UserAlreadyExists },
+		{
+			run: "hashPassword",
+			fn: hashPassword,
+			args: ["$input.plainPassword"],
+			as: "hash",
+		},
+		{
+			build: User,
+			values: { name: "$input.name", email: "$input.email", password: "$hash" },
+			as: "user",
+		},
+		{ create: "users", value: "$user", as: "saved" },
+		{ return: { user: "$saved" } },
+	],
+}) {}
 
-async function signUp({ plainPassword, ...data }: SignUpData) {
-	const password = await Password.hash(plainPassword);
-	return users.save(new User({ ...data, password: password.value }));
-}
+// Command: the execution boundary (here, one transaction per call)
+const Accounts = commandOf({
+	name: "Accounts",
+	useCases: { register: Register },
+	transaction: true,
+});
 
-export const app = new Hono().post(
-	"/users",
-	sValidator("json", SignUpBody), // any Standard Schema consumer works the same
-	async (c) => {
-		const user = await signUp(c.req.valid("json"));
-		return c.json(user.toJSON(), 201); // the password comes out masked
-	},
-);
+// Output: the commands as an HTTP API with an OpenAPI document
+const Api = outputOf({
+	name: "Api",
+	commands: [Accounts],
+	statuses: { UserAlreadyExists: 409 },
+	pipe: [
+		hono({
+			basePath: "/api",
+			docs: {
+				path: "/openapi.json",
+				info: { title: "Accounts", version: "1.0.0" },
+			},
+		}),
+	],
+});
 
-// Errors keep the layers they crossed
-export function changePassword(user: User, value: string) {
-	return guard(
-		{ layer: ExceptionLayers.Output, source: "PATCH /password" },
-		() =>
-			guard({ layer: ExceptionLayers.UseCase, source: "ChangePassword" }, () =>
-				user.change.password(value),
-			),
-	);
-}
+export const api = Api.build();
 
-type SignUpData = StandardSchemaV1.InferOutput<typeof SignUpBody>;
+if (import.meta.main) Bun.serve({ fetch: api.fetch });

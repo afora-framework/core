@@ -1,6 +1,6 @@
 # @afora/drizzle
 
-A repository provider for [`@afora/core`](../../README.md) on [Drizzle ORM](https://orm.drizzle.team). It implements the provider v2 contract (queries with `where` equality and `in`, `orderBy`, `limit` / `offset`, `withDeleted`, `count`, unique keys, transactions) and passes the `providerContract` kit of `@afora/core/testing` on SQLite (`bun:sqlite`) and Postgres (PGlite).
+A repository provider for [`@afora/core`](../../README.md) on [Drizzle ORM](https://orm.drizzle.team). It implements the provider v2 contract (queries with `where` equality and `in`, `orderBy`, `limit` / `offset`, `withDeleted`, `count`, unique keys, transactions) and passes the `providerContract` kit of `@afora/core/testing` on SQLite (`bun:sqlite`) and Postgres (PGlite). The contract and the kit are described in [docs/repositories.md](../../docs/repositories.md) and [Testing a provider](../../docs/repositories.md#testing-a-provider).
 
 ```bash
 bun add @afora/core typebox drizzle-orm @afora/drizzle

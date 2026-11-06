@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`@afora/core` (the Standard Schema vendor is still `"afora"`) is a TypeScript library published on npm for domain modeling on TypeBox: properties → blueprints → records → entities, plus repositories, use cases, environments and layered exceptions, with Standard Schema V1 on every field. `README.md` is the user-facing spec of behavior; `CHANGELOG.md` (`## Unreleased`) records every public change and should be updated alongside features.
+`@afora/core` (the Standard Schema vendor is still `"afora"`) is a TypeScript library published on npm for domain modeling on TypeBox: properties → blueprints → records → entities, plus repositories, use cases, environments and layered exceptions, with Standard Schema V1 on every field. `README.md` is the entry point (intro, install, a tested quick start, overview) and `docs/` holds the user-facing spec of behavior, one file per concept (`docs/README.md` is the index; `docs/afora-json.md` is the JSON-first guide). A change in behavior goes into the matching `docs/*.md`, and the quick start code in `README.md` must stay equal to `examples/interop/quickstart.ts` and `quickstart.afora.json`, which `bun run test:interop` checks. `CHANGELOG.md` (`## Unreleased`) records every public change and should be updated alongside features.
 
 ## Tooling
 
@@ -19,7 +19,8 @@ bun run lint                             # biome lint
 bun run fmt                              # biome format + fix (tabs, double quotes, organized imports)
 bun run build                            # dist/: bun build (ESM, node target, deps external) + tsc declarations, then scripts/add-dts-extensions.ts
 bun run test:api                         # tests/api-surface: snapshot of every export of dist/ with its declaration, and of packages/codegen/afora.schema.json (the public contract); update with -u on purpose
-bun run test:interop                     # examples/interop: real Hono, tRPC, TanStack Form tests, incl. the README quick start
+bun run test:interop                     # examples/interop: real Hono, tRPC, TanStack Form tests, incl. the README quick start (TypeScript and afora.json)
+bun run docs:links                       # every relative link and #anchor in README.md, docs/ and the package READMEs resolves
 bun run test:types                       # packs the package and type-checks tests/types-compat on TS 5.5, latest 5.x and 7, bundler + nodenext
 bun run test:type-perf                   # tests/type-perf: per-edit type instantiations of README code (budgeted) + snapshot of hovers/completions/diagnostics, src and dist
 bun run playground                       # the local playground (packages/playground) on this repo's src/

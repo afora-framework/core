@@ -1,6 +1,6 @@
 # @afora/hono
 
-A [Hono](https://hono.dev) sink for [`@afora/core`](../../README.md) outputs. It turns the operations of an output into a Hono app: validated input, `200` with the response (sensitive values masked), RFC 9457 `application/problem+json` errors, and an OpenAPI document of the same routes.
+A [Hono](https://hono.dev) sink for [`@afora/core`](../../README.md) outputs. It turns the operations of an output into a Hono app: validated input, `200` with the response (sensitive values masked), RFC 9457 `application/problem+json` errors, and an OpenAPI document of the same routes. Outputs, stages and `statusOf` are described in [docs/outputs.md](../../docs/outputs.md).
 
 ```bash
 bun add @afora/core @afora/hono hono typebox

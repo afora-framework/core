@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Docs: the README is now the entry point (intro, install, a quick start that runs the full flow from an entity to an HTTP API with `Bun.serve`, then the same app as an `afora.json` generated with `afora-codegen`), and the concept reference moved to `docs/`, one page per concept (`docs/README.md` is the index), plus `docs/afora-json.md`, a guide to generating, extracting and round-tripping a spec, with its catalogs and limitations. The quick start is tested by `bun run test:interop` (TypeScript and JSON), and `bun run docs:links` checks the relative links of the README, the docs and the package READMEs.
 - `commandOf({ transaction: true })` checks at declaration only the providers the repositories declared; the rest are checked when an application binds the command (with its provider) or on the first call, so a transactional command over repositories that an application provider binds can be declared at module level.
 - A relation to a soft-deleted entity loads it (deleted, read-only) instead of failing the read with `InvalidRepositoryData`: a reference is data, so an order keeps its deleted product.
 - Breaking: TypeBox is now a required peer dependency (`typebox: ^1`) instead of a runtime dependency. Install it alongside `@afora/core`; companion packages and generated applications share the application's TypeBox installation.
