@@ -197,7 +197,6 @@ exports[`source mode experience completions: records and repositories 1`] = `
 "signature L6:23 const user = new User(‸{ name: "a", email: "a@b.co", slug: "a" });
   * User(value: EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; slug: CallableProperty<...>; }>>): User  [arg 0]
 complete L7:6 user.‸;
-  blueprint (property)
   change (property)
   createdAt (property)
   deletedAt (property)
@@ -207,7 +206,6 @@ complete L7:6 user.‸;
   id (property)
   isDeleted (getter)
   name (property)
-  options (property)
   pullEvents (method)
   slug (property)
   toJSON (method)
@@ -467,7 +465,6 @@ exports[`package mode experience completions: records and repositories 1`] = `
 "signature L6:23 const user = new User(‸{ name: "a", email: "a@b.co", slug: "a" });
   * User(value: EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<...>>): User  [arg 0]
 complete L7:6 user.‸;
-  blueprint (property)
   change (property)
   createdAt (property)
   deletedAt (property)
@@ -477,7 +474,6 @@ complete L7:6 user.‸;
   id (property)
   isDeleted (getter)
   name (property)
-  options (property)
   pullEvents (method)
   slug (property)
   toJSON (method)
