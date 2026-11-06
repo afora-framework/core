@@ -76,7 +76,7 @@ Dropping a version of TypeScript, Bun or Node is breaking, except when that vers
 
 ## How it is enforced
 
-- `bun run test:api` snapshots the public surface (exports, signatures and `afora.schema.json`). A change to the snapshot has to be intended and shows up in review. This script is being added.
+- `bun run test:api` snapshots the public surface (exports, signatures and `afora.schema.json`). A change to the snapshot has to be intended and shows up in review.
 - `bun run test:types` type-checks the packed package on the supported TypeScript versions.
 - `bun run test:type-perf` budgets the editor cost and snapshots hovers, completions and diagnostics.
 - `CHANGELOG.md` lists every public change under `## Unreleased`, and a breaking one is marked "Breaking:".
