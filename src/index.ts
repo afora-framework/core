@@ -12,6 +12,7 @@ export type {
 	ApplicationCollections,
 	ApplicationDescription,
 	ApplicationSettings,
+	CommandDescription,
 	ExceptionDescription,
 	FieldDescription,
 	FieldsDescription,

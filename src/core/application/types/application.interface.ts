@@ -1,3 +1,4 @@
+import type { AnyCommand } from "../../command/types/command.interface";
 import type { AnyEnvironment } from "../../environment/environment";
 import type { ExceptionLayers } from "../../exception/enums/exception-layers";
 import type { RecordPluginDescriptor } from "../../record/types/plugin.interface";
@@ -24,6 +25,7 @@ export interface ApplicationCollections {
 	readonly environments: Named<AnyEnvironment>;
 	readonly repositories: Named<AnyRepository>;
 	readonly useCases: Named<AnyUseCaseClass>;
+	readonly commands: Named<AnyCommand>;
 	readonly exceptions: Named<AnyExceptionClass>;
 }
 
@@ -51,6 +53,8 @@ export interface ApplicationSettings<
 	readonly repositories?: Collections["repositories"];
 	/** Use cases, keyed by their `useCaseName`. */
 	readonly useCases?: Collections["useCases"];
+	/** Commands, keyed by their `commandName`; every use case of each must be in `useCases`. */
+	readonly commands?: Collections["commands"];
 	/** Exceptions made by `exceptionOf`, keyed by their `name`. */
 	readonly exceptions?: Collections["exceptions"];
 	/**
@@ -108,6 +112,11 @@ export interface IApplication<
 	 * time. Without one they are the declared classes.
 	 */
 	readonly useCases: Collections["useCases"];
+	/**
+	 * Its commands. With a `provider` they are rebuilt over the bound use
+	 * cases (same settings), memoized; without one, the declared commands.
+	 */
+	readonly commands: Collections["commands"];
 	/** Its exceptions. */
 	readonly exceptions: Collections["exceptions"];
 	/** The bound version of a repository registered in the application. */
@@ -116,6 +125,8 @@ export interface IApplication<
 	): Repository;
 	/** The bound version of a use case registered in the application. */
 	useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase;
+	/** The bound version of a command registered in the application. */
+	command<Command extends AnyCommand>(command: Command): Command;
 	/** A new application with the declarations of `others` too; this one is left as it is. */
 	extend<const Others extends readonly AnyApplication[]>(
 		...others: Others
@@ -240,6 +251,20 @@ export interface UseCaseDescription {
 		| { readonly kind: "opaque" };
 }
 
+/** A command: its metadata, context, operations and policies. */
+export interface CommandDescription {
+	readonly from: string;
+	readonly name: string;
+	readonly description?: string;
+	readonly tags: readonly string[];
+	readonly context?: FieldsDescription;
+	/** Each operation and the name of its use case in the application. */
+	readonly operations: Readonly<Record<string, { readonly ref: string }>>;
+	readonly transaction: boolean;
+	readonly events: "after-commit" | "manual" | { readonly kind: "opaque" };
+	readonly onEventError?: { readonly kind: "opaque" };
+}
+
 /** An exception: its layer and, when declared as a string, its message. */
 export interface ExceptionDescription {
 	readonly from: string;
@@ -289,5 +314,6 @@ export interface ApplicationDescription {
 		>
 	>;
 	readonly useCases: Readonly<Record<string, UseCaseDescription>>;
+	readonly commands: Readonly<Record<string, CommandDescription>>;
 	readonly exceptions: Readonly<Record<string, ExceptionDescription>>;
 }
