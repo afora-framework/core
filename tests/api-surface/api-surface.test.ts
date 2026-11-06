@@ -16,8 +16,13 @@ import { apiSurface } from "./surface";
 const root = join(import.meta.dir, "../..");
 const entry = join(root, "dist/index.d.ts");
 const experimentalEntry = join(root, "dist/experimental.d.ts");
+const testingEntry = join(root, "dist/testing/index.d.ts");
 
-if (!existsSync(entry) || !existsSync(experimentalEntry))
+if (
+	!existsSync(entry) ||
+	!existsSync(experimentalEntry) ||
+	!existsSync(testingEntry)
+)
 	throw new Error("dist/ is missing: run `bun run test:api`.");
 
 test("exports of the package and their declarations", () => {
@@ -30,6 +35,14 @@ test("exports of the package and their declarations", () => {
 // VERSIONING.md). Snapshotted only so a change is seen and reviewed.
 test("experimental entry (not contract)", () => {
 	const surface = apiSurface(experimentalEntry);
+	expect(Object.keys(surface).length).toBeGreaterThan(0);
+	expect(surface).toMatchSnapshot();
+});
+
+// Part of the contract: `@afora/core/testing` is what provider packages run
+// their implementations against.
+test("testing entry (contract)", () => {
+	const surface = apiSurface(testingEntry);
 	expect(Object.keys(surface).length).toBeGreaterThan(0);
 	expect(surface).toMatchSnapshot();
 });

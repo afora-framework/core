@@ -45,6 +45,11 @@
 			"import": "./dist/experimental.js",
 			"default": "./dist/experimental.js"
 		},
+		"./testing": {
+			"types": "./dist/testing/index.d.ts",
+			"import": "./dist/testing/index.js",
+			"default": "./dist/testing/index.js"
+		},
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -63,7 +68,7 @@
 		"lint": "biome lint .",
 		"fmt": "biome check --write .",
 		"knip": "knip",
-		"build": "rm -rf dist && bun build ./src/index.ts ./src/experimental.ts --outdir ./dist --target node --format esm --splitting --packages external && tsc -p tsconfig.build.json",
+		"build": "rm -rf dist && bun build ./src/index.ts ./src/experimental.ts ./src/testing/index.ts --outdir ./dist --target node --format esm --splitting --packages external && tsc -p tsconfig.build.json",
 		"postbuild": "bun scripts/add-dts-extensions.ts",
 		"playground": "bun run --cwd packages/playground dev",
 		"test:playground": "bun run --cwd packages/playground test",

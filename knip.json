@@ -8,6 +8,7 @@
 			"entry": [
 				"src/index.ts",
 				"src/experimental.ts",
+				"src/testing/index.ts",
 				"src/**/*.sandbox.ts",
 				"scripts/*.{ts,mjs}"
 			],

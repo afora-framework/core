@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 // The application supplies the TypeBox peer used by these schemas and core.
 import { Type } from "typebox";
+import { sliceOf, sliceValue } from "../dist/experimental.js";
 import {
 	blueprintOf,
 	DeletedEntity,
@@ -13,7 +14,7 @@ import {
 	propertyOf,
 	recordOf,
 } from "../dist/index.js";
-import { sliceOf, sliceValue } from "../dist/experimental.js";
+import { providerContract } from "../dist/testing/index.js";
 
 // property
 const Name = propertyOf({
@@ -102,5 +103,8 @@ assert.deepEqual(sliceValue(wrapped, { slim: { title: true } }), {
 });
 const Only = sliceOf(Wrapper.blueprint, { slim: true });
 assert.ok(Only.properties.slim === Slim);
+
+// testing entry shares module state with the main one (same exception classes)
+assert.equal(typeof providerContract, "function");
 
 console.log(`smoke ok on node ${process.version}`);

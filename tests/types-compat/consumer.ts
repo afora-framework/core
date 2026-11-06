@@ -18,6 +18,11 @@ import {
 	type StandardSchemaV1,
 } from "@afora/core";
 import { type SliceMask, sliceOf } from "@afora/core/experimental";
+import {
+	type ContractRunner,
+	type ProviderV2,
+	providerContract,
+} from "@afora/core/testing";
 import { Type } from "typebox";
 
 type Equals<A, B> =
@@ -376,3 +381,8 @@ const SlicedAddress = sliceOf(Address, { zip: true });
 export const slicedKeys: Equals<keyof typeof SlicedAddress.properties, "zip"> =
 	true;
 export type AddressMask = SliceMask<typeof Address.properties>;
+
+// The provider contract kit is runner-agnostic.
+declare const runner: ContractRunner;
+declare const makeProvider: () => ProviderV2;
+providerContract(runner, makeProvider, { transactions: false });

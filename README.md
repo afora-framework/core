@@ -871,6 +871,20 @@ bun run playground
 
 In this repository that uses the current `src/`. In a project that depends on `@afora/core`, install `@afora/playground` as a dev dependency and run `afora playground` through a package script to use that project's `package.json`, `tsconfig.json` and installed dependencies. Saved experiments live in `.afora/sandbox/**/*.sandbox.ts` inside the selected project. Bun is required for the playground. See [packages/playground](packages/playground/README.md) for setup, project selection and execution limits.
 
+## Testing a provider
+
+`@afora/core/testing` has a contract test kit for `IRepositoryProvider` implementations. It does not import a test runner: pass the `describe`, `it` and `expect` of yours, and a factory of fresh, empty providers (called once per case).
+
+```ts
+import { describe, expect, it } from "bun:test"; // or vitest, jest
+import { providerContract } from "@afora/core/testing";
+import { myProvider } from "./my-provider";
+
+providerContract({ describe, it, expect }, () => myProvider());
+```
+
+It checks `insert`, `findOne`, `findMany`, `update`, `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; and, when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints.
+
 ## Scripts
 
 ```bash
