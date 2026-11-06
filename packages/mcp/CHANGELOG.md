@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Repository authoring accepts `deletion: "hard" | "soft"`, validates it through the codegen schema, and generates/extracts soft deletion without losing the setting.
+
 ### Changed
 
 - TypeBox (`^1`) is a required peer dependency, shared with `@afora/core` and `@afora/codegen`.

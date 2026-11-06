@@ -250,7 +250,7 @@ export const tools: readonly ToolDefinition[] = [
 				},
 				declaration: {
 					description:
-						"The declaration. property: { base, with? } | { enum } | { opaque, import }. blueprint/environment: { fields }. record/entity: { fields, unique?, sensitive?, change?, plugins? }. repository: { entity, actions, relations?, environments? }.",
+						"The declaration. property: { base, with? } | { enum } | { opaque, import }. blueprint/environment: { fields }. record/entity: { fields, unique?, sensitive?, change?, plugins? }. repository: { entity, actions, deletion?: hard | soft, relations?, environments? }.",
 					anyOf: Object.values(declarationSchemas).map((schema) =>
 						json(schema),
 					),

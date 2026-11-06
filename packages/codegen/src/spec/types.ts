@@ -84,6 +84,8 @@ export interface EnvironmentSpec {
 export interface RepositorySpec {
 	readonly entity: string;
 	readonly actions: readonly string[];
+	/** Physical removal (default), or retained rows hidden by deletedAt. */
+	readonly deletion?: "hard" | "soft";
 	/** The repositories of the entities the entity holds. */
 	readonly relations?: readonly string[];
 	/** The environments it depends on. */

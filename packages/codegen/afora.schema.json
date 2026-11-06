@@ -307,6 +307,20 @@
 							"type": "string",
 							"description": "The entity it stores."
 						},
+						"deletion": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "hard"
+								},
+								{
+									"type": "string",
+									"const": "soft"
+								}
+							],
+							"default": "hard",
+							"description": "Physical removal or retained rows hidden by deletedAt."
+						},
 						"actions": {
 							"type": "array",
 							"items": {

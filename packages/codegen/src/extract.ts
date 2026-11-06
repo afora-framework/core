@@ -275,6 +275,7 @@ export function extractSpec(
 	const repositories = entries(description.repositories, (value) => ({
 		entity: value.entity,
 		actions: [...value.actions],
+		...(value.deletion === "soft" ? { deletion: "soft" } : {}),
 		...(value.relations.length > 0 ? { relations: [...value.relations] } : {}),
 		...(value.environments.length > 0
 			? { environments: [...value.environments] }

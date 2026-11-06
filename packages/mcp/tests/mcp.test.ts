@@ -155,6 +155,44 @@ describe("the server", () => {
 });
 
 describe("catalog -> upsert -> validate -> generate", () => {
+	test("authors soft deletion and rejects invalid modes without changing the spec", async () => {
+		const { dir, client } = await setup();
+		expect(
+			(
+				await client.call("afora_spec_upsert", {
+					kind: "entity",
+					name: "Item",
+					declaration: { fields: { name: "string" } },
+				})
+			).isError,
+		).not.toBe(true);
+		const repository = {
+			kind: "repository",
+			name: "Items",
+			declaration: {
+				entity: "Item",
+				actions: ["create", "delete"],
+				deletion: "soft",
+			},
+		};
+		expect(
+			(await client.call("afora_spec_upsert", repository)).isError,
+		).not.toBe(true);
+		const before = await Bun.file(join(dir, "afora.json")).text();
+		expect(JSON.parse(before).repositories.Items.deletion).toBe("soft");
+		const invalid = await client.call("afora_spec_upsert", {
+			...repository,
+			declaration: { ...repository.declaration, deletion: "archive" },
+		});
+		expect(invalid.data.written).toBe(false);
+		expect(invalid.data.issues).toContainEqual({
+			code: "invalid_deletion",
+			path: ["repositories", "Items", "deletion"],
+			message: 'Expected "hard" or "soft".',
+		});
+		expect(await Bun.file(join(dir, "afora.json")).text()).toBe(before);
+	});
+
 	test("builds a blog in a project, type-checks it and reports no diagnostics", async () => {
 		const { dir, client } = await setup();
 

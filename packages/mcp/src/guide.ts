@@ -58,12 +58,13 @@ a file of your own.
 - Declaration names are PascalCase and unique across every kind; names exported by @afora/core are taken.
 - No circular references between declarations (store an id instead of the entity).
 - An entity cannot declare \`id\`, \`createdAt\`, \`updatedAt\`, \`deletedAt\` (it gets them). No record member names
-  (\`toJSON\`, \`set\`, \`options\`...); see \`reservedRecordKeys\` in the catalog.
+  (\`toJSON\`, \`set\`, \`onSet\`...); see \`reservedRecordKeys\` in the catalog. \`blueprint\` and \`options\` are valid fields.
 - \`unique\`, \`sensitive\`, \`change\` must name fields (or keys of its plugins); \`change\` cannot name an identity key.
   \`password\` is always sensitive and \`slug\` always unique; \`id\` is always unique.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.
 - Repository actions: \`findById\`; \`findBy<Key>\` only for unique keys (id, \`unique\`, slug fields, unique plugin keys such as
   \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`count\`.
+- Repository \`deletion\`: \`"hard"\` (default) physically removes rows; \`"soft"\` retains \`deletedAt\` and hides deleted rows from reads, counts and relations.
 - \`relations\` must list exactly one repository for each entity the repository's entity holds, at any depth (inside
   records, blueprints and nested objects), not through another entity.
 - Environments hold properties only (no lists, no objects).

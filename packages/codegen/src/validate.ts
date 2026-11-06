@@ -643,15 +643,32 @@ function checkRepository(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 	const path = ["repositories", decl.name];
 	const { spec } = decl;
 	for (const key of Object.keys(spec)) {
-		if (!["entity", "actions", "relations", "environments"].includes(key)) {
+		if (
+			!["entity", "actions", "deletion", "relations", "environments"].includes(
+				key,
+			)
+		) {
 			issues.push(
 				issue(
 					[...path, key],
 					"unknown_key",
-					`"${key}" is not valid here. Valid keys: entity, actions, relations, environments.`,
+					`"${key}" is not valid here. Valid keys: entity, actions, deletion, relations, environments.`,
 				),
 			);
 		}
+	}
+	if (
+		spec.deletion !== undefined &&
+		spec.deletion !== "hard" &&
+		spec.deletion !== "soft"
+	) {
+		issues.push(
+			issue(
+				[...path, "deletion"],
+				"invalid_deletion",
+				'Expected "hard" or "soft".',
+			),
+		);
 	}
 	const target =
 		typeof spec.entity === "string" ? scope.decls.get(spec.entity) : undefined;

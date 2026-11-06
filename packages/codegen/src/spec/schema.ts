@@ -163,6 +163,12 @@ const RecordDeclaration = Type.Object(
 const RepositoryDeclaration = Type.Object(
 	{
 		entity: Type.String({ description: "The entity it stores." }),
+		deletion: Type.Optional(
+			Type.Union([Type.Literal("hard"), Type.Literal("soft")], {
+				default: "hard",
+				description: "Physical removal or retained rows hidden by deletedAt.",
+			}),
+		),
 		actions: Type.Array(Type.String(), {
 			description:
 				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), create, update, delete, count.",
