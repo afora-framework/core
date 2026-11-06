@@ -64,6 +64,8 @@ export interface RepositoryInspection {
 	readonly actions: readonly string[];
 	readonly deletion: "hard" | "soft";
 	readonly explicitProvider: boolean;
+	/** The provider, only when the repository declared it. */
+	readonly provider: IRepositoryProvider | undefined;
 	readonly environments: readonly object[];
 	/** The repository state of each related entity class; compare with `inspect(...).state`. */
 	readonly relations: readonly object[];
@@ -83,6 +85,7 @@ export function inspectRepository(
 		actions: state.actions,
 		deletion: state.deletion,
 		explicitProvider: state.explicitProvider,
+		provider: state.explicitProvider ? state.provider : undefined,
 		environments:
 			environment === undefined
 				? []

@@ -648,9 +648,7 @@ Events from managed children move to the parent when each child finishes, includ
 
 ### Repositories
 
-The [provider v2 design](docs/plans/T09-design.md) defines typed `RepositoryQuery<Entity>`, query actions, transaction scope and JSON provider descriptions for the upcoming provider contract migration. The query/descriptor types are exported now; runtime support follows in T10–T12.
-
-`repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete` and `count`. Every method is async.
+`repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `count`, and the queries `findMany`, `exists` and `findPage`. Every method is async.
 
 ```ts
 import {
@@ -694,11 +692,58 @@ await Users.findManyByName("Ana"); // User[]
 // repositoryOf({ entity: User, actions: ["findByName"] }) does not compile, and throws: name is not unique
 ```
 
+**Queries.** `findMany`, `exists`, `findPage` and `count` take a typed `RepositoryQuery<Entity>`: `where`, `orderBy`, `limit`, `offset` and `withDeleted`. `where` maps entity keys to a value (equality) or to `{ in: [...] }` (membership, an empty list matches nothing); conditions on several keys are ANDed. Values are normalized before they reach the provider: a record becomes its plain data and an entity its id, also inside `in`. `orderBy` is a list of `{ key, direction?: "asc" | "desc" }` on scalar fields (default `asc`): missing values come first when ascending and last when descending, strings sort by code point, numbers numerically, ties keep their order. A query with unknown keys or options, an invalid direction, an unorderable field or a negative, fractional or nonfinite `limit`/`offset` throws `InvalidRepositoryQuery` before the provider is called.
+
+```ts
+const adults = await Users.findMany({
+	where: { age: { in: [18, 21] } },
+	orderBy: [{ key: "name" }],
+	limit: 20,
+}); // User[]
+await Users.exists({ where: { name: "Ana" } }); // boolean, honors offset and limit
+const page = await Users.findPage({
+	orderBy: [{ key: "name" }],
+	limit: 10,
+	offset: 20,
+});
+// { items: User[], total, limit, offset }: defaults 20 and 0; total ignores pagination
+await Users.count({ where: { name: "Ana" } }); // ignores orderBy, limit and offset
+```
+
+`findPage` reads the items and the total with two provider calls, so they are not an atomic snapshot unless the provider runs them in a transaction. `findBy<Key>`, `findManyBy<Key>` and `count` are queries too. By default reads leave out deleted rows when `deletion` is `"soft"`; with `"hard"` (the default) they see every row that exists, as before. `withDeleted: true` includes soft-deleted rows, and never makes a deleted entity mutable again.
+
 `create` takes an entity or the input that builds one. `delete` takes an entity or an id, calls `destroy()` (so `onDelete` is queued) and gives the entity. Entities read back are rebuilt from their stored value, with their identity, so they do not queue `onCreate` again.
 
-`repositoryOf({ entity, actions, deletion: "hard" | "soft" })` defaults to `"hard"`: deletion physically removes the stored row. With `"soft"`, deletion persists `deletedAt` through the provider's `update`. Finds, counts and relation loading exclude these rows; unique values remain occupied. A relation pointing to a soft-deleted entity is treated as missing. In this provider contract, soft `count` uses `findMany(context, "deletedAt", undefined)` to count live rows, and soft `delete` requires `update` instead of `remove`. `app.describe()` includes each repository's resolved `deletion` mode.
+`repositoryOf({ entity, actions, deletion: "hard" | "soft" })` defaults to `"hard"`: deletion physically removes the stored row. With `"soft"`, deletion persists `deletedAt` through the provider's `update`. Finds, counts and relation loading exclude these rows; unique values remain occupied. A relation pointing to a soft-deleted entity is treated as missing. Soft reads send `withDeleted: false` to the provider, and soft `delete` requires `update` instead of `remove`. `app.describe()` includes each repository's resolved `deletion` mode.
 
-**Providers.** A repository reads and writes through an `IRepositoryProvider`: `findOne`, `findMany`, `insert`, `update`, `remove` and `count`, on plain unmasked values, each getting a `context` with the `entity`, the repository `name`, its `unique` keys and `env`. A provider enforces `context.unique` (`RepositoryUniqueViolation`) and rejects an unknown id on `update` and `remove` (`RepositoryEntityNotFound`). By default each repository gets its own `inMemoryProvider()`; repositories given the same provider share the table of their entity. `repositoryOf` checks that the provider has the methods its actions call.
+**Providers.** A repository reads and writes through an `IRepositoryProvider` (v2), on plain unmasked values, each call getting a `context` with the `entity`, the repository `name`, its `unique` keys and `env`:
+
+```ts
+interface IRepositoryProvider<Environment = unknown> {
+	findOne(
+		context,
+		query?: RepositoryQuery,
+	): Promise<RepositoryData | undefined>; // first row after offset
+	findMany(
+		context,
+		query?: RepositoryQuery,
+	): Promise<readonly RepositoryData[]>;
+	insert(context, data): Promise<void>;
+	update(context, data): Promise<void>;
+	remove(context, id: string): Promise<void>;
+	count(context, query?: RepositoryQuery): Promise<number>; // ignores orderBy, limit and offset
+	capabilities?: ProviderCapabilities; // e.g. { transactions: true }
+	transaction?<Result>(
+		run: (provider: IRepositoryProvider<Environment>) => Promise<Result>,
+	): Promise<Result>;
+}
+```
+
+The bare `RepositoryQuery` uses string keys and stored values. Equality and `in` are mandatory; a provider excludes rows with `deletedAt !== undefined` unless `withDeleted` is `true`. A provider enforces `context.unique` (`RepositoryUniqueViolation`) and rejects an unknown id on `update` and `remove` (`RepositoryEntityNotFound`). Relations load with `findMany(context, { where: { id: { in: ids } } })` (the v1 `findIn` and the key/value signatures are gone). By default each repository gets its own `inMemoryProvider()`; repositories given the same provider share the table of their entity. `repositoryOf` checks that the provider has the methods its actions call.
+
+`transaction(run)` is optional: `run` gets a scoped provider whose writes commit when it resolves and roll back when it rejects; the scoped provider must not be used after `run` ends. `inMemoryProvider()` runs transactions on isolated snapshots, one at a time, makes other operations wait for the active one (so a rollback never discards unrelated writes), treats nested transactions through the scoped provider as savepoints, and clones data on write and read.
+
+`providerOf({ name, options = {}, create })` calls `create(options)` once and returns that provider unchanged, keeping an immutable JSON description out of band; `providerDescriptionOf(provider)` gives `{ kind: "provider", name, options }`, or `{ kind: "opaque" }` for a provider made without it. Empty names, non-JSON or cyclic options and non-providers throw `InvalidRepositoryDeclaration`. `app.describe()` reports `provider` for an application with an explicit provider and for each repository that declared its own; omitted providers stay omitted.
 
 **Environments.** `environmentOf(blueprint)` reads the declared variables from `process.env` (or `{ source }`), validates them on the first `load()` and keeps the value; a missing or rejected variable throws `InvalidEnvironment`. Pass one, or a list (merged in order), as `environmentDependencies`: the provider gets them as `context.env`, read on the first call, not on declaration.
 
@@ -716,7 +761,7 @@ const Posts = repositoryOf({
 
 A variable is converted when its property does not take a string: to `true` or `false` (from `"true"` and `"false"`) for a boolean, and to a number for a number, e.g. `PORT: ctx.integer` reads `"3000"` as `3000`, and `DEBUG: ctx.boolean` reads `"true"` as `true`. A property that takes a string keeps the variable as is, so `"10"` stays a string for `ctx.string`. A value that does not convert is left for the blueprint to reject.
 
-**References.** An entity a record holds (as a field, in a list, in a blueprint, or in a record that is not an entity) is stored as its id, not as a copy, and loaded back when the record is read, so it is always current. List the repositories that load them in `relations`: one for each entity class held, at any depth (the class itself, or a subclass). A missing, extra, duplicated or invalid relation throws `InvalidRepositoryDeclaration`. A stored id with no entity throws `InvalidRepositoryData`, caused by `RepositoryEntityNotFound`, even in an optional field. Reads load by batch (one `findIn` of the provider for each relation, when it has one, or a `findOne` for each distinct id), and the same id is the same instance within a read. Writes do not cascade: the entity is not checked or saved, so persist it through its own repository. Entities loaded this way do not queue `onCreate` again, and a use case collects the events of an entity only when it goes through that entity's own repository. `findBy<Key>` and `findManyBy<Key>` take the entity or its id (a list of them for a list field).
+**References.** An entity a record holds (as a field, in a list, in a blueprint, or in a record that is not an entity) is stored as its id, not as a copy, and loaded back when the record is read, so it is always current. List the repositories that load them in `relations`: one for each entity class held, at any depth (the class itself, or a subclass). A missing, extra, duplicated or invalid relation throws `InvalidRepositoryDeclaration`. A stored id with no entity throws `InvalidRepositoryData`, caused by `RepositoryEntityNotFound`, even in an optional field. Reads load by batch (one `findMany` with `in` for each relation, under the deletion policy of the related repository), and the same id is the same instance within a read. Writes do not cascade: the entity is not checked or saved, so persist it through its own repository. Entities loaded this way do not queue `onCreate` again, and a use case collects the events of an entity only when it goes through that entity's own repository. `findBy<Key>` and `findManyBy<Key>` take the entity or its id (a list of them for a list field).
 
 ```ts
 class PasswordRecovery extends entityOf(

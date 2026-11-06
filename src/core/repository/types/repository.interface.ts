@@ -10,6 +10,13 @@ import type {
 import type { AnyEntityClass } from "../../entity/event";
 import type { RecordSettings } from "../../record/types/record.interface";
 import type { AbstractRepository } from "../repository";
+import type {
+	ProviderCapabilities,
+	RepositoryExists,
+	RepositoryFindMany,
+	RepositoryFindPage,
+	RepositoryQuery,
+} from "./query.interface";
 
 /** Any class made by `entityOf`, or extending one, that a repository holds. */
 export type AnyRepositoryEntity = AnyRecordClass &
@@ -92,8 +99,8 @@ export interface RepositoryDelete<Entity> {
 }
 
 /** `count`: how many entities it holds. */
-export interface RepositoryCount {
-	count(): Promise<number>;
+export interface RepositoryCount<Entity = unknown> {
+	count(query?: RepositoryQuery<Entity>): Promise<number>;
 }
 
 /** The `findBy<Key>` of `Actions`, one for each unique key: the entity, or `undefined`. */
@@ -139,7 +146,10 @@ export type RepositoryMethods<
 	("create" extends Actions ? RepositoryCreate<Entity> : unknown) &
 	("update" extends Actions ? RepositoryUpdate<Entity> : unknown) &
 	("delete" extends Actions ? RepositoryDelete<Entity> : unknown) &
-	("count" extends Actions ? RepositoryCount : unknown);
+	("count" extends Actions ? RepositoryCount<Entity> : unknown) &
+	("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) &
+	("exists" extends Actions ? RepositoryExists<Entity> : unknown) &
+	("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown);
 
 /** A method a repository of `Entity` can have, e.g. `"findByEmail"`. */
 export type RepositoryAction<Entity> =
@@ -148,7 +158,10 @@ export type RepositoryAction<Entity> =
 	| "create"
 	| "update"
 	| "delete"
-	| "count";
+	| "count"
+	| "findMany"
+	| "exists"
+	| "findPage";
 
 /**
  * A repository of `Entity` with the methods of `Actions`, whose provider gets
@@ -190,13 +203,11 @@ export interface RepositoryContext<Environment = unknown> {
 export interface IRepositoryProvider<Environment = unknown> {
 	findOne(
 		context: RepositoryContext<Environment>,
-		key: string,
-		value: unknown,
+		query?: RepositoryQuery,
 	): Promise<RepositoryData | undefined>;
 	findMany(
 		context: RepositoryContext<Environment>,
-		key: string,
-		value: unknown,
+		query?: RepositoryQuery,
 	): Promise<readonly RepositoryData[]>;
 	insert(
 		context: RepositoryContext<Environment>,
@@ -207,15 +218,12 @@ export interface IRepositoryProvider<Environment = unknown> {
 		data: RepositoryData,
 	): Promise<void>;
 	remove(context: RepositoryContext<Environment>, id: string): Promise<void>;
-	count(context: RepositoryContext<Environment>): Promise<number>;
-	/**
-	 * Optional: every value whose `key` is one of `values`, in a single call.
-	 * A repository uses it to load the entities another one holds by id, and
-	 * calls `findOne` for each id when it is missing.
-	 */
-	findIn?(
+	count(
 		context: RepositoryContext<Environment>,
-		key: string,
-		values: readonly unknown[],
-	): Promise<readonly RepositoryData[]>;
+		query?: RepositoryQuery,
+	): Promise<number>;
+	readonly capabilities?: ProviderCapabilities;
+	transaction?<Result>(
+		run: (provider: IRepositoryProvider<Environment>) => Promise<Result>,
+	): Promise<Result>;
 }

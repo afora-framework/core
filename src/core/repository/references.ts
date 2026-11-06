@@ -130,13 +130,9 @@ export function relationsOf(
 		if (related.some((other) => other.entity === state.entity)) {
 			return invalid(`Relation "${state.entity.name}" is duplicated.`);
 		}
-		const { provider } = state;
-		if (
-			typeof provider.findIn !== "function" &&
-			typeof provider.findOne !== "function"
-		) {
+		if (typeof state.provider.findMany !== "function") {
 			return invalid(
-				`The provider of "${state.name}" has no "findIn" or "findOne" to load it.`,
+				`The provider of "${state.name}" has no "findMany" to load it.`,
 			);
 		}
 		related.push(state);
@@ -187,27 +183,15 @@ export function parseEntity(state: RepositoryState, data: RepositoryData) {
 /** What one read shares: the entities it loaded, by repository and id. */
 export type ReferenceSession = Map<RepositoryState, Map<string, object>>;
 
-/** The stored values of `ids`, in one `findIn` or one `findOne` for each. */
-async function loadByIds(
+/** The stored values of `ids`, in one `findMany`, under the policy of their repository. */
+function loadByIds(
 	state: RepositoryState,
 	ids: readonly string[],
 ): Promise<readonly RepositoryData[]> {
-	const context = contextOf(state);
-	const { provider } = state;
-	if (typeof provider.findIn === "function") {
-		const rows = await provider.findIn(context, "id", ids);
-		return rows.filter(
-			(data) => state.deletion !== "soft" || data.deletedAt === undefined,
-		);
-	}
-	const found = await Promise.all(
-		ids.map((id) => provider.findOne(context, "id", id)),
-	);
-	return found.filter(
-		(data): data is RepositoryData =>
-			data !== undefined &&
-			(state.deletion !== "soft" || data.deletedAt === undefined),
-	);
+	return state.provider.findMany(contextOf(state), {
+		where: { id: { in: ids } },
+		withDeleted: state.deletion === "hard",
+	});
 }
 
 /**

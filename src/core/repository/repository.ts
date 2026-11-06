@@ -20,8 +20,10 @@ import {
 	RepositoryEntityNotFound,
 } from "./exceptions";
 import { inMemoryProvider } from "./in-memory";
+import { prepareQuery } from "./query";
 import { parseEntity, relationsOf, resolveReferences } from "./references";
 import { contextOf, stateOf, states } from "./state";
+import type { RepositoryQuery } from "./types/query.interface";
 import type {
 	AnyRepository,
 	AnyRepositoryEntity,
@@ -157,34 +159,78 @@ function action(
 }
 
 /** A value to look up `key` by: a record as its plain value, an entity as its id. */
-function queryOf(context: RepositoryContext, key: string, value: unknown) {
+function queryValueOf(context: RepositoryContext, key: string, value: unknown) {
 	const properties = context.entity.blueprint.properties as Readonly<
 		Record<string, BlueprintField | undefined>
 	>;
 	return recordFieldDataOf(properties[key], value, REFERENCES);
 }
 
+/**
+ * A query validated and normalized for the provider: records as plain data,
+ * entities as ids (also inside `in`), and `withDeleted` set by the policy.
+ */
+function queryOf(self: Internal, query: unknown): RepositoryQuery {
+	const prepared = prepareQuery(self.context, query, (key, value) =>
+		queryValueOf(self.context, key, value),
+	);
+	return {
+		...prepared,
+		withDeleted: prepared.withDeleted ?? stateOf(self).deletion === "hard",
+	};
+}
+
+const equals = (self: Internal, key: string, value: unknown) =>
+	queryOf(self, { where: { [key]: value } });
+
 const findBy = (key: string): Method =>
 	action(async (self, value: unknown) => {
 		const data = await self.provider.findOne(
 			self.context,
-			key,
-			queryOf(self.context, key, value),
+			equals(self, key, value),
 		);
-		return data === undefined || !visible(self, data)
-			? undefined
-			: await self.hydrate(data);
+		return data === undefined ? undefined : await self.hydrate(data);
 	});
 
 const findManyBy = (key: string): Method =>
-	action(async (self, value: unknown) => {
-		const list = await self.provider.findMany(
-			self.context,
-			key,
-			queryOf(self.context, key, value),
-		);
-		return self.hydrateMany(list.filter((data) => visible(self, data)));
-	});
+	action(async (self, value: unknown) =>
+		self.hydrateMany(
+			await self.provider.findMany(self.context, equals(self, key, value)),
+		),
+	);
+
+const findMany = action(async (self, query: unknown) =>
+	self.hydrateMany(
+		await self.provider.findMany(self.context, queryOf(self, query)),
+	),
+);
+
+const exists = action(
+	async (self, query: unknown) =>
+		(await self.provider.findOne(self.context, queryOf(self, query))) !==
+		undefined,
+);
+
+const findPage = action(async (self, query: unknown) => {
+	const {
+		orderBy,
+		where,
+		withDeleted,
+		limit = 20,
+		offset = 0,
+	} = queryOf(self, query);
+	const [rows, total] = await Promise.all([
+		self.provider.findMany(self.context, {
+			where,
+			orderBy,
+			withDeleted,
+			limit,
+			offset,
+		}),
+		self.provider.count(self.context, { where, withDeleted }),
+	]);
+	return { items: await self.hydrateMany(rows), total, limit, offset };
+});
 
 const create = action(async (self, input: unknown) => {
 	const { entity: Entity } = self.context;
@@ -205,8 +251,11 @@ const remove = action(async (self, target: unknown) => {
 	const { context } = self;
 	let entity = target;
 	if (typeof target === "string") {
-		const data = await self.provider.findOne(context, "id", target);
-		if (data === undefined || !visible(self, data)) {
+		const data = await self.provider.findOne(
+			context,
+			equals(self, "id", target),
+		);
+		if (data === undefined) {
 			throw new RepositoryEntityNotFound({
 				source: context.name,
 				details: { id: target },
@@ -228,21 +277,9 @@ const remove = action(async (self, target: unknown) => {
 	return entity;
 });
 
-/** Soft-deleted records are absent from the repository's read view. */
-function visible(self: object, data: RepositoryData): boolean {
-	return stateOf(self).deletion !== "soft" || data.deletedAt === undefined;
-}
-
-const count = action(async (self) => {
-	if (stateOf(self).deletion !== "soft")
-		return self.provider.count(self.context);
-	const rows = await self.provider.findMany(
-		self.context,
-		"deletedAt",
-		undefined,
-	);
-	return rows.filter((data) => visible(self, data)).length;
-});
+const count = action(async (self, query: unknown) =>
+	self.provider.count(self.context, queryOf(self, query)),
+);
 
 /** The provider methods each action calls. */
 const NEEDS: Readonly<Record<string, readonly (keyof IRepositoryProvider)[]>> =
@@ -253,6 +290,9 @@ const NEEDS: Readonly<Record<string, readonly (keyof IRepositoryProvider)[]>> =
 		update: ["update"],
 		delete: ["findOne", "remove"],
 		count: ["count"],
+		findMany: ["findMany"],
+		exists: ["findOne"],
+		findPage: ["findMany", "count"],
 	};
 
 function capitalize(key: string): string {
@@ -289,8 +329,8 @@ function invalid(source: string, reason: string): never {
  * A repository of `entity` with the methods of `actions`: `findBy<Key>` for a
  * unique key (`id`, `options.unique`, a `unique` property), giving the entity
  * or `undefined`; `findManyBy<Key>` for any other key, giving a list;
- * `create`, `update`, `delete`
- * and `count`. Every method is async and reads and writes through `provider`
+ * `create`, `update`, `delete`, `count`, and the queries `findMany`,
+ * `exists` and `findPage`. Every method is async and reads and writes through `provider`
  * (a new `inMemoryProvider()` by default), which gets the variables of
  * `environmentDependencies` as `context.env`. The repository can be a
  * dependency of a use case, and `RepositoryOf` extends it with a class.
@@ -342,6 +382,9 @@ export function repositoryOf<
 	methods.set("update", ["update", update]);
 	methods.set("delete", ["delete", remove]);
 	methods.set("count", ["count", count]);
+	methods.set("findMany", ["findMany", findMany]);
+	methods.set("exists", ["exists", exists]);
+	methods.set("findPage", ["findPage", findPage]);
 
 	class DeclaredRepository extends AbstractRepository<
 		Entity,
@@ -357,9 +400,7 @@ export function repositoryOf<
 		const needs =
 			deletion === "soft" && kind === "delete"
 				? (["findOne", "update"] as const)
-				: deletion === "soft" && kind === "count"
-					? (["findMany"] as const)
-					: (NEEDS[kind] ?? []);
+				: (NEEDS[kind] ?? []);
 		for (const need of needs) {
 			if (typeof provider?.[need] !== "function") {
 				invalid(name, `The provider has no "${need}" for "${name_}".`);

@@ -159,7 +159,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type QueryKey<Entity> = unknown extends Entity ? string : EntityKeyOf<Entity>;",
   ],
   "(internal) QueryValue": [
-    "type QueryValue<Entity, Key extends string> = Key extends keyof EntityValueOf<Entity> ? QueryValueOf<EntityValueOf<Entity>[Key]> : unknown;",
+    "type QueryValue<Entity, Key extends string> = unknown extends Entity ? unknown : Key extends keyof EntityValueOf<Entity> ? QueryValueOf<EntityValueOf<Entity>[Key]> : unknown;",
   ],
   "(internal) ReadonlyKeys": [
     "type ReadonlyKeys<Schemas> = { [Key in keyof Schemas]: Schemas[Key] extends TReadonly<TSchema> ? Schemas[Key] extends TOptional<Schemas[Key]> ? never : Key : never; }[keyof Schemas];",
@@ -198,7 +198,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type RecordValueOf<Record extends AnyRecordClass, Mode extends FieldMode> = Mode extends "value" ? InstanceType<Record> : Mode extends "input" ? InstanceType<Record> | RecordInput<Record> | AcceptedBy<Record> : Record["blueprint"] extends IBlueprint<infer Properties, boolean> ? CollectionValue<Properties, "data"> : never;",
   ],
   "(internal) RepositoryMethods": [
-    "export type RepositoryMethods<Entity, Actions extends string = string> = RepositoryFindBy<Entity, Actions> & RepositoryFindManyBy<Entity, Actions> & ("create" extends Actions ? RepositoryCreate<Entity> : unknown) & ("update" extends Actions ? RepositoryUpdate<Entity> : unknown) & ("delete" extends Actions ? RepositoryDelete<Entity> : unknown) & ("count" extends Actions ? RepositoryCount : unknown);",
+    "export type RepositoryMethods<Entity, Actions extends string = string> = RepositoryFindBy<Entity, Actions> & RepositoryFindManyBy<Entity, Actions> & ("create" extends Actions ? RepositoryCreate<Entity> : unknown) & ("update" extends Actions ? RepositoryUpdate<Entity> : unknown) & ("delete" extends Actions ? RepositoryDelete<Entity> : unknown) & ("count" extends Actions ? RepositoryCount<Entity> : unknown) & ("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) & ("exists" extends Actions ? RepositoryExists<Entity> : unknown) & ("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown);",
   ],
   "(internal) RepositoryOf": [
     "export type RepositoryOf<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment = Readonly<Record<never, never>>> = AbstractRepository<Entity, Actions, Environment> & RepositoryMethods<Entity, Actions[number]>;",
@@ -315,7 +315,7 @@ exports[`exports of the package and their declarations 1`] = `
     "ApplicationConflict: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; readonly origins: readonly [ string, string ]; readonly declarations: readonly [ string, string ]; }>",
   ],
   "ApplicationDescription": [
-    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider: boolean; }>>; }",
+    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription; }>>; }",
   ],
   "ApplicationSettings": [
     "export interface ApplicationSettings<Name extends string, Extended extends readonly AnyApplication[], Collections extends ApplicationCollections> { readonly name: Name; readonly extends?: Extended; readonly properties?: Collections["properties"]; readonly blueprints?: Collections["blueprints"]; readonly records?: Collections["records"]; readonly entities?: Collections["entities"]; readonly environments?: Collections["environments"]; readonly repositories?: Collections["repositories"]; readonly provider?: IRepositoryProvider; }",
@@ -570,7 +570,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface IRecordPluginCatalog<Plugins extends Readonly<globalThis.Record<string, AnyRecordPlugin>> = Readonly<globalThis.Record<string, AnyRecordPlugin>>> { readonly [Kind]: "record-plugin-catalog"; readonly plugins: Plugins; readonly list: readonly AnyRecordPlugin[]; resolve(reference: RecordPluginReference): AnyRecordPlugin; resolveAll(references: readonly RecordPluginReference[]): readonly AnyRecordPlugin[]; }",
   ],
   "IRepositoryProvider": [
-    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, key: string, value: unknown): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, key: string, value: unknown): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; count(context: RepositoryContext<Environment>): Promise<number>; findIn?(context: RepositoryContext<Environment>, key: string, values: readonly unknown[]): Promise<readonly RepositoryData[]>; }",
+    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; count(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; }",
   ],
   "ISchema": [
     "export interface ISchema<SchemaType extends TSchema, Value = Static<SchemaType>> { match(value: unknown): value is Value; matchShape(value: unknown): boolean; errors(value: unknown): string[]; toString(): string; get type(): ISchemaType<SchemaType, Value>; }",
@@ -619,6 +619,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "InvalidRepositoryEntity": [
     "InvalidRepositoryEntity: import("../../index.js").DeclaredExceptionClass<undefined>",
+  ],
+  "InvalidRepositoryQuery": [
+    "InvalidRepositoryQuery: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
   ],
   "InvalidUseCaseDeclaration": [
     "InvalidUseCaseDeclaration: import("../../index.js").DeclaredExceptionClass<{ reason: string; }>",
@@ -813,13 +816,13 @@ exports[`exports of the package and their declarations 1`] = `
     "export type RecordValue<Record extends AnyRecordShape> = Record extends { readonly [Meta]: { readonly blueprint: IBlueprint<infer Properties>; }; } ? BlueprintValue<Properties> : Record extends { readonly blueprint: IBlueprint<infer Properties>; } ? BlueprintValue<Properties> : never;",
   ],
   "RepositoryAction": [
-    "export type RepositoryAction<Entity> = keyof RepositoryFindBy<Entity> | keyof RepositoryFindManyBy<Entity> | "create" | "update" | "delete" | "count";",
+    "export type RepositoryAction<Entity> = keyof RepositoryFindBy<Entity> | keyof RepositoryFindManyBy<Entity> | "create" | "update" | "delete" | "count" | "findMany" | "exists" | "findPage";",
   ],
   "RepositoryContext": [
     "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly env: Environment; }",
   ],
   "RepositoryCount": [
-    "export interface RepositoryCount { count(): Promise<number>; }",
+    "export interface RepositoryCount<Entity = unknown> { count(query?: RepositoryQuery<Entity>): Promise<number>; }",
   ],
   "RepositoryCreate": [
     "export interface RepositoryCreate<Entity> { create(entity: RepositoryCreateInput<Entity>): Promise<EntityInstanceOf<Entity>>; }",
@@ -1083,6 +1086,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "propertyOf": [
     "export declare function propertyOf<SchemaType extends TSchema, Optional extends boolean = false, const Unique extends boolean = false>({ name, schema, optional, sensitive, unique, default: _default, preHandle: onPreHandle, afterHandle: onAfterHandle, }: PropertyOfArgs<SchemaType, Optional, Unique>): PropertyClass<SchemaValueType<SchemaType, Optional>, Static<SchemaType>> & UniqueMark<Unique>;",
+  ],
+  "providerDescriptionOf": [
+    "export declare function providerDescriptionOf(provider: IRepositoryProvider): ProviderDescription;",
+  ],
+  "providerOf": [
+    "export declare function providerOf<Options extends ProviderOptions = ProviderOptions, Provider extends IRepositoryProvider = IRepositoryProvider>(settings: ProviderSettings<Options, Provider>): Provider;",
   ],
   "recordBuilderOf": [
     "export declare function recordBuilderOf<const Catalogs extends readonly IRecordPluginCatalog[]>(...catalogs: Catalogs): RecordBuilder<RecordPluginContext<Catalogs>>;",

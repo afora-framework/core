@@ -221,10 +221,12 @@ export {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
+	InvalidRepositoryQuery,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
 } from "./core/repository/exceptions";
 export { inMemoryProvider } from "./core/repository/in-memory";
+export { providerDescriptionOf, providerOf } from "./core/repository/provider";
 export type { RepositorySettings } from "./core/repository/repository";
 export {
 	AbstractRepository,
