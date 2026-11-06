@@ -163,7 +163,10 @@ A complete `afora.json` with exceptions, use cases with steps, a command and an 
 		"RegisterInput": { "fields": { "name": "text", "email": "email" } }
 	},
 	"entities": {
-		"User": { "fields": { "name": "text", "email": "email" }, "unique": ["email"] }
+		"User": {
+			"fields": { "name": "text", "email": "email" },
+			"unique": ["email"]
+		}
 	},
 	"repositories": {
 		"Users": { "entity": "User", "actions": ["findByEmail", "create"] }
@@ -179,8 +182,16 @@ A complete `afora.json` with exceptions, use cases with steps, a command and an 
 			"errors": ["UserAlreadyExists"],
 			"implementation": {
 				"steps": [
-					{ "find": "users.findByEmail", "args": ["$input.email"], "as": "existing" },
-					{ "ensure": "absent", "value": "$existing", "error": "UserAlreadyExists" },
+					{
+						"find": "users.findByEmail",
+						"args": ["$input.email"],
+						"as": "existing"
+					},
+					{
+						"ensure": "absent",
+						"value": "$existing",
+						"error": "UserAlreadyExists"
+					},
 					{
 						"build": "User",
 						"values": { "name": "$input.name", "email": "$input.email" },
@@ -269,5 +280,7 @@ const again = extractSpec(App, { extends: { auth: "../auth/afora.json" } });
 - `extractSpec(app, { extends, outputDir, imports })` is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec (`normalizeSpec` makes shorthand and object forms compare equal). Properties with custom handlers become opaque imports. Use cases: a steps use case comes back as steps (its `run` functions need `imports` `useCases.<Name>.run.<name>`), a hand-written `execute` as `{ import }` (`imports` `useCases.<Name>`), otherwise `ExtractionError` names the key. Commands and outputs come back as in the sections above. The input, response and context come back as the name of the registered blueprint (`describe().refs`) and as `{ fields }` when it was not registered, and an exception whose message is a function comes back without `message`, so generation gives it the default `"<Name>."`. Constructs the core does not describe (a `change` on a plugin key, the order of `plugins`) are not recovered.
 - `writeGenerated(root, files)` writes only inside `root` (no `..`, no symlink out), overwrites and removes only files that carry the banner, and writes nothing if one is refused.
 - `afora.schema.json` is the JSON Schema of the spec, for editors.
+
+**Round trips.** `bun run test:roundtrip` (also run by CI beside `test:codegen`) proves both directions on complete applications, in `tests/roundtrip/`: specs that use every feature are generated, type-checked, linted, run and extracted back to the same normalized spec, and hand-written applications (with `execute`, `run` functions, an anonymous provider, a stage written by hand and function messages) are extracted with an `imports` map, generated and held to the same behavior functions as the original. An unmapped hand-written piece makes extraction throw an `ExtractionError` naming its key; an opaque property is the exception, it falls back to `./opaque`.
 
 Generated code type-checks with TypeScript 5.5 or newer.

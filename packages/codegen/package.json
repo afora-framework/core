@@ -49,7 +49,8 @@
 		"typecheck": "bun check",
 		"schema": "bun scripts/schema.ts",
 		"build": "rm -rf dist && bun scripts/schema.ts && bun build ./src/index.ts ./src/cli.ts --outdir ./dist --target node --format esm --packages external --tsconfig-override tsconfig.build.json && tsc -p tsconfig.build.json && bun ../../scripts/add-dts-extensions.ts dist",
-		"test": "bun test"
+		"test": "bun test --path-ignore-patterns \"tests/roundtrip/**\"",
+		"test:roundtrip": "bun test tests/roundtrip"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.4.4",

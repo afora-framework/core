@@ -79,6 +79,7 @@ jobs:
       # the packages build against the declarations of the built core
       - run: bun run build
       - run: bun run test:codegen
+      - run: bun run test:roundtrip
       - run: bun run test:mcp
       - run: bun run test:hono
       - run: bun run test:playground
