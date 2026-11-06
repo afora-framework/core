@@ -3,9 +3,8 @@
  *
  * - Edit cost: type instantiations of the checker TypeScript creates after an
  *   edit (deterministic, unlike time). `CEILING` keeps today's cost from
- *   growing; lower it whenever a change makes the types cheaper. The `TARGET`
- *   tests are expected to fail until the cost is under it: once one passes,
- *   bun reports it, and it becomes a plain test.
+ *   growing; lower it whenever a change makes the types cheaper. Every case
+ *   also stays under `TARGET`, what IntelliSense should cost.
  * - Experience: hovers, completions, signatures and diagnostics of every case,
  *   snapshotted per mode. A change to the types must keep them, or update the
  *   snapshot (`bun run test:type-perf -u`) as a reviewed, intended change.
@@ -22,13 +21,16 @@ import { type EditCost, experience, type Mode, measureEdit } from "./harness";
 if (!existsSync(join(import.meta.dir, "../../dist/index.d.ts")))
 	throw new Error("dist/ is missing: run `bun run test:type-perf`.");
 
-/** Instantiations per edit, the most of both modes, as measured on 2026-11-05. */
+/**
+ * Instantiations per edit, the most of both modes (source mode), as measured
+ * on 2026-11-05, plus 2%.
+ */
 const CEILING: Record<string, number> = {
-	"bare blueprint": 1_340_000,
-	"quick start": 1_360_000,
-	entity: 1_360_000,
-	repository: 1_360_000,
-	"use case": 1_350_000,
+	"bare blueprint": 34_500,
+	"quick start": 44_900,
+	entity: 53_000,
+	repository: 53_900,
+	"use case": 54_300,
 };
 
 /** About 100 ms per edit: what IntelliSense should cost. */
@@ -63,7 +65,7 @@ for (const mode of modes) {
 					},
 					timeout,
 				);
-				test.failing(
+				test(
 					`${name} meets the target`,
 					() => {
 						expect(cost(name, code, mode).instantiations).toBeLessThanOrEqual(

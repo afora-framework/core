@@ -4,15 +4,15 @@ exports[`source mode experience bare blueprint 1`] = `"diagnostics (0)"`;
 
 exports[`source mode experience quick start 1`] = `
 "hover L45:34 for (const key of User.options.‸unique) {
-  (property) RecordSettings<StoredFields<{ email: CallableProperty<PropertyClass<TString>>; slug: CallableProperty<typeof Slug>; password: CallableProperty<typeof Password>; address: IBlueprint<...>; tags: IBlueprintList<...>; }>>.unique: readonly RecordKey<StoredFields<{
-      email: CallableProperty<PropertyClass<TString>>;
+  (property) RecordSettings<StoredFields<{ email: CallableProperty<PropertyClass<TString, string>>; slug: CallableProperty<typeof Slug>; password: CallableProperty<...>; address: IBlueprint<...>; tags: IBlueprintList<...>; }>>.unique: readonly RecordKey<StoredFields<{
+      email: CallableProperty<PropertyClass<TString, string>>;
       slug: CallableProperty<typeof Slug>;
       password: CallableProperty<typeof Password>;
       address: IBlueprint<StoredFields<{
-          street: CallableProperty<PropertyClass<TString>>;
-          zip: CallableProperty<PropertyClass<TString>>;
+          street: CallableProperty<PropertyClass<TString, string>>;
+          zip: CallableProperty<PropertyClass<TString, string>>;
       }>, false>;
-      tags: IBlueprintList<PropertyClass<TString>, false>;
+      tags: IBlueprintList<PropertyClass<TString, string>, false>;
   }>>[]
 hover L57:51 async function signUp({ plainPassword, ...data }: ‸SignUpData) {
   type SignUpData = {
@@ -78,7 +78,7 @@ diagnostics (0)"
 
 exports[`source mode experience use case 1`] = `
 "hover L13:32 return { user: new User(this.‸input) };
-  (property) AbstractUseCase<StoredFields<{ name: CallableProperty<PropertyClass<TString>>; }>, StoredFields<{ user: typeof User; }>, Record<...>>.input: Readonly<{
+  (property) AbstractUseCase<StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; }>, StoredFields<{ user: typeof User; }>, Record<...>>.input: Readonly<{
       name: string;
   }>
 hover L23:58 override async execute({ createUser = this.dependencies.‸createUser } = {}) {
@@ -162,21 +162,20 @@ complete L4:37 blueprintOf((ctx) => ({ a: ctx.list.‸ }));
   updatedAt (property)
   url (property)
 signature L5:39 blueprintOf((ctx) => ({ a: ctx.string(‸) }));
-  * string(options?: PropertyOptions<TString> | undefined): PropertyClass<TString>  [arg 0]
+  * string(options?: PropertyOptions<TString, string> | undefined): PropertyClass<TString, string>  [arg 0]
 hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
   (parameter) ctx: BlueprintContext<readonly [IBlueprintPlugin<{
       id: typeof Id;
       slug: typeof Slug;
-      email: PropertyClass<TString>;
-      phone: PropertyClass<TString>;
-      url: PropertyClass<TString>;
-      ip: PropertyClass<TUnion<[TString, TString]>>;
+      email: PropertyClass<TString, string>;
+      phone: PropertyClass<TString, string>;
+      url: PropertyClass<TString, string>;
+      ip: PropertyClass<TUnion<[TString, TString]>, string>;
       password: typeof Password;
-      string: PropertyClass<TString>;
-      text: PropertyClass<TString>;
-      number: PropertyClass<TNumber>;
-      integer: PropertyClass<TInteger>;
-      ... 6 more ...;
+      string: PropertyClass<TString, string>;
+      text: PropertyClass<TString, string>;
+      number: PropertyClass<TNumber, number>;
+      ... 7 more ...;
       schema: typeof SchemaProperty;
   }, {
       ...;
@@ -184,7 +183,7 @@ hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
       ...;
   }]>
 hover L6:32 blueprintOf((ctx) => ({ a: ctx.‸email }));
-  (property) email: CallableProperty<PropertyClass<TString>>
+  (property) email: CallableProperty<PropertyClass<TString, string>>
 diagnostics (3)
   TS1003 L2:33 blueprintOf((ctx) => ({ a: ctx. ‸}));
     Identifier expected.
@@ -196,7 +195,7 @@ diagnostics (3)
 
 exports[`source mode experience completions: records and repositories 1`] = `
 "signature L6:23 const user = new User(‸{ name: "a", email: "a@b.co", slug: "a" });
-  * User(value: EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString>>; email: CallableProperty<...>; slug: CallableProperty<...>; }>>): User  [arg 0]
+  * User(value: EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; slug: CallableProperty<...>; }>>): User  [arg 0]
 complete L7:6 user.‸;
   blueprint (property)
   change (property)
@@ -257,20 +256,20 @@ exports[`source mode experience errors 1`] = `
   TS2322 L6:12 new User({ ‸name: 1, email: "a@b.co" });
     Type 'number' is not assignable to type 'string'.
   TS2345 L7:10 new User(‸{ email: "a@b.co" });
-    Argument of type '{ email: string; }' is not assignable to parameter of type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString>>; email: CallableProperty<...>; }>>'.
+    Argument of type '{ email: string; }' is not assignable to parameter of type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; }>>'.
       Property 'name' is missing in type '{ email: string; }' but required in type '{ email: string; name: string; }'.
   TS2353 L8:40 new User({ name: "a", email: "a@b.co", ‸extra: true });
-    Object literal may only specify known properties, and 'extra' does not exist in type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString>>; email: CallableProperty<...>; }>>'.
+    Object literal may only specify known properties, and 'extra' does not exist in type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; }>>'.
   TS2339 L10:13 user.change.‸email("b@b.co");
-    Property 'email' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString>>; email: CallableProperty<PropertyClass<TString>>; }>, "name">'.
+    Property 'email' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<PropertyClass<TString, string>>; }>, "name">'.
   TS2339 L11:13 user.change.‸id("x");
-    Property 'id' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString>>; email: CallableProperty<PropertyClass<TString>>; }>, "name">'.
+    Property 'id' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<PropertyClass<TString, string>>; }>, "name">'.
   TS2322 L12:40 repositoryOf({ entity: User, actions: [‸"findByName"] });
     Type '"findByName"' is not assignable to type 'RepositoryAction<typeof User>'.
   TS2820 L13:40 repositoryOf({ entity: User, actions: [‸"findManyByEmail"] });
     Type '"findManyByEmail"' is not assignable to type 'RepositoryAction<typeof User>'. Did you mean '"findByEmail"'?
   TS2339 L14:32 blueprintOf((ctx) => ({ a: ctx.‸nope }));
-    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString>; phone: PropertyClass<TString>; url: PropertyClass<TString>; ... 12 more ...; schema: typeof SchemaProperty; }, { ...; }> & { ...; }]>'.
+    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 12 more ...; schema: typeof SchemaProperty; }, { ...; }> & { ...; }]>'.
   TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
     Type '"missing"' is not assignable to type '"n"'."
 `;
@@ -279,15 +278,15 @@ exports[`package mode experience bare blueprint 1`] = `"diagnostics (0)"`;
 
 exports[`package mode experience quick start 1`] = `
 "hover L45:34 for (const key of User.options.‸unique) {
-  (property) RecordSettings<StoredFields<{ email: CallableProperty<PropertyClass<TString>>; slug: CallableProperty<typeof Slug>; password: CallableProperty<typeof Password>; address: IBlueprint<...>; tags: IBlueprintList<...>; }>>.unique: readonly RecordKey<StoredFields<{
-      email: CallableProperty<PropertyClass<TString>>;
+  (property) RecordSettings<StoredFields<{ email: CallableProperty<PropertyClass<TString, string>>; slug: CallableProperty<typeof Slug>; password: CallableProperty<...>; address: IBlueprint<...>; tags: IBlueprintList<...>; }>>.unique: readonly RecordKey<StoredFields<{
+      email: CallableProperty<PropertyClass<TString, string>>;
       slug: CallableProperty<typeof Slug>;
       password: CallableProperty<typeof Password>;
       address: IBlueprint<StoredFields<{
-          street: CallableProperty<PropertyClass<TString>>;
-          zip: CallableProperty<PropertyClass<TString>>;
+          street: CallableProperty<PropertyClass<TString, string>>;
+          zip: CallableProperty<PropertyClass<TString, string>>;
       }>, false>;
-      tags: IBlueprintList<PropertyClass<TString>, false>;
+      tags: IBlueprintList<PropertyClass<TString, string>, false>;
   }>>[]
 hover L57:51 async function signUp({ plainPassword, ...data }: ‸SignUpData) {
   type SignUpData = {
@@ -353,7 +352,7 @@ diagnostics (0)"
 
 exports[`package mode experience use case 1`] = `
 "hover L13:32 return { user: new User(this.‸input) };
-  (property) AbstractUseCase<StoredFields<{ name: CallableProperty<PropertyClass<TString>>; }>, StoredFields<{ user: typeof User; }>, Record<...>>.input: Readonly<{
+  (property) AbstractUseCase<StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; }>, StoredFields<{ user: typeof User; }>, Record<...>>.input: Readonly<{
       name: string;
   }>
 hover L23:58 override async execute({ createUser = this.dependencies.‸createUser } = {}) {
@@ -437,15 +436,15 @@ complete L4:37 blueprintOf((ctx) => ({ a: ctx.list.‸ }));
   updatedAt (property)
   url (property)
 signature L5:39 blueprintOf((ctx) => ({ a: ctx.string(‸) }));
-  * string(options?: PropertyOptions<TString> | undefined): PropertyClass<TString>  [arg 0]
+  * string(options?: PropertyOptions<TString, string> | undefined): PropertyClass<TString, string>  [arg 0]
 hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
   (parameter) ctx: BlueprintContext<readonly [IBlueprintPlugin<{
       id: typeof import("<root>/dist/index").Id;
       slug: typeof import("<root>/dist/index").Slug;
-      email: import("<root>/dist/index").PropertyClass<TString>;
-      phone: import("<root>/dist/index").PropertyClass<TString>;
-      url: import("<root>/dist/index").PropertyClass<TString>;
-      ip: import("<root>/dist/index").PropertyClass<TUnion<[TString, TString]>>;
+      email: import("<root>/dist/index").PropertyClass<TString, string>;
+      phone: import("<root>/dist/index").PropertyClass<TString, string>;
+      url: import("<root>/dist/index").PropertyClass<TString, string>;
+      ip: import("<root>/dist/index").PropertyClass<TUnion<[TString, TString]>, string>;
       ... 11 more ...;
       schema: typeof import("<root>/dist/index").SchemaProperty;
   }, {
@@ -454,7 +453,7 @@ hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
       ...;
   }]>
 hover L6:32 blueprintOf((ctx) => ({ a: ctx.‸email }));
-  (property) email: CallableProperty<PropertyClass<TString>>
+  (property) email: CallableProperty<PropertyClass<TString, string>>
 diagnostics (3)
   TS1003 L2:33 blueprintOf((ctx) => ({ a: ctx. ‸}));
     Identifier expected.
@@ -527,20 +526,20 @@ exports[`package mode experience errors 1`] = `
   TS2322 L6:12 new User({ ‸name: 1, email: "a@b.co" });
     Type 'number' is not assignable to type 'string'.
   TS2345 L7:10 new User(‸{ email: "a@b.co" });
-    Argument of type '{ email: string; }' is not assignable to parameter of type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString>>; email: CallableProperty<...>; }>>'.
+    Argument of type '{ email: string; }' is not assignable to parameter of type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; }>>'.
       Property 'name' is missing in type '{ email: string; }' but required in type '{ email: string; name: string; }'.
   TS2353 L8:40 new User({ name: "a", email: "a@b.co", ‸extra: true });
-    Object literal may only specify known properties, and 'extra' does not exist in type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString>>; email: CallableProperty<...>; }>>'.
+    Object literal may only specify known properties, and 'extra' does not exist in type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; }>>'.
   TS2339 L10:13 user.change.‸email("b@b.co");
-    Property 'email' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString>>; email: CallableProperty<PropertyClass<TString>>; }>, "name">'.
+    Property 'email' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<PropertyClass<TString, string>>; }>, "name">'.
   TS2339 L11:13 user.change.‸id("x");
-    Property 'id' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString>>; email: CallableProperty<PropertyClass<TString>>; }>, "name">'.
+    Property 'id' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<PropertyClass<TString, string>>; }>, "name">'.
   TS2322 L12:40 repositoryOf({ entity: User, actions: [‸"findByName"] });
     Type '"findByName"' is not assignable to type 'RepositoryAction<typeof User>'.
   TS2820 L13:40 repositoryOf({ entity: User, actions: [‸"findManyByEmail"] });
     Type '"findManyByEmail"' is not assignable to type 'RepositoryAction<typeof User>'. Did you mean '"findByEmail"'?
   TS2339 L14:32 blueprintOf((ctx) => ({ a: ctx.‸nope }));
-    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString>; phone: PropertyClass<TString>; url: PropertyClass<TString>; ... 12 more ...; schema: typeof SchemaProperty; }, { ...; }> & { ...; }]>'.
+    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 12 more ...; schema: typeof SchemaProperty; }, { ...; }> & { ...; }]>'.
   TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
     Type '"missing"' is not assignable to type '"n"'."
 `;
