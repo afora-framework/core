@@ -262,6 +262,7 @@ export type {
 export type { StandardSchemaV1 } from "./core/standard/standard-schema";
 export { Demo } from "./core/symbols/demo";
 export { Kind } from "./core/symbols/kind";
+export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
 export type {
 	AnyUseCaseClass,
