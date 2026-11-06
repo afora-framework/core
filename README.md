@@ -747,6 +747,8 @@ const { value, events } = await Users.execute("register", input, { context }); /
 
 The keys of `useCases` are the operation names: identifiers holding concrete use case classes. `commandOf` validates its settings and throws `InvalidCommandDeclaration` (`Command` layer, `details.reason`) for anything else. The command is frozen and exposes `commandName`, `description`, `tags`, `context`, `useCases`, `transaction`, `events`, `onEventError` and `operations`; `isCommand` identifies one.
 
+In an application, register commands under `commands: { Users }` (keyed by `commandName`, else `InvalidApplicationDeclaration`); every use case of every command must be in `useCases` (`UnregisteredApplicationReference`, `details: { command, useCase }`). With a `provider`, `app.commands.Users` (or `app.command(Users)`) is the same command rebuilt over the bound use cases, memoized, with the same settings; the transaction check runs again against the bound providers and throws `InvalidCommandDeclaration` at `applicationOf`. `app.describe().commands` gives each command's operations (`{ ref }` of the use case), `transaction`, `events` (a handler appears as `{ kind: "opaque" }`) and `onEventError` (only when set).
+
 `run(op, input, options)` does this:
 
 1. An unknown operation throws `UnknownCommandOperation` (`details.operation`).
@@ -959,6 +961,8 @@ It checks the set as a whole when declared: one object under two names (`Duplica
 Use cases are registered by name too: `useCases: { Register, CreateUser }` (concrete classes, keyed by their `useCaseName`) and `exceptions: { UserAlreadyExists }` (made by `exceptionOf`, keyed by their `name`); another key throws `InvalidApplicationDeclaration`. The resolved set (extended applications included) is checked: every dependency of a use case must be registered, a use case, repository or environment (`UnregisteredUseCaseDependency`, with `details.useCase` and `details.dependency`); records and entities held by its `blueprint`, `response` or `context` must be registered (`UnregisteredApplicationReference`); and each class in `errors` must be in `exceptions`, unless it is an exception exported by `@afora/core` such as `RepositoryUniqueViolation` (`UnregisteredApplicationReference` otherwise).
 
 With a `provider`, `app.useCases.Register` is a subclass of `Register` whose `dependencies` swap each repository for the application's bound one, through child use cases too; it is the same subclass every time, and `Register` itself is never changed. Without a provider, `app.useCases.Register === Register`. `app.useCase(Register)` gives the same class from the original, as `app.repository(Users)` does.
+
+Commands are registered the same way (`commands: { Users }`, keyed by `commandName`); with a provider `app.commands.Users` runs over the bound use cases (see Commands above).
 
 Repositories are module-level and may be shared, so an application does not change them: `app.repositories.Users` shares the declaration of `Users` but reads and writes through the `provider` of the application (or of the last application it extends that has one), unless `Users` declared its own. Two applications with different providers do not share data. Without a `provider`, `app.repositories.Users` is `Users` itself, and records, entities and repositories work the same outside any application.
 

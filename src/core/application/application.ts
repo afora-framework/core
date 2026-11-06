@@ -7,6 +7,8 @@ import type {
 	BlueprintField,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { commandOf, isCommand } from "../command/command";
+import type { AnyCommand } from "../command/types/command.interface";
 import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
 import { isEnvironment } from "../environment/environment";
@@ -59,6 +61,7 @@ const KEYS = [
 	"environments",
 	"repositories",
 	"useCases",
+	"commands",
 	"exceptions",
 ] as const satisfies readonly ApplicationCollectionKey[];
 
@@ -86,6 +89,7 @@ const KIND_OF: Readonly<Record<ApplicationCollectionKey, string>> = {
 	environments: "environment",
 	repositories: "repository",
 	useCases: "use case",
+	commands: "command",
 	exceptions: "exception",
 };
 
@@ -119,6 +123,8 @@ function isOfKind(collection: ApplicationCollectionKey, value: unknown) {
 			return inspectRepository(value) !== undefined;
 		case "useCases":
 			return isUseCaseClass(value);
+		case "commands":
+			return isCommand(value);
 		case "exceptions":
 			return isDeclaredException(value);
 	}
@@ -230,9 +236,11 @@ function resolve(
 			const declaredName =
 				collection === "useCases"
 					? (value as AnyUseCaseClass).useCaseName
-					: collection === "exceptions"
-						? (value as { name: string }).name
-						: name;
+					: collection === "commands"
+						? (value as AnyCommand).commandName
+						: collection === "exceptions"
+							? (value as { name: string }).name
+							: name;
 			if (declaredName !== name) {
 				invalid(
 					source,
@@ -328,6 +336,28 @@ function validate(source: string, registry: Registry): void {
 			if (!environments.has(environment)) {
 				unregistered(entry.name, "an environment");
 			}
+		}
+	}
+}
+
+/** Checks that every use case of every command is registered. */
+function validateCommands(source: string, registry: Registry): void {
+	const useCases = new Set(
+		[...registry.useCases.values()].map((entry) => entry.key),
+	);
+	for (const entry of registry.commands.values()) {
+		const command = entry.value as AnyCommand;
+		for (const UseCase of Object.values(command.useCases)) {
+			if (useCases.has(UseCase)) continue;
+			throw new UnregisteredApplicationReference({
+				source,
+				details: {
+					holder: `command "${entry.name}"`,
+					reference: `use case "${UseCase.useCaseName}"`,
+					command: entry.name,
+					useCase: UseCase.useCaseName,
+				} as { holder: string; reference: string },
+			});
 		}
 	}
 }
@@ -730,6 +760,36 @@ function describeRegistry(
 				implementation: describeImplementation(UseCase),
 			};
 		}),
+		commands: each("commands", (entry) => {
+			const command = entry.value as AnyCommand;
+			return {
+				from: entry.from,
+				name: command.commandName,
+				...(command.description === undefined
+					? {}
+					: { description: command.description }),
+				tags: command.tags,
+				...(command.context === undefined
+					? {}
+					: {
+							context: fieldsDescriptionOf(command.context.properties, scope),
+						}),
+				operations: Object.fromEntries(
+					Object.entries(command.useCases).map(([op, UseCase]) => [
+						op,
+						{ ref: useCaseRefs.get(UseCase) as string },
+					]),
+				),
+				transaction: command.transaction,
+				events:
+					typeof command.events === "function"
+						? ({ kind: "opaque" } as const)
+						: command.events,
+				...(command.onEventError === undefined
+					? {}
+					: { onEventError: { kind: "opaque" } as const }),
+			};
+		}),
 		exceptions: each("exceptions", (entry) => {
 			const Declared = entry.value as Parameters<typeof declaredMessageOf>[0];
 			const message = declaredMessageOf(Declared);
@@ -788,6 +848,10 @@ export function applicationOf<
 		never,
 		never
 	>,
+	const Commands extends ApplicationCollections["commands"] = Record<
+		never,
+		never
+	>,
 	const Exceptions extends ApplicationCollections["exceptions"] = Record<
 		never,
 		never
@@ -804,6 +868,7 @@ export function applicationOf<
 			environments: Environments;
 			repositories: Repositories;
 			useCases: UseCases;
+			commands: Commands;
 			exceptions: Exceptions;
 		}
 	>,
@@ -818,6 +883,7 @@ export function applicationOf<
 			environments: Environments;
 			repositories: Repositories;
 			useCases: UseCases;
+			commands: Commands;
 			exceptions: Exceptions;
 		},
 		Extended
@@ -834,6 +900,7 @@ export function applicationOf<
 	const registry = resolve(settings);
 	validate(name, registry);
 	validateUseCases(name, registry);
+	validateCommands(name, registry);
 
 	const provider: IRepositoryProvider | undefined =
 		settings.provider ??
@@ -898,6 +965,34 @@ export function applicationOf<
 		useCases[entry.name] = bound;
 	}
 
+	// With a provider a command is rebuilt over the bound use cases, with the
+	// same settings; commandOf re-runs the transaction check on them.
+	const commands: Record<string, unknown> = {};
+	const boundCommandOf = new Map<unknown, unknown>();
+	for (const entry of registry.commands.values()) {
+		const declared = entry.value as AnyCommand;
+		const rebuilt =
+			provider === undefined
+				? declared
+				: commandOf({
+						name: declared.commandName,
+						description: declared.description,
+						tags: declared.tags,
+						context: declared.context,
+						useCases: Object.fromEntries(
+							Object.entries(declared.useCases).map(([op, UseCase]) => [
+								op,
+								boundUseCaseOf.get(UseCase) as AnyUseCaseClass,
+							]),
+						),
+						transaction: declared.transaction,
+						events: declared.events,
+						onEventError: declared.onEventError,
+					} as never);
+		boundCommandOf.set(entry.value, rebuilt);
+		commands[entry.name] = rebuilt;
+	}
+
 	const application = Object.freeze({
 		[Kind]: "application" as const,
 		name,
@@ -910,12 +1005,19 @@ export function applicationOf<
 		environments: collection("environments"),
 		repositories: Object.freeze(repositories),
 		useCases: Object.freeze(useCases),
+		commands: Object.freeze(commands),
 		exceptions: collection("exceptions"),
 		useCase(useCase: unknown) {
 			if (!boundUseCaseOf.has(useCase)) {
 				invalid(name, "Expected a use case registered in the application.");
 			}
 			return boundUseCaseOf.get(useCase);
+		},
+		command(command: unknown) {
+			if (!boundCommandOf.has(command)) {
+				invalid(name, "Expected a command registered in the application.");
+			}
+			return boundCommandOf.get(command);
 		},
 		repository(repository: unknown) {
 			if (!bound.has(repository)) {
