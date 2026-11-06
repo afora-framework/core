@@ -1,5 +1,6 @@
 import {
 	blueprintOf,
+	commandOf,
 	type EventDefinition,
 	type Exception,
 	ExceptionLayers,
@@ -10,12 +11,15 @@ import {
 	type IRepositoryProvider,
 	listOf,
 	Meta,
+	openapi,
 	optionalOf,
+	outputOf,
 	propertyOf,
 	type RecordChange,
 	type RecordEffects,
 	type RecordValue,
 	recordOf,
+	repositoryOf,
 	type StandardSchemaV1,
 } from "@afora/core";
 import { type SliceMask, sliceOf } from "@afora/core/experimental";
@@ -383,3 +387,75 @@ export type AddressMask = SliceMask<typeof Address.properties>;
 declare const runner: ContractRunner;
 declare const makeProvider: () => IRepositoryProvider;
 providerContract(runner, makeProvider, { transactions: false });
+
+// Queries, steps, commands and outputs (1.0).
+class ClubMember extends entityOf(
+	blueprintOf((ctx) => ({
+		name: ctx.string,
+		age: ctx.integer,
+		email: ctx.email,
+	})),
+	{ unique: ["email"] },
+) {}
+const ClubMembers = repositoryOf({
+	entity: ClubMember,
+	actions: ["findByEmail", "findMany", "findPage", "create"],
+	deletion: "soft",
+});
+export const adults: Promise<ClubMember[]> = ClubMembers.findMany({
+	where: { age: { in: [18, 21] } },
+	orderBy: [{ key: "name", direction: "desc" }],
+	limit: 10,
+});
+// @ts-expect-error an unknown query key
+ClubMembers.findMany({ where: { nope: 1 } });
+
+const ClubMemberExists = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "ClubMemberExists",
+	message: "The member exists.",
+});
+class Join extends useCaseOf({
+	name: "Join",
+	blueprint: blueprintOf((ctx) => ({
+		name: ctx.string,
+		age: ctx.integer,
+		email: ctx.email,
+	})),
+	response: blueprintOf(() => ({ member: ClubMember })),
+	context: blueprintOf((ctx) => ({ actor: ctx.optional.string })),
+	dependencies: { members: ClubMembers },
+	errors: [ClubMemberExists],
+	steps: [
+		{ find: "members.findByEmail", args: ["$input.email"], as: "existing" },
+		{ ensure: "absent", value: "$existing", error: ClubMemberExists },
+		{ create: "members", value: "$input", as: "member" },
+		{ return: { member: "$member" } },
+	],
+}) {}
+const BadInput = blueprintOf((ctx) => ({ email: ctx.email }));
+const BadResponse = blueprintOf(() => ({}));
+const badDependencies = { members: ClubMembers };
+// biome-ignore format: TypeScript 5 and 7 report the overload on different lines of a multi-line call
+// @ts-expect-error a find of an action the repository lacks
+useCaseOf({ name: "Bad", blueprint: BadInput, response: BadResponse, dependencies: badDependencies, steps: [{ find: "members.findById", args: ["$input.email"] }, { return: {} }] });
+
+const Club = commandOf({
+	name: "Club",
+	useCases: { join: Join },
+	transaction: true,
+});
+export const joined: Promise<{ readonly member: ClubMember }> = Club.run(
+	"join",
+	{ name: "Ana", age: 30, email: "ana@example.com" },
+	{ context: {} },
+);
+// @ts-expect-error an unknown operation
+Club.run("leave", {});
+
+const ClubApi = outputOf({
+	name: "ClubApi",
+	commands: [Club],
+	pipe: [openapi({ info: { title: "Club", version: "1.0.0" } })],
+});
+export const clubDocument = ClubApi.build();

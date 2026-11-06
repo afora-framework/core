@@ -31,6 +31,10 @@ const CEILING: Record<string, number> = {
 	entity: 53_000,
 	repository: 53_900,
 	"use case": 54_300,
+	// Added on 2026-11-07 (T32), measured plus 2%.
+	queries: 51_500,
+	"steps use case": 53_200,
+	"command and output": 64_000,
 };
 
 /** About 100 ms per edit: what IntelliSense should cost. */
