@@ -247,6 +247,16 @@ export interface UseCaseDescription {
 	readonly input: FieldsDescription;
 	readonly response: FieldsDescription;
 	readonly context?: FieldsDescription;
+	/**
+	 * The names of the registered blueprints that are the `input`, `response`
+	 * or `context` (their fields stay described above). Absent for the ones
+	 * that are not registered.
+	 */
+	readonly refs?: {
+		readonly input?: string;
+		readonly response?: string;
+		readonly context?: string;
+	};
 	/** A registered exception, or one exported by the package, by name. */
 	readonly errors: readonly (
 		| { readonly kind: "exception"; readonly ref: string }
@@ -272,6 +282,8 @@ export interface CommandDescription {
 	readonly description?: string;
 	readonly tags: readonly string[];
 	readonly context?: FieldsDescription;
+	/** The name of the registered blueprint that is the `context`, if it is one. */
+	readonly refs?: { readonly context?: string };
 	/** Each operation and the name of its use case in the application. */
 	readonly operations: Readonly<Record<string, { readonly ref: string }>>;
 	readonly transaction: boolean;

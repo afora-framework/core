@@ -697,6 +697,20 @@ function describeRegistry(
 					}),
 				} as const);
 	};
+	// The names of the registered blueprints a use case or command is typed with.
+	const refsOf = (
+		blueprints: Record<string, AnyBlueprint | undefined>,
+	): { refs?: Record<string, string> } => {
+		const refs: Record<string, string> = {};
+		for (const [key, blueprint] of Object.entries(blueprints)) {
+			const ref =
+				blueprint === undefined
+					? undefined
+					: scope.blueprints.get(blueprint.properties);
+			if (ref !== undefined) refs[key] = ref;
+		}
+		return Object.keys(refs).length === 0 ? {} : { refs };
+	};
 	const each = <Result>(
 		collection: ApplicationCollectionKey,
 		describe: (entry: Entry) => Result,
@@ -769,6 +783,11 @@ function describeRegistry(
 					: {
 							context: fieldsDescriptionOf(UseCase.context.properties, scope),
 						}),
+				...refsOf({
+					input: UseCase.blueprint,
+					response: UseCase.response,
+					context: UseCase.context,
+				}),
 				errors: UseCase.errors.map((Thrown) => {
 					const ref = exceptionRefs.get(Thrown);
 					return ref === undefined
@@ -811,6 +830,7 @@ function describeRegistry(
 					: {
 							context: fieldsDescriptionOf(command.context.properties, scope),
 						}),
+				...refsOf({ context: command.context }),
 				operations: Object.fromEntries(
 					Object.entries(command.useCases).map(([op, UseCase]) => [
 						op,

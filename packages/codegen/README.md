@@ -10,8 +10,8 @@ bun add -d @afora/codegen
 `@afora/core` and TypeBox (`typebox: ^1`) are peer dependencies. Generated files use the application's dependencies; codegen does not generate a package manifest.
 
 ```bash
-afora-codegen check [afora.json] [--providers module]                 # validate
-afora-codegen generate [afora.json] [--out dir] [--providers module]  # write the code into output.dir
+afora-codegen check [afora.json] [--providers module] [--stages module]                 # validate
+afora-codegen generate [afora.json] [--out dir] [--providers module] [--stages module]  # write the code into output.dir
 afora-codegen extract src/app.ts#App [--import provider=./db.ts#provider] > afora.json
 ```
 
@@ -144,13 +144,103 @@ export class User extends entityOf(
 
 **Fields.** A string is a shorthand: `"email"`, `"Age?"` (optional), `"string[]"` (list), `"User[]?"` (optional list). The object form is `{ "type", "optional", "list": true | { "minItems", "maxItems" }, "with": {...} }`, `{ "enum": [...] }` or `{ "fields": {...} }` (a nested object). Lowercase names are Std properties (`email`, `text`, `integer`, ...), PascalCase names are declarations of the spec. `with` is `Property.with` / `ctx.<property>(options)` and only takes the options valid for the type (`pattern` is not valid for an `integer`).
 
-**Declarations.** `properties` are `{ base, with?, optional? }`, `{ enum, name?, default? }` or `{ opaque: true, ref?, import }` (a hand-written property, imported relative to the output directory instead of recreated). `blueprints` and `environments` have `fields`. `records` and `entities` have `fields`, `sensitive`, `unique`, `change` and `plugins` (`authenticatable`, `taggable`, ...). `repositories` have `entity`, `actions`, `provider`, `deletion`, `relations` and `environments`. `exceptions` are `{ layer, message? }` (`layer` is one of `ExceptionLayers`; the message is `"<Name>."` when omitted). `useCases` are described below.
+**Declarations.** `properties` are `{ base, with?, optional? }`, `{ enum, name?, default? }` or `{ opaque: true, ref?, import }` (a hand-written property, imported relative to the output directory instead of recreated). `blueprints` and `environments` have `fields`. `records` and `entities` have `fields`, `sensitive`, `unique`, `change` and `plugins` (`authenticatable`, `taggable`, ...). `repositories` have `entity`, `actions`, `provider`, `deletion`, `relations` and `environments`. `exceptions` are `{ layer, message? }` (`layer` is one of `ExceptionLayers`; the message is `"<Name>."` when omitted). `useCases`, `commands` and `outputs` are described below.
 
 **Use cases.** `{ description?, tags?, deprecated?, input, response, context?, dependencies?, errors?, implementation }`. `input`, `response` and `context` are a blueprint name or `{ "fields": {...} }`; `dependencies` maps a key to a declared use case, repository or environment; `errors` lists declared exceptions or exceptions exported by `@afora/core` (`catalog().coreExceptions`). The implementation is either `{ "steps": [...] }`, the steps DSL (`find`, `ensure`, `build`, `change`, `invoke`, `create`/`update`/`delete`, `call`, `run`, `return`; the same data as the TypeScript form, with class names for `build`/`ensure.error` and `{ "import": "./file.ts#fn" }` for `run.fn`), generated as a complete `class Register extends useCaseOf({ ..., steps: [...] }) {}`, or `{ "import": "../handlers/register#Register" }`, a hand-written class: the generated file has `export abstract class RegisterBase extends useCaseOf({...}) {}`, your class extends it and implements `execute`, and `application.ts` registers your class (`index.ts` re-exports it). Imports are relative to the output directory. A use case cannot list an imported use case as a dependency (its handler imports the generated file that would import it back). Step rules are validated with the codes the core uses in `InvalidUseCaseStep` (`unknown_step`, `invalid_reference`, `unbound_reference`, `unknown_key`, `unknown_dependency`, `unknown_action`, `write_in_find`, `undeclared_error`, `missing_return`, `misplaced_return`, `invalid_step_name`, `invalid_class`, `invalid_change_key`, `invalid_value`, `invalid_step`) plus `unknown_exception`, `unknown_blueprint`, `invalid_import`, `import_dependency`.
 
+**Commands.** `{ description?, tags?, context?, useCases, transaction?, events?, onEventError? }`, generated with `commandOf` in `commands.ts`. `useCases` maps an operation name (an identifier) to a declared use case (a hand-written one is imported from its handler); `context` is a blueprint name or `{ "fields": {...} }`. `transaction: true` runs each call in a transaction of the repositories' provider; the provider is unknown when the spec is validated, so this is checked when the code runs (`commandOf` throws `InvalidCommandDeclaration` for a provider without transactions), not by `validateSpec`. `events` is `"after-commit"` (the default), `"manual"` or `{ "import": "./events.ts#dispatch" }` (a handler written by hand); `onEventError` is an import and only valid with `after-commit`. Normalization drops `transaction: false`, `events: "after-commit"` and `tags: []`. Issues: `unknown_use_case`, `invalid_use_cases`, `invalid_operation`, `wrong_kind`, `invalid_events`, `event_error_requires_after_commit`, `invalid_import`, `invalid_option`. Extraction reads `describe().commands` (`imports` keys `commands.<Name>.events` and `commands.<Name>.onEventError`, else `ExtractionError`).
+
+**Outputs.** `{ commands, statuses?, pipe }`, generated with `outputOf` in `outputs.ts`. `commands` are declared commands; `statuses` maps an exception name (declared or exported by `@afora/core`) to a status from 400 to 599; `pipe` is a list of `{ "transform": name, "options"?: {...} }`, then at most one `{ "sink": name, "options"?: {...} }` as the last stage, or `{ "import": "./stages.ts#auth" }` for a stage written by hand. Options are JSON. Normalization drops empty `statuses` and `options`. Issues: `unknown_command`, `invalid_commands`, `duplicate_command`, `invalid_pipe`, `invalid_stage`, `unknown_stage`, `stage_kind_mismatch`, `sink_not_last`, `invalid_stage_options`, `invalid_statuses`, `invalid_status`, `unknown_exception`, `invalid_stage_catalog`. The stage catalog is a codegen option like the provider one: `{ stages: [{ name: "hono", module: "@afora/hono", export: "hono", kind: "sink" }] }` in `validateSpec(spec, extended, options)` and `generate(spec, extended, options)`, and `--stages <module>` (exporting `stages`, or a default export) in the CLI. `select` and `openapi` come from `StdStages` of `@afora/core` and are always available (`catalog().stages` lists them with their kind); `kind` is optional on an external entry and, when given, checks `transform` / `sink`. Extraction reads `describe().outputs` (`imports` key `outputs.<Name>.pipe.<index>` for a stage written by hand).
+
+A complete `afora.json` with exceptions, use cases with steps, a command and an output:
+
+```json
+{
+	"version": 1,
+	"name": "blog",
+	"provider": "inMemory",
+	"blueprints": {
+		"RegisterInput": { "fields": { "name": "text", "email": "email" } }
+	},
+	"entities": {
+		"User": { "fields": { "name": "text", "email": "email" }, "unique": ["email"] }
+	},
+	"repositories": {
+		"Users": { "entity": "User", "actions": ["findByEmail", "create"] }
+	},
+	"exceptions": {
+		"UserAlreadyExists": { "layer": "use-case", "message": "Taken." }
+	},
+	"useCases": {
+		"Register": {
+			"input": "RegisterInput",
+			"response": { "fields": { "user": "User" } },
+			"dependencies": { "users": "Users" },
+			"errors": ["UserAlreadyExists"],
+			"implementation": {
+				"steps": [
+					{ "find": "users.findByEmail", "args": ["$input.email"], "as": "existing" },
+					{ "ensure": "absent", "value": "$existing", "error": "UserAlreadyExists" },
+					{
+						"build": "User",
+						"values": { "name": "$input.name", "email": "$input.email" },
+						"as": "user"
+					},
+					{ "create": "users", "value": "$user", "as": "saved" },
+					{ "return": { "user": "$saved" } }
+				]
+			}
+		}
+	},
+	"commands": {
+		"Accounts": {
+			"tags": ["public"],
+			"useCases": { "register": "Register" },
+			"transaction": true
+		}
+	},
+	"outputs": {
+		"Api": {
+			"commands": ["Accounts"],
+			"statuses": { "UserAlreadyExists": 409 },
+			"pipe": [
+				{ "transform": "select", "options": { "tags": ["public"] } },
+				{
+					"sink": "openapi",
+					"options": { "info": { "title": "Blog", "version": "1.0.0" } }
+				}
+			]
+		}
+	}
+}
+```
+
+Generated `commands.ts` and `outputs.ts`:
+
+```ts
+export const Accounts = commandOf({
+	name: "Accounts",
+	tags: ["public"],
+	useCases: { register: Register },
+	transaction: true,
+});
+
+export const Api = outputOf({
+	name: "Api",
+	commands: [Accounts],
+	statuses: { UserAlreadyExists: 409 },
+	pipe: [
+		select({ tags: ["public"] }),
+		openapi({ info: { title: "Blog", version: "1.0.0" } }),
+	],
+});
+```
+
+`App.outputs.Api.build()` is the OpenAPI document. Names are shared by every kind of declaration, so a command cannot be called `Users` while a repository already is.
+
 **Extending.** `"extends": ["../auth/afora.json", "@acme/auth"]` uses the declarations of other specs (a relative path to their `afora.json`, or a package that exports `./afora.json` and the generated code). The same name for different declarations is a conflict; the same declaration reached twice is registered once. The generated `application.ts` extends their `App`.
 
-**Output.** One file per kind in `output.dir` (`properties.ts`, `blueprints.ts`, `records.ts`, `entities.ts`, `environments.ts`, `repositories.ts`, `exceptions.ts`, `use-cases.ts`), `application.ts` with `export const App = applicationOf({...})` and `index.ts`, each starting with `// Generated by @afora/codegen from afora.json. Do not edit.`. Kinds that need each other share one file (no import cycles), and the code is formatted as Biome would. To add behavior, extend the generated class in a file of your own. Limitation: repositories point at the generated classes.
+**Output.** One file per kind in `output.dir` (`properties.ts`, `blueprints.ts`, `records.ts`, `entities.ts`, `environments.ts`, `repositories.ts`, `exceptions.ts`, `use-cases.ts`, `commands.ts`, `outputs.ts`), `application.ts` with `export const App = applicationOf({...})` and `index.ts`, each starting with `// Generated by @afora/codegen from afora.json. Do not edit.`. Kinds that need each other share one file (no import cycles), and the code is formatted as Biome would. To add behavior, extend the generated class in a file of your own. Limitation: repositories point at the generated classes.
 
 ## API
 
@@ -173,10 +263,10 @@ await writeGenerated(projectDir, files); // confined to the project, banner-chec
 const again = extractSpec(App, { extends: { auth: "../auth/afora.json" } });
 ```
 
-- `validateSpec(spec, extended?, { providers }?)` reports unknown references, name collisions, cycles, reserved and identity keys, `unique`/`sensitive`/`change` naming missing keys, repository action rules (`findBy<Key>` only for unique keys: `id`, `unique`, `slug` fields and unique plugin keys; `findManyBy<Key>` only for the others), `relations` that do not cover exactly the entities held at any depth, and `with` options invalid for the type. Each issue has a stable `code`.
-- `generate(spec, extended?, { providers }?)` throws `InvalidSpecError` (with `issues`) for an invalid spec.
+- `validateSpec(spec, extended?, { providers, stages }?)` reports unknown references, name collisions, cycles, reserved and identity keys, `unique`/`sensitive`/`change` naming missing keys, repository action rules (`findBy<Key>` only for unique keys: `id`, `unique`, `slug` fields and unique plugin keys; `findManyBy<Key>` only for the others), `relations` that do not cover exactly the entities held at any depth, and `with` options invalid for the type. Each issue has a stable `code`.
+- `generate(spec, extended?, { providers, stages }?)` throws `InvalidSpecError` (with `issues`) for an invalid spec.
 - `catalog()` is read from `@afora/core` at runtime (`Std.properties`, `Std.factories`, `StdRecordPlugins`, the reserved keys): nothing is a list kept by hand.
-- `extractSpec(app, { extends, outputDir, imports })` is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec (`normalizeSpec` makes shorthand and object forms compare equal). Properties with custom handlers become opaque imports. Use cases: a steps use case comes back as steps (its `run` functions need `imports` `useCases.<Name>.run.<name>`), a hand-written `execute` as `{ import }` (`imports` `useCases.<Name>`), otherwise `ExtractionError` names the key. The input, response and context come back as `{ fields }` (the descriptor does not say whether a blueprint was named), and an exception whose message is a function comes back without `message`, so generation gives it the default `"<Name>."`. Constructs the core does not describe (a `change` on a plugin key, the order of `plugins`) are not recovered.
+- `extractSpec(app, { extends, outputDir, imports })` is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec (`normalizeSpec` makes shorthand and object forms compare equal). Properties with custom handlers become opaque imports. Use cases: a steps use case comes back as steps (its `run` functions need `imports` `useCases.<Name>.run.<name>`), a hand-written `execute` as `{ import }` (`imports` `useCases.<Name>`), otherwise `ExtractionError` names the key. Commands and outputs come back as in the sections above. The input, response and context come back as the name of the registered blueprint (`describe().refs`) and as `{ fields }` when it was not registered, and an exception whose message is a function comes back without `message`, so generation gives it the default `"<Name>."`. Constructs the core does not describe (a `change` on a plugin key, the order of `plugins`) are not recovered.
 - `writeGenerated(root, files)` writes only inside `root` (no `..`, no symlink out), overwrites and removes only files that carry the banner, and writes nothing if one is refused.
 - `afora.schema.json` is the JSON Schema of the spec, for editors.
 

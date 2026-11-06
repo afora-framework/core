@@ -8,10 +8,10 @@ The project needs `@afora/core` and TypeBox (`typebox: ^1`) as peer dependencies
 
 ```bash
 claude mcp add afora -- bunx @afora/mcp --project .
-# or: afora-mcp --project <dir> [--app src/app.ts#App] [--providers afora.providers.ts]
+# or: afora-mcp --project <dir> [--app src/app.ts#App] [--providers afora.providers.ts] [--stages afora.stages.ts]
 ```
 
-`--project` is the project directory (the current one by default); every write stays inside it. `--app` names an `Application` (`file.ts#Export`) to extract the spec from when the project has no `afora.json`. Importing the application needs Bun on `PATH`. `--providers` is a module (a path from the project) exporting `providers`, or a default export: an array of `{ name, module, export }` that `provider.use` may name besides the built-in `inMemory`; `afora_catalog` lists them.
+`--project` is the project directory (the current one by default); every write stays inside it. `--app` names an `Application` (`file.ts#Export`) to extract the spec from when the project has no `afora.json`. Importing the application needs Bun on `PATH`. `--providers` is a module (a path from the project) exporting `providers`, or a default export: an array of `{ name, module, export }` that `provider.use` may name besides the built-in `inMemory`; `afora_catalog` lists them. `--stages` is the same for the stages an output's `pipe` may name (entries `{ name, module, export, kind? }`; `select` and `openapi` are built in and listed under `stages`).
 
 ## Tools
 
@@ -21,12 +21,12 @@ claude mcp add afora -- bunx @afora/mcp --project .
 | `afora_spec_read`     | Reads `afora.json` with its issues; with no file and an `--app`, the spec extracted from that code (not written).                                                                                  |
 | `afora_extract`       | Extracts the spec of an `Application` of the project (a Bun subprocess imports it). Writes nothing.                                                                                                |
 | `afora_spec_validate` | Validates a draft `spec`, or the file on disk; returns `{ valid, issues }`.                                                                                                                        |
-| `afora_spec_upsert`   | Adds or replaces one declaration (`kind` + `name` + `declaration`; kinds include `exception` and `useCase`, with steps); validates the whole spec and writes only if it is valid.                  |
+| `afora_spec_upsert`   | Adds or replaces one declaration (`kind` + `name` + `declaration`; kinds include `exception`, `useCase` (with steps), `command` and `output`); validates the whole spec and writes only if it is valid.                  |
 | `afora_spec_remove`   | Removes one declaration; writes only if the spec stays valid.                                                                                                                                      |
 | `afora_spec_write`    | Replaces the whole spec (validated first).                                                                                                                                                         |
 | `afora_generate`      | `dryRun: true` returns the files. Otherwise writes them, then runs `bunx tsc --noEmit -p <project>` if there is a `tsconfig.json` and returns only the diagnostics of the generated files.         |
 
-`afora_extract` takes `imports` (`useCases.<Name>`, `useCases.<Name>.run.<name>`) for hand-written use cases and `run` functions. Resources: `afora://spec/schema` (JSON Schema of `afora.json`), `afora://catalog` and `afora://spec/guide` (a short guide for the agent: workflow, shape, rules). The `inputSchema` of each tool is JSON Schema derived from the same TypeBox schema as the spec.
+`afora_extract` takes `imports` (`useCases.<Name>`, `useCases.<Name>.run.<name>`, `commands.<Name>.events`, `commands.<Name>.onEventError`, `outputs.<Name>.pipe.<index>`) for hand-written use cases, `run` functions, command handlers and stages. Resources: `afora://spec/schema` (JSON Schema of `afora.json`), `afora://catalog` and `afora://spec/guide` (a short guide for the agent: workflow, shape, rules). The `inputSchema` of each tool is JSON Schema derived from the same TypeBox schema as the spec.
 
 ## Safety
 
@@ -41,6 +41,7 @@ import { createServer } from "@afora/mcp";
 
 const server = await createServer({
 	project: "/path/to/project",
+	stages: [{ name: "hono", module: "@afora/hono", export: "hono", kind: "sink" }],
 	providers: [
 		{ name: "drizzle", module: "@acme/drizzle", export: "drizzleProvider" },
 	],

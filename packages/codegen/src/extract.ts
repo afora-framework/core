@@ -24,7 +24,9 @@ export interface ExtractOptions {
 	 * described: it needs an entry `"./db.ts#provider"` under the key `provider`
 	 * (the application's) or `repositories.<Name>.provider`. A use case with a
 	 * hand-written `execute` needs `useCases.<Name>`, and a `run` function of a
-	 * steps use case `useCases.<Name>.run.<name>`, both `"./file.ts#export"`.
+	 * steps use case `useCases.<Name>.run.<name>`, a command with a handler
+	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, and a stage
+	 * written by hand `outputs.<Name>.pipe.<index>`, all `"./file.ts#export"`.
 	 */
 	readonly imports?: Readonly<Record<string, string>>;
 }
@@ -91,6 +93,8 @@ class Extraction {
 			...Object.keys(description.repositories),
 			...Object.keys(description.exceptions),
 			...Object.keys(description.useCases),
+			...Object.keys(description.commands),
+			...Object.keys(description.outputs),
 		]);
 	}
 
@@ -383,11 +387,17 @@ export function extractSpec(
 				: { description: value.description }),
 			...(value.tags.length > 0 ? { tags: [...value.tags] } : {}),
 			...(value.deprecated ? { deprecated: true } : {}),
-			input: { fields: extraction.json(value.input) },
-			response: { fields: extraction.json(value.response) },
+			input: value.refs?.input ?? { fields: extraction.json(value.input) },
+			response: value.refs?.response ?? {
+				fields: extraction.json(value.response),
+			},
 			...(value.context === undefined
 				? {}
-				: { context: { fields: extraction.json(value.context) } }),
+				: {
+						context: value.refs?.context ?? {
+							fields: extraction.json(value.context),
+						},
+					}),
 			...(Object.keys(value.dependencies).length > 0
 				? {
 						dependencies: Object.fromEntries(
@@ -416,6 +426,75 @@ export function extractSpec(
 					},
 		};
 	});
+
+	const commands = entries(description.commands, (value, name) => ({
+		...(value.description === undefined
+			? {}
+			: { description: value.description }),
+		...(value.tags.length > 0 ? { tags: [...value.tags] } : {}),
+		...(value.context === undefined
+			? {}
+			: {
+					context: value.refs?.context ?? {
+						fields: extraction.json(value.context),
+					},
+				}),
+		useCases: Object.fromEntries(
+			Object.entries(value.operations).map(([op, operation]) => [
+				op,
+				operation.ref,
+			]),
+		),
+		...(value.transaction ? { transaction: true } : {}),
+		...(value.events === "after-commit"
+			? {}
+			: {
+					events:
+						value.events === "manual"
+							? "manual"
+							: {
+									import: importFor(
+										options.imports,
+										`commands.${name}.events`,
+										`The events handler of the command "${name}"`,
+									),
+								},
+				}),
+		...(value.onEventError === undefined
+			? {}
+			: {
+					onEventError: {
+						import: importFor(
+							options.imports,
+							`commands.${name}.onEventError`,
+							`The onEventError handler of the command "${name}"`,
+						),
+					},
+				}),
+	}));
+	const outputs = entries(description.outputs, (value, name) => ({
+		commands: [...value.commands],
+		...(Object.keys(value.statuses).length > 0
+			? { statuses: { ...value.statuses } }
+			: {}),
+		pipe: value.pipe.map((stage, index) => {
+			if (stage.kind === "opaque") {
+				return {
+					import: importFor(
+						options.imports,
+						`outputs.${name}.pipe.${index}`,
+						`The stage ${index} of the output "${name}" was written by hand, so it`,
+					),
+				};
+			}
+			return {
+				[stage.kind]: stage.name,
+				...(Object.keys(stage.options).length > 0
+					? { options: JSON.parse(JSON.stringify(stage.options)) }
+					: {}),
+			};
+		}),
+	}));
 
 	const allProperties = { ...extraction.generated, ...properties };
 	const spec: Json = {
@@ -448,6 +527,8 @@ export function extractSpec(
 		...(Object.keys(repositories).length > 0 ? { repositories } : {}),
 		...(Object.keys(exceptions).length > 0 ? { exceptions } : {}),
 		...(Object.keys(useCases).length > 0 ? { useCases } : {}),
+		...(Object.keys(commands).length > 0 ? { commands } : {}),
+		...(Object.keys(outputs).length > 0 ? { outputs } : {}),
 	};
 	return compactSpec(spec as unknown as Spec);
 }

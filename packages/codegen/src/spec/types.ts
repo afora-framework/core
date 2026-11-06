@@ -119,10 +119,24 @@ export interface ProviderCatalogEntry {
 	readonly export: string;
 }
 
+/** A stage factory of the catalog supplied to codegen: where it comes from. */
+export interface StageCatalogEntry {
+	/** The name `transform` or `sink` refers to. */
+	readonly name: string;
+	/** A package or a path relative to the output directory. */
+	readonly module: string;
+	/** The factory, called with the options object. */
+	readonly export: string;
+	/** When known, what it builds, so that `transform`/`sink` is checked. */
+	readonly kind?: "transform" | "sink";
+}
+
 /** What codegen needs besides the spec. */
 export interface CodegenOptions {
 	/** External providers `use` may name; `inMemory` is built in. */
 	readonly providers?: readonly ProviderCatalogEntry[];
+	/** External stages a pipe may name; `StdStages` (`select`, `openapi`) are built in. */
+	readonly stages?: readonly StageCatalogEntry[];
 }
 
 export interface RepositorySpec {
@@ -236,6 +250,40 @@ export interface UseCaseSpec {
 	readonly implementation: UseCaseImplementationSpec;
 }
 
+/** A command (`commandOf`). */
+export interface CommandSpec {
+	readonly description?: string;
+	readonly tags?: readonly string[];
+	readonly context?: BlueprintRefSpec;
+	/** Operation name -> name of a use case. */
+	readonly useCases: Readonly<Record<string, string>>;
+	/** `false` by default. */
+	readonly transaction?: boolean;
+	/** `"after-commit"` by default; a handler is written by hand. */
+	readonly events?: "after-commit" | "manual" | ImportRef;
+	readonly onEventError?: ImportRef;
+}
+
+/** One stage of an output pipe: a catalog transform or sink with JSON options, or a hand-written stage. */
+export type PipeEntrySpec =
+	| {
+			readonly transform: string;
+			readonly options?: Readonly<Record<string, unknown>>;
+	  }
+	| {
+			readonly sink: string;
+			readonly options?: Readonly<Record<string, unknown>>;
+	  }
+	| ImportRef;
+
+/** An output (`outputOf`). */
+export interface OutputSpec {
+	readonly commands: readonly string[];
+	/** Status (400 to 599) by exception name. */
+	readonly statuses?: Readonly<Record<string, number>>;
+	readonly pipe: readonly PipeEntrySpec[];
+}
+
 /** The afora.json document. */
 export interface Spec {
 	readonly $schema?: string;
@@ -255,6 +303,8 @@ export interface Spec {
 	readonly repositories?: Readonly<Record<string, RepositorySpec>>;
 	readonly exceptions?: Readonly<Record<string, ExceptionSpec>>;
 	readonly useCases?: Readonly<Record<string, UseCaseSpec>>;
+	readonly commands?: Readonly<Record<string, CommandSpec>>;
+	readonly outputs?: Readonly<Record<string, OutputSpec>>;
 }
 
 /** A spec with the specs it extends, already loaded, by the reference it uses. */
@@ -282,6 +332,8 @@ export const COLLECTIONS = [
 	"repositories",
 	"exceptions",
 	"useCases",
+	"commands",
+	"outputs",
 ] as const;
 
 export type CollectionKey = (typeof COLLECTIONS)[number];
@@ -294,7 +346,9 @@ export type DeclKind =
 	| "environment"
 	| "repository"
 	| "exception"
-	| "useCase";
+	| "useCase"
+	| "command"
+	| "output";
 
 export const KIND_OF: Readonly<Record<CollectionKey, DeclKind>> = {
 	properties: "property",
@@ -305,6 +359,8 @@ export const KIND_OF: Readonly<Record<CollectionKey, DeclKind>> = {
 	repositories: "repository",
 	exceptions: "exception",
 	useCases: "useCase",
+	commands: "command",
+	outputs: "output",
 };
 
 export const DEFAULT_OUTPUT_DIR = "src/domain";

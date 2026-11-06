@@ -920,6 +920,202 @@
 			},
 			"additionalProperties": false,
 			"description": "Use cases, by name."
+		},
+		"commands": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": ["useCases"],
+					"properties": {
+						"description": {
+							"type": "string"
+						},
+						"tags": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Tags, for documentation."
+						},
+						"context": {
+							"anyOf": [
+								{
+									"type": "string",
+									"pattern": "^[A-Z][A-Za-z0-9]*$",
+									"description": "The name of a declared blueprint."
+								},
+								{
+									"type": "object",
+									"required": ["fields"],
+									"properties": {
+										"fields": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"$ref": "#/$defs/Field"
+												}
+											},
+											"additionalProperties": false,
+											"description": "Fields by key."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+						},
+						"useCases": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"type": "string"
+								}
+							},
+							"minProperties": 1,
+							"description": "Operation name -> name of a declared use case (e.g. { \"register\": \"Register\" })."
+						},
+						"transaction": {
+							"type": "boolean",
+							"default": false,
+							"description": "Runs every call in a transaction of the provider of the repositories (checked when the code runs: the provider must support it)."
+						},
+						"events": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "after-commit"
+								},
+								{
+									"type": "string",
+									"const": "manual"
+								},
+								{
+									"type": "object",
+									"required": ["import"],
+									"properties": {
+										"import": {
+											"type": "string",
+											"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+											"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"default": "after-commit",
+							"description": "\"after-commit\" (default), \"manual\" or { \"import\": \"./events.ts#dispatch\" } (a handler written by hand)."
+						},
+						"onEventError": {
+							"type": "object",
+							"required": ["import"],
+							"properties": {
+								"import": {
+									"type": "string",
+									"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+									"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+								}
+							},
+							"additionalProperties": false
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Commands (commandOf), by name."
+		},
+		"outputs": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": ["commands", "pipe"],
+					"properties": {
+						"commands": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"pattern": "^[A-Z][A-Za-z0-9]*$"
+							},
+							"minItems": 1,
+							"uniqueItems": true,
+							"description": "Names of declared commands."
+						},
+						"statuses": {
+							"type": "object",
+							"patternProperties": {
+								"^.*$": {
+									"type": "integer",
+									"minimum": 400,
+									"maximum": 599
+								}
+							},
+							"description": "HTTP-style status by exception name (declared or exported by @afora/core)."
+						},
+						"pipe": {
+							"type": "array",
+							"items": {
+								"anyOf": [
+									{
+										"type": "object",
+										"required": ["transform"],
+										"properties": {
+											"transform": {
+												"type": "string",
+												"description": "A transform of the stage catalog (afora_catalog stages)."
+											},
+											"options": {
+												"type": "object",
+												"patternProperties": {
+													"^.*$": {}
+												},
+												"description": "JSON options of the stage factory."
+											}
+										},
+										"additionalProperties": false
+									},
+									{
+										"type": "object",
+										"required": ["sink"],
+										"properties": {
+											"sink": {
+												"type": "string",
+												"description": "A sink of the stage catalog; only the last stage."
+											},
+											"options": {
+												"type": "object",
+												"patternProperties": {
+													"^.*$": {}
+												},
+												"description": "JSON options of the stage factory."
+											}
+										},
+										"additionalProperties": false
+									},
+									{
+										"type": "object",
+										"required": ["import"],
+										"properties": {
+											"import": {
+												"type": "string",
+												"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+												"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+											}
+										},
+										"additionalProperties": false
+									}
+								],
+								"description": "{ \"transform\": name, \"options\"? }, { \"sink\": name, \"options\"? } or { \"import\": \"./stages.ts#auth\" } (a stage written by hand)."
+							},
+							"description": "Transforms, then at most one sink as the last stage."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Outputs (outputOf), by name."
 		}
 	},
 	"additionalProperties": false,

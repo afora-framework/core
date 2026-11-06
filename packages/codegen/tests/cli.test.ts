@@ -38,6 +38,56 @@ describe("afora-codegen", () => {
 		expect(bad.output).toContain("entities.X.fields.a.type: [unknown_type]");
 	});
 
+	test("--stages supplies the stages an output may name", async () => {
+		const dir = await temp();
+		const spec = {
+			...blogSpec,
+			commands: { Blog: { useCases: { open: "Open" } } },
+			useCases: {
+				Open: {
+					input: { fields: {} },
+					response: { fields: {} },
+					implementation: { steps: [{ return: {} }] },
+				},
+			},
+			outputs: {
+				Api: {
+					commands: ["Blog"],
+					pipe: [{ transform: "label", options: { tag: "x" } }],
+				},
+			},
+		};
+		await writeFile(join(dir, "afora.json"), json(spec));
+		const without = await run(dir, "bun", CLI, "check");
+		expect(without.code).toBe(1);
+		expect(without.output).toContain("[unknown_stage]");
+		await writeFile(
+			join(dir, "stages.ts"),
+			'export const stages = [{ name: "label", module: "../stages", export: "label" }];\n',
+		);
+		const checked = await run(
+			dir,
+			"bun",
+			CLI,
+			"check",
+			"--stages",
+			"stages.ts",
+		);
+		expect(checked.output).toContain("valid");
+		const generated = await run(
+			dir,
+			"bun",
+			CLI,
+			"generate",
+			"--stages",
+			"stages.ts",
+		);
+		expect(generated.code).toBe(0);
+		expect(
+			await readFile(join(dir, "src/domain/outputs.ts"), "utf8"),
+		).toContain('import { label } from "../stages";');
+	});
+
 	test("generate writes the code, or --out another directory", async () => {
 		const dir = await temp();
 		await writeFile(join(dir, "afora.json"), json(blogSpec));

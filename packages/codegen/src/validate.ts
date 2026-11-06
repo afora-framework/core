@@ -1,6 +1,8 @@
 import { catalog, recordPlugin } from "./catalog";
+import { checkCommand } from "./command";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
+import { checkOutput, checkStageCatalog, stageEntries } from "./output";
 import { checkCatalog, checkProvider } from "./provider";
 import { type Decl, issue, type Scope, scopeOf } from "./scope";
 import { isIdentifier, isObject } from "./spec/field";
@@ -11,6 +13,7 @@ import {
 	type ProviderCatalogEntry,
 	type ResolvedSpec,
 	type SpecIssue,
+	type StageCatalogEntry,
 } from "./spec/types";
 import { checkException, checkUseCase } from "./use-case";
 
@@ -869,7 +872,13 @@ export function validateSpec(
 		return [issue([], "invalid_spec", "The spec must be a JSON object.")];
 	}
 	try {
-		check(input, extended, options.providers ?? [], issues);
+		check(
+			input,
+			extended,
+			options.providers ?? [],
+			options.stages ?? [],
+			issues,
+		);
 	} catch (error) {
 		issues.push(
 			issue(
@@ -886,9 +895,12 @@ function check(
 	input: Record<string, unknown>,
 	extended: Readonly<Record<string, ResolvedSpec>>,
 	providers: readonly ProviderCatalogEntry[],
+	stages: readonly StageCatalogEntry[],
 	issues: SpecIssue[],
 ): void {
 	checkCatalog(providers, issues);
+	checkStageCatalog(stages, issues);
+	const stageMap = stageEntries(stages);
 	if (input.provider !== undefined) {
 		checkProvider(input.provider, ["provider"], providers, issues);
 	}
@@ -961,6 +973,15 @@ function check(
 	const own = [...scope.decls.values()].filter(
 		(decl) => decl.via === undefined,
 	);
+	const checkInline = (value: unknown, path: readonly (string | number)[]) => {
+		const fields = parseFields(value, path, issues);
+		if (!fields) return undefined;
+		checkKeys(fields, path, "inline", issues);
+		for (const [key, field] of Object.entries(fields)) {
+			checkField(field, [...path, key], scope, "inline", issues);
+		}
+		return fields;
+	};
 	for (const decl of own) {
 		switch (decl.kind) {
 			case "property":
@@ -985,20 +1006,13 @@ function check(
 				checkException(decl, issues);
 				break;
 			case "useCase":
-				checkUseCase(
-					decl,
-					scope,
-					(value, path) => {
-						const fields = parseFields(value, path, issues);
-						if (!fields) return undefined;
-						checkKeys(fields, path, "inline", issues);
-						for (const [key, field] of Object.entries(fields)) {
-							checkField(field, [...path, key], scope, "inline", issues);
-						}
-						return fields;
-					},
-					issues,
-				);
+				checkUseCase(decl, scope, checkInline, issues);
+				break;
+			case "command":
+				checkCommand(decl, scope, checkInline, issues);
+				break;
+			case "output":
+				checkOutput(decl, scope, stageMap, issues);
 				break;
 		}
 	}

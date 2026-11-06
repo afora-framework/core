@@ -943,3 +943,179 @@ export class Greet extends GreetBase {
 		expect(await readFile(join(dir, "afora.json"), "utf8")).toBe(before);
 	});
 });
+
+describe("commands and outputs", () => {
+	const stagesTs = `import { transformOf } from "@afora/core";
+
+export const label = transformOf({
+	name: "label",
+	apply: (operation, options: { tag?: string }) => ({
+		...operation,
+		tags: [...operation.tags, options.tag ?? "labeled"],
+	}),
+});
+`;
+	const eventsTs =
+		"export const dispatch = (_events: readonly unknown[]) => {};\n";
+	const declarations = [
+		{
+			kind: "entity",
+			name: "User",
+			declaration: { fields: { name: "text", email: "email" } },
+		},
+		{
+			kind: "repository",
+			name: "Users",
+			declaration: { entity: "User", actions: ["findById", "create"] },
+		},
+		{
+			kind: "useCase",
+			name: "Register",
+			declaration: {
+				input: { fields: { name: "text", email: "email" } },
+				response: { fields: { user: "User" } },
+				dependencies: { users: "Users" },
+				implementation: {
+					steps: [
+						{
+							build: "User",
+							values: { name: "$input.name", email: "$input.email" },
+							as: "user",
+						},
+						{ create: "users", value: "$user", as: "saved" },
+						{ return: { user: "$saved" } },
+					],
+				},
+			},
+		},
+		{
+			kind: "command",
+			name: "Accounts",
+			declaration: {
+				tags: ["public"],
+				useCases: { register: "Register" },
+				transaction: true,
+				events: { import: "../events#dispatch" },
+			},
+		},
+		{
+			kind: "output",
+			name: "Api",
+			declaration: {
+				commands: ["Accounts"],
+				pipe: [
+					{ transform: "select", options: { tags: ["public"] } },
+					{ transform: "label", options: { tag: "api" } },
+					{
+						sink: "openapi",
+						options: { info: { title: "Blog", version: "1.0.0" } },
+					},
+				],
+			},
+		},
+	];
+
+	async function withStages() {
+		const dir = await makeProject({
+			"src/stages.ts": stagesTs,
+			"src/events.ts": eventsTs,
+		});
+		projects.push(dir);
+		const client = await connect({
+			project: dir,
+			stages: [
+				{
+					name: "label",
+					module: "../stages",
+					export: "label",
+					kind: "transform",
+				},
+			],
+		});
+		clients.push(client);
+		return { dir, client };
+	}
+
+	test("the catalog lists the stages, built in and supplied", async () => {
+		const { client } = await withStages();
+		const catalog = await client.call("afora_catalog");
+		expect(catalog.data.stages.map((s: { name: string }) => s.name)).toEqual([
+			"openapi",
+			"select",
+			"label",
+		]);
+		const guide = (
+			await client.client.readResource({ uri: "afora://spec/guide" })
+		).contents[0] as { text: string };
+		expect(guide.text).toContain("Commands and outputs");
+	});
+
+	test("authors, generates, builds the document and extracts them", async () => {
+		const { dir, client } = await withStages();
+		for (const declaration of declarations) {
+			const result = await client.call("afora_spec_upsert", declaration);
+			expect(result.data.written, JSON.stringify(result.data)).toBe(true);
+		}
+		const spec = JSON.parse(await readFile(join(dir, "afora.json"), "utf8"));
+		expect(Object.keys(spec)).toEqual([
+			"version",
+			"entities",
+			"repositories",
+			"useCases",
+			"commands",
+			"outputs",
+		]);
+
+		const before = await readFile(join(dir, "afora.json"), "utf8");
+		const bad = await client.call("afora_spec_upsert", {
+			kind: "output",
+			name: "Broken",
+			declaration: {
+				commands: ["Accounts"],
+				pipe: [{ sink: "nope" }, { transform: "select" }],
+			},
+		});
+		expect(bad.data.written).toBe(false);
+		expect(bad.data.issues.map((i: { code: string }) => i.code)).toEqual(
+			expect.arrayContaining(["unknown_stage", "sink_not_last"]),
+		);
+		expect(await readFile(join(dir, "afora.json"), "utf8")).toBe(before);
+
+		const generated = await client.call("afora_generate");
+		expect(generated.data.generated, JSON.stringify(generated.data)).toBe(true);
+		expect(generated.data.typecheck).toMatchObject({
+			ok: true,
+			diagnostics: [],
+		});
+		expect(await exists(join(dir, "src/domain/commands.ts"))).toBe(true);
+		expect(await exists(join(dir, "src/domain/outputs.ts"))).toBe(true);
+
+		const missing = await client.call("afora_extract", {
+			app: "src/domain/index.ts#App",
+		});
+		expect(missing.isError).toBe(true);
+		expect(missing.data).toContain("commands.Accounts.events");
+		const extracted = await client.call("afora_extract", {
+			app: "src/domain/index.ts#App",
+			imports: { "commands.Accounts.events": "../events#dispatch" },
+		});
+		expect(extracted.isError, JSON.stringify(extracted.data)).toBe(false);
+		expect(extracted.data.valid).toBe(true);
+		expect(extracted.data.spec.commands.Accounts).toEqual(
+			spec.commands.Accounts,
+		);
+		expect(extracted.data.spec.outputs.Api).toEqual(spec.outputs.Api);
+	}, 120_000);
+
+	test("an unknown stage is rejected without the --stages catalog", async () => {
+		const { client } = await setup();
+		for (const declaration of declarations.slice(0, 4)) {
+			await client.call("afora_spec_upsert", declaration);
+		}
+		const result = await client.call("afora_spec_upsert", declarations[4]);
+		expect(result.data.written).toBe(false);
+		expect(result.data.issues.map((i: { code: string }) => i.code)).toContain(
+			"unknown_stage",
+		);
+	});
+});

@@ -115,7 +115,7 @@ export type InlineChecker = (
 	path: Path,
 ) => Record<string, Field> | undefined;
 
-function checkBlueprintRef(
+export function checkBlueprintRef(
 	value: unknown,
 	path: Path,
 	scope: Scope,

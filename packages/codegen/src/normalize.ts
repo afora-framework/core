@@ -210,6 +210,50 @@ function canonicalUseCase(value: Json): Json {
 	};
 }
 
+function canonicalCommand(value: Json): Json {
+	const tags = keep(value.tags);
+	return {
+		...(typeof value.description === "string"
+			? { description: value.description }
+			: {}),
+		...(tags ? { tags } : {}),
+		...(value.context === undefined
+			? {}
+			: { context: canonicalBlueprintRef(value.context) }),
+		useCases: isObject(value.useCases) ? { ...value.useCases } : value.useCases,
+		...(value.transaction === true ? { transaction: true } : {}),
+		...(value.events !== undefined && value.events !== "after-commit"
+			? { events: cloneJson(value.events) }
+			: {}),
+		...(value.onEventError === undefined
+			? {}
+			: { onEventError: cloneJson(value.onEventError) }),
+	};
+}
+
+function canonicalPipeEntry(entry: unknown): unknown {
+	if (!isObject(entry)) return entry;
+	const kind = Object.hasOwn(entry, "sink") ? "sink" : "transform";
+	if (!Object.hasOwn(entry, kind)) return cloneJson(entry);
+	const options = entry.options;
+	return {
+		[kind]: entry[kind],
+		...(isObject(options) && Object.keys(options).length > 0
+			? { options: cloneJson(options) }
+			: {}),
+	};
+}
+
+function canonicalOutput(value: Json): Json {
+	return {
+		commands: Array.isArray(value.commands) ? [...value.commands] : [],
+		...(isObject(value.statuses) && Object.keys(value.statuses).length > 0
+			? { statuses: { ...value.statuses } }
+			: {}),
+		pipe: Array.isArray(value.pipe) ? value.pipe.map(canonicalPipeEntry) : [],
+	};
+}
+
 const providerOf = (value: unknown): Json =>
 	value === undefined ? {} : { provider: canonicalProvider(value) };
 
@@ -263,6 +307,10 @@ export function normalizeSpec(
 						return [name, canonicalException(name, value)];
 					case "useCases":
 						return [name, canonicalUseCase(value)];
+					case "commands":
+						return [name, canonicalCommand(value)];
+					case "outputs":
+						return [name, canonicalOutput(value)];
 					default: {
 						const relations = keep(value.relations);
 						const environments = keep(value.environments);
@@ -351,6 +399,13 @@ export function compactSpec(normalized: Spec): Spec {
 		if (!isObject(declared)) continue;
 		for (const value of Object.values(declared)) {
 			if (isObject(value)) value.fields = compactFields(value.fields);
+		}
+	}
+	if (isObject(spec.commands)) {
+		for (const value of Object.values(spec.commands)) {
+			if (isObject(value) && isObject(value.context)) {
+				value.context.fields = compactFields(value.context.fields);
+			}
 		}
 	}
 	if (isObject(spec.useCases)) {
