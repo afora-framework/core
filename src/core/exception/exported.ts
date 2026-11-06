@@ -4,6 +4,7 @@ import * as Command from "../command/exceptions";
 import * as Entity from "../entity/exceptions";
 import * as Environment from "../environment/environment";
 import * as OpenAPI from "../openapi/exceptions";
+import * as Output from "../output/exceptions";
 import * as Property from "../property/exceptions";
 import * as RecordKeys from "../record/exceptions";
 import * as Repository from "../repository/exceptions";
@@ -37,6 +38,7 @@ export function isExportedException(Declared: unknown): boolean {
 			Entity,
 			Environment,
 			OpenAPI,
+			Output,
 			Property,
 			RecordKeys,
 			Repository,

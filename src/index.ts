@@ -158,6 +158,49 @@ export type {
 	OpenAPIOptions,
 	OpenAPISchema,
 } from "./core/openapi/types/openapi.interface";
+export {
+	DuplicateOperation,
+	InvalidOutputStage,
+} from "./core/output/exceptions";
+export { isOutput, operationOf, outputOf } from "./core/output/output";
+export {
+	outputValueOf,
+	PROBLEM_MEDIA_TYPE,
+	problemOf,
+} from "./core/output/problem";
+export type { SelectOptions } from "./core/output/select";
+export { select } from "./core/output/select";
+export {
+	sinkOf,
+	stageCatalogOf,
+	stageDescriptionOf,
+	transformOf,
+} from "./core/output/stage";
+export { statusOf } from "./core/output/status";
+export type {
+	AnyOutput,
+	IStageCatalog,
+	OperationCallOptions,
+	OperationDescriptor,
+	OperationPatch,
+	OutputOf,
+	OutputSettings,
+	OutputStatuses,
+	PipeResult,
+	Problem,
+	ProblemOptions,
+	SinkFactory,
+	SinkSettings,
+	SinkStage,
+	Stage,
+	StageContext,
+	StageDescription,
+	StageFactory,
+	StageOptions,
+	TransformFactory,
+	TransformSettings,
+	TransformStage,
+} from "./core/output/types/output.interface";
 export type {
 	Issue,
 	IssueCode,
@@ -381,3 +424,4 @@ export {
 	resetRuntime,
 	SyncVerifyUnsupported,
 } from "./std/runtime";
+export { StdStages } from "./std/stages";

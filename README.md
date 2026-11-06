@@ -713,6 +713,55 @@ The keys of `useCases` are the operation names: identifiers holding concrete use
 
 Types: `CommandOf`, `CommandOperation`, `CommandInput`, `CommandResponse`, `CommandOptions` and `AnyCommand`. `options` is `{ context }` when the command declares a context, or the use case's `UseCaseOptions` when it does not.
 
+### Outputs
+
+`outputOf` turns commands into **operations** and runs them through a **pipe** of stages: transforms change or remove operations, and a last stage, a **sink**, builds something concrete (an OpenAPI document, an HTTP app, MCP tools).
+
+```ts
+import { outputOf, select } from "@afora/core";
+
+const Api = outputOf({
+	name: "Api",
+	commands: [Users, Posts],
+	statuses: { UserAlreadyExists: 409 }, // optional, by exception name
+	pipe: [select({ tags: ["public"] }), someSink({ basePath: "/api" })],
+});
+
+Api.operations; // OperationDescriptor[] after the transforms, in declaration order
+Api.build(); // the sink's result, built on the first call and memoized
+Api.pipe(select({ exclude: ["Users.login"] })); // a new, unnamed output with more stages
+Api.pipe(otherSink()); // when the last stage is a sink, its result
+```
+
+Each operation is a frozen **`OperationDescriptor`** (version 1): `id` (`"Users.register"`), `command`, `name`, `useCase`, `description` (the use case's, else the command's), `tags` (the command's then the use case's, deduplicated), `deprecated`, `input`, `response`, `context` (the command's, else the use case's), `errors`, `meta` (`{}` until a transform sets it) and `invoke(input, { context })`, which is `command.run`. `operationOf(operation, patch)` returns a modified copy; only `meta` (replaced), `tags`, `description`, `deprecated` and `invoke` can be patched, anything else throws `InvalidOutputStage`.
+
+`outputOf` throws `InvalidOutputStage` (`Output` layer, `details.reason`) for an empty `name`, an entry that is not a command made by `commandOf`, a pipe entry that is not a stage, a sink that is not last, or `statuses` that is not a map of exception names to integers between 400 and 599, and `DuplicateOperation` when two operations share an `id`. The operations are computed at declaration; `build()` throws when the pipe has no sink. The output is frozen, tagged and identified by `isOutput`. (Building an output from an application is not available yet.)
+
+**Stages** come from factories, so a stage is a name plus JSON options (validated like the options of `providerOf`, and frozen):
+
+```ts
+import { sinkOf, transformOf } from "@afora/core";
+
+const hide = transformOf({
+	name: "hide",
+	apply: (operation, options: { tag: string }) =>
+		operation.tags.includes(options.tag) ? null : operation, // null removes it
+});
+const ids = sinkOf({
+	name: "ids",
+	build: (operations, options: { prefix?: string }, { output }) =>
+		operations.map(({ id }) => `${options.prefix ?? ""}${output.name}/${id}`),
+});
+
+outputOf({ name: "Api", commands: [Users], pipe: [hide({ tag: "internal" }), ids()] });
+```
+
+`apply` and `build` also get `{ output: { name, statuses } }`. `stageDescriptionOf(stage)` gives `{ kind, name, options }` for a stage made by a factory and `{ kind: "opaque" }` for a hand-written object of the stage shape (accepted at runtime). `stageCatalogOf(...factories)` resolves names to stages (`catalog.resolve("select", options)`), and `StdStages` holds the built-in ones. `select` keeps the operations that match `tags` (any of), `operations` (ids to keep) and `exclude` (ids to drop).
+
+**Errors at the boundary.** `statusOf(error, operation?, statuses?)` gives an HTTP-style status: `statuses[error.name]` if given; 400 for `InvalidUseCaseInput`, `InvalidUseCaseContext`, `InvalidCommandContext` and any exception whose `details.issues` is a list; 404 for `RepositoryEntityNotFound` and `UnknownCommandOperation`; 409 for `RepositoryUniqueViolation`; 422 for an exception listed in `operation.errors`; 500 for anything else, including `CommandEventFailed` (the call committed, but the response cannot claim success) and errors that are not exceptions. `problemOf(error, { status, debug? })` returns an RFC 9457 object (`type: "urn:afora:exception:<name>"`, `title`, `status`, `detail`, `layer`), served as `PROBLEM_MEDIA_TYPE` (`application/problem+json`). `issues` (`path`, `code`, `message`; no values, no causes) only appears for a 400, `trace` only with `debug: true`, and the `detail` of a 5xx is `"Internal error."` unless `debug` is set, so internal messages do not leak.
+
+**Masking.** `outputValueOf(value)` is `JSON.parse(JSON.stringify(value))`: every record goes through its `toJSON`, so sensitive values (a `Password` always) are masked at any depth. A sink must send its response values through it.
+
 ### Repositories
 
 `repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `count`, and the queries `findMany`, `exists` and `findPage`. Every method is async.

@@ -1,7 +1,7 @@
+import { frozenJson } from "../json";
 import { InvalidRepositoryDeclaration } from "./exceptions";
 import type {
 	ProviderDescription,
-	ProviderOption,
 	ProviderOptions,
 	ProviderSettings,
 } from "./types/query.interface";
@@ -17,32 +17,6 @@ function invalid(reason: string): never {
 	});
 }
 
-function json(value: unknown, seen = new Set<object>()): ProviderOption {
-	if (value === null || typeof value === "string" || typeof value === "boolean")
-		return value;
-	if (typeof value === "number" && Number.isFinite(value)) return value;
-	if (typeof value !== "object" || value === null || seen.has(value))
-		return invalid("Provider options must be finite, acyclic JSON values.");
-	if (
-		!Array.isArray(value) &&
-		Object.getPrototypeOf(value) !== Object.prototype &&
-		Object.getPrototypeOf(value) !== null
-	)
-		return invalid(
-			"Provider options must contain only plain objects and arrays.",
-		);
-	if (Object.getOwnPropertySymbols(value).length > 0)
-		return invalid("Provider options cannot contain symbol keys.");
-	seen.add(value);
-	const result = Array.isArray(value)
-		? value.map((item) => json(item, seen))
-		: Object.fromEntries(
-				Object.entries(value).map(([key, item]) => [key, json(item, seen)]),
-			);
-	seen.delete(value);
-	return Object.freeze(result);
-}
-
 /** Creates a provider once and attaches an immutable, serializable declaration out of band. */
 export function providerOf<
 	Options extends ProviderOptions = ProviderOptions,
@@ -55,7 +29,11 @@ export function providerOf<
 		typeof settings.create !== "function"
 	)
 		invalid("Expected a provider name and create function.");
-	const options = json(settings.options ?? {});
+	const options = frozenJson(
+		settings.options ?? {},
+		"Provider options",
+		invalid,
+	);
 	if (options === null || typeof options !== "object" || Array.isArray(options))
 		invalid("Provider options must be an object.");
 	const provider = settings.create(options as Options);

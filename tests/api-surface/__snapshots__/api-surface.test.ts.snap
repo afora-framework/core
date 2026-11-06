@@ -8,6 +8,12 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) AnyRecordShape": [
     "type AnyRecordShape = { readonly blueprint: AnyBlueprint; } | { readonly [Meta]: { readonly blueprint: AnyBlueprint; }; };",
   ],
+  "(internal) AnySink": [
+    "type AnySink<Result> = SinkStage<Result, any>;",
+  ],
+  "(internal) AnyTransform": [
+    "type AnyTransform = TransformStage<any>;",
+  ],
   "(internal) ApplicationCollectionKey": [
     "export type ApplicationCollectionKey = keyof ApplicationCollections;",
   ],
@@ -94,6 +100,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) JoinedProperties": [
     "export type JoinedProperties<Blueprints extends readonly { readonly properties: IBlueprintCollection; }[]> = BlueprintPluginContext<Blueprints> extends infer Properties extends IBlueprintCollection ? Properties : never;",
+  ],
+  "(internal) JsonValue": [
+    "export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };",
   ],
   "(internal) ListProperties": [
     "export type ListProperties<Properties> = { readonly [Key in keyof Properties]: Properties[Key] extends BlueprintField ? IBlueprintList<Properties[Key]> : never; };",
@@ -299,6 +308,9 @@ exports[`exports of the package and their declarations 1`] = `
   "AnyOptionalRecord": [
     "export type AnyOptionalRecord = OptionalRecord<AnyRecordClass>;",
   ],
+  "AnyOutput": [
+    "export type AnyOutput = OutputOf<any>;",
+  ],
   "AnyPropertyConstructor": [
     "export type AnyPropertyConstructor = { new (value: any): AbstractProperty<any, any>; readonly type: IPropertyType<any, any>; safeParse(value: unknown): ParseResult<any>; readonly "~standard": StandardSchemaV1.Props<any, any>; };",
   ],
@@ -460,6 +472,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "DuplicateApplicationDeclaration": [
     "DuplicateApplicationDeclaration: import("../../index.js").DeclaredExceptionClass<{ readonly first: string; readonly second: string; }>",
+  ],
+  "DuplicateOperation": [
+    "DuplicateOperation: import("../../index.js").DeclaredExceptionClass<{ readonly id: string; }>",
   ],
   "ENTITY_IDENTITY_KEYS": [
     "ENTITY_IDENTITY_KEYS: readonly EntityIdentityKey[]",
@@ -629,6 +644,9 @@ exports[`exports of the package and their declarations 1`] = `
   "ISchemaType": [
     "export type ISchemaType<SchemaType extends TSchema, Value = Static<SchemaType>> = Validator<Record<string, TSchema>, SchemaType, Value, Value>;",
   ],
+  "IStageCatalog": [
+    "export interface IStageCatalog<Factories extends Readonly<Record<string, StageFactory>> = Readonly<Record<string, StageFactory>>> { readonly [Kind]: "stage-catalog"; readonly stages: Factories; readonly list: readonly StageFactory[]; resolve(name: string, options?: StageOptions): Stage; }",
+  ],
   "Id": [
     "export declare class Id extends Id_base { static generate(): Id; }",
   ],
@@ -658,6 +676,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "InvalidOpenAPIModel": [
     "InvalidOpenAPIModel: import("../../index.js").DeclaredExceptionClass<{ readonly name: string; }>",
+  ],
+  "InvalidOutputStage": [
+    "InvalidOutputStage: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
   ],
   "InvalidPropertyValue": [
     "InvalidPropertyValue: import("../../index.js").DeclaredExceptionClass<{ readonly errors: readonly string[]; }>",
@@ -722,6 +743,15 @@ exports[`exports of the package and their declarations 1`] = `
   "OpenAPISchema": [
     "export interface OpenAPISchema { readonly type?: string | readonly string[]; readonly properties?: { readonly [key: string]: OpenAPISchema; }; readonly required?: readonly string[]; readonly additionalProperties?: boolean | OpenAPISchema; readonly items?: OpenAPISchema; readonly $ref?: string; readonly title?: string; readonly description?: string; readonly examples?: readonly unknown[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly [keyword: string]: unknown; }",
   ],
+  "OperationCallOptions": [
+    "export interface OperationCallOptions { readonly context?: unknown; }",
+  ],
+  "OperationDescriptor": [
+    "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyBlueprint; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
+  ],
+  "OperationPatch": [
+    "export interface OperationPatch { readonly meta?: Readonly<Record<string, unknown>>; readonly tags?: readonly string[]; readonly description?: string | undefined; readonly deprecated?: boolean; readonly invoke?: OperationDescriptor["invoke"]; }",
+  ],
   "OptionalBlueprint": [
     "export type OptionalBlueprint<Blueprint extends AnyBlueprint> = Blueprint extends IBlueprint<infer Properties, boolean> ? IBlueprint<Properties, true> : never;",
   ],
@@ -734,6 +764,15 @@ exports[`exports of the package and their declarations 1`] = `
   "OptionalRecord": [
     "export interface OptionalRecord<Record extends AnyRecordClass> { readonly [Kind]: "record"; readonly record: Record; readonly optional: true; readonly "~standard": StandardSchemaV1.Props<StandardSchemaV1.InferInput<Record> | undefined, InstanceType<Record> | undefined>; }",
   ],
+  "OutputOf": [
+    "export interface OutputOf<Result = never> { readonly [Kind]: "output"; readonly outputName: string; readonly commands: readonly AnyCommand[]; readonly operations: readonly OperationDescriptor[]; readonly stages: readonly Stage[]; readonly statuses: OutputStatuses; build(): Result; pipe<Built>(...stages: [ ...AnyTransform[], AnySink<Built> ]): Built; pipe(...stages: Stage[]): OutputOf<never>; }",
+  ],
+  "OutputSettings": [
+    "export interface OutputSettings<Pipe extends readonly Stage[]> { readonly name: string; readonly commands: readonly AnyCommand[]; readonly statuses?: OutputStatuses; readonly pipe?: Pipe; }",
+  ],
+  "OutputStatuses": [
+    "export type OutputStatuses = Readonly<Record<string, number>>;",
+  ],
   "Ownable": [
     "Ownable: import("../index.js").IRecordPlugin<typeof OwnableRecord, "ownable">",
   ],
@@ -745,6 +784,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "PASSWORD_SPECIAL_CHARACTERS": [
     "PASSWORD_SPECIAL_CHARACTERS = "!@#$%^&*()-_=+[]{}|\\\\;:'\\",.<>/?\`~"",
+  ],
+  "PROBLEM_MEDIA_TYPE": [
+    "PROBLEM_MEDIA_TYPE = "application/problem+json"",
   ],
   "ParseResult": [
     "export type ParseResult<Output> = { readonly value: Output; readonly issues?: undefined; } | { readonly issues: readonly Issue[]; };",
@@ -761,8 +803,17 @@ exports[`exports of the package and their declarations 1`] = `
   "Phone": [
     "Phone: import("../../index.js").PropertyClass<Type.TString, string>",
   ],
+  "PipeResult": [
+    "export type PipeResult<Pipe extends readonly Stage[]> = Pipe extends readonly [ ...Stage[], SinkStage<infer Result, any> ] ? Result : never;",
+  ],
   "PluginUniqueKey": [
     "export type PluginUniqueKey<Plugins extends readonly AnyRecordPlugin[]> = Plugins[number] extends infer Plugin ? Plugin extends { readonly record: { readonly [RecordUniqueKeys]?: infer Key; }; } ? Extract<Key, string> : never : never;",
+  ],
+  "Problem": [
+    "export interface Problem { readonly type: string; readonly title: string; readonly status: number; readonly detail: string; readonly layer?: string; readonly issues?: readonly { readonly path: readonly (string | number)[]; readonly code: string; readonly message: string; }[]; readonly trace?: string; }",
+  ],
+  "ProblemOptions": [
+    "export interface ProblemOptions { readonly status: number; readonly debug?: boolean; }",
   ],
   "PropertyClass": [
     "export interface PropertyClass<SchemaType extends TSchema, Value = Static<SchemaType>> { new (value: PropertyValue<SchemaType, Value>): DeclaredProperty<SchemaType, Value>; readonly type: IPropertyType<SchemaType, Value>; safeParse(value: unknown): ParseResult<PropertyValue<SchemaType, Value>>; readonly "~standard": StandardSchemaV1.Props<PropertyValue<SchemaType, Value>, PropertyValue<SchemaType, Value>>; with<Self extends AnyPropertyConstructor>(this: Self, options: PropertyOptions<SchemaType, Value>): Self; demo<Self extends AbstractProperty<any>>(this: new (value: never) => Self): Self; }",
@@ -954,8 +1005,35 @@ exports[`exports of the package and their declarations 1`] = `
   "SchemaProperty": [
     "export declare class SchemaProperty extends SchemaProperty_base { private compiled?; static deserialize(json: string): SchemaProperty; serialize(): string; match(data: unknown): boolean; errors(data: unknown): string[]; private toSchema; }",
   ],
+  "SelectOptions": [
+    "export interface SelectOptions { tags?: string[]; operations?: string[]; exclude?: string[]; }",
+  ],
+  "SinkFactory": [
+    "export type SinkFactory<Result = unknown, Options extends object = StageOptions> = (options?: Options) => SinkStage<Result, Options>;",
+  ],
+  "SinkSettings": [
+    "export interface SinkSettings<Result, Options extends object> { readonly name: string; readonly build: (operations: readonly OperationDescriptor[], options: Options, context: StageContext) => Result; readonly validate?: (options: Options) => string | undefined; }",
+  ],
+  "SinkStage": [
+    "export interface SinkStage<Result = unknown, Options extends object = StageOptions> { readonly kind: "sink"; readonly name?: string; readonly options?: Options; build(operations: readonly OperationDescriptor[], context: StageContext): Result; }",
+  ],
   "Slug": [
     "export declare class Slug extends Slug_base { }",
+  ],
+  "Stage": [
+    "export type Stage = TransformStage<any> | SinkStage<any, any>;",
+  ],
+  "StageContext": [
+    "export interface StageContext { readonly output: { readonly name: string; readonly statuses: OutputStatuses; }; }",
+  ],
+  "StageDescription": [
+    "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; } | { readonly kind: "opaque"; };",
+  ],
+  "StageFactory": [
+    "export type StageFactory = TransformFactory<any> | SinkFactory<any, any>;",
+  ],
+  "StageOptions": [
+    "export type StageOptions = { readonly [key: string]: JsonValue; };",
   ],
   "StandardSchemaV1": [
     "export declare namespace StandardSchemaV1 { interface Props<Input = unknown, Output = Input> { readonly version: 1; readonly vendor: string; readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>; readonly types?: Types<Input, Output> | undefined; } type Result<Output> = SuccessResult<Output> | FailureResult; interface SuccessResult<Output> { readonly value: Output; readonly issues?: undefined; } interface FailureResult { readonly issues: ReadonlyArray<Issue>; } interface Issue { readonly message: string; readonly path?: ReadonlyArray<PropertyKey | PathSegment> | undefined; } interface PathSegment { readonly key: PropertyKey; } interface Types<Input = unknown, Output = Input> { readonly input: Input; readonly output: Output; } type InferInput<Schema extends StandardSchemaV1> = NonNullable<Schema["~standard"]["types"]>["input"]; type InferOutput<Schema extends StandardSchemaV1> = NonNullable<Schema["~standard"]["types"]>["output"]; }",
@@ -969,6 +1047,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "StdRecordPlugins": [
     "StdRecordPlugins: import("../index.js").IRecordPluginCatalog<import("../core/record/types/plugin.interface.js").RecordPluginsByName<readonly [ import("../index.js").IRecordPlugin<typeof PublishableRecord, "publishable">, import("../index.js").IRecordPlugin<typeof ArchivableRecord, "archivable">, import("../index.js").IRecordPlugin<typeof TaggableRecord, "taggable">, import("../index.js").IRecordPlugin<typeof OwnableRecord, "ownable">, import("../index.js").IRecordPlugin<typeof AuthenticatableRecord, "authenticatable"> ]>>",
+  ],
+  "StdStages": [
+    "StdStages: import("../index.js").IStageCatalog<Readonly<Record<string, import("../index.js").StageFactory>>>",
   ],
   "StringConstraints": [
     "export interface StringConstraints { readonly min?: number; readonly max?: number; readonly pattern?: string | RegExp; }",
@@ -984,6 +1065,15 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "Text": [
     "Text: import("../../index.js").PropertyClass<Type.TString, string>",
+  ],
+  "TransformFactory": [
+    "export type TransformFactory<Options extends object = StageOptions> = (options?: Options) => TransformStage<Options>;",
+  ],
+  "TransformSettings": [
+    "export interface TransformSettings<Options extends object> { readonly name: string; readonly apply: (operation: OperationDescriptor, options: Options, context: StageContext) => OperationDescriptor | null; readonly validate?: (options: Options) => string | undefined; }",
+  ],
+  "TransformStage": [
+    "export interface TransformStage<Options extends object = StageOptions> { readonly kind: "transform"; readonly name?: string; readonly options?: Options; apply(operation: OperationDescriptor, context: StageContext): OperationDescriptor | null; }",
   ],
   "UNEXPECTED_ERROR": [
     "UNEXPECTED_ERROR = "UnexpectedError"",
@@ -1125,6 +1215,9 @@ exports[`exports of the package and their declarations 1`] = `
   "isOptionalRecord": [
     "export declare function isOptionalRecord(value: unknown): value is AnyOptionalRecord;",
   ],
+  "isOutput": [
+    "export declare function isOutput(value: unknown): value is AnyOutput;",
+  ],
   "isPasswordHash": [
     "export declare function isPasswordHash(value: string): boolean;",
   ],
@@ -1149,6 +1242,9 @@ exports[`exports of the package and their declarations 1`] = `
   "listOf": [
     "export declare function listOf<Item extends BlueprintField>(item: Item, { minItems, maxItems }?: BlueprintListOptions): IBlueprintList<StoredField<Item>>;",
   ],
+  "operationOf": [
+    "export declare function operationOf(operation: OperationDescriptor, patch: OperationPatch): OperationDescriptor;",
+  ],
   "optionalOf": [
     "export declare function optionalOf(field: BlueprintField): BlueprintField;",
     "export declare function optionalOf<Blueprint extends AnyBlueprint>(blueprint: Blueprint): OptionalBlueprint<Blueprint>;",
@@ -1156,11 +1252,20 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function optionalOf<Property extends AnyPropertyConstructor>(Property: Property): OptionalProperty<Property>;",
     "export declare function optionalOf<Record extends AnyRecordClass>(record: Record | OptionalRecord<Record>): OptionalRecord<Record>;",
   ],
+  "outputOf": [
+    "export declare function outputOf<const Pipe extends readonly Stage[] = readonly [ ]>(settings: OutputSettings<Pipe>): OutputOf<PipeResult<Pipe>>;",
+  ],
+  "outputValueOf": [
+    "export declare function outputValueOf(value: unknown): unknown;",
+  ],
   "passwordIssues": [
     "export declare function passwordIssues(value: string): string[];",
   ],
   "pluginsOf": [
     "export declare function pluginsOf(value: unknown): readonly AnyRecordPlugin[];",
+  ],
+  "problemOf": [
+    "export declare function problemOf(error: unknown, options: ProblemOptions): Problem;",
   ],
   "propertyLineageOf": [
     "export declare function propertyLineageOf(Property: unknown): PropertyLineage | undefined;",
@@ -1198,9 +1303,27 @@ exports[`exports of the package and their declarations 1`] = `
   "schemaOf": [
     "export declare function schemaOf<SchemaType extends TSchema>(name: string, schema: SchemaType): SchemaClass<SchemaType>;",
   ],
+  "select": [
+    "select: import("./types/output.interface.js").TransformFactory<SelectOptions>",
+  ],
+  "sinkOf": [
+    "export declare function sinkOf<Result, Options extends object = StageOptions>(settings: SinkSettings<Result, Options>): SinkFactory<Result, Options>;",
+  ],
+  "stageCatalogOf": [
+    "export declare function stageCatalogOf<const Factories extends readonly StageFactory[]>(...stages: Factories): IStageCatalog;",
+  ],
+  "stageDescriptionOf": [
+    "export declare function stageDescriptionOf(stage: Stage): StageDescription;",
+  ],
+  "statusOf": [
+    "export declare function statusOf(error: unknown, operation?: Pick<OperationDescriptor, "errors">, statuses?: OutputStatuses): number;",
+  ],
   "toOpenAPI": [
     "export declare function toOpenAPI(field: BlueprintField): OpenAPISchema;",
     "export declare function toOpenAPI<const Models extends Record<string, BlueprintField>>(models: Models, options?: OpenAPIOptions): OpenAPIComponents<keyof Models & string>;",
+  ],
+  "transformOf": [
+    "export declare function transformOf<Options extends object = StageOptions>(settings: TransformSettings<Options>): TransformFactory<Options>;",
   ],
   "useCaseOf": [
     "export declare function useCaseOf<Input extends IBlueprintCollection, Output extends IBlueprintCollection, const Dependencies extends UseCaseCollection = Record<never, never>, Context extends IBlueprintCollection | undefined = undefined>(settings: UseCaseSettings<Input, Output, Dependencies, Context>): UseCaseConstructor<Input, Output, Dependencies, Context>;",
