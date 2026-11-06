@@ -26,7 +26,11 @@ function toast(message: string) {
 		element("toast").hidden = true;
 	}, 4000);
 }
-async function api<T>(path: string, body?: unknown): Promise<T> {
+async function api<T>(
+	path: string,
+	body?: unknown,
+	signal?: AbortSignal,
+): Promise<T> {
 	const response = await fetch(
 		path,
 		body === undefined
@@ -38,10 +42,12 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
 						"x-afora-playground": "1",
 					},
 					body: JSON.stringify(body),
+					signal,
 				},
 	);
 	if (!response.ok) throw new Error(await response.text());
-	return response.json();
+	// 204: the server dropped a request superseded by a newer one.
+	return response.status === 204 ? (undefined as T) : response.json();
 }
 type ProjectInfo = Awaited<ReturnType<typeof projectInfo>> & {
 	source: boolean;
@@ -166,14 +172,41 @@ async function start() {
 		fixedOverflowWidgets: true,
 	});
 	const session = crypto.randomUUID();
-	const query = <T>(action: string, position = 0, extras = {}) =>
-		api<T>("/api/language", {
-			session,
-			code: model.getValue(),
-			action,
-			position,
-			...extras,
-		});
+	// One in-flight request per kind: a newer one aborts the previous, and a
+	// Monaco cancellation aborts its own. Resolves to undefined when the request
+	// was aborted or the server dropped it as stale.
+	const inflight = new Map<string, AbortController>();
+	const query = async <T>(
+		action: string,
+		position = 0,
+		extras = {},
+		token?: monaco.CancellationToken,
+	): Promise<T | undefined> => {
+		inflight.get(action)?.abort();
+		const controller = new AbortController();
+		inflight.set(action, controller);
+		const cancel = token?.onCancellationRequested(() => controller.abort());
+		try {
+			return await api<T>(
+				"/api/language",
+				{
+					session,
+					version: model.getVersionId(),
+					code: model.getValue(),
+					action,
+					position,
+					...extras,
+				},
+				controller.signal,
+			);
+		} catch (error) {
+			if (controller.signal.aborted) return undefined;
+			throw error;
+		} finally {
+			cancel?.dispose();
+			if (inflight.get(action) === controller) inflight.delete(action);
+		}
+	};
 	const display = (parts?: ts.SymbolDisplayPart[]) =>
 		parts?.map((part) => part.text).join("") ?? "";
 	const range = (span: ts.TextSpan) => {
@@ -205,8 +238,17 @@ async function start() {
 		async provideCompletionItems(_model, position, _context, token) {
 			const version = model.getVersionId();
 			const offset = model.getOffsetAt(position);
-			const entries = await query<ts.CompletionEntry[]>("complete", offset);
-			if (token.isCancellationRequested || model.getVersionId() !== version)
+			const entries = await query<ts.CompletionEntry[]>(
+				"complete",
+				offset,
+				{},
+				token,
+			);
+			if (
+				!entries ||
+				token.isCancellationRequested ||
+				model.getVersionId() !== version
+			)
 				return { suggestions: [] };
 			const word = model.getWordUntilPosition(position);
 			return {
@@ -235,13 +277,14 @@ async function start() {
 				}),
 			};
 		},
-		async resolveCompletionItem(item) {
+		async resolveCompletionItem(item, token) {
 			const meta = completionMeta.get(item);
 			if (!meta) return item;
 			const details = await query<ts.CompletionEntryDetails | null>(
 				"details",
 				meta.position,
 				meta,
+				token,
 			);
 			if (details) {
 				item.detail = display(details.displayParts);
@@ -269,6 +312,8 @@ async function start() {
 			const info = await query<ts.QuickInfo | null>(
 				"hover",
 				model.getOffsetAt(position),
+				{},
+				token,
 			);
 			if (
 				!info ||
@@ -291,6 +336,8 @@ async function start() {
 			const info = await query<ts.SignatureHelpItems | null>(
 				"signature",
 				model.getOffsetAt(position),
+				{},
+				token,
 			);
 			if (!info || token.isCancellationRequested) return null;
 			return {
@@ -322,11 +369,14 @@ async function start() {
 		category: number;
 		code: number;
 	};
-	async function diagnostics() {
+	let diagnosedVersion: number | undefined;
+	async function diagnostics(force = false) {
 		const version = model.getVersionId();
+		if (!force && version === diagnosedVersion) return;
 		try {
 			const issues = await query<Diagnostic[]>("diagnostics");
-			if (model.getVersionId() !== version) return;
+			if (!issues || model.getVersionId() !== version) return;
+			diagnosedVersion = version;
 			monaco.editor.setModelMarkers(
 				model,
 				"typescript",
@@ -397,6 +447,8 @@ async function start() {
 	model.onDidChangeContent(() => {
 		persist();
 		clearTimeout(diagnosticTimer);
+		// The buffer moved on: let the server drop a pending check of the old one.
+		inflight.get("diagnostics")?.abort();
 		diagnosticTimer = setTimeout(() => void diagnostics(), 400);
 	});
 	nameInput.oninput = persist;
@@ -661,7 +713,7 @@ async function start() {
 			showProject(await api<ProjectInfo>("/api/refresh", {}));
 			saved = await api<Saved[]>("/api/sandbox");
 			renderSaved();
-			await diagnostics();
+			await diagnostics(true);
 			toast("Projeto e tipos atualizados.");
 		} catch (error) {
 			toast(`Falha ao atualizar: ${String(error)}`);

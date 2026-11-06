@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import { createProject, projectInfo } from "./project";
 import { execute } from "./runner";
 import { sandboxStore } from "./sandbox";
+import { languageQueue, stale } from "./scheduler";
 
 const args = process.argv.slice(2).filter((arg) => arg !== "playground");
 if (args.includes("--help")) {
@@ -30,7 +31,13 @@ if (source && !(await Bun.file(join(project, "src/index.ts")).exists()))
 	throw new Error("Source mode requires src/index.ts");
 const sandboxes = sandboxStore(project);
 const assets = join(import.meta.dir, "assets");
-const sessions = new Map<string, ReturnType<typeof createProject>>();
+const sessions = new Map<
+	string,
+	{
+		project: ReturnType<typeof createProject>;
+		queue: ReturnType<typeof languageQueue>;
+	}
+>();
 const executions = new Set<AbortController>();
 const getProject = (id: string) => {
 	let context = sessions.get(id);
@@ -38,11 +45,14 @@ const getProject = (id: string) => {
 		if (sessions.size >= 8) {
 			const oldest = sessions.keys().next().value;
 			if (oldest) {
-				sessions.get(oldest)?.dispose();
+				sessions.get(oldest)?.project.dispose();
 				sessions.delete(oldest);
 			}
 		}
-		context = createProject(project, source);
+		context = {
+			project: createProject(project, source),
+			queue: languageQueue(),
+		};
 		sessions.set(id, context);
 	}
 	return context;
@@ -87,7 +97,7 @@ const server = Bun.serve({
 			if (url.pathname === "/api/project" && request.method === "GET")
 				return Response.json({ ...(await projectInfo(project)), source });
 			if (url.pathname === "/api/refresh" && request.method === "POST") {
-				for (const context of sessions.values()) context.reload();
+				for (const context of sessions.values()) context.project.reload();
 				return Response.json({ ...(await projectInfo(project)), source });
 			}
 			if (url.pathname === "/api/language" && request.method === "POST") {
@@ -99,15 +109,25 @@ const server = Bun.serve({
 					typeof body.action !== "string"
 				)
 					return new Response("Invalid request", { status: 400 });
-				return Response.json(
-					getProject(body.session).query(
-						body.code,
-						body.action,
-						Number(body.position) || 0,
-						body.name,
-						body.source,
-					),
+				const context = getProject(body.session);
+				const result = await context.queue.run(
+					() =>
+						context.project.query(
+							body.code,
+							body.action,
+							Number(body.position) || 0,
+							body.name,
+							body.source,
+						),
+					{
+						version: Number.isInteger(body.version) ? body.version : undefined,
+						interactive: body.action !== "diagnostics",
+						signal: request.signal,
+					},
 				);
+				// Superseded by a newer buffer version or aborted by the client.
+				if (result === stale) return new Response(null, { status: 204 });
+				return Response.json(result);
 			}
 			if (url.pathname === "/api/run" && request.method === "POST") {
 				if (executions.size >= 4)

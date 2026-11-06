@@ -64,7 +64,7 @@
 		"build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target node --format esm --packages external && tsc -p tsconfig.build.json",
 		"postbuild": "bun scripts/add-dts-extensions.ts && bun playground/build.ts",
 		"playground": "bun playground/build.ts && bun dist/playground/server.js --source",
-		"test:playground": "bun test ./playground/runner.test.ts",
+		"test:playground": "bun test ./playground/runner.test.ts ./playground/scheduler.test.ts",
 		"bench": "cd bench && bun install && bun run.ts",
 		"smoke": "bun run build && node scripts/smoke.mjs",
 		"test:types": "bun run build && bun tests/types-compat/run.ts",

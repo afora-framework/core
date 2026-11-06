@@ -5,6 +5,6 @@
 	"scripts": {
 		"dev": "bun build.ts && bun ../dist/playground/server.js --project .. --source",
 		"check": "bun check",
-		"test": "bun test ./runner.test.ts"
+		"test": "bun test ./runner.test.ts ./scheduler.test.ts"
 	}
 }

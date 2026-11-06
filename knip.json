@@ -8,7 +8,7 @@
 				"src/index.ts",
 				"src/**/*.sandbox.ts",
 				"scripts/*.{ts,mjs}",
-				"playground/{server,build,client,child,editor.worker,runner.test}.ts"
+				"playground/{server,build,client,child,editor.worker,runner.test,scheduler.test}.ts"
 			],
 			"project": ["src/**/*.ts", "scripts/**/*.{ts,mjs}", "playground/*.ts"]
 		},
