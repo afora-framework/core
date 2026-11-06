@@ -211,6 +211,7 @@ export interface ApplicationDescription {
 				readonly from: string;
 				readonly entity: string;
 				readonly actions: readonly string[];
+				readonly deletion: "hard" | "soft";
 				/** The names of the repositories of the entities its entity holds. */
 				readonly relations: readonly string[];
 				/** The names of its `environmentDependencies`. */
