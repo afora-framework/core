@@ -7,7 +7,7 @@ import type {
 	BlueprintField,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
-import { commandOf, isCommand } from "../command/command";
+import { commandOf, isCommand, verifyCommand } from "../command/command";
 import type { AnyCommand } from "../command/types/command.interface";
 import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
@@ -1040,7 +1040,7 @@ export function applicationOf<
 	}
 
 	// With a provider a command is rebuilt over the bound use cases, with the
-	// same settings; commandOf re-runs the transaction check on them.
+	// same settings, and its transaction check runs now, on the bound providers.
 	const commands: Record<string, unknown> = {};
 	const boundCommandOf = new Map<unknown, unknown>();
 	for (const entry of registry.commands.values()) {
@@ -1063,6 +1063,7 @@ export function applicationOf<
 						events: declared.events,
 						onEventError: declared.onEventError,
 					} as never);
+		if (provider !== undefined) verifyCommand(rebuilt);
 		boundCommandOf.set(entry.value, rebuilt);
 		commands[entry.name] = rebuilt;
 	}

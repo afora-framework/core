@@ -292,3 +292,74 @@ describe("describe", () => {
 		expect(app.describe().commands.C?.events).toBe("after-commit");
 	});
 });
+
+describe("transactions over repositories an application binds", () => {
+	class Note extends entityOf(Name) {}
+	class Tag extends entityOf(Name) {}
+	const Notes = repositoryOf({ entity: Note, actions: ["create", "count"] });
+	const Tags = repositoryOf({ entity: Tag, actions: ["create", "count"] });
+	class Tagged extends useCaseOf({
+		name: "Tagged",
+		blueprint: Name,
+		response: Empty,
+		errors: [Boom],
+		dependencies: { notes: Notes, tags: Tags },
+	}) {
+		override async execute({
+			notes = this.dependencies.notes,
+			tags = this.dependencies.tags,
+		}: {
+			notes?: typeof Notes;
+			tags?: typeof Tags;
+		} = {}): Promise<object> {
+			await notes.create(new Note(this.input));
+			await tags.create(new Tag(this.input));
+			if (this.input.name === "fail") throw new Boom({ source: "Tagged" });
+			return {};
+		}
+	}
+	const Notebook = commandOf({
+		name: "Notebook",
+		useCases: { tag: Tagged },
+		transaction: true,
+	});
+
+	test("declares, and fails on its first call when the providers differ", async () => {
+		await expect(Notebook.run("tag", { name: "a" })).rejects.toBeInstanceOf(
+			InvalidCommandDeclaration,
+		);
+	});
+
+	test("an application provider makes them one, and rolls both back", async () => {
+		const App = applicationOf({
+			name: "notebook",
+			entities: { Note, Tag },
+			repositories: { Notes, Tags },
+			useCases: { Tagged },
+			exceptions: { Boom },
+			commands: { Notebook },
+			provider: inMemoryProvider(),
+		});
+		await App.commands.Notebook.run("tag", { name: "ok" });
+		await expect(
+			App.commands.Notebook.run("tag", { name: "fail" }),
+		).rejects.toMatchObject({ name: "Boom" });
+		expect(await App.repositories.Notes.count()).toBe(1);
+		expect(await App.repositories.Tags.count()).toBe(1);
+	});
+
+	test("an application provider without transactions fails when it binds", () => {
+		const { transaction: _, ...plain } = inMemoryProvider();
+		expect(() =>
+			applicationOf({
+				name: "notebook",
+				entities: { Note, Tag },
+				repositories: { Notes, Tags },
+				useCases: { Tagged },
+				exceptions: { Boom },
+				commands: { Notebook },
+				provider: plain as never,
+			}),
+		).toThrow(InvalidCommandDeclaration);
+	});
+});

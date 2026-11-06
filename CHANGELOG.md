@@ -4,6 +4,7 @@
 
 ### Changed
 
+- `commandOf({ transaction: true })` checks at declaration only the providers the repositories declared; the rest are checked when an application binds the command (with its provider) or on the first call, so a transactional command over repositories that an application provider binds can be declared at module level.
 - A relation to a soft-deleted entity loads it (deleted, read-only) instead of failing the read with `InvalidRepositoryData`: a reference is data, so an order keeps its deleted product.
 - Breaking: TypeBox is now a required peer dependency (`typebox: ^1`) instead of a runtime dependency. Install it alongside `@afora/core`; companion packages and generated applications share the application's TypeBox installation.
 - Breaking: record and entity instance metadata moved from `.blueprint` and `.options` to `[Meta].blueprint` and `[Meta].options`. Class statics keep their names. `blueprint` and `options` are now legal domain fields, including plugin fields, and metadata no longer appears in spread or `Object.keys`. Reserved record and entity names are covered by fixed contract tests.

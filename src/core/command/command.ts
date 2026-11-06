@@ -4,7 +4,7 @@ import type { EntityEvent } from "../entity/event";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { guard } from "../exception/guard";
 import { isRepository } from "../repository/repository";
-import { findState } from "../repository/state";
+import { findState, type RepositoryState } from "../repository/state";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
 import { type ExecutionScope, ScopeKey } from "../use-case/scope";
@@ -25,15 +25,35 @@ import type {
 	CommandUseCases,
 } from "./types/command.interface";
 
+/** The check of the providers of each command, run on its first call or by `verifyCommand`. */
+const verifiers = new WeakMap<object, () => unknown>();
+
+/**
+ * Checks now that the repositories of `command` share a provider that has
+ * `transaction`, as its first call would; an application calls it when it
+ * binds the command to its provider.
+ * @internal
+ */
+export function verifyCommand(command: object): void {
+	verifiers.get(command)?.();
+}
+
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
-/** The providers of every repository the use cases reach, with the names of the repositories. */
+/**
+ * The providers of every repository the use cases reach, with the names of
+ * the repositories. With `declared`, only the providers the repositories
+ * declared: the others are bound later by an application.
+ */
 function providersOf(
 	useCases: CommandUseCases,
+	declared: boolean,
 ): Map<IRepositoryProvider, string[]> {
 	const providers = new Map<IRepositoryProvider, string[]>();
 	const seen = new Set<unknown>();
-	const add = (provider: IRepositoryProvider, name: string) => {
+	const add = (state: RepositoryState) => {
+		if (declared && !state.explicitProvider) return;
+		const { provider, name } = state;
 		const names = providers.get(provider) ?? [];
 		if (!names.includes(name)) names.push(name);
 		providers.set(provider, names);
@@ -47,10 +67,8 @@ function providersOf(
 			} else if (isRepository(dependency)) {
 				const state = findState(dependency);
 				if (!state) continue;
-				add(state.provider, state.name);
-				for (const related of state.relations.values()) {
-					add(related.provider, related.name);
-				}
+				add(state);
+				for (const related of state.relations.values()) add(related);
 			}
 		}
 	};
@@ -66,8 +84,9 @@ function providersOf(
 function transactionProviderOf(
 	name: string,
 	useCases: CommandUseCases,
+	declared = false,
 ): IRepositoryProvider | undefined {
-	const providers = providersOf(useCases);
+	const providers = providersOf(useCases, declared);
 	const invalid = (reason: string, repositories: readonly string[]): never => {
 		throw new InvalidCommandDeclaration({
 			source: name,
@@ -185,9 +204,16 @@ export function commandOf<
 			invalid('onEventError only applies to the "after-commit" policy.');
 		}
 	}
-	const provider = transaction
-		? transactionProviderOf(source, useCases)
-		: undefined;
+	// At declaration only the providers the repositories declared are checked:
+	// an application binds the others to its provider later. All of them are
+	// checked on the first call, or when an application binds the command.
+	if (transaction) transactionProviderOf(source, useCases, true);
+	let resolved: { provider: IRepositoryProvider | undefined } | undefined;
+	const providerOfCall = (): IRepositoryProvider | undefined => {
+		if (!transaction) return undefined;
+		resolved ??= { provider: transactionProviderOf(source, useCases) };
+		return resolved.provider;
+	};
 	const operations = Object.freeze(Object.keys(useCases));
 	const frozenUseCases = Object.freeze({ ...useCases });
 
@@ -228,6 +254,7 @@ export function commandOf<
 			const value = await useCase.execute();
 			return { value, events: useCase.pullEvents() };
 		};
+		const provider = providerOfCall();
 		const outcome = await guard(
 			{ layer: ExceptionLayers.Command, source: where },
 			() =>
@@ -274,7 +301,9 @@ export function commandOf<
 			return value;
 		},
 	};
-	return Object.freeze(command) as unknown as CommandOf<UseCases, Context>;
+	Object.freeze(command);
+	verifiers.set(command, providerOfCall);
+	return command as unknown as CommandOf<UseCases, Context>;
 }
 
 /** Step 6: what the command does with the events of a call that succeeded. */
