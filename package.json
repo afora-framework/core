@@ -82,7 +82,8 @@
 		"prepublishOnly": "bun run typecheck && bun test && bun run smoke",
 		"test:codegen": "bun test --cwd packages/codegen",
 		"test:mcp": "bun test --cwd packages/mcp",
-		"build:packages": "bun run build && bun run --cwd packages/codegen build && bun run --cwd packages/mcp build && bun run --cwd packages/playground build"
+		"test:drizzle": "bun test --cwd packages/drizzle",
+		"build:packages": "bun run build && bun run --cwd packages/codegen build && bun run --cwd packages/mcp build && bun run --cwd packages/drizzle build && bun run --cwd packages/playground build"
 	},
 	"dependencies": {
 		"slugify": "^1.6.9"

@@ -1120,7 +1120,7 @@ Where the others win: Zod and Valibot are faster, have far larger ecosystems and
 
 ## Packages
 
-`@afora/codegen` generates afora code from an `afora.json` (and extracts the `afora.json` of an `Application` back), and `@afora/mcp` is an MCP server that lets an agent build a domain with it: see [packages/codegen](packages/codegen/README.md) and [packages/mcp](packages/mcp/README.md).
+`@afora/codegen` generates afora code from an `afora.json` (and extracts the `afora.json` of an `Application` back), and `@afora/mcp` is an MCP server that lets an agent build a domain with it: see [packages/codegen](packages/codegen/README.md) and [packages/mcp](packages/mcp/README.md). `@afora/drizzle` is a repository provider on Drizzle ORM (SQLite and Postgres) that passes the provider contract kit: see [packages/drizzle](packages/drizzle/README.md).
 
 ## Local playground
 
@@ -1164,9 +1164,10 @@ bun run fmt           # biome format + fix
 bun run build         # build dist/ (ESM + .d.ts)
 bun run test:codegen  # tests of packages/codegen
 bun run test:mcp      # tests of packages/mcp
+bun run test:drizzle  # tests of packages/drizzle (SQLite and PGlite)
 bun run test:playground # tests of packages/playground
 bun run playground    # the local playground, on this repository's src/
-bun run build:packages # build the core, then packages/codegen, packages/mcp and packages/playground
+bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/drizzle and packages/playground
 ```
 
 ## Contributing

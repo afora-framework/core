@@ -23,6 +23,10 @@
 			],
 			"project": ["src/**/*.ts", "scripts/*.ts", "tests/**/*.ts"]
 		},
+		"packages/drizzle": {
+			"entry": ["src/index.ts", "src/**/*.test.ts"],
+			"project": ["src/**/*.ts"]
+		},
 		"packages/playground": {
 			"entry": [
 				"src/{server,client,child,editor.worker,runner.test,scheduler.test}.ts"
