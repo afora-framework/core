@@ -66,6 +66,28 @@ export type {
 	IBlueprintFactories,
 	IBlueprintPlugin,
 } from "./core/blueprint/types/blueprint-plugin.interface";
+export { commandOf, isCommand } from "./core/command/command";
+export {
+	CommandEventFailed,
+	InvalidCommandContext,
+	InvalidCommandDeclaration,
+	UnknownCommandOperation,
+} from "./core/command/exceptions";
+export type {
+	AnyCommand,
+	CommandEventErrorHandler,
+	CommandEventHandler,
+	CommandEventInfo,
+	CommandEvents,
+	CommandExecution,
+	CommandInput,
+	CommandOf,
+	CommandOperation,
+	CommandOptions,
+	CommandResponse,
+	CommandSettings,
+	CommandUseCases,
+} from "./core/command/types/command.interface";
 export {
 	AbstractEntity,
 	ENTITY_IDENTITY_KEYS,

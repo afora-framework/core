@@ -1,5 +1,6 @@
 import * as Application from "../application/exceptions";
 import * as Blueprint from "../blueprint/exceptions";
+import * as Command from "../command/exceptions";
 import * as Entity from "../entity/exceptions";
 import * as Environment from "../environment/environment";
 import * as OpenAPI from "../openapi/exceptions";
@@ -32,6 +33,7 @@ export function isExportedException(Declared: unknown): boolean {
 		for (const module of [
 			Application,
 			Blueprint,
+			Command,
 			Entity,
 			Environment,
 			OpenAPI,
