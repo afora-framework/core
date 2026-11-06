@@ -23,6 +23,10 @@
 			],
 			"project": ["src/**/*.ts", "scripts/*.ts", "tests/**/*.ts"]
 		},
+		"packages/hono": {
+			"entry": ["src/index.ts", "tests/**/*.test.ts"],
+			"project": ["src/**/*.ts", "tests/**/*.ts"]
+		},
 		"packages/playground": {
 			"entry": [
 				"src/{server,client,child,editor.worker,runner.test,scheduler.test}.ts"

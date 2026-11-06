@@ -75,6 +75,54 @@ function isPath(value: unknown): value is string {
 	);
 }
 
+/** The options that route operations: shared by the sinks that serve HTTP. */
+export interface RouteOptions {
+	readonly basePath?: string;
+	readonly route?: OpenAPISinkOptions["route"];
+}
+
+/** Where an operation is served. */
+export interface OperationRoute {
+	readonly method: OpenAPIMethod;
+	/** `basePath` included. */
+	readonly path: string;
+}
+
+/**
+ * Why `basePath` and `route` are not valid routing options, naming them
+ * `where.basePath` and `where.route`; `undefined` when they are.
+ */
+export function routeOptionsIssue(
+	options: RouteOptions,
+	where: string,
+): string | undefined {
+	const { basePath, route } = options as unknown as Obj;
+	if (
+		basePath !== undefined &&
+		(typeof basePath !== "string" || (basePath !== "" && !isPath(basePath)))
+	) {
+		return `Expected ${where}.basePath to be "" or a path such as "/api".`;
+	}
+	if (route !== undefined) {
+		if (!isObject(route)) return `Expected ${where}.route to be an object.`;
+		for (const [id, entry] of Object.entries(route)) {
+			if (!isObject(entry) || onlyKeys(entry, ["method", "path"], "route")) {
+				return `Expected ${where}.route["${id}"] to be { method?, path? }.`;
+			}
+			if (
+				entry.method !== undefined &&
+				!(METHODS as readonly unknown[]).includes(entry.method)
+			) {
+				return `Expected ${where}.route["${id}"].method to be one of ${METHODS.join(", ")}.`;
+			}
+			if (entry.path !== undefined && !isPath(entry.path)) {
+				return `Expected ${where}.route["${id}"].path to start with "/" and have no parameters or query.`;
+			}
+		}
+	}
+	return undefined;
+}
+
 function validate(options: OpenAPISinkOptions): string | undefined {
 	const bad = onlyKeys(
 		options as unknown as Obj,
@@ -110,34 +158,11 @@ function validate(options: OpenAPISinkOptions): string | undefined {
 			}
 		}
 	}
-	if (
-		basePath !== undefined &&
-		(typeof basePath !== "string" || (basePath !== "" && !isPath(basePath)))
-	) {
-		return 'Expected openapi.basePath to be "" or a path such as "/api".';
-	}
-	if (route !== undefined) {
-		if (!isObject(route)) return "Expected openapi.route to be an object.";
-		for (const [id, entry] of Object.entries(route)) {
-			if (!isObject(entry) || onlyKeys(entry, ["method", "path"], "route")) {
-				return `Expected openapi.route["${id}"] to be { method?, path? }.`;
-			}
-			if (
-				entry.method !== undefined &&
-				!(METHODS as readonly unknown[]).includes(entry.method)
-			) {
-				return `Expected openapi.route["${id}"].method to be one of ${METHODS.join(", ")}.`;
-			}
-			if (entry.path !== undefined && !isPath(entry.path)) {
-				return `Expected openapi.route["${id}"].path to start with "/" and have no parameters or query.`;
-			}
-		}
-	}
-	return undefined;
+	return routeOptionsIssue({ basePath, route } as RouteOptions, "openapi");
 }
 
-function invalid(reason: string): never {
-	throw new InvalidOutputStage({ source: "openapi", details: { reason } });
+function invalid(reason: string, source = "openapi"): never {
+	throw new InvalidOutputStage({ source, details: { reason } });
 }
 
 /** `changePassword` -> `change-password`. */
@@ -148,6 +173,47 @@ function kebab(text: string): string {
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-+|-+$/g, "");
+}
+
+/**
+ * The route of every operation, by id: `POST {basePath}/{kebab(command)}/{kebab(operation)}`,
+ * changed per operation id with `route`. Throws `InvalidOutputStage` (with
+ * `source`) when `route` names an unknown operation or two operations share a
+ * method and path. The routing of the `openapi` sink and of the sinks that
+ * serve HTTP.
+ */
+export function operationRoutes(
+	operations: readonly OperationDescriptor[],
+	options: RouteOptions,
+	source = "openapi",
+): ReadonlyMap<string, OperationRoute> {
+	const base = options.basePath ?? "";
+	const route = options.route ?? {};
+	const ids = new Set(operations.map(({ id }) => id));
+	for (const id of Object.keys(route)) {
+		if (!ids.has(id)) {
+			invalid(`${source}.route names the unknown operation "${id}".`, source);
+		}
+	}
+	const routes = new Map<string, OperationRoute>();
+	const taken = new Set<string>();
+	for (const operation of operations) {
+		const chosen = route[operation.id] ?? {};
+		const method: OpenAPIMethod = chosen.method ?? "post";
+		const path =
+			base +
+			(chosen.path ?? `/${kebab(operation.command)}/${kebab(operation.name)}`);
+		const key = `${method} ${path}`;
+		if (taken.has(key)) {
+			invalid(
+				`Two operations are routed to ${method.toUpperCase()} ${path}.`,
+				source,
+			);
+		}
+		taken.add(key);
+		routes.set(operation.id, { method, path });
+	}
+	return routes;
 }
 
 /** Every record class reachable from `properties`, nested ones first-seen order. */
@@ -307,13 +373,7 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 	name: "openapi",
 	validate,
 	build: (operations, options, { output }) => {
-		const base = options.basePath ?? "";
-		const route = options.route ?? {};
-		const ids = new Set(operations.map(({ id }) => id));
-		for (const id of Object.keys(route)) {
-			if (!ids.has(id))
-				invalid(`openapi.route names the unknown operation "${id}".`);
-		}
+		const routes = operationRoutes(operations, options);
 
 		const records = new Set<AnyRecordClass>();
 		for (const operation of operations) {
@@ -351,12 +411,7 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 		components.Problem = problemSchema();
 
 		for (const operation of operations) {
-			const chosen = route[operation.id] ?? {};
-			const method: OpenAPIMethod = chosen.method ?? "post";
-			const path =
-				base +
-				(chosen.path ??
-					`/${kebab(operation.command)}/${kebab(operation.name)}`);
+			const { method, path } = routes.get(operation.id) as OperationRoute;
 			const operationId = operation.id.replaceAll(".", "_");
 			if (operationIds.has(operationId)) {
 				invalid(`The operationId "${operationId}" is produced twice.`);
@@ -364,11 +419,6 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 			operationIds.add(operationId);
 			const slot = paths[path] ?? {};
 			paths[path] = slot;
-			if (slot[method]) {
-				invalid(
-					`Two operations are routed to ${method.toUpperCase()} ${path}.`,
-				);
-			}
 
 			const input = schemas[`${operation.id}#input`] as OpenAPISchema;
 			const response = schemas[`${operation.id}#response`] as OpenAPISchema;

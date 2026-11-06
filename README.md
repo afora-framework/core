@@ -851,7 +851,7 @@ const Docs = outputOf({
 Docs.build(); // { openapi: "3.1.0", info, paths, components: { schemas } }
 ```
 
-- **Routes.** `POST {basePath}/{kebab(command)}/{kebab(operation)}`, e.g. `/api/users/change-password`; `route` changes `method` (`get`, `post`, `put`, `patch`, `delete`) or `path` (no parameters) per operation id. Two operations on one method and path, or a `route` for an unknown id, throw `InvalidOutputStage`.
+- **Routes.** `POST {basePath}/{kebab(command)}/{kebab(operation)}`, e.g. `/api/users/change-password`; `route` changes `method` (`get`, `post`, `put`, `patch`, `delete`) or `path` (no parameters) per operation id. Two operations on one method and path, or a `route` for an unknown id, throw `InvalidOutputStage`. `operationRoutes(operations, { basePath?, route? })` gives these routes (`Map` of id to `{ method, path }`) for sinks that serve HTTP, such as `hono`, and `routeOptionsIssue` validates the two options.
 - **Operations.** `operationId` is the id with an underscore for the dot (`Users_register`; a collision throws), `summary` is the id, plus `description`, `tags` and `deprecated` from the descriptor. `post`, `put` and `patch` send the input as a JSON body (omitted when it has no fields); `get` and `delete` send it as query parameters, which needs every field to be a scalar property, otherwise the build throws `InvalidOutputStage` (route it with `post`). The `context` is transport-specific and not in the document: sinks that serve HTTP map it (headers, middleware).
 - **Responses.** `200` with the response schema (sensitive keys are `writeOnly`), `400` and `500` always, and one response per status of the declared `errors`, given by `statusOf` with the output `statuses` (422 by default). An operation does not expose its repository dependencies, so `404` and `409` are documented when a declared error maps to them. Errors are `application/problem+json` with `components.schemas.Problem` (RFC 9457 plus `layer` and `issues`).
 - **Models.** Records and entities reachable from inputs and responses are `components.schemas` named by class name and referenced with `$ref` (see [OpenAPI](#openapi)). Two different classes with one name, an anonymous class or a class named `Problem` throw `InvalidOutputStage`.
@@ -1120,7 +1120,7 @@ Where the others win: Zod and Valibot are faster, have far larger ecosystems and
 
 ## Packages
 
-`@afora/codegen` generates afora code from an `afora.json` (and extracts the `afora.json` of an `Application` back), and `@afora/mcp` is an MCP server that lets an agent build a domain with it: see [packages/codegen](packages/codegen/README.md) and [packages/mcp](packages/mcp/README.md).
+`@afora/codegen` generates afora code from an `afora.json` (and extracts the `afora.json` of an `Application` back), and `@afora/mcp` is an MCP server that lets an agent build a domain with it: see [packages/codegen](packages/codegen/README.md) and [packages/mcp](packages/mcp/README.md). `@afora/hono` is a `hono` sink for outputs: it serves the operations as a Hono app, with problem+json errors, masked responses and an optional OpenAPI document ([packages/hono](packages/hono/README.md)).
 
 ## Local playground
 
@@ -1164,9 +1164,10 @@ bun run fmt           # biome format + fix
 bun run build         # build dist/ (ESM + .d.ts)
 bun run test:codegen  # tests of packages/codegen
 bun run test:mcp      # tests of packages/mcp
+bun run test:hono     # tests of packages/hono
 bun run test:playground # tests of packages/playground
 bun run playground    # the local playground, on this repository's src/
-bun run build:packages # build the core, then packages/codegen, packages/mcp and packages/playground
+bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono and packages/playground
 ```
 
 ## Contributing
