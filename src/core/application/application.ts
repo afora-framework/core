@@ -15,6 +15,9 @@ import { isEnvironment } from "../environment/environment";
 import { declaredMessageOf, isDeclaredException } from "../exception/exception";
 import { isExportedException } from "../exception/exported";
 import { plainOf } from "../openapi/openapi";
+import { isOutput, outputOf } from "../output/output";
+import { stageDescriptionOf } from "../output/stage";
+import type { AnyOutput } from "../output/types/output.interface";
 import { isProperty } from "../property/is-property";
 import { type PropertyLineage, propertyLineageOf } from "../property/lineage";
 import { pluginsOf } from "../record/plugin";
@@ -62,6 +65,7 @@ const KEYS = [
 	"repositories",
 	"useCases",
 	"commands",
+	"outputs",
 	"exceptions",
 ] as const satisfies readonly ApplicationCollectionKey[];
 
@@ -90,6 +94,7 @@ const KIND_OF: Readonly<Record<ApplicationCollectionKey, string>> = {
 	repositories: "repository",
 	useCases: "use case",
 	commands: "command",
+	outputs: "output",
 	exceptions: "exception",
 };
 
@@ -125,6 +130,8 @@ function isOfKind(collection: ApplicationCollectionKey, value: unknown) {
 			return isUseCaseClass(value);
 		case "commands":
 			return isCommand(value);
+		case "outputs":
+			return isOutput(value);
 		case "exceptions":
 			return isDeclaredException(value);
 	}
@@ -238,9 +245,11 @@ function resolve(
 					? (value as AnyUseCaseClass).useCaseName
 					: collection === "commands"
 						? (value as AnyCommand).commandName
-						: collection === "exceptions"
-							? (value as { name: string }).name
-							: name;
+						: collection === "outputs"
+							? (value as AnyOutput).outputName
+							: collection === "exceptions"
+								? (value as { name: string }).name
+								: name;
 			if (declaredName !== name) {
 				invalid(
 					source,
@@ -356,6 +365,34 @@ function validateCommands(source: string, registry: Registry): void {
 					reference: `use case "${UseCase.useCaseName}"`,
 					command: entry.name,
 					useCase: UseCase.useCaseName,
+				} as { holder: string; reference: string },
+			});
+		}
+	}
+}
+
+/** Checks that every output is named and every command of it is registered. */
+function validateOutputs(source: string, registry: Registry): void {
+	const commands = new Set(
+		[...registry.commands.values()].map((entry) => entry.key),
+	);
+	for (const entry of registry.outputs.values()) {
+		const output = entry.value as AnyOutput;
+		if (!output.outputName) {
+			invalid(
+				source,
+				`outputs.${entry.name} has no name (an output made by pipe cannot be registered).`,
+			);
+		}
+		for (const command of output.commands) {
+			if (commands.has(command)) continue;
+			throw new UnregisteredApplicationReference({
+				source,
+				details: {
+					holder: `output "${entry.name}"`,
+					reference: `command "${command.commandName}"`,
+					output: entry.name,
+					command: command.commandName,
 				} as { holder: string; reference: string },
 			});
 		}
@@ -790,6 +827,16 @@ function describeRegistry(
 					: { onEventError: { kind: "opaque" } as const }),
 			};
 		}),
+		outputs: each("outputs", (entry) => {
+			const output = entry.value as AnyOutput;
+			return {
+				from: entry.from,
+				name: output.outputName,
+				commands: output.commands.map((command) => command.commandName),
+				statuses: output.statuses,
+				pipe: output.stages.map((stage) => stageDescriptionOf(stage)),
+			};
+		}),
 		exceptions: each("exceptions", (entry) => {
 			const Declared = entry.value as Parameters<typeof declaredMessageOf>[0];
 			const message = declaredMessageOf(Declared);
@@ -852,6 +899,10 @@ export function applicationOf<
 		never,
 		never
 	>,
+	const Outputs extends ApplicationCollections["outputs"] = Record<
+		never,
+		never
+	>,
 	const Exceptions extends ApplicationCollections["exceptions"] = Record<
 		never,
 		never
@@ -869,6 +920,7 @@ export function applicationOf<
 			repositories: Repositories;
 			useCases: UseCases;
 			commands: Commands;
+			outputs: Outputs;
 			exceptions: Exceptions;
 		}
 	>,
@@ -884,6 +936,7 @@ export function applicationOf<
 			repositories: Repositories;
 			useCases: UseCases;
 			commands: Commands;
+			outputs: Outputs;
 			exceptions: Exceptions;
 		},
 		Extended
@@ -901,6 +954,7 @@ export function applicationOf<
 	validate(name, registry);
 	validateUseCases(name, registry);
 	validateCommands(name, registry);
+	validateOutputs(name, registry);
 
 	const provider: IRepositoryProvider | undefined =
 		settings.provider ??
@@ -993,6 +1047,27 @@ export function applicationOf<
 		commands[entry.name] = rebuilt;
 	}
 
+	// With a provider an output is rebuilt over the bound commands, with the
+	// same name, statuses and stages (the transforms run again on them).
+	const outputs: Record<string, unknown> = {};
+	const boundOutputOf = new Map<unknown, unknown>();
+	for (const entry of registry.outputs.values()) {
+		const declared = entry.value as AnyOutput;
+		const rebuilt =
+			provider === undefined
+				? declared
+				: outputOf({
+						name: declared.outputName,
+						commands: declared.commands.map(
+							(command) => boundCommandOf.get(command) as AnyCommand,
+						),
+						statuses: declared.statuses,
+						pipe: declared.stages,
+					});
+		boundOutputOf.set(entry.value, rebuilt);
+		outputs[entry.name] = rebuilt;
+	}
+
 	const application = Object.freeze({
 		[Kind]: "application" as const,
 		name,
@@ -1006,6 +1081,7 @@ export function applicationOf<
 		repositories: Object.freeze(repositories),
 		useCases: Object.freeze(useCases),
 		commands: Object.freeze(commands),
+		outputs: Object.freeze(outputs),
 		exceptions: collection("exceptions"),
 		useCase(useCase: unknown) {
 			if (!boundUseCaseOf.has(useCase)) {
@@ -1018,6 +1094,12 @@ export function applicationOf<
 				invalid(name, "Expected a command registered in the application.");
 			}
 			return boundCommandOf.get(command);
+		},
+		output(output: unknown) {
+			if (!boundOutputOf.has(output)) {
+				invalid(name, "Expected an output registered in the application.");
+			}
+			return boundOutputOf.get(output);
 		},
 		repository(repository: unknown) {
 			if (!bound.has(repository)) {

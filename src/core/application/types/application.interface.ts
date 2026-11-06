@@ -1,6 +1,10 @@
 import type { AnyCommand } from "../../command/types/command.interface";
 import type { AnyEnvironment } from "../../environment/environment";
 import type { ExceptionLayers } from "../../exception/enums/exception-layers";
+import type {
+	AnyOutput,
+	StageDescription,
+} from "../../output/types/output.interface";
 import type { RecordPluginDescriptor } from "../../record/types/plugin.interface";
 import type { ProviderDescription } from "../../repository/types/query.interface";
 import type {
@@ -26,6 +30,7 @@ export interface ApplicationCollections {
 	readonly repositories: Named<AnyRepository>;
 	readonly useCases: Named<AnyUseCaseClass>;
 	readonly commands: Named<AnyCommand>;
+	readonly outputs: Named<AnyOutput>;
 	readonly exceptions: Named<AnyExceptionClass>;
 }
 
@@ -55,6 +60,8 @@ export interface ApplicationSettings<
 	readonly useCases?: Collections["useCases"];
 	/** Commands, keyed by their `commandName`; every use case of each must be in `useCases`. */
 	readonly commands?: Collections["commands"];
+	/** Outputs, keyed by their `outputName`; every command of each must be in `commands`. */
+	readonly outputs?: Collections["outputs"];
 	/** Exceptions made by `exceptionOf`, keyed by their `name`. */
 	readonly exceptions?: Collections["exceptions"];
 	/**
@@ -117,6 +124,11 @@ export interface IApplication<
 	 * cases (same settings), memoized; without one, the declared commands.
 	 */
 	readonly commands: Collections["commands"];
+	/**
+	 * Its outputs. With a `provider` they are rebuilt over the bound commands
+	 * (same name, statuses and stages), memoized; without one, the declared outputs.
+	 */
+	readonly outputs: Collections["outputs"];
 	/** Its exceptions. */
 	readonly exceptions: Collections["exceptions"];
 	/** The bound version of a repository registered in the application. */
@@ -127,6 +139,8 @@ export interface IApplication<
 	useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase;
 	/** The bound version of a command registered in the application. */
 	command<Command extends AnyCommand>(command: Command): Command;
+	/** The bound version of an output registered in the application. */
+	output<Output extends AnyOutput>(output: Output): Output;
 	/** A new application with the declarations of `others` too; this one is left as it is. */
 	extend<const Others extends readonly AnyApplication[]>(
 		...others: Others
@@ -265,6 +279,15 @@ export interface CommandDescription {
 	readonly onEventError?: { readonly kind: "opaque" };
 }
 
+/** An output: its commands, statuses and pipe. */
+export interface OutputDescription {
+	readonly from: string;
+	readonly name: string;
+	readonly commands: readonly string[];
+	readonly statuses: Readonly<Record<string, number>>;
+	readonly pipe: readonly StageDescription[];
+}
+
 /** An exception: its layer and, when declared as a string, its message. */
 export interface ExceptionDescription {
 	readonly from: string;
@@ -315,5 +338,6 @@ export interface ApplicationDescription {
 	>;
 	readonly useCases: Readonly<Record<string, UseCaseDescription>>;
 	readonly commands: Readonly<Record<string, CommandDescription>>;
+	readonly outputs: Readonly<Record<string, OutputDescription>>;
 	readonly exceptions: Readonly<Record<string, ExceptionDescription>>;
 }

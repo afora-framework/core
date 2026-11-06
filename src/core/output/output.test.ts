@@ -191,9 +191,23 @@ describe("operations", () => {
 		const Same = commandOf({ name: "Users", useCases: { register: Register } });
 		const attempt = () => outputOf({ name: "Api", commands: [Users, Same] });
 		expect(attempt).toThrow(DuplicateOperation);
-		expect(() => outputOf({ name: "Api", commands: [Users, Users] })).toThrow(
-			DuplicateOperation,
-		);
+	});
+
+	test("the same command twice counts once", () => {
+		const Twice = outputOf({ name: "Api", commands: [Users, Users] });
+		expect(Twice.commands).toEqual([Users]);
+		expect(Twice.operations.map((op) => op.id)).toEqual([
+			"Users.register",
+			"Users.total",
+		]);
+	});
+
+	test("a command source that is neither command nor application throws", () => {
+		for (const commands of [{}, [{}], "Users", [Users, null]]) {
+			expect(() => outputOf({ name: "Api", commands } as never)).toThrow(
+				InvalidOutputStage,
+			);
+		}
 	});
 
 	test("the exceptions are in the Output layer and exported", () => {

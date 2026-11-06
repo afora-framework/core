@@ -164,13 +164,19 @@ export type PipeResult<Pipe extends readonly Stage[]> = Pipe extends readonly [
 	? Result
 	: never;
 
+/** An application, as far as an output is concerned: it gives its commands. */
+export interface OutputApplication {
+	readonly [Kind]: "application";
+	readonly commands: Readonly<Record<string, AnyCommand>>;
+}
+
+/** What an output takes its commands from. */
+export type OutputSource = AnyCommand | OutputApplication;
+
 export interface OutputSettings<Pipe extends readonly Stage[]> {
 	readonly name: string;
-	/**
-	 * The commands the output exposes.
-	 * TODO(T-application): an application (all its commands) is accepted once `applicationOf` supports outputs.
-	 */
-	readonly commands: readonly AnyCommand[];
+	/** The commands the output exposes: commands, applications (all their commands) or a mix. */
+	readonly commands: OutputApplication | readonly OutputSource[];
 	/** HTTP-style status by exception name. */
 	readonly statuses?: OutputStatuses;
 	readonly pipe?: Pipe;

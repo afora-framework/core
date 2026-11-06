@@ -17,6 +17,15 @@ import type {
 	StageContext,
 } from "./types/output.interface";
 
+/** Whether `value` is an application (checked by brand: `applicationOf` imports this module). */
+function isApplicationLike(value: unknown): boolean {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		(value as { [Kind]?: unknown })[Kind] === "application"
+	);
+}
+
 function invalid(source: string, reason: string): never {
 	throw new InvalidOutputStage({ source, details: { reason } });
 }
@@ -249,8 +258,7 @@ function make(
  * (an OpenAPI document, an HTTP app, ...). The operations are computed once,
  * at declaration; `build()` runs the sink the first time it is called.
  * Throws `InvalidOutputStage` (or `DuplicateOperation`) for a bad declaration.
- *
- * TODO: accept an application (`commands: app`) when `applicationOf` supports outputs.
+ * `commands` takes commands, applications (all their commands) or a mix.
  */
 export function outputOf<const Pipe extends readonly Stage[] = readonly []>(
 	settings: OutputSettings<Pipe>,
@@ -259,15 +267,30 @@ export function outputOf<const Pipe extends readonly Stage[] = readonly []>(
 	if (typeof name !== "string" || !name.trim()) {
 		invalid("outputOf", "Expected name to be a non-empty string.");
 	}
-	if (!Array.isArray(commands) || commands.some((entry) => !isCommand(entry))) {
+	const sources: unknown[] = Array.isArray(commands) ? commands : [commands];
+	if (
+		(!Array.isArray(commands) && isCommand(commands)) ||
+		sources.some((entry) => !isCommand(entry) && !isApplicationLike(entry))
+	) {
 		invalid(
 			name,
-			"Expected commands to be a list of commands made by commandOf (applications are not supported yet).",
+			"Expected commands to be a list of commands made by commandOf or applications.",
 		);
 	}
+	const flat = [
+		...new Set(
+			sources.flatMap((entry) =>
+				isCommand(entry)
+					? [entry]
+					: Object.values(
+							(entry as { commands: Record<string, AnyCommand> }).commands,
+						),
+			),
+		),
+	];
 	const statuses = statusesOf(name, settings.statuses);
 	const stages = checkPipe(name, settings.pipe ?? []);
-	const all = commands.flatMap(operationsOfCommand);
+	const all = flat.flatMap(operationsOfCommand);
 	const ids = new Set<string>();
 	for (const { id } of all) {
 		if (ids.has(id))
@@ -278,7 +301,7 @@ export function outputOf<const Pipe extends readonly Stage[] = readonly []>(
 	const operations = transformed(name, all, stages, context);
 	return make(
 		name,
-		Object.freeze([...commands]),
+		Object.freeze(flat),
 		operations,
 		stages,
 		statuses,
