@@ -4,6 +4,7 @@
 
 ### Added
 
+- `mcpTools` sink (with `McpStages` and `stages`): exposes the operations of an afora output as MCP tools (`{ tools, call, register, server }`), with inline input schemas, masked responses, problem JSON errors with `isError` and a `context` mapping.
 - Commands and outputs: `afora_spec_upsert`/`remove`/`write` accept `command` and `output` declarations, `afora_catalog` lists the `stages` a pipe may name, the guide teaches both, and `afora_extract` takes `imports` for `commands.<Name>.events`, `commands.<Name>.onEventError` and `outputs.<Name>.pipe.<index>`. `afora-mcp --stages <module>` (and `createServer({ stages })`) supplies the catalog of external stages, as `--providers` does for providers.
 - Exceptions, use cases and steps: `afora_spec_upsert`/`remove`/`write` accept `exception` and `useCase` declarations (invalid ones are issues and nothing is written), `afora_catalog` lists `exceptionLayers` and `coreExceptions`, the guide teaches the steps DSL, and `afora_extract` takes `imports` for hand-written use cases and `run` functions.
 - Providers: the guide, `afora_spec_write`/`afora_spec_upsert` (repository `provider`) and `afora_generate` handle `provider` and the actions `findMany`, `exists`, `findPage`; invalid providers are issues and nothing is written. `afora-mcp --providers <module>` (and `createServer({ providers })`) supplies the catalog of external providers, listed by `afora_catalog`; `afora_extract` takes `imports` for a provider created without `providerOf`.
