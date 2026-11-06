@@ -69,6 +69,7 @@
 		"smoke": "bun run build && node scripts/smoke.mjs",
 		"test:types": "bun run build && bun tests/types-compat/run.ts",
 		"test:type-perf": "bun run build && bun test ./tests/type-perf",
+		"test:api": "bun run build && bun test ./tests/api-surface",
 		"test:interop": "cd examples/interop && bun install && bun test",
 		"prepare": "husky",
 		"prepublishOnly": "bun run typecheck && bun test && bun run smoke",

@@ -873,6 +873,7 @@ bun test              # unit tests
 bun check             # type check
 bun run test:types    # build, then type-check the packed package on TypeScript, bundler and nodenext resolution
 bun run test:type-perf # build, then budget the editor cost per edit and snapshot hovers, completions and errors
+bun run test:api      # build, then snapshot the public surface (exports and declarations) and the afora.json schema
 bun run test:interop  # Hono, tRPC and TanStack Form tests (examples/interop), including the quick start
 bun run smoke         # build, then run the package on plain Node
 bun run bench         # benchmark against TypeBox, Zod, Valibot and ArkType
