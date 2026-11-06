@@ -15,6 +15,23 @@ const NOT_FOUND = new Set([
 ]);
 
 /**
+ * The exception that raised `error` under its name: a use case or a command
+ * passes an exception up as a copy with the same name, no details and the
+ * original as its cause, so the original is the deepest one with that name.
+ */
+export function raisedOf(error: Exception): Exception {
+	let raised = error;
+	for (
+		let current: unknown = error.cause;
+		current instanceof Exception;
+		current = current.cause
+	) {
+		if (current.name === error.name) raised = current;
+	}
+	return raised;
+}
+
+/**
  * The HTTP-style status of an error, in this order: `statuses` by exception
  * name; 400 for invalid input or context (and any exception whose
  * `details.issues` is a list); 404 for a missing entity or operation; 409 for
@@ -33,7 +50,9 @@ export function statusOf(
 		return statuses[name] as number;
 	if (INVALID_INPUT.has(name)) return 400;
 	if (
-		Array.isArray((error.details as { issues?: unknown } | undefined)?.issues)
+		Array.isArray(
+			(raisedOf(error).details as { issues?: unknown } | undefined)?.issues,
+		)
 	) {
 		return 400;
 	}
@@ -41,7 +60,7 @@ export function statusOf(
 	if (name === "RepositoryUniqueViolation") return 409;
 	if (
 		operation?.errors.some(
-			(Declared) => error instanceof Declared || Declared.name === name,
+			(Declared) => error.is(Declared) || Declared.name === name,
 		)
 	) {
 		return 422;

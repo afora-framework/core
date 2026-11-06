@@ -1,5 +1,6 @@
 import { Exception } from "../exception/exception";
 import type { Issue } from "../parse/types/parse.interface";
+import { raisedOf } from "./status";
 import type { Problem, ProblemOptions } from "./types/output.interface";
 
 /** The media type of a problem response. */
@@ -20,7 +21,8 @@ export function problemOf(error: unknown, options: ProblemOptions): Problem {
 	const message =
 		exception?.message ??
 		(error instanceof Error ? error.message : String(error));
-	const rawIssues = (exception?.details as { issues?: unknown } | undefined)
+	const raised = exception && raisedOf(exception);
+	const rawIssues = (raised?.details as { issues?: unknown } | undefined)
 		?.issues;
 	const issues =
 		status === 400 && Array.isArray(rawIssues)
@@ -35,7 +37,7 @@ export function problemOf(error: unknown, options: ProblemOptions): Problem {
 		title,
 		status,
 		detail: status >= 500 && !debug ? INTERNAL : message,
-		...(exception ? { layer: exception.layer } : {}),
+		...(raised ? { layer: raised.layer } : {}),
 		...(issues ? { issues } : {}),
 		...(debug
 			? { trace: exception ? exception.toString() : String(error) }

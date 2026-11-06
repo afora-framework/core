@@ -3,6 +3,7 @@ import {
 	blueprintOf,
 	commandOf,
 	DuplicateOperation,
+	Exception,
 	ExceptionLayers,
 	exceptionOf,
 	InvalidCommandContext,
@@ -755,5 +756,45 @@ describe("outputValueOf", () => {
 			a: 1,
 			b: [null, "x"],
 		});
+	});
+});
+
+describe("errors passed up by a use case or a command", () => {
+	const Declared = exceptionOf({
+		layer: ExceptionLayers.UseCase,
+		name: "Declared",
+		message: "Declared.",
+	});
+
+	test("the issues of the raised exception give a 400, with its layer", () => {
+		const raised = new Exception({
+			layer: ExceptionLayers.UseCase,
+			name: "InvalidThing",
+			source: "Register",
+			message: "Invalid.",
+			details: {
+				issues: [{ path: ["email"], code: "invalid_value", message: "bad" }],
+			},
+		});
+		const passed = raised
+			.propagate({ layer: ExceptionLayers.UseCase, source: "Register" })
+			.propagate({ layer: ExceptionLayers.Command, source: "Users.register" });
+		expect(statusOf(passed)).toBe(400);
+		const problem = problemOf(passed, { status: 400 });
+		expect(problem.issues).toEqual([
+			{ path: ["email"], code: "invalid_value", message: "bad" },
+		]);
+		expect(problem.layer).toBe(ExceptionLayers.UseCase);
+	});
+
+	test("a declared error wrapped under another name is still a 422", () => {
+		const wrapped = new Exception({
+			layer: ExceptionLayers.Command,
+			name: "Wrapper",
+			source: "Users.register",
+			message: "Wrapped.",
+			cause: new Declared({ source: "Register" }),
+		});
+		expect(statusOf(wrapped, { errors: [Declared] })).toBe(422);
 	});
 });
