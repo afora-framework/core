@@ -20,6 +20,7 @@ bun run fmt                              # biome format + fix (tabs, double quot
 bun run build                            # dist/: bun build (ESM, node target, deps external) + tsc declarations, then scripts/add-dts-extensions.ts
 bun run test:interop                     # examples/interop: real Hono, tRPC, TanStack Form tests, incl. the README quick start
 bun run test:types                       # packs the package and type-checks tests/types-compat on TS 5.5, latest 5.x and 7, bundler + nodenext
+bun run test:type-perf                   # tests/type-perf: per-edit type instantiations of README code (budgeted) + snapshot of hovers/completions/diagnostics, src and dist
 bun run smoke                            # build, then run scripts/smoke.mjs on plain Node
 bun run bench                            # bench/ vs TypeBox, Zod, Valibot, ArkType; results in bench/RESULTS.md
 ```
@@ -47,7 +48,7 @@ The library ships to Bun **and** Node >= 22 (and must load in browsers/Workers).
 
 **Cross-cutting pieces.** `core/exception`: `exceptionOf({ layer, name, message })` and `guard({ layer, source }, fn)`; each exception carries an `ExceptionLayers` value and a `trace` that grows as it crosses layers — new error types should be declared per module in an `exceptions.ts` with the right layer. `core/parse` + `core/standard`: `safeParse` and `~standard.validate` never throw for invalid input and collect every `Issue` (`code`, `path`, `source`); `Record.safeParse` goes through the class constructor. The invalid-input path is performance-sensitive (see `bench/`). `core/symbols`: `Kind`, `State`, `Demo` symbols brand values so blueprints, lists and records are distinguished by brand, not by shape.
 
-**Type-level work is a large part of the code.** Inference of inputs/outputs, unique keys (`MarkedUniqueKey`, literal `options.unique`), the `change.<key>` namespace members and generated `findBy<Key>` method names, etc. live in each module's `types/*.interface.ts`. Changes to public types should be checked with `bun run test:types`, not just `bun check`.
+**Type-level work is a large part of the code.** Inference of inputs/outputs, unique keys (`MarkedUniqueKey`, literal `options.unique`), the `change.<key>` namespace members and generated `findBy<Key>` method names, etc. live in each module's `types/*.interface.ts`. Changes to public types should be checked with `bun run test:types`, not just `bun check`, and with `bun run test:type-perf`: it keeps the editor cost per edit under budget and the writing experience (hovers, completions, error messages) unchanged unless its snapshot is updated on purpose (`-u`).
 
 ## Conventions
 
