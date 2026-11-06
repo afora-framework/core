@@ -672,6 +672,47 @@ The class gets the frozen statics `context`, `description`, `tags`, `deprecated`
 
 `UseCaseInput`, `UseCaseResponse` and `UseCaseDependencies` extract a declaration's types. `isUseCase` identifies instances; `isUseCaseClass` identifies concrete declarations with a prototype `execute`. UseCases carry their own kind and cannot be used as fields of ordinary data blueprints. Validation errors carry `details.issues`; errors crossing an execution boundary preserve their cause and gain a `UseCase` trace frame using the declared name.
 
+### Commands
+
+`commandOf` groups use cases under operation names and is the **execution boundary** of a call: the context is validated once, a transaction can wrap the use case, the events it raised are handled by a policy, and the trace gets a `command` frame.
+
+```ts
+import { blueprintOf, commandOf } from "@afora/core";
+
+const Users = commandOf({
+	name: "Users",
+	description: "Accounts.", // optional
+	tags: ["accounts"], // optional, default []
+	context: blueprintOf((ctx) => ({ userId: ctx.id, requestId: ctx.string })), // optional
+	useCases: { register: Register, login: Login },
+	transaction: true, // optional, default false
+	events: "after-commit", // "after-commit" (default) | "manual" | handler
+	onEventError: (error, event) => {}, // optional, "after-commit" only
+});
+
+const { user } = await Users.run("register", input, { context });
+const { value, events } = await Users.execute("register", input, { context }); // no event policy
+```
+
+The keys of `useCases` are the operation names: identifiers holding concrete use case classes. `commandOf` validates its settings and throws `InvalidCommandDeclaration` (`Command` layer, `details.reason`) for anything else. The command is frozen and exposes `commandName`, `description`, `tags`, `context`, `useCases`, `transaction`, `events`, `onEventError` and `operations`; `isCommand` identifies one.
+
+`run(op, input, options)` does this:
+
+1. An unknown operation throws `UnknownCommandOperation` (`details.operation`).
+2. With a command `context`, `options.context` is validated by that blueprint (`InvalidCommandContext`, `details.issues`) and each use case gets it narrowed to its own context keys; a use case without a context gets none. Without a command `context`, `options.context` goes to the use case as is, typed and validated by it.
+3. A fresh use case is built and executed. Input errors stay use case errors.
+4. With `transaction: true`, `execute()` runs inside the `transaction` of the provider of the repositories, which therefore see the transaction (relations and child use cases included). A rejection rolls back and propagates. At declaration, every repository reachable from the use cases (through child use cases and relations) must share one provider, and it must support `transaction`; otherwise `commandOf` throws `InvalidCommandDeclaration` listing the repositories. A command with no repository ignores the flag.
+5. The events are drained **after** the transaction resolves, so a call that rolled back handles none.
+6. The event policy applies, in `run` only:
+   - `"after-commit"`: awaits `event.handle()` in emission order. On the first failure, `onEventError(error, event)` is awaited and the next event runs; without it, `run` throws `CommandEventFailed` (`cause`, `details: { operation, event, handled, remaining }`). The commit already happened, so the data is saved even when this error is thrown.
+   - `"manual"`: `run` drops the events; use `execute` to get them.
+   - a function: awaited with `(events, { command, operation, context })`; a rejection is a `CommandEventFailed`.
+7. The validated response is returned.
+
+`execute` performs steps 1 to 5 and returns `{ value, events }` without applying the policy, for outboxes and tests. The whole call runs under a `Command` guard, so errors gain the frame `command @ Users.register`. Concurrent calls are independent; each builds its own use case.
+
+Types: `CommandOf`, `CommandOperation`, `CommandInput`, `CommandResponse`, `CommandOptions` and `AnyCommand`. `options` is `{ context }` when the command declares a context, or the use case's `UseCaseOptions` when it does not.
+
 ### Repositories
 
 `repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `count`, and the queries `findMany`, `exists` and `findPage`. Every method is async.
