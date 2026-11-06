@@ -9,6 +9,8 @@
 
 ### Added
 
+- `provider` in the spec, at the application and per repository: `"inMemory"`, `{ "use", "options" }` or `{ "import": "./file.ts#name" }`, with `{ "import" }` references nested in the options. Validated (`unknown_provider`, `invalid_provider`, `invalid_import`, `invalid_provider_catalog`), normalized (`"inMemory"` is `{ use: "inMemory", options: {} }`; an omitted provider is never a shared one), generated (`provider:` in `applicationOf` / `repositoryOf`, named imports) and extracted from `describe()`. External providers are a codegen option, `{ providers: [{ name, module, export }] }`, accepted by `validateSpec(spec, extended, options)` and `generate(spec, extended, options)`; the CLI takes `--providers <module>`. An opaque provider needs `imports` (`provider`, `repositories.<Name>.provider`; CLI `--import key=./file.ts#name`) or extraction throws `ExtractionError`.
+- Repository actions `findMany`, `exists` and `findPage` in the spec, schema, validation, generation and extraction.
 - Repository `deletion: "hard" | "soft"` in the spec, schema, validation (`invalid_deletion`), generation and extraction. Normalization omits the default `hard`; round trips preserve soft deletion behavior.
 - First version. `afora.json` (version 1): `properties` (`base` + `with`, `enum`, `opaque` imports), `blueprints`, `records`, `entities`, `environments`, `repositories`, `extends` and `output.dir`; `useCases` is reserved. Fields in shorthand (`"Age?"`, `"string[]"`) or object form.
 - `validateSpec(spec, extended?)`: issues with `path`, `code` and `message` for unknown references, name collisions, cycles, reserved and identity keys, `unique`/`sensitive`/`change`, plugins, repository actions and relations, and `with` options.

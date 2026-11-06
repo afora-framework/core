@@ -1,26 +1,50 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import type { ProviderCatalogEntry } from "@afora/codegen";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createServer } from "./server";
 
 const USAGE = `afora-mcp: an MCP server (stdio) to build a domain from an afora.json
 
-Usage: afora-mcp [--project <dir>] [--app <file.ts#Export>]
+Usage: afora-mcp [--project <dir>] [--app <file.ts#Export>] [--providers <module>]
 
   --project  the project directory; all writes stay inside it (default: the current directory)
-  --app      an application to extract the spec from when the project has no afora.json, e.g. src/app.ts#App`;
+  --app      an application to extract the spec from when the project has no afora.json, e.g. src/app.ts#App
+  --providers a module (path from the project) exporting \`providers\` (or a default export): an array of
+              { name, module, export } for the providers the spec's "use" may name (inMemory is built in)`;
+
+async function loadProviders(path: string): Promise<ProviderCatalogEntry[]> {
+	const module = (await import(pathToFileURL(path).href)) as Record<
+		string,
+		unknown
+	>;
+	const providers = module.providers ?? module.default;
+	if (!Array.isArray(providers)) {
+		throw new Error(
+			`${path} must export \`providers\` (or a default export): an array of { name, module, export }.`,
+		);
+	}
+	return providers as ProviderCatalogEntry[];
+}
 
 /** Starts the server on stdio. */
 export async function main(argv: string[]): Promise<number> {
-	let values: { project?: string; app?: string; help?: boolean };
+	let values: {
+		project?: string;
+		app?: string;
+		providers?: string;
+		help?: boolean;
+	};
 	try {
 		({ values } = parseArgs({
 			args: argv,
 			options: {
 				project: { type: "string" },
 				app: { type: "string" },
+				providers: { type: "string" },
 				help: { type: "boolean", short: "h" },
 			},
 		}));
@@ -34,7 +58,11 @@ export async function main(argv: string[]): Promise<number> {
 		return 0;
 	}
 	try {
+		const providers = values.providers
+			? await loadProviders(resolve(values.project ?? ".", values.providers))
+			: undefined;
 		const server = await createServer({
+			...(providers ? { providers } : {}),
 			...(values.project ? { project: values.project } : {}),
 			...(values.app ? { app: values.app } : {}),
 		});

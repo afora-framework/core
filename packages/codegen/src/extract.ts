@@ -4,6 +4,7 @@ import {
 	type FieldDescription,
 	type PropertyDescription,
 	type PropertyReference,
+	type ProviderDescription,
 	Std,
 } from "@afora/core";
 import { stdProperty } from "./catalog";
@@ -17,8 +18,18 @@ export interface ExtractOptions {
 	readonly extends?: Readonly<Record<string, string>>;
 	/** `output.dir` of the spec. `src/domain` by default. */
 	readonly outputDir?: string;
-	/** Where a property that cannot be recreated is imported from, by its name. `./opaque` by default. */
+	/**
+	 * Where a property that cannot be recreated is imported from, by its name
+	 * (`./opaque` by default). A provider created without `providerOf` cannot be
+	 * described: it needs an entry `"./db.ts#provider"` under the key `provider`
+	 * (the application's) or `repositories.<Name>.provider`.
+	 */
 	readonly imports?: Readonly<Record<string, string>>;
+}
+
+/** Thrown by `extractSpec` when the application holds something the spec cannot express without help. */
+export class ExtractionError extends Error {
+	override readonly name = "ExtractionError";
 }
 
 type Json = Record<string, unknown>;
@@ -29,6 +40,36 @@ const pascalOf = (text: string): string =>
 		.filter(Boolean)
 		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
 		.join("") || "Property";
+
+/**
+ * A provider as the spec says it. A named one (`providerOf`) is its name and
+ * the JSON options it was given; an import reference that produced an option
+ * cannot be recovered, so the options are those values.
+ */
+function providerSpec(
+	description: ProviderDescription,
+	key: string,
+	imports: Readonly<Record<string, string>> | undefined,
+): unknown {
+	if (description.kind === "provider") {
+		return description.name === "inMemory" &&
+			Object.keys(description.options).length === 0
+			? "inMemory"
+			: {
+					use: description.name,
+					...(Object.keys(description.options).length > 0
+						? { options: description.options }
+						: {}),
+				};
+	}
+	const reference = imports?.[key];
+	if (reference === undefined) {
+		throw new ExtractionError(
+			`The provider of ${key === "provider" ? "the application" : `"${key.slice("repositories.".length, -".provider".length)}"`} was not created with providerOf, so it cannot be described. Create it with providerOf({ name, options, create }), or pass imports: { "${key}": "./path/to/file.ts#exportName" } to import it as it is.`,
+		);
+	}
+	return { import: reference };
+}
 
 class Extraction {
 	readonly opaque = new Map<string, string>();
@@ -252,10 +293,10 @@ export function extractSpec(
 		] as const;
 	const entries = <Value extends { readonly from: string }>(
 		collection: Readonly<Record<string, Value>>,
-		map: (value: Value) => Json,
+		map: (value: Value, name: string) => Json,
 	): Json =>
 		Object.fromEntries(
-			own(collection).map(([name, value]) => [name, map(value)]),
+			own(collection).map(([name, value]) => [name, map(value, name)]),
 		);
 
 	const blueprints = entries(description.blueprints, (value) => ({
@@ -272,9 +313,18 @@ export function extractSpec(
 	const environments = entries(description.environments, (value) => ({
 		fields: extraction.json(value.fields),
 	}));
-	const repositories = entries(description.repositories, (value) => ({
+	const repositories = entries(description.repositories, (value, name) => ({
 		entity: value.entity,
 		actions: [...value.actions],
+		...(value.provider === undefined
+			? {}
+			: {
+					provider: providerSpec(
+						value.provider,
+						`repositories.${name}.provider`,
+						options.imports,
+					),
+				}),
 		...(value.deletion === "soft" ? { deletion: "soft" } : {}),
 		...(value.relations.length > 0 ? { relations: [...value.relations] } : {}),
 		...(value.environments.length > 0
@@ -294,6 +344,15 @@ export function extractSpec(
 				}
 			: {}),
 		output: { dir: options.outputDir ?? DEFAULT_OUTPUT_DIR },
+		...(description.provider === undefined
+			? {}
+			: {
+					provider: providerSpec(
+						description.provider,
+						"provider",
+						options.imports,
+					),
+				}),
 		...(Object.keys(allProperties).length > 0
 			? { properties: allProperties }
 			: {}),

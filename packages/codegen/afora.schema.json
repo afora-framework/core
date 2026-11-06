@@ -1,9 +1,7 @@
 {
 	"$schema": "http://json-schema.org/draft-07/schema#",
 	"type": "object",
-	"required": [
-		"version"
-	],
+	"required": ["version"],
 	"properties": {
 		"$schema": {
 			"type": "string"
@@ -25,9 +23,7 @@
 		},
 		"output": {
 			"type": "object",
-			"required": [
-				"dir"
-			],
+			"required": ["dir"],
 			"properties": {
 				"dir": {
 					"type": "string",
@@ -36,6 +32,83 @@
 			},
 			"additionalProperties": false
 		},
+		"provider": {
+			"anyOf": [
+				{
+					"type": "string",
+					"const": "inMemory"
+				},
+				{
+					"type": "object",
+					"required": ["use"],
+					"properties": {
+						"use": {
+							"type": "string",
+							"description": "A provider of the catalog given to codegen (inMemory is built in)."
+						},
+						"options": {
+							"type": "object",
+							"patternProperties": {
+								"^.*$": {
+									"anyOf": [
+										{
+											"type": "string"
+										},
+										{
+											"type": "number"
+										},
+										{
+											"type": "boolean"
+										},
+										{
+											"type": "null"
+										},
+										{
+											"type": "object",
+											"required": ["import"],
+											"properties": {
+												"import": {
+													"type": "string",
+													"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+													"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+												}
+											},
+											"additionalProperties": false
+										},
+										{
+											"type": "array",
+											"items": {}
+										},
+										{
+											"type": "object",
+											"patternProperties": {
+												"^.*$": {}
+											}
+										}
+									],
+									"description": "A JSON value, or { \"import\": \"./file.ts#name\" } for a value created by hand (nested at any depth)."
+								}
+							},
+							"description": "Options passed to the provider factory."
+						}
+					},
+					"additionalProperties": false
+				},
+				{
+					"type": "object",
+					"required": ["import"],
+					"properties": {
+						"import": {
+							"type": "string",
+							"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+							"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+						}
+					},
+					"additionalProperties": false
+				}
+			],
+			"description": "\"inMemory\", { \"use\": \"<catalog name>\", \"options\": {...} } or { \"import\": \"./file.ts#provider\" }."
+		},
 		"properties": {
 			"type": "object",
 			"patternProperties": {
@@ -43,9 +116,7 @@
 					"anyOf": [
 						{
 							"type": "object",
-							"required": [
-								"base"
-							],
+							"required": ["base"],
 							"properties": {
 								"base": {
 									"type": "string",
@@ -66,9 +137,7 @@
 						},
 						{
 							"type": "object",
-							"required": [
-								"enum"
-							],
+							"required": ["enum"],
 							"properties": {
 								"enum": {
 									"type": "array",
@@ -106,10 +175,7 @@
 						},
 						{
 							"type": "object",
-							"required": [
-								"opaque",
-								"import"
-							],
+							"required": ["opaque", "import"],
 							"properties": {
 								"opaque": {
 									"type": "boolean",
@@ -138,9 +204,7 @@
 			"patternProperties": {
 				"^[A-Z][A-Za-z0-9]*$": {
 					"type": "object",
-					"required": [
-						"fields"
-					],
+					"required": ["fields"],
 					"properties": {
 						"fields": {
 							"type": "object",
@@ -164,9 +228,7 @@
 			"patternProperties": {
 				"^[A-Z][A-Za-z0-9]*$": {
 					"type": "object",
-					"required": [
-						"fields"
-					],
+					"required": ["fields"],
 					"properties": {
 						"fields": {
 							"type": "object",
@@ -218,9 +280,7 @@
 			"patternProperties": {
 				"^[A-Z][A-Za-z0-9]*$": {
 					"type": "object",
-					"required": [
-						"fields"
-					],
+					"required": ["fields"],
 					"properties": {
 						"fields": {
 							"type": "object",
@@ -272,9 +332,7 @@
 			"patternProperties": {
 				"^[A-Z][A-Za-z0-9]*$": {
 					"type": "object",
-					"required": [
-						"fields"
-					],
+					"required": ["fields"],
 					"properties": {
 						"fields": {
 							"type": "object",
@@ -298,10 +356,7 @@
 			"patternProperties": {
 				"^[A-Z][A-Za-z0-9]*$": {
 					"type": "object",
-					"required": [
-						"entity",
-						"actions"
-					],
+					"required": ["entity", "actions"],
 					"properties": {
 						"entity": {
 							"type": "string",
@@ -326,7 +381,84 @@
 							"items": {
 								"type": "string"
 							},
-							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), create, update, delete, count."
+							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, create, update, delete, count."
+						},
+						"provider": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "inMemory"
+								},
+								{
+									"type": "object",
+									"required": ["use"],
+									"properties": {
+										"use": {
+											"type": "string",
+											"description": "A provider of the catalog given to codegen (inMemory is built in)."
+										},
+										"options": {
+											"type": "object",
+											"patternProperties": {
+												"^.*$": {
+													"anyOf": [
+														{
+															"type": "string"
+														},
+														{
+															"type": "number"
+														},
+														{
+															"type": "boolean"
+														},
+														{
+															"type": "null"
+														},
+														{
+															"type": "object",
+															"required": ["import"],
+															"properties": {
+																"import": {
+																	"type": "string",
+																	"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+																	"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+																}
+															},
+															"additionalProperties": false
+														},
+														{
+															"type": "array",
+															"items": {}
+														},
+														{
+															"type": "object",
+															"patternProperties": {
+																"^.*$": {}
+															}
+														}
+													],
+													"description": "A JSON value, or { \"import\": \"./file.ts#name\" } for a value created by hand (nested at any depth)."
+												}
+											},
+											"description": "Options passed to the provider factory."
+										}
+									},
+									"additionalProperties": false
+								},
+								{
+									"type": "object",
+									"required": ["import"],
+									"properties": {
+										"import": {
+											"type": "string",
+											"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+											"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"description": "\"inMemory\", { \"use\": \"<catalog name>\", \"options\": {...} } or { \"import\": \"./file.ts#provider\" }."
 						},
 						"relations": {
 							"type": "array",
@@ -365,9 +497,7 @@
 				},
 				{
 					"type": "object",
-					"required": [
-						"type"
-					],
+					"required": ["type"],
 					"properties": {
 						"type": {
 							"type": "string",
@@ -413,9 +543,7 @@
 				},
 				{
 					"type": "object",
-					"required": [
-						"enum"
-					],
+					"required": ["enum"],
 					"properties": {
 						"enum": {
 							"type": "array",
@@ -477,9 +605,7 @@
 				},
 				{
 					"type": "object",
-					"required": [
-						"fields"
-					],
+					"required": ["fields"],
 					"properties": {
 						"fields": {
 							"type": "object",

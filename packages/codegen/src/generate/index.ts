@@ -1,12 +1,15 @@
 import { posix } from "node:path";
-import { stdProperty } from "../catalog";
+import { catalog, stdProperty } from "../catalog";
 import { fieldsOfDecl, orderOf } from "../graph";
 import type { Field } from "../model";
 import { normalizeSpec } from "../normalize";
+import { isImportObject, parseImportRef } from "../provider";
 import { type Decl, type Scope, scopeOf } from "../scope";
 import { isIdentifier } from "../spec/field";
 import {
+	type CodegenOptions,
 	DEFAULT_OUTPUT_DIR,
+	type ProviderCatalogEntry,
 	type ResolvedSpec,
 	type Spec,
 	type SpecIssue,
@@ -91,12 +94,20 @@ function keyDoc(key: string): string {
 }
 
 /** A JSON value as a TypeScript literal: flat when it fits, broken when it does not. */
-function literal(value: Json): Doc {
+function literal(value: Json, onImport?: (reference: string) => string): Doc {
+	if (onImport && isImportObject(value))
+		return onImport(value.import as string);
 	if (Array.isArray(value)) {
 		if (value.length === 0) return "[]";
 		return group([
 			"[",
-			indent([softline, join([",", line], value.map(literal))]),
+			indent([
+				softline,
+				join(
+					[",", line],
+					value.map((item) => literal(item, onImport)),
+				),
+			]),
 			ifBreak(","),
 			softline,
 			"]",
@@ -105,7 +116,11 @@ function literal(value: Json): Doc {
 	if (typeof value === "object" && value !== null) {
 		const entries = Object.entries(value).filter(([, v]) => v !== undefined);
 		if (entries.length === 0) return "{}";
-		return objectDoc(entries.map(([key, v]) => [key, literal(v)] as const));
+		return objectDoc(
+			entries.map(([key, v]) => [key, literal(v, onImport)] as const),
+			false,
+			true,
+		);
 	}
 	return JSON.stringify(value) ?? "undefined";
 }
@@ -170,6 +185,21 @@ class Emitter {
 	use(name: string): string {
 		this.core.add(name);
 		return name;
+	}
+
+	/** The local name of `exported` imported from `module`, aliased when the name is taken. */
+	bind(module: string, exported: string, taken: ReadonlySet<string>): string {
+		const names = this.opaqueImports.get(module) ?? new Map<string, string>();
+		this.opaqueImports.set(module, names);
+		for (const [local, name] of names) if (name === exported) return local;
+		const used = new Set<string>(taken);
+		for (const imported of this.opaqueImports.values()) {
+			for (const local of imported.keys()) used.add(local);
+		}
+		let local = exported;
+		for (let n = 2; used.has(local); n++) local = `${exported}${n}`;
+		names.set(local, exported);
+		return local;
 	}
 
 	ref(name: string): string {
@@ -389,7 +419,39 @@ function environmentDoc(decl: Decl, e: Emitter): Doc {
 	];
 }
 
-function repositoryDoc(decl: Decl, e: Emitter): Doc {
+/** What provider expressions need: the catalog and the names an import must not take. */
+interface Providers {
+	readonly catalog: ReadonlyMap<string, ProviderCatalogEntry>;
+	readonly taken: ReadonlySet<string>;
+}
+
+/** `inMemoryProvider()`, `drizzleProvider({ db })` or the imported provider. */
+function providerDoc(value: unknown, e: Emitter, providers: Providers): Doc {
+	const imported = (reference: string): string => {
+		const { module, name } = parseImportRef(reference) as {
+			module: string;
+			name: string;
+		};
+		return e.bind(module, name, providers.taken);
+	};
+	if (isImportObject(value)) return imported(value.import as string);
+	const { use, options } = value as {
+		use: string;
+		options?: Record<string, unknown>;
+	};
+	let factory: string;
+	if (use === "inMemory") {
+		factory = e.use("inMemoryProvider");
+	} else {
+		const entry = providers.catalog.get(use) as ProviderCatalogEntry;
+		factory = e.bind(entry.module, entry.export, providers.taken);
+	}
+	return options && Object.keys(options).length > 0
+		? callWithObject(factory, literal(options, imported))
+		: `${factory}()`;
+}
+
+function repositoryDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	const { spec } = decl;
 	const names = (list: unknown): string[] =>
 		Array.isArray(list) ? (list as string[]) : [];
@@ -398,6 +460,9 @@ function repositoryDoc(decl: Decl, e: Emitter): Doc {
 		["actions", literal(names(spec.actions))],
 	];
 	if (spec.deletion === "soft") props.push(["deletion", literal("soft")]);
+	if (spec.provider !== undefined) {
+		props.push(["provider", providerDoc(spec.provider, e, providers)]);
+	}
 	const relations = names(spec.relations).map((name) => e.ref(name));
 	if (relations.length > 0) props.push(["relations", listDoc(relations)]);
 	const environments = names(spec.environments).map((name) => e.ref(name));
@@ -489,8 +554,9 @@ function pascalOf(text: string): string {
 export function generate(
 	original: Spec,
 	extended: Readonly<Record<string, ResolvedSpec>> = {},
+	options: CodegenOptions = {},
 ): GeneratedFile[] {
-	const issues = validateSpec(original, extended);
+	const issues = validateSpec(original, extended, options);
 	if (issues.length > 0) throw new InvalidSpecError(issues);
 	// The canonical form leaves out what a property or plugin already implies.
 	const spec = normalizeSpec(original, extended);
@@ -584,6 +650,13 @@ export function generate(
 		extendedInfo.set(ref, { from, alias });
 	}
 
+	const providers: Providers = {
+		catalog: new Map(
+			(options.providers ?? []).map((entry) => [entry.name, entry]),
+		),
+		taken: new Set([...catalog().reservedDeclarationNames, ...takenNames]),
+	};
+
 	const emitters = new Map<string, Emitter>();
 	const bodies = new Map<string, Doc[]>();
 	for (const decl of order) {
@@ -627,7 +700,7 @@ export function generate(
 				body.push(environmentDoc(decl, e));
 				break;
 			case "repository":
-				body.push(repositoryDoc(decl, e));
+				body.push(repositoryDoc(decl, e, providers));
 				break;
 		}
 	}
@@ -687,6 +760,9 @@ export function generate(
 				),
 			),
 		]);
+	}
+	if (spec.provider !== undefined) {
+		props.push(["provider", providerDoc(spec.provider, app, providers)]);
 	}
 	for (const [key, kind] of [
 		["properties", "property"],
@@ -772,7 +848,16 @@ function importsFor(
 	extendedInfo: ReadonlyMap<string, { from: string; alias: string }>,
 ): Doc[] {
 	const imports: [string, Doc][] = [];
-	imports.push(["@afora/core", importDoc(["applicationOf"], "@afora/core")]);
+	imports.push([
+		"@afora/core",
+		importDoc(new Set(["applicationOf", ...app.core]), "@afora/core"),
+	]);
+	for (const [mod, names] of app.opaqueImports) {
+		const specifiers = [...names].map(([local, exported]) =>
+			local === exported ? local : `${exported} as ${local}`,
+		);
+		imports.push([mod, importDoc(specifiers, mod)]);
+	}
 	for (const [file, names] of app.local) {
 		const from = `./${file.replace(/\.ts$/, "")}`;
 		imports.push([from, importDoc(names, from)]);

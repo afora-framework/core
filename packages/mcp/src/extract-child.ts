@@ -8,9 +8,11 @@ import { extractSpec } from "@afora/codegen";
 const START = "\n<<<AFORA_SPEC>>>\n";
 const END = "\n<<<END_AFORA_SPEC>>>\n";
 
-const [file, name, outputDir] = process.argv.slice(2);
+const [file, name, outputDir, importsJson] = process.argv.slice(2);
 if (!file || !name)
-	throw new Error("Usage: extract-child <file> <export> [outputDir]");
+	throw new Error(
+		"Usage: extract-child <file> <export> [outputDir] [importsJson]",
+	);
 
 const module = (await import(pathToFileURL(file).href)) as Record<
 	string,
@@ -24,8 +26,8 @@ if (
 ) {
 	throw new Error(`${file} does not export an application named "${name}".`);
 }
-const spec = extractSpec(
-	app as Parameters<typeof extractSpec>[0],
-	outputDir ? { outputDir } : {},
-);
+const spec = extractSpec(app as Parameters<typeof extractSpec>[0], {
+	...(outputDir ? { outputDir } : {}),
+	...(importsJson ? { imports: JSON.parse(importsJson) } : {}),
+});
 process.stdout.write(`${START}${JSON.stringify(spec)}${END}`);

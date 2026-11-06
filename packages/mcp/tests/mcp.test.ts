@@ -600,3 +600,163 @@ describe("extends", () => {
 		).toContain('import { Account } from "../../auth/src/auth";');
 	});
 });
+
+describe("providers and query actions", () => {
+	const providers = [
+		{ name: "memory", module: "../providers", export: "memoryProvider" },
+	];
+	const providersTs = `import { inMemoryProvider, providerOf } from "@afora/core";
+export const memoryProvider = (options: { label?: string } = {}) =>
+	providerOf({ name: "memory", options: { label: options.label ?? null }, create: () => inMemoryProvider() });
+`;
+	const repository = {
+		kind: "repository",
+		name: "Items",
+		declaration: {
+			entity: "Item",
+			actions: ["create", "findMany", "exists", "findPage"],
+			provider: { use: "memory", options: { label: "repo" } },
+		},
+	};
+
+	async function withItem() {
+		const { dir, client } = await setup({ "src/providers.ts": providersTs });
+		await client.close();
+		const configured = await connect({ project: dir, providers });
+		clients.push(configured);
+		const added = await configured.call("afora_spec_upsert", {
+			kind: "entity",
+			name: "Item",
+			declaration: { fields: { name: "string" } },
+		});
+		expect(added.data.written, JSON.stringify(added.data)).toBe(true);
+		return { dir, client: configured };
+	}
+
+	test("the catalog lists the providers; authoring, generating and extracting use them", async () => {
+		const { dir, client } = await withItem();
+		const catalog = await client.call("afora_catalog");
+		expect(catalog.data.providers.map((p: { name: string }) => p.name)).toEqual(
+			["inMemory", "memory"],
+		);
+		expect(
+			catalog.data.repositoryActions.map((a: { action: string }) => a.action),
+		).toEqual(expect.arrayContaining(["findMany", "exists", "findPage"]));
+
+		expect(
+			(await client.call("afora_spec_upsert", repository)).data.written,
+		).toBe(true);
+		const written = await client.call("afora_spec_write", {
+			spec: {
+				...JSON.parse(await readFile(join(dir, "afora.json"), "utf8")),
+				provider: "inMemory",
+			},
+		});
+		expect(written.data.written, JSON.stringify(written.data)).toBe(true);
+		const onDisk = JSON.parse(await readFile(join(dir, "afora.json"), "utf8"));
+		expect(Object.keys(onDisk)).toEqual([
+			"version",
+			"provider",
+			"entities",
+			"repositories",
+		]);
+
+		const generated = await client.call("afora_generate");
+		expect(generated.data.generated, JSON.stringify(generated.data)).toBe(true);
+		expect(generated.data.typecheck).toMatchObject({
+			ok: true,
+			diagnostics: [],
+		});
+		const repositories = await readFile(
+			join(dir, "src/domain/repositories.ts"),
+			"utf8",
+		);
+		expect(repositories).toContain('memoryProvider({ label: "repo" })');
+		const application = await readFile(
+			join(dir, "src/domain/application.ts"),
+			"utf8",
+		);
+		expect(application).toContain("provider: inMemoryProvider()");
+
+		const extracted = await client.call("afora_extract", {
+			app: "src/domain/index.ts#App",
+		});
+		expect(extracted.isError, JSON.stringify(extracted.data)).toBe(false);
+		expect(extracted.data.spec.provider).toBe("inMemory");
+		expect(extracted.data.spec.repositories.Items.provider).toEqual({
+			use: "memory",
+			options: { label: "repo" },
+		});
+		expect(extracted.data.spec.repositories.Items.actions).toEqual([
+			"create",
+			"findMany",
+			"exists",
+			"findPage",
+		]);
+	}, 120_000);
+
+	test("invalid providers are reported and nothing is written", async () => {
+		const { dir, client } = await withItem();
+		expect(
+			(await client.call("afora_spec_upsert", repository)).data.written,
+		).toBe(true);
+		const before = await readFile(join(dir, "afora.json"), "utf8");
+		for (const [provider, code] of [
+			[{ use: "postgres" }, "unknown_provider"],
+			[{ use: "memory", options: [] }, "invalid_provider"],
+			[{ import: "./db.ts" }, "invalid_import"],
+		] as const) {
+			const result = await client.call("afora_spec_upsert", {
+				...repository,
+				declaration: { ...repository.declaration, provider },
+			});
+			expect(result.data.written).toBe(false);
+			expect(
+				result.data.issues.map((issue: { code: string }) => issue.code),
+			).toContain(code);
+			expect(await readFile(join(dir, "afora.json"), "utf8")).toBe(before);
+		}
+		const top = await client.call("afora_spec_write", {
+			spec: { ...JSON.parse(before), provider: "memory" },
+		});
+		expect(top.data.written).toBe(false);
+		expect(top.data.issues).toContainEqual(
+			expect.objectContaining({ code: "unknown_provider", path: ["provider"] }),
+		);
+		expect(await readFile(join(dir, "afora.json"), "utf8")).toBe(before);
+	});
+
+	test("without the catalog a catalog provider is unknown", async () => {
+		const { client } = await setup();
+		const result = await client.call("afora_spec_validate", {
+			spec: { version: 1, provider: { use: "memory" } },
+		});
+		expect(result.data.issues[0]).toMatchObject({
+			code: "unknown_provider",
+			path: ["provider", "use"],
+		});
+	});
+
+	test("extracting an anonymous provider asks for imports", async () => {
+		const app = `import { applicationOf, blueprintOf, entityOf, inMemoryProvider, repositoryOf } from "@afora/core";
+class Note extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+const Notes = repositoryOf({ entity: Note, actions: ["create"] });
+const base = inMemoryProvider();
+export const anonymous = { findOne: base.findOne, findMany: base.findMany, insert: base.insert, update: base.update, remove: base.remove, count: base.count };
+export const App = applicationOf({ name: "notes", entities: { Note }, repositories: { Notes }, provider: anonymous });
+`;
+		const { client } = await setup({ "src/app.ts": app });
+		const failed = await client.call("afora_extract", {
+			app: "src/app.ts#App",
+		});
+		expect(failed.isError).toBe(true);
+		expect(failed.data).toContain("imports");
+		expect(failed.data).toContain('"provider"');
+		const ok = await client.call("afora_extract", {
+			app: "src/app.ts#App",
+			imports: { provider: "../app#anonymous" },
+		});
+		expect(ok.isError, JSON.stringify(ok.data)).toBe(false);
+		expect(ok.data.spec.provider).toEqual({ import: "../app#anonymous" });
+	}, 60_000);
+});

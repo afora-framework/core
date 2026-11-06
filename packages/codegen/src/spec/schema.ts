@@ -1,6 +1,7 @@
 import { type TSchema, Type } from "typebox";
 
 const NAME = "^[A-Z][A-Za-z0-9]*$";
+const IMPORT = "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$";
 const KEY = "^[A-Za-z_$][A-Za-z0-9_$]*$";
 
 const Bounds = Type.Object(
@@ -132,6 +133,58 @@ const Property = Type.Union(
 	},
 );
 
+const ImportRef = Type.Object(
+	{
+		import: Type.String({
+			pattern: IMPORT,
+			description:
+				'A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.',
+		}),
+	},
+	{ additionalProperties: false },
+);
+
+const OptionValue = Type.Union(
+	[
+		Type.String(),
+		Type.Number(),
+		Type.Boolean(),
+		Type.Null(),
+		ImportRef,
+		Type.Array(Type.Unknown()),
+		Type.Record(Type.String(), Type.Unknown()),
+	],
+	{
+		description:
+			'A JSON value, or { "import": "./file.ts#name" } for a value created by hand (nested at any depth).',
+	},
+);
+
+const Provider = Type.Union(
+	[
+		Type.Literal("inMemory"),
+		Type.Object(
+			{
+				use: Type.String({
+					description:
+						"A provider of the catalog given to codegen (inMemory is built in).",
+				}),
+				options: Type.Optional(
+					Type.Record(Type.String(), OptionValue, {
+						description: "Options passed to the provider factory.",
+					}),
+				),
+			},
+			{ additionalProperties: false },
+		),
+		ImportRef,
+	],
+	{
+		description:
+			'"inMemory", { "use": "<catalog name>", "options": {...} } or { "import": "./file.ts#provider" }.',
+	},
+);
+
 const StringList = (description: string) =>
 	Type.Array(Type.String(), { description });
 
@@ -171,8 +224,9 @@ const RepositoryDeclaration = Type.Object(
 		),
 		actions: Type.Array(Type.String(), {
 			description:
-				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), create, update, delete, count.",
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, create, update, delete, count.",
 		}),
+		provider: Type.Optional(Provider),
 		relations: Type.Optional(
 			StringList(
 				"Repositories of every entity the entity holds, at any depth.",
@@ -208,6 +262,7 @@ export const specSchema = Type.Object(
 				{ additionalProperties: false },
 			),
 		),
+		provider: Type.Optional(Provider),
 		properties: Type.Optional(
 			Names(Property, "Custom properties, by PascalCase name."),
 		),

@@ -81,9 +81,55 @@ export interface EnvironmentSpec {
 	readonly fields: FieldsSpec;
 }
 
+/** A reference to a hand-written export: `"./db.ts#provider"`, relative to the output directory. */
+export interface ImportRef {
+	readonly import: string;
+}
+
+/** An option of a provider: any JSON value, with `{ "import": ... }` references in place of values. */
+export type ProviderOptionSpec =
+	| string
+	| number
+	| boolean
+	| null
+	| ImportRef
+	| readonly ProviderOptionSpec[]
+	| { readonly [key: string]: ProviderOptionSpec };
+
+/**
+ * A repository provider: the built-in `"inMemory"`, a catalog provider with
+ * options (`{ "use": "drizzle", "options": { "db": { "import": "./db.ts#db" } } }`)
+ * or an import of a provider created by hand (`{ "import": "./db.ts#provider" }`).
+ */
+export type ProviderSpec =
+	| "inMemory"
+	| {
+			readonly use: string;
+			readonly options?: { readonly [key: string]: ProviderOptionSpec };
+	  }
+	| ImportRef;
+
+/** A provider of the catalog supplied to codegen: where the factory comes from. */
+export interface ProviderCatalogEntry {
+	/** The name `use` refers to. */
+	readonly name: string;
+	/** A package or a path relative to the output directory. */
+	readonly module: string;
+	/** The factory, called with the options object. */
+	readonly export: string;
+}
+
+/** What codegen needs besides the spec. */
+export interface CodegenOptions {
+	/** External providers `use` may name; `inMemory` is built in. */
+	readonly providers?: readonly ProviderCatalogEntry[];
+}
+
 export interface RepositorySpec {
 	readonly entity: string;
 	readonly actions: readonly string[];
+	/** Its own provider; it uses the application's when omitted. */
+	readonly provider?: ProviderSpec;
 	/** Physical removal (default), or retained rows hidden by deletedAt. */
 	readonly deletion?: "hard" | "soft";
 	/** The repositories of the entities the entity holds. */
@@ -101,6 +147,8 @@ export interface Spec {
 	/** Other specs whose declarations this one uses: a relative path or a package. */
 	readonly extends?: readonly string[];
 	readonly output?: { readonly dir: string };
+	/** The provider the repositories use unless they declare their own. */
+	readonly provider?: ProviderSpec;
 	readonly properties?: Readonly<Record<string, PropertySpec>>;
 	readonly blueprints?: Readonly<Record<string, BlueprintSpec>>;
 	readonly records?: Readonly<Record<string, RecordSpec>>;

@@ -23,6 +23,7 @@ a file of your own.
   "version": 1,
   "name": "blog",
   "output": { "dir": "src/domain" },
+  "provider": "inMemory",
   "properties":   { "Age": { "base": "integer", "with": { "min": 0, "max": 150 } },
                     "Status": { "enum": ["draft", "published"] } },
   "blueprints":   { "Address": { "fields": { "street": "string", "zip": "string" } } },
@@ -63,7 +64,14 @@ a file of your own.
   \`password\` is always sensitive and \`slug\` always unique; \`id\` is always unique.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.
 - Repository actions: \`findById\`; \`findBy<Key>\` only for unique keys (id, \`unique\`, slug fields, unique plugin keys such as
-  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`count\`.
+  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`count\`, and the
+  queries \`findMany\`, \`exists\`, \`findPage\` (no key needed; \`where\`, \`orderBy\`, \`limit\`, \`offset\` at runtime).
+- \`provider\` (top level for the application, and optionally on a repository, which then uses its own): \`"inMemory"\`,
+  \`{ "use": "<name>", "options": {...} }\` with a name from the \`providers\` of \`afora_catalog\` (external ones are given
+  to the server with \`--providers\`), or \`{ "import": "./db.ts#provider" }\` for one created by hand. Options are JSON or
+  \`{ "import": "./db.ts#db" }\` references (any depth); imports are relative to \`output.dir\` and never run by the validator.
+  Omitting \`provider\` is not the same as \`"inMemory"\`: a repository without one uses the application's. For a provider
+  not created with \`providerOf\`, \`afora_extract\` needs \`imports\` (\`provider\` / \`repositories.<Name>.provider\`).
 - Repository \`deletion\`: \`"hard"\` (default) physically removes rows; \`"soft"\` retains \`deletedAt\` and hides deleted rows from reads, counts and relations.
 - \`relations\` must list exactly one repository for each entity the repository's entity holds, at any depth (inside
   records, blueprints and nested objects), not through another entity.

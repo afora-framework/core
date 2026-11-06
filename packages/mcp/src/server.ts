@@ -1,4 +1,4 @@
-import { catalog, specSchema } from "@afora/codegen";
+import { catalog, type ProviderCatalogEntry, specSchema } from "@afora/codegen";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
 	CallToolRequestSchema,
@@ -16,6 +16,8 @@ export interface ServerOptions {
 	readonly project?: string;
 	/** `src/app.ts#App`: an application to extract the spec from when there is no afora.json. */
 	readonly app?: string;
+	/** External providers the spec's `provider.use` may name; `inMemory` is built in. */
+	readonly providers?: readonly ProviderCatalogEntry[];
 }
 
 const RESOURCES = [
@@ -55,6 +57,7 @@ export async function createServer(
 	const project: Project = await openProject(
 		options.project ?? process.cwd(),
 		options.app,
+		options.providers,
 	);
 	const server = new Server(
 		{ name: "afora", version: "0.0.1" },
