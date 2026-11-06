@@ -15,7 +15,6 @@
         "@types/bun": "^1.4.4",
         "husky": "^9.1.7",
         "knip": "^6.43.0",
-        "monaco-editor": "0.52.2",
         "typescript": "^7.0.2",
         "typescript-language-service": "npm:typescript@5.9.3",
       },
@@ -60,6 +59,21 @@
         "@afora/core": ">=0.0.2",
       },
     },
+    "packages/playground": {
+      "name": "@afora/playground",
+      "version": "0.0.1",
+      "bin": {
+        "afora": "./dist/server.js",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.4",
+        "monaco-editor": "0.52.2",
+        "typescript-language-service": "npm:typescript@5.9.3",
+      },
+      "peerDependencies": {
+        "@afora/core": ">=0.0.2",
+      },
+    },
   },
   "overrides": {
     "@afora/core": "link:.",
@@ -67,9 +81,11 @@
   "packages": {
     "@afora/codegen": ["@afora/codegen@workspace:packages/codegen"],
 
-    "@afora/core": ["@afora/core@link:.", { "hasInstallScript": true, "bin": { "afora": "./dist/playground/server.js" } }],
+    "@afora/core": ["@afora/core@link:.", { "hasInstallScript": true }],
 
     "@afora/mcp": ["@afora/mcp@workspace:packages/mcp"],
+
+    "@afora/playground": ["@afora/playground@workspace:packages/playground"],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 

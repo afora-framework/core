@@ -22,11 +22,13 @@ bun run test:api                         # tests/api-surface: snapshot of every 
 bun run test:interop                     # examples/interop: real Hono, tRPC, TanStack Form tests, incl. the README quick start
 bun run test:types                       # packs the package and type-checks tests/types-compat on TS 5.5, latest 5.x and 7, bundler + nodenext
 bun run test:type-perf                   # tests/type-perf: per-edit type instantiations of README code (budgeted) + snapshot of hovers/completions/diagnostics, src and dist
+bun run playground                       # the local playground (packages/playground) on this repo's src/
+bun run test:playground                  # playground tests
 bun run smoke                            # build, then run scripts/smoke.mjs on plain Node
 bun run bench                            # bench/ vs TypeBox, Zod, Valibot, ArkType; results in bench/RESULTS.md
 ```
 
-`examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
+`packages/*` (`codegen`, `mcp`, `playground`) are workspaces with their own build and tests (`bun run build:packages`). `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
 
 ## Runtime constraint
 

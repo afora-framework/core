@@ -4,13 +4,8 @@
 	"ignoreBinaries": ["run.ts"],
 	"workspaces": {
 		".": {
-			"entry": [
-				"src/index.ts",
-				"src/**/*.sandbox.ts",
-				"scripts/*.{ts,mjs}",
-				"playground/{server,build,client,child,editor.worker,runner.test,scheduler.test}.ts"
-			],
-			"project": ["src/**/*.ts", "scripts/**/*.{ts,mjs}", "playground/*.ts"]
+			"entry": ["src/index.ts", "src/**/*.sandbox.ts", "scripts/*.{ts,mjs}"],
+			"project": ["src/**/*.ts", "scripts/**/*.{ts,mjs}"]
 		},
 		"packages/codegen": {
 			"entry": [
@@ -20,6 +15,12 @@
 				"tests/**/*.test.ts"
 			],
 			"project": ["src/**/*.ts", "scripts/*.ts", "tests/**/*.ts"]
+		},
+		"packages/playground": {
+			"entry": [
+				"src/{server,client,child,editor.worker,runner.test,scheduler.test}.ts"
+			],
+			"project": ["src/**/*.ts", "scripts/*.ts"]
 		},
 		"packages/mcp": {
 			"entry": [
