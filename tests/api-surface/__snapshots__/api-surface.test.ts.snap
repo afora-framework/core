@@ -1883,6 +1883,20 @@ exports[`afora.json schema 1`] = `
               },
               "type": "array",
             },
+            "deletion": {
+              "anyOf": [
+                {
+                  "const": "hard",
+                  "type": "string",
+                },
+                {
+                  "const": "soft",
+                  "type": "string",
+                },
+              ],
+              "default": "hard",
+              "description": "Physical removal or retained rows hidden by deletedAt.",
+            },
             "entity": {
               "description": "The entity it stores.",
               "type": "string",

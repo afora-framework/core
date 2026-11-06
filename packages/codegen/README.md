@@ -19,6 +19,8 @@ afora-codegen extract src/app.ts#App > afora.json
 
 ## The spec
 
+Repositories accept `"deletion": "hard" | "soft"`. The default is `"hard"`; `"soft"` retains rows with `deletedAt` and hides them from reads, counts and relations. Extraction preserves `"soft"`; normalization omits explicit `"hard"` as the default. Invalid values produce an `invalid_deletion` issue.
+
 `blueprint` and `options` are valid field names in records and entities. Their instance metadata lives under the core's `Meta` symbol; the JSON spec and class statics keep their existing shape.
 
 ```jsonc

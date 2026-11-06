@@ -397,6 +397,7 @@ function repositoryDoc(decl: Decl, e: Emitter): Doc {
 		["entity", e.ref(spec.entity as string)],
 		["actions", literal(names(spec.actions))],
 	];
+	if (spec.deletion === "soft") props.push(["deletion", literal("soft")]);
 	const relations = names(spec.relations).map((name) => e.ref(name));
 	if (relations.length > 0) props.push(["relations", listDoc(relations)]);
 	const environments = names(spec.environments).map((name) => e.ref(name));

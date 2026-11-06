@@ -18,6 +18,7 @@
 
 ### Added
 
+- `afora.json` repositories support `deletion: "hard" | "soft"`, including generation and extraction; explicit hard deletion normalizes to the default. MCP authoring tools accept and validate the setting.
 - `repositoryOf({ deletion: "hard" | "soft" })`, defaulting to hard deletion. Soft deletion persists `deletedAt`, hides deleted rows from finds, counts and relations, and appears in `app.describe()`. Unique values of retained rows remain occupied.
 - `VERSIONING.md`: the semver policy, what is and is not the contract, what counts as additive or breaking, the deprecation process, supported ranges and how they are enforced.
 - `bun run test:api` (`tests/api-surface`): a snapshot of every export of the built package with its declaration, and of `packages/codegen/afora.schema.json`, so a change to the public surface (or to the `afora.json` spec) is a reviewed, intended one (`-u`). Run in CI.

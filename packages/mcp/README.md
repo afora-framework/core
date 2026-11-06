@@ -1,5 +1,7 @@
 # @afora/mcp
 
+Repository declarations accept `deletion: "hard" | "soft"` (default `hard`). The tools validate the setting and preserve soft deletion when generating or extracting an application.
+
 An [MCP](https://modelcontextprotocol.io) server (stdio) that lets an agent build a domain with afora: discover the catalog, edit an `afora.json`, validate it, generate the code with [`@afora/codegen`](../codegen/README.md) and get the TypeScript diagnostics of what was generated.
 
 The project needs `@afora/core` and TypeBox (`typebox: ^1`) as peer dependencies; install them with `bun add @afora/core typebox`.

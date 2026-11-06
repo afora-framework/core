@@ -183,6 +183,7 @@ export function normalizeSpec(
 							{
 								entity: value.entity,
 								actions: Array.isArray(value.actions) ? [...value.actions] : [],
+								...(value.deletion === "soft" ? { deletion: "soft" } : {}),
 								...(relations ? { relations } : {}),
 								...(environments ? { environments } : {}),
 							},
