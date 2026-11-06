@@ -1,12 +1,19 @@
 export { applicationOf, isApplication } from "./core/application/application";
 export {
 	ApplicationConflict,
+	ApplicationNotStarted,
 	DuplicateApplicationDeclaration,
 	InvalidApplicationDeclaration,
+	InvalidApplicationEnvironment,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
 	UnregisteredUseCaseDependency,
 } from "./core/application/exceptions";
+export {
+	isProviderFactory,
+	type ProviderFactory,
+	providerFrom,
+} from "./core/application/start";
 export type {
 	AnyApplication,
 	ApplicationCollections,

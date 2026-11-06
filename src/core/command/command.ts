@@ -46,6 +46,17 @@ export function verifyCommand(command: object): void {
 	verifiers.get(command)?.();
 }
 
+/**
+ * The provider whose transaction runs the calls of `command`, or `undefined`
+ * without a transaction or a repository.
+ * @internal
+ */
+export function commandTransactionProvider(
+	command: object,
+): IRepositoryProvider | undefined {
+	return verifiers.get(command)?.() as IRepositoryProvider | undefined;
+}
+
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 /**

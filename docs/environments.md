@@ -22,4 +22,6 @@ A variable is converted when its property does not take a string: to `true` or `
 
 As `environmentDependencies` of a command, `command.env` gives the variables, the event handlers get them as `info.env`, and a call can replace some of them with `run(op, input, { env })` for the use cases that declare the same environment (see [Commands](commands.md#environments)).
 
+`await app.start()` validates every environment of an application at once, and `providerFrom(Database, (env) => ...)` makes its provider from their variables (see [Applications](applications.md#starting)).
+
 An application registers environments in `environments` and `app.describe()` lists them ([Applications](applications.md)).

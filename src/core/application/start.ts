@@ -1,0 +1,248 @@
+import { InvalidCommandDeclaration } from "../command/exceptions";
+import {
+	type AnyEnvironment,
+	type EnvironmentDependencies,
+	isEnvironment,
+	loadEnvironments,
+	type MergedEnvironment,
+} from "../environment/environment";
+import type { IRepositoryProvider } from "../repository/types/repository.interface";
+import { Kind } from "../symbols/kind";
+import {
+	ApplicationNotStarted,
+	InvalidApplicationDeclaration,
+} from "./exceptions";
+
+/**
+ * A provider an application creates when it starts, from the variables of
+ * its environments: what `providerFrom` makes.
+ */
+export interface ProviderFactory<
+	Environment extends EnvironmentDependencies = EnvironmentDependencies,
+> {
+	readonly [Kind]: "provider-factory";
+	/** The environments whose variables `create` gets, as a list. */
+	readonly environments: readonly AnyEnvironment[];
+	readonly create: (
+		env: MergedEnvironment<Environment>,
+	) => IRepositoryProvider | Promise<IRepositoryProvider>;
+}
+
+/**
+ * A provider made on `app.start()`: `create` gets the variables of
+ * `environmentDependencies` (one environment or a list, merged in order),
+ * read and validated then, e.g.
+ * `providerFrom(Database, (env) => drizzleProvider({ db: connect(env.DATABASE_URL), tables }))`.
+ */
+export function providerFrom<const Environment extends EnvironmentDependencies>(
+	environmentDependencies: Environment,
+	create: (
+		env: MergedEnvironment<Environment>,
+	) => IRepositoryProvider | Promise<IRepositoryProvider>,
+): ProviderFactory<Environment> {
+	const list: unknown[] = isEnvironment(environmentDependencies)
+		? [environmentDependencies]
+		: Array.isArray(environmentDependencies)
+			? [...environmentDependencies]
+			: [null];
+	if (
+		!list.every(isEnvironment) ||
+		new Set(list).size !== list.length ||
+		typeof create !== "function"
+	) {
+		throw new InvalidApplicationDeclaration({
+			source: "providerFrom",
+			details: {
+				reason:
+					"Expected distinct environments made by environmentOf and a create function.",
+			},
+		});
+	}
+	return Object.freeze({
+		[Kind]: "provider-factory" as const,
+		environments: Object.freeze(list as AnyEnvironment[]),
+		create,
+	});
+}
+
+/** Whether `value` was made by `providerFrom`. */
+export function isProviderFactory(value: unknown): value is ProviderFactory {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		(value as { [Kind]?: unknown })[Kind] === "provider-factory"
+	);
+}
+
+/** What an application keeps of the provider it makes on start. */
+interface Deferred {
+	readonly factory: ProviderFactory;
+	/** The application that declared the factory, for the messages. */
+	readonly application: string;
+	provider: IRepositoryProvider | undefined;
+	starting: Promise<IRepositoryProvider> | undefined;
+}
+
+const deferred = new WeakMap<object, Deferred>();
+
+const METHODS = [
+	"findOne",
+	"findMany",
+	"insert",
+	"update",
+	"remove",
+	"count",
+] as const;
+
+/**
+ * The provider the repositories of an application are bound to when it was
+ * declared with `providerFrom`: each call goes to the provider made on start,
+ * and throws `ApplicationNotStarted` before it.
+ * @internal
+ */
+export function deferredProvider(
+	factory: ProviderFactory,
+	application: string,
+): IRepositoryProvider {
+	const state: Deferred = {
+		factory,
+		application,
+		provider: undefined,
+		starting: undefined,
+	};
+	const real = (method: string): IRepositoryProvider => {
+		const { provider } = state;
+		if (!provider) {
+			throw new ApplicationNotStarted({
+				source: application,
+				details: { application },
+			});
+		}
+		if (
+			typeof (provider as unknown as Record<string, unknown>)[method] !==
+			"function"
+		) {
+			throw new InvalidApplicationDeclaration({
+				source: application,
+				details: {
+					reason: `The provider made on start has no "${method}".`,
+				},
+			});
+		}
+		return provider;
+	};
+	const proxy: Record<string, unknown> = {};
+	for (const method of METHODS) {
+		proxy[method] = (...args: unknown[]) =>
+			(
+				real(method) as unknown as Record<
+					string,
+					(...args: unknown[]) => unknown
+				>
+			)[method]?.(...args);
+	}
+	proxy.transaction = (run: (provider: IRepositoryProvider) => unknown) =>
+		(
+			real("transaction").transaction as NonNullable<
+				IRepositoryProvider["transaction"]
+			>
+		)(run as never);
+	Object.defineProperty(proxy, "capabilities", {
+		get: () => state.provider?.capabilities,
+		enumerable: true,
+	});
+	Object.freeze(proxy);
+	deferred.set(proxy, state);
+	return proxy as unknown as IRepositoryProvider;
+}
+
+/** Whether `provider` was made by `deferredProvider`. @internal */
+export function isDeferredProvider(provider: unknown): boolean {
+	return (
+		typeof provider === "object" && provider !== null && deferred.has(provider)
+	);
+}
+
+/** The environments the factory behind `provider` reads, if it is deferred. @internal */
+export function deferredEnvironments(
+	provider: unknown,
+): readonly AnyEnvironment[] {
+	return (
+		(typeof provider === "object" && provider !== null
+			? deferred.get(provider)?.factory.environments
+			: undefined) ?? []
+	);
+}
+
+/**
+ * Makes the provider behind `provider` once, from the variables of its
+ * environments (already validated by the caller); later calls give the same.
+ * @internal
+ */
+export function startDeferred(
+	provider: IRepositoryProvider,
+): Promise<IRepositoryProvider> | undefined {
+	const state = deferred.get(provider);
+	if (!state) return undefined;
+	state.starting ??= (async () => {
+		const made = await state.factory.create(
+			loadEnvironments(state.factory.environments) as never,
+		);
+		if (typeof made !== "object" || made === null) {
+			state.starting = undefined;
+			throw new InvalidApplicationDeclaration({
+				source: state.application,
+				details: {
+					reason:
+						"Expected providerFrom's create to give a repository provider.",
+				},
+			});
+		}
+		state.provider = made;
+		return made;
+	})();
+	return state.starting;
+}
+
+/**
+ * Closes the provider made on start and forgets it, so that calls throw
+ * `ApplicationNotStarted` again; a provider that is not deferred is closed.
+ * @internal
+ */
+export async function stopProvider(
+	provider: IRepositoryProvider,
+): Promise<void> {
+	const state = deferred.get(provider);
+	if (!state) {
+		await provider.close?.();
+		return;
+	}
+	const made = state.provider;
+	state.provider = undefined;
+	state.starting = undefined;
+	await made?.close?.();
+}
+
+/**
+ * Throws `InvalidCommandDeclaration` when `provider` cannot run the
+ * transactions of `commands` (it has no `transaction`, or says it has none).
+ * @internal
+ */
+export function checkTransactions(
+	source: string,
+	provider: IRepositoryProvider,
+	commands: readonly string[],
+): void {
+	if (commands.length === 0) return;
+	if (
+		typeof provider.transaction !== "function" ||
+		provider.capabilities?.transactions === false
+	) {
+		throw new InvalidCommandDeclaration({
+			source,
+			details: {
+				reason: `The provider made on start does not support transactions, which ${commands.join(", ")} declare.`,
+			},
+		});
+	}
+}

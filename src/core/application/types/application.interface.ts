@@ -17,6 +17,7 @@ import type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
 } from "../../use-case/use-case";
+import type { ProviderFactory } from "../start";
 
 type Named<Value> = Readonly<Record<string, Value>>;
 
@@ -66,9 +67,11 @@ export interface ApplicationSettings<
 	readonly exceptions?: Collections["exceptions"];
 	/**
 	 * The provider of the repositories that did not declare one; the
-	 * repositories of the application read and write through it.
+	 * repositories of the application read and write through it. With
+	 * `providerFrom`, it is made by `app.start()` from the variables of its
+	 * environments, and calls before that throw `ApplicationNotStarted`.
 	 */
-	readonly provider?: IRepositoryProvider;
+	readonly provider?: IRepositoryProvider | ProviderFactory;
 }
 
 type UnionToIntersection<Union> = (
@@ -147,6 +150,17 @@ export interface IApplication<
 	): IApplication<Name, MergedCollections<Collections, Others>>;
 	/** A format-neutral, JSON-serializable graph of its declarations. */
 	describe(): ApplicationDescription;
+	/**
+	 * Validates every environment it registers at once
+	 * (`InvalidApplicationEnvironment`), makes the provider of `providerFrom`
+	 * and checks the transactions of its commands against it. Idempotent: the
+	 * same promise until it fails or `stop()` is called.
+	 */
+	start(): Promise<IApplication<Name, Collections>>;
+	/** Closes its provider (`close`, if it has one); a provider of `providerFrom` is made again by the next `start()`. */
+	stop(): Promise<void>;
+	/** Whether `start()` completed and `stop()` was not called since. */
+	readonly started: boolean;
 }
 
 /** Any application. */

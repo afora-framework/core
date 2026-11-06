@@ -7,12 +7,25 @@ import type {
 	BlueprintField,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
-import { commandOf, isCommand, verifyCommand } from "../command/command";
+import {
+	commandOf,
+	commandTransactionProvider,
+	isCommand,
+	verifyCommand,
+} from "../command/command";
 import type { AnyCommand } from "../command/types/command.interface";
 import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
-import { isEnvironment } from "../environment/environment";
-import { declaredMessageOf, isDeclaredException } from "../exception/exception";
+import {
+	type AnyEnvironment,
+	InvalidEnvironment,
+	isEnvironment,
+} from "../environment/environment";
+import {
+	declaredMessageOf,
+	Exception,
+	isDeclaredException,
+} from "../exception/exception";
 import { isExportedException } from "../exception/exported";
 import { plainOf } from "../openapi/openapi";
 import { isOutput, outputOf } from "../output/output";
@@ -36,10 +49,20 @@ import {
 	ApplicationConflict,
 	DuplicateApplicationDeclaration,
 	InvalidApplicationDeclaration,
+	InvalidApplicationEnvironment,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
 	UnregisteredUseCaseDependency,
 } from "./exceptions";
+import {
+	checkTransactions,
+	deferredEnvironments,
+	deferredProvider,
+	isDeferredProvider,
+	isProviderFactory,
+	startDeferred,
+	stopProvider,
+} from "./start";
 import type {
 	AnyApplication,
 	ApplicationCollectionKey,
@@ -997,11 +1020,33 @@ export function applicationOf<
 	validateCommands(name, registry);
 	validateOutputs(name, registry);
 
-	const provider: IRepositoryProvider | undefined =
+	const declaredProvider: unknown =
 		settings.provider ??
 		[...extended].reverse().find((other) => other.provider)?.provider;
-	if (provider !== undefined && typeof provider !== "object") {
+	if (declaredProvider !== undefined && typeof declaredProvider !== "object") {
 		invalid(name, "Expected `provider` to be a repository provider.");
+	}
+	// A provider of `providerFrom` is made on start: until then the
+	// repositories are bound to one that forwards to it once it exists.
+	const provider: IRepositoryProvider | undefined = isProviderFactory(
+		declaredProvider,
+	)
+		? deferredProvider(declaredProvider, name)
+		: (declaredProvider as IRepositoryProvider | undefined);
+	{
+		const registered = new Set(
+			[...registry.environments.values()].map((entry) => entry.key),
+		);
+		for (const environment of deferredEnvironments(provider)) {
+			if (registered.has(environment)) continue;
+			throw new UnregisteredApplicationReference({
+				source: name,
+				details: {
+					holder: "the provider",
+					reference: "an environment",
+				},
+			});
+		}
 	}
 
 	const collection = (key: ApplicationCollectionKey) =>
@@ -1111,6 +1156,50 @@ export function applicationOf<
 		outputs[entry.name] = rebuilt;
 	}
 
+	const environmentEntries = [...registry.environments.values()];
+	let starting: Promise<unknown> | undefined;
+	let started = false;
+	const start = async () => {
+		// Every environment at once, so one start reports all that is missing.
+		const failures: Record<string, string[]> = {};
+		let cause: unknown;
+		for (const entry of environmentEntries) {
+			try {
+				(entry.value as AnyEnvironment).load();
+			} catch (error) {
+				if (!(error instanceof Exception) || !error.is(InvalidEnvironment)) {
+					throw error;
+				}
+				cause ??= error;
+				failures[entry.name] = [
+					...((error.details as { keys?: string[] } | undefined)?.keys ?? []),
+				];
+			}
+		}
+		if (Object.keys(failures).length > 0) {
+			throw new InvalidApplicationEnvironment({
+				source: name,
+				details: { environments: failures },
+				cause,
+			});
+		}
+		if (provider !== undefined && isDeferredProvider(provider)) {
+			const made = (await startDeferred(provider)) as IRepositoryProvider;
+			checkTransactions(
+				name,
+				made,
+				Object.entries(commands)
+					.filter(
+						([, command]) =>
+							(command as AnyCommand).transaction &&
+							commandTransactionProvider(command as object) === provider,
+					)
+					.map(([key]) => key),
+			);
+		}
+		started = true;
+	};
+
 	const application = Object.freeze({
 		[Kind]: "application" as const,
 		name,
@@ -1158,6 +1247,29 @@ export function applicationOf<
 			} as never);
 		},
 		describe: () => describeRegistry(name, extended, registry, provider),
+		get started() {
+			return started;
+		},
+		start() {
+			starting ??= start().then(
+				() => application,
+				async (error: unknown) => {
+					starting = undefined;
+					if (provider !== undefined && isDeferredProvider(provider)) {
+						await stopProvider(provider);
+					}
+					throw error;
+				},
+			);
+			return starting;
+		},
+		async stop() {
+			const wasStarting = starting;
+			starting = undefined;
+			started = false;
+			if (wasStarting) await wasStarting.catch(() => undefined);
+			if (provider !== undefined) await stopProvider(provider);
+		},
 	});
 	internals.set(application, registry);
 	return application as never;

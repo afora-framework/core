@@ -79,3 +79,31 @@ export const UnregisteredUseCaseDependency = exceptionOf({
 	}) =>
 		`Use case ${useCase} depends on ${dependency}, which is not registered in the application.`,
 });
+
+/**
+ * The application provider is made by `providerFrom` and the application has
+ * not been started: `await app.start()` creates it.
+ */
+export const ApplicationNotStarted = exceptionOf({
+	layer: ExceptionLayers.Application,
+	name: "ApplicationNotStarted",
+	message: ({ application }: { readonly application: string }) =>
+		`The application "${application}" is not started: call await app.start() first.`,
+});
+
+/**
+ * `app.start()` found environments whose variables are missing or rejected;
+ * `details.environments` gives the keys of each, by name.
+ */
+export const InvalidApplicationEnvironment = exceptionOf({
+	layer: ExceptionLayers.Environment,
+	name: "InvalidApplicationEnvironment",
+	message: ({
+		environments,
+	}: {
+		readonly environments: Readonly<Record<string, readonly string[]>>;
+	}) =>
+		`Invalid environment variables: ${Object.entries(environments)
+			.map(([name, keys]) => `${name} (${keys.join(", ")})`)
+			.join("; ")}.`,
+});

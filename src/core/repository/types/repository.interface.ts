@@ -226,4 +226,6 @@ export interface IRepositoryProvider<Environment = unknown> {
 	transaction?<Result>(
 		run: (provider: IRepositoryProvider<Environment>) => Promise<Result>,
 	): Promise<Result>;
+	/** Releases what the provider holds (connections, files); `app.stop()` calls it. */
+	close?(): void | Promise<void>;
 }

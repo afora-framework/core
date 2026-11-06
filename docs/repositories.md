@@ -88,6 +88,7 @@ interface IRepositoryProvider<Environment = unknown> {
 	transaction?<Result>(
 		run: (provider: IRepositoryProvider<Environment>) => Promise<Result>,
 	): Promise<Result>;
+	close?(): void | Promise<void>; // called by app.stop()
 }
 ```
 

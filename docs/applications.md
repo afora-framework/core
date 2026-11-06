@@ -33,3 +33,41 @@ Outputs are registered with `outputs: { Api }`, keyed by `outputName` (`InvalidA
 Repositories are module-level and may be shared, so an application does not change them: `app.repositories.Users` shares the declaration of `Users` but reads and writes through the `provider` of the application (or of the last application it extends that has one), unless `Users` declared its own. Two applications with different providers do not share data. Without a `provider`, `app.repositories.Users` is `Users` itself, and records, entities and repositories work the same outside any application.
 
 `app.describe()` gives a JSON-serializable graph, with the `from` of each declaration (the application that registered it): properties (name, flags, JSON Schema and `lineage`), blueprints, records and entities (fields, `options`, plugin descriptors), environments, repositories (entity, actions, `relations` and `environments` by name), use cases (`name`, `description`, `tags`, `deprecated`, `input`, `response`, optional `context`, `errors` as `{ kind: "exception", ref }` or `{ kind: "core", name }`, `dependencies` as `{ kind, ref }`, and `implementation`: `{ kind: "steps", steps }` or `{ kind: "opaque" }`) and exceptions (`layer` and, when declared as a string, `message`). A field is a reference by name (`{ kind: "entity", ref: "User" }`) when it holds a registered declaration. A property's `lineage` comes from `propertyLineageOf(Property)`: `Integer.with({ min: 0 })` is `{ kind: "refined", base, options }`, `optionalOf` is `{ kind: "optional", base }` and `enumOf` is `{ kind: "factory", factory: "enumOf", args: { values } }`. A root property (declared with `propertyOf`) has no lineage and is identified by its `name`; one with custom handlers is described with what is known (name and schema), never an error.
+
+## Starting
+
+`await app.start()` gets an application ready in one step, and gives it back:
+
+1. It reads every environment it registers (its own and inherited ones) and reports all the variables that are missing or rejected at once: `InvalidApplicationEnvironment` (`Environment` layer, `details.environments`, e.g. `{ Database: ["DATABASE_URL"], Mail: ["FROM", "PORT"] }`, with the first `InvalidEnvironment` as its `cause`).
+2. It makes the provider of `providerFrom`, if the application has one.
+3. It checks that this provider runs the transactions of its commands (`InvalidCommandDeclaration` otherwise).
+
+`start()` is idempotent: it gives the same promise until it fails (then it can be called again, e.g. once the variables are set) or `stop()` is called. `app.started` tells whether it completed. An application whose provider is an object, or that has none, works without `start()` as before; `start()` then only validates the environments.
+
+**A provider made from the environment.** `providerFrom(environmentDependencies, create)` declares a provider that needs variables, such as a database URL, without reading them when the module loads:
+
+```ts
+import { applicationOf, blueprintOf, environmentOf, providerFrom } from "@afora/core";
+import { drizzleProvider } from "@afora/drizzle";
+
+const Database = environmentOf(
+	blueprintOf((ctx) => ({ DATABASE_URL: ctx.string })),
+);
+
+export const App = applicationOf({
+	name: "blog",
+	environments: { Database },
+	repositories: { Users, Posts },
+	provider: providerFrom(Database, (env) =>
+		drizzleProvider({ db: connect(env.DATABASE_URL), tables }),
+	),
+	// ...
+});
+
+await App.start(); // validates Database, then calls create once
+```
+
+`environmentDependencies` is one environment or a list of distinct ones (merged in order), which must be registered in `environments` (`UnregisteredApplicationReference`); `create` gets their typed variables and gives a provider, or a promise of one. It is called once per start, by the first `start()` of the application or of one that extends it (they share the provider). Until then the repositories, use cases, commands and outputs of the application are bound as usual, to a provider that forwards each call to the one made on start; a call before `start()` throws `ApplicationNotStarted`. `isProviderFactory` tells a factory apart; `describe()` describes the provider as `{ kind: "opaque" }`.
+
+`await app.stop()` calls the optional `close()` of the provider (a new optional member of `IRepositoryProvider`, for connections and files). With `providerFrom`, it also forgets the provider: calls throw `ApplicationNotStarted` again, and the next `start()` makes a new one.
+
