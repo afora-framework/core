@@ -20,19 +20,28 @@ mapping, and typing stays cheap.
 
 ```ts
 class Register extends useCaseOf({
-  name: "Register",
-  blueprint: RegisterInput,                // { name, email, plainPassword }
-  response: UserResponse,                  // { user: User }
-  dependencies: { users: Users },
-  errors: [UserAlreadyExists],
-  steps: [
-    { find: "users.findByEmail", args: ["$input.email"], as: "existing" },
-    { ensure: "absent", value: "$existing", error: UserAlreadyExists },
-    { run: "hashPassword", fn: hashPassword, args: ["$input.plainPassword"], as: "hash" },
-    { build: User, values: { name: "$input.name", email: "$input.email", password: "$hash" }, as: "user" },
-    { create: "users", value: "$user", as: "saved" },
-    { return: { user: "$saved" } },
-  ],
+	name: "Register",
+	blueprint: RegisterInput, // { name, email, plainPassword }
+	response: UserResponse, // { user: User }
+	dependencies: { users: Users },
+	errors: [UserAlreadyExists],
+	steps: [
+		{ find: "users.findByEmail", args: ["$input.email"], as: "existing" },
+		{ ensure: "absent", value: "$existing", error: UserAlreadyExists },
+		{
+			run: "hashPassword",
+			fn: hashPassword,
+			args: ["$input.plainPassword"],
+			as: "hash",
+		},
+		{
+			build: User,
+			values: { name: "$input.name", email: "$input.email", password: "$hash" },
+			as: "user",
+		},
+		{ create: "users", value: "$user", as: "saved" },
+		{ return: { user: "$saved" } },
+	],
 }) {}
 ```
 
@@ -62,7 +71,7 @@ code for a steps use case is complete, with no hand-written file.
 
 ## 2. Values: references, literals and mappings
 
-A *value* is one of:
+A _value_ is one of:
 - **A reference**: a string that starts with `$`. The roots are:
   - `$input` (the parsed input);
   - `$context` (the parsed context, T13);
@@ -87,18 +96,17 @@ before any reference to it.
 
 ## 3. Step kinds (v1, closed)
 
-| Step | Shape | Does | Result (`as`) |
-|---|---|---|---|
-| `find` | `{ find: "<repo>.<action>", args?: value[], as? }` | calls a **read** action of a repository dependency: `findBy*`, `findManyBy*`, `findMany`, `exists`, `findPage`, `count` | its result |
-| `ensure` | `{ ensure: kind, value, other?, error, details? }` | `kind` is one of `exists` (not `undefined`/`null`), `absent`, `equals`/`notEquals` (`other` required, structural equality as in queries), `true`, `false`; on failure, `throw new error({ source: useCaseName, details })` | none |
-| `build` | `{ build: Class, values, as }` | `new Class(values)`, a record or entity; invalid values throw as in a hand-written `new` | the instance |
-| `change` | `{ change: "$ref", key, value, as? }` | `entity.change[key](value)`; `key` must be in the class's change keys | the record |
-| `invoke` | `{ invoke: "$ref", method, args?: value[], as? }` | calls a public method of a record or entity, including plugin methods such as `publish` or `verifyPassword` | its result (awaited) |
-| `create` / `update` / `delete` | `{ create: "<repo>", value, as? }` | the repository action of that name | its result |
-| `call` | `{ call: "<useCase>", input: value, as? }` | the use-case dependency function: validated child, inherited context, events moved up | its response |
-| `run` | `{ run: "<name>", fn, args?: value[], as? }` | `await fn(...args, { context })`; `name` is unique within the use case | its result |
-| `return` | `{ return: value }` | the response, validated by the response blueprint as today | none |
-
+| Step                           | Shape                                              | Does                                                                                                                                                                                                                       | Result (`as`)        |
+| ------------------------------ | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `find`                         | `{ find: "<repo>.<action>", args?: value[], as? }` | calls a **read** action of a repository dependency: `findBy*`, `findManyBy*`, `findMany`, `exists`, `findPage`, `count`                                                                                                    | its result           |
+| `ensure`                       | `{ ensure: kind, value, other?, error, details? }` | `kind` is one of `exists` (not `undefined`/`null`), `absent`, `equals`/`notEquals` (`other` required, structural equality as in queries), `true`, `false`; on failure, `throw new error({ source: useCaseName, details })` | none                 |
+| `build`                        | `{ build: Class, values, as }`                     | `new Class(values)`, a record or entity; invalid values throw as in a hand-written `new`                                                                                                                                   | the instance         |
+| `change`                       | `{ change: "$ref", key, value, as? }`              | `entity.change[key](value)`; `key` must be in the class's change keys                                                                                                                                                      | the record           |
+| `invoke`                       | `{ invoke: "$ref", method, args?: value[], as? }`  | calls a public method of a record or entity, including plugin methods such as `publish` or `verifyPassword`                                                                                                                | its result (awaited) |
+| `create` / `update` / `delete` | `{ create: "<repo>", value, as? }`                 | the repository action of that name                                                                                                                                                                                         | its result           |
+| `call`                         | `{ call: "<useCase>", input: value, as? }`         | the use-case dependency function: validated child, inherited context, events moved up                                                                                                                                      | its response         |
+| `run`                          | `{ run: "<name>", fn, args?: value[], as? }`       | `await fn(...args, { context })`; `name` is unique within the use case                                                                                                                                                     | its result           |
+| `return`                       | `{ return: value }`                                | the response, validated by the response blueprint as today                                                                                                                                                                 | none                 |
 - Steps run in order, each awaited. `return` is required and must be the
   last step, exactly once.
 - There is no branching except `ensure`, and no loops. That is deliberate:

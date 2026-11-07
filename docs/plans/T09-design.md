@@ -75,20 +75,37 @@ T12 handles all codegen implications in one sequential task.
 
 ```json
 {
-  "version": 1,
-  "name": "accounts",
-  "provider": "inMemory",
-  "entities": { "User": { "fields": { "name": "string", "age": "integer" } } },
-  "repositories": {
-    "Users": { "entity": "User", "actions": ["findMany", "exists", "findPage", "create"], "deletion": "soft" }
-  }
+	"version": 1,
+	"name": "accounts",
+	"provider": "inMemory",
+	"entities": { "User": { "fields": { "name": "string", "age": "integer" } } },
+	"repositories": {
+		"Users": {
+			"entity": "User",
+			"actions": ["findMany", "exists", "findPage", "create"],
+			"deletion": "soft"
+		}
+	}
 }
 ```
 
 ```ts
-const Users = repositoryOf({ entity: User, actions: ["findMany", "exists", "findPage", "create"], deletion: "soft" });
-const App = applicationOf({ name: "accounts", entities: { User }, repositories: { Users }, provider: inMemoryProvider() });
-await App.repositories.Users.findMany({ where: { age: { in: [18, 21] } }, orderBy: [{ key: "name" }], limit: 20 });
+const Users = repositoryOf({
+	entity: User,
+	actions: ["findMany", "exists", "findPage", "create"],
+	deletion: "soft",
+});
+const App = applicationOf({
+	name: "accounts",
+	entities: { User },
+	repositories: { Users },
+	provider: inMemoryProvider(),
+});
+await App.repositories.Users.findMany({
+	where: { age: { in: [18, 21] } },
+	orderBy: [{ key: "name" }],
+	limit: 20,
+});
 ```
 
 A provider reference can also be `{ "import": "./db.ts#provider" }` (generated

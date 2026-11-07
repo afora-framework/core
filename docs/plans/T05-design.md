@@ -29,11 +29,13 @@ No new spec syntax is needed. These existing fields become legal:
 
 ```json
 {
-  "version": 1,
-  "name": "MetadataFields",
-  "records": {
-    "DetailsRecord": { "fields": { "blueprint": "string", "options": "string" } }
-  }
+	"version": 1,
+	"name": "MetadataFields",
+	"records": {
+		"DetailsRecord": {
+			"fields": { "blueprint": "string", "options": "string" }
+		}
+	}
 }
 ```
 
@@ -41,8 +43,8 @@ The generated declaration continues to use the existing builders:
 
 ```ts
 const Details = blueprintOf((ctx) => ({
-  blueprint: ctx.string,
-  options: ctx.string,
+	blueprint: ctx.string,
+	options: ctx.string,
 }));
 class DetailsRecord extends recordOf(Details) {}
 // value.blueprint and value.options are domain data.

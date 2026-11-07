@@ -9,15 +9,15 @@ brings use cases to `afora.json`. Everything here is additive to the public API.
 
 ```ts
 useCaseOf({
-  name: "Register",
-  blueprint: RegisterInput,
-  response: UserResponse,
-  dependencies: { users: Users, database: Database },
-  context: RequestContext,            // a blueprint; optional
-  description: "Signs a user up.",    // optional
-  tags: ["users"],                    // optional, default []
-  deprecated: false,                  // optional, default false
-  errors: [UserAlreadyExists, RepositoryUniqueViolation], // exceptionOf classes; optional, default []
+	name: "Register",
+	blueprint: RegisterInput,
+	response: UserResponse,
+	dependencies: { users: Users, database: Database },
+	context: RequestContext, // a blueprint; optional
+	description: "Signs a user up.", // optional
+	tags: ["users"], // optional, default []
+	deprecated: false, // optional, default false
+	errors: [UserAlreadyExists, RepositoryUniqueViolation], // exceptionOf classes; optional, default []
 });
 ```
 
@@ -71,8 +71,8 @@ The execution state (`ExecutionState` in `use-case.ts`) gains `context` and
 
 ```ts
 interface ExecutionScope {
-  /** Provider used by the call for each provider the repositories declared. */
-  readonly providers: ReadonlyMap<IRepositoryProvider, IRepositoryProvider>;
+	/** Provider used by the call for each provider the repositories declared. */
+	readonly providers: ReadonlyMap<IRepositoryProvider, IRepositoryProvider>;
 }
 ```
 
@@ -124,24 +124,36 @@ mutated, as with repositories today. `app.useCase(Register)` mirrors
 ## 5. `describe()`
 
 ```ts
-useCases: Record<string, {
-  from: string;
-  name: string;                       // useCaseName
-  description?: string;
-  tags: readonly string[];
-  deprecated: boolean;
-  input: FieldsDescription;
-  response: FieldsDescription;
-  context?: FieldsDescription;
-  errors: readonly ({ kind: "exception"; ref: string } | { kind: "core"; name: string })[];
-  dependencies: Record<string, { kind: "use-case" | "repository" | "environment"; ref: string }>;
-  implementation: { kind: "opaque" };  // T16 adds { kind: "steps", steps }
-}>;
-exceptions: Record<string, {
-  from: string;
-  layer: ExceptionLayers;
-  message?: string;                    // only when declared as a string
-}>;
+useCases: Record<
+	string,
+	{
+		from: string;
+		name: string; // useCaseName
+		description?: string;
+		tags: readonly string[];
+		deprecated: boolean;
+		input: FieldsDescription;
+		response: FieldsDescription;
+		context?: FieldsDescription;
+		errors: readonly (
+			| { kind: "exception"; ref: string }
+			| { kind: "core"; name: string }
+		)[];
+		dependencies: Record<
+			string,
+			{ kind: "use-case" | "repository" | "environment"; ref: string }
+		>;
+		implementation: { kind: "opaque" }; // T16 adds { kind: "steps", steps }
+	}
+>;
+exceptions: Record<
+	string,
+	{
+		from: string;
+		layer: ExceptionLayers;
+		message?: string; // only when declared as a string
+	}
+>;
 ```
 
 A field that is a registered blueprint, record or entity is a reference by
@@ -151,21 +163,24 @@ name, as the existing field descriptions already do.
 
 ```json
 {
-  "exceptions": {
-    "UserAlreadyExists": { "layer": "use-case", "message": "A user with this email already exists." }
-  },
-  "useCases": {
-    "Register": {
-      "description": "Signs a user up.",
-      "tags": ["users"],
-      "input": "RegisterInput",
-      "response": { "fields": { "user": "User" } },
-      "context": { "fields": { "userId": "id?" } },
-      "dependencies": { "users": "Users", "database": "Database" },
-      "errors": ["UserAlreadyExists", "RepositoryUniqueViolation"],
-      "implementation": { "import": "./handlers/register.ts#Register" }
-    }
-  }
+	"exceptions": {
+		"UserAlreadyExists": {
+			"layer": "use-case",
+			"message": "A user with this email already exists."
+		}
+	},
+	"useCases": {
+		"Register": {
+			"description": "Signs a user up.",
+			"tags": ["users"],
+			"input": "RegisterInput",
+			"response": { "fields": { "user": "User" } },
+			"context": { "fields": { "userId": "id?" } },
+			"dependencies": { "users": "Users", "database": "Database" },
+			"errors": ["UserAlreadyExists", "RepositoryUniqueViolation"],
+			"implementation": { "import": "./handlers/register.ts#Register" }
+		}
+	}
 }
 ```
 

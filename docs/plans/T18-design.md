@@ -11,14 +11,18 @@ into operations.
 
 ```ts
 const Users = commandOf({
-  name: "Users",
-  description: "Accounts.",                 // optional
-  tags: ["accounts"],                       // optional, default []
-  context: RequestContext,                  // a blueprint; optional
-  useCases: { register: Register, login: Login, changePassword: ChangePassword },
-  transaction: true,                        // optional, default false
-  events: "after-commit",                   // "after-commit" (default) | "manual" | handler
-  onEventError: (error, event) => {},       // optional, after-commit only
+	name: "Users",
+	description: "Accounts.", // optional
+	tags: ["accounts"], // optional, default []
+	context: RequestContext, // a blueprint; optional
+	useCases: {
+		register: Register,
+		login: Login,
+		changePassword: ChangePassword,
+	},
+	transaction: true, // optional, default false
+	events: "after-commit", // "after-commit" (default) | "manual" | handler
+	onEventError: (error, event) => {}, // optional, after-commit only
 });
 ```
 
@@ -61,7 +65,7 @@ The command object is frozen and has these properties:
 ## 2. Running
 
 ```ts
-const { user } = await Users.run("register", input, { context });   // response
+const { user } = await Users.run("register", input, { context }); // response
 const { value, events } = await Users.execute("register", input, { context }); // no policy
 ```
 
@@ -135,14 +139,20 @@ app provider. `app.command(Users)` mirrors `app.repository`.
 `describe()` gains:
 
 ```ts
-commands: Record<string, {
-  from: string; name: string; description?: string; tags: readonly string[];
-  context?: FieldsDescription;
-  operations: Record<string, { ref: string }>;   // op → use case name
-  transaction: boolean;
-  events: "after-commit" | "manual" | { kind: "opaque" };
-  onEventError?: { kind: "opaque" };
-}>;
+commands: Record<
+	string,
+	{
+		from: string;
+		name: string;
+		description?: string;
+		tags: readonly string[];
+		context?: FieldsDescription;
+		operations: Record<string, { ref: string }>; // op → use case name
+		transaction: boolean;
+		events: "after-commit" | "manual" | { kind: "opaque" };
+		onEventError?: { kind: "opaque" };
+	}
+>;
 ```
 
 ## 5. JSON (T21)
@@ -161,10 +171,12 @@ commands: Record<string, {
 
 ```ts
 export const Users = commandOf({
-  name: "Users", description: "Accounts.",
-  context: blueprintOf((ctx) => ({ userId: ctx.optional.id })),
-  useCases: { register: Register, login: Login },
-  transaction: true, events: "after-commit",
+	name: "Users",
+	description: "Accounts.",
+	context: blueprintOf((ctx) => ({ userId: ctx.optional.id })),
+	useCases: { register: Register, login: Login },
+	transaction: true,
+	events: "after-commit",
 });
 ```
 

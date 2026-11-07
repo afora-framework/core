@@ -10,21 +10,21 @@ something concrete (an HTTP app, an OpenAPI document, MCP tools).
 
 ```ts
 interface OperationDescriptor {
-  readonly kind: "operation";
-  readonly version: 1;
-  readonly id: string;            // "Users.register"
-  readonly command: string;       // "Users"
-  readonly name: string;          // "register"
-  readonly useCase: string;       // "Register" (useCaseName)
-  readonly description?: string;  // use case description, else command description
-  readonly tags: readonly string[];      // command tags, then use case tags, deduplicated
-  readonly deprecated: boolean;          // use case deprecated
-  readonly input: AnyBlueprint;
-  readonly response: AnyBlueprint;
-  readonly context?: AnyBlueprint;       // the command context, else the use case one
-  readonly errors: readonly AnyExceptionClass[];   // use case `errors`
-  readonly meta: Readonly<Record<string, unknown>>; // set by transforms, {} initially
-  invoke(input: unknown, options?: { context?: unknown }): Promise<unknown>; // command.run
+	readonly kind: "operation";
+	readonly version: 1;
+	readonly id: string; // "Users.register"
+	readonly command: string; // "Users"
+	readonly name: string; // "register"
+	readonly useCase: string; // "Register" (useCaseName)
+	readonly description?: string; // use case description, else command description
+	readonly tags: readonly string[]; // command tags, then use case tags, deduplicated
+	readonly deprecated: boolean; // use case deprecated
+	readonly input: AnyBlueprint;
+	readonly response: AnyBlueprint;
+	readonly context?: AnyBlueprint; // the command context, else the use case one
+	readonly errors: readonly AnyExceptionClass[]; // use case `errors`
+	readonly meta: Readonly<Record<string, unknown>>; // set by transforms, {} initially
+	invoke(input: unknown, options?: { context?: unknown }): Promise<unknown>; // command.run
 }
 ```
 
@@ -38,14 +38,17 @@ interface OperationDescriptor {
 
 ```ts
 const Api = outputOf({
-  name: "Api",
-  commands: [Users, Posts],                        // or an application: all its commands
-  statuses: { UserAlreadyExists: 409 },            // optional, by exception name
-  pipe: [select({ tags: ["public"] }), openapi({ info: { title: "Blog", version: "1.0.0" } })],
+	name: "Api",
+	commands: [Users, Posts], // or an application: all its commands
+	statuses: { UserAlreadyExists: 409 }, // optional, by exception name
+	pipe: [
+		select({ tags: ["public"] }),
+		openapi({ info: { title: "Blog", version: "1.0.0" } }),
+	],
 });
 
 Api.operations; // OperationDescriptor[] after the transforms, in declaration order
-Api.build();    // the sink's result (memoized); throws if the pipe has no sink
+Api.build(); // the sink's result (memoized); throws if the pipe has no sink
 Api.pipe(t, s); // a new, unnamed output with more stages (ad hoc), or the sink's result when s is a sink
 ```
 
@@ -68,16 +71,18 @@ as in JSON:
 
 ```ts
 export const select = transformOf({
-  name: "select",
-  apply: (operation, options: { tags?: string[]; operations?: string[]; exclude?: string[] }) =>
-    keep(operation, options) ? operation : null,        // null removes it
+	name: "select",
+	apply: (
+		operation,
+		options: { tags?: string[]; operations?: string[]; exclude?: string[] },
+	) => (keep(operation, options) ? operation : null), // null removes it
 });
 export const openapi = sinkOf({
-  name: "openapi",
-  build: (operations, options: OpenAPISinkOptions, output) => document,
+	name: "openapi",
+	build: (operations, options: OpenAPISinkOptions, output) => document,
 });
 
-select({ tags: ["public"] });   // a TransformStage { kind: "transform", name: "select", options }
+select({ tags: ["public"] }); // a TransformStage { kind: "transform", name: "select", options }
 ```
 
 - `transformOf({ name, apply })` and `sinkOf({ name, build })` return
@@ -141,12 +146,19 @@ With a provider, `app.outputs.Api` is rebuilt over the application-bound
 commands, and memoized. `describe()` gains:
 
 ```ts
-outputs: Record<string, {
-  from: string; name: string;
-  commands: readonly string[];
-  statuses: Readonly<Record<string, number>>;
-  pipe: readonly ({ kind: "transform" | "sink"; name: string; options: JsonObject } | { kind: "opaque" })[];
-}>;
+outputs: Record<
+	string,
+	{
+		from: string;
+		name: string;
+		commands: readonly string[];
+		statuses: Readonly<Record<string, number>>;
+		pipe: readonly (
+			| { kind: "transform" | "sink"; name: string; options: JsonObject }
+			| { kind: "opaque" }
+		)[];
+	}
+>;
 ```
 
 ## 6. JSON (T25)
@@ -167,8 +179,13 @@ outputs: Record<string, {
 ```ts
 import { hono } from "@afora/hono";
 export const Api = outputOf({
-  name: "Api", commands: [Users, Posts], statuses: { UserAlreadyExists: 409 },
-  pipe: [select({ tags: ["public"] }), hono({ basePath: "/api", docs: { path: "/openapi.json" } })],
+	name: "Api",
+	commands: [Users, Posts],
+	statuses: { UserAlreadyExists: 409 },
+	pipe: [
+		select({ tags: ["public"] }),
+		hono({ basePath: "/api", docs: { path: "/openapi.json" } }),
+	],
 });
 ```
 
