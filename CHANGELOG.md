@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Releases now publish `@afora/codegen` and `@afora/mcp` after `@afora/core`, skipping versions already on npm. The package manifests point to `afora-framework/core`, which npm provenance requires. Dependabot ignores `monaco-editor`.
 - Breaking: the `change<Key>` methods are now a `change` namespace, `user.change.name(value)` instead of `user.changeName(value)`, with the same validation, `updatedAt` and effects. `change.<key>` is bound to its record, so `const { change } = user` works, and it returns the record. `change` only exists when `options.change` (or a plugin) lists keys, and then a blueprint key named `change` throws `ReservedRecordKey` (a plugin member named `change` throws `RecordPluginConflict`). The standard `authenticatable` plugin now has `change.password(hash)`.
 - `recordOf` is now the `std` one, `recordBuilderOf(StdRecordPlugins)`, so that `options.plugins` can pick standard plugins; its classes have a static `plugins`. `change` keys are resolved in the order of the blueprint, as `sensitive` and `unique` are.
 
