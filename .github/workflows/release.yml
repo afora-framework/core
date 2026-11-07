@@ -63,6 +63,8 @@ jobs:
           publish .
           publish packages/codegen
           publish packages/mcp
+          publish packages/hono
+          publish packages/drizzle
       - name: Create GitHub release
         run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
         env:
