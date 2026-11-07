@@ -167,7 +167,6 @@ class Register extends useCaseOf({
 }
 ```
 
-
 ## Testing a provider
 
 `@afora/core/testing` has a contract test kit for `IRepositoryProvider` implementations. It does not import a test runner: pass the `describe`, `it` and `expect` of yours, and a factory of fresh, empty providers (called once per case).

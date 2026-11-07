@@ -159,7 +159,9 @@ export interface IApplication<
 	 * and checks the transactions of its commands against it. Idempotent: the
 	 * same promise until it fails or `stop()` is called.
 	 */
-	start(options?: ApplicationStartOptions): Promise<IApplication<Name, Collections>>;
+	start(
+		options?: ApplicationStartOptions,
+	): Promise<IApplication<Name, Collections>>;
 	/**
 	 * Closes its provider (`close`, if it has one); a provider of
 	 * `providerFrom` is made again by the next `start()`. It stops being the

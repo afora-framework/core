@@ -47,7 +47,12 @@ Repositories are module-level and may be shared, so an application does not chan
 **A provider made from the environment.** `providerFrom(environmentDependencies, create)` declares a provider that needs variables, such as a database URL, without reading them when the module loads:
 
 ```ts
-import { applicationOf, blueprintOf, environmentOf, providerFrom } from "@afora/core";
+import {
+	applicationOf,
+	blueprintOf,
+	environmentOf,
+	providerFrom,
+} from "@afora/core";
 import { drizzleProvider } from "@afora/drizzle";
 
 const Database = environmentOf(
@@ -70,4 +75,3 @@ await App.start(); // validates Database, then calls create once
 `environmentDependencies` is one environment or a list of distinct ones (merged in order), which must be registered in `environments` (`UnregisteredApplicationReference`); `create` gets their typed variables and gives a provider, or a promise of one. It is called once per start, by the first `start()` of the application or of one that extends it (they share the provider). Until then the repositories, use cases, commands and outputs of the application are bound as usual, to a provider that forwards each call to the one made on start; a call before `start()` throws `ApplicationNotStarted`. `isProviderFactory` tells a factory apart; `describe()` describes the provider as `{ kind: "opaque" }`.
 
 `await app.stop()` calls the optional `close()` of the provider (a new optional member of `IRepositoryProvider`, for connections and files). With `providerFrom`, it also forgets the provider: calls throw `ApplicationNotStarted` again, and the next `start()` makes a new one.
-

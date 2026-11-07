@@ -10,6 +10,7 @@ optional fields.
 A use case can declare `steps` instead of a hand-written `execute`. The steps
 are **plain data**. They are the same objects in TypeScript and in JSON,
 except for three places where TypeScript passes a value and JSON passes a name:
+
 - the record or entity class of `build`;
 - the exception class of `ensure`;
 - the function of `run`.
@@ -72,6 +73,7 @@ code for a steps use case is complete, with no hand-written file.
 ## 2. Values: references, literals and mappings
 
 A _value_ is one of:
+
 - **A reference**: a string that starts with `$`. The roots are:
   - `$input` (the parsed input);
   - `$context` (the parsed context, T13);
@@ -120,6 +122,7 @@ before any reference to it.
 
 `useCaseOf` validates `steps` and throws `InvalidUseCaseStep` (layer
 `UseCase`, `details: { index, reason }`) when:
+
 - a step has an unknown kind, a missing or extra field, or a bad `as`;
 - a reference has an unknown root, uses a name not yet bound, or uses
   `$context` without a declared context;
@@ -165,6 +168,7 @@ mirror the reasons: `unknown_step`, `invalid_reference`, `unbound_reference`,
 ## 6. `describe()` (extends T13)
 
 `implementation` is one of:
+
 - `{ kind: "steps", steps }`. In it, `build` and `ensure.error` become names
   (`"User"`, `"UserAlreadyExists"`; a core exception is
   `{ "core": "RepositoryUniqueViolation" }`), and `run.fn` becomes

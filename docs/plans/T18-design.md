@@ -50,6 +50,7 @@ const Users = commandOf({
   (T20).
 
 The command object is frozen and has these properties:
+
 - `[Kind]: "command"`;
 - `commandName`;
 - `description`;
@@ -70,6 +71,7 @@ const { value, events } = await Users.execute("register", input, { context }); /
 ```
 
 `run` executes these steps:
+
 1. Validates `op`. An unknown one throws `UnknownCommandOperation` (layer
    `Command`, `details.operation`).
 2. Validates the context:
@@ -128,6 +130,7 @@ provider's transaction serializes them if it does.
 ## 4. Applications (T20)
 
 `applicationOf({ commands: { Users } })`:
+
 - the key must equal `commandName` (`InvalidApplicationDeclaration`);
 - every use case of every command must be registered in `useCases`
   (`UnregisteredApplicationReference`, `details: { command, useCase }`).
@@ -197,6 +200,7 @@ Files: `src/core/command/command.ts`, `exceptions.ts`
 `src/core/actions`.
 
 The tests cover:
+
 - the declaration rules;
 - running every operation;
 - context validation and narrowing;

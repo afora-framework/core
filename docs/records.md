@@ -46,7 +46,6 @@ Keys are resolved in the order of the blueprint.
 
 **Spread caveat.** The value of a record lives in a `WeakMap`, and each key is a getter on the record's prototype, not an own property. So `Object.keys(user)` is `[]` and `{ ...user }` is `{}` (unless a subclass adds own properties). Metadata is available through `user[Meta].blueprint` and `user[Meta].options` (`Meta` is exported by `@afora/core`), or the class statics `User.blueprint` and `User.options`. The string keys `blueprint` and `options` are available for domain data. For plain data use `user.toJSON()` (frozen, sensitive values masked), or `blueprint.safeParse(value)` to handle plain input into a plain object. To build a record from another one, pass a plain object of its keys, rather than relying on enumeration of the record itself.
 
-
 ## Plugins
 
 A plugin carries keys, options and behavior that records and entities share, with no identity of its own. It is made from a record class: the keys of its blueprint, its `sensitive`, `unique` and `change` keys, the methods and getters its class declares, and its `onSet` and `onSetAll`. A record or an entity lists plugins in `options.plugins`, and gets all of that:
@@ -130,7 +129,6 @@ catalog.resolve("slugged@1.0.0"); // by name and version
 ```
 
 `resolve` throws `UnknownRecordPlugin` when the catalog has no plugin of that name. It throws `IncompatibleRecordPlugin` when the catalog's plugin does not satisfy the reference: a different major version (minor, below `1.0.0`), an older version, or keys, options, members or requirements the descriptor lists that it no longer has. Typing is lost once plugins go through JSON, since they are only known at runtime.
-
 
 ## Slicing (experimental)
 

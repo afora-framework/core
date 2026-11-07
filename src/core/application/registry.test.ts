@@ -6,9 +6,9 @@ import {
 	applicationOf,
 	blueprintOf,
 	commandOf,
+	type EnvironmentValue,
 	entityOf,
 	environmentOf,
-	type EnvironmentValue,
 	InvalidApplicationDeclaration,
 	inMemoryProvider,
 	openapi,
@@ -41,12 +41,18 @@ const Api = outputOf({
 	commands: [Writes],
 	pipe: [openapi({ info: { title: "Notes", version: "0.0.1" } })],
 });
-const Mail = environmentOf(blueprintOf((ctx) => ({ FROM: ctx.email })), {
-	source: () => ({ FROM: "app@example.com" }),
-});
-const Other = environmentOf(blueprintOf((ctx) => ({ X: ctx.string })), {
-	source: () => ({ X: "x" }),
-});
+const Mail = environmentOf(
+	blueprintOf((ctx) => ({ FROM: ctx.email })),
+	{
+		source: () => ({ FROM: "app@example.com" }),
+	},
+);
+const Other = environmentOf(
+	blueprintOf((ctx) => ({ X: ctx.string })),
+	{
+		source: () => ({ X: "x" }),
+	},
+);
 
 const appOf = (name = "notes") =>
 	applicationOf({

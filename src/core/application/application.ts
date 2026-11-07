@@ -47,9 +47,9 @@ import { describeSteps } from "../use-case/steps/describe";
 import { interpretedStepsOf } from "../use-case/steps/run";
 import { type AnyUseCaseClass, isUseCaseClass } from "../use-case/use-case";
 import {
+	ApplicationAlreadyStarted,
 	ApplicationConflict,
 	DuplicateApplicationDeclaration,
-	ApplicationAlreadyStarted,
 	InvalidApplicationDeclaration,
 	InvalidApplicationEnvironment,
 	UnregisteredApplicationReference,
@@ -1290,13 +1290,17 @@ export function applicationOf<
 			starting = undefined;
 			started = false;
 			if (wasStarting) await wasStarting.catch(() => undefined);
-			if (startedApplication() === application) setStartedApplication(undefined);
+			if (startedApplication() === application)
+				setStartedApplication(undefined);
 			if (provider !== undefined) await stopProvider(provider);
 		},
 		get(declaration: unknown) {
 			if (isEnvironment(declaration)) {
 				if (!registeredEnvironments.has(declaration)) {
-					invalid(name, "Expected an environment registered in the application.");
+					invalid(
+						name,
+						"Expected an environment registered in the application.",
+					);
 				}
 				return declaration.load();
 			}

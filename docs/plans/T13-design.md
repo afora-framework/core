@@ -25,6 +25,7 @@ The declared class gets these statics, frozen: `useCaseName`, `blueprint`,
 `response` and `dependencies` (which exist today), plus `context` (the
 blueprint or `undefined`), `description` (`string | undefined`), `tags`,
 `deprecated` and `errors`. `useCaseOf` validates the settings:
+
 - `context` is a non-optional blueprint;
 - `description` is a string;
 - `tags` are distinct non-empty strings;
@@ -57,6 +58,7 @@ this.context; // Readonly<BlueprintValue<RequestContext>>, parsed and frozen
 **Inheritance.** A child use case called through a dependency function
 receives the parent's context, narrowed to the keys of its own context
 blueprint (picked from the parent's parsed value) and then validated by it.
+
 - A child that declares no context receives none.
 - A child that declares one under a parent without context fails when called,
   with `InvalidUseCaseContext`.
@@ -96,6 +98,7 @@ interface ExecutionScope {
 ## 4. Registration: `applicationOf({ useCases, exceptions })`
 
 There are two new collections:
+
 - `useCases: { Register, CreateUser }`, keyed by name. **The key must equal
   `useCaseName`**, otherwise `InvalidApplicationDeclaration`. That keeps the
   JSON names and the runtime names the same.
@@ -103,6 +106,7 @@ There are two new collections:
   `name`. The same rule applies.
 
 Validation, on the resolved set, extended applications included:
+
 - Every dependency of a registered use case must itself be registered: a use
   case, a repository or an environment. Otherwise
   `UnregisteredUseCaseDependency`, a new exception in the `Application`
@@ -205,6 +209,7 @@ export const App = applicationOf({ ..., useCases: { Register }, exceptions: { Us
 
 There is no import cycle: the handler imports the generated base and the
 application imports the handler.
+
 - Extraction maps `implementation: { kind: "opaque" }` to `{ "import": ... }`
   through the `imports` option (key `useCases.Register`). Without it,
   extraction fails with an actionable error, as for opaque providers.

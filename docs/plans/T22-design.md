@@ -139,6 +139,7 @@ select({ tags: ["public"] }); // a TransformStage { kind: "transform", name: "se
 ## 5. Applications
 
 `applicationOf({ outputs: { Api } })`:
+
 - the key must equal `outputName` (`InvalidApplicationDeclaration`);
 - every command must be registered (`UnregisteredApplicationReference`).
 
@@ -211,6 +212,7 @@ Files: `src/core/output/output.ts`, `stage.ts`, `select.ts`, `status.ts`,
 recognized by `isExportedException`), `types/output.interface.ts` and tests.
 
 The tests cover:
+
 - the descriptors built from commands and from an application;
 - the patch rules;
 - transforms that remove and patch operations;
