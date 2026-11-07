@@ -19,13 +19,13 @@
 	],
 	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
 	"license": "MIT",
-	"homepage": "https://github.com/Hoyasumii/afora#readme",
+	"homepage": "https://github.com/afora-framework/core#readme",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/Hoyasumii/afora.git"
+		"url": "git+https://github.com/afora-framework/core.git"
 	},
 	"bugs": {
-		"url": "https://github.com/Hoyasumii/afora/issues"
+		"url": "https://github.com/afora-framework/core/issues"
 	},
 	"type": "module",
 	"workspaces": [
@@ -45,9 +45,6 @@
 	"files": [
 		"dist"
 	],
-	"bin": {
-		"afora": "./dist/playground/server.js"
-	},
 	"engines": {
 		"bun": ">=1.4.4",
 		"node": ">=22"
@@ -62,9 +59,7 @@
 		"fmt": "biome check --write .",
 		"knip": "knip",
 		"build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target node --format esm --packages external && tsc -p tsconfig.build.json",
-		"postbuild": "bun scripts/add-dts-extensions.ts && bun playground/build.ts",
-		"playground": "bun playground/build.ts && bun dist/playground/server.js --source",
-		"test:playground": "bun test ./playground/runner.test.ts",
+		"postbuild": "bun scripts/add-dts-extensions.ts",
 		"bench": "cd bench && bun install && bun run.ts",
 		"smoke": "bun run build && node scripts/smoke.mjs",
 		"test:types": "bun run build && bun tests/types-compat/run.ts",
@@ -86,9 +81,7 @@
 		"@types/bun": "^1.4.4",
 		"husky": "^9.1.7",
 		"knip": "^6.43.0",
-		"monaco-editor": "0.52.2",
-		"typescript": "^7.0.2",
-		"typescript-language-service": "npm:typescript@5.9.3"
+		"typescript": "^7.0.2"
 	},
 	"peerDependencies": {
 		"typescript": ">=5.5"

@@ -855,16 +855,6 @@ Where the others win: Zod and Valibot are faster, have far larger ecosystems and
 
 `@afora/codegen` generates afora code from an `afora.json` (and extracts the `afora.json` of an `Application` back), and `@afora/mcp` is an MCP server that lets an agent build a domain with it: see [packages/codegen](packages/codegen/README.md) and [packages/mcp](packages/mcp/README.md).
 
-## Local playground
-
-Try the library in a TypeScript editor with IntelliSense, executable examples and an expandable console:
-
-```bash
-bun run playground
-```
-
-In this repository it uses the current `src/`. The published package also includes an `afora playground` CLI: run it through a package script in a consuming project to use that project's `package.json`, `tsconfig.json` and installed dependencies. Saved experiments live in `.afora/sandbox/**/*.sandbox.ts` inside the selected project. Bun is required for the playground. See [playground/README.md](playground/README.md) for setup, project selection and execution limits.
-
 ## Scripts
 
 ```bash
