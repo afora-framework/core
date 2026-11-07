@@ -1,5 +1,8 @@
 import type { AnyCommand } from "../../command/types/command.interface";
-import type { AnyEnvironment } from "../../environment/environment";
+import type {
+	AnyEnvironment,
+	EnvironmentValue,
+} from "../../environment/environment";
 import type { ExceptionLayers } from "../../exception/enums/exception-layers";
 import type {
 	AnyOutput,
@@ -156,11 +159,39 @@ export interface IApplication<
 	 * and checks the transactions of its commands against it. Idempotent: the
 	 * same promise until it fails or `stop()` is called.
 	 */
-	start(): Promise<IApplication<Name, Collections>>;
-	/** Closes its provider (`close`, if it has one); a provider of `providerFrom` is made again by the next `start()`. */
+	start(options?: ApplicationStartOptions): Promise<IApplication<Name, Collections>>;
+	/**
+	 * Closes its provider (`close`, if it has one); a provider of
+	 * `providerFrom` is made again by the next `start()`. It stops being the
+	 * started application of the process.
+	 */
 	stop(): Promise<void>;
+	/** The variables of an environment registered in the application. */
+	get<Environment extends AnyEnvironment>(
+		environment: Environment,
+	): EnvironmentValue<Environment>;
+	/** The bound version of a command registered in the application. */
+	get<Command extends AnyCommand>(command: Command): Command;
+	/** The bound version of an output registered in the application. */
+	get<Output extends AnyOutput>(output: Output): Output;
+	/** The bound version of a use case registered in the application. */
+	get<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase;
+	/** The bound version of a repository registered in the application. */
+	get<Repository extends AnyRepository>(repository: Repository): Repository;
 	/** Whether `start()` completed and `stop()` was not called since. */
 	readonly started: boolean;
+}
+
+/** What `app.start()` takes. */
+export interface ApplicationStartOptions {
+	/**
+	 * Become the started application of the process (what `useApplication()`
+	 * gives). Default `true`; another one already started throws
+	 * `ApplicationAlreadyStarted`.
+	 */
+	readonly register?: boolean;
+	/** Stop the started application of the process and take its place, e.g. on hot reload. Default `false`. */
+	readonly replace?: boolean;
 }
 
 /** Any application. */

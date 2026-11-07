@@ -35,6 +35,7 @@ import { isProperty } from "../property/is-property";
 import { type PropertyLineage, propertyLineageOf } from "../property/lineage";
 import { pluginsOf } from "../record/plugin";
 import { providerDescriptionOf } from "../repository/provider";
+import { isRepository } from "../repository/repository";
 import {
 	bindRepository,
 	inspectRepository,
@@ -48,12 +49,14 @@ import { type AnyUseCaseClass, isUseCaseClass } from "../use-case/use-case";
 import {
 	ApplicationConflict,
 	DuplicateApplicationDeclaration,
+	ApplicationAlreadyStarted,
 	InvalidApplicationDeclaration,
 	InvalidApplicationEnvironment,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
 	UnregisteredUseCaseDependency,
 } from "./exceptions";
+import { setStartedApplication, startedApplication } from "./registry";
 import {
 	checkTransactions,
 	deferredEnvironments,
@@ -1157,6 +1160,9 @@ export function applicationOf<
 	}
 
 	const environmentEntries = [...registry.environments.values()];
+	const registeredEnvironments = new Set<unknown>(
+		environmentEntries.map((entry) => entry.value),
+	);
 	let starting: Promise<unknown> | undefined;
 	let started = false;
 	const start = async () => {
@@ -1250,8 +1256,24 @@ export function applicationOf<
 		get started() {
 			return started;
 		},
-		start() {
-			starting ??= start().then(
+		start(options: { replace?: boolean; register?: boolean } = {}) {
+			const { replace = false, register = true } = options ?? {};
+			starting ??= (async () => {
+				if (register) {
+					const current = startedApplication();
+					if (current !== undefined && current !== application) {
+						if (!replace) {
+							throw new ApplicationAlreadyStarted({
+								source: name,
+								details: { current: current.name, attempted: name },
+							});
+						}
+						await current.stop();
+					}
+				}
+				await start();
+				if (register) setStartedApplication(application as never);
+			})().then(
 				() => application,
 				async (error: unknown) => {
 					starting = undefined;
@@ -1268,7 +1290,26 @@ export function applicationOf<
 			starting = undefined;
 			started = false;
 			if (wasStarting) await wasStarting.catch(() => undefined);
+			if (startedApplication() === application) setStartedApplication(undefined);
 			if (provider !== undefined) await stopProvider(provider);
+		},
+		get(declaration: unknown) {
+			if (isEnvironment(declaration)) {
+				if (!registeredEnvironments.has(declaration)) {
+					invalid(name, "Expected an environment registered in the application.");
+				}
+				return declaration.load();
+			}
+			if (isCommand(declaration)) return application.command(declaration);
+			if (isOutput(declaration)) return application.output(declaration);
+			if (isUseCaseClass(declaration)) return application.useCase(declaration);
+			if (isRepository(declaration)) {
+				return application.repository(declaration);
+			}
+			return invalid(
+				name,
+				"Expected a repository, use case, command, output or environment registered in the application.",
+			);
 		},
 	});
 	internals.set(application, registry);

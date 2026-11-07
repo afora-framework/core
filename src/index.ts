@@ -1,5 +1,6 @@
 export { applicationOf, isApplication } from "./core/application/application";
 export {
+	ApplicationAlreadyStarted,
 	ApplicationConflict,
 	ApplicationNotStarted,
 	DuplicateApplicationDeclaration,
@@ -10,6 +11,12 @@ export {
 	UnregisteredUseCaseDependency,
 } from "./core/application/exceptions";
 export {
+	type Register,
+	type RegisteredApplication,
+	resetApplication,
+	useApplication,
+} from "./core/application/registry";
+export {
 	isProviderFactory,
 	type ProviderFactory,
 	providerFrom,
@@ -19,6 +26,7 @@ export type {
 	ApplicationCollections,
 	ApplicationDescription,
 	ApplicationSettings,
+	ApplicationStartOptions,
 	CommandDescription,
 	ExceptionDescription,
 	FieldDescription,

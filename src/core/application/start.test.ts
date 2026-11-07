@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
 	ApplicationNotStarted,
 	applicationOf,
@@ -16,6 +16,7 @@ import {
 	isProviderFactory,
 	providerFrom,
 	repositoryOf,
+	resetApplication,
 	UnregisteredApplicationReference,
 	useCaseOf,
 } from "../../index";
@@ -58,6 +59,9 @@ const failureOf = async (run: () => Promise<unknown>) => {
 	}
 	throw new Error("did not throw");
 };
+
+// Each start makes its application the started one of the process.
+afterEach(() => resetApplication());
 
 describe("start", () => {
 	test("validates every environment at once", async () => {
@@ -290,7 +294,7 @@ describe("providerFrom", () => {
 		const extended = applicationOf({ name: "more", extends: [base] });
 		await extended.start();
 		expect(made).toHaveLength(1);
-		await base.start();
+		await base.start({ register: false });
 		expect(made).toHaveLength(1);
 		await extended.repositories.Notes.create({ name: "a" });
 		expect(await base.repositories.Notes.count()).toBe(1);

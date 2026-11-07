@@ -459,3 +459,16 @@ const ClubApi = outputOf({
 	pipe: [openapi({ info: { title: "Club", version: "1.0.0" } })],
 });
 export const clubDocument = ClubApi.build();
+
+// The started application, typed by augmenting `Register` once per project.
+import { useApplication as useAppOf } from "@afora/core";
+
+declare module "@afora/core" {
+	interface Register {
+		application: typeof AuthApp;
+	}
+}
+const registered: Equals<ReturnType<typeof useAppOf>, typeof AuthApp> = true;
+void registered;
+const fromAnywhere: typeof AppUsers = useAppOf().get(AppUsers);
+void fromAnywhere;

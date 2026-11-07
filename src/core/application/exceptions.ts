@@ -87,8 +87,32 @@ export const UnregisteredUseCaseDependency = exceptionOf({
 export const ApplicationNotStarted = exceptionOf({
 	layer: ExceptionLayers.Application,
 	name: "ApplicationNotStarted",
-	message: ({ application }: { readonly application: string }) =>
-		`The application "${application}" is not started: call await app.start() first.`,
+	message: ({
+		application,
+	}: {
+		/** The application, or none when `useApplication()` found none started. */
+		readonly application?: string;
+	}) =>
+		application === undefined
+			? "No application is started: call await app.start() first."
+			: `The application "${application}" is not started: call await app.start() first.`,
+});
+
+/**
+ * `app.start()` was called while another application is the started one of
+ * the process; `start({ replace: true })` stops it and takes its place.
+ */
+export const ApplicationAlreadyStarted = exceptionOf({
+	layer: ExceptionLayers.Application,
+	name: "ApplicationAlreadyStarted",
+	message: ({
+		current,
+		attempted,
+	}: {
+		readonly current: string;
+		readonly attempted: string;
+	}) =>
+		`The application "${current}" is already started, so "${attempted}" cannot be: stop it, or call start({ replace: true }).`,
 });
 
 /**
