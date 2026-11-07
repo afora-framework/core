@@ -2,13 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { extractSpec, generate, loadSpec, normalizeSpec } from "@afora/codegen";
+import { useApplication } from "@afora/core";
 import { Validator } from "@seriousme/openapi-schema-validator";
 import { providers, stages } from "./catalogs.ts";
 import { App } from "./src/domain";
+import "./src/register.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper reading JSON bodies
 const body = (response: Response): Promise<any> => response.json();
 
+// validates Database and makes the drizzle provider from it
+await App.start();
 const api = App.outputs.Api.build();
 
 const json = (body: unknown, headers: Record<string, string> = {}) => ({
@@ -37,6 +41,15 @@ describe("generated code", () => {
 				file.contents,
 			);
 		}
+	});
+});
+
+describe("start", () => {
+	test("the started application is reachable anywhere, typed by Register", () => {
+		const app: typeof App = useApplication();
+		expect(app).toBe(App);
+		expect(app.started).toBe(true);
+		expect(app.get(app.environments.Database)).toEqual({});
 	});
 });
 
@@ -172,12 +185,9 @@ describe("round trip", () => {
 		});
 		const expected = normalizeSpec(spec);
 		const actual = normalizeSpec(extracted);
-		// a drizzle provider is opaque (db and tables are not JSON): extraction
-		// needs it mapped to an import, and gives back that import
+		// the provider of providerFrom is opaque (it is code): extraction needs
+		// it mapped to its import, and gives back the spec as written
 		expect(actual.provider).toEqual({ import: "../provider.ts#provider" });
-		expect({ ...actual, provider: undefined }).toEqual({
-			...expected,
-			provider: undefined,
-		});
+		expect(actual).toEqual(expected);
 	});
 });

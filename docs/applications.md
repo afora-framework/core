@@ -16,6 +16,7 @@ const Blog = applicationOf({
 Blog.entities.User; // the declarations, by name
 Blog.repositories.Users; // typed; bound to Blog's provider
 Blog.repository(Users); // the same, from the original
+Blog.get(Users); // the same, for any kind of declaration
 ```
 
 It checks the set as a whole when declared: one object under two names (`DuplicateApplicationDeclaration`), an entity or record held at any depth (fields, lists, optionals, nested blueprints) that is not registered (`UnregisteredApplicationReference`), and a repository whose entity, `relations` or `environmentDependencies` are not (`UnregisteredRepositoryDependency`). A declaration of the wrong kind throws `InvalidApplicationDeclaration`.
@@ -75,3 +76,35 @@ await App.start(); // validates Database, then calls create once
 `environmentDependencies` is one environment or a list of distinct ones (merged in order), which must be registered in `environments` (`UnregisteredApplicationReference`); `create` gets their typed variables and gives a provider, or a promise of one. It is called once per start, by the first `start()` of the application or of one that extends it (they share the provider). Until then the repositories, use cases, commands and outputs of the application are bound as usual, to a provider that forwards each call to the one made on start; a call before `start()` throws `ApplicationNotStarted`. `isProviderFactory` tells a factory apart; `describe()` describes the provider as `{ kind: "opaque" }`.
 
 `await app.stop()` calls the optional `close()` of the provider (a new optional member of `IRepositoryProvider`, for connections and files). With `providerFrom`, it also forgets the provider: calls throw `ApplicationNotStarted` again, and the next `start()` makes a new one.
+
+## The started application
+
+`start()` also makes the application the started one of the process, which `useApplication()` gives from anywhere, without importing it. A hand-written use case or handler that the application itself imports can reach the application this way without an import cycle.
+
+```ts
+import { useApplication } from "@afora/core";
+
+export async function notifyAll() {
+	const app = useApplication(); // throws ApplicationNotStarted before start()
+	const users = await app.get(Users).findMany();
+	await app.get(Mailer).run("notify", { to: users.map((user) => user.email) });
+}
+```
+
+`useApplication()` is typed by augmenting the `Register` interface once in the project, in a file of your own (codegen does not write it, so that two generated applications in one project do not conflict):
+
+```ts
+import type { App } from "./domain";
+
+declare module "@afora/core" {
+	interface Register {
+		application: typeof App;
+	}
+}
+```
+
+Without it, `useApplication()` gives `AnyApplication` (`RegisteredApplication` is the type it gives).
+
+- **One per process.** Starting another application while one is started throws `ApplicationAlreadyStarted` (`details: { current, attempted }`); starting the same one again is a no-op. `start({ replace: true })` stops the started one (calling its `stop()`) and takes its place, e.g. on hot reload, and `start({ register: false })` starts without registering, e.g. for a second application in tests. `stop()` unregisters it, and `resetApplication()` forgets the started application without stopping it, between tests.
+- **Shared by copies of the package.** The started application is kept on `globalThis` under `Symbol.for("afora.application")`, so two copies of `@afora/core` loaded in one process (a duplicated module, a dual package) see the same one. It works on Bun, Node, browsers and Workers.
+- **`app.get(declaration)`.** The bound repository, use case, command or output of a registered declaration (what `repository`, `useCase`, `command` and `output` give), or the variables of a registered environment (`app.get(Mail).FROM`). Anything else throws `InvalidApplicationDeclaration`.

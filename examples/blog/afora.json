@@ -6,13 +6,12 @@
 		"dir": "src/domain"
 	},
 	"provider": {
-		"use": "drizzle",
-		"options": {
-			"db": {
-				"import": "../db.ts#db"
-			},
-			"tables": {
-				"import": "../schema.ts#tables"
+		"import": "../provider.ts#provider"
+	},
+	"environments": {
+		"Database": {
+			"fields": {
+				"BLOG_DB": "string?"
 			}
 		}
 	},

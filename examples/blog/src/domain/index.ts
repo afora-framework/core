@@ -3,6 +3,7 @@
 export * from "./application";
 export * from "./commands";
 export * from "./entities";
+export * from "./environments";
 export * from "./exceptions";
 export * from "./outputs";
 export * from "./properties";
