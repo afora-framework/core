@@ -12,10 +12,10 @@
 	],
 	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
 	"license": "MIT",
-	"homepage": "https://github.com/Hoyasumii/afora/tree/main/packages/hono#readme",
+	"homepage": "https://github.com/afora-framework/core/tree/main/packages/hono#readme",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/Hoyasumii/afora.git",
+		"url": "git+https://github.com/afora-framework/core.git",
 		"directory": "packages/hono"
 	},
 	"type": "module",

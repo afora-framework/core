@@ -19,4 +19,4 @@ The [README](../README.md) has the install, a quick start and an overview. These
 | [OpenAPI](openapi.md)                 | `toOpenAPI` for models; the `openapi` sink is in [Outputs](outputs.md).                                   |
 | [afora.json](afora-json.md)           | The JSON-first guide: generate, extract, round trip, catalogs, limitations.                               |
 
-Other documents: [VERSIONING.md](../VERSIONING.md) says what is stable, [CHANGELOG.md](../CHANGELOG.md) lists every change, and each package has its own README: [codegen](../packages/codegen/README.md), [mcp](../packages/mcp/README.md), [hono](../packages/hono/README.md), [drizzle](../packages/drizzle/README.md) and [playground](../packages/playground/README.md).
+Other documents: [VERSIONING.md](../VERSIONING.md) says what is stable, [CHANGELOG.md](../CHANGELOG.md) lists every change, and each package has its own README: [codegen](../packages/codegen/README.md), [mcp](../packages/mcp/README.md), [hono](../packages/hono/README.md) and [drizzle](../packages/drizzle/README.md).

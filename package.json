@@ -19,13 +19,13 @@
 	],
 	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
 	"license": "MIT",
-	"homepage": "https://github.com/Hoyasumii/afora#readme",
+	"homepage": "https://github.com/afora-framework/core#readme",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/Hoyasumii/afora.git"
+		"url": "git+https://github.com/afora-framework/core.git"
 	},
 	"bugs": {
-		"url": "https://github.com/Hoyasumii/afora/issues"
+		"url": "https://github.com/afora-framework/core/issues"
 	},
 	"type": "module",
 	"workspaces": [
@@ -70,8 +70,6 @@
 		"knip": "knip",
 		"build": "rm -rf dist && bun build ./src/index.ts ./src/experimental.ts ./src/testing/index.ts --outdir ./dist --target node --format esm --splitting --packages external && tsc -p tsconfig.build.json",
 		"postbuild": "bun scripts/add-dts-extensions.ts",
-		"playground": "bun run --cwd packages/playground dev",
-		"test:playground": "bun run --cwd packages/playground test",
 		"bench": "cd bench && bun install && bun run.ts",
 		"smoke": "bun run build && node scripts/smoke.mjs",
 		"test:types": "bun run build && bun tests/types-compat/run.ts",
@@ -87,7 +85,7 @@
 		"test:mcp": "bun test --cwd packages/mcp",
 		"test:hono": "bun test --cwd packages/hono",
 		"test:drizzle": "bun test --cwd packages/drizzle",
-		"build:packages": "bun run build && bun run --cwd packages/codegen build && bun run --cwd packages/mcp build && bun run --cwd packages/hono build && bun run --cwd packages/drizzle build && bun run --cwd packages/playground build"
+		"build:packages": "bun run build && bun run --cwd packages/codegen build && bun run --cwd packages/mcp build && bun run --cwd packages/hono build && bun run --cwd packages/drizzle build"
 	},
 	"dependencies": {
 		"slugify": "^1.6.9"

@@ -302,8 +302,6 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 
 `@afora/codegen` generates afora code from an `afora.json` (and extracts the `afora.json` of an `Application` back), and `@afora/mcp` is an MCP server that lets an agent build a domain with it: see [packages/codegen](packages/codegen/README.md) and [packages/mcp](packages/mcp/README.md). `@afora/hono` is a `hono` sink for outputs: it serves the operations as a Hono app, with problem+json errors, masked responses and an optional OpenAPI document ([packages/hono](packages/hono/README.md)). `@afora/drizzle` is a repository provider on Drizzle ORM (SQLite and Postgres) that passes the provider contract kit: see [packages/drizzle](packages/drizzle/README.md).
 
-`@afora/playground` is a local TypeScript playground with IntelliSense, executable examples and an expandable console (`afora playground`, or `bun run playground` in this repository); `@afora/core` carries no editor. Bun is required for it. See [packages/playground](packages/playground/README.md) for setup, project selection and execution limits.
-
 ## Example
 
 `examples/blog` is a blog (users with the `authenticatable` plugin, posts with soft deletion, use cases written as steps, a Hono API on Drizzle and SQLite) whose whole `src/domain` is generated from one `afora.json` by `@afora/codegen`. Only the database, the schema, the provider, a password hashing function and the server are hand-written. Its tests check that the committed code is what the spec generates, drive the API end to end and extract the spec back from the application: `bun run test:blog`.
@@ -360,9 +358,7 @@ bun run test:codegen  # tests of packages/codegen
 bun run test:mcp      # tests of packages/mcp
 bun run test:hono     # tests of packages/hono
 bun run test:drizzle  # tests of packages/drizzle (SQLite and PGlite)
-bun run test:playground # tests of packages/playground
-bun run playground    # the local playground, on this repository's src/
-bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/drizzle and packages/playground
+bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono and packages/drizzle
 ```
 
 ## Versioning

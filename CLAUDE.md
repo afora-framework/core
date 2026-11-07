@@ -23,13 +23,11 @@ bun run test:interop                     # examples/interop: real Hono, tRPC, Ta
 bun run docs:links                       # every relative link and #anchor in README.md, docs/ and the package READMEs resolves
 bun run test:types                       # packs the package and type-checks tests/types-compat on TS 5.5, latest 5.x and 7, bundler + nodenext
 bun run test:type-perf                   # tests/type-perf: per-edit type instantiations of README code (budgeted) + snapshot of hovers/completions/diagnostics, src and dist
-bun run playground                       # the local playground (packages/playground) on this repo's src/
-bun run test:playground                  # playground tests
 bun run smoke                            # build, then run scripts/smoke.mjs on plain Node
 bun run bench                            # bench/ vs TypeBox, Zod, Valibot, ArkType; results in bench/RESULTS.md
 ```
 
-`packages/*` (`codegen`, `mcp`, `playground`) are workspaces with their own build and tests (`bun run build:packages`). `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
+`packages/*` (`codegen`, `mcp`, `hono`, `drizzle`) are workspaces with their own build and tests (`bun run build:packages`). `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
 
 ## Runtime constraint
 
@@ -42,6 +40,7 @@ The library ships to Bun **and** Node >= 22 (and must load in browsers/Workers).
 **`src/core/` vs `src/std/`.** `core` holds the generic machinery (builders like `blueprintBuilderOf`, `entityBuilderOf`, `recordOf`, `repositoryOf`, `useCaseOf`, `environmentOf`, exceptions, parsing, Standard Schema). `std` instantiates it with concrete properties (`Id`, `Slug`, `Email`, `Password`, time stamps, `enumOf`…) and exports the ready-made `blueprintOf` (= `blueprintBuilderOf(Std)`) and `entityOf`. **`core` must never import from `std`** — enforced by `src/core/layers.test.ts` (test and `*.sandbox.ts` files are exempt).
 
 **The layering of concepts**, each built on the previous:
+
 - **Property** (`core/property`): a class wrapping one value, run through `preHandle → TypeBox validation → afterHandle`; flags `optional`, `sensitive`, `unique` propagate up to records.
 - **Blueprint** (`core/blueprint`): an object shape built from a context `ctx` supplied by plugins (`blueprintPluginOf`), with `listOf`, `optionalOf`, `join`, nested blueprints and record classes as fields. `optional`, `list`, `listOf`, `optionalOf`, `propertyOf` are reserved context keys.
 - **Record** (`core/record`): `recordOf(blueprint, { sensitive, unique, change })` returns a class. Values live in a `WeakMap`; keys are prototype getters (so spreading a record yields nothing — use `toJSON()`). `set` is protected; `change: [...]` exposes `instance.change.<key>(value)` (a `change` namespace getter); `toJSON` masks sensitive leaves at any depth; undeclared keys are rejected at any depth; keys colliding with record members or `Object.prototype` throw `ReservedRecordKey`.

@@ -7,8 +7,8 @@ import { join } from "node:path";
 import ts from "typescript-language-service";
 
 /**
- * `source` resolves `@afora/core` to `src/index.ts`, as the playground's
- * `--source` mode and contributors see it; `package` resolves it through the
+ * `source` resolves `@afora/core` to `src/index.ts`, as contributors to afora
+ * see it; `package` resolves it through the
  * package `exports` to `dist/`, as a consumer sees it.
  */
 export type Mode = "source" | "package";

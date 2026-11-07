@@ -12,6 +12,10 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      # monaco-editor is 0.x and removed the entry points the playground imports
+      # (editor.all, basic-languages) in 0.53+; bump it by hand with the playground.
+      - dependency-name: monaco-editor
     groups:
       dev-dependencies:
         dependency-type: development
