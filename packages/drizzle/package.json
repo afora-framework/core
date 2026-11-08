@@ -1,6 +1,6 @@
 {
 	"name": "@afora/drizzle",
-	"version": "0.0.1",
+	"version": "0.0.3",
 	"description": "A repository provider for @afora/core on Drizzle ORM (SQLite and Postgres).",
 	"keywords": [
 		"afora",

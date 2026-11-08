@@ -80,3 +80,16 @@ Dropping a version of TypeScript, Bun or Node is breaking, except when that vers
 - `bun run test:types` type-checks the packed package on the supported TypeScript versions.
 - `bun run test:type-perf` budgets the editor cost and snapshots hovers, completions and diagnostics.
 - `CHANGELOG.md` lists every public change under `## Unreleased`, and a breaking one is marked "Breaking:".
+
+## Releasing
+
+Releases are automatic. All the `@afora/*` packages share one version.
+
+1. In a pull request, set the same new `version` in `package.json` and in every `packages/*/package.json`, run `bun install` to update `bun.lock`, and date the release in `CHANGELOG.md`.
+2. Merge it to `main`. `.github/workflows/release.yml` sees a version without a tag, runs CI, publishes the packages to npm with provenance, then creates the `v<version>` tag and the GitHub release.
+
+A version with a `-` (such as `1.0.0-rc.1`) is published under the `next` dist-tag and marked as a prerelease. The others go to `latest`. A version behind the `latest` on npm, or packages at different versions, fail the release.
+
+If a release fails halfway, run the workflow again from the Actions tab (`workflow_dispatch`). What is already on npm is skipped.
+
+Publishing uses npm trusted publishing: each package names the workflow `release.yml` and the environment `npm` as its trusted publisher. A package that is not on npm yet needs its first publish to go through a temporary `NPM_TOKEN` secret in that environment.

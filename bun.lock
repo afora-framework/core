@@ -29,7 +29,7 @@
     },
     "packages/codegen": {
       "name": "@afora/codegen",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "bin": {
         "afora-codegen": "./dist/cli.js",
       },
@@ -44,7 +44,7 @@
     },
     "packages/drizzle": {
       "name": "@afora/drizzle",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "devDependencies": {
         "@electric-sql/pglite": "0.4.6",
         "@types/bun": "^1.4.4",
@@ -58,7 +58,7 @@
     },
     "packages/hono": {
       "name": "@afora/hono",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "devDependencies": {
         "@seriousme/openapi-schema-validator": "2.11.0",
         "@types/bun": "^1.4.4",
@@ -73,7 +73,7 @@
     },
     "packages/mcp": {
       "name": "@afora/mcp",
-      "version": "0.0.1",
+      "version": "0.0.3",
       "bin": {
         "afora-mcp": "./dist/bin.js",
       },
