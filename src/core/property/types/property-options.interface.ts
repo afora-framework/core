@@ -50,9 +50,10 @@ export interface StringConstraints {
  * What `Property.with` and `ctx.<property>(options)` take: the metadata of any
  * property, plus the constraints of its kind of schema, for strings and numbers.
  */
-export type PropertyOptions<SchemaType extends TSchema> = PropertyMetadata<
-	NonNullable<Static<SchemaType>>
-> &
+export type PropertyOptions<
+	SchemaType extends TSchema,
+	Value = Static<SchemaType>,
+> = PropertyMetadata<NonNullable<Value>> &
 	(SchemaType extends TString
 		? StringConstraints
 		: SchemaType extends TNumber | TInteger
@@ -73,25 +74,34 @@ export declare const Callable: unique symbol;
 export type CallableProperty<
 	Property extends { readonly type: IPropertyType<TSchema> },
 > = Property & {
-	(options?: PropertyOptions<SchemaOfProperty<Property>>): Property;
+	(options?: OptionsOfProperty<Property>): Property;
 	readonly [Callable]: Property;
 };
 
-/** The schema of a property class. */
-type SchemaOfProperty<Property> = Property extends {
-	readonly type: IPropertyType<infer SchemaType>;
+/**
+ * The `PropertyOptions` of a property class, from its schema and the value
+ * its type carries, so `Static` is not measured again.
+ */
+type OptionsOfProperty<Property> = Property extends {
+	readonly type: IPropertyType<infer SchemaType, infer Value>;
 }
-	? SchemaType
-	: TSchema;
+	? PropertyOptions<SchemaType, Value>
+	: PropertyOptions<TSchema>;
 
-/** `Field`, or the property it stands for when it is a `CallableProperty`, as a blueprint stores it. */
+/**
+ * `Field`, or the property it stands for when it is a `CallableProperty`, as a blueprint stores it.
+ * @internal
+ */
 export type StoredField<Field> = Field extends {
 	readonly [Callable]: infer Property;
 }
 	? Property
 	: Field;
 
-/** `StoredField` of every field of a collection. */
+/**
+ * `StoredField` of every field of a collection.
+ * @internal
+ */
 export type StoredFields<Fields> = {
 	[Key in keyof Fields]: StoredField<Fields[Key]>;
 };

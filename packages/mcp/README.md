@@ -1,28 +1,66 @@
 # @afora/mcp
 
-An [MCP](https://modelcontextprotocol.io) server (stdio) that lets an agent build a domain with afora: discover the catalog, edit an `afora.json`, validate it, generate the code with [`@afora/codegen`](../codegen/README.md) and get the TypeScript diagnostics of what was generated.
+Repository declarations accept `deletion: "hard" | "soft"` (default `hard`), the actions `findMany`, `exists` and `findPage`, and a `provider` (`"inMemory"`, `{ use, options }` or `{ import }`); the application's provider is the top-level `provider` of the spec (`afora_spec_write`). An invalid provider is an issue (`unknown_provider`, `invalid_provider`, `invalid_import`) and nothing is written. `afora_extract` takes `imports` (`provider`, `repositories.<Name>.provider`) for a provider created without `providerOf`. The tools validate the setting and preserve soft deletion when generating or extracting an application.
+
+An [MCP](https://modelcontextprotocol.io) server (stdio) that lets an agent build a domain with afora: discover the catalog, edit an `afora.json`, validate it, generate the code with [`@afora/codegen`](../codegen/README.md) and get the TypeScript diagnostics of what was generated. The spec it edits is described in the [afora.json guide](../../docs/afora-json.md).
+
+The project needs `@afora/core` and TypeBox (`typebox: ^1`) as peer dependencies; install them with `bun add @afora/core typebox`.
 
 ```bash
 claude mcp add afora -- bunx @afora/mcp --project .
-# or: afora-mcp --project <dir> [--app src/app.ts#App]
+# or: afora-mcp --project <dir> [--app src/app.ts#App] [--providers afora.providers.ts] [--stages afora.stages.ts]
 ```
 
-`--project` is the project directory (the current one by default); every write stays inside it. `--app` names an `Application` (`file.ts#Export`) to extract the spec from when the project has no `afora.json`. Importing the application needs Bun on `PATH`.
+`--project` is the project directory (the current one by default); every write stays inside it. `--app` names an `Application` (`file.ts#Export`) to extract the spec from when the project has no `afora.json`. Importing the application needs Bun on `PATH`. `--providers` is a module (a path from the project) exporting `providers`, or a default export: an array of `{ name, module, export }` that `provider.use` may name besides the built-in `inMemory`; `afora_catalog` lists them. `--stages` is the same for the stages an output's `pipe` may name (entries `{ name, module, export, kind? }`; `select` and `openapi` are built in and listed under `stages`).
 
 ## Tools
 
-| Tool                  | What it does                                                                                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `afora_catalog`       | What a spec can use, read from `@afora/core`: Std properties (flags and the `with` options each takes), record plugins, reserved keys, repository action rules.                            |
-| `afora_spec_read`     | Reads `afora.json` with its issues; with no file and an `--app`, the spec extracted from that code (not written).                                                                          |
-| `afora_extract`       | Extracts the spec of an `Application` of the project (a Bun subprocess imports it). Writes nothing.                                                                                        |
-| `afora_spec_validate` | Validates a draft `spec`, or the file on disk; returns `{ valid, issues }`.                                                                                                                |
-| `afora_spec_upsert`   | Adds or replaces one declaration (`kind` + `name` + `declaration`); validates the whole spec and writes only if it is valid.                                                               |
-| `afora_spec_remove`   | Removes one declaration; writes only if the spec stays valid.                                                                                                                              |
-| `afora_spec_write`    | Replaces the whole spec (validated first).                                                                                                                                                 |
-| `afora_generate`      | `dryRun: true` returns the files. Otherwise writes them, then runs `bunx tsc --noEmit -p <project>` if there is a `tsconfig.json` and returns only the diagnostics of the generated files. |
+| Tool                  | What it does                                                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `afora_catalog`       | What a spec can use, read from `@afora/core`: Std properties (flags and the `with` options each takes), record plugins, reserved keys, repository action rules, exception layers, core exceptions.      |
+| `afora_spec_read`     | Reads `afora.json` with its issues; with no file and an `--app`, the spec extracted from that code (not written).                                                                                       |
+| `afora_extract`       | Extracts the spec of an `Application` of the project (a Bun subprocess imports it). Writes nothing.                                                                                                     |
+| `afora_spec_validate` | Validates a draft `spec`, or the file on disk; returns `{ valid, issues }`.                                                                                                                             |
+| `afora_spec_upsert`   | Adds or replaces one declaration (`kind` + `name` + `declaration`; kinds include `exception`, `useCase` (with steps), `command` and `output`); validates the whole spec and writes only if it is valid. |
+| `afora_spec_remove`   | Removes one declaration; writes only if the spec stays valid.                                                                                                                                           |
+| `afora_spec_write`    | Replaces the whole spec (validated first).                                                                                                                                                              |
+| `afora_generate`      | `dryRun: true` returns the files. Otherwise writes them, then runs `bunx tsc --noEmit -p <project>` if there is a `tsconfig.json` and returns only the diagnostics of the generated files.              |
 
-Resources: `afora://spec/schema` (JSON Schema of `afora.json`), `afora://catalog` and `afora://spec/guide` (a short guide for the agent: workflow, shape, rules). The `inputSchema` of each tool is JSON Schema derived from the same TypeBox schema as the spec.
+`afora_extract` takes `imports` (`useCases.<Name>`, `useCases.<Name>.run.<name>`, `commands.<Name>.events`, `commands.<Name>.onEventError`, `outputs.<Name>.pipe.<index>`) for hand-written use cases, `run` functions, command handlers and stages. Resources: `afora://spec/schema` (JSON Schema of `afora.json`), `afora://catalog` and `afora://spec/guide` (a short guide for the agent: workflow, shape, rules). The `inputSchema` of each tool is JSON Schema derived from the same TypeBox schema as the spec.
+
+## Expose an output as MCP tools
+
+`mcpTools` is a sink stage of an afora output: it turns the operations of the output into MCP tools, so an agent can call your domain directly (the same operations `@afora/hono` serves over HTTP).
+
+```ts
+import { outputOf } from "@afora/core";
+import { mcpTools } from "@afora/mcp";
+
+const Tools = outputOf({
+	name: "Blog",
+	commands: [Users, Posts],
+	statuses: { Unauthorized: 401 },
+	pipe: [
+		mcpTools({
+			name: "blog",
+			version: "1.0.0",
+			prefix: "blog_",
+			context: { authorization: "authorization" },
+		}),
+	],
+});
+
+const mcp = Tools.build(); // { tools, call, register, server }
+await mcp.server().connect(transport); // any transport of the MCP SDK
+```
+
+- Options (JSON, so the stage can live in `afora.json`): `name`, `version` (of the server `server()` creates), `prefix`, `include` (operation ids; all by default) and `context`.
+- One tool per operation, named `{prefix}{command}_{operation}` in snake case (`blog_users_register`). The description is the operation one (plus `Deprecated.`) and `inputSchema` is the JSON Schema of the input, inline, with no `$ref`.
+- A call runs `operation.invoke(args, { context })` and answers one text content with the response as JSON; sensitive values are masked.
+- Errors answer `isError: true` with the RFC 9457 problem as JSON text; its `status` comes from `statusOf` (the output `statuses` first). Invalid input is a 400 with `issues`, an unknown tool a 404.
+- Context: `context: { token: "authorization" }` fills `context.token` from the value named `authorization` in `extra.values` of `call(name, args, extra)`. With `register`/`server()`, the values are the HTTP headers of the request (lower-case) and the string entries of the request `_meta`. Anything richer, such as authentication, is a `transform` stage that wraps `invoke`.
+- The result is `{ tools, call(name, args, extra?), register(server), server() }`: `register` installs `tools/list` and `tools/call` on a low-level SDK `Server`, `server()` returns a new one with the `tools` capability.
+- For codegen, `stages` and `McpStages` are exported (`--stages @afora/mcp`): `{ name: "mcpTools", module: "@afora/mcp", export: "mcpTools", kind: "sink" }`.
 
 ## Safety
 
@@ -35,6 +73,14 @@ Resources: `afora://spec/schema` (JSON Schema of `afora.json`), `afora://catalog
 ```ts
 import { createServer } from "@afora/mcp";
 
-const server = await createServer({ project: "/path/to/project" });
+const server = await createServer({
+	project: "/path/to/project",
+	stages: [
+		{ name: "hono", module: "@afora/hono", export: "hono", kind: "sink" },
+	],
+	providers: [
+		{ name: "drizzle", module: "@acme/drizzle", export: "drizzleProvider" },
+	],
+});
 await server.connect(transport); // any transport of the MCP SDK
 ```

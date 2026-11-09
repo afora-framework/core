@@ -1,0 +1,591 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`source mode experience bare blueprint 1`] = `"diagnostics (0)"`;
+
+exports[`source mode experience quick start 1`] = `
+"hover L45:34 for (const key of User.options.‸unique) {
+  (property) RecordSettings<StoredFields<{ email: CallableProperty<PropertyClass<TString, string>>; slug: CallableProperty<typeof Slug>; password: CallableProperty<...>; address: IBlueprint<...>; tags: IBlueprintList<...>; }>>.unique: readonly RecordKey<StoredFields<{
+      email: CallableProperty<PropertyClass<TString, string>>;
+      slug: CallableProperty<typeof Slug>;
+      password: CallableProperty<typeof Password>;
+      address: IBlueprint<StoredFields<{
+          street: CallableProperty<PropertyClass<TString, string>>;
+          zip: CallableProperty<PropertyClass<TString, string>>;
+      }>, false>;
+      tags: IBlueprintList<PropertyClass<TString, string>, false>;
+  }>>[]
+hover L57:51 async function signUp({ plainPassword, ...data }: ‸SignUpData) {
+  type SignUpData = {
+      slug: string;
+      email: string;
+      tags: string[];
+      address: {
+          street: string;
+          zip: string;
+      };
+      plainPassword: string;
+  }
+hover L59:24 return users.save(new ‸User({ ...data, password: password.value }));
+  constructor User(value: {
+      slug: string;
+      email: string;
+      password: string;
+      tags: string[];
+      address: {
+          street: string;
+          zip: string;
+      };
+  }): User
+hover L67:17 user.change.‸password(value),
+  (property) password: (value: string) => User
+hover L72:7 const ‸json = new User({
+  const json: Readonly<Partial<{
+      slug: string;
+      email: string;
+      password: string;
+      tags: string[];
+      address: {
+          street: string;
+          zip: string;
+      };
+  }>>
+diagnostics (0)"
+`;
+
+exports[`source mode experience entity 1`] = `
+"hover L8:7 const ‸user = new User({ name: "Jane" });
+  const user: User
+hover L9:6 user.‸id;
+  (property) id: string
+hover L10:25 user.change.name("Ann").‸updatedAt;
+  (property) updatedAt?: string | undefined
+hover L20:7 const ‸post = new Post({ title: "Hi", author: { name: "Jane" }, coauthors: [user] });
+  const post: Post
+hover L21:6 post.‸reviewer;
+  (property) reviewer?: User | undefined
+diagnostics (0)"
+`;
+
+exports[`source mode experience repository 1`] = `
+"hover L8:7 const ‸Users = repositoryOf({
+  const Users: RepositoryOf<typeof User, readonly ["findById", "findByEmail", "findBySlug", "findManyByName", "create", "update", "delete", "count"], Readonly<Record<never, never>>>
+hover L14:7 const ‸found = await Users.findByEmail("ana@example.com");
+  const found: User | undefined
+hover L15:7 const ‸many = await Users.findManyByName("Ana");
+  const many: User[]
+diagnostics (0)"
+`;
+
+exports[`source mode experience use case 1`] = `
+"hover L13:32 return { user: new User(this.‸input) };
+  (property) AbstractUseCase<StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; }>, StoredFields<{ user: typeof User; }>, Record<...>>.input: Readonly<{
+      name: string;
+  }>
+hover L23:58 override async execute({ createUser = this.dependencies.‸createUser } = {}) {
+  (property) createUser: (input: {
+      name: string;
+  }) => Promise<{
+      user: User;
+  }>
+hover L29:9 const { ‸user } = await operation.execute();
+  const user: User
+hover L31:21 createUser: async (‸input) => ({ user: new User(input) }),
+  (parameter) input: {
+      name: string;
+  }
+diagnostics (0)"
+`;
+
+exports[`source mode experience completions: blueprint context 1`] = `
+"complete L2:32 blueprintOf((ctx) => ({ a: ctx.‸ }));
+  boolean (property)
+  createdAt (property)
+  date (property)
+  dateTime (property)
+  deletedAt (property)
+  email (property)
+  enumOf (property)
+  id (property)
+  integer (property)
+  ip (property)
+  list (property)
+  listOf (property)
+  number (property)
+  optional (property)
+  optionalOf (property)
+  password (property)
+  phone (property)
+  propertyOf (property)
+  schema (property)
+  slug (property)
+  string (property)
+  text (property)
+  updatedAt (property)
+  url (property)
+complete L3:41 blueprintOf((ctx) => ({ a: ctx.optional.‸ }));
+  boolean (property)
+  createdAt (property)
+  date (property)
+  dateTime (property)
+  deletedAt (property)
+  email (property)
+  id (property)
+  integer (property)
+  ip (property)
+  number (property)
+  password (property)
+  phone (property)
+  schema (property)
+  slug (property)
+  string (property)
+  text (property)
+  updatedAt (property)
+  url (property)
+complete L4:37 blueprintOf((ctx) => ({ a: ctx.list.‸ }));
+  boolean (property)
+  createdAt (property)
+  date (property)
+  dateTime (property)
+  deletedAt (property)
+  email (property)
+  id (property)
+  integer (property)
+  ip (property)
+  number (property)
+  optional (property)
+  password (property)
+  phone (property)
+  schema (property)
+  slug (property)
+  string (property)
+  text (property)
+  updatedAt (property)
+  url (property)
+signature L5:39 blueprintOf((ctx) => ({ a: ctx.string(‸) }));
+  * string(options?: PropertyOptions<TString, string> | undefined): PropertyClass<TString, string>  [arg 0]
+hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
+  (parameter) ctx: BlueprintContext<readonly [IBlueprintPlugin<{
+      id: typeof Id;
+      slug: typeof Slug;
+      email: PropertyClass<TString, string>;
+      phone: PropertyClass<TString, string>;
+      url: PropertyClass<TString, string>;
+      ip: PropertyClass<TUnion<[TString, TString]>, string>;
+      password: typeof Password;
+      string: PropertyClass<TString, string>;
+      text: PropertyClass<TString, string>;
+      number: PropertyClass<TNumber, number>;
+      ... 7 more ...;
+      schema: typeof SchemaProperty;
+  }, {
+      ...;
+  }> & {
+      ...;
+  }]>
+hover L6:32 blueprintOf((ctx) => ({ a: ctx.‸email }));
+  (property) email: CallableProperty<PropertyClass<TString, string>>
+diagnostics (3)
+  TS1003 L2:33 blueprintOf((ctx) => ({ a: ctx. ‸}));
+    Identifier expected.
+  TS1003 L3:42 blueprintOf((ctx) => ({ a: ctx.optional. ‸}));
+    Identifier expected.
+  TS1003 L4:38 blueprintOf((ctx) => ({ a: ctx.list. ‸}));
+    Identifier expected."
+`;
+
+exports[`source mode experience completions: records and repositories 1`] = `
+"signature L6:23 const user = new User(‸{ name: "a", email: "a@b.co", slug: "a" });
+  * User(value: EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; slug: CallableProperty<...>; }>>): User  [arg 0]
+complete L7:6 user.‸;
+  change (property)
+  createdAt (property)
+  deletedAt (property)
+  destroy (method)
+  email (property)
+  equals (method)
+  id (property)
+  isDeleted (getter)
+  name (property)
+  pullEvents (method)
+  slug (property)
+  toJSON (method)
+  updatedAt (property)
+complete L8:13 user.change.‸;
+  name (property)
+complete L9:6 User.‸;
+  apply (method)
+  arguments (property)
+  bind (method)
+  blueprint (property)
+  call (method)
+  caller (property)
+  length (property)
+  name (property)
+  options (property)
+  plugins (property)
+  prototype (property)
+  safeParse (method)
+  toString (method)
+complete L10:55 const Users = repositoryOf({ entity: User, actions: ["‸"] });
+  count (string)
+  create (string)
+  delete (string)
+  exists (string)
+  findByEmail (string)
+  findById (string)
+  findBySlug (string)
+  findMany (string)
+  findManyByCreatedAt (string)
+  findManyByDeletedAt (string)
+  findManyByName (string)
+  findManyByUpdatedAt (string)
+  findPage (string)
+  update (string)
+diagnostics (4)
+  TS1003 L7:6 user.‸;
+    Identifier expected.
+  TS1003 L8:13 user.change.‸;
+    Identifier expected.
+  TS1003 L9:6 User.‸;
+    Identifier expected.
+  TS2322 L10:54 const Users = repositoryOf({ entity: User, actions: [‸""] });
+    Type '""' is not assignable to type 'RepositoryAction<typeof User>'."
+`;
+
+exports[`source mode experience errors 1`] = `
+"diagnostics (9)
+  TS2322 L6:12 new User({ ‸name: 1, email: "a@b.co" });
+    Type 'number' is not assignable to type 'string'.
+  TS2345 L7:10 new User(‸{ email: "a@b.co" });
+    Argument of type '{ email: string; }' is not assignable to parameter of type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; }>>'.
+      Property 'name' is missing in type '{ email: string; }' but required in type '{ email: string; name: string; }'.
+  TS2353 L8:40 new User({ name: "a", email: "a@b.co", ‸extra: true });
+    Object literal may only specify known properties, and 'extra' does not exist in type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; }>>'.
+  TS2339 L10:13 user.change.‸email("b@b.co");
+    Property 'email' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<PropertyClass<TString, string>>; }>, "name">'.
+  TS2339 L11:13 user.change.‸id("x");
+    Property 'id' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<PropertyClass<TString, string>>; }>, "name">'.
+  TS2322 L12:40 repositoryOf({ entity: User, actions: [‸"findByName"] });
+    Type '"findByName"' is not assignable to type 'RepositoryAction<typeof User>'.
+  TS2820 L13:40 repositoryOf({ entity: User, actions: [‸"findManyByEmail"] });
+    Type '"findManyByEmail"' is not assignable to type 'RepositoryAction<typeof User>'. Did you mean '"findByEmail"'?
+  TS2339 L14:32 blueprintOf((ctx) => ({ a: ctx.‸nope }));
+    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 12 more ...; schema: typeof SchemaProperty; }, { ...; }> & { ...; }]>'.
+  TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
+    Type '"missing"' is not assignable to type '"n"'."
+`;
+
+exports[`package mode experience bare blueprint 1`] = `"diagnostics (0)"`;
+
+exports[`package mode experience quick start 1`] = `
+"hover L45:34 for (const key of User.options.‸unique) {
+  (property) RecordSettings<StoredFields<{ email: CallableProperty<PropertyClass<TString, string>>; slug: CallableProperty<typeof Slug>; password: CallableProperty<...>; address: IBlueprint<...>; tags: IBlueprintList<...>; }>>.unique: readonly RecordKey<StoredFields<{
+      email: CallableProperty<PropertyClass<TString, string>>;
+      slug: CallableProperty<typeof Slug>;
+      password: CallableProperty<typeof Password>;
+      address: IBlueprint<StoredFields<{
+          street: CallableProperty<PropertyClass<TString, string>>;
+          zip: CallableProperty<PropertyClass<TString, string>>;
+      }>, false>;
+      tags: IBlueprintList<PropertyClass<TString, string>, false>;
+  }>>[]
+hover L57:51 async function signUp({ plainPassword, ...data }: ‸SignUpData) {
+  type SignUpData = {
+      email: string;
+      slug: string;
+      address: {
+          street: string;
+          zip: string;
+      };
+      tags: string[];
+      plainPassword: string;
+  }
+hover L59:24 return users.save(new ‸User({ ...data, password: password.value }));
+  constructor User(value: {
+      password: string;
+      email: string;
+      slug: string;
+      address: {
+          street: string;
+          zip: string;
+      };
+      tags: string[];
+  }): User
+hover L67:17 user.change.‸password(value),
+  (property) password: (value: string) => User
+hover L72:7 const ‸json = new User({
+  const json: Readonly<Partial<{
+      password: string;
+      email: string;
+      slug: string;
+      address: {
+          street: string;
+          zip: string;
+      };
+      tags: string[];
+  }>>
+diagnostics (0)"
+`;
+
+exports[`package mode experience entity 1`] = `
+"hover L8:7 const ‸user = new User({ name: "Jane" });
+  const user: User
+hover L9:6 user.‸id;
+  (property) id: string
+hover L10:25 user.change.name("Ann").‸updatedAt;
+  (property) updatedAt?: string | undefined
+hover L20:7 const ‸post = new Post({ title: "Hi", author: { name: "Jane" }, coauthors: [user] });
+  const post: Post
+hover L21:6 post.‸reviewer;
+  (property) reviewer?: User | undefined
+diagnostics (0)"
+`;
+
+exports[`package mode experience repository 1`] = `
+"hover L8:7 const ‸Users = repositoryOf({
+  const Users: RepositoryOf<typeof User, readonly ["findById", "findByEmail", "findBySlug", "findManyByName", "create", "update", "delete", "count"], Readonly<Record<never, never>>>
+hover L14:7 const ‸found = await Users.findByEmail("ana@example.com");
+  const found: User | undefined
+hover L15:7 const ‸many = await Users.findManyByName("Ana");
+  const many: User[]
+diagnostics (0)"
+`;
+
+exports[`package mode experience use case 1`] = `
+"hover L13:32 return { user: new User(this.‸input) };
+  (property) AbstractUseCase<StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; }>, StoredFields<{ user: typeof User; }>, Record<...>>.input: Readonly<{
+      name: string;
+  }>
+hover L23:58 override async execute({ createUser = this.dependencies.‸createUser } = {}) {
+  (property) createUser: (input: {
+      name: string;
+  }) => Promise<{
+      user: User;
+  }>
+hover L29:9 const { ‸user } = await operation.execute();
+  const user: User
+hover L31:21 createUser: async (‸input) => ({ user: new User(input) }),
+  (parameter) input: {
+      name: string;
+  }
+diagnostics (0)"
+`;
+
+exports[`package mode experience completions: blueprint context 1`] = `
+"complete L2:32 blueprintOf((ctx) => ({ a: ctx.‸ }));
+  boolean (property)
+  createdAt (property)
+  date (property)
+  dateTime (property)
+  deletedAt (property)
+  email (property)
+  enumOf (property)
+  id (property)
+  integer (property)
+  ip (property)
+  list (property)
+  listOf (property)
+  number (property)
+  optional (property)
+  optionalOf (property)
+  password (property)
+  phone (property)
+  propertyOf (property)
+  schema (property)
+  slug (property)
+  string (property)
+  text (property)
+  updatedAt (property)
+  url (property)
+complete L3:41 blueprintOf((ctx) => ({ a: ctx.optional.‸ }));
+  boolean (property)
+  createdAt (property)
+  date (property)
+  dateTime (property)
+  deletedAt (property)
+  email (property)
+  id (property)
+  integer (property)
+  ip (property)
+  number (property)
+  password (property)
+  phone (property)
+  schema (property)
+  slug (property)
+  string (property)
+  text (property)
+  updatedAt (property)
+  url (property)
+complete L4:37 blueprintOf((ctx) => ({ a: ctx.list.‸ }));
+  boolean (property)
+  createdAt (property)
+  date (property)
+  dateTime (property)
+  deletedAt (property)
+  email (property)
+  id (property)
+  integer (property)
+  ip (property)
+  number (property)
+  optional (property)
+  password (property)
+  phone (property)
+  schema (property)
+  slug (property)
+  string (property)
+  text (property)
+  updatedAt (property)
+  url (property)
+signature L5:39 blueprintOf((ctx) => ({ a: ctx.string(‸) }));
+  * string(options?: PropertyOptions<TString, string> | undefined): PropertyClass<TString, string>  [arg 0]
+hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
+  (parameter) ctx: BlueprintContext<readonly [IBlueprintPlugin<{
+      id: typeof import("<root>/dist/index").Id;
+      slug: typeof import("<root>/dist/index").Slug;
+      email: import("<root>/dist/index").PropertyClass<TString, string>;
+      phone: import("<root>/dist/index").PropertyClass<TString, string>;
+      url: import("<root>/dist/index").PropertyClass<TString, string>;
+      ip: import("<root>/dist/index").PropertyClass<TUnion<[TString, TString]>, string>;
+      ... 11 more ...;
+      schema: typeof import("<root>/dist/index").SchemaProperty;
+  }, {
+      ...;
+  }> & {
+      ...;
+  }]>
+hover L6:32 blueprintOf((ctx) => ({ a: ctx.‸email }));
+  (property) email: CallableProperty<PropertyClass<TString, string>>
+diagnostics (3)
+  TS1003 L2:33 blueprintOf((ctx) => ({ a: ctx. ‸}));
+    Identifier expected.
+  TS1003 L3:42 blueprintOf((ctx) => ({ a: ctx.optional. ‸}));
+    Identifier expected.
+  TS1003 L4:38 blueprintOf((ctx) => ({ a: ctx.list. ‸}));
+    Identifier expected."
+`;
+
+exports[`package mode experience completions: records and repositories 1`] = `
+"signature L6:23 const user = new User(‸{ name: "a", email: "a@b.co", slug: "a" });
+  * User(value: EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<...>>): User  [arg 0]
+complete L7:6 user.‸;
+  change (property)
+  createdAt (property)
+  deletedAt (property)
+  destroy (method)
+  email (property)
+  equals (method)
+  id (property)
+  isDeleted (getter)
+  name (property)
+  pullEvents (method)
+  slug (property)
+  toJSON (method)
+  updatedAt (property)
+complete L8:13 user.change.‸;
+  name (property)
+complete L9:6 User.‸;
+  apply (method)
+  arguments (property)
+  bind (method)
+  blueprint (property)
+  call (method)
+  caller (property)
+  length (property)
+  name (property)
+  options (property)
+  plugins (property)
+  prototype (property)
+  safeParse (method)
+  toString (method)
+complete L10:55 const Users = repositoryOf({ entity: User, actions: ["‸"] });
+  count (string)
+  create (string)
+  delete (string)
+  exists (string)
+  findByEmail (string)
+  findById (string)
+  findBySlug (string)
+  findMany (string)
+  findManyByCreatedAt (string)
+  findManyByDeletedAt (string)
+  findManyByName (string)
+  findManyByUpdatedAt (string)
+  findPage (string)
+  update (string)
+diagnostics (4)
+  TS1003 L7:6 user.‸;
+    Identifier expected.
+  TS1003 L8:13 user.change.‸;
+    Identifier expected.
+  TS1003 L9:6 User.‸;
+    Identifier expected.
+  TS2322 L10:54 const Users = repositoryOf({ entity: User, actions: [‸""] });
+    Type '""' is not assignable to type 'RepositoryAction<typeof User>'."
+`;
+
+exports[`package mode experience errors 1`] = `
+"diagnostics (9)
+  TS2322 L6:12 new User({ ‸name: 1, email: "a@b.co" });
+    Type 'number' is not assignable to type 'string'.
+  TS2345 L7:10 new User(‸{ email: "a@b.co" });
+    Argument of type '{ email: string; }' is not assignable to parameter of type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; }>>'.
+      Property 'name' is missing in type '{ email: string; }' but required in type '{ email: string; name: string; }'.
+  TS2353 L8:40 new User({ name: "a", email: "a@b.co", ‸extra: true });
+    Object literal may only specify known properties, and 'extra' does not exist in type 'EntityInput<StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<...>; }>>'.
+  TS2339 L10:13 user.change.‸email("b@b.co");
+    Property 'email' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<PropertyClass<TString, string>>; }>, "name">'.
+  TS2339 L11:13 user.change.‸id("x");
+    Property 'id' does not exist on type 'RecordChangeMethods<User, StoredFields<{ name: CallableProperty<PropertyClass<TString, string>>; email: CallableProperty<PropertyClass<TString, string>>; }>, "name">'.
+  TS2322 L12:40 repositoryOf({ entity: User, actions: [‸"findByName"] });
+    Type '"findByName"' is not assignable to type 'RepositoryAction<typeof User>'.
+  TS2820 L13:40 repositoryOf({ entity: User, actions: [‸"findManyByEmail"] });
+    Type '"findManyByEmail"' is not assignable to type 'RepositoryAction<typeof User>'. Did you mean '"findByEmail"'?
+  TS2339 L14:32 blueprintOf((ctx) => ({ a: ctx.‸nope }));
+    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 12 more ...; schema: typeof SchemaProperty; }, { ...; }> & { ...; }]>'.
+  TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
+    Type '"missing"' is not assignable to type '"n"'."
+`;
+
+exports[`source mode experience queries 1`] = `
+"hover L14:7 const ‸adults = await Users.findMany({
+  const adults: User[]
+hover L19:7 const ‸page = await Users.findPage({ where: { name: "Ana" } });
+  const page: RepositoryPage<typeof User>
+diagnostics (0)"
+`;
+
+exports[`source mode experience steps use case 1`] = `
+"hover L29:9 const { ‸user } = await new Register({ name: "Ana", email: "ana@example.com" }).execute();
+  const user: User
+diagnostics (0)"
+`;
+
+exports[`source mode experience command and output 1`] = `
+"hover L19:9 const { ‸user } = await Accounts.run("create", { name: "Ana" }, { context: {} });
+  const user: User
+hover L26:7 const ‸document = Api.build();
+  const document: OpenAPIDocument
+diagnostics (0)"
+`;
+
+exports[`package mode experience queries 1`] = `
+"hover L14:7 const ‸adults = await Users.findMany({
+  const adults: User[]
+hover L19:7 const ‸page = await Users.findPage({ where: { name: "Ana" } });
+  const page: RepositoryPage<typeof User>
+diagnostics (0)"
+`;
+
+exports[`package mode experience steps use case 1`] = `
+"hover L29:9 const { ‸user } = await new Register({ name: "Ana", email: "ana@example.com" }).execute();
+  const user: User
+diagnostics (0)"
+`;
+
+exports[`package mode experience command and output 1`] = `
+"hover L19:9 const { ‸user } = await Accounts.run("create", { name: "Ana" }, { context: {} });
+  const user: User
+hover L26:7 const ‸document = Api.build();
+  const document: OpenAPIDocument
+diagnostics (0)"
+`;

@@ -6,19 +6,71 @@ import { pathToFileURL } from "node:url";
 import { extractSpec } from "./extract";
 import { generate, InvalidSpecError } from "./generate";
 import { loadSpec, SpecLoadError } from "./load";
-import type { SpecIssue } from "./spec/types";
+import type {
+	CodegenOptions,
+	ProviderCatalogEntry,
+	SpecIssue,
+	StageCatalogEntry,
+} from "./spec/types";
 import { validateSpec } from "./validate";
 import { writeGenerated } from "./write";
 
 const USAGE = `afora-codegen: generate @afora/core code from an afora.json
 
 Usage:
-  afora-codegen check [afora.json]                  validate the spec
-  afora-codegen generate [afora.json] [--out dir]   write the code (to output.dir, or --out)
-  afora-codegen extract <file.ts>#App [--output-dir dir]
+  afora-codegen check [afora.json] [--providers module] [--stages module]
+                                                    validate the spec
+  afora-codegen generate [afora.json] [--out dir] [--providers module] [--stages module]
+                                                    write the code (to output.dir, or --out)
+  afora-codegen extract <file.ts>#App [--output-dir dir] [--import key=./file.ts#name]...
                                                     print the afora.json of an application
 
+--providers is a module exporting \`providers\` (or a default export): an array of
+{ name, module, export } entries for the providers "use" may name (inMemory is built in).
+--stages is the same for the stages an output pipe may name: a module exporting \`stages\`
+(or a default export), an array of { name, module, export, kind? } entries (select and openapi
+are built in).
+--import maps what cannot be described to the export it is imported from: a provider
+created without providerOf ("provider" or "repositories.<Name>.provider"), a use case
+with a hand-written execute ("useCases.<Name>") or a run function of a steps use case
+("useCases.<Name>.run.<name>"), a command handler ("commands.<Name>.events" or
+"commands.<Name>.onEventError") or a stage written by hand ("outputs.<Name>.pipe.<index>").
 extract imports the file: use Bun, or Node >= 23.6 for TypeScript files.`;
+
+/** A catalog exported by a module: `key`, or the default export. */
+async function loadCatalog<Entry>(
+	path: string | undefined,
+	key: "providers" | "stages",
+): Promise<readonly Entry[] | undefined> {
+	if (path === undefined) return undefined;
+	const module = (await import(pathToFileURL(resolve(path)).href)) as Record<
+		string,
+		unknown
+	>;
+	const entries = module[key] ?? module.default;
+	if (!Array.isArray(entries)) {
+		throw new Error(
+			`${path} must export \`${key}\` (or a default export): an array of { name, module, export }.`,
+		);
+	}
+	return entries as Entry[];
+}
+
+/** Takes every `--import key=value` out of `args`. */
+function importFlags(args: string[]): Record<string, string> {
+	const imports: Record<string, string> = {};
+	for (
+		let value = flag(args, "--import");
+		value !== undefined;
+		value = flag(args, "--import")
+	) {
+		const at = value.indexOf("=");
+		if (at <= 0)
+			throw new Error(`--import expects key=./file.ts#name, got "${value}".`);
+		imports[value.slice(0, at)] = value.slice(at + 1);
+	}
+	return imports;
+}
 
 function flag(args: string[], name: string): string | undefined {
 	const index = args.indexOf(name);
@@ -43,9 +95,21 @@ export async function main(argv: string[]): Promise<number> {
 	try {
 		if (command === "check" || command === "generate") {
 			const out = flag(args, "--out");
+			const providers = await loadCatalog<ProviderCatalogEntry>(
+				flag(args, "--providers"),
+				"providers",
+			);
+			const stages = await loadCatalog<StageCatalogEntry>(
+				flag(args, "--stages"),
+				"stages",
+			);
+			const options: CodegenOptions = {
+				...(providers ? { providers } : {}),
+				...(stages ? { stages } : {}),
+			};
 			const file = resolve(args[0] ?? "afora.json");
 			const { spec, extended } = await loadSpec(file);
-			const issues = validateSpec(spec, extended);
+			const issues = validateSpec(spec, extended, options);
 			if (issues.length > 0) {
 				report(issues);
 				return 1;
@@ -57,6 +121,7 @@ export async function main(argv: string[]): Promise<number> {
 			const files = generate(
 				out ? { ...spec, output: { dir: out } } : spec,
 				extended,
+				options,
 			);
 			const result = await writeGenerated(dirname(file), files);
 			if (result.refused.length > 0) {
@@ -74,6 +139,7 @@ export async function main(argv: string[]): Promise<number> {
 		}
 		if (command === "extract") {
 			const outputDir = flag(args, "--output-dir");
+			const imports = importFlags(args);
 			const target = args[0];
 			if (!target?.includes("#")) {
 				console.error("extract needs <file.ts>#ExportName.\n");
@@ -93,10 +159,10 @@ export async function main(argv: string[]): Promise<number> {
 				console.error(`${path} does not export an application named ${name}.`);
 				return 1;
 			}
-			const spec = extractSpec(
-				app as Parameters<typeof extractSpec>[0],
-				outputDir ? { outputDir } : {},
-			);
+			const spec = extractSpec(app as Parameters<typeof extractSpec>[0], {
+				...(outputDir ? { outputDir } : {}),
+				...(Object.keys(imports).length > 0 ? { imports } : {}),
+			});
 			console.log(JSON.stringify(spec, null, "\t"));
 			return 0;
 		}

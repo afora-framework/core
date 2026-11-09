@@ -98,15 +98,17 @@ export function describeError(error: {
 	return `${error.instancePath || "/"}: ${error.message}`;
 }
 
-abstract class AbstractSchema<SchemaType extends TSchema>
-	implements ISchema<SchemaType>
+abstract class AbstractSchema<
+	SchemaType extends TSchema,
+	Value = Static<SchemaType>,
+> implements ISchema<SchemaType, Value>
 {
-	private validator?: ISchemaType<SchemaType>;
+	private validator?: ISchemaType<SchemaType, Value>;
 	private shapeValidator?: ISchemaType<TSchema>;
 
 	constructor(protected readonly _type: SchemaType) {}
 
-	match(value: unknown): value is Static<SchemaType> {
+	match(value: unknown): value is Value {
 		return this.type.Check(value);
 	}
 
@@ -123,8 +125,11 @@ abstract class AbstractSchema<SchemaType extends TSchema>
 		return JSON.stringify(this._type);
 	}
 
-	get type(): ISchemaType<SchemaType> {
-		this.validator ??= Compile(this._type);
+	get type(): ISchemaType<SchemaType, Value> {
+		this.validator ??= Compile(this._type) as unknown as ISchemaType<
+			SchemaType,
+			Value
+		>;
 		return this.validator;
 	}
 }

@@ -1,25 +1,44 @@
 export { applicationOf, isApplication } from "./core/application/application";
 export {
+	ApplicationAlreadyStarted,
 	ApplicationConflict,
+	ApplicationNotStarted,
 	DuplicateApplicationDeclaration,
 	InvalidApplicationDeclaration,
+	InvalidApplicationEnvironment,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
+	UnregisteredUseCaseDependency,
 } from "./core/application/exceptions";
+export {
+	type Register,
+	type RegisteredApplication,
+	resetApplication,
+	useApplication,
+} from "./core/application/registry";
+export {
+	isProviderFactory,
+	type ProviderFactory,
+	providerFrom,
+} from "./core/application/start";
 export type {
 	AnyApplication,
-	ApplicationCollectionKey,
 	ApplicationCollections,
 	ApplicationDescription,
 	ApplicationSettings,
+	ApplicationStartOptions,
+	CommandDescription,
+	ExceptionDescription,
 	FieldDescription,
 	FieldsDescription,
 	IApplication,
-	MergedCollections,
+	OutputDescription,
 	PropertyDescription,
 	PropertyLineageDescription,
 	PropertyReference,
 	RecordDescription,
+	UseCaseDependencyDescription,
+	UseCaseDescription,
 } from "./core/application/types/application.interface";
 export { blueprintBuilderOf } from "./core/blueprint/blueprint";
 export { blueprintPluginOf } from "./core/blueprint/blueprint-plugin";
@@ -35,7 +54,6 @@ export {
 	isRecordClass,
 	recordFieldOf,
 } from "./core/blueprint/record-field";
-export { sliceOf, sliceValue } from "./core/blueprint/slice";
 export type {
 	AnyBlueprint,
 	AnyBlueprintList,
@@ -45,25 +63,19 @@ export type {
 	BlueprintContext,
 	BlueprintData,
 	BlueprintDefinition,
-	BlueprintFactoryContext,
 	BlueprintField,
 	BlueprintHelpers,
 	BlueprintInput,
 	BlueprintListOptions,
 	BlueprintPluginContext,
-	BlueprintPropertySchema,
 	BlueprintSchema,
 	BlueprintSource,
 	BlueprintValue,
-	CallableProperties,
 	IBlueprint,
 	IBlueprintCollection,
 	IBlueprintList,
-	JoinedProperties,
-	ListProperties,
 	OptionalBlueprint,
 	OptionalBlueprintList,
-	OptionalProperties,
 	OptionalRecord,
 } from "./core/blueprint/types/blueprint.interface";
 export type {
@@ -71,12 +83,30 @@ export type {
 	IBlueprintFactories,
 	IBlueprintPlugin,
 } from "./core/blueprint/types/blueprint-plugin.interface";
+export { commandOf, isCommand } from "./core/command/command";
+export {
+	CommandEventFailed,
+	InvalidCommandContext,
+	InvalidCommandDeclaration,
+	InvalidCommandEnvironment,
+	UnknownCommandOperation,
+} from "./core/command/exceptions";
 export type {
-	SlicedBlueprint,
-	SlicedValue,
-	SliceMask,
-	ValueMask,
-} from "./core/blueprint/types/slice.interface";
+	AnyCommand,
+	CommandEnvOption,
+	CommandEventErrorHandler,
+	CommandEventHandler,
+	CommandEventInfo,
+	CommandEvents,
+	CommandExecution,
+	CommandInput,
+	CommandOf,
+	CommandOperation,
+	CommandOptions,
+	CommandResponse,
+	CommandSettings,
+	CommandUseCases,
+} from "./core/command/types/command.interface";
 export {
 	AbstractEntity,
 	ENTITY_IDENTITY_KEYS,
@@ -116,7 +146,6 @@ export type {
 	EnvironmentSource,
 	EnvironmentValue,
 	IEnvironment,
-	MergedEnvironment,
 } from "./core/environment/environment";
 export {
 	environmentOf,
@@ -148,6 +177,64 @@ export type {
 	OpenAPIOptions,
 	OpenAPISchema,
 } from "./core/openapi/types/openapi.interface";
+export {
+	DuplicateOperation,
+	InvalidOutputStage,
+} from "./core/output/exceptions";
+export type {
+	OpenAPIDocument,
+	OpenAPIMethod,
+	OpenAPISinkOptions,
+	OperationRoute,
+	RouteOptions,
+} from "./core/output/openapi-sink";
+export {
+	openapi,
+	operationRoutes,
+	routeOptionsIssue,
+} from "./core/output/openapi-sink";
+export { isOutput, operationOf, outputOf } from "./core/output/output";
+export {
+	outputValueOf,
+	PROBLEM_MEDIA_TYPE,
+	problemOf,
+} from "./core/output/problem";
+export type { SelectOptions } from "./core/output/select";
+export { select } from "./core/output/select";
+export {
+	sinkOf,
+	stageCatalogOf,
+	stageDescriptionOf,
+	stageKindOf,
+	transformOf,
+} from "./core/output/stage";
+export { statusOf } from "./core/output/status";
+export type {
+	AnyOutput,
+	IStageCatalog,
+	OperationCallOptions,
+	OperationDescriptor,
+	OperationPatch,
+	OutputApplication,
+	OutputOf,
+	OutputSettings,
+	OutputSource,
+	OutputStatuses,
+	PipeResult,
+	Problem,
+	ProblemOptions,
+	SinkFactory,
+	SinkSettings,
+	SinkStage,
+	Stage,
+	StageContext,
+	StageDescription,
+	StageFactory,
+	StageOptions,
+	TransformFactory,
+	TransformSettings,
+	TransformStage,
+} from "./core/output/types/output.interface";
 export type {
 	Issue,
 	IssueCode,
@@ -179,8 +266,6 @@ export type {
 	NumberConstraints,
 	PropertyMetadata,
 	PropertyOptions,
-	StoredField,
-	StoredFields,
 	StringConstraints,
 } from "./core/property/types/property-options.interface";
 export type {
@@ -214,16 +299,12 @@ export type {
 	AnyRecordPlugin,
 	IRecordPlugin,
 	IRecordPluginCatalog,
-	PluginMembers,
 	PluginUniqueKey,
-	RecordPluginContext,
 	RecordPluginDescriptor,
 	RecordPluginOptions,
 	RecordPluginReference,
 	RecordPluginRequirement,
-	RecordPluginsByName,
 	RecordPluginsOption,
-	WithPluginProperties,
 } from "./core/record/types/plugin.interface";
 export type {
 	DeclaredRecordInstance,
@@ -243,10 +324,12 @@ export {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
+	InvalidRepositoryQuery,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
 } from "./core/repository/exceptions";
 export { inMemoryProvider } from "./core/repository/in-memory";
+export { providerDescriptionOf, providerOf } from "./core/repository/provider";
 export type { RepositorySettings } from "./core/repository/repository";
 export {
 	AbstractRepository,
@@ -254,6 +337,20 @@ export {
 	RepositoryOf,
 	repositoryOf,
 } from "./core/repository/repository";
+export type {
+	ProviderCapabilities,
+	ProviderDescription,
+	ProviderOption,
+	ProviderOptions,
+	ProviderSettings,
+	RepositoryExists,
+	RepositoryFindMany,
+	RepositoryFindPage,
+	RepositoryOrder,
+	RepositoryPage,
+	RepositoryQuery,
+	RepositoryWhere,
+} from "./core/repository/types/query.interface";
 export type {
 	AnyRepository,
 	AnyRepositoryEntity,
@@ -273,7 +370,6 @@ export type {
 	RepositoryDelete,
 	RepositoryFindBy,
 	RepositoryFindManyBy,
-	RepositoryMethods,
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
 export type { SchemaClass } from "./core/schema/schema";
@@ -285,19 +381,37 @@ export type {
 export type { StandardSchemaV1 } from "./core/standard/standard-schema";
 export { Demo } from "./core/symbols/demo";
 export { Kind } from "./core/symbols/kind";
+export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
+export { InvalidUseCaseStep } from "./core/use-case/exceptions";
 export type {
+	StepEnsureKind,
+	StepErrorDescription,
+	StepFindTarget,
+	StepReadAction,
+	StepReference,
+	StepRepositoryWith,
+	StepValue,
+	UseCaseStep,
+	UseCaseStepDescription,
+} from "./core/use-case/steps/types/steps.interface";
+export type {
+	AnyExceptionClass,
 	AnyUseCaseClass,
 	DependencyFunctions,
 	DependencyOf,
 	DependencyOverrides,
+	StepsUseCaseConstructor,
 	UseCaseCollection,
 	UseCaseConstructor,
+	UseCaseContext,
 	UseCaseDependencies,
 	UseCaseDependency,
 	UseCaseInput,
+	UseCaseOptions,
 	UseCaseResponse,
 	UseCaseSettings,
+	UseCaseStepsSettings,
 } from "./core/use-case/use-case";
 export {
 	AbstractUseCase,
@@ -358,3 +472,4 @@ export {
 	resetRuntime,
 	SyncVerifyUnsupported,
 } from "./std/runtime";
+export { StdStages } from "./std/stages";

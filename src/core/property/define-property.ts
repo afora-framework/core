@@ -42,18 +42,21 @@ function segmentsOf(pointer: string): (string | number)[] {
 		});
 }
 
-export abstract class AbstractDefineProperty<SchemaType extends TSchema>
-	implements IDefineProperty<SchemaType>
+/** How a property handles its value; `Value` is the value of its schema, as in `ISchema`. */
+export abstract class AbstractDefineProperty<
+	SchemaType extends TSchema,
+	Value = Static<SchemaType>,
+> implements IDefineProperty<SchemaType, Value>
 {
 	[State]: PropertyStates = PropertyStates.Declared;
-	abstract get type(): IPropertyType<SchemaType>;
+	abstract get type(): IPropertyType<SchemaType, Value>;
 
 	/**
 	 * The value handled by the property; throws `PropertyRequired` for
 	 * `undefined` on a required property, and `InvalidPropertyValue` (or the
 	 * exception of a handler) for a value it rejects.
 	 */
-	make(value: Static<SchemaType>): Static<SchemaType> {
+	make(value: Value): Value {
 		const attempt = this.attempt(value);
 		if ("failure" in attempt) throw attempt.failure.exception();
 		return attempt.value;
@@ -67,7 +70,7 @@ export abstract class AbstractDefineProperty<SchemaType extends TSchema>
 	 * `Exception`, from any step, rejects the value too, as the cause of an
 	 * `InvalidPropertyValue`.
 	 */
-	parse(value: unknown): ParseResult<Static<SchemaType>> {
+	parse(value: unknown): ParseResult<Value> {
 		const attempt = this.attemptWithoutThrowing(value);
 		if (!("failure" in attempt)) return { value: attempt.value };
 
@@ -81,25 +84,25 @@ export abstract class AbstractDefineProperty<SchemaType extends TSchema>
 		};
 	}
 
-	protected preHandle(value: Static<SchemaType>): Static<SchemaType> {
+	protected preHandle(value: Value): Value {
 		return value;
 	}
 
-	protected afterHandle(value: Static<SchemaType>): Static<SchemaType> {
+	protected afterHandle(value: Value): Value {
 		return value;
 	}
 
 	/** The value, or `MISMATCH` when the schema rejects it. */
-	protected handle(value: Static<SchemaType>): Static<SchemaType> {
+	protected handle(value: Value): Value {
 		return this.type.schema.match(value) ? value : (MISMATCH as never);
 	}
 
 	/** `attempt`, with the error of any step as a failure. */
 	private attemptWithoutThrowing(
 		value: unknown,
-	): { readonly value: Static<SchemaType> } | { readonly failure: Failure } {
+	): { readonly value: Value } | { readonly failure: Failure } {
 		try {
-			return this.attempt(value as Static<SchemaType>);
+			return this.attempt(value as Value);
 		} catch (error) {
 			return {
 				failure: this.raise(
@@ -111,8 +114,8 @@ export abstract class AbstractDefineProperty<SchemaType extends TSchema>
 
 	/** Runs the pipeline, updating the state, and tells why it stopped if it did. */
 	private attempt(
-		value: Static<SchemaType>,
-	): { readonly value: Static<SchemaType> } | { readonly failure: Failure } {
+		value: Value,
+	): { readonly value: Value } | { readonly failure: Failure } {
 		const { name, optional } = this.type;
 		this[State] = PropertyStates.Declared;
 
@@ -169,7 +172,7 @@ export abstract class AbstractDefineProperty<SchemaType extends TSchema>
 	 * Runs a handler: an `Exception` it throws goes up as it is, any other
 	 * error rejects the value, with the error as its cause.
 	 */
-	private runHandler(handler: () => Static<SchemaType>): Static<SchemaType> {
+	private runHandler(handler: () => Value): Value {
 		try {
 			return handler();
 		} catch (error) {

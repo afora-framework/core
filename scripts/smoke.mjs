@@ -1,6 +1,8 @@
 // Runs the built package on plain Node: `bun run smoke`.
 import assert from "node:assert/strict";
+// The application supplies the TypeBox peer used by these schemas and core.
 import { Type } from "typebox";
+import { sliceOf, sliceValue } from "../dist/experimental.js";
 import {
 	blueprintOf,
 	DeletedEntity,
@@ -12,6 +14,7 @@ import {
 	propertyOf,
 	recordOf,
 } from "../dist/index.js";
+import { providerContract } from "../dist/testing/index.js";
 
 // property
 const Name = propertyOf({
@@ -84,5 +87,24 @@ post.author.change.name("Bia");
 assert.equal(typeof post.author.updatedAt, "string");
 post.author.destroy();
 assert.throws(() => post.author.change.name("Cy"), DeletedEntity);
+
+// experimental entry shares module state with the main one
+const Card = sliceOf(UserBlueprint, { email: true, address: { zip: true } });
+assert.deepEqual(Object.keys(Card.properties).sort(), ["address", "email"]);
+assert.deepEqual(sliceValue(user, { email: true, password: true }), {
+	email: "ana@example.com",
+	password: MASK,
+});
+class Slim extends entityOf(blueprintOf((ctx) => ({ title: ctx.string }))) {}
+class Wrapper extends recordOf(blueprintOf(() => ({ slim: Slim }))) {}
+const wrapped = new Wrapper({ slim: { title: "x" } });
+assert.deepEqual(sliceValue(wrapped, { slim: { title: true } }), {
+	slim: { title: "x" },
+});
+const Only = sliceOf(Wrapper.blueprint, { slim: true });
+assert.ok(Only.properties.slim === Slim);
+
+// testing entry shares module state with the main one (same exception classes)
+assert.equal(typeof providerContract, "function");
 
 console.log(`smoke ok on node ${process.version}`);

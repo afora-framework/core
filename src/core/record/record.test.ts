@@ -9,6 +9,7 @@ import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { Exception } from "../exception/exception";
 import { InvalidPropertyValue, PropertyRequired } from "../property/exceptions";
 import { propertyOf } from "../property/property";
+import { Meta } from "../symbols/meta";
 import { RESERVED_RECORD_KEYS } from "./abstract-record";
 import {
 	InvalidRecordValue,
@@ -63,7 +64,7 @@ test("stores the blueprint, and each key of the value as a member", () => {
 	const record = new User(user);
 
 	expect(User.blueprint).toBe(UserBlueprint);
-	expect(record.blueprint).toBe(UserBlueprint);
+	expect(record[Meta].blueprint).toBe(UserBlueprint);
 	expect(record.name).toBe("Jane");
 	expect(record.address).toEqual(user.address);
 	expect(record.nickname).toBeUndefined();
@@ -78,7 +79,7 @@ test("stores the blueprint, and each key of the value as a member", () => {
 });
 
 test("a key cannot take the name of a member of the record", () => {
-	for (const key of ["blueprint", "set", "toJSON", "onSet"]) {
+	for (const key of ["set", "toJSON", "onSet"]) {
 		const Broken = blueprintOf((ctx) => ({ [key]: ctx.string }));
 		expect(() => recordOf(Broken)).toThrow(ReservedRecordKey);
 	}
@@ -338,7 +339,7 @@ test("options name the sensitive, unique and changeable keys", () => {
 		unique: ["email"],
 		change: ["password", "name"],
 	});
-	expect(new Record(account).options).toBe(Record.options);
+	expect(new Record(account)[Meta].options).toBe(Record.options);
 	expect(recordOf(Account).options).toEqual({
 		sensitive: ["password", "recovery"],
 		unique: [],

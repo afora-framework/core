@@ -19,14 +19,20 @@ type SchemaValueType<
 	Optional extends boolean = false,
 > = Optional extends true ? TOptional<SchemaType> : SchemaType;
 
+/**
+ * What `propertyOf` takes. `SchemaType` is inferred from `schema` alone: the
+ * value is `NoInfer`, since inferring through `Static` makes TypeScript
+ * measure `Static` itself, which costs about a second on every check.
+ */
 type PropertyOfArgs<
 	SchemaType extends TSchema,
 	Optional extends boolean = false,
 	Unique extends boolean = false,
+	Value = Static<SchemaType>,
 > = {
 	name: string;
 	schema: SchemaType;
-	default?: Static<SchemaType>;
+	default?: NoInfer<Value>;
 	optional?: Optional;
 	/** A record masks its value in `toJSON`, at any depth, as `Password`. */
 	sensitive?: boolean;
@@ -35,27 +41,42 @@ type PropertyOfArgs<
 	 * do not check it, repositories (or the database) enforce it.
 	 */
 	unique?: Unique;
-	preHandle?: (value: Static<SchemaType>) => Static<SchemaType>;
-	afterHandle?: (value: Static<SchemaType>) => Static<SchemaType>;
+	preHandle?: (value: NoInfer<Value>) => NoInfer<Value>;
+	afterHandle?: (value: NoInfer<Value>) => NoInfer<Value>;
 };
 
-/** The instance type of a class declared with `propertyOf`. */
+/**
+ * The instance type of a class declared with `propertyOf`; `Value` is the
+ * value of its schema, as in `ISchema`.
+ */
 export declare class DeclaredProperty<
 	SchemaType extends TSchema,
-> extends AbstractProperty<SchemaType> {
-	protected override createDefinition(): AbstractDefineProperty<SchemaType>;
+	Value = Static<SchemaType>,
+> extends AbstractProperty<SchemaType, Value> {
+	protected override createDefinition(): AbstractDefineProperty<
+		SchemaType,
+		Value
+	>;
 }
 
-/** A class declared with `propertyOf`; extend it to add behavior, as `Id` does. */
-export interface PropertyClass<SchemaType extends TSchema> {
-	new (value: PropertyValue<SchemaType>): DeclaredProperty<SchemaType>;
-	readonly type: IPropertyType<SchemaType>;
+/**
+ * A class declared with `propertyOf`; extend it to add behavior, as `Id` does.
+ * `Value` is the value of its schema, as in `ISchema`.
+ */
+export interface PropertyClass<
+	SchemaType extends TSchema,
+	Value = Static<SchemaType>,
+> {
+	new (
+		value: PropertyValue<SchemaType, Value>,
+	): DeclaredProperty<SchemaType, Value>;
+	readonly type: IPropertyType<SchemaType, Value>;
 	/** The value handled by the property, or every issue that rejects `value`; never throws. */
-	safeParse(value: unknown): ParseResult<PropertyValue<SchemaType>>;
+	safeParse(value: unknown): ParseResult<PropertyValue<SchemaType, Value>>;
 	/** The Standard Schema of the class: `validate` gives the handled value. */
 	readonly "~standard": StandardSchemaV1.Props<
-		PropertyValue<SchemaType>,
-		PropertyValue<SchemaType>
+		PropertyValue<SchemaType, Value>,
+		PropertyValue<SchemaType, Value>
 	>;
 	/**
 	 * A subclass narrowed and documented by `options`, e.g.
@@ -63,7 +84,7 @@ export interface PropertyClass<SchemaType extends TSchema> {
 	 */
 	with<Self extends AnyPropertyConstructor>(
 		this: Self,
-		options: PropertyOptions<SchemaType>,
+		options: PropertyOptions<SchemaType, Value>,
 	): Self;
 	// biome-ignore lint/suspicious/noExplicitAny: any property, whatever its schema
 	demo<Self extends AbstractProperty<any>>(
@@ -87,7 +108,8 @@ export function propertyOf<
 	preHandle: onPreHandle,
 	afterHandle: onAfterHandle,
 }: PropertyOfArgs<SchemaType, Optional, Unique>): PropertyClass<
-	SchemaValueType<SchemaType, Optional>
+	SchemaValueType<SchemaType, Optional>,
+	Static<SchemaType>
 > &
 	UniqueMark<Unique> {
 	type ValueSchema = SchemaValueType<SchemaType, Optional>;
@@ -129,6 +151,9 @@ export function propertyOf<
 	}
 
 	// Names the class's type for declaration emit; at runtime it is `Property`.
-	return Property satisfies AbstractPropertyConstructor<ValueSchema> as unknown as PropertyClass<ValueSchema> &
+	return Property satisfies AbstractPropertyConstructor<ValueSchema> as unknown as PropertyClass<
+		ValueSchema,
+		Static<SchemaType>
+	> &
 		UniqueMark<Unique>;
 }

@@ -45,6 +45,14 @@ export interface FactoryInfo {
 	readonly spec: string;
 }
 
+/** A stage `@afora/core` ships in `StdStages`. */
+interface StageInfo {
+	/** The name `transform` or `sink` refers to in a pipe. */
+	readonly name: string;
+	readonly kind: "transform" | "sink";
+	readonly builtin: true;
+}
+
 export interface Catalog {
 	readonly properties: readonly StdPropertyInfo[];
 	readonly factories: readonly FactoryInfo[];
@@ -57,6 +65,12 @@ export interface Catalog {
 	readonly identityKeys: readonly string[];
 	/** The actions a repository can list, and the rule of each. */
 	readonly repositoryActions: readonly { action: string; rule: string }[];
+	/** The values of `ExceptionLayers`: what an exception's `layer` may be. */
+	readonly exceptionLayers: readonly string[];
+	/** Exceptions `@afora/core` exports: a use case may list them in `errors` and `ensure` them without declaring them. */
+	readonly coreExceptions: readonly string[];
+	/** The built-in stages (`StdStages`) a pipe may name; others come from the `stages` option. */
+	readonly stages: readonly StageInfo[];
 	/** Everything `@afora/core` exports; a declaration cannot take one of these names. */
 	readonly reservedDeclarationNames: readonly string[];
 }
@@ -180,8 +194,40 @@ function build(): Catalog {
 			},
 			{ action: "update", rule: "Saves a changed entity." },
 			{ action: "delete", rule: "Destroys an entity (soft delete)." },
-			{ action: "count", rule: "Counts the entities." },
+			{
+				action: "count",
+				rule: "Counts the entities; takes an optional query to count only the matching ones.",
+			},
+			{
+				action: "findMany",
+				rule: "Queries with { where?, orderBy?, limit?, offset? }. Needs no key.",
+			},
+			{
+				action: "exists",
+				rule: "Tells whether some entity matches a query (true or false). Needs no key.",
+			},
+			{
+				action: "findPage",
+				rule: "Gives { items, total, limit, offset } for a query (limit 20 by default). Needs no key.",
+			},
 		],
+		exceptionLayers: Object.values(core.ExceptionLayers),
+		coreExceptions: exportsOf
+			.filter(
+				([name, value]) =>
+					name !== "Exception" &&
+					typeof value === "function" &&
+					value.prototype instanceof core.Exception,
+			)
+			.map(([name]) => name)
+			.sort(),
+		stages: Object.entries(core.StdStages.stages)
+			.map(([name, factory]) => ({
+				name,
+				kind: core.stageKindOf(factory) as "transform" | "sink",
+				builtin: true as const,
+			}))
+			.sort((a, b) => (a.name < b.name ? -1 : 1)),
 		reservedDeclarationNames: [...Object.keys(core), "App"].sort(),
 	};
 }

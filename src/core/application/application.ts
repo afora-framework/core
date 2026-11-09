@@ -7,13 +7,35 @@ import type {
 	BlueprintField,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import {
+	commandOf,
+	commandTransactionProvider,
+	isCommand,
+	verifyCommand,
+} from "../command/command";
+import type { AnyCommand } from "../command/types/command.interface";
 import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
-import { isEnvironment } from "../environment/environment";
+import {
+	type AnyEnvironment,
+	InvalidEnvironment,
+	isEnvironment,
+} from "../environment/environment";
+import {
+	declaredMessageOf,
+	Exception,
+	isDeclaredException,
+} from "../exception/exception";
+import { isExportedException } from "../exception/exported";
 import { plainOf } from "../openapi/openapi";
+import { isOutput, outputOf } from "../output/output";
+import { stageDescriptionOf } from "../output/stage";
+import type { AnyOutput } from "../output/types/output.interface";
 import { isProperty } from "../property/is-property";
 import { type PropertyLineage, propertyLineageOf } from "../property/lineage";
 import { pluginsOf } from "../record/plugin";
+import { providerDescriptionOf } from "../repository/provider";
+import { isRepository } from "../repository/repository";
 import {
 	bindRepository,
 	inspectRepository,
@@ -21,13 +43,29 @@ import {
 } from "../repository/state";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import { describeSteps } from "../use-case/steps/describe";
+import { interpretedStepsOf } from "../use-case/steps/run";
+import { type AnyUseCaseClass, isUseCaseClass } from "../use-case/use-case";
 import {
+	ApplicationAlreadyStarted,
 	ApplicationConflict,
 	DuplicateApplicationDeclaration,
 	InvalidApplicationDeclaration,
+	InvalidApplicationEnvironment,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
+	UnregisteredUseCaseDependency,
 } from "./exceptions";
+import { setStartedApplication, startedApplication } from "./registry";
+import {
+	checkTransactions,
+	deferredEnvironments,
+	deferredProvider,
+	isDeferredProvider,
+	isProviderFactory,
+	startDeferred,
+	stopProvider,
+} from "./start";
 import type {
 	AnyApplication,
 	ApplicationCollectionKey,
@@ -51,6 +89,10 @@ const KEYS = [
 	"entities",
 	"environments",
 	"repositories",
+	"useCases",
+	"commands",
+	"outputs",
+	"exceptions",
 ] as const satisfies readonly ApplicationCollectionKey[];
 
 /** One registered declaration. */
@@ -76,6 +118,10 @@ const KIND_OF: Readonly<Record<ApplicationCollectionKey, string>> = {
 	entities: "entity",
 	environments: "environment",
 	repositories: "repository",
+	useCases: "use case",
+	commands: "command",
+	outputs: "output",
+	exceptions: "exception",
 };
 
 /** Whether `value` is an application made by `applicationOf`. */
@@ -106,6 +152,14 @@ function isOfKind(collection: ApplicationCollectionKey, value: unknown) {
 			return isEnvironment(value);
 		case "repositories":
 			return inspectRepository(value) !== undefined;
+		case "useCases":
+			return isUseCaseClass(value);
+		case "commands":
+			return isCommand(value);
+		case "outputs":
+			return isOutput(value);
+		case "exceptions":
+			return isDeclaredException(value);
 	}
 }
 
@@ -212,6 +266,22 @@ function resolve(
 					`${collection}.${name} is not a ${KIND_OF[collection]} (${collection} takes ${KIND_OF[collection]} declarations).`,
 				);
 			}
+			const declaredName =
+				collection === "useCases"
+					? (value as AnyUseCaseClass).useCaseName
+					: collection === "commands"
+						? (value as AnyCommand).commandName
+						: collection === "outputs"
+							? (value as AnyOutput).outputName
+							: collection === "exceptions"
+								? (value as { name: string }).name
+								: name;
+			if (declaredName !== name) {
+				invalid(
+					source,
+					`${collection}.${name} must be keyed by its name, "${declaredName}".`,
+				);
+			}
 			add({
 				collection,
 				name,
@@ -300,6 +370,154 @@ function validate(source: string, registry: Registry): void {
 		for (const environment of info.environments) {
 			if (!environments.has(environment)) {
 				unregistered(entry.name, "an environment");
+			}
+		}
+	}
+}
+
+/** Checks that every use case of every command is registered. */
+function validateCommands(source: string, registry: Registry): void {
+	const useCases = new Set(
+		[...registry.useCases.values()].map((entry) => entry.key),
+	);
+	const environments = new Set(
+		[...registry.environments.values()].map((entry) => entry.key),
+	);
+	for (const entry of registry.commands.values()) {
+		const command = entry.value as AnyCommand;
+		for (const environment of command.environments) {
+			if (environments.has(environment)) continue;
+			throw new UnregisteredApplicationReference({
+				source,
+				details: {
+					holder: `command "${entry.name}"`,
+					reference: "an environment",
+					command: entry.name,
+				} as { holder: string; reference: string },
+			});
+		}
+		for (const UseCase of Object.values(command.useCases)) {
+			if (useCases.has(UseCase)) continue;
+			throw new UnregisteredApplicationReference({
+				source,
+				details: {
+					holder: `command "${entry.name}"`,
+					reference: `use case "${UseCase.useCaseName}"`,
+					command: entry.name,
+					useCase: UseCase.useCaseName,
+				} as { holder: string; reference: string },
+			});
+		}
+	}
+}
+
+/** Checks that every output is named and every command of it is registered. */
+function validateOutputs(source: string, registry: Registry): void {
+	const commands = new Set(
+		[...registry.commands.values()].map((entry) => entry.key),
+	);
+	for (const entry of registry.outputs.values()) {
+		const output = entry.value as AnyOutput;
+		if (!output.outputName) {
+			invalid(
+				source,
+				`outputs.${entry.name} has no name (an output made by pipe cannot be registered).`,
+			);
+		}
+		for (const command of output.commands) {
+			if (commands.has(command)) continue;
+			throw new UnregisteredApplicationReference({
+				source,
+				details: {
+					holder: `output "${entry.name}"`,
+					reference: `command "${command.commandName}"`,
+					output: entry.name,
+					command: command.commandName,
+				} as { holder: string; reference: string },
+			});
+		}
+	}
+}
+
+/** Checks the use cases of the resolved set: dependencies, records and errors. */
+function validateUseCases(source: string, registry: Registry): void {
+	const registered = new Set<object>([
+		...[...registry.records.values()].map((entry) => entry.key),
+		...[...registry.entities.values()].map((entry) => entry.key),
+	]);
+	const known = (collection: ApplicationCollectionKey) =>
+		new Set([...registry[collection].values()].map((entry) => entry.key));
+	const useCases = known("useCases");
+	const repositories = known("repositories");
+	const environments = known("environments");
+	const exceptions = known("exceptions");
+	for (const entry of registry.useCases.values()) {
+		const UseCase = entry.value as AnyUseCaseClass;
+		for (const [key, dependency] of Object.entries(UseCase.dependencies)) {
+			const found = isUseCaseClass(dependency)
+				? useCases.has(dependency)
+				: isEnvironment(dependency)
+					? environments.has(dependency)
+					: repositories.has(
+							(inspectRepository(dependency) as RepositoryInspection).state,
+						);
+			if (!found) {
+				throw new UnregisteredUseCaseDependency({
+					source,
+					details: { useCase: `"${entry.name}"`, dependency: `"${key}"` },
+				});
+			}
+		}
+		for (const [part, blueprint] of [
+			["blueprint", UseCase.blueprint],
+			["response", UseCase.response],
+			["context", UseCase.context],
+		] as const) {
+			if (blueprint === undefined) continue;
+			for (const record of recordsIn(blueprint.properties)) {
+				if (registered.has(record)) continue;
+				throw new UnregisteredApplicationReference({
+					source,
+					details: {
+						holder: `the ${part} of use case "${entry.name}"`,
+						reference: `${isEntityClass(record) ? "entity" : "record"} "${(record as { name: string }).name}"`,
+					},
+				});
+			}
+		}
+		for (const Thrown of UseCase.errors) {
+			if (exceptions.has(Thrown) || isExportedException(Thrown)) continue;
+			throw new UnregisteredApplicationReference({
+				source,
+				details: {
+					holder: `use case "${entry.name}"`,
+					reference: `exception "${Thrown.name}"`,
+				},
+			});
+		}
+		for (const [index, step] of (interpretedStepsOf(UseCase) ?? []).entries()) {
+			const holder = `step ${index} of use case "${entry.name}"`;
+			if (step.build !== undefined && !registered.has(step.build as object)) {
+				throw new UnregisteredApplicationReference({
+					source,
+					details: {
+						holder,
+						reference: `${isEntityClass(step.build) ? "entity" : "record"} "${(step.build as { name: string }).name}"`,
+					},
+				});
+			}
+			const Thrown = step.error as
+				| AnyUseCaseClass["errors"][number]
+				| undefined;
+			if (
+				Thrown !== undefined &&
+				!exceptions.has(Thrown) &&
+				!isExportedException(Thrown)
+			) {
+				throw new UnregisteredApplicationReference({
+					source,
+					details: { holder, reference: `exception "${Thrown.name}"` },
+				});
 			}
 		}
 	}
@@ -488,6 +706,7 @@ function describeRegistry(
 	name: string,
 	extended: readonly AnyApplication[],
 	registry: Registry,
+	provider: IRepositoryProvider | undefined,
 ): ApplicationDescription {
 	const scope: Scope = {
 		properties: referencesOf(registry, "properties"),
@@ -496,6 +715,42 @@ function describeRegistry(
 		entities: referencesOf(registry, "entities"),
 	};
 	const repositories = referencesOf(registry, "repositories");
+	const environmentRefs = referencesOf(registry, "environments");
+	const useCaseRefs = referencesOf(registry, "useCases");
+	const exceptionRefs = referencesOf(registry, "exceptions");
+	const describeImplementation = (UseCase: AnyUseCaseClass) => {
+		const steps = interpretedStepsOf(UseCase);
+		return steps === undefined
+			? ({ kind: "opaque" } as const)
+			: ({
+					kind: "steps",
+					steps: describeSteps(steps, {
+						record: (Class) =>
+							(scope.entities.get(Class as object) ??
+								scope.records.get(Class as object)) as string,
+						error: (Class) => {
+							const ref = exceptionRefs.get(Class as object);
+							return ref === undefined
+								? { core: (Class as { name: string }).name }
+								: ref;
+						},
+					}),
+				} as const);
+	};
+	// The names of the registered blueprints a use case or command is typed with.
+	const refsOf = (
+		blueprints: Record<string, AnyBlueprint | undefined>,
+	): { refs?: Record<string, string> } => {
+		const refs: Record<string, string> = {};
+		for (const [key, blueprint] of Object.entries(blueprints)) {
+			const ref =
+				blueprint === undefined
+					? undefined
+					: scope.blueprints.get(blueprint.properties);
+			if (ref !== undefined) refs[key] = ref;
+		}
+		return Object.keys(refs).length === 0 ? {} : { refs };
+	};
 	const each = <Result>(
 		collection: ApplicationCollectionKey,
 		describe: (entry: Entry) => Result,
@@ -510,6 +765,9 @@ function describeRegistry(
 	return {
 		name,
 		extends: extended.map((other) => other.name),
+		...(provider === undefined
+			? {}
+			: { provider: providerDescriptionOf(provider) }),
 		properties: each("properties", (entry) => ({
 			from: entry.from,
 			...propertyDescriptionOf(entry.value as BlueprintField, scope),
@@ -536,14 +794,123 @@ function describeRegistry(
 				from: entry.from,
 				entity: scope.entities.get(info.entity) as string,
 				actions: info.actions,
+				deletion: info.deletion,
 				relations: info.relations.map(
 					(relation) => repositories.get(relation) as string,
 				),
 				environments: info.environments.map(
-					(environment) =>
-						referencesOf(registry, "environments").get(environment) as string,
+					(environment) => environmentRefs.get(environment) as string,
 				),
-				provider: info.explicitProvider,
+				...(info.provider === undefined
+					? {}
+					: { provider: providerDescriptionOf(info.provider) }),
+			};
+		}),
+		useCases: each("useCases", (entry) => {
+			const UseCase = entry.value as AnyUseCaseClass;
+			return {
+				from: entry.from,
+				name: UseCase.useCaseName,
+				...(UseCase.description === undefined
+					? {}
+					: { description: UseCase.description }),
+				tags: UseCase.tags,
+				deprecated: UseCase.deprecated,
+				input: fieldsDescriptionOf(UseCase.blueprint.properties, scope),
+				response: fieldsDescriptionOf(UseCase.response.properties, scope),
+				...(UseCase.context === undefined
+					? {}
+					: {
+							context: fieldsDescriptionOf(UseCase.context.properties, scope),
+						}),
+				...refsOf({
+					input: UseCase.blueprint,
+					response: UseCase.response,
+					context: UseCase.context,
+				}),
+				errors: UseCase.errors.map((Thrown) => {
+					const ref = exceptionRefs.get(Thrown);
+					return ref === undefined
+						? { kind: "core" as const, name: Thrown.name }
+						: { kind: "exception" as const, ref };
+				}),
+				dependencies: Object.fromEntries(
+					Object.entries(UseCase.dependencies).map(([key, dependency]) => [
+						key,
+						isUseCaseClass(dependency)
+							? { kind: "use-case", ref: useCaseRefs.get(dependency) as string }
+							: isEnvironment(dependency)
+								? {
+										kind: "environment",
+										ref: environmentRefs.get(dependency) as string,
+									}
+								: {
+										kind: "repository",
+										ref: repositories.get(
+											(inspectRepository(dependency) as RepositoryInspection)
+												.state,
+										) as string,
+									},
+					]),
+				),
+				implementation: describeImplementation(UseCase),
+			};
+		}),
+		commands: each("commands", (entry) => {
+			const command = entry.value as AnyCommand;
+			return {
+				from: entry.from,
+				name: command.commandName,
+				...(command.description === undefined
+					? {}
+					: { description: command.description }),
+				tags: command.tags,
+				...(command.context === undefined
+					? {}
+					: {
+							context: fieldsDescriptionOf(command.context.properties, scope),
+						}),
+				...refsOf({ context: command.context }),
+				operations: Object.fromEntries(
+					Object.entries(command.useCases).map(([op, UseCase]) => [
+						op,
+						{ ref: useCaseRefs.get(UseCase) as string },
+					]),
+				),
+				transaction: command.transaction,
+				...(command.environments.length === 0
+					? {}
+					: {
+							environments: command.environments.map(
+								(environment) => environmentRefs.get(environment) as string,
+							),
+						}),
+				events:
+					typeof command.events === "function"
+						? ({ kind: "opaque" } as const)
+						: command.events,
+				...(command.onEventError === undefined
+					? {}
+					: { onEventError: { kind: "opaque" } as const }),
+			};
+		}),
+		outputs: each("outputs", (entry) => {
+			const output = entry.value as AnyOutput;
+			return {
+				from: entry.from,
+				name: output.outputName,
+				commands: output.commands.map((command) => command.commandName),
+				statuses: output.statuses,
+				pipe: output.stages.map((stage) => stageDescriptionOf(stage)),
+			};
+		}),
+		exceptions: each("exceptions", (entry) => {
+			const Declared = entry.value as Parameters<typeof declaredMessageOf>[0];
+			const message = declaredMessageOf(Declared);
+			return {
+				from: entry.from,
+				layer: Declared.layer,
+				...(message === undefined ? {} : { message }),
 			};
 		}),
 	};
@@ -591,6 +958,22 @@ export function applicationOf<
 		never,
 		never
 	>,
+	const UseCases extends ApplicationCollections["useCases"] = Record<
+		never,
+		never
+	>,
+	const Commands extends ApplicationCollections["commands"] = Record<
+		never,
+		never
+	>,
+	const Outputs extends ApplicationCollections["outputs"] = Record<
+		never,
+		never
+	>,
+	const Exceptions extends ApplicationCollections["exceptions"] = Record<
+		never,
+		never
+	>,
 >(
 	settings: ApplicationSettings<
 		Name,
@@ -602,6 +985,10 @@ export function applicationOf<
 			entities: Entities;
 			environments: Environments;
 			repositories: Repositories;
+			useCases: UseCases;
+			commands: Commands;
+			outputs: Outputs;
+			exceptions: Exceptions;
 		}
 	>,
 ): IApplication<
@@ -614,6 +1001,10 @@ export function applicationOf<
 			entities: Entities;
 			environments: Environments;
 			repositories: Repositories;
+			useCases: UseCases;
+			commands: Commands;
+			outputs: Outputs;
+			exceptions: Exceptions;
 		},
 		Extended
 	>
@@ -628,12 +1019,37 @@ export function applicationOf<
 	}
 	const registry = resolve(settings);
 	validate(name, registry);
+	validateUseCases(name, registry);
+	validateCommands(name, registry);
+	validateOutputs(name, registry);
 
-	const provider: IRepositoryProvider | undefined =
+	const declaredProvider: unknown =
 		settings.provider ??
 		[...extended].reverse().find((other) => other.provider)?.provider;
-	if (provider !== undefined && typeof provider !== "object") {
+	if (declaredProvider !== undefined && typeof declaredProvider !== "object") {
 		invalid(name, "Expected `provider` to be a repository provider.");
+	}
+	// A provider of `providerFrom` is made on start: until then the
+	// repositories are bound to one that forwards to it once it exists.
+	const provider: IRepositoryProvider | undefined = isProviderFactory(
+		declaredProvider,
+	)
+		? deferredProvider(declaredProvider, name)
+		: (declaredProvider as IRepositoryProvider | undefined);
+	{
+		const registered = new Set(
+			[...registry.environments.values()].map((entry) => entry.key),
+		);
+		for (const environment of deferredEnvironments(provider)) {
+			if (registered.has(environment)) continue;
+			throw new UnregisteredApplicationReference({
+				source: name,
+				details: {
+					holder: "the provider",
+					reference: "an environment",
+				},
+			});
+		}
 	}
 
 	const collection = (key: ApplicationCollectionKey) =>
@@ -644,6 +1060,7 @@ export function applicationOf<
 		);
 
 	const bound = new Map<unknown, unknown>();
+	const boundByState = new Map<object, unknown>();
 	const repositories: Record<string, unknown> = {};
 	for (const entry of registry.repositories.values()) {
 		const repository =
@@ -651,8 +1068,143 @@ export function applicationOf<
 				? entry.value
 				: bindRepository(entry.value as object, provider);
 		bound.set(entry.value, repository);
+		boundByState.set(entry.key, repository);
 		repositories[entry.name] = repository;
 	}
+
+	// A use case is bound once: a subclass whose dependencies are the bound
+	// repositories and the bound use cases, never mutating the declared class.
+	const boundUseCases = new Map<AnyUseCaseClass, AnyUseCaseClass>();
+	const bindUseCase = (UseCase: AnyUseCaseClass): AnyUseCaseClass => {
+		if (provider === undefined) return UseCase;
+		const done = boundUseCases.get(UseCase);
+		if (done) return done;
+		const Declared = UseCase as unknown as new (...args: never[]) => object;
+		class Bound extends Declared {}
+		Object.defineProperty(Bound, "name", { value: Declared.name });
+		boundUseCases.set(UseCase, Bound as unknown as AnyUseCaseClass);
+		const dependencies = Object.fromEntries(
+			Object.entries(UseCase.dependencies).map(([key, dependency]) => [
+				key,
+				isUseCaseClass(dependency)
+					? bindUseCase(dependency)
+					: isEnvironment(dependency)
+						? dependency
+						: (boundByState.get(
+								(inspectRepository(dependency) as RepositoryInspection).state,
+							) ?? dependency),
+			]),
+		);
+		Object.defineProperty(Bound, "dependencies", {
+			value: Object.freeze(dependencies),
+		});
+		return Bound as unknown as AnyUseCaseClass;
+	};
+	const useCases: Record<string, unknown> = {};
+	const boundUseCaseOf = new Map<unknown, unknown>();
+	for (const entry of registry.useCases.values()) {
+		const bound = bindUseCase(entry.value as AnyUseCaseClass);
+		boundUseCaseOf.set(entry.value, bound);
+		useCases[entry.name] = bound;
+	}
+
+	// With a provider a command is rebuilt over the bound use cases, with the
+	// same settings, and its transaction check runs now, on the bound providers.
+	const commands: Record<string, unknown> = {};
+	const boundCommandOf = new Map<unknown, unknown>();
+	for (const entry of registry.commands.values()) {
+		const declared = entry.value as AnyCommand;
+		const rebuilt =
+			provider === undefined
+				? declared
+				: commandOf({
+						name: declared.commandName,
+						description: declared.description,
+						tags: declared.tags,
+						context: declared.context,
+						useCases: Object.fromEntries(
+							Object.entries(declared.useCases).map(([op, UseCase]) => [
+								op,
+								boundUseCaseOf.get(UseCase) as AnyUseCaseClass,
+							]),
+						),
+						transaction: declared.transaction,
+						environmentDependencies: declared.environments,
+						events: declared.events,
+						onEventError: declared.onEventError,
+					} as never);
+		if (provider !== undefined) verifyCommand(rebuilt);
+		boundCommandOf.set(entry.value, rebuilt);
+		commands[entry.name] = rebuilt;
+	}
+
+	// With a provider an output is rebuilt over the bound commands, with the
+	// same name, statuses and stages (the transforms run again on them).
+	const outputs: Record<string, unknown> = {};
+	const boundOutputOf = new Map<unknown, unknown>();
+	for (const entry of registry.outputs.values()) {
+		const declared = entry.value as AnyOutput;
+		const rebuilt =
+			provider === undefined
+				? declared
+				: outputOf({
+						name: declared.outputName,
+						commands: declared.commands.map(
+							(command) => boundCommandOf.get(command) as AnyCommand,
+						),
+						statuses: declared.statuses,
+						pipe: declared.stages,
+					});
+		boundOutputOf.set(entry.value, rebuilt);
+		outputs[entry.name] = rebuilt;
+	}
+
+	const environmentEntries = [...registry.environments.values()];
+	const registeredEnvironments = new Set<unknown>(
+		environmentEntries.map((entry) => entry.value),
+	);
+	let starting: Promise<unknown> | undefined;
+	let started = false;
+	const start = async () => {
+		// Every environment at once, so one start reports all that is missing.
+		const failures: Record<string, string[]> = {};
+		let cause: unknown;
+		for (const entry of environmentEntries) {
+			try {
+				(entry.value as AnyEnvironment).load();
+			} catch (error) {
+				if (!(error instanceof Exception) || !error.is(InvalidEnvironment)) {
+					throw error;
+				}
+				cause ??= error;
+				failures[entry.name] = [
+					...((error.details as { keys?: string[] } | undefined)?.keys ?? []),
+				];
+			}
+		}
+		if (Object.keys(failures).length > 0) {
+			throw new InvalidApplicationEnvironment({
+				source: name,
+				details: { environments: failures },
+				cause,
+			});
+		}
+		if (provider !== undefined && isDeferredProvider(provider)) {
+			const made = (await startDeferred(provider)) as IRepositoryProvider;
+			checkTransactions(
+				name,
+				made,
+				Object.entries(commands)
+					.filter(
+						([, command]) =>
+							(command as AnyCommand).transaction &&
+							commandTransactionProvider(command as object) === provider,
+					)
+					.map(([key]) => key),
+			);
+		}
+		started = true;
+	};
 
 	const application = Object.freeze({
 		[Kind]: "application" as const,
@@ -665,6 +1217,28 @@ export function applicationOf<
 		entities: collection("entities"),
 		environments: collection("environments"),
 		repositories: Object.freeze(repositories),
+		useCases: Object.freeze(useCases),
+		commands: Object.freeze(commands),
+		outputs: Object.freeze(outputs),
+		exceptions: collection("exceptions"),
+		useCase(useCase: unknown) {
+			if (!boundUseCaseOf.has(useCase)) {
+				invalid(name, "Expected a use case registered in the application.");
+			}
+			return boundUseCaseOf.get(useCase);
+		},
+		command(command: unknown) {
+			if (!boundCommandOf.has(command)) {
+				invalid(name, "Expected a command registered in the application.");
+			}
+			return boundCommandOf.get(command);
+		},
+		output(output: unknown) {
+			if (!boundOutputOf.has(output)) {
+				invalid(name, "Expected an output registered in the application.");
+			}
+			return boundOutputOf.get(output);
+		},
 		repository(repository: unknown) {
 			if (!bound.has(repository)) {
 				invalid(name, "Expected a repository registered in the application.");
@@ -678,7 +1252,69 @@ export function applicationOf<
 				...(provider === undefined ? {} : { provider }),
 			} as never);
 		},
-		describe: () => describeRegistry(name, extended, registry),
+		describe: () => describeRegistry(name, extended, registry, provider),
+		get started() {
+			return started;
+		},
+		start(options: { replace?: boolean; register?: boolean } = {}) {
+			const { replace = false, register = true } = options ?? {};
+			starting ??= (async () => {
+				if (register) {
+					const current = startedApplication();
+					if (current !== undefined && current !== application) {
+						if (!replace) {
+							throw new ApplicationAlreadyStarted({
+								source: name,
+								details: { current: current.name, attempted: name },
+							});
+						}
+						await current.stop();
+					}
+				}
+				await start();
+				if (register) setStartedApplication(application as never);
+			})().then(
+				() => application,
+				async (error: unknown) => {
+					starting = undefined;
+					if (provider !== undefined && isDeferredProvider(provider)) {
+						await stopProvider(provider);
+					}
+					throw error;
+				},
+			);
+			return starting;
+		},
+		async stop() {
+			const wasStarting = starting;
+			starting = undefined;
+			started = false;
+			if (wasStarting) await wasStarting.catch(() => undefined);
+			if (startedApplication() === application)
+				setStartedApplication(undefined);
+			if (provider !== undefined) await stopProvider(provider);
+		},
+		get(declaration: unknown) {
+			if (isEnvironment(declaration)) {
+				if (!registeredEnvironments.has(declaration)) {
+					invalid(
+						name,
+						"Expected an environment registered in the application.",
+					);
+				}
+				return declaration.load();
+			}
+			if (isCommand(declaration)) return application.command(declaration);
+			if (isOutput(declaration)) return application.output(declaration);
+			if (isUseCaseClass(declaration)) return application.useCase(declaration);
+			if (isRepository(declaration)) {
+				return application.repository(declaration);
+			}
+			return invalid(
+				name,
+				"Expected a repository, use case, command, output or environment registered in the application.",
+			);
+		},
 	});
 	internals.set(application, registry);
 	return application as never;

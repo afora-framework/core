@@ -414,38 +414,30 @@ describe("references", () => {
 	) {}
 
 	type Call = { readonly method: string; readonly value?: unknown };
-	/** A provider that keeps what it was asked, with or without `findIn`. */
-	function spy(withFindIn = true) {
+	/** A provider that keeps what it was asked. */
+	function spy() {
 		const memory = inMemoryProvider();
 		const calls: Call[] = [];
 		const provider: IRepositoryProvider = {
 			...memory,
-			async findOne(context, key, value) {
-				calls.push({ method: "findOne", value });
-				return memory.findOne(context, key, value);
+			async findOne(context, query) {
+				calls.push({ method: "findOne", value: query });
+				return memory.findOne(context, query);
+			},
+			async findMany(context, query) {
+				calls.push({ method: "findMany", value: query });
+				return memory.findMany(context, query);
 			},
 			async insert(context, data) {
 				calls.push({ method: "insert", value: data });
 				return memory.insert(context, data);
 			},
 		};
-		if (withFindIn) {
-			provider.findIn = async (context, key, values) => {
-				calls.push({ method: "findIn", value: values });
-				return (memory.findIn as NonNullable<typeof memory.findIn>)(
-					context,
-					key,
-					values,
-				);
-			};
-		} else {
-			delete provider.findIn;
-		}
 		return { provider, calls };
 	}
 
-	function setup(withFindIn = true) {
-		const users = spy(withFindIn);
+	function setup() {
+		const users = spy();
 		const posts = spy();
 		const Users = repositoryOf({
 			entity: User,
@@ -647,27 +639,22 @@ describe("references", () => {
 		}
 	});
 
-	test("many records load what they hold in one findIn, or one findOne for each id", async () => {
-		const withIn = setup();
-		const without = setup(false);
-		for (const { Users, Posts, users } of [withIn, without]) {
-			const a = await Users.create(person("Ana"));
-			const b = await Users.create(person("Bia"));
-			await Posts.create(postOf(a, { reviewers: [b] }));
-			await Posts.create(postOf(b, { reviewers: [a, b] }));
-			await Posts.create(postOf(a, { editor: b }));
-			users.calls.length = 0;
-			expect(await Posts.findManyByTitle("Title")).toHaveLength(3);
-		}
+	test("many records load what they hold in one findMany with in", async () => {
+		const { Users, Posts, users } = setup();
+		const a = await Users.create(person("Ana"));
+		const b = await Users.create(person("Bia"));
+		await Posts.create(postOf(a, { reviewers: [b] }));
+		await Posts.create(postOf(b, { reviewers: [a, b] }));
+		await Posts.create(postOf(a, { editor: b }));
+		users.calls.length = 0;
+		expect(await Posts.findManyByTitle("Title")).toHaveLength(3);
 
-		const [lookup] = withIn.users.calls;
-		expect(withIn.users.calls).toHaveLength(1);
-		expect(lookup?.method).toBe("findIn");
-		expect(lookup?.value).toHaveLength(2);
-		expect(without.users.calls.map((call) => call.method)).toEqual([
-			"findOne",
-			"findOne",
-		]);
+		expect(users.calls).toHaveLength(1);
+		const [lookup] = users.calls;
+		expect(lookup?.method).toBe("findMany");
+		const query = lookup?.value as { where: { id: { in: string[] } } };
+		expect([...query.where.id.in].sort()).toEqual([a.id, b.id].sort());
+		expect(query).toMatchObject({ withDeleted: true });
 	});
 
 	test("references chain through the repositories of the entities", async () => {
@@ -813,22 +800,5 @@ describe("references", () => {
 		expect(post.author.pullEvents().map((event) => event.name)).toEqual([
 			"user.created",
 		]);
-	});
-
-	test("the in-memory provider finds the values of a list of keys", async () => {
-		const provider = inMemoryProvider();
-		const context: RepositoryContext = {
-			entity: User,
-			name: "UserRepository",
-			unique: ["id"],
-			env: undefined,
-		};
-		for (const id of ["a", "b", "c"]) {
-			await provider.insert(context, { id, name: id });
-		}
-		expect(provider.findIn).toBeFunction();
-		const found = await provider.findIn?.(context, "id", ["c", "a", "x"]);
-		expect(found?.map((data) => data.id).sort()).toEqual(["a", "c"]);
-		expect(await provider.findIn?.(context, "id", [])).toEqual([]);
 	});
 });

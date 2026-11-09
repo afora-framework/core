@@ -148,6 +148,43 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 		).toEqual(normalizeSpec(authSpec));
 	});
 
+	test("metadata names round trip as ordinary record and entity fields", async () => {
+		const spec: Spec = {
+			version: 1,
+			name: "MetadataFields",
+			output: { dir: "src/domain" },
+			records: {
+				Details: {
+					fields: { blueprint: "string", options: "string" },
+					sensitive: ["options"],
+				},
+			},
+			entities: {
+				Item: {
+					fields: { blueprint: "string", options: "Details" },
+					change: ["blueprint"],
+				},
+			},
+			repositories: {
+				Items: { entity: "Item", actions: ["create", "findById"] },
+			},
+		};
+		expect(validateSpec(spec)).toEqual([]);
+		const dir = await generated({ ".": { spec } });
+		const { App } = await import(join(dir, "src/domain/index.ts"));
+		const item = await App.repositories.Items.create({
+			blueprint: "draft",
+			options: { blueprint: "nested", options: "secret" },
+		});
+		expect(
+			(await App.repositories.Items.findById(item.id)).toJSON(),
+		).toMatchObject({
+			blueprint: "draft",
+			options: { blueprint: "nested", options: "********" },
+		});
+		expect(normalizeSpec(extractSpec(App))).toEqual(normalizeSpec(spec));
+	});
+
 	test("the shorthand is used where it says the same", async () => {
 		const dir = await generated({ ".": { spec: blogSpec } });
 		const domain = await import(join(dir, "src/domain/index.ts"));

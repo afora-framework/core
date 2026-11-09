@@ -1,9 +1,7 @@
 {
 	"$schema": "http://json-schema.org/draft-07/schema#",
 	"type": "object",
-	"required": [
-		"version"
-	],
+	"required": ["version"],
 	"properties": {
 		"$schema": {
 			"type": "string"
@@ -25,9 +23,7 @@
 		},
 		"output": {
 			"type": "object",
-			"required": [
-				"dir"
-			],
+			"required": ["dir"],
 			"properties": {
 				"dir": {
 					"type": "string",
@@ -36,6 +32,83 @@
 			},
 			"additionalProperties": false
 		},
+		"provider": {
+			"anyOf": [
+				{
+					"type": "string",
+					"const": "inMemory"
+				},
+				{
+					"type": "object",
+					"required": ["use"],
+					"properties": {
+						"use": {
+							"type": "string",
+							"description": "A provider of the catalog given to codegen (inMemory is built in)."
+						},
+						"options": {
+							"type": "object",
+							"patternProperties": {
+								"^.*$": {
+									"anyOf": [
+										{
+											"type": "string"
+										},
+										{
+											"type": "number"
+										},
+										{
+											"type": "boolean"
+										},
+										{
+											"type": "null"
+										},
+										{
+											"type": "object",
+											"required": ["import"],
+											"properties": {
+												"import": {
+													"type": "string",
+													"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+													"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+												}
+											},
+											"additionalProperties": false
+										},
+										{
+											"type": "array",
+											"items": {}
+										},
+										{
+											"type": "object",
+											"patternProperties": {
+												"^.*$": {}
+											}
+										}
+									],
+									"description": "A JSON value, or { \"import\": \"./file.ts#name\" } for a value created by hand (nested at any depth)."
+								}
+							},
+							"description": "Options passed to the provider factory."
+						}
+					},
+					"additionalProperties": false
+				},
+				{
+					"type": "object",
+					"required": ["import"],
+					"properties": {
+						"import": {
+							"type": "string",
+							"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+							"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+						}
+					},
+					"additionalProperties": false
+				}
+			],
+			"description": "\"inMemory\", { \"use\": \"<catalog name>\", \"options\": {...} } or { \"import\": \"./file.ts#provider\" }."
+		},
 		"properties": {
 			"type": "object",
 			"patternProperties": {
@@ -43,9 +116,7 @@
 					"anyOf": [
 						{
 							"type": "object",
-							"required": [
-								"base"
-							],
+							"required": ["base"],
 							"properties": {
 								"base": {
 									"type": "string",
@@ -66,9 +137,7 @@
 						},
 						{
 							"type": "object",
-							"required": [
-								"enum"
-							],
+							"required": ["enum"],
 							"properties": {
 								"enum": {
 									"type": "array",
@@ -106,10 +175,7 @@
 						},
 						{
 							"type": "object",
-							"required": [
-								"opaque",
-								"import"
-							],
+							"required": ["opaque", "import"],
 							"properties": {
 								"opaque": {
 									"type": "boolean",
@@ -138,9 +204,7 @@
 			"patternProperties": {
 				"^[A-Z][A-Za-z0-9]*$": {
 					"type": "object",
-					"required": [
-						"fields"
-					],
+					"required": ["fields"],
 					"properties": {
 						"fields": {
 							"type": "object",
@@ -164,9 +228,7 @@
 			"patternProperties": {
 				"^[A-Z][A-Za-z0-9]*$": {
 					"type": "object",
-					"required": [
-						"fields"
-					],
+					"required": ["fields"],
 					"properties": {
 						"fields": {
 							"type": "object",
@@ -218,9 +280,7 @@
 			"patternProperties": {
 				"^[A-Z][A-Za-z0-9]*$": {
 					"type": "object",
-					"required": [
-						"fields"
-					],
+					"required": ["fields"],
 					"properties": {
 						"fields": {
 							"type": "object",
@@ -272,9 +332,7 @@
 			"patternProperties": {
 				"^[A-Z][A-Za-z0-9]*$": {
 					"type": "object",
-					"required": [
-						"fields"
-					],
+					"required": ["fields"],
 					"properties": {
 						"fields": {
 							"type": "object",
@@ -298,21 +356,109 @@
 			"patternProperties": {
 				"^[A-Z][A-Za-z0-9]*$": {
 					"type": "object",
-					"required": [
-						"entity",
-						"actions"
-					],
+					"required": ["entity", "actions"],
 					"properties": {
 						"entity": {
 							"type": "string",
 							"description": "The entity it stores."
+						},
+						"deletion": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "hard"
+								},
+								{
+									"type": "string",
+									"const": "soft"
+								}
+							],
+							"default": "hard",
+							"description": "Physical removal or retained rows hidden by deletedAt."
 						},
 						"actions": {
 							"type": "array",
 							"items": {
 								"type": "string"
 							},
-							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), create, update, delete, count."
+							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, create, update, delete, count."
+						},
+						"provider": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "inMemory"
+								},
+								{
+									"type": "object",
+									"required": ["use"],
+									"properties": {
+										"use": {
+											"type": "string",
+											"description": "A provider of the catalog given to codegen (inMemory is built in)."
+										},
+										"options": {
+											"type": "object",
+											"patternProperties": {
+												"^.*$": {
+													"anyOf": [
+														{
+															"type": "string"
+														},
+														{
+															"type": "number"
+														},
+														{
+															"type": "boolean"
+														},
+														{
+															"type": "null"
+														},
+														{
+															"type": "object",
+															"required": ["import"],
+															"properties": {
+																"import": {
+																	"type": "string",
+																	"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+																	"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+																}
+															},
+															"additionalProperties": false
+														},
+														{
+															"type": "array",
+															"items": {}
+														},
+														{
+															"type": "object",
+															"patternProperties": {
+																"^.*$": {}
+															}
+														}
+													],
+													"description": "A JSON value, or { \"import\": \"./file.ts#name\" } for a value created by hand (nested at any depth)."
+												}
+											},
+											"description": "Options passed to the provider factory."
+										}
+									},
+									"additionalProperties": false
+								},
+								{
+									"type": "object",
+									"required": ["import"],
+									"properties": {
+										"import": {
+											"type": "string",
+											"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+											"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"description": "\"inMemory\", { \"use\": \"<catalog name>\", \"options\": {...} } or { \"import\": \"./file.ts#provider\" }."
 						},
 						"relations": {
 							"type": "array",
@@ -335,8 +481,648 @@
 			"additionalProperties": false,
 			"description": "Repositories of entities, by name."
 		},
+		"exceptions": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": ["layer"],
+					"properties": {
+						"layer": {
+							"type": "string",
+							"description": "One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output (see afora_catalog)."
+						},
+						"message": {
+							"type": "string",
+							"description": "The message. \"<Name>.\" when omitted."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Exceptions (exceptionOf), by name."
+		},
 		"useCases": {
-			"description": "Reserved. Not supported in v1."
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": ["input", "response", "implementation"],
+					"properties": {
+						"description": {
+							"type": "string"
+						},
+						"tags": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Tags, for documentation."
+						},
+						"deprecated": {
+							"type": "boolean",
+							"default": false
+						},
+						"input": {
+							"anyOf": [
+								{
+									"type": "string",
+									"pattern": "^[A-Z][A-Za-z0-9]*$",
+									"description": "The name of a declared blueprint."
+								},
+								{
+									"type": "object",
+									"required": ["fields"],
+									"properties": {
+										"fields": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"$ref": "#/$defs/Field"
+												}
+											},
+											"additionalProperties": false,
+											"description": "Fields by key."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+						},
+						"response": {
+							"anyOf": [
+								{
+									"type": "string",
+									"pattern": "^[A-Z][A-Za-z0-9]*$",
+									"description": "The name of a declared blueprint."
+								},
+								{
+									"type": "object",
+									"required": ["fields"],
+									"properties": {
+										"fields": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"$ref": "#/$defs/Field"
+												}
+											},
+											"additionalProperties": false,
+											"description": "Fields by key."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+						},
+						"context": {
+							"anyOf": [
+								{
+									"type": "string",
+									"pattern": "^[A-Z][A-Za-z0-9]*$",
+									"description": "The name of a declared blueprint."
+								},
+								{
+									"type": "object",
+									"required": ["fields"],
+									"properties": {
+										"fields": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"$ref": "#/$defs/Field"
+												}
+											},
+											"additionalProperties": false,
+											"description": "Fields by key."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+						},
+						"dependencies": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"type": "string"
+								}
+							},
+							"description": "Key -> name of a declared use case, repository or environment."
+						},
+						"errors": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Declared exceptions, or exceptions exported by @afora/core (afora_catalog coreExceptions), a caller should expect."
+						},
+						"implementation": {
+							"anyOf": [
+								{
+									"type": "object",
+									"required": ["steps"],
+									"properties": {
+										"steps": {
+											"type": "array",
+											"items": {
+												"anyOf": [
+													{
+														"type": "object",
+														"required": ["find"],
+														"properties": {
+															"find": {
+																"type": "string",
+																"description": "\"<repository>.<read action>\", e.g. \"users.findByEmail\"."
+															},
+															"args": {
+																"type": "array",
+																"items": {
+																	"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+																}
+															},
+															"as": {
+																"type": "string",
+																"description": "Binds the result."
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
+														"required": ["ensure", "value", "error"],
+														"properties": {
+															"ensure": {
+																"anyOf": [
+																	{
+																		"type": "string",
+																		"const": "exists"
+																	},
+																	{
+																		"type": "string",
+																		"const": "absent"
+																	},
+																	{
+																		"type": "string",
+																		"const": "equals"
+																	},
+																	{
+																		"type": "string",
+																		"const": "notEquals"
+																	},
+																	{
+																		"type": "string",
+																		"const": "true"
+																	},
+																	{
+																		"type": "string",
+																		"const": "false"
+																	}
+																],
+																"description": "What to check; throws `error` when it fails."
+															},
+															"value": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															},
+															"other": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															},
+															"error": {
+																"anyOf": [
+																	{
+																		"type": "string"
+																	},
+																	{
+																		"type": "object",
+																		"required": ["core"],
+																		"properties": {
+																			"core": {
+																				"type": "string"
+																			}
+																		},
+																		"additionalProperties": false
+																	}
+																]
+															},
+															"details": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
+														"required": ["build", "values", "as"],
+														"properties": {
+															"build": {
+																"type": "string",
+																"description": "A declared record or entity."
+															},
+															"values": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															},
+															"as": {
+																"type": "string"
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
+														"required": ["change", "key", "value"],
+														"properties": {
+															"change": {
+																"type": "string",
+																"description": "A $reference to a record."
+															},
+															"key": {
+																"type": "string"
+															},
+															"value": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															},
+															"as": {
+																"type": "string",
+																"description": "Binds the result."
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
+														"required": ["invoke", "method"],
+														"properties": {
+															"invoke": {
+																"type": "string",
+																"description": "A $reference to a record."
+															},
+															"method": {
+																"type": "string"
+															},
+															"args": {
+																"type": "array",
+																"items": {
+																	"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+																}
+															},
+															"as": {
+																"type": "string",
+																"description": "Binds the result."
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
+														"required": ["create", "value"],
+														"properties": {
+															"create": {
+																"type": "string",
+																"description": "A repository dependency."
+															},
+															"value": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															},
+															"as": {
+																"type": "string",
+																"description": "Binds the result."
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
+														"required": ["update", "value"],
+														"properties": {
+															"update": {
+																"type": "string",
+																"description": "A repository dependency."
+															},
+															"value": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															},
+															"as": {
+																"type": "string",
+																"description": "Binds the result."
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
+														"required": ["delete", "value"],
+														"properties": {
+															"delete": {
+																"type": "string",
+																"description": "A repository dependency."
+															},
+															"value": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															},
+															"as": {
+																"type": "string",
+																"description": "Binds the result."
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
+														"required": ["call", "input"],
+														"properties": {
+															"call": {
+																"type": "string",
+																"description": "A use case dependency."
+															},
+															"input": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															},
+															"as": {
+																"type": "string",
+																"description": "Binds the result."
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
+														"required": ["run", "fn"],
+														"properties": {
+															"run": {
+																"type": "string",
+																"description": "A name, unique in the use case."
+															},
+															"fn": {
+																"type": "object",
+																"required": ["import"],
+																"properties": {
+																	"import": {
+																		"type": "string",
+																		"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+																		"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+																	}
+																},
+																"additionalProperties": false
+															},
+															"args": {
+																"type": "array",
+																"items": {
+																	"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+																}
+															},
+															"as": {
+																"type": "string",
+																"description": "Binds the result."
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
+														"required": ["return"],
+														"properties": {
+															"return": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															}
+														},
+														"additionalProperties": false
+													}
+												],
+												"description": "A step: find, ensure, build, change, invoke, create, update, delete, call, run or return (exactly one, last)."
+											},
+											"minItems": 1
+										}
+									},
+									"additionalProperties": false
+								},
+								{
+									"type": "object",
+									"required": ["import"],
+									"properties": {
+										"import": {
+											"type": "string",
+											"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+											"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"description": "{ \"steps\": [...] } (complete, no hand-written file) or { \"import\": \"./file.ts#Class\" } (a class extending the generated <Name>Base)."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Use cases, by name."
+		},
+		"commands": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": ["useCases"],
+					"properties": {
+						"description": {
+							"type": "string"
+						},
+						"tags": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Tags, for documentation."
+						},
+						"context": {
+							"anyOf": [
+								{
+									"type": "string",
+									"pattern": "^[A-Z][A-Za-z0-9]*$",
+									"description": "The name of a declared blueprint."
+								},
+								{
+									"type": "object",
+									"required": ["fields"],
+									"properties": {
+										"fields": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"$ref": "#/$defs/Field"
+												}
+											},
+											"additionalProperties": false,
+											"description": "Fields by key."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+						},
+						"useCases": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"type": "string"
+								}
+							},
+							"minProperties": 1,
+							"description": "Operation name -> name of a declared use case (e.g. { \"register\": \"Register\" })."
+						},
+						"transaction": {
+							"type": "boolean",
+							"default": false,
+							"description": "Runs every call in a transaction of the provider of the repositories (checked when the code runs: the provider must support it)."
+						},
+						"environments": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Environments it depends on: command.env, the event handlers and the use cases that declare them get their variables."
+						},
+						"events": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "after-commit"
+								},
+								{
+									"type": "string",
+									"const": "manual"
+								},
+								{
+									"type": "object",
+									"required": ["import"],
+									"properties": {
+										"import": {
+											"type": "string",
+											"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+											"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"default": "after-commit",
+							"description": "\"after-commit\" (default), \"manual\" or { \"import\": \"./events.ts#dispatch\" } (a handler written by hand)."
+						},
+						"onEventError": {
+							"type": "object",
+							"required": ["import"],
+							"properties": {
+								"import": {
+									"type": "string",
+									"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+									"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+								}
+							},
+							"additionalProperties": false
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Commands (commandOf), by name."
+		},
+		"outputs": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Z][A-Za-z0-9]*$": {
+					"type": "object",
+					"required": ["commands", "pipe"],
+					"properties": {
+						"commands": {
+							"type": "array",
+							"items": {
+								"type": "string",
+								"pattern": "^[A-Z][A-Za-z0-9]*$"
+							},
+							"minItems": 1,
+							"uniqueItems": true,
+							"description": "Names of declared commands."
+						},
+						"statuses": {
+							"type": "object",
+							"patternProperties": {
+								"^.*$": {
+									"type": "integer",
+									"minimum": 400,
+									"maximum": 599
+								}
+							},
+							"description": "HTTP-style status by exception name (declared or exported by @afora/core)."
+						},
+						"pipe": {
+							"type": "array",
+							"items": {
+								"anyOf": [
+									{
+										"type": "object",
+										"required": ["transform"],
+										"properties": {
+											"transform": {
+												"type": "string",
+												"description": "A transform of the stage catalog (afora_catalog stages)."
+											},
+											"options": {
+												"type": "object",
+												"patternProperties": {
+													"^.*$": {}
+												},
+												"description": "JSON options of the stage factory."
+											}
+										},
+										"additionalProperties": false
+									},
+									{
+										"type": "object",
+										"required": ["sink"],
+										"properties": {
+											"sink": {
+												"type": "string",
+												"description": "A sink of the stage catalog; only the last stage."
+											},
+											"options": {
+												"type": "object",
+												"patternProperties": {
+													"^.*$": {}
+												},
+												"description": "JSON options of the stage factory."
+											}
+										},
+										"additionalProperties": false
+									},
+									{
+										"type": "object",
+										"required": ["import"],
+										"properties": {
+											"import": {
+												"type": "string",
+												"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+												"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+											}
+										},
+										"additionalProperties": false
+									}
+								],
+								"description": "{ \"transform\": name, \"options\"? }, { \"sink\": name, \"options\"? } or { \"import\": \"./stages.ts#auth\" } (a stage written by hand)."
+							},
+							"description": "Transforms, then at most one sink as the last stage."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"additionalProperties": false,
+			"description": "Outputs (outputOf), by name."
 		}
 	},
 	"additionalProperties": false,
@@ -351,9 +1137,7 @@
 				},
 				{
 					"type": "object",
-					"required": [
-						"type"
-					],
+					"required": ["type"],
 					"properties": {
 						"type": {
 							"type": "string",
@@ -399,9 +1183,7 @@
 				},
 				{
 					"type": "object",
-					"required": [
-						"enum"
-					],
+					"required": ["enum"],
 					"properties": {
 						"enum": {
 							"type": "array",
@@ -463,9 +1245,7 @@
 				},
 				{
 					"type": "object",
-					"required": [
-						"fields"
-					],
+					"required": ["fields"],
 					"properties": {
 						"fields": {
 							"type": "object",

@@ -1,0 +1,87 @@
+{
+	"version": 1,
+	"name": "accounts",
+	"output": { "dir": "src/domain" },
+	"provider": "inMemory",
+	"entities": {
+		"User": {
+			"fields": { "name": "text", "email": "email", "password": "password" },
+			"unique": ["email"]
+		}
+	},
+	"repositories": {
+		"Users": { "entity": "User", "actions": ["findByEmail", "create"] }
+	},
+	"exceptions": {
+		"UserAlreadyExists": {
+			"layer": "use-case",
+			"message": "A user with this email already exists."
+		}
+	},
+	"useCases": {
+		"Register": {
+			"input": {
+				"fields": {
+					"name": "text",
+					"email": "email",
+					"plainPassword": "string"
+				}
+			},
+			"response": { "fields": { "user": "User" } },
+			"dependencies": { "users": "Users" },
+			"errors": ["UserAlreadyExists"],
+			"implementation": {
+				"steps": [
+					{
+						"find": "users.findByEmail",
+						"args": ["$input.email"],
+						"as": "existing"
+					},
+					{
+						"ensure": "absent",
+						"value": "$existing",
+						"error": "UserAlreadyExists"
+					},
+					{
+						"run": "hashPassword",
+						"fn": { "import": "../hash-password.ts#hashPassword" },
+						"args": ["$input.plainPassword"],
+						"as": "hash"
+					},
+					{
+						"build": "User",
+						"values": {
+							"name": "$input.name",
+							"email": "$input.email",
+							"password": "$hash"
+						},
+						"as": "user"
+					},
+					{ "create": "users", "value": "$user", "as": "saved" },
+					{ "return": { "user": "$saved" } }
+				]
+			}
+		}
+	},
+	"commands": {
+		"Accounts": { "useCases": { "register": "Register" }, "transaction": true }
+	},
+	"outputs": {
+		"Api": {
+			"commands": ["Accounts"],
+			"statuses": { "UserAlreadyExists": 409 },
+			"pipe": [
+				{
+					"sink": "hono",
+					"options": {
+						"basePath": "/api",
+						"docs": {
+							"path": "/openapi.json",
+							"info": { "title": "Accounts", "version": "1.0.0" }
+						}
+					}
+				}
+			]
+		}
+	}
+}

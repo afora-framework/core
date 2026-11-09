@@ -3,12 +3,15 @@ import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
 	COLLECTION_KEYS,
+	type CodegenOptions,
 	confinePath,
+	type ProviderCatalogEntry,
 	type ResolvedSpec,
 	resolveExtended,
 	type Spec,
 	type SpecIssue,
 	SpecLoadError,
+	type StageCatalogEntry,
 	validateSpec,
 } from "@afora/codegen";
 import { ToolError } from "./extract";
@@ -20,12 +23,26 @@ export interface Project {
 	readonly root: string;
 	/** `src/app.ts#App`: where to extract the spec from when there is no afora.json. */
 	readonly app?: string;
+	/** External providers `use` may name in the spec (`inMemory` is built in). */
+	readonly providers?: readonly ProviderCatalogEntry[];
+	/** External stages an output's `pipe` may name (`select` and `openapi` are built in). */
+	readonly stages?: readonly StageCatalogEntry[];
+}
+
+/** What codegen needs from the project besides the spec. */
+export function codegenOptionsOf(project: Project): CodegenOptions {
+	return {
+		...(project.providers ? { providers: project.providers } : {}),
+		...(project.stages ? { stages: project.stages } : {}),
+	};
 }
 
 /** The project directory, resolved; it must exist. */
 export async function openProject(
 	directory: string,
 	app?: string,
+	providers?: readonly ProviderCatalogEntry[],
+	stages?: readonly StageCatalogEntry[],
 ): Promise<Project> {
 	let root: string;
 	try {
@@ -33,7 +50,12 @@ export async function openProject(
 	} catch {
 		throw new Error(`The project directory ${directory} does not exist.`);
 	}
-	return { root, ...(app ? { app } : {}) };
+	return {
+		root,
+		...(app ? { app } : {}),
+		...(providers ? { providers } : {}),
+		...(stages ? { stages } : {}),
+	};
 }
 
 /** The spec on disk, or undefined when there is none. */
@@ -74,8 +96,8 @@ const TOP_ORDER = [
 	"name",
 	"extends",
 	"output",
+	"provider",
 	...COLLECTION_KEYS,
-	"useCases",
 ];
 
 function ordered(spec: Spec): Spec {
@@ -123,7 +145,7 @@ export async function validateInProject(
 		typeof spec === "object" && spec !== null
 			? await extendedOf(project, spec as Spec)
 			: { extended: {}, issues: [] };
-	const issues = validateSpec(spec, loaded.extended);
+	const issues = validateSpec(spec, loaded.extended, codegenOptionsOf(project));
 	const known = new Set(
 		issues.map((issue) => `${issue.code}@${issue.path.join(".")}`),
 	);

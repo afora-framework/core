@@ -1,14 +1,27 @@
 import { catalog, recordPlugin } from "./catalog";
+import { checkCommand } from "./command";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
-import { type Decl, issue, type Scope, scopeOf } from "./scope";
+import { checkOutput, checkStageCatalog, stageEntries } from "./output";
+import { checkCatalog, checkProvider } from "./provider";
+import {
+	checkEnvironmentNames,
+	type Decl,
+	issue,
+	type Scope,
+	scopeOf,
+} from "./scope";
 import { isIdentifier, isObject } from "./spec/field";
 import {
 	COLLECTIONS,
+	type CodegenOptions,
 	KIND_OF,
+	type ProviderCatalogEntry,
 	type ResolvedSpec,
 	type SpecIssue,
+	type StageCatalogEntry,
 } from "./spec/types";
+import { checkException, checkUseCase } from "./use-case";
 
 const TOP_LEVEL_KEYS = [
 	"$schema",
@@ -16,7 +29,7 @@ const TOP_LEVEL_KEYS = [
 	"name",
 	"extends",
 	"output",
-	"useCases",
+	"provider",
 	...COLLECTIONS,
 ];
 
@@ -639,19 +652,49 @@ function checkRecord(
 	}
 }
 
-function checkRepository(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
+function checkRepository(
+	decl: Decl,
+	scope: Scope,
+	providers: readonly ProviderCatalogEntry[],
+	issues: SpecIssue[],
+): void {
 	const path = ["repositories", decl.name];
 	const { spec } = decl;
 	for (const key of Object.keys(spec)) {
-		if (!["entity", "actions", "relations", "environments"].includes(key)) {
+		if (
+			![
+				"entity",
+				"actions",
+				"provider",
+				"deletion",
+				"relations",
+				"environments",
+			].includes(key)
+		) {
 			issues.push(
 				issue(
 					[...path, key],
 					"unknown_key",
-					`"${key}" is not valid here. Valid keys: entity, actions, relations, environments.`,
+					`"${key}" is not valid here. Valid keys: entity, actions, provider, deletion, relations, environments.`,
 				),
 			);
 		}
+	}
+	if (spec.provider !== undefined) {
+		checkProvider(spec.provider, [...path, "provider"], providers, issues);
+	}
+	if (
+		spec.deletion !== undefined &&
+		spec.deletion !== "hard" &&
+		spec.deletion !== "soft"
+	) {
+		issues.push(
+			issue(
+				[...path, "deletion"],
+				"invalid_deletion",
+				'Expected "hard" or "soft".',
+			),
+		);
 	}
 	const target =
 		typeof spec.entity === "string" ? scope.decls.get(spec.entity) : undefined;
@@ -692,14 +735,25 @@ function checkRepository(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 				continue;
 			}
 			seen.add(action);
-			if (["create", "update", "delete", "count"].includes(action)) continue;
+			if (
+				[
+					"create",
+					"update",
+					"delete",
+					"count",
+					"findMany",
+					"exists",
+					"findPage",
+				].includes(action)
+			)
+				continue;
 			const match = /^(findBy|findManyBy)(.+)$/.exec(action);
 			if (!match) {
 				issues.push(
 					issue(
 						here,
 						"unknown_action",
-						`"${action}" is not an action. Use create, update, delete, count, findBy<Key> or findManyBy<Key>.`,
+						`"${action}" is not an action. Use create, update, delete, count, findMany, exists, findPage, findBy<Key> or findManyBy<Key>.`,
 					),
 				);
 				continue;
@@ -792,38 +846,32 @@ function checkRepository(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 		}
 	}
 
-	const environments =
-		checkStringList(spec.environments, [...path, "environments"], issues) ?? [];
-	for (const [index, name] of environments.entries()) {
-		const here = [...path, "environments", index];
-		const other = scope.decls.get(name);
-		if (other?.kind !== "environment") {
-			issues.push(
-				issue(
-					here,
-					"unknown_environment",
-					`"${name}" is not a declared environment.`,
-				),
-			);
-		} else if (environments.indexOf(name) !== index) {
-			issues.push(
-				issue(here, "duplicate_environment", `"${name}" is listed twice.`),
-			);
-		}
-	}
+	checkEnvironmentNames(
+		spec.environments,
+		[...path, "environments"],
+		scope,
+		issues,
+	);
 }
 
 /** Everything that makes `input` an invalid `afora.json`, never throwing. */
 export function validateSpec(
 	input: unknown,
 	extended: Readonly<Record<string, ResolvedSpec>> = {},
+	options: CodegenOptions = {},
 ): SpecIssue[] {
 	const issues: SpecIssue[] = [];
 	if (!isObject(input)) {
 		return [issue([], "invalid_spec", "The spec must be a JSON object.")];
 	}
 	try {
-		check(input, extended, issues);
+		check(
+			input,
+			extended,
+			options.providers ?? [],
+			options.stages ?? [],
+			issues,
+		);
 	} catch (error) {
 		issues.push(
 			issue(
@@ -839,8 +887,16 @@ export function validateSpec(
 function check(
 	input: Record<string, unknown>,
 	extended: Readonly<Record<string, ResolvedSpec>>,
+	providers: readonly ProviderCatalogEntry[],
+	stages: readonly StageCatalogEntry[],
 	issues: SpecIssue[],
 ): void {
+	checkCatalog(providers, issues);
+	checkStageCatalog(stages, issues);
+	const stageMap = stageEntries(stages);
+	if (input.provider !== undefined) {
+		checkProvider(input.provider, ["provider"], providers, issues);
+	}
 	for (const key of Object.keys(input)) {
 		if (!TOP_LEVEL_KEYS.includes(key)) {
 			issues.push(
@@ -855,15 +911,6 @@ function check(
 	if (input.version !== 1) {
 		issues.push(
 			issue(["version"], "unsupported_version", '"version" must be 1.'),
-		);
-	}
-	if (input.useCases !== undefined) {
-		issues.push(
-			issue(
-				["useCases"],
-				"use_cases_not_supported",
-				'"useCases" is reserved: use cases are not supported in v1. Remove it.',
-			),
 		);
 	}
 	if (
@@ -919,6 +966,15 @@ function check(
 	const own = [...scope.decls.values()].filter(
 		(decl) => decl.via === undefined,
 	);
+	const checkInline = (value: unknown, path: readonly (string | number)[]) => {
+		const fields = parseFields(value, path, issues);
+		if (!fields) return undefined;
+		checkKeys(fields, path, "inline", issues);
+		for (const [key, field] of Object.entries(fields)) {
+			checkField(field, [...path, key], scope, "inline", issues);
+		}
+		return fields;
+	};
 	for (const decl of own) {
 		switch (decl.kind) {
 			case "property":
@@ -937,7 +993,19 @@ function check(
 				checkFieldsOf(decl, "environments", "environment", scope, issues);
 				break;
 			case "repository":
-				checkRepository(decl, scope, issues);
+				checkRepository(decl, scope, providers, issues);
+				break;
+			case "exception":
+				checkException(decl, issues);
+				break;
+			case "useCase":
+				checkUseCase(decl, scope, checkInline, issues);
+				break;
+			case "command":
+				checkCommand(decl, scope, checkInline, issues);
+				break;
+			case "output":
+				checkOutput(decl, scope, stageMap, issues);
 				break;
 		}
 	}

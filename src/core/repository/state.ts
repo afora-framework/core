@@ -14,6 +14,7 @@ export interface RepositoryState {
 	readonly name: string;
 	readonly entity: AnyRepositoryEntity;
 	readonly actions: readonly string[];
+	readonly deletion: "hard" | "soft";
 	readonly provider: IRepositoryProvider;
 	/** Whether `settings.provider` was given, and not the default one. */
 	readonly explicitProvider: boolean;
@@ -61,7 +62,10 @@ export function contextOf(state: RepositoryState): RepositoryContext {
 export interface RepositoryInspection {
 	readonly entity: AnyRepositoryEntity;
 	readonly actions: readonly string[];
+	readonly deletion: "hard" | "soft";
 	readonly explicitProvider: boolean;
+	/** The provider, only when the repository declared it. */
+	readonly provider: IRepositoryProvider | undefined;
 	readonly environments: readonly object[];
 	/** The repository state of each related entity class; compare with `inspect(...).state`. */
 	readonly relations: readonly object[];
@@ -79,7 +83,9 @@ export function inspectRepository(
 	return {
 		entity: state.entity,
 		actions: state.actions,
+		deletion: state.deletion,
 		explicitProvider: state.explicitProvider,
+		provider: state.explicitProvider ? state.provider : undefined,
 		environments:
 			environment === undefined
 				? []

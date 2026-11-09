@@ -2,10 +2,13 @@
 	"$schema": "https://unpkg.com/knip@6/schema.json",
 	"ignore": ["examples/**"],
 	"ignoreBinaries": ["run.ts"],
+	"tags": ["-@internal"],
 	"workspaces": {
 		".": {
 			"entry": [
 				"src/index.ts",
+				"src/experimental.ts",
+				"src/testing/index.ts",
 				"src/**/*.sandbox.ts",
 				"scripts/*.{ts,mjs}"
 			],
@@ -19,6 +22,14 @@
 				"tests/**/*.test.ts"
 			],
 			"project": ["src/**/*.ts", "scripts/*.ts", "tests/**/*.ts"]
+		},
+		"packages/hono": {
+			"entry": ["src/index.ts", "tests/**/*.test.ts"],
+			"project": ["src/**/*.ts", "tests/**/*.ts"]
+		},
+		"packages/drizzle": {
+			"entry": ["src/index.ts", "src/**/*.test.ts"],
+			"project": ["src/**/*.ts"]
 		},
 		"packages/mcp": {
 			"entry": [
