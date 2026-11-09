@@ -33,7 +33,7 @@
 		"dist"
 	],
 	"bin": {
-		"afora-mcp": "./dist/bin.js"
+		"afora-mcp": "dist/bin.js"
 	},
 	"engines": {
 		"bun": ">=1.4.4",

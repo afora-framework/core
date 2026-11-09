@@ -31,7 +31,7 @@
       "name": "@afora/codegen",
       "version": "0.0.3",
       "bin": {
-        "afora-codegen": "./dist/cli.js",
+        "afora-codegen": "dist/cli.js",
       },
       "devDependencies": {
         "@types/bun": "^1.4.4",
@@ -75,7 +75,7 @@
       "name": "@afora/mcp",
       "version": "0.0.3",
       "bin": {
-        "afora-mcp": "./dist/bin.js",
+        "afora-mcp": "dist/bin.js",
       },
       "dependencies": {
         "@afora/codegen": "workspace:*",
