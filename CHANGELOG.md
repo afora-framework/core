@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.0.7 — unreleased (draft: dated when it is published)
 
 ### Changed
 
+- `@afora/codegen` requires `@afora/core` 0.0.7 or later: a spec with standard use cases generates code that uses `StdUseCases`.
 - `commandOf` is now the standard one, `commandBuilderOf(StdUseCases)`: its declared type is `CommandBuilder<StdUseCaseContext>` and `useCases` also accepts a function of the standard use cases. Calls with an object are unchanged; `commandBuilderOf()` gives the one without them.
 - `statusOf` gives 404 for `UseCaseEntityNotFound`, 409 for `UseCaseEntityConflict` and 401 for `UseCaseInvalidCredentials`.
 
@@ -20,7 +21,7 @@
 - Repositories: the `restore` action brings a soft-deleted entity back, by entity or id, clearing `deletedAt` and stamping `updatedAt`; it needs `deletion: "soft"` (`InvalidRepositoryDeclaration` otherwise) and a provider whose `update` clears a value that is left out, which `providerContract` now checks. Steps have `{ restore: "<repo>", value, as? }`, and `afora.json` takes the action (`restore_needs_soft` without soft deletion) and the step. Also exported: `RepositoryRestore`.
 - Steps: a `change` step takes `ifPresent: true`, which skips it when its value resolves to `undefined` (a partial update), and the `args` of `find`, `invoke` and `run` may be one reference to a list, which is spread (`args: "$input.tags"`). Both are in `afora.json` too. Also exported: `StepArgs`.
 
-## 0.0.6 — unreleased (draft: dated when it is published)
+## 0.0.6 — 2026-11-10
 
 ### Changed
 

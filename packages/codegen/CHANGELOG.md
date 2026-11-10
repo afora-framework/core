@@ -13,7 +13,7 @@
 
 ### Added
 
-- Standard use cases in `afora.json`: `{ "generic": "create", "repository": "Posts", "options": {...} }` declares a use case of `StdUseCases` made for a repository, generated as `export const CreatePost = StdUseCases.context.create(Posts, {...})` and extracted back as written, with no import to map. `catalog().useCases` lists them (`GenericUseCaseInfo`: `actions`, `plugins`, `options`), and the validator reports `unknown_generic`, `unknown_repository`, `generic_requires_action`, `generic_requires_plugin` and `invalid_generic_option`. Also exported: `GenericUseCaseSpec`. Needs an `@afora/core` with `StdUseCases`.
+- Standard use cases in `afora.json`: `{ "generic": "create", "repository": "Posts", "options": {...} }` declares a use case of `StdUseCases` made for a repository, generated as `export const CreatePost = StdUseCases.context.create(Posts, {...})` and extracted back as written, with no import to map. `catalog().useCases` lists them (`GenericUseCaseInfo`: `actions`, `plugins`, `options`), and the validator reports `unknown_generic`, `unknown_repository`, `generic_requires_action`, `generic_requires_plugin` and `invalid_generic_option`. Also exported: `GenericUseCaseSpec`. Requires `@afora/core` 0.0.7 or later.
 - The `restore` repository action (`restore_needs_soft` without `"deletion": "soft"`) and the `restore` step; `ifPresent` on a `change` step; `args` as one `$reference` to a list.
 
 - `commands.<Name>.environments`: the environments of a command, checked like those of a repository (`unknown_environment`, `duplicate_environment`, `invalid_option`), generated as `environmentDependencies`, dropped when empty by normalization, and extracted back from `describe().commands`.
