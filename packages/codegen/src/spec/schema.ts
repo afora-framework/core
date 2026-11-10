@@ -337,7 +337,7 @@ const RepositoryDeclaration = Type.Object(
 		),
 		actions: Type.Array(Type.String(), {
 			description:
-				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), count.",
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, forEachPage (walks the pages of a cursor query; not a step), create, update, delete, restore (soft deletion only), count.",
 		}),
 		provider: Type.Optional(ProviderOrKey),
 		relations: Type.Optional(

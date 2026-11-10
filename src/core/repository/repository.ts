@@ -33,7 +33,7 @@ import {
 	stateOf,
 	states,
 } from "./state";
-import type { RepositoryQuery } from "./types/query.interface";
+import type { RepositoryOrder, RepositoryQuery } from "./types/query.interface";
 import type {
 	AnyRepository,
 	AnyRepositoryEntity,
@@ -246,7 +246,20 @@ const findPage = action(async (self, query: unknown) => {
 /** The options of the query of `findCursor`. */
 const CURSOR_OPTIONS = ["where", "orderBy", "limit", "withDeleted", "after"];
 
-const findCursor = action(async (self, query: unknown = {}) => {
+/** A cursor query validated once, to read any number of its pages. */
+interface CursorRead {
+	readonly where: RepositoryQuery["where"];
+	readonly orderBy: readonly RepositoryOrder[];
+	readonly withDeleted: boolean;
+	readonly limit: number;
+}
+
+/**
+ * The query of `findCursor` validated and normalized for the provider, the
+ * `id` added as its last order; throws `InvalidRepositoryQuery` when invalid
+ * or when the provider does not read by cursor.
+ */
+function cursorReadOf(self: Internal, query: unknown): CursorRead {
 	const { context } = self;
 	const fail = (reason: string): never => {
 		throw new InvalidRepositoryQuery({
@@ -260,7 +273,6 @@ const findCursor = action(async (self, query: unknown = {}) => {
 		(key, value) => queryValueOf(context, key, value),
 		CURSOR_OPTIONS,
 	);
-	const { after } = query as { readonly after?: unknown };
 	const { where, limit = 20 } = prepared;
 	if (limit < 1) fail("Expected a positive integer for limit.");
 	const withDeleted = prepared.withDeleted ?? stateOf(self).deletion === "hard";
@@ -276,7 +288,13 @@ const findCursor = action(async (self, query: unknown = {}) => {
 	}
 	if (self.provider.capabilities?.keyset !== true)
 		fail("The provider does not read by cursor (capabilities.keyset).");
+	return { where, orderBy, withDeleted, limit };
+}
 
+/** The page of `read` after the cursor `after` (the first one when `undefined`). */
+async function readCursor(self: Internal, read: CursorRead, after: unknown) {
+	const { context } = self;
+	const { where, orderBy, withDeleted, limit } = read;
 	const rows = await self.provider.findMany(context, {
 		where,
 		orderBy,
@@ -296,7 +314,70 @@ const findCursor = action(async (self, query: unknown = {}) => {
 				? encodeCursor(orderBy, last)
 				: undefined,
 	};
-});
+}
+
+const findCursor = action(async (self, query: unknown = {}) =>
+	readCursor(
+		self,
+		cursorReadOf(self, query),
+		(query as { readonly after?: unknown }).after,
+	),
+);
+
+/** Whether the walk must stop, by the `until` of `forEachPage`. */
+function stopperOf(source: string, until: unknown): () => boolean {
+	if (until === undefined) return () => false;
+	if (typeof until === "function") return () => Boolean(until());
+	const deadline =
+		until instanceof Date
+			? until.getTime()
+			: typeof until === "number"
+				? until
+				: Number.NaN;
+	if (Number.isNaN(deadline)) {
+		throw new InvalidRepositoryQuery({
+			source,
+			details: {
+				reason:
+					"Expected until to be a Date, epoch milliseconds or a function.",
+			},
+		});
+	}
+	return () => Date.now() >= deadline;
+}
+
+const forEachPage = action(
+	async (self, query: unknown, fn: unknown, options: unknown) => {
+		const { context } = self;
+		if (typeof fn !== "function") {
+			throw new InvalidRepositoryQuery({
+				source: context.name,
+				details: { reason: "Expected a function to run on each page." },
+			});
+		}
+		const read = cursorReadOf(self, query ?? {});
+		const stop = stopperOf(
+			context.name,
+			(options as { readonly until?: unknown } | undefined)?.until,
+		);
+		let after = (query as { readonly after?: string } | undefined)?.after;
+		let pages = 0;
+		let items = 0;
+		// `until` is checked before each page, never while one runs.
+		while (!stop()) {
+			const page = await readCursor(self, read, after);
+			// Only the last page can be empty: nothing left after `after`.
+			if (page.items.length > 0) {
+				await fn(page.items, { index: pages, next: page.next });
+				pages += 1;
+				items += page.items.length;
+			}
+			if (page.next === undefined) return { done: true, pages, items };
+			after = page.next;
+		}
+		return { done: false, next: after, pages, items };
+	},
+);
 
 const create = action(async (self, input: unknown) => {
 	const { entity: Entity } = self.context;
@@ -390,7 +471,7 @@ const NEEDS: Readonly<Record<string, readonly (keyof IRepositoryProvider)[]>> =
 		findPage: ["findMany", "count"],
 		findCursor: ["findMany"],
 		// #34: increment
-		// #37: forEachPage
+		forEachPage: ["findMany"],
 	};
 
 function capitalize(key: string): string {
@@ -428,7 +509,8 @@ function invalid(source: string, reason: string): never {
  * unique key (`id`, `options.unique`, a `unique` property), giving the entity
  * or `undefined`; `findManyBy<Key>` for any other key, giving a list;
  * `create`, `update`, `delete`, `restore` (soft deletion only), `count`, and the queries `findMany`,
- * `exists`, `findPage` and `findCursor`. Every method is async and reads and writes through `provider`
+ * `exists`, `findPage` and `findCursor`, and `forEachPage`, which walks the
+ * pages of a cursor query, resumably. Every method is async and reads and writes through `provider`
  * (a new `inMemoryProvider()` by default), which gets the variables of
  * `environmentDependencies` as `context.env`. The repository can be a
  * dependency of a use case, and `RepositoryOf` extends it with a class.
@@ -486,7 +568,7 @@ export function repositoryOf<
 	methods.set("findPage", ["findPage", findPage]);
 	methods.set("findCursor", ["findCursor", findCursor]);
 	// #34: methods.set("increment", ...)
-	// #37: methods.set("forEachPage", ...)
+	methods.set("forEachPage", ["forEachPage", forEachPage]);
 
 	class DeclaredRepository extends AbstractRepository<
 		Entity,

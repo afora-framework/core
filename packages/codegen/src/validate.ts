@@ -785,6 +785,7 @@ function checkRepository(
 					"exists",
 					"findPage",
 					"findCursor",
+					"forEachPage",
 				].includes(action)
 			)
 				continue;
@@ -794,7 +795,7 @@ function checkRepository(
 					issue(
 						here,
 						"unknown_action",
-						`"${action}" is not an action. Use create, update, delete, restore, count, findMany, exists, findPage, findCursor, findBy<Key> or findManyBy<Key>.`,
+						`"${action}" is not an action. Use create, update, delete, restore, count, findMany, exists, findPage, findCursor, forEachPage, findBy<Key> or findManyBy<Key>.`,
 					),
 				);
 				continue;

@@ -1,6 +1,6 @@
 # Repositories
 
-`repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `restore` (with soft deletion), `count`, and the queries `findMany`, `exists`, `findPage` and `findCursor`. Every method is async.
+`repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `restore` (with soft deletion), `count`, the queries `findMany`, `exists`, `findPage` and `findCursor`, and `forEachPage`, which walks the pages of a cursor query and can stop and resume. Every method is async.
 
 ```ts
 import {
@@ -65,22 +65,50 @@ await Users.count({ where: { name: "Ana" } }); // ignores orderBy, limit and off
 **Cursors.** `findCursor` pages by position instead of by `offset`: it gives `{ items, limit, next }`, and the `next` of a page is the `after` of the following one, `undefined` on the last.
 
 ```ts
-let after: string | undefined;
-do {
-	const page = await Users.findCursor({
-		where: { active: true },
-		orderBy: [{ key: "name" }],
-		limit: 50, // 20 by default, at least 1
-		after,
-	});
-	// page.items: User[]
-	after = page.next;
-} while (after !== undefined);
+const page = await Users.findCursor({
+	where: { active: true },
+	orderBy: [{ key: "name" }],
+	limit: 50, // 20 by default, at least 1
+	after, // the next of the page before; the first page when left out
+});
+// page.items: User[], page.next: string | undefined
 ```
 
 It reads a page with one provider call and no count, costs the same on the last page as on the first, and a row added or removed between two pages never repeats or skips another, which `offset` cannot promise. The query takes `where`, `orderBy`, `limit` and `withDeleted`, which must stay the same from one page to the next; `offset` is rejected, and there is no `total` (use `count`). The `id` is added as the last order, so every row has one position even when the others tie.
 
 A cursor is opaque text (base64url) that holds the values of the order keys of the last row. It is neither encrypted nor signed: whoever receives it can read those values, so a key in `options.sensitive` cannot order a cursor (`InvalidRepositoryQuery`), and a changed cursor only moves the position inside the same `where`. An `after` that is not a cursor of `findCursor`, or that was made for another `orderBy`, throws `InvalidRepositoryCursor`, which an output answers with 400. The provider must read by cursor, `capabilities.keyset` (`inMemoryProvider` and `@afora/drizzle` do); otherwise `findCursor` throws `InvalidRepositoryQuery`.
+
+**Walking every page.** `forEachPage(query, fn, { until? })` reads the pages of a `findCursor` query one after the other and awaits `fn(items, { index, next })` on each, for bulk work: deleting a content type with its entries, rewriting rows after a rename, a cleanup, a migration. It gives `{ done, next?, pages, items }`: the pages `fn` ran on and their items, and `done: true` once the last page is done.
+
+```ts
+const result = await Entries.forEachPage(
+	{ where: { type: type.id }, limit: 100, after: checkpoint },
+	async (items) => {
+		await Promise.all(items.map((entry) => Entries.delete(entry)));
+	},
+);
+// { done: true, pages, items }
+```
+
+`until` stops the walk before the end: a deadline (a `Date` or epoch milliseconds) or a function that says when to stop. It is checked before each page is read, never while `fn` runs, so a page is never left half done by it. When it stops the walk, the result has `done: false` and `next`, the `after` to resume from: the `next` of the last page done, or the `after` it was given when it ran none (an `until` already passed runs no page; `next` is then `undefined` if the query had no `after`, which resumes from the start). Save it and call again with `after: next`; as with `findCursor`, rows added or removed between pages, or between two calls, are neither repeated nor skipped, and `fn` may delete or change the items it gets (only a change of the keys of `orderBy` moves a row). In a Lambda, leave a margin for the longest page:
+
+```ts
+export async function handler(_event: unknown, context: Context) {
+	const checkpoint = await loadCheckpoint(); // undefined the first time
+	const result = await Entries.forEachPage(
+		{ where: { type: typeId }, limit: 100, after: checkpoint },
+		async (items, page) => {
+			await Promise.all(items.map((entry) => Entries.delete(entry)));
+			if (page.next) await saveCheckpoint(page.next); // done up to here
+		},
+		{ until: Date.now() + context.getRemainingTimeInMillis() - 10_000 },
+	);
+	if (result.done) await clearCheckpoint();
+	else await scheduleAgain(); // resumes from the checkpoint saved
+}
+```
+
+`fn` runs on one page at a time and only on pages with items (an empty repository gives `{ done: true, pages: 0, items: 0 }`); `index` counts the pages of this call from 0, and `next` is the cursor after the page (`undefined` on the last), to save once the page is done. An error of `fn` stops the walk and rejects through the repository like any other action (an `Exception` of the repository layer); resume from the last checkpoint you saved, which runs the failed page again. The query is checked as `findCursor` checks it, before the first page and even when `until` has already passed, and `forEachPage` needs `findMany` and a provider that reads by cursor. It reads with the same internal read as `findCursor`, so declaring `findCursor` is not needed. In a use case, the repository `fn` calls is the one `execute` gets, with its overrides. It is not a use case step: call it from a use case written in TypeScript.
 
 `findPage` reads the items and the total with two provider calls, so they are not an atomic snapshot unless the provider runs them in a transaction. `findBy<Key>`, `findManyBy<Key>` and `count` are queries too. By default reads leave out deleted rows when `deletion` is `"soft"`; with `"hard"` (the default) they see every row that exists, as before. `withDeleted: true` includes soft-deleted rows, and never makes a deleted entity mutable again.
 

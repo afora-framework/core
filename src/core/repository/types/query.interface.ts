@@ -88,6 +88,59 @@ export interface RepositoryFindCursor<Entity> {
 	): Promise<RepositoryCursorPage<Entity>>;
 }
 
+/** Where `forEachPage` is in its walk, given with each page. */
+export interface RepositoryWalkPage {
+	/** The position of the page in this call, from 0. */
+	readonly index: number;
+	/**
+	 * The cursor after this page, `undefined` on the last: save it once the
+	 * page is done to resume from the next one.
+	 */
+	readonly next?: string;
+}
+
+/** When `forEachPage` stops before the end. */
+export interface RepositoryWalkOptions {
+	/**
+	 * A deadline (a `Date` or epoch milliseconds) or a function that says when
+	 * to stop; checked before each page, never while one runs.
+	 */
+	readonly until?: Date | number | (() => boolean);
+}
+
+/** What `forEachPage` did. */
+export interface RepositoryWalkResult {
+	/** Whether it walked to the last page; `false` when `until` stopped it. */
+	readonly done: boolean;
+	/**
+	 * When it stopped early, the `after` to resume from: the `next` of the
+	 * last page it ran, or the `after` it was given if it ran none.
+	 */
+	readonly next?: string;
+	/** The pages it ran `fn` on. */
+	readonly pages: number;
+	/** The items of those pages. */
+	readonly items: number;
+}
+
+export interface RepositoryForEachPage<Entity> {
+	/**
+	 * Reads the pages of `query` by cursor, as `findCursor` does, and runs
+	 * `fn` on each, one after the other, until the last or until `until`
+	 * says to stop (checked between pages). Rows added or removed between
+	 * pages, by `fn` too, are neither repeated nor skipped. An error of `fn`
+	 * stops the walk and rejects; resume from the last `next` saved.
+	 */
+	forEachPage(
+		query: RepositoryCursorQuery<Entity>,
+		fn: (
+			items: EntityInstanceOf<Entity>[],
+			page: RepositoryWalkPage,
+		) => unknown,
+		options?: RepositoryWalkOptions,
+	): Promise<RepositoryWalkResult>;
+}
+
 export interface RepositoryFindMany<Entity> {
 	findMany(
 		query?: RepositoryQuery<Entity>,
