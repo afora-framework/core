@@ -85,7 +85,7 @@ await Users.findPage({
 });
 ```
 
-`tables` maps a repository to its Drizzle table: by the name of the repository (`UserRepository`, or `<name>Repository` for `repositoryOf({ name })`) and, failing that, by the name of the entity class (`User`). Create the schema with `drizzle-kit` or your own migrations; the provider never changes it.
+`tables` maps a repository to its Drizzle table: by the name of the repository (`UserRepository`) and, failing that, by the name of the entity (`User`). Without more, both come from the name of the entity class, which a bundler that minifies (without `keepNames`) changes, so the table is no longer found. Declare the name to make it independent of the class: `class User extends entityOf(blueprint, { name: "User" }) {}` (`@afora/core` after 0.0.5; `@afora/codegen` generates it). Create the schema with `drizzle-kit` or your own migrations; the provider never changes it.
 
 ## Mapping rules
 

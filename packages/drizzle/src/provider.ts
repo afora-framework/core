@@ -39,8 +39,9 @@ export interface DrizzleProviderOptions {
 	readonly db: DrizzleDatabase;
 	/**
 	 * The table of each repository: keyed by the name of the repository
-	 * (`repositoryOf({ name })`, which defaults to the entity class name) or,
-	 * failing that, by the name of the entity class.
+	 * (`UserRepository`) or, failing that, by the name of the entity (`User`).
+	 * Both come from the `name` option of `entityOf` when it has one, and from
+	 * the name of the class otherwise, which a minifier changes.
 	 */
 	readonly tables: Readonly<Record<string, DrizzleTable>>;
 }
@@ -72,14 +73,28 @@ interface Mapping {
 
 const mappings = new WeakMap<object, Mapping>();
 
+/**
+ * The declared name of an entity (`recordName`, from the `name` option of
+ * `entityOf`), which a bundler does not rename; the name of the class on a
+ * version of `@afora/core` without it.
+ */
+function entityNameOf(entity: object): string {
+	const { recordName, name } = entity as {
+		readonly recordName?: unknown;
+		readonly name: string;
+	};
+	return typeof recordName === "string" ? recordName : name;
+}
+
 function mappingOf(
 	tables: DrizzleProviderOptions["tables"],
 	context: RepositoryContext,
 ): Mapping {
-	const table = tables[context.name] ?? tables[context.entity.name];
+	const entity = entityNameOf(context.entity);
+	const table = tables[context.name] ?? tables[entity];
 	if (!table) {
 		return invalid(
-			`No Drizzle table for "${context.name}" (or the entity "${context.entity.name}").`,
+			`No Drizzle table for "${context.name}" (or the entity "${entity}"). Tables are found by name: declare it with entityOf(blueprint, { name }) when the code is minified.`,
 		);
 	}
 	let mapping = mappings.get(table);

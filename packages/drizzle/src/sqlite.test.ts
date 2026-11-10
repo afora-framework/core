@@ -97,6 +97,42 @@ function world() {
 }
 
 describe("repositoryOf", () => {
+	it("finds the table by the declared name of a renamed class", async () => {
+		const sqlite = new Database(":memory:");
+		for (const statement of DDL) sqlite.run(statement);
+		const provider = drizzleProvider({
+			db: drizzle(sqlite),
+			tables: { Post: posts },
+		});
+		const fields = blueprintOf((ctx) => ({
+			title: ctx.string,
+			author: ctx.string,
+		}));
+		// What a minifier does to the class: it gets another name.
+		const rename = <Class extends object>(Class: Class): Class =>
+			Object.defineProperty(Class, "name", { value: "a" });
+		const Post = rename(
+			class Post extends entityOf(fields, { name: "Post" }) {},
+		);
+		const Posts = repositoryOf({
+			entity: Post,
+			provider,
+			actions: ["create", "count"],
+		});
+		await Posts.create(new Post({ title: "Hello", author: "ana" }));
+		expect(await Posts.count()).toBe(1);
+
+		const Unnamed = rename(class Post extends entityOf(fields) {});
+		const Lost = repositoryOf({
+			entity: Unnamed,
+			provider,
+			actions: ["count"],
+		});
+		await expect(Lost.count()).rejects.toMatchObject({
+			name: "InvalidRepositoryDeclaration",
+		});
+	});
+
 	it("creates, finds, updates, pages and removes", async () => {
 		const { provider, User } = world();
 		const Users = repositoryOf({
