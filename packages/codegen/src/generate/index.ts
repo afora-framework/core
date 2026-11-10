@@ -469,6 +469,35 @@ function providerDoc(value: unknown, e: Emitter, providers: Providers): Doc {
 		: `${factory}()`;
 }
 
+/** `log`: the built-in providers by their factory, imports bound by name. */
+function logDoc(value: unknown, e: Emitter, providers: Providers): Doc {
+	const imported = (reference: string): string => {
+		const { module, name } = parseImportRef(reference) as {
+			module: string;
+			name: string;
+		};
+		return e.bind(module, name, providers.taken);
+	};
+	if (isImportObject(value)) return imported(value.import as string);
+	const { level, providers: list } = value as {
+		level?: string;
+		providers: readonly unknown[];
+	};
+	const entries: (readonly [string, Doc])[] = [];
+	if (level !== undefined) entries.push(["level", literal(level)]);
+	entries.push([
+		"providers",
+		listDoc(
+			list.map((provider) =>
+				isImportObject(provider)
+					? imported(provider.import as string)
+					: `${e.use(provider === "console" ? "consoleLogProvider" : "jsonLogProvider")}()`,
+			),
+		),
+	]);
+	return objectDoc(entries);
+}
+
 function repositoryDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	const { spec } = decl;
 	const names = (list: unknown): string[] =>
@@ -596,7 +625,16 @@ function useCaseDoc(
 		props.push([
 			"dependencies",
 			objectDoc(
-				dependencies.map(([key, name]) => [key, e.ref(name)] as const),
+				dependencies.map(
+					([key, name]) =>
+						[
+							key,
+							// `Logger` is the core's, unless the spec declares its own.
+							name === "Logger" && !scope.decls.has(name)
+								? e.use("Logger")
+								: e.ref(name),
+						] as const,
+				),
 				false,
 				true,
 			),
@@ -1078,6 +1116,9 @@ export function generate(
 	}
 	if (spec.provider !== undefined) {
 		props.push(["provider", providerDoc(spec.provider, app, providers)]);
+	}
+	if (spec.log !== undefined) {
+		props.push(["log", logDoc(spec.log, app, providers)]);
 	}
 	for (const [key, kind] of [
 		["properties", "property"],

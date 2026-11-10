@@ -77,6 +77,39 @@ await App.start(); // validates Database, then calls create once
 
 `await app.stop()` calls the optional `close()` of the provider (a new optional member of `IRepositoryProvider`, for connections and files). With `providerFrom`, it also forgets the provider: calls throw `ApplicationNotStarted` again, and the next `start()` makes a new one.
 
+## The context of an application
+
+`app.context` (an `ApplicationContext`) is what an application knows of itself: its `name`, `env(Environment)` for the typed variables of an environment it registers (one it does not register throws `UnregisteredApplicationReference`), and its `logger`. Your code reaches it through the application, or through `useApplication().context` without importing it.
+
+The factories an application runs on start get it, so that a provider, or the log, is made from the variables without listing them up front:
+
+```ts
+import {
+	applicationOf,
+	jsonLogProvider,
+	logFrom,
+	providerFrom,
+} from "@afora/core";
+
+export const App = applicationOf({
+	name: "blog",
+	environments: { Database, Logging },
+	log: logFrom((ctx) => ({
+		level: ctx.env(Logging).LOG_LEVEL,
+		providers: [jsonLogProvider()],
+	})),
+	provider: providerFrom((ctx) => {
+		ctx.logger.info("connecting");
+		return drizzleProvider({
+			db: connect(ctx.env(Database).DATABASE_URL),
+			tables,
+		});
+	}),
+});
+```
+
+`providerFrom((ctx) => provider)` works as `providerFrom(environmentDependencies, create)`, but `create` gets the context instead of the merged variables. `start()` validates every environment first, then makes the log, then the provider. See [Logging](logging.md) for `log` and `logFrom`.
+
 ## The started application
 
 `start()` also makes the application the started one of the process, which `useApplication()` gives from anywhere, without importing it. A hand-written use case or handler that the application itself imports can reach the application this way without an import cycle.

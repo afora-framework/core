@@ -204,3 +204,75 @@ export function checkCatalog(
 		}
 	}
 }
+
+const LOG_LEVELS = ["debug", "info", "warn", "error"];
+const BUILTIN_LOG_PROVIDERS = ["console", "json"];
+
+/** `log`: { level?, providers } with built-in names or imports, or an import of a whole log. */
+export function checkLog(
+	value: unknown,
+	path: Path,
+	issues: SpecIssue[],
+): void {
+	if (isImportObject(value)) {
+		checkImport(value, path, issues);
+		return;
+	}
+	if (!isObject(value)) {
+		issues.push(
+			issue(
+				path,
+				"invalid_log",
+				'"log" is { "level": "info", "providers": ["json"] }, or { "import": "./file.ts#log" }.',
+			),
+		);
+		return;
+	}
+	for (const key of Object.keys(value)) {
+		if (key !== "level" && key !== "providers") {
+			issues.push(
+				issue(
+					[...path, key],
+					"unknown_key",
+					`"${key}" is not valid here. Valid keys: level, providers.`,
+				),
+			);
+		}
+	}
+	if (
+		value.level !== undefined &&
+		!LOG_LEVELS.includes(value.level as string)
+	) {
+		issues.push(
+			issue(
+				[...path, "level"],
+				"invalid_log_level",
+				`"level" is one of ${LOG_LEVELS.join(", ")}.`,
+			),
+		);
+	}
+	if (!Array.isArray(value.providers)) {
+		issues.push(
+			issue(
+				[...path, "providers"],
+				"invalid_log",
+				'"providers" is a list: "console", "json" or { "import": "./file.ts#provider" }.',
+			),
+		);
+		return;
+	}
+	value.providers.forEach((provider, index) => {
+		const here = [...path, "providers", index];
+		if (isImportObject(provider)) {
+			checkImport(provider, here, issues);
+		} else if (!BUILTIN_LOG_PROVIDERS.includes(provider as string)) {
+			issues.push(
+				issue(
+					here,
+					"unknown_log_provider",
+					`${JSON.stringify(provider)} is not a log provider. Use "console", "json" or { "import": "./file.ts#provider" }.`,
+				),
+			);
+		}
+	});
+}

@@ -109,6 +109,20 @@ export type ProviderSpec =
 	  }
 	| ImportRef;
 
+/** A log provider: the built-in `"console"` or `"json"`, or an import of one made by hand. */
+export type LogProviderSpec = "console" | "json" | ImportRef;
+
+/**
+ * How the application logs (`applicationOf({ log })`): the lowest level kept
+ * and the providers, or an import of a whole `log` made by hand (a `logFrom`).
+ */
+export type LogSpec =
+	| {
+			readonly level?: "debug" | "info" | "warn" | "error";
+			readonly providers: readonly LogProviderSpec[];
+	  }
+	| ImportRef;
+
 /** A provider of the catalog supplied to codegen: where the factory comes from. */
 export interface ProviderCatalogEntry {
 	/** The name `use` refers to. */
@@ -297,6 +311,8 @@ export interface Spec {
 	readonly output?: { readonly dir: string };
 	/** The provider the repositories use unless they declare their own. */
 	readonly provider?: ProviderSpec;
+	/** How the application logs. */
+	readonly log?: LogSpec;
 	readonly properties?: Readonly<Record<string, PropertySpec>>;
 	readonly blueprints?: Readonly<Record<string, BlueprintSpec>>;
 	readonly records?: Readonly<Record<string, RecordSpec>>;

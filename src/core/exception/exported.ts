@@ -3,6 +3,7 @@ import * as Blueprint from "../blueprint/exceptions";
 import * as Command from "../command/exceptions";
 import * as Entity from "../entity/exceptions";
 import * as Environment from "../environment/environment";
+import * as Log from "../logger/exceptions";
 import * as OpenAPI from "../openapi/exceptions";
 import * as Output from "../output/exceptions";
 import * as Property from "../property/exceptions";
@@ -38,6 +39,7 @@ export function isExportedException(Declared: unknown): boolean {
 			Command,
 			Entity,
 			Environment,
+			Log,
 			OpenAPI,
 			Output,
 			Property,

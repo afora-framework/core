@@ -17,13 +17,17 @@ export {
 	useApplication,
 } from "./core/application/registry";
 export {
+	isLogFactory,
 	isProviderFactory,
+	type LogFactory,
+	logFrom,
 	type ProviderFactory,
 	providerFrom,
 } from "./core/application/start";
 export type {
 	AnyApplication,
 	ApplicationCollections,
+	ApplicationContext,
 	ApplicationDescription,
 	ApplicationSettings,
 	ApplicationStartOptions,
@@ -32,6 +36,7 @@ export type {
 	FieldDescription,
 	FieldsDescription,
 	IApplication,
+	LogDescription,
 	OutputDescription,
 	PropertyDescription,
 	PropertyLineageDescription,
@@ -120,6 +125,7 @@ export type {
 	EntityEventReference,
 	EntityEvents,
 	EventDefinition,
+	EventHandlerContext,
 } from "./core/entity/event";
 export { eventOf } from "./core/entity/event";
 export {
@@ -170,6 +176,26 @@ export type {
 	ExceptionPropagation,
 	ExceptionScope,
 } from "./core/exception/types/exception.interface";
+export { InvalidLogDeclaration } from "./core/logger/exceptions";
+export type {
+	ILogger,
+	ILogProvider,
+	LogEntry,
+	LogFields,
+	LoggerDeclaration,
+	LogLevel,
+	LogProviderSettings,
+	LogSettings,
+	MemoryLogProvider,
+} from "./core/logger/logger";
+export {
+	consoleLogProvider,
+	jsonLogProvider,
+	Logger,
+	LogLevels,
+	logProviderOf,
+	memoryLogProvider,
+} from "./core/logger/logger";
 export { InvalidOpenAPIModel } from "./core/openapi/exceptions";
 export { toOpenAPI } from "./core/openapi/openapi";
 export type {

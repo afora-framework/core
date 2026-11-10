@@ -6,12 +6,14 @@ import {
 	loadEnvironments,
 	type MergedEnvironment,
 } from "../environment/environment";
+import type { LogSettings } from "../logger/logger";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
 import {
 	ApplicationNotStarted,
 	InvalidApplicationDeclaration,
 } from "./exceptions";
+import type { ApplicationContext } from "./types/application.interface";
 
 /**
  * A provider an application creates when it starts, from the variables of
@@ -26,6 +28,8 @@ export interface ProviderFactory<
 	readonly create: (
 		env: MergedEnvironment<Environment>,
 	) => IRepositoryProvider | Promise<IRepositoryProvider>;
+	/** Whether `create` takes the context of the application instead of variables. */
+	readonly withContext: boolean;
 }
 
 /**
@@ -39,7 +43,30 @@ export function providerFrom<const Environment extends EnvironmentDependencies>(
 	create: (
 		env: MergedEnvironment<Environment>,
 	) => IRepositoryProvider | Promise<IRepositoryProvider>,
-): ProviderFactory<Environment> {
+): ProviderFactory<Environment>;
+/**
+ * A provider made on `app.start()` from the context of the application:
+ * `ctx.env(Database)` gives the variables of a registered environment and
+ * `ctx.logger` its logger, e.g.
+ * `providerFrom((ctx) => drizzleProvider({ db: connect(ctx.env(Database).DATABASE_URL), tables }))`.
+ */
+export function providerFrom(
+	create: (
+		context: ApplicationContext,
+	) => IRepositoryProvider | Promise<IRepositoryProvider>,
+): ProviderFactory<readonly []>;
+export function providerFrom(
+	environmentDependencies: unknown,
+	create?: unknown,
+): ProviderFactory {
+	if (typeof environmentDependencies === "function" && create === undefined) {
+		return Object.freeze({
+			[Kind]: "provider-factory" as const,
+			environments: Object.freeze([]),
+			create: environmentDependencies as ProviderFactory["create"],
+			withContext: true,
+		});
+	}
 	const list: unknown[] = isEnvironment(environmentDependencies)
 		? [environmentDependencies]
 		: Array.isArray(environmentDependencies)
@@ -61,8 +88,43 @@ export function providerFrom<const Environment extends EnvironmentDependencies>(
 	return Object.freeze({
 		[Kind]: "provider-factory" as const,
 		environments: Object.freeze(list as AnyEnvironment[]),
-		create,
+		create: create as ProviderFactory["create"],
+		withContext: false,
 	});
+}
+
+/** A `log` an application makes on `app.start()`: what `logFrom` makes. */
+export interface LogFactory {
+	readonly [Kind]: "log-factory";
+	readonly create: (
+		context: ApplicationContext,
+	) => LogSettings | Promise<LogSettings>;
+}
+
+/**
+ * A `log` made on `app.start()` from the context of the application, before
+ * its provider, e.g. `logFrom((ctx) => ({ level: ctx.env(Logging).LOG_LEVEL,
+ * providers: [jsonLogProvider()] }))`. Until then the application logs nothing.
+ */
+export function logFrom(
+	create: (context: ApplicationContext) => LogSettings | Promise<LogSettings>,
+): LogFactory {
+	if (typeof create !== "function") {
+		throw new InvalidApplicationDeclaration({
+			source: "logFrom",
+			details: { reason: "Expected logFrom to take a create function." },
+		});
+	}
+	return Object.freeze({ [Kind]: "log-factory" as const, create });
+}
+
+/** Whether `value` was made by `logFrom`. */
+export function isLogFactory(value: unknown): value is LogFactory {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		(value as { [Kind]?: unknown })[Kind] === "log-factory"
+	);
 }
 
 /** Whether `value` was made by `providerFrom`. */
@@ -181,12 +243,15 @@ export function deferredEnvironments(
  */
 export function startDeferred(
 	provider: IRepositoryProvider,
+	context: ApplicationContext,
 ): Promise<IRepositoryProvider> | undefined {
 	const state = deferred.get(provider);
 	if (!state) return undefined;
 	state.starting ??= (async () => {
 		const made = await state.factory.create(
-			loadEnvironments(state.factory.environments) as never,
+			(state.factory.withContext
+				? context
+				: loadEnvironments(state.factory.environments)) as never,
 		);
 		if (typeof made !== "object" || made === null) {
 			state.starting = undefined;

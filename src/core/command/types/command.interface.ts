@@ -9,6 +9,7 @@ import type {
 	EnvironmentDependencies,
 	MergedEnvironment,
 } from "../../environment/environment";
+import type { ILogger } from "../../logger/logger";
 import type { Kind } from "../../symbols/kind";
 import type {
 	AnyUseCaseClass,
@@ -28,6 +29,11 @@ export interface CommandEventInfo {
 	readonly context: unknown;
 	/** The variables of the command's environments, with the `env` of the call over them. */
 	readonly env: Readonly<Record<string, unknown>>;
+	/**
+	 * The logger of the application that bound the command, else the started
+	 * application's; a logger that writes nothing without either.
+	 */
+	readonly logger: ILogger;
 }
 
 /** Handles all the events of a call, once it succeeded. */

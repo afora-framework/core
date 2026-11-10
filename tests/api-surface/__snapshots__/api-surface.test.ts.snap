@@ -356,14 +356,17 @@ exports[`exports of the package and their declarations 1`] = `
   "ApplicationConflict": [
     "ApplicationConflict: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; readonly origins: readonly [ string, string ]; readonly declarations: readonly [ string, string ]; }>",
   ],
+  "ApplicationContext": [
+    "export interface ApplicationContext { readonly name: string; env<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; readonly logger: ILogger; }",
+  ],
   "ApplicationDescription": [
-    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly commands: Readonly<Record<string, CommandDescription>>; readonly outputs: Readonly<Record<string, OutputDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
+    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription; readonly log?: LogDescription | { readonly kind: "opaque"; }; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly commands: Readonly<Record<string, CommandDescription>>; readonly outputs: Readonly<Record<string, OutputDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
   ],
   "ApplicationNotStarted": [
     "ApplicationNotStarted: import("../../index.js").DeclaredExceptionClass<{ readonly application?: string; }>",
   ],
   "ApplicationSettings": [
-    "export interface ApplicationSettings<Name extends string, Extended extends readonly AnyApplication[], Collections extends ApplicationCollections> { readonly name: Name; readonly extends?: Extended; readonly properties?: Collections["properties"]; readonly blueprints?: Collections["blueprints"]; readonly records?: Collections["records"]; readonly entities?: Collections["entities"]; readonly environments?: Collections["environments"]; readonly repositories?: Collections["repositories"]; readonly useCases?: Collections["useCases"]; readonly commands?: Collections["commands"]; readonly outputs?: Collections["outputs"]; readonly exceptions?: Collections["exceptions"]; readonly provider?: IRepositoryProvider | ProviderFactory; }",
+    "export interface ApplicationSettings<Name extends string, Extended extends readonly AnyApplication[], Collections extends ApplicationCollections> { readonly name: Name; readonly extends?: Extended; readonly properties?: Collections["properties"]; readonly blueprints?: Collections["blueprints"]; readonly records?: Collections["records"]; readonly entities?: Collections["entities"]; readonly environments?: Collections["environments"]; readonly repositories?: Collections["repositories"]; readonly useCases?: Collections["useCases"]; readonly commands?: Collections["commands"]; readonly outputs?: Collections["outputs"]; readonly exceptions?: Collections["exceptions"]; readonly provider?: IRepositoryProvider | ProviderFactory; readonly log?: LogSettings | LogFactory; }",
   ],
   "ApplicationStartOptions": [
     "export interface ApplicationStartOptions { readonly register?: boolean; readonly replace?: boolean; }",
@@ -435,7 +438,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type CommandEventHandler = (events: readonly EntityEvent[], info: CommandEventInfo) => void | Promise<void>;",
   ],
   "CommandEventInfo": [
-    "export interface CommandEventInfo { readonly command: AnyCommand; readonly operation: string; readonly context: unknown; readonly env: Readonly<Record<string, unknown>>; }",
+    "export interface CommandEventInfo { readonly command: AnyCommand; readonly operation: string; readonly context: unknown; readonly env: Readonly<Record<string, unknown>>; readonly logger: ILogger; }",
   ],
   "CommandEvents": [
     "export type CommandEvents = "after-commit" | "manual" | CommandEventHandler;",
@@ -498,7 +501,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type DependencyFunctions<Dependencies extends UseCaseCollection> = { readonly [Key in keyof Dependencies]: DependencyOf<Dependencies[Key]>; };",
   ],
   "DependencyOf": [
-    "export type DependencyOf<Dependency> = Dependency extends AnyUseCaseClass ? (input: UseCaseInput<Dependency>) => Promise<UseCaseResponse<Dependency>> : Dependency extends AnyEnvironment ? EnvironmentValue<Dependency> : Dependency;",
+    "export type DependencyOf<Dependency> = Dependency extends AnyUseCaseClass ? (input: UseCaseInput<Dependency>) => Promise<UseCaseResponse<Dependency>> : Dependency extends AnyEnvironment ? EnvironmentValue<Dependency> : Dependency extends LoggerDeclaration ? ILogger : Dependency;",
   ],
   "DependencyOverrides": [
     "export type DependencyOverrides<Dependencies extends UseCaseCollection> = { readonly [Key in keyof Dependencies]?: Dependencies[Key] extends AnyRepository ? Partial<Dependencies[Key]> : DependencyOf<Dependencies[Key]>; };",
@@ -525,7 +528,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type EntityConstructor<Identity extends IEntityIdentity, Properties extends IBlueprintCollection, Change extends readonly string[], Unique extends readonly string[] = [ ], Members = unknown> = { readonly [EntityClassBrand]: true; readonly [EntityUniqueKeys]: readonly EntityUniqueKey<Identity, Properties, Unique>[]; new (value: EntityInput<Identity, Properties>): DeclaredEntityInstance<Identity, Properties, Change, Members>; readonly "~standard": StandardSchemaV1.Props<EntityInput<Identity, Properties>, DeclaredEntityInstance<Identity, Properties, Change, Members>>; safeParse<Self extends new (value: never) => object>(this: Self, value: unknown): ParseResult<InstanceType<Self>>; readonly [Kind]: "record"; readonly blueprint: IBlueprint<EntityProperties<Identity, Properties>>; readonly options: RecordSettings<EntityProperties<Identity, Properties>>; readonly plugins: readonly AnyRecordPlugin[]; };",
   ],
   "EntityEvent": [
-    "export interface EntityEvent<Entity = object> { readonly name: string; readonly entity: Entity; handle(): Promise<void>; }",
+    "export interface EntityEvent<Entity = object> { readonly name: string; readonly entity: Entity; handle(context?: Partial<EventHandlerContext>): Promise<void>; }",
   ],
   "EntityEventReference": [
     "export type EntityEventReference = EventDefinition | readonly EventDefinition[] | (() => EventDefinition | readonly EventDefinition[]);",
@@ -584,6 +587,9 @@ exports[`exports of the package and their declarations 1`] = `
   "EventDefinition": [
     "export interface EventDefinition { readonly name: string; readonly [EventBrand]: true; }",
   ],
+  "EventHandlerContext": [
+    "export interface EventHandlerContext { readonly logger: ILogger; }",
+  ],
   "Exception": [
     "export declare class Exception<Details = unknown> extends Error { readonly name: string; readonly layer: ExceptionLayers; readonly source: string; readonly details: Details; readonly cause?: unknown; constructor({ layer, name, source, message, details, cause, }: ExceptionInit<Details>); static from(error: unknown, scope: ExceptionScope): Exception; get frame(): ExceptionFrame<Details>; get trace(): readonly ExceptionFrame[]; get origin(): Exception; find<Instance extends Exception>(target: ExceptionClass<Instance> | string): Instance | undefined; is(target: ExceptionClass | string): boolean; passedThrough(layer: ExceptionLayers): boolean; propagate<Next = undefined>({ layer, source, name, message, details, }: ExceptionPropagation<Next>): Exception<Next>; toJSON(): ExceptionFrame<Details> & { trace: readonly ExceptionFrame[]; }; toString(): string; private chain; }",
   ],
@@ -624,7 +630,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
   ],
   "IApplication": [
-    "export interface IApplication<Name extends string, Collections extends ApplicationCollections> { readonly [Kind]: "application"; readonly name: Name; readonly extends: readonly AnyApplication[]; readonly provider: IRepositoryProvider | undefined; readonly properties: Collections["properties"]; readonly blueprints: Collections["blueprints"]; readonly records: Collections["records"]; readonly entities: Collections["entities"]; readonly environments: Collections["environments"]; readonly repositories: Collections["repositories"]; readonly useCases: Collections["useCases"]; readonly commands: Collections["commands"]; readonly outputs: Collections["outputs"]; readonly exceptions: Collections["exceptions"]; repository<Repository extends AnyRepository>(repository: Repository): Repository; useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; command<Command extends AnyCommand>(command: Command): Command; output<Output extends AnyOutput>(output: Output): Output; extend<const Others extends readonly AnyApplication[]>(...others: Others): IApplication<Name, MergedCollections<Collections, Others>>; describe(): ApplicationDescription; start(options?: ApplicationStartOptions): Promise<IApplication<Name, Collections>>; stop(): Promise<void>; get<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; get<Command extends AnyCommand>(command: Command): Command; get<Output extends AnyOutput>(output: Output): Output; get<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; get<Repository extends AnyRepository>(repository: Repository): Repository; readonly started: boolean; }",
+    "export interface IApplication<Name extends string, Collections extends ApplicationCollections> { readonly [Kind]: "application"; readonly name: Name; readonly extends: readonly AnyApplication[]; readonly provider: IRepositoryProvider | undefined; readonly logger: ILogger; readonly context: ApplicationContext; readonly properties: Collections["properties"]; readonly blueprints: Collections["blueprints"]; readonly records: Collections["records"]; readonly entities: Collections["entities"]; readonly environments: Collections["environments"]; readonly repositories: Collections["repositories"]; readonly useCases: Collections["useCases"]; readonly commands: Collections["commands"]; readonly outputs: Collections["outputs"]; readonly exceptions: Collections["exceptions"]; repository<Repository extends AnyRepository>(repository: Repository): Repository; useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; command<Command extends AnyCommand>(command: Command): Command; output<Output extends AnyOutput>(output: Output): Output; extend<const Others extends readonly AnyApplication[]>(...others: Others): IApplication<Name, MergedCollections<Collections, Others>>; describe(): ApplicationDescription; start(options?: ApplicationStartOptions): Promise<IApplication<Name, Collections>>; stop(): Promise<void>; get<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; get<Command extends AnyCommand>(command: Command): Command; get<Output extends AnyOutput>(output: Output): Output; get<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; get<Repository extends AnyRepository>(repository: Repository): Repository; readonly started: boolean; }",
   ],
   "IBlueprint": [
     "export interface IBlueprint<Properties extends IBlueprintCollection, Optional extends boolean = false> { readonly [Kind]: "blueprint"; readonly plugins: readonly IBlueprintPlugin[]; readonly properties: Properties; readonly schema: ISchema<BlueprintSchema<Properties>, BlueprintData<Properties>>; readonly optional: Optional; safeParse(value: unknown): ParseResult<Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; readonly "~standard": StandardSchemaV1.Props<Optional extends true ? BlueprintInput<Properties> | undefined : BlueprintInput<Properties>, Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; join<const Blueprints extends readonly AnyBlueprint[]>(...blueprints: Blueprints): IBlueprint<JoinedProperties<readonly [ { readonly properties: Properties; }, ...Blueprints ]>>; }",
@@ -649,6 +655,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "IEnvironment": [
     "export interface IEnvironment<Properties extends IBlueprintCollection> { readonly [Kind]: "environment"; readonly blueprint: IBlueprint<Properties>; load(): Readonly<BlueprintValue<Properties>>; }",
+  ],
+  "ILogProvider": [
+    "export interface ILogProvider { write(entry: LogEntry): void | Promise<void>; flush?(): Promise<void>; }",
+  ],
+  "ILogger": [
+    "export interface ILogger { debug(event: string, fields?: LogFields): void; info(event: string, fields?: LogFields): void; warn(event: string, fields?: LogFields): void; error(event: string, fields?: LogFields): void; }",
   ],
   "IProperty": [
     "export interface IProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly definition: AbstractDefineProperty<SchemaType, Value>; readonly value: PropertyValue<SchemaType, Value>; }",
@@ -713,6 +725,9 @@ exports[`exports of the package and their declarations 1`] = `
   "InvalidEnvironment": [
     "InvalidEnvironment: import("../../index.js").DeclaredExceptionClass<{ readonly keys: readonly string[]; }>",
   ],
+  "InvalidLogDeclaration": [
+    "InvalidLogDeclaration: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
   "InvalidOpenAPIModel": [
     "InvalidOpenAPIModel: import("../../index.js").DeclaredExceptionClass<{ readonly name: string; }>",
   ],
@@ -761,11 +776,44 @@ exports[`exports of the package and their declarations 1`] = `
   "Kind": [
     "Kind: unique symbol",
   ],
+  "LogDescription": [
+    "export interface LogDescription { readonly level: LogLevel; readonly providers: readonly ({ readonly kind: "log-provider"; readonly name: string; } | { readonly kind: "opaque"; })[]; }",
+  ],
+  "LogEntry": [
+    "export interface LogEntry { readonly at: string; readonly level: LogLevel; readonly event: string; readonly fields: LogFields; readonly application: string; }",
+  ],
+  "LogFactory": [
+    "export interface LogFactory { readonly [Kind]: "log-factory"; readonly create: (context: ApplicationContext) => LogSettings | Promise<LogSettings>; }",
+  ],
+  "LogFields": [
+    "export type LogFields = Readonly<Record<string, unknown>>;",
+  ],
+  "LogLevel": [
+    "export type LogLevel = "debug" | "info" | "warn" | "error";",
+  ],
+  "LogLevels": [
+    "LogLevels: readonly LogLevel[]",
+  ],
+  "LogProviderSettings": [
+    "export interface LogProviderSettings<Provider extends ILogProvider> { readonly name?: string; readonly write: Provider["write"]; readonly flush?: Provider["flush"]; }",
+  ],
+  "LogSettings": [
+    "export interface LogSettings { readonly level?: LogLevel; readonly providers: readonly ILogProvider[]; }",
+  ],
+  "Logger": [
+    "Logger: LoggerDeclaration",
+  ],
+  "LoggerDeclaration": [
+    "export interface LoggerDeclaration { readonly [Kind]: "logger"; }",
+  ],
   "MASK": [
     "MASK = "********"",
   ],
   "MarkedUniqueKey": [
     "export type MarkedUniqueKey<Properties extends IBlueprintCollection> = { [Key in keyof Properties]-?: Properties[Key] extends { readonly type: { readonly unique: true; }; } ? Key : never; }[keyof Properties] & string;",
+  ],
+  "MemoryLogProvider": [
+    "export interface MemoryLogProvider extends ILogProvider { readonly entries: readonly LogEntry[]; clear(): void; }",
   ],
   "Meta": [
     "Meta: unique symbol",
@@ -915,7 +963,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type ProviderDescription = { readonly kind: "provider"; readonly name: string; readonly options: ProviderOptions; } | { readonly kind: "opaque"; };",
   ],
   "ProviderFactory": [
-    "export interface ProviderFactory<Environment extends EnvironmentDependencies = EnvironmentDependencies> { readonly [Kind]: "provider-factory"; readonly environments: readonly AnyEnvironment[]; readonly create: (env: MergedEnvironment<Environment>) => IRepositoryProvider | Promise<IRepositoryProvider>; }",
+    "export interface ProviderFactory<Environment extends EnvironmentDependencies = EnvironmentDependencies> { readonly [Kind]: "provider-factory"; readonly environments: readonly AnyEnvironment[]; readonly create: (env: MergedEnvironment<Environment>) => IRepositoryProvider | Promise<IRepositoryProvider>; readonly withContext: boolean; }",
   ],
   "ProviderOption": [
     "export type ProviderOption = null | boolean | number | string | readonly ProviderOption[] | { readonly [key: string]: ProviderOption; };",
@@ -1223,10 +1271,10 @@ exports[`exports of the package and their declarations 1`] = `
     "export type UseCaseDependencies<Class extends Declaration> = DependencyFunctions<Class["dependencies"]>;",
   ],
   "UseCaseDependency": [
-    "export type UseCaseDependency = AnyUseCaseClass | AnyRepository | AnyEnvironment;",
+    "export type UseCaseDependency = AnyUseCaseClass | AnyRepository | AnyEnvironment | LoggerDeclaration;",
   ],
   "UseCaseDependencyDescription": [
-    "export interface UseCaseDependencyDescription { readonly kind: "use-case" | "repository" | "environment"; readonly ref: string; }",
+    "export interface UseCaseDependencyDescription { readonly kind: "use-case" | "repository" | "environment" | "logger"; readonly ref: string; }",
   ],
   "UseCaseDescription": [
     "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly context?: FieldsDescription; readonly refs?: { readonly input?: string; readonly response?: string; readonly context?: string; }; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; }",
@@ -1271,6 +1319,9 @@ exports[`exports of the package and their declarations 1`] = `
   "configure": [
     "export declare function configure(services: RuntimeServices): void;",
   ],
+  "consoleLogProvider": [
+    "export declare function consoleLogProvider(): ILogProvider;",
+  ],
   "entityBuilderOf": [
     "export declare function entityBuilderOf<Identity extends IEntityIdentity, const Catalogs extends readonly IRecordPluginCatalog[] = [ ]>({ identity, generateId, now, plugins: catalogs, }: EntityBuilderSettings<Identity, Catalogs>): EntityBuilder<Identity, RecordPluginContext<Catalogs>>;",
   ],
@@ -1284,7 +1335,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function environmentOf<Properties extends IBlueprintCollection>(blueprint: IBlueprint<Properties, boolean>, { source }?: EnvironmentOptions): IEnvironment<Properties>;",
   ],
   "eventOf": [
-    "export declare function eventOf<Class extends AnyEntityClass>(name: string, entityClass: Class, handler: (entity: InstanceType<Class>) => Promise<void>): EventDefinition;",
+    "export declare function eventOf<Class extends AnyEntityClass>(name: string, entityClass: Class, handler: (entity: InstanceType<Class>, context: EventHandlerContext) => Promise<void>): EventDefinition;",
   ],
   "exceptionOf": [
     "export declare function exceptionOf<Details = undefined>({ layer, name, message, }: ExceptionDeclaration<Details>): DeclaredExceptionClass<Details>;",
@@ -1320,6 +1371,9 @@ exports[`exports of the package and their declarations 1`] = `
   "isEnvironment": [
     "export declare function isEnvironment(value: unknown): value is AnyEnvironment;",
   ],
+  "isLogFactory": [
+    "export declare function isLogFactory(value: unknown): value is LogFactory;",
+  ],
   "isOptionalRecord": [
     "export declare function isOptionalRecord(value: unknown): value is AnyOptionalRecord;",
   ],
@@ -1350,8 +1404,20 @@ exports[`exports of the package and their declarations 1`] = `
   "isUseCaseClass": [
     "export declare function isUseCaseClass(value: unknown): value is AnyUseCaseClass;",
   ],
+  "jsonLogProvider": [
+    "export declare function jsonLogProvider(): ILogProvider;",
+  ],
   "listOf": [
     "export declare function listOf<Item extends BlueprintField>(item: Item, { minItems, maxItems }?: BlueprintListOptions): IBlueprintList<StoredField<Item>>;",
+  ],
+  "logFrom": [
+    "export declare function logFrom(create: (context: ApplicationContext) => LogSettings | Promise<LogSettings>): LogFactory;",
+  ],
+  "logProviderOf": [
+    "export declare function logProviderOf(settings: LogProviderSettings<ILogProvider>): ILogProvider;",
+  ],
+  "memoryLogProvider": [
+    "export declare function memoryLogProvider(): MemoryLogProvider;",
   ],
   "openapi": [
     "openapi: import("./types/output.interface.js").SinkFactory<OpenAPIDocument, OpenAPISinkOptions>",
@@ -1394,6 +1460,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function providerDescriptionOf(provider: IRepositoryProvider): ProviderDescription;",
   ],
   "providerFrom": [
+    "export declare function providerFrom(create: (context: ApplicationContext) => IRepositoryProvider | Promise<IRepositoryProvider>): ProviderFactory<readonly [ ]>;",
     "export declare function providerFrom<const Environment extends EnvironmentDependencies>(environmentDependencies: Environment, create: (env: MergedEnvironment<Environment>) => IRepositoryProvider | Promise<IRepositoryProvider>): ProviderFactory<Environment>;",
   ],
   "providerOf": [
@@ -1875,7 +1942,7 @@ exports[`testing entry (contract) 1`] = `
     "EntityClassBrand: unique symbol",
   ],
   "(internal) EntityEvent": [
-    "export interface EntityEvent<Entity = object> { readonly name: string; readonly entity: Entity; handle(): Promise<void>; }",
+    "export interface EntityEvent<Entity = object> { readonly name: string; readonly entity: Entity; handle(context?: Partial<EventHandlerContext>): Promise<void>; }",
   ],
   "(internal) EntityKeyOf": [
     "export type EntityKeyOf<Entity> = keyof EntityPropertiesOf<Entity> & string;",
@@ -1897,6 +1964,9 @@ exports[`testing entry (contract) 1`] = `
   ],
   "(internal) EventDefinition": [
     "export interface EventDefinition { readonly name: string; readonly [EventBrand]: true; }",
+  ],
+  "(internal) EventHandlerContext": [
+    "export interface EventHandlerContext { readonly logger: ILogger; }",
   ],
   "(internal) Exception": [
     "export declare class Exception<Details = unknown> extends Error { readonly name: string; readonly layer: ExceptionLayers; readonly source: string; readonly details: Details; readonly cause?: unknown; constructor({ layer, name, source, message, details, cause, }: ExceptionInit<Details>); static from(error: unknown, scope: ExceptionScope): Exception; get frame(): ExceptionFrame<Details>; get trace(): readonly ExceptionFrame[]; get origin(): Exception; find<Instance extends Exception>(target: ExceptionClass<Instance> | string): Instance | undefined; is(target: ExceptionClass | string): boolean; passedThrough(layer: ExceptionLayers): boolean; propagate<Next = undefined>({ layer, source, name, message, details, }: ExceptionPropagation<Next>): Exception<Next>; toJSON(): ExceptionFrame<Details> & { trace: readonly ExceptionFrame[]; }; toString(): string; private chain; }",
@@ -1949,6 +2019,9 @@ exports[`testing entry (contract) 1`] = `
   "(internal) IDefineProperty": [
     "export interface IDefineProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { [State]: PropertyStates; get type(): IPropertyType<SchemaType, Value>; make(value: Value): Value; parse(value: unknown): ParseResult<Value>; }",
   ],
+  "(internal) ILogger": [
+    "export interface ILogger { debug(event: string, fields?: LogFields): void; info(event: string, fields?: LogFields): void; warn(event: string, fields?: LogFields): void; error(event: string, fields?: LogFields): void; }",
+  ],
   "(internal) IProperty": [
     "export interface IProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly definition: AbstractDefineProperty<SchemaType, Value>; readonly value: PropertyValue<SchemaType, Value>; }",
   ],
@@ -1985,6 +2058,9 @@ exports[`testing entry (contract) 1`] = `
   ],
   "(internal) ListShape": [
     "type ListShape<Item, Mode extends FieldMode, Optional extends boolean> = Optional extends true ? FieldValue<Item, Mode>[] | undefined : FieldValue<Item, Mode>[];",
+  ],
+  "(internal) LogFields": [
+    "export type LogFields = Readonly<Record<string, unknown>>;",
   ],
   "(internal) Meta": [
     "Meta: unique symbol",
@@ -2555,6 +2631,85 @@ exports[`afora.json schema 1`] = `
         "type": "string",
       },
       "type": "array",
+    },
+    "log": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "level": {
+              "anyOf": [
+                {
+                  "const": "debug",
+                  "type": "string",
+                },
+                {
+                  "const": "info",
+                  "type": "string",
+                },
+                {
+                  "const": "warn",
+                  "type": "string",
+                },
+                {
+                  "const": "error",
+                  "type": "string",
+                },
+              ],
+              "description": "The lowest level kept; info by default.",
+            },
+            "providers": {
+              "description": "Where the lines go: "console", "json" or { "import": "./file.ts#provider" }.",
+              "items": {
+                "anyOf": [
+                  {
+                    "const": "console",
+                    "type": "string",
+                  },
+                  {
+                    "const": "json",
+                    "type": "string",
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "import": {
+                        "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                        "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "import",
+                    ],
+                    "type": "object",
+                  },
+                ],
+              },
+              "type": "array",
+            },
+          },
+          "required": [
+            "providers",
+          ],
+          "type": "object",
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "import": {
+              "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+              "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string",
+            },
+          },
+          "required": [
+            "import",
+          ],
+          "type": "object",
+        },
+      ],
+      "description": "How the application logs: { "level", "providers" }, or { "import": "./file.ts#log" } for a log made by hand (logFrom).",
     },
     "name": {
       "description": "The name of the generated application.",

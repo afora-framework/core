@@ -3,7 +3,7 @@ import { checkCommand } from "./command";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
-import { checkCatalog, checkProvider } from "./provider";
+import { checkCatalog, checkLog, checkProvider } from "./provider";
 import {
 	checkEnvironmentNames,
 	type Decl,
@@ -30,6 +30,7 @@ const TOP_LEVEL_KEYS = [
 	"extends",
 	"output",
 	"provider",
+	"log",
 	...COLLECTIONS,
 ];
 
@@ -897,6 +898,7 @@ function check(
 	if (input.provider !== undefined) {
 		checkProvider(input.provider, ["provider"], providers, issues);
 	}
+	if (input.log !== undefined) checkLog(input.log, ["log"], issues);
 	for (const key of Object.keys(input)) {
 		if (!TOP_LEVEL_KEYS.includes(key)) {
 			issues.push(

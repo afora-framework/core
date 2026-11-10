@@ -38,6 +38,8 @@ export type {
 	ImportRef,
 	InlineField,
 	ListBounds,
+	LogProviderSpec,
+	LogSpec,
 	OutputSpec,
 	PipeEntrySpec,
 	PropertySpec,

@@ -349,6 +349,8 @@ export function checkUseCase(
 				}
 				const target =
 					typeof name === "string" ? scope.decls.get(name) : undefined;
+				// The core's `Logger`: nothing to declare, and no step reads it.
+				if (name === "Logger" && target === undefined) continue;
 				if (
 					target?.kind !== "useCase" &&
 					target?.kind !== "repository" &&
@@ -359,8 +361,8 @@ export function checkUseCase(
 							here,
 							target ? "wrong_kind" : "unknown_dependency",
 							target
-								? `"${name}" is a ${target.kind}; a dependency is a use case, a repository or an environment.`
-								: `"${String(name)}" is not a declared use case, repository or environment.`,
+								? `"${name}" is a ${target.kind}; a dependency is a use case, a repository, an environment or "Logger".`
+								: `"${String(name)}" is not a declared use case, repository or environment, nor "Logger".`,
 						),
 					);
 					continue;

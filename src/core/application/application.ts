@@ -27,6 +27,15 @@ import {
 	isDeclaredException,
 } from "../exception/exception";
 import { isExportedException } from "../exception/exported";
+import {
+	ApplicationLoggerKey,
+	applicationLogger,
+	checkLogSettings,
+	isLoggerDeclaration,
+	type LogSettings,
+	logProviderNameOf,
+	silentLogger,
+} from "../logger/logger";
 import { plainOf } from "../openapi/openapi";
 import { isOutput, outputOf } from "../output/output";
 import { stageDescriptionOf } from "../output/stage";
@@ -62,7 +71,9 @@ import {
 	deferredEnvironments,
 	deferredProvider,
 	isDeferredProvider,
+	isLogFactory,
 	isProviderFactory,
+	type LogFactory,
 	startDeferred,
 	stopProvider,
 } from "./start";
@@ -70,6 +81,7 @@ import type {
 	AnyApplication,
 	ApplicationCollectionKey,
 	ApplicationCollections,
+	ApplicationContext,
 	ApplicationDescription,
 	ApplicationSettings,
 	FieldDescription,
@@ -110,6 +122,8 @@ type Registry = Record<ApplicationCollectionKey, Map<string, Entry>>;
 
 /** The resolved declarations of each application, and its bound repositories. */
 const internals = new WeakMap<object, Registry>();
+/** The `log` each application was declared with (or inherited), for `extends`. */
+const logSettings = new WeakMap<object, LogSettings | LogFactory>();
 
 const KIND_OF: Readonly<Record<ApplicationCollectionKey, string>> = {
 	properties: "property",
@@ -454,13 +468,16 @@ function validateUseCases(source: string, registry: Registry): void {
 	for (const entry of registry.useCases.values()) {
 		const UseCase = entry.value as AnyUseCaseClass;
 		for (const [key, dependency] of Object.entries(UseCase.dependencies)) {
-			const found = isUseCaseClass(dependency)
-				? useCases.has(dependency)
-				: isEnvironment(dependency)
-					? environments.has(dependency)
-					: repositories.has(
-							(inspectRepository(dependency) as RepositoryInspection).state,
-						);
+			// `Logger` is the core's own: nothing to register.
+			const found = isLoggerDeclaration(dependency)
+				? true
+				: isUseCaseClass(dependency)
+					? useCases.has(dependency)
+					: isEnvironment(dependency)
+						? environments.has(dependency)
+						: repositories.has(
+								(inspectRepository(dependency) as RepositoryInspection).state,
+							);
 			if (!found) {
 				throw new UnregisteredUseCaseDependency({
 					source,
@@ -707,6 +724,7 @@ function describeRegistry(
 	extended: readonly AnyApplication[],
 	registry: Registry,
 	provider: IRepositoryProvider | undefined,
+	log: Required<LogSettings> | "opaque" | undefined,
 ): ApplicationDescription {
 	const scope: Scope = {
 		properties: referencesOf(registry, "properties"),
@@ -768,6 +786,21 @@ function describeRegistry(
 		...(provider === undefined
 			? {}
 			: { provider: providerDescriptionOf(provider) }),
+		...(log === undefined
+			? {}
+			: log === "opaque"
+				? { log: { kind: "opaque" as const } }
+				: {
+						log: {
+							level: log.level,
+							providers: log.providers.map((logProvider) => {
+								const providerName = logProviderNameOf(logProvider);
+								return providerName === undefined
+									? { kind: "opaque" as const }
+									: { kind: "log-provider" as const, name: providerName };
+							}),
+						},
+					}),
 		properties: each("properties", (entry) => ({
 			from: entry.from,
 			...propertyDescriptionOf(entry.value as BlueprintField, scope),
@@ -837,20 +870,25 @@ function describeRegistry(
 				dependencies: Object.fromEntries(
 					Object.entries(UseCase.dependencies).map(([key, dependency]) => [
 						key,
-						isUseCaseClass(dependency)
-							? { kind: "use-case", ref: useCaseRefs.get(dependency) as string }
-							: isEnvironment(dependency)
+						isLoggerDeclaration(dependency)
+							? { kind: "logger", ref: "Logger" }
+							: isUseCaseClass(dependency)
 								? {
-										kind: "environment",
-										ref: environmentRefs.get(dependency) as string,
+										kind: "use-case",
+										ref: useCaseRefs.get(dependency) as string,
 									}
-								: {
-										kind: "repository",
-										ref: repositories.get(
-											(inspectRepository(dependency) as RepositoryInspection)
-												.state,
-										) as string,
-									},
+								: isEnvironment(dependency)
+									? {
+											kind: "environment",
+											ref: environmentRefs.get(dependency) as string,
+										}
+									: {
+											kind: "repository",
+											ref: repositories.get(
+												(inspectRepository(dependency) as RepositoryInspection)
+													.state,
+											) as string,
+										},
 					]),
 				),
 				implementation: describeImplementation(UseCase),
@@ -1052,6 +1090,22 @@ export function applicationOf<
 		}
 	}
 
+	// The log: its own, else the one of the last extended application with one.
+	const declaredLog: LogSettings | LogFactory | undefined =
+		settings.log ??
+		[...extended]
+			.reverse()
+			.map((other) => logSettings.get(other))
+			.find((log) => log !== undefined);
+	const log = declaredLog === undefined ? undefined : applicationLogger(name);
+	// A `log` of `logFrom` is made on start; until then nothing is written.
+	if (declaredLog !== undefined && !isLogFactory(declaredLog)) {
+		log?.set(checkLogSettings(declaredLog));
+	}
+	const logger = log?.logger;
+	// Use cases, commands and outputs are rebound for a provider or a logger.
+	const rebinds = provider !== undefined || logger !== undefined;
+
 	const collection = (key: ApplicationCollectionKey) =>
 		Object.freeze(
 			Object.fromEntries(
@@ -1076,7 +1130,7 @@ export function applicationOf<
 	// repositories and the bound use cases, never mutating the declared class.
 	const boundUseCases = new Map<AnyUseCaseClass, AnyUseCaseClass>();
 	const bindUseCase = (UseCase: AnyUseCaseClass): AnyUseCaseClass => {
-		if (provider === undefined) return UseCase;
+		if (!rebinds) return UseCase;
 		const done = boundUseCases.get(UseCase);
 		if (done) return done;
 		const Declared = UseCase as unknown as new (...args: never[]) => object;
@@ -1088,7 +1142,7 @@ export function applicationOf<
 				key,
 				isUseCaseClass(dependency)
 					? bindUseCase(dependency)
-					: isEnvironment(dependency)
+					: isEnvironment(dependency) || isLoggerDeclaration(dependency)
 						? dependency
 						: (boundByState.get(
 								(inspectRepository(dependency) as RepositoryInspection).state,
@@ -1098,6 +1152,8 @@ export function applicationOf<
 		Object.defineProperty(Bound, "dependencies", {
 			value: Object.freeze(dependencies),
 		});
+		if (logger)
+			Object.defineProperty(Bound, ApplicationLoggerKey, { value: logger });
 		return Bound as unknown as AnyUseCaseClass;
 	};
 	const useCases: Record<string, unknown> = {};
@@ -1114,25 +1170,24 @@ export function applicationOf<
 	const boundCommandOf = new Map<unknown, unknown>();
 	for (const entry of registry.commands.values()) {
 		const declared = entry.value as AnyCommand;
-		const rebuilt =
-			provider === undefined
-				? declared
-				: commandOf({
-						name: declared.commandName,
-						description: declared.description,
-						tags: declared.tags,
-						context: declared.context,
-						useCases: Object.fromEntries(
-							Object.entries(declared.useCases).map(([op, UseCase]) => [
-								op,
-								boundUseCaseOf.get(UseCase) as AnyUseCaseClass,
-							]),
-						),
-						transaction: declared.transaction,
-						environmentDependencies: declared.environments,
-						events: declared.events,
-						onEventError: declared.onEventError,
-					} as never);
+		const rebuilt = !rebinds
+			? declared
+			: commandOf({
+					name: declared.commandName,
+					description: declared.description,
+					tags: declared.tags,
+					context: declared.context,
+					useCases: Object.fromEntries(
+						Object.entries(declared.useCases).map(([op, UseCase]) => [
+							op,
+							boundUseCaseOf.get(UseCase) as AnyUseCaseClass,
+						]),
+					),
+					transaction: declared.transaction,
+					environmentDependencies: declared.environments,
+					events: declared.events,
+					onEventError: declared.onEventError,
+				} as never);
 		if (provider !== undefined) verifyCommand(rebuilt);
 		boundCommandOf.set(entry.value, rebuilt);
 		commands[entry.name] = rebuilt;
@@ -1144,17 +1199,16 @@ export function applicationOf<
 	const boundOutputOf = new Map<unknown, unknown>();
 	for (const entry of registry.outputs.values()) {
 		const declared = entry.value as AnyOutput;
-		const rebuilt =
-			provider === undefined
-				? declared
-				: outputOf({
-						name: declared.outputName,
-						commands: declared.commands.map(
-							(command) => boundCommandOf.get(command) as AnyCommand,
-						),
-						statuses: declared.statuses,
-						pipe: declared.stages,
-					});
+		const rebuilt = !rebinds
+			? declared
+			: outputOf({
+					name: declared.outputName,
+					commands: declared.commands.map(
+						(command) => boundCommandOf.get(command) as AnyCommand,
+					),
+					statuses: declared.statuses,
+					pipe: declared.stages,
+				});
 		boundOutputOf.set(entry.value, rebuilt);
 		outputs[entry.name] = rebuilt;
 	}
@@ -1163,6 +1217,20 @@ export function applicationOf<
 	const registeredEnvironments = new Set<unknown>(
 		environmentEntries.map((entry) => entry.value),
 	);
+	const context: ApplicationContext = Object.freeze({
+		name,
+		env(environment: AnyEnvironment) {
+			if (!registeredEnvironments.has(environment)) {
+				throw new UnregisteredApplicationReference({
+					source: name,
+					details: { holder: "the context", reference: "an environment" },
+				});
+			}
+			return environment.load();
+		},
+		logger: logger ?? silentLogger,
+	}) as ApplicationContext;
+
 	let starting: Promise<unknown> | undefined;
 	let started = false;
 	const start = async () => {
@@ -1189,8 +1257,15 @@ export function applicationOf<
 				cause,
 			});
 		}
+		// The log first, so that whoever makes the provider can log.
+		if (isLogFactory(declaredLog)) {
+			log?.set(checkLogSettings(await declaredLog.create(context)));
+		}
 		if (provider !== undefined && isDeferredProvider(provider)) {
-			const made = (await startDeferred(provider)) as IRepositoryProvider;
+			const made = (await startDeferred(
+				provider,
+				context,
+			)) as IRepositoryProvider;
 			checkTransactions(
 				name,
 				made,
@@ -1211,6 +1286,9 @@ export function applicationOf<
 		name,
 		extends: Object.freeze([...extended]),
 		provider,
+		logger: logger ?? silentLogger,
+		context,
+		...(logger ? { [ApplicationLoggerKey]: logger } : {}),
 		properties: collection("properties"),
 		blueprints: collection("blueprints"),
 		records: collection("records"),
@@ -1250,9 +1328,17 @@ export function applicationOf<
 				name,
 				extends: [application, ...others],
 				...(provider === undefined ? {} : { provider }),
+				...(declaredLog === undefined ? {} : { log: declaredLog }),
 			} as never);
 		},
-		describe: () => describeRegistry(name, extended, registry, provider),
+		describe: () =>
+			describeRegistry(
+				name,
+				extended,
+				registry,
+				provider,
+				isLogFactory(declaredLog) ? "opaque" : log?.settings,
+			),
 		get started() {
 			return started;
 		},
@@ -1280,6 +1366,7 @@ export function applicationOf<
 					if (provider !== undefined && isDeferredProvider(provider)) {
 						await stopProvider(provider);
 					}
+					if (isLogFactory(declaredLog)) log?.set(undefined);
 					throw error;
 				},
 			);
@@ -1293,6 +1380,8 @@ export function applicationOf<
 			if (startedApplication() === application)
 				setStartedApplication(undefined);
 			if (provider !== undefined) await stopProvider(provider);
+			await log?.flush();
+			if (isLogFactory(declaredLog)) log?.set(undefined);
 		},
 		get(declaration: unknown) {
 			if (isEnvironment(declaration)) {
@@ -1317,5 +1406,6 @@ export function applicationOf<
 		},
 	});
 	internals.set(application, registry);
+	if (declaredLog !== undefined) logSettings.set(application, declaredLog);
 	return application as never;
 }

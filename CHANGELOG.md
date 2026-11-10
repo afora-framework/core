@@ -1,6 +1,21 @@
 # Changelog
 
-## 0.0.3 — unreleased (draft: dated when it is published)
+## 0.0.4 — unreleased (draft: dated when it is published)
+
+### Changed
+
+- Breaking: `UseCaseDependency` and `UseCaseDependencyDescription.kind` gain the logger (`"logger"`, with `ref: "Logger"`); code that switches over every kind needs the new case.
+- Breaking: `CommandEventInfo` gains `logger`, and `ProviderFactory` gains `withContext`; code that builds either by hand must give them.
+- `eventOf` handlers get a second argument, `{ logger }`, and `EntityEvent.handle` takes an optional one; existing handlers and calls are unaffected.
+- `@afora/codegen` requires `@afora/core` 0.0.4 or later, since a spec with `log` or `"Logger"` generates code that uses them.
+
+### Added
+
+- Logging, as data access is: `applicationOf({ log: { level?, providers } })` builds an `ILogger` (`debug`, `info`, `warn`, `error`, each `(event, fields?)`) from log providers (`ILogProvider`: `write(entry)`, optional `flush()`; `LogEntry` with `at`, `level`, `event`, `fields`, `application`). Built in: `jsonLogProvider()`, `consoleLogProvider()` and `memoryLogProvider()` (for tests); `logProviderOf({ name?, write, flush? })` checks your own (`InvalidLogDeclaration`). The application logs `use-case`, `repository` and `command` at `debug` with their time, and a failure once however many layers it crosses (`use-case-failed`, `command-failed`: `warn` for a declared exception, `error` for an unexpected one, with `exception.toJSON()`), never inputs, arguments or responses. `app.logger` writes your own lines; `stop()` flushes the providers; `extends` inherits the `log`; `describe().log` gives the level and the named providers. A provider that throws never breaks the call. A use case gets the logger by declaring `Logger` as a dependency (an `ILogger`, replaceable in `execute`; `UseCaseDependencyDescription.kind` gains `"logger"`); an `eventOf` handler gets `{ logger }` next to the entity (`EventHandlerContext`, and `event.handle({ logger })`), and `CommandEventInfo` gains `logger`. Outside a bound use case or command, the started application's logger is used. See `docs/logging.md`.
+- The context of an application: `app.context` (`ApplicationContext`: `name`, `env(Environment)` with typed variables, `logger`), also through `useApplication().context`. `providerFrom((ctx) => provider)` makes the provider from it on start, and `logFrom((ctx) => log)` (with `isLogFactory` and `LogFactory`) the log, before the provider.
+- `@afora/codegen`: `"log": { "level"?, "providers": ["json" | "console" | { "import" }] }` (or `{ "import" }` for a whole log) at the top of an `afora.json`, and `"Logger"` as a use case dependency, generated, validated and extracted (imports `log` and `log.providers.<index>`).
+
+## 0.0.3 — 2026-11-09
 
 ### Changed
 

@@ -9,6 +9,15 @@ import {
 } from "../environment/environment";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { guard } from "../exception/guard";
+import {
+	clock,
+	elapsed,
+	type ILogger,
+	logFailure,
+	resolveLogger,
+	silentLogger,
+	writeLog,
+} from "../logger/logger";
 import { isRepository } from "../repository/repository";
 import { findState, type RepositoryState } from "../repository/state";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
@@ -341,6 +350,7 @@ export function commandOf<
 		events: EntityEvent[];
 		context: unknown;
 		env: () => Readonly<Record<string, unknown>>;
+		logger: ILogger;
 	}> => {
 		if (typeof op !== "string" || !Object.hasOwn(frozenUseCases, op)) {
 			throw new UnknownCommandOperation({
@@ -368,15 +378,23 @@ export function commandOf<
 			options?.env === undefined
 				? undefined
 				: callEnvironment(where, environments, options.env);
+		// The application that bound the use case logs the call, and every use
+		// case it runs, bound or not, gets its logger through the scope.
+		const logger = resolveLogger(undefined, UseCase);
 		const withEnvironments = (
 			scope: ExecutionScope | undefined,
-		): ExecutionScope | undefined =>
-			overrides === undefined || overrides.byEnvironment.size === 0
-				? scope
-				: {
-						providers: scope?.providers ?? new Map(),
-						environments: overrides.byEnvironment,
-					};
+		): ExecutionScope | undefined => {
+			const environmentsOfCall =
+				overrides === undefined || overrides.byEnvironment.size === 0
+					? scope?.environments
+					: overrides.byEnvironment;
+			if (!environmentsOfCall && !logger) return scope;
+			return {
+				providers: scope?.providers ?? new Map(),
+				...(environmentsOfCall ? { environments: environmentsOfCall } : {}),
+				...(logger ? { logger } : {}),
+			};
+		};
 		const run = async (declared: ExecutionScope | undefined) => {
 			const scope = withEnvironments(declared);
 			const useCase = new UseCase(input, { context: given, [ScopeKey]: scope });
@@ -384,6 +402,7 @@ export function commandOf<
 			return { value, events: useCase.pullEvents() };
 		};
 		const provider = providerOfCall();
+		const started = clock();
 		const outcome = await guard(
 			{ layer: ExceptionLayers.Command, source: where },
 			() =>
@@ -392,11 +411,25 @@ export function commandOf<
 							run({ providers: new Map([[provider, scoped]]) }),
 						)
 					: run(undefined),
-		);
+		).catch((error: unknown) => {
+			// Logged once: a use case that failed inside has logged it already.
+			logFailure(
+				logger,
+				"command-failed",
+				{ command: where, ms: elapsed(started) },
+				error,
+			);
+			throw error;
+		});
+		writeLog(logger, "debug", "command", {
+			command: where,
+			ms: elapsed(started),
+		});
 		return {
 			...outcome,
 			context: callContext,
 			env: () => overrides?.merged ?? loadEnvironments(environments),
+			logger: logger ?? silentLogger,
 		};
 	};
 
@@ -433,6 +466,7 @@ export function commandOf<
 				events: raised,
 				context: callContext,
 				env,
+				logger,
 			} = await perform(op, input, options);
 			await applyPolicy(
 				command as unknown as AnyCommand,
@@ -443,6 +477,7 @@ export function commandOf<
 					raised,
 					context: callContext,
 					env,
+					logger,
 				},
 			);
 			return value;
@@ -463,6 +498,7 @@ async function applyPolicy(
 		readonly raised: readonly EntityEvent[];
 		readonly context: unknown;
 		readonly env: () => Readonly<Record<string, unknown>>;
+		readonly logger: ILogger;
 	},
 ): Promise<void> {
 	const { operation, raised } = call;
@@ -476,6 +512,7 @@ async function applyPolicy(
 		get env() {
 			return call.env();
 		},
+		logger: call.logger,
 	};
 	if (typeof policy === "function") {
 		try {
@@ -491,7 +528,7 @@ async function applyPolicy(
 	}
 	for (const [index, event] of raised.entries()) {
 		try {
-			await event.handle();
+			await event.handle({ logger: call.logger });
 		} catch (cause) {
 			if (!onEventError) {
 				throw new CommandEventFailed({

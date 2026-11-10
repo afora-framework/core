@@ -36,6 +36,8 @@ Some things are code, not data: a provider made by hand, a `run` function, an `e
 | Key                            | Maps                                                                    |
 | ------------------------------ | ----------------------------------------------------------------------- |
 | `provider`                     | the provider of the application, when created without `providerOf`      |
+| `log`                          | the `log` of the application, when made by `logFrom`                    |
+| `log.providers.<index>`        | a log provider other than `"console"` or `"json"`, by its position      |
 | `repositories.<Name>.provider` | the own provider of a repository, when created without `providerOf`     |
 | `useCases.<Name>`              | a use case with a hand-written `execute`                                |
 | `useCases.<Name>.run.<name>`   | the `fn` of a `run` step of a steps use case                            |

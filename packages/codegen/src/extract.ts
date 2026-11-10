@@ -75,6 +75,45 @@ function providerSpec(
 	return { import: reference };
 }
 
+/**
+ * The `log` as the spec says it: the built-in console and json providers by
+ * name; any other provider, or a `log` of `logFrom`, needs an import in
+ * `imports` (`"log"`, or `"log.providers.<index>"`).
+ */
+function logSpec(
+	description: NonNullable<ApplicationDescription["log"]>,
+	imports: Readonly<Record<string, string>> | undefined,
+): unknown {
+	if (!("level" in description)) {
+		const reference = imports?.log;
+		if (reference === undefined) {
+			throw new ExtractionError(
+				'The log of the application is made on start (logFrom), so it cannot be described. Pass imports: { "log": "./path/to/file.ts#exportName" } to import it as it is.',
+			);
+		}
+		return { import: reference };
+	}
+	return {
+		...(description.level === "info" ? {} : { level: description.level }),
+		providers: description.providers.map((provider, index) => {
+			if (
+				provider.kind === "log-provider" &&
+				(provider.name === "console" || provider.name === "json")
+			) {
+				return provider.name;
+			}
+			const key = `log.providers.${index}`;
+			const reference = imports?.[key];
+			if (reference === undefined) {
+				throw new ExtractionError(
+					`Log provider ${index} of the application is not "console" or "json", so the spec cannot name it. Pass imports: { "${key}": "./path/to/file.ts#exportName" } to import it as it is.`,
+				);
+			}
+			return { import: reference };
+		}),
+	};
+}
+
 class Extraction {
 	readonly opaque = new Map<string, string>();
 	readonly declared: Set<string>;
@@ -520,6 +559,9 @@ export function extractSpec(
 						options.imports,
 					),
 				}),
+		...(description.log === undefined
+			? {}
+			: { log: logSpec(description.log, options.imports) }),
 		...(Object.keys(allProperties).length > 0
 			? { properties: allProperties }
 			: {}),

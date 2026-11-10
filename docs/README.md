@@ -14,6 +14,7 @@ The [README](../README.md) has the install, a quick start and an overview. These
 | [Outputs](outputs.md)                 | Stages, the `select` and `openapi` ones, `statusOf` and `problemOf`, catalogs of stages.                  |
 | [Applications](applications.md)       | The manifest of declarations, composition, bound providers, `describe()`.                                 |
 | [Exceptions](exceptions.md)           | Layers, `trace`, `guard`.                                                                                 |
+| [Logging](logging.md)                 | `log` and log providers, the `Logger` dependency, `logFrom`; what afora logs.                             |
 | [Environments](environments.md)       | Validated environment variables.                                                                          |
 | [Standard Schema](standard-schema.md) | Hono, tRPC, TanStack Form, `safeParse`, issue codes.                                                      |
 | [OpenAPI](openapi.md)                 | `toOpenAPI` for models; the `openapi` sink is in [Outputs](outputs.md).                                   |
