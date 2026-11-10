@@ -18,6 +18,8 @@ new Name("a"); // throws: Invalid value for property "name": ...
 Name.demo().value; // "Jane"
 ```
 
+A handler only gets a value of the types of the schema: before `preHandle` runs, the value is checked against the schema without its constraints (`minLength`, `format`...), and one of another type is rejected there. A property with no `preHandle` has no such step, its value goes straight to validation.
+
 Pass `optional: true` to accept `undefined`, `sensitive: true` to have records mask it (as `Password` does) and `unique: true` to have records list its key in `options.unique` (as `Slug` does). `Std` ships `Id`, `Slug`, `Email`, `Phone`, `Url`, `Ip`, `Password`, strings, numbers, booleans, date properties and [JSON](#json).
 
 A property whose callers give another form of its value than the one it stores says so with a static under the `PropertyInput` symbol: `{ accepts, convert }`, the property that validates what a caller gives (of the same value type) and the function that turns it into what is stored. `Password` declares `{ accepts: PlainPassword, convert }`, a plain password checked by the password rules and hashed, so what derives inputs from an entity, as the [standard use cases](std-use-cases.md) do, takes a plain password for a `Password` key and stores its hash. `propertyInputOf(field)` reads it (`undefined` for a property that takes its value as it stores it); a class extending or refining the property keeps it. `PlainPassword` is exported; it is not in the `Std` context.
