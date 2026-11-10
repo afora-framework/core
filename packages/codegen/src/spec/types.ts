@@ -18,13 +18,21 @@ interface FieldModifiers {
 }
 
 /** A field naming a type: a Std property (`email`) or a declaration (`Age`, `Address`, `User`). */
-export interface TypeField extends FieldModifiers {
+/** What a stored row lacking the key gets, and the key that held it before (not for lists). */
+interface FieldEvolution {
+	/** The value a repository gives the key when a stored row lacks it. */
+	readonly fill?: unknown;
+	/** The key that held the value in rows stored before the rename. */
+	readonly renamedFrom?: string;
+}
+
+export interface TypeField extends FieldModifiers, FieldEvolution {
 	readonly type: string;
 	readonly with?: WithOptions;
 }
 
 /** A field holding one of some values. */
-export interface EnumField extends FieldModifiers {
+export interface EnumField extends FieldModifiers, FieldEvolution {
 	readonly enum: readonly EnumValue[];
 	readonly name?: string;
 	readonly default?: EnumValue;
@@ -81,6 +89,12 @@ export interface RecordSpec {
 	readonly versioned?: boolean;
 	/** Entities only: when their records expire, which reads then leave out. */
 	readonly expires?: EntityExpiresSpec;
+	/** Entities only: the version of the stored shape, 1 when absent. */
+	readonly schemaVersion?: number;
+	/** Entities only: the hand-written step reaching each version, by version. */
+	readonly upgrade?: Readonly<Record<string, ImportRef>>;
+	/** Entities only: the names the entity had before. */
+	readonly previousNames?: readonly string[];
 }
 
 /**

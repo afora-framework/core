@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Schema evolution (#28), see `docs/schema-evolution.md`:
+  - Property options `fill` (the value a stored row lacking the key gets, on read and in a backfill; unlike `default`, the demo value) and `renamedFrom` (the key that held the value before), in `.with()`; both kept in the lineage `describe()` gives.
+  - Entity options `schemaVersion`, `upgrade: { [version]: (data) => data }` and `previousNames`. Every write of an entity with `schemaVersion` stores it in the row under `SCHEMA_VERSION_KEY` (`"$v"`), which such an entity cannot declare (`ReservedEntityKey`); a row without it is version 1. Invalid options throw the new `InvalidEntitySchemaVersion` (layer `entity`). `describe().entities.<Name>` has `schemaVersion`, `upgrade` (the versions with a step) and `previousNames` when declared.
+  - Upcast on read: for an entity declaring any of them, each row read (and each row of a related entity) runs its `upgrade` steps from the stored version, then the automatic steps of the current blueprint (renames, fills, keys no longer declared left out), at any depth, before it is parsed. Other entities are read as before. A stored version that is not a positive integer or is above `schemaVersion` throws `InvalidRepositoryData` caused by the new `InvalidStoredSchemaVersion` (layer `repository`).
+  - `app.migrate({ entities?, mode: "check" | "apply", destructive?, pageSize?, lock? })` walks each provider and gives, per entity, `{ scanned, upToDate, upgraded, removalPending, invalid, movedFromPreviousNames, removedKeys }`: in `apply` it calls `provider.migrate(context, plan)`, rewrites the rows below the version or with a fill or rename pending, and moves the rows of previous names; keys and old rows are removed only with `destructive: true`. Idempotent and resumable. Invalid options throw the new `InvalidSchemaMigration` (layer `application`). New types `SchemaMigrationOptions`, `SchemaMigrationReport`, `EntityMigrationReport`, `SchemaMigrationInvalidRow`.
+  - `schemaLockOf(app.describe())` (the normalized lock, `afora.lock.json`; `SchemaLockEntity.upgrade` lists the versions with a step), `diffSchemas(lock, current)` (each change classed `automatic`, `declared` or `check`, with `satisfied` and `destructive`) and `schemaLockProblemsOf(lock, current)`. `app.start({ lock })` throws the new `SchemaLockMismatch` (layer `application`) when an entity of the lock is gone without a `previousNames` naming it, or when a `schemaVersion` is lower than the lock's.
+  - `providerContract` has schema evolution cases (`{ schemaEvolution }`, default `true`), and `{ schemaVersionKey }` (default `true`) for those storing `$v`. Providers made with `providersOf` and `providerFrom` forward `migrate`.
+
+### Changed
+
+- `inMemoryProvider` keys its tables by `context.name` instead of the entity class, so a context made for a previous name of an entity reads its rows. Two repositories of entity classes with the same name sharing one provider now share a table.
+
 ## 0.0.8 — unreleased (draft: dated when it is published)
 
 ### Changed

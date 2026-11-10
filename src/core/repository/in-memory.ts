@@ -27,7 +27,7 @@ export type InMemoryProvider = IRepositoryProvider & {
 };
 
 type Table = Map<string, RepositoryData>;
-type Tables = Map<object, Table>;
+type Tables = Map<string, Table>;
 
 /** The id of a stored value. */
 function idOf(data: RepositoryData): string {
@@ -48,10 +48,12 @@ function scopeOf(initial: Tables, root: boolean) {
 	let closed = false;
 
 	const tableOf = (context: RepositoryContext): Table => {
-		let table = tables.get(context.entity);
+		// By name, as a database names its tables: a context made for a
+		// previous name of an entity (`app.migrate`) reads its old rows.
+		let table = tables.get(context.name);
 		if (!table) {
 			table = new Map();
-			tables.set(context.entity, table);
+			tables.set(context.name, table);
 		}
 		return table;
 	};
@@ -238,7 +240,8 @@ function scopeOf(initial: Tables, root: boolean) {
 }
 
 /**
- * A provider that keeps the values in memory, one table per entity class,
+ * A provider that keeps the values in memory, one table per repository name
+ * (`context.name`),
  * enforcing its unique keys. Each `repositoryOf` without a provider gets its
  * own; repositories given the same one share the tables of their entities.
  * Its `transaction` works on isolated snapshots: commits on success, discards

@@ -199,10 +199,25 @@ class Extraction {
 		switch (lineage.kind) {
 			case "refined": {
 				const inner = this.property(lineage.base);
+				// fill and renamedFrom are keys of the field, not options of `with`.
+				const { fill, renamedFrom, ...options } = lineage.options as Record<
+					string,
+					unknown
+				>;
+				const evolution = {
+					...(fill === undefined ? {} : { fill }),
+					...(typeof renamedFrom === "string" ? { renamedFrom } : {}),
+				};
+				if (inner.kind === "enum" && Object.keys(options).length === 0) {
+					return { ...inner, ...evolution };
+				}
 				if (inner.kind !== "type") return this.opaqueFor(property);
+				const merged = { ...(inner.with ?? {}), ...options };
+				const { with: _with, ...rest } = inner;
 				return {
-					...inner,
-					with: { ...(inner.with ?? {}), ...lineage.options },
+					...rest,
+					...(Object.keys(merged).length > 0 ? { with: merged } : {}),
+					...evolution,
 				};
 			}
 			case "optional":
@@ -403,6 +418,28 @@ export function extractSpec(
 		...(value.expires === undefined
 			? {}
 			: { expires: structuredClone(value.expires) as Json }),
+		...(value.schemaVersion === undefined
+			? {}
+			: { schemaVersion: value.schemaVersion }),
+		...(value.upgrade === undefined || value.upgrade.length === 0
+			? {}
+			: {
+					upgrade: Object.fromEntries(
+						value.upgrade.map((version) => [
+							String(version),
+							{
+								import: importFor(
+									options.imports,
+									`entities.${name}.upgrade.${version}`,
+									`The upgrade step ${version} of the entity "${name}"`,
+								),
+							},
+						]),
+					),
+				}),
+		...(value.previousNames === undefined || value.previousNames.length === 0
+			? {}
+			: { previousNames: [...value.previousNames].sort() }),
 		...(value.events === undefined
 			? {}
 			: {

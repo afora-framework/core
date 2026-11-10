@@ -38,6 +38,23 @@ const WithOptions = Type.Record(Type.String(), Type.Unknown(), {
 
 const FieldRef = Type.Ref("#/$defs/Field");
 
+/** `fill` and `renamedFrom` of a type or enum field (not a list). */
+const Evolution = {
+	fill: Type.Optional(
+		Type.Unknown({
+			description:
+				"The value a repository gives the key when a stored row lacks it, on read and in app.migrate; unlike `default` (the demo value), it fills real data. Not for list fields.",
+		}),
+	),
+	renamedFrom: Type.Optional(
+		Type.String({
+			pattern: "^[A-Za-z_$][A-Za-z0-9_$]*$",
+			description:
+				"The key that held the value in rows stored before the key was renamed: moved on read and in app.migrate. Not for list fields.",
+		}),
+	),
+};
+
 const FieldsOf = Type.Record(Type.String({ pattern: KEY }), FieldRef, {
 	additionalProperties: false,
 	description: "Fields by key.",
@@ -59,6 +76,7 @@ export const fieldDefinition = Type.Union(
 						"A Std property (lowercase: email, text, integer...) or a declaration of this spec (PascalCase).",
 				}),
 				with: Type.Optional(WithOptions),
+				...Evolution,
 				...Modifiers,
 			},
 			{ additionalProperties: false },
@@ -68,6 +86,7 @@ export const fieldDefinition = Type.Union(
 				enum: EnumValues,
 				name: Type.Optional(Type.String()),
 				default: Type.Optional(Type.Union([Type.String(), Type.Number()])),
+				...Evolution,
 				...Modifiers,
 			},
 			{ additionalProperties: false },
@@ -368,6 +387,25 @@ const RecordDeclaration = Type.Object(
 			}),
 		),
 		expires: Type.Optional(EntityExpires),
+		schemaVersion: Type.Optional(
+			Type.Integer({
+				minimum: 1,
+				description:
+					"Entities only: the version of the stored shape (1 when absent). Rows store it under $v; reads bring older rows up through upgrade.",
+			}),
+		),
+		upgrade: Type.Optional(
+			Type.Record(Type.String({ pattern: "^[1-9][0-9]*$" }), ImportRef, {
+				additionalProperties: false,
+				description:
+					'Entities only: the hand-written step that brings a stored row up to each version: { "2": { "import": "./upgrades.ts#toV2" } }, each (data) => data. Keys from 2 to schemaVersion.',
+			}),
+		),
+		previousNames: Type.Optional(
+			StringList(
+				"Entities only: the names the entity had before; app.migrate moves their rows and start({ lock }) accepts the rename.",
+			),
+		),
 	},
 	{ additionalProperties: false },
 );

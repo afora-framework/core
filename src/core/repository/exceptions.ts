@@ -40,6 +40,34 @@ export const InvalidRepositoryEntity = exceptionOf({
 		`"${source}" expected an entity of its own class.`,
 });
 
+/**
+ * A stored row holds a schema version (`SCHEMA_VERSION_KEY`) that is not a
+ * positive integer, or that is above the `schemaVersion` of its entity (it
+ * was written by newer code), or an `upgrade` step did not give an object.
+ * `source` is the repository name; reads throw it as the cause of
+ * `InvalidRepositoryData`.
+ */
+export const InvalidStoredSchemaVersion = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "InvalidStoredSchemaVersion",
+	message: (
+		{
+			id,
+			stored,
+			current,
+			reason,
+		}: {
+			readonly id: string;
+			readonly stored: unknown;
+			readonly current: number;
+			readonly reason?: string;
+		},
+		source,
+	) =>
+		reason ??
+		`"${source}" read the row "${id}" stored at schema version ${JSON.stringify(stored)}, and its entity is at version ${current}.`,
+});
+
 /** A provider gave a value its entity rejects; `source` is the repository name. */
 export const InvalidRepositoryData = exceptionOf({
 	layer: ExceptionLayers.Repository,

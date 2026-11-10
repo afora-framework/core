@@ -8,6 +8,7 @@ import {
 	eventsConstOf,
 } from "../entity-events";
 import { canonicalExpires } from "../entity-expires";
+import { canonicalEntitySchema } from "../entity-schema";
 import { fieldsOfDecl, orderOf } from "../graph";
 import { type Field, parseFields } from "../model";
 import { defaultMessageOf, normalizeSpec } from "../normalize";
@@ -254,6 +255,17 @@ function withOptions(options: unknown): Doc | undefined {
 	return Object.keys(options).length === 0 ? undefined : literal(options);
 }
 
+/** `fill` and `renamedFrom` of a field, as options of `with`. */
+function evolutionOptions(field: Field): Record<string, unknown> {
+	if (field.kind === "inline") return {};
+	return {
+		...(field.fill === undefined ? {} : { fill: field.fill }),
+		...(field.renamedFrom === undefined
+			? {}
+			: { renamedFrom: field.renamedFrom }),
+	};
+}
+
 /** The property a field names, without optional or list. */
 function itemDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 	if (field.kind === "enum") {
@@ -263,13 +275,15 @@ function itemDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 		if (field.default !== undefined) {
 			options.push(["default", literal(field.default)]);
 		}
-		return call("ctx.enumOf", [
+		const made = call("ctx.enumOf", [
 			literal([...field.values]),
 			...(options.length > 0 ? [objectDoc(options)] : []),
 		]);
+		const evolution = withOptions(evolutionOptions(field));
+		return evolution ? [made, ".with(", evolution, ")"] : made;
 	}
 	if (field.kind === "inline") return blueprintDoc(field.fields, e, false);
-	const options = withOptions(field.with);
+	const options = withOptions({ ...field.with, ...evolutionOptions(field) });
 	if (/^[a-z]/.test(field.type)) {
 		ctx.used = true;
 		return options
@@ -286,6 +300,8 @@ function fieldDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 		field.kind === "type" &&
 		/^[a-z]/.test(field.type) &&
 		!field.with &&
+		field.fill === undefined &&
+		field.renamedFrom === undefined &&
 		!bounded;
 	if (plain && field.kind === "type") {
 		ctx.used = true;
@@ -415,6 +431,35 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	}
 	const expires = entity ? canonicalExpires(decl.spec.expires) : undefined;
 	if (expires) options.push(["expires", literal(expires)]);
+	if (entity) {
+		const { schemaVersion, upgrade, previousNames } = canonicalEntitySchema(
+			decl.spec,
+		) as {
+			schemaVersion?: number;
+			upgrade?: Record<string, { import: string }>;
+			previousNames?: string[];
+		};
+		if (schemaVersion !== undefined) {
+			options.push(["schemaVersion", literal(schemaVersion)]);
+		}
+		if (upgrade !== undefined) {
+			options.push([
+				"upgrade",
+				objectDoc(
+					Object.entries(upgrade).map(([version, step]) => {
+						const { module, name } = parseImportRef(step.import) as {
+							module: string;
+							name: string;
+						};
+						return [version, e.bind(module, name, providers.taken)] as const;
+					}),
+				),
+			]);
+		}
+		if (previousNames !== undefined) {
+			options.push(["previousNames", literal(previousNames)]);
+		}
+	}
 	for (const cycle of CYCLES) {
 		const list = cycles[cycle];
 		if (!list || list.length === 0) continue;

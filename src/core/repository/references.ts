@@ -18,6 +18,7 @@ import type {
 	AnyRepositoryEntity,
 	RepositoryData,
 } from "./types/repository.interface";
+import { upcastRows } from "./upcast";
 
 type Plain = Readonly<Record<string, unknown>>;
 
@@ -239,7 +240,10 @@ export async function resolveReferences(
 		const missing = [...ids].filter((id) => !loaded.has(id));
 		if (missing.length === 0) continue;
 
-		const found = await loadByIds(relation, missing, scope);
+		const found = upcastRows(
+			relation,
+			await loadByIds(relation, missing, scope),
+		);
 		const resolved = await resolveReferences(relation, found, session, scope);
 		for (const data of resolved) {
 			const id = data.id as string;

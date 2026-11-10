@@ -91,7 +91,13 @@ function slotOf(
 			string,
 			(...args: unknown[]) => unknown
 		>;
-		for (const method of [...METHODS, "increment", "transaction", "close"]) {
+		for (const method of [
+			...METHODS,
+			"increment",
+			"transaction",
+			"close",
+			"migrate",
+		]) {
 			if (typeof target[method] === "function") {
 				slot[method] = (...args: unknown[]) => target[method]?.(...args);
 			}

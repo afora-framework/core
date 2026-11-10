@@ -66,6 +66,12 @@ export const EXPIRES_AT = "expiresAt";
 /** The key a versioned entity adds to its identity. */
 export const ENTITY_VERSION_KEY = "version";
 
+/**
+ * The key of each stored row holding its schema version, for entities
+ * declared with `schemaVersion`; it is never a key of the entity.
+ */
+export const SCHEMA_VERSION_KEY = "$v";
+
 /** Whether `entityClass` was declared with `versioned: true`. */
 export function isVersionedEntityClass(entityClass: unknown): boolean {
 	if (typeof entityClass !== "function") return false;

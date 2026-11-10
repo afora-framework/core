@@ -49,6 +49,28 @@ A repository lists `"increment"` among its actions for atomic counters; the enti
 }
 ```
 
+## Schema evolution
+
+An entity takes `schemaVersion`, `previousNames` and `upgrade` (each step an import of a hand-written function, by the version it reaches), and the object form of a type or enum field takes `fill` and `renamedFrom` (see [Schema evolution](schema-evolution.md)):
+
+```json
+{
+	"entities": {
+		"Entry": {
+			"fields": {
+				"title": { "type": "text", "renamedFrom": "name" },
+				"locale": { "enum": ["pt", "en"], "fill": "pt" }
+			},
+			"schemaVersion": 2,
+			"previousNames": ["Post"],
+			"upgrade": { "2": { "import": "./upgrades#entryV2" } }
+		}
+	}
+}
+```
+
+They are generated as `.with({ fill, renamedFrom })` and the options of `entityOf`, and extracted back (`entities.<Name>.upgrade.<n>` in `imports` for a step). `afora-codegen schema lock src/app.ts#App [--out afora.lock.json]` writes the [schema lock](schema-evolution.md#the-lock), and `afora-codegen schema check src/app.ts#App [--lock afora.lock.json]` fails in CI when the lock is stale, a change lacks its declaration or a version was not bumped, printing an `upgrade` stub for each missing step.
+
 ## Round trip
 
 `extractSpec(app)` reads `app.describe()` and is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec, and `normalizeSpec` makes the shorthand and object forms of a field compare equal. This holds for code that was generated, and for code written by hand, as long as everything the core cannot describe is mapped to an export (next section). An unmapped piece makes extraction throw an `ExtractionError` naming the key, instead of guessing. `examples/blog` extracts its own spec back in its tests, and `bun run test:roundtrip` proves both directions on complete applications.
