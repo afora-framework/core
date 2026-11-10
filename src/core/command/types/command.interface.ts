@@ -79,6 +79,41 @@ export interface CommandSettings<
 	readonly onEventError?: CommandEventErrorHandler;
 }
 
+/**
+ * The `useCases` of a command made by a builder: the object, or a function
+ * of the use case plugins of its catalogs that gives it.
+ */
+export type CommandUseCasesOption<UseCases extends CommandUseCases, Generics> =
+	| UseCases
+	| ((ctx: Generics) => UseCases);
+
+/** `CommandSettings` with `useCases` as a builder takes it. */
+export interface CommandBuilderSettings<
+	UseCases extends CommandUseCases,
+	Context extends IBlueprintCollection | undefined,
+	Environment extends EnvironmentDependencies | undefined,
+	Generics,
+> extends Omit<CommandSettings<UseCases, Context, Environment>, "useCases"> {
+	/**
+	 * The use cases, by operation name; or a function that gets the use
+	 * case plugins of the builder's catalogs, each called with a repository,
+	 * and gives them: `(ctx) => ({ create: ctx.create(Posts) })`.
+	 */
+	readonly useCases: CommandUseCasesOption<UseCases, Generics>;
+}
+
+/**
+ * What `commandBuilderOf` gives: `commandOf`, with the use case plugins
+ * `Generics` to pick from.
+ */
+export type CommandBuilder<Generics> = <
+	const UseCases extends CommandUseCases,
+	Context extends IBlueprintCollection | undefined = undefined,
+	Environment extends EnvironmentDependencies | undefined = undefined,
+>(
+	settings: CommandBuilderSettings<UseCases, Context, Environment, Generics>,
+) => CommandOf<UseCases, Context, Environment>;
+
 /** The names of the operations of a command. */
 export type CommandOperation<Command extends { readonly useCases: object }> =
 	keyof Command["useCases"] & string;

@@ -749,11 +749,22 @@ function checkRepository(
 				continue;
 			}
 			seen.add(action);
+			if (action === "restore" && spec.deletion !== "soft") {
+				issues.push(
+					issue(
+						here,
+						"restore_needs_soft",
+						'"restore" needs "deletion": "soft" on the repository.',
+					),
+				);
+				continue;
+			}
 			if (
 				[
 					"create",
 					"update",
 					"delete",
+					"restore",
 					"count",
 					"findMany",
 					"exists",
@@ -768,7 +779,7 @@ function checkRepository(
 					issue(
 						here,
 						"unknown_action",
-						`"${action}" is not an action. Use create, update, delete, count, findMany, exists, findPage, findCursor, findBy<Key> or findManyBy<Key>.`,
+						`"${action}" is not an action. Use create, update, delete, restore, count, findMany, exists, findPage, findCursor, findBy<Key> or findManyBy<Key>.`,
 					),
 				);
 				continue;

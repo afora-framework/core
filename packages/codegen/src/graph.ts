@@ -41,6 +41,16 @@ function stringsOf(value: unknown): string[] {
 function useCaseNamesOf(decl: Decl): string[] {
 	const { spec } = decl;
 	const names: string[] = [];
+	// A standard use case: its repository and the errors of its options.
+	if (typeof spec.repository === "string") names.push(spec.repository);
+	const options = spec.options as { errors?: unknown } | undefined;
+	if (options?.errors && typeof options.errors === "object") {
+		names.push(
+			...Object.values(options.errors).filter(
+				(value): value is string => typeof value === "string",
+			),
+		);
+	}
 	for (const key of ["input", "response", "context"]) {
 		const ref = spec[key];
 		if (typeof ref === "string") names.push(ref);

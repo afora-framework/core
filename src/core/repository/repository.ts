@@ -1,5 +1,5 @@
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
-import { EntityUniqueKeys } from "../entity/abstract-entity";
+import { EntityClock, EntityUniqueKeys } from "../entity/abstract-entity";
 import { isEntity, isEntityClass } from "../entity/entity";
 import {
 	type EnvironmentDependencies,
@@ -26,7 +26,13 @@ import {
 import { inMemoryProvider } from "./in-memory";
 import { prepareQuery } from "./query";
 import { parseEntity, relationsOf, resolveReferences } from "./references";
-import { contextOf, stateOf, states } from "./state";
+import {
+	contextOf,
+	declareRepository,
+	type RepositoryState,
+	stateOf,
+	states,
+} from "./state";
 import type { RepositoryQuery } from "./types/query.interface";
 import type {
 	AnyRepository,
@@ -337,6 +343,34 @@ const remove = action(async (self, target: unknown) => {
 	return entity;
 });
 
+const restore = action(async (self, target: unknown) => {
+	const { context } = self;
+	const id =
+		typeof target === "string" ? target : (self.dataOf(target).id as string);
+	const data = await self.provider.findOne(context, {
+		...equals(self, "id", id),
+		withDeleted: true,
+	});
+	if (data === undefined) {
+		throw new RepositoryEntityNotFound({
+			source: context.name,
+			details: { id },
+		});
+	}
+	if (data.deletedAt === undefined) return self.hydrate(data);
+	const { deletedAt: _deletedAt, ...alive } = data;
+	const restored = {
+		...alive,
+		updatedAt: (
+			context.entity as unknown as {
+				readonly [EntityClock]: { now(): string };
+			}
+		)[EntityClock].now(),
+	};
+	await self.provider.update(context, restored);
+	return self.hydrate(restored);
+});
+
 const count = action(async (self, query: unknown) =>
 	self.provider.count(self.context, queryOf(self, query)),
 );
@@ -349,6 +383,7 @@ const NEEDS: Readonly<Record<string, readonly (keyof IRepositoryProvider)[]>> =
 		create: ["insert"],
 		update: ["update"],
 		delete: ["findOne", "remove"],
+		restore: ["findOne", "update"],
 		count: ["count"],
 		findMany: ["findMany"],
 		exists: ["findOne"],
@@ -390,7 +425,7 @@ function invalid(source: string, reason: string): never {
  * A repository of `entity` with the methods of `actions`: `findBy<Key>` for a
  * unique key (`id`, `options.unique`, a `unique` property), giving the entity
  * or `undefined`; `findManyBy<Key>` for any other key, giving a list;
- * `create`, `update`, `delete`, `count`, and the queries `findMany`,
+ * `create`, `update`, `delete`, `restore` (soft deletion only), `count`, and the queries `findMany`,
  * `exists`, `findPage` and `findCursor`. Every method is async and reads and writes through `provider`
  * (a new `inMemoryProvider()` by default), which gets the variables of
  * `environmentDependencies` as `context.env`. The repository can be a
@@ -442,6 +477,7 @@ export function repositoryOf<
 	methods.set("create", ["create", create]);
 	methods.set("update", ["update", update]);
 	methods.set("delete", ["delete", remove]);
+	methods.set("restore", ["restore", restore]);
 	methods.set("count", ["count", count]);
 	methods.set("findMany", ["findMany", findMany]);
 	methods.set("exists", ["exists", exists]);
@@ -462,6 +498,9 @@ export function repositoryOf<
 				unknownAction(recordNameOf(entity), String(name_), methods),
 			);
 		const [kind, implementation] = method;
+		if (kind === "restore" && deletion !== "soft") {
+			invalid(name, '"restore" needs deletion to be "soft".');
+		}
 		const needs =
 			deletion === "soft" && kind === "delete"
 				? (["findOne", "update"] as const)
@@ -478,7 +517,7 @@ export function repositoryOf<
 		});
 	}
 	Object.defineProperty(DeclaredRepository, "name", { value: name });
-	states.set(DeclaredRepository, {
+	const state: RepositoryState = {
 		name,
 		entity,
 		actions: Object.freeze([...new Set(actions as readonly string[])]),
@@ -487,9 +526,12 @@ export function repositoryOf<
 		explicitProvider: settings.provider !== undefined,
 		environment: environmentDependencies,
 		relations,
-	});
+	};
+	states.set(DeclaredRepository, state);
+	const repository = Object.freeze(new DeclaredRepository());
+	declareRepository(state, repository);
 
-	return Object.freeze(new DeclaredRepository()) as unknown as RepositoryType<
+	return repository as unknown as RepositoryType<
 		Entity,
 		Actions,
 		MergedEnvironment<Environment>

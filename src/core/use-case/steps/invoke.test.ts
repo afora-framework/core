@@ -40,6 +40,29 @@ describe("invoke", () => {
 		});
 	});
 
+	test("args as a reference to a list is spread", async () => {
+		const Case = stepsCase({
+			blueprint: blueprintOf((ctx) => ({
+				name: ctx.string,
+				email: ctx.email,
+				words: ctx.list.string,
+			})),
+			response: blueprintOf((ctx) => ({ text: ctx.string })),
+			steps: [
+				build,
+				{ invoke: "$user", method: "greet", args: "$input.words", as: "text" },
+				{ return: { text: "$text" } },
+			],
+		});
+		expect(
+			await new Case({
+				name: sample.name,
+				email: sample.email,
+				words: ["Hi", "ignored"],
+			}).execute(),
+		).toEqual({ text: "Hi, Ana" });
+	});
+
 	test("awaits an async method", async () => {
 		class Later extends User {
 			async later(value: string) {

@@ -464,6 +464,45 @@ export const joined: Promise<{ readonly member: ClubMember }> = Club.run(
 // @ts-expect-error an unknown operation
 Club.run("leave", {});
 
+// The standard use cases, picked from the context of commandOf.
+class Article extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{ change: ["title"], plugins: (ctx) => [ctx.publishable] },
+) {}
+const Articles = repositoryOf({
+	entity: Article,
+	deletion: "soft",
+	actions: ["findById", "findPage", "create", "update", "delete", "restore"],
+});
+const Editorial = commandOf({
+	name: "Editorial",
+	useCases: (ctx) => ({
+		create: ctx.create(Articles, { as: "article", omit: ["publishedAt"] }),
+		list: ctx.list(Articles),
+		update: ctx.update(Articles),
+		publish: ctx.publish(Articles),
+		remove: ctx.delete(Articles),
+		restore: ctx.restore(Articles),
+		join: Join,
+	}),
+});
+export const written: Promise<{ readonly article: Article }> = Editorial.run(
+	"create",
+	{ title: "Hello" },
+);
+export const edited: Promise<{ readonly item: Article }> = Editorial.run(
+	"update",
+	{ id: "0190a6a0-0000-7000-8000-000000000001", title: "Hi" },
+);
+export const listed: Promise<{
+	readonly items: Article[];
+	readonly total: number;
+	readonly limit: number;
+	readonly offset: number;
+}> = Editorial.run("list", {});
+// @ts-expect-error Articles has no findByEmail action, and Article is not authenticatable
+commandOf({ name: "Bad", useCases: (ctx) => ({ login: ctx.login(Articles) }) });
+
 const ClubApi = outputOf({
 	name: "ClubApi",
 	commands: [Club],

@@ -22,7 +22,12 @@ import { isRepository } from "../repository/repository";
 import { findState, type RepositoryState } from "../repository/state";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import { isUseCaseCatalog } from "../use-case/plugin-catalog";
 import { type ExecutionScope, ScopeKey } from "../use-case/scope";
+import type {
+	IUseCaseCatalog,
+	UseCasePluginContext,
+} from "../use-case/types/plugin.interface";
 import { type AnyUseCaseClass, isUseCaseClass } from "../use-case/use-case";
 import {
 	CommandEventFailed,
@@ -33,6 +38,8 @@ import {
 } from "./exceptions";
 import type {
 	AnyCommand,
+	CommandBuilder,
+	CommandBuilderSettings,
 	CommandEventErrorHandler,
 	CommandEventInfo,
 	CommandEvents,
@@ -235,19 +242,34 @@ function callEnvironment(
 }
 
 /**
- * Groups use cases under operation names and is the boundary of a call: the
- * context is validated once, a transaction can wrap the use case, and the
- * events it raised are handled by a policy once it succeeded.
+ * Declares a command: `settings.useCases` is the object of use case classes,
+ * or a function of `generics`, the context of the catalogs, that gives it.
  */
-export function commandOf<
+function declareCommand<
 	const UseCases extends CommandUseCases,
 	Context extends IBlueprintCollection | undefined = undefined,
 	Environment extends EnvironmentDependencies | undefined = undefined,
 >(
-	settings: CommandSettings<UseCases, Context, Environment>,
+	given: CommandBuilderSettings<UseCases, Context, Environment, never>,
+	generics: object,
 ): CommandOf<UseCases, Context, Environment> {
-	const { name, description, context, useCases, onEventError } = settings;
+	const { name, description, context, onEventError } = given;
 	const source = typeof name === "string" ? name : "commandOf";
+	// A use case plugin that cannot make its use case throws its own
+	// exception, which gains the frame of the command.
+	const picked: unknown = given.useCases;
+	const useCases = (
+		typeof picked === "function" && !isUseCaseClass(picked)
+			? guard({ layer: ExceptionLayers.Command, source }, () =>
+					(picked as (ctx: object) => unknown)(generics),
+				)
+			: picked
+	) as UseCases;
+	const settings = given as unknown as CommandSettings<
+		UseCases,
+		Context,
+		Environment
+	>;
 	const invalid = (reason: string): never => {
 		throw new InvalidCommandDeclaration({ source, details: { reason } });
 	};
@@ -274,7 +296,9 @@ export function commandOf<
 		Array.isArray(useCases) ||
 		Reflect.ownKeys(useCases).length === 0
 	) {
-		invalid("Expected useCases to be a non-empty object of use case classes.");
+		invalid(
+			"Expected useCases to be a non-empty object of use case classes, or a function returning one.",
+		);
 	}
 	for (const key of Reflect.ownKeys(useCases)) {
 		if (
@@ -487,6 +511,41 @@ export function commandOf<
 	verifiers.set(command, providerOfCall);
 	return command as unknown as CommandOf<UseCases, Context, Environment>;
 }
+
+/**
+ * A `commandOf` whose `useCases` may be a function of the use case plugins
+ * of `catalogs`, by name, a later catalog winning a name:
+ * `useCases: (ctx) => ({ create: ctx.create(Posts), custom: MyUseCase })`.
+ * Throws `InvalidCommandDeclaration` for what is not a catalog made by
+ * `useCaseCatalogOf`.
+ */
+export function commandBuilderOf<
+	const Catalogs extends readonly IUseCaseCatalog[] = [],
+>(...catalogs: Catalogs): CommandBuilder<UseCasePluginContext<Catalogs>> {
+	if (!catalogs.every(isUseCaseCatalog)) {
+		throw new InvalidCommandDeclaration({
+			source: "commandBuilderOf",
+			details: {
+				reason: "Expected catalogs made by useCaseCatalogOf.",
+			},
+		});
+	}
+	const generics = Object.freeze(
+		Object.assign({}, ...catalogs.map((catalog) => catalog.context)),
+	);
+	return ((settings: never) =>
+		declareCommand(settings, generics)) as unknown as CommandBuilder<
+		UseCasePluginContext<Catalogs>
+	>;
+}
+
+/**
+ * Groups use cases under operation names and is the boundary of a call: the
+ * context is validated once, a transaction can wrap the use case, and the
+ * events it raised are handled by a policy once it succeeded.
+ */
+export const commandOf: CommandBuilder<Record<never, never>> =
+	commandBuilderOf();
 
 /** Step 6: what the command does with the events of a call that succeeded. */
 async function applyPolicy(

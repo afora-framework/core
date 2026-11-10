@@ -4,6 +4,8 @@
 
 ### Added
 
+- The guide teaches the standard use cases of `afora.json` (`{ "generic", "repository", "options" }`), and `afora_catalog` lists them under `useCases`. It also covers the `restore` action and step.
+
 - The guide and the repository `actions` accept `findCursor`, the query that pages by position.
 - `mcpTools` sink (with `McpStages` and `stages`): exposes the operations of an afora output as MCP tools (`{ tools, call, register, server }`), with inline input schemas, masked responses, problem JSON errors with `isError` and a `context` mapping.
 - Commands and outputs: `afora_spec_upsert`/`remove`/`write` accept `command` and `output` declarations, `afora_catalog` lists the `stages` a pipe may name, the guide teaches both, and `afora_extract` takes `imports` for `commands.<Name>.events`, `commands.<Name>.onEventError` and `outputs.<Name>.pipe.<index>`. `afora-mcp --stages <module>` (and `createServer({ stages })`) supplies the catalog of external stages, as `--providers` does for providers.

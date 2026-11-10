@@ -22,6 +22,12 @@ export type StepValue =
 	| readonly StepValue[]
 	| { readonly [key: string]: StepValue };
 
+/**
+ * The arguments of a `find`, `invoke` or `run`: a list of values, or one
+ * reference to a list, which is spread (`args: "$input.tags"`).
+ */
+export type StepArgs = readonly StepValue[] | StepReference;
+
 /** The actions of a repository that only read. */
 export type StepReadAction =
 	| `findBy${string}`
@@ -84,7 +90,7 @@ export type UseCaseStep<
 	| {
 			/** `"<repository>.<read action>"`. */
 			readonly find: StepFindTarget<Dependencies>;
-			readonly args?: readonly StepValue[];
+			readonly args?: StepArgs;
 			readonly as?: string;
 	  }
 	| {
@@ -112,13 +118,15 @@ export type UseCaseStep<
 			readonly change: StepReference;
 			readonly key: string;
 			readonly value: StepValue;
+			/** Skips the step when `value` resolves to `undefined`: a partial update. */
+			readonly ifPresent?: boolean;
 			readonly as?: string;
 	  }
 	| {
 			/** A reference to a record or entity. */
 			readonly invoke: StepReference;
 			readonly method: string;
-			readonly args?: readonly StepValue[];
+			readonly args?: StepArgs;
 			readonly as?: string;
 	  }
 	| {
@@ -137,6 +145,12 @@ export type UseCaseStep<
 			readonly as?: string;
 	  }
 	| {
+			/** A soft-deleted entity or its id; the repository gives it back alive. */
+			readonly restore: StepRepositoryWith<Dependencies, "restore">;
+			readonly value: StepValue;
+			readonly as?: string;
+	  }
+	| {
 			readonly call: UseCaseKeys<Dependencies>;
 			readonly input: StepValue;
 			readonly as?: string;
@@ -145,7 +159,7 @@ export type UseCaseStep<
 			readonly run: string;
 			// biome-ignore lint/suspicious/noExplicitAny: any function, validated at execution
 			readonly fn: (...args: any[]) => unknown;
-			readonly args?: readonly StepValue[];
+			readonly args?: StepArgs;
 			readonly as?: string;
 	  }
 	| { readonly return: StepValue };
@@ -157,7 +171,7 @@ export type StepErrorDescription = string | { readonly core: string };
 export type UseCaseStepDescription =
 	| {
 			readonly find: string;
-			readonly args?: readonly StepValue[];
+			readonly args?: StepArgs;
 			readonly as?: string;
 	  }
 	| {
@@ -176,12 +190,13 @@ export type UseCaseStepDescription =
 			readonly change: string;
 			readonly key: string;
 			readonly value: StepValue;
+			readonly ifPresent?: boolean;
 			readonly as?: string;
 	  }
 	| {
 			readonly invoke: string;
 			readonly method: string;
-			readonly args?: readonly StepValue[];
+			readonly args?: StepArgs;
 			readonly as?: string;
 	  }
 	| {
@@ -199,11 +214,16 @@ export type UseCaseStepDescription =
 			readonly value: StepValue;
 			readonly as?: string;
 	  }
+	| {
+			readonly restore: string;
+			readonly value: StepValue;
+			readonly as?: string;
+	  }
 	| { readonly call: string; readonly input: StepValue; readonly as?: string }
 	| {
 			readonly run: string;
 			readonly fn: { readonly kind: "opaque" };
-			readonly args?: readonly StepValue[];
+			readonly args?: StepArgs;
 			readonly as?: string;
 	  }
 	| { readonly return: StepValue };

@@ -69,6 +69,52 @@ test("soft deletion persists timestamps and hides rows from every read", async (
 	expect(await Items.count()).toBe(0);
 });
 
+test("restore brings a soft-deleted entity back, by entity or id", async () => {
+	const provider = inMemoryProvider();
+	const Items = repositoryOf({
+		entity: Item,
+		actions: [...actions, "restore"],
+		provider,
+		deletion: "soft",
+	});
+	const item = await Items.create({ name: "a", email: "a@example.com" });
+	await Items.delete(item);
+	expect(await Items.findById(item.id)).toBeUndefined();
+
+	const restored = await Items.restore(item.id);
+	expect(restored).not.toBe(item);
+	expect(restored.isDeleted).toBe(false);
+	expect(restored.deletedAt).toBeUndefined();
+	expect(restored.email).toBe("a@example.com");
+	expect((await Items.findById(item.id))?.isDeleted).toBe(false);
+	expect(await Items.count()).toBe(1);
+
+	// by the deleted entity, and again for one that is alive
+	await Items.delete(restored);
+	expect((await Items.restore(restored)).isDeleted).toBe(false);
+	expect((await Items.restore(item.id)).id).toBe(item.id);
+	await expect(
+		Items.restore("0190a6a0-0000-7000-8000-000000000001"),
+	).rejects.toMatchObject({ name: "RepositoryEntityNotFound" });
+});
+
+test("restore needs soft deletion, and findOne and update of the provider", () => {
+	expect(() => repositoryOf({ entity: Item, actions: ["restore"] })).toThrow(
+		'"restore" needs deletion to be "soft".',
+	);
+	expect(() =>
+		repositoryOf({
+			entity: Item,
+			actions: ["restore"],
+			deletion: "soft",
+			provider: {
+				...inMemoryProvider(),
+				update: undefined,
+			} as unknown as IRepositoryProvider,
+		}),
+	).toThrow(InvalidRepositoryDeclaration);
+});
+
 test("soft actions require update and findOne, without requiring remove", async () => {
 	const memory = inMemoryProvider();
 	const provider = {

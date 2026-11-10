@@ -181,8 +181,42 @@ function canonicalStep(step: unknown): unknown {
 	return copy;
 }
 
+/** The options of a standard use case: core exceptions as `{ core }`, no `name`. */
+function canonicalGenericOptions(options: Json): Json {
+	const { name: _name, ...rest } = cloneJson(options) as Json;
+	if (isObject(rest.errors)) {
+		rest.errors = Object.fromEntries(
+			Object.entries(rest.errors).map(([kind, error]) => {
+				const name = errorNameOf(error);
+				return [
+					kind,
+					name !== undefined && catalog().coreExceptions.includes(name)
+						? { core: name }
+						: error,
+				];
+			}),
+		);
+	}
+	return rest;
+}
+
 function canonicalUseCase(value: Json): Json {
 	const tags = keep(value.tags);
+	if (typeof value.generic === "string") {
+		const options = isObject(value.options)
+			? canonicalGenericOptions(value.options)
+			: undefined;
+		return {
+			generic: value.generic,
+			repository: value.repository,
+			...(options && Object.keys(options).length > 0 ? { options } : {}),
+			...(typeof value.description === "string"
+				? { description: value.description }
+				: {}),
+			...(tags ? { tags } : {}),
+			...(value.deprecated === true ? { deprecated: true } : {}),
+		};
+	}
 	const errors = keep(value.errors);
 	const dependencies =
 		isObject(value.dependencies) && Object.keys(value.dependencies).length > 0

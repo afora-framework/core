@@ -4,7 +4,10 @@ import { open } from "./db.ts";
 import { Database } from "./domain/environments";
 import { tables } from "./schema.ts";
 
-/** The provider of the blog, made by `App.start()` from the `Database` variables. */
-export const provider = providerFrom(Database, (env) =>
+/**
+ * The database of the blog, made by `App.start()` from the `Database`
+ * variables; afora.json names it as the key `database` of its `providers`.
+ */
+export const database = providerFrom(Database, (env) =>
 	drizzleProvider({ db: open(env.BLOG_DB), tables }),
 );

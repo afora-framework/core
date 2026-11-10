@@ -1,6 +1,27 @@
 # Changelog
 
-## 0.0.6 — unreleased (draft: dated when it is published)
+## 0.0.7 — unreleased (draft: dated when it is published)
+
+### Changed
+
+- `@afora/codegen` requires `@afora/core` 0.0.7 or later: a spec with standard use cases generates code that uses `StdUseCases`.
+- `commandOf` is now the standard one, `commandBuilderOf(StdUseCases)`: its declared type is `CommandBuilder<StdUseCaseContext>` and `useCases` also accepts a function of the standard use cases. Calls with an object are unchanged; `commandBuilderOf()` gives the one without them.
+- `statusOf` gives 404 for `UseCaseEntityNotFound`, 409 for `UseCaseEntityConflict` and 401 for `UseCaseInvalidCredentials`.
+
+### Added
+
+- `afora.json` declares standard use cases, `{ "generic": "create", "repository": "Posts", "options": {...} }`, generated as `StdUseCases.context.create(Posts, {...})` and extracted back as written (`@afora/codegen`, see `docs/afora-json.md#standard-use-cases`); `examples/blog` now uses them for all its use cases, so its inputs take `id` and `password`, and its password hashing function is gone.
+
+- Standard use cases: `commandOf({ useCases: (ctx) => ({ create: ctx.create(Posts), publish: ctx.publish(Posts) }) })` picks ready-made use cases, each made for a repository. `create`, `get`, `list`, `update`, `delete` and `restore` exist for the actions the repository declares; `publish`, `unpublish`, `archive`, `unarchive`, `tag` and `untag` for entities with those record plugins; `register` and `login` for authenticatable ones. Inputs follow the entity: no identity keys, an entity it holds by `<key>Id`, a plain password for a `Password` key (stored as its hash), only the change keys in `update`. Options: `name`, `as`, `errors`, `owner` (the caller owns the entity: filled on create, checked on the others, filtered in `list`), `omit`, `values`, `set`, `orderBy`. A use case the repository or the entity cannot support is a type error and throws `UseCaseUnavailable`. Exported: `StdUseCases`, `StdUseCaseContext`, `StdUseCasePlugins`, the option types `StdUseCaseOptions`, `StdEntityOptions`, `StdCreateOptions`, `StdLifecycleOptions`, `StdListOptions`, `StdOwnerOption`, `StdUseCaseErrors`, and the maker types (`CreateMaker`...). See `docs/std-use-cases.md`.
+- Properties: a property class declares the input it accepts under the `PropertyInput` symbol (`{ accepts, convert }`), read by `propertyInputOf(field)`; `Password` accepts the new `PlainPassword` (the password rules as a property) and converts it to its hash. Also exported: `IPropertyInput`. The field plans of `useCaseTargetOf` carry it as `input` and `convert`.
+
+- Use case plugins: `useCasePluginOf(name, { requires, compile })` declares a use case that is made for a repository, its blueprints, dependencies and steps following the entity, the actions and the record plugins; `plugin.make(repository, options)` gives the class (a steps use case), one per repository and options, and throws the new `UseCaseUnavailable` when the repository lacks an action or the entity a record plugin. `UseCaseTarget` states that precondition in the type of the repository argument, with errors that name what is missing (`MissingRepositoryAction`, `MissingRecordPlugin`). `useCaseTargetOf(repository)` is what `compile` reads (a plan of each key, relations), `useCaseOriginOf(UseCase)` says which plugin made a class, and `useCaseCatalogOf(...plugins)` groups plugins by name. Also exported: `isUseCasePlugin`, `isUseCaseCatalog`, `InvalidUseCasePlugin`, `UnknownUseCasePlugin`, `IncompatibleUseCasePlugin`, the default errors `UseCaseEntityNotFound`, `UseCaseEntityConflict` and `UseCaseInvalidCredentials`, and the types `IUseCasePlugin`, `IUseCaseCatalog`, `UseCasePluginSettings`, `UseCaseCompilation`, `UseCaseTargetInfo`, `UseCaseFieldPlan`, `UseCaseOriginInfo` and `EntityOfRepository`. See `docs/use-cases.md#plugins`.
+- `commandBuilderOf(...catalogs)` gives a `commandOf` whose `useCases` may be a function of the use case plugins of the catalogs: `useCases: (ctx) => ({ create: ctx.create(Posts), custom: MyUseCase })`. Also exported: `CommandBuilder`, `CommandBuilderSettings` and `CommandUseCasesOption`.
+- Applications register the use cases a plugin made by the commands that hold them, under their `useCaseName`, and `describe()` gives them `generic: { name, version, repository, options }`.
+- Repositories: the `restore` action brings a soft-deleted entity back, by entity or id, clearing `deletedAt` and stamping `updatedAt`; it needs `deletion: "soft"` (`InvalidRepositoryDeclaration` otherwise) and a provider whose `update` clears a value that is left out, which `providerContract` now checks. Steps have `{ restore: "<repo>", value, as? }`, and `afora.json` takes the action (`restore_needs_soft` without soft deletion) and the step. Also exported: `RepositoryRestore`.
+- Steps: a `change` step takes `ifPresent: true`, which skips it when its value resolves to `undefined` (a partial update), and the `args` of `find`, `invoke` and `run` may be one reference to a list, which is spread (`args: "$input.tags"`). Both are in `afora.json` too. Also exported: `StepArgs`.
+
+## 0.0.6 — 2026-11-10
 
 ### Changed
 
