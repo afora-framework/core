@@ -99,11 +99,7 @@ export type {
 	IBlueprintFactories,
 	IBlueprintPlugin,
 } from "./core/blueprint/types/blueprint-plugin.interface";
-export {
-	commandBuilderOf,
-	commandOf,
-	isCommand,
-} from "./core/command/command";
+export { commandBuilderOf, isCommand } from "./core/command/command";
 export {
 	CommandEventFailed,
 	InvalidCommandContext,
@@ -291,6 +287,8 @@ export {
 	InvalidPropertyValue,
 	PropertyRequired,
 } from "./core/property/exceptions";
+export type { IPropertyInput } from "./core/property/input";
+export { PropertyInput, propertyInputOf } from "./core/property/input";
 export { isProperty } from "./core/property/is-property";
 export type { PropertyLineage } from "./core/property/lineage";
 export { propertyLineageOf } from "./core/property/lineage";
@@ -519,6 +517,7 @@ export {
 } from "./core/use-case/use-case";
 export { blueprintOf } from "./std/blueprint";
 export { Std } from "./std/blueprint-plugin";
+export { commandOf } from "./std/command";
 export { entityOf } from "./std/entity";
 export { Email, Ip, Phone, Url } from "./std/properties/contact";
 export type { EnumClass } from "./std/properties/enum";
@@ -531,6 +530,7 @@ export {
 	PASSWORD_MIN_LENGTH,
 	PASSWORD_SPECIAL_CHARACTERS,
 	Password,
+	PlainPassword,
 	passwordIssues,
 } from "./std/properties/password";
 export {
@@ -568,3 +568,26 @@ export {
 	SyncVerifyUnsupported,
 } from "./std/runtime";
 export { StdStages } from "./std/stages";
+export { StdUseCases } from "./std/use-cases/index";
+export type {
+	ArchiveMaker,
+	CreateMaker,
+	DeleteMaker,
+	GetMaker,
+	ListMaker,
+	LoginMaker,
+	PublishMaker,
+	RegisterMaker,
+	RestoreMaker,
+	StdCreateOptions,
+	StdEntityOptions,
+	StdLifecycleOptions,
+	StdListOptions,
+	StdOwnerOption,
+	StdUseCaseContext,
+	StdUseCaseErrors,
+	StdUseCaseOptions,
+	StdUseCasePlugins,
+	TagMaker,
+	UpdateMaker,
+} from "./std/use-cases/types";

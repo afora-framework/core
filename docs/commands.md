@@ -23,6 +23,8 @@ const { value, events } = await Users.execute("register", input, { context }); /
 
 The keys of `useCases` are the operation names: identifiers holding concrete use case classes. `commandOf` validates its settings and throws `InvalidCommandDeclaration` (`Command` layer, `details.reason`) for anything else. The command is frozen and exposes `commandName`, `description`, `tags`, `context`, `useCases`, `transaction`, `environments`, `env`, `events`, `onEventError` and `operations`; `isCommand` identifies one.
 
+`useCases` may also be a function of the [standard use cases](std-use-cases.md), each made for a repository: `useCases: (ctx) => ({ create: ctx.create(Posts), login: Login })`. `commandOf` is `commandBuilderOf(StdUseCases)`:
+
 `commandBuilderOf(...catalogs)` gives a `commandOf` whose `useCases` may also be a function of the use case plugins of the catalogs (see [Use cases](use-cases.md#plugins)), each called with a repository; classes written by hand go beside them. The function runs once, at declaration, and a plugin that cannot make its use case throws `UseCaseUnavailable` there. A later catalog wins a name; anything that is not a catalog throws `InvalidCommandDeclaration`.
 
 ```ts

@@ -131,6 +131,41 @@ hover L26:7 const ‸document = Api.build();
 diagnostics (0)"
 `;
 
+exports[`source mode experience standard use cases 1`] = `
+"hover L14:13 useCases: (‸ctx) => ({
+  (parameter) ctx: StdUseCaseContext
+hover L15:15 create: ctx.‸create(Posts, {
+  (property) StdUseCaseContext.create: <AbstractRepository<typeof Post, readonly ["findById", "findPage", "create", "update", "delete"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Post, "create" | "update" | "delete" | "findPage" | "findById"> & RepositoryFindManyBy<typeof Post, "create" | "update" | "delete" | "findPage" | "findById"> & RepositoryCreate<typeof Post> & RepositoryUpdate<typeof Post> & RepositoryDelete<typeof Post> & RepositoryFindPage<...>, {
+      ...;
+  }>(repository: AbstractRepository<...> & ... 5 more ... & RepositoryFindPage<...>, options?: {
+      ...;
+  } | undefined) => EntityUseCase<...>
+hover L26:9 const { ‸post } = await Blog.run("create", { title: "Hi" });
+  const post: Post
+signature L26:43 const { post } = await Blog.run("create", ‸{ title: "Hi" });
+  * run(op: "create", input: { readonly title: string; }): Promise<{ readonly post: Post; }>  [arg 1]
+hover L27:9 const { ‸items } = await Blog.run("list", {});
+  const items: Post[]
+complete L28:41 await Blog.run("update", { id: post.id, ‸ });
+  status (property)
+  title (property)
+diagnostics (0)"
+`;
+
+exports[`source mode experience errors: standard use cases 1`] = `
+"diagnostics (4)
+  TS2345 L7:22 update: ctx.update(‸Notes),
+    Argument of type 'RepositoryOf<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>>' is not assignable to parameter of type 'AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...> & MissingRepositoryAction<...>'.
+      Property '"this use case needs the repository to declare the action"' is missing in type 'AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...>' but required in type 'MissingRepositoryAction<"update">'.
+  TS2345 L8:24 publish: ctx.publish(‸Notes),
+    Argument of type 'RepositoryOf<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>>' is not assignable to parameter of type 'AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...> & MissingRepositoryAction<...>'.
+      Property '"this use case needs the repository to declare the action"' is missing in type 'AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...>' but required in type 'MissingRepositoryAction<"update">'.
+  TS2322 L9:38 create: ctx.create(Notes, { omit: [‸"nope"] }),
+    Type '"nope"' is not assignable to type 'KeyOf<AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...>>'.
+  TS2741 L10:25 get: ctx.get(Notes, { ‸owner: {} }),
+    Property 'context' is missing in type '{}' but required in type '{ readonly key?: KeyOf<AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...>> | undefined; readonly context: string; }'."
+`;
+
 exports[`source mode experience completions: blueprint context 1`] = `
 "complete L2:32 blueprintOf((ctx) => ({ a: ctx.‸ }));
   boolean (property)
@@ -277,6 +312,7 @@ complete L10:55 const Users = repositoryOf({ entity: User, actions: ["‸"] });
   findManyByName (string)
   findManyByUpdatedAt (string)
   findPage (string)
+  restore (string)
   update (string)
 diagnostics (4)
   TS1003 L7:6 user.‸;
@@ -443,6 +479,41 @@ hover L26:7 const ‸document = Api.build();
 diagnostics (0)"
 `;
 
+exports[`package mode experience standard use cases 1`] = `
+"hover L14:13 useCases: (‸ctx) => ({
+  (parameter) ctx: StdUseCaseContext
+hover L15:15 create: ctx.‸create(Posts, {
+  (property) StdUseCaseContext.create: <AbstractRepository<typeof Post, readonly ["findById", "findPage", "create", "update", "delete"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Post, "create" | "update" | "delete" | "findPage" | "findById"> & RepositoryFindManyBy<typeof Post, "create" | "update" | "delete" | "findPage" | "findById"> & RepositoryCreate<typeof Post> & RepositoryUpdate<typeof Post> & RepositoryDelete<typeof Post> & RepositoryFindPage<...>, {
+      ...;
+  }>(repository: AbstractRepository<...> & ... 5 more ... & RepositoryFindPage<...>, options?: {
+      ...;
+  } | undefined) => EntityUseCase<...>
+hover L26:9 const { ‸post } = await Blog.run("create", { title: "Hi" });
+  const post: Post
+signature L26:43 const { post } = await Blog.run("create", ‸{ title: "Hi" });
+  * run(op: "create", input: { readonly title: string; }): Promise<{ readonly post: Post; }>  [arg 1]
+hover L27:9 const { ‸items } = await Blog.run("list", {});
+  const items: Post[]
+complete L28:41 await Blog.run("update", { id: post.id, ‸ });
+  status (property)
+  title (property)
+diagnostics (0)"
+`;
+
+exports[`package mode experience errors: standard use cases 1`] = `
+"diagnostics (4)
+  TS2345 L7:22 update: ctx.update(‸Notes),
+    Argument of type 'RepositoryOf<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>>' is not assignable to parameter of type 'AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...> & MissingRepositoryAction<...>'.
+      Property '"this use case needs the repository to declare the action"' is missing in type 'AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...>' but required in type 'MissingRepositoryAction<"update">'.
+  TS2345 L8:24 publish: ctx.publish(‸Notes),
+    Argument of type 'RepositoryOf<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>>' is not assignable to parameter of type 'AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...> & MissingRepositoryAction<...>'.
+      Property '"this use case needs the repository to declare the action"' is missing in type 'AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...>' but required in type 'MissingRepositoryAction<"update">'.
+  TS2322 L9:38 create: ctx.create(Notes, { omit: [‸"nope"] }),
+    Type '"nope"' is not assignable to type 'KeyOf<AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...>>'.
+  TS2741 L10:25 get: ctx.get(Notes, { ‸owner: {} }),
+    Property 'context' is missing in type '{}' but required in type '{ readonly key?: KeyOf<AbstractRepository<typeof Note, readonly ["findById", "create"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Note, "create" | "findById"> & RepositoryFindManyBy<...> & RepositoryCreate<...>> | undefined; readonly context: string; }'."
+`;
+
 exports[`package mode experience completions: blueprint context 1`] = `
 "complete L2:32 blueprintOf((ctx) => ({ a: ctx.‸ }));
   boolean (property)
@@ -585,6 +656,7 @@ complete L10:55 const Users = repositoryOf({ entity: User, actions: ["‸"] });
   findManyByName (string)
   findManyByUpdatedAt (string)
   findPage (string)
+  restore (string)
   update (string)
 diagnostics (4)
   TS1003 L7:6 user.‸;

@@ -143,7 +143,7 @@ There are no operators or interpolation: anything computed goes through `run`. T
 
 ## Plugins
 
-A use case plugin is a use case that is made for a repository: its blueprints, dependencies and steps follow the entity, the actions the repository declares and the record plugins of the entity. The standard ones (`create`, `list`, `publish`...) are plugins; this is how to write another.
+A use case plugin is a use case that is made for a repository: its blueprints, dependencies and steps follow the entity, the actions the repository declares and the record plugins of the entity. The [standard ones](std-use-cases.md) (`create`, `list`, `publish`...) are plugins; this is how to write another.
 
 ```ts
 import {
@@ -202,7 +202,7 @@ const Generics = useCaseCatalogOf(get); // for commandBuilderOf, see Commands
 | `relation(key, actions?)`                         | the repository of the entity a key holds, taken from the `relations` of the target, to load it by id                                                                                            |
 | `unavailable(reason)`                             | throws `UseCaseUnavailable` for an option the entity cannot satisfy                                                                                                                             |
 
-The `input` of a plan is what an input blueprint takes for the key: the key and its field, or `<key>Id` and the `id` field of the related entity for a key that holds an entity. `useCaseTargetOf(repository)` gives the same target outside a plugin.
+The `input` of a plan is what an input blueprint takes for the key: the key and its field, `<key>Id` and the `id` field of the related entity for a key that holds an entity, or the property a `PropertyInput` accepts (see [Properties](properties.md)), whose `convert` the plan then carries. `useCaseTargetOf(repository)` gives the same target outside a plugin.
 
 `plugin.make(repository, options)` gives one class per repository and options: the same call anywhere gives the same class (options are compared by value, classes among them by identity), which is what lets a command, an application and a test name the same use case. It throws `UseCaseUnavailable` (`UseCase` layer, `details: { repository, reason, missing }`) when the repository lacks an action of `requires.actions` or the entity a record plugin of `requires.plugins`, `InvalidUseCasePlugin` for what is not a repository or options that are not a plain object, and whatever `useCaseOf` throws for the compiled steps. `useCaseOriginOf(UseCase)` gives `{ plugin, repository, options }` for a class a plugin made (and for a class extending it), `undefined` otherwise.
 
