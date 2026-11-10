@@ -1,4 +1,5 @@
 import {
+	coerceTextValues,
 	InvalidOutputStage,
 	type OperationDescriptor,
 	outputValueOf,
@@ -123,36 +124,6 @@ const kebab = (text: string) =>
 		.replace(/[^A-Za-z0-9_.-]+/g, "_")
 		.toLowerCase();
 
-function scalarTypesOf(
-	blueprint: OperationDescriptor["input"],
-): Readonly<Record<string, readonly string[]>> {
-	const schema = toOpenAPI(blueprint) as {
-		properties?: Record<string, { type?: string | string[] }>;
-	};
-	const types: Record<string, readonly string[]> = {};
-	for (const [key, property] of Object.entries(schema.properties ?? {})) {
-		types[key] = [property.type ?? []].flat();
-	}
-	return types;
-}
-
-/** Text as the context field takes it; invalid text is kept for the blueprint to reject. */
-function coerce(text: string, types: readonly string[] | undefined): unknown {
-	if (!types || types.includes("string")) return text;
-	const trimmed = text.trim();
-	if (
-		types.includes("boolean") &&
-		(trimmed === "true" || trimmed === "false")
-	) {
-		return trimmed === "true";
-	}
-	if (types.includes("integer") || types.includes("number")) {
-		const number = trimmed === "" ? Number.NaN : Number(trimmed);
-		if (Number.isFinite(number)) return number;
-	}
-	return text;
-}
-
 const text = (value: unknown, isError?: true): McpToolResult => ({
 	...(isError ? { isError } : {}),
 	content: [{ type: "text", text: JSON.stringify(value) }],
@@ -246,15 +217,12 @@ export const mcpTools = sinkOf<McpTools, McpToolsOptions>({
 			const { operation } = entry;
 			const options_: { context?: unknown } = {};
 			if (operation.context) {
-				const types = scalarTypesOf(operation.context);
-				const context: Obj = {};
+				const raw: Record<string, string | undefined> = {};
 				for (const key of Object.keys(operation.context.properties)) {
 					const source = mapping[key];
-					const value =
-						source === undefined ? undefined : extra?.values?.[source];
-					if (value !== undefined) context[key] = coerce(value, types[key]);
+					raw[key] = source === undefined ? undefined : extra?.values?.[source];
 				}
-				options_.context = context;
+				options_.context = coerceTextValues(operation.context, raw);
 			}
 			try {
 				const response = await operation.invoke(args ?? {}, options_);

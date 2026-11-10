@@ -1,8 +1,10 @@
 import { catalog, recordPlugin } from "./catalog";
 import { checkCommand } from "./command";
+import { checkEntityEvents } from "./entity-events";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
+import { checkPolicyCatalog, checkPublishers, policyEntries } from "./policy";
 import {
 	checkCatalog,
 	checkLog,
@@ -21,6 +23,7 @@ import { isIdentifier, isObject } from "./spec/field";
 import {
 	COLLECTIONS,
 	type CodegenOptions,
+	type EventPolicyCatalogEntry,
 	KIND_OF,
 	type ProviderCatalogEntry,
 	type ResolvedSpec,
@@ -38,6 +41,7 @@ const TOP_LEVEL_KEYS = [
 	"provider",
 	"providers",
 	"log",
+	"publishers",
 	...COLLECTIONS,
 ];
 
@@ -550,9 +554,11 @@ function checkFieldsOf(
 	const path = [collection, decl.name];
 	const keys = Object.keys(decl.spec);
 	const allowed =
-		owner === "record" || owner === "entity"
-			? ["fields", "sensitive", "unique", "change", "plugins"]
-			: ["fields"];
+		owner === "entity"
+			? ["fields", "sensitive", "unique", "change", "plugins", "events"]
+			: owner === "record"
+				? ["fields", "sensitive", "unique", "change", "plugins"]
+				: ["fields"];
 	for (const key of keys) {
 		if (!allowed.includes(key)) {
 			issues.push(
@@ -583,6 +589,15 @@ function checkRecord(
 	const path = [collection, decl.name];
 	const fields = checkFieldsOf(decl, collection, owner, scope, issues);
 	const entries = catalog();
+	if (owner === "entity" && decl.spec.events !== undefined) {
+		checkEntityEvents(
+			decl.name,
+			decl.spec.events,
+			[...path, "events"],
+			scope,
+			issues,
+		);
+	}
 
 	const plugins = checkStringList(
 		decl.spec.plugins,
@@ -896,6 +911,7 @@ export function validateSpec(
 			extended,
 			options.providers ?? [],
 			options.stages ?? [],
+			options.policies ?? [],
 			issues,
 		);
 	} catch (error) {
@@ -915,11 +931,15 @@ function check(
 	extended: Readonly<Record<string, ResolvedSpec>>,
 	providers: readonly ProviderCatalogEntry[],
 	stages: readonly StageCatalogEntry[],
+	policies: readonly EventPolicyCatalogEntry[],
 	issues: SpecIssue[],
 ): void {
 	checkCatalog(providers, issues);
 	checkStageCatalog(stages, issues);
+	checkPolicyCatalog(policies, issues);
 	const stageMap = stageEntries(stages);
+	const policyMap = policyEntries(policies);
+	checkPublishers(input.publishers, issues);
 	checkProviders(input.providers, providers, issues);
 	if (input.log !== undefined) checkLog(input.log, ["log"], issues);
 	for (const key of Object.keys(input)) {
@@ -1036,7 +1056,7 @@ function check(
 				checkUseCase(decl, scope, checkInline, issues);
 				break;
 			case "command":
-				checkCommand(decl, scope, checkInline, issues);
+				checkCommand(decl, scope, checkInline, issues, policyMap);
 				break;
 			case "output":
 				checkOutput(decl, scope, stageMap, issues);

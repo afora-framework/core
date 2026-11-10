@@ -1,4 +1,5 @@
 import { catalog, recordPlugin } from "./catalog";
+import { cyclesOf } from "./entity-events";
 import { flagOf } from "./graph";
 import { type Field, parseField } from "./model";
 import { type Scope, scopeOf } from "./scope";
@@ -96,12 +97,26 @@ function canonicalRecord(
 		option("change"),
 	];
 	void name;
+	// Events: a list per cycle, each a name or { name, handler }.
+	const events = Object.fromEntries(
+		Object.entries(entity ? cyclesOf(value.events) : {})
+			.filter(([, list]) => list.length > 0)
+			.map(([cycle, list]) => [
+				cycle,
+				list.map((entry) =>
+					entry.handler === undefined
+						? entry.name
+						: { name: entry.name, handler: { import: entry.handler } },
+				),
+			]),
+	);
 	return {
 		fields: fieldsOf(value.fields),
 		...(sensitive ? { sensitive } : {}),
 		...(unique ? { unique } : {}),
 		...(change ? { change } : {}),
 		...(plugins ? { plugins } : {}),
+		...(Object.keys(events).length > 0 ? { events } : {}),
 	};
 }
 
@@ -260,12 +275,25 @@ function canonicalCommand(value: Json): Json {
 			? { environments: [...value.environments] }
 			: {}),
 		...(value.events !== undefined && value.events !== "after-commit"
-			? { events: cloneJson(value.events) }
+			? { events: canonicalEvents(value.events) }
 			: {}),
 		...(value.onEventError === undefined
 			? {}
 			: { onEventError: cloneJson(value.onEventError) }),
 	};
+}
+
+/** The events policy: a policy without options loses its empty `options`. */
+function canonicalEvents(events: unknown): unknown {
+	if (
+		isObject(events) &&
+		Object.hasOwn(events, "policy") &&
+		isObject(events.options) &&
+		Object.keys(events.options).length === 0
+	) {
+		return { policy: events.policy };
+	}
+	return cloneJson(events);
 }
 
 function canonicalPipeEntry(entry: unknown): unknown {
@@ -337,6 +365,14 @@ export function normalizeSpec(
 						? [...spec.log.providers]
 						: [],
 				};
+	}
+	// Publishers by key in order.
+	if (isObject(spec.publishers) && Object.keys(spec.publishers).length > 0) {
+		out.publishers = Object.fromEntries(
+			Object.keys(spec.publishers)
+				.sort()
+				.map((key) => [key, cloneJson((spec.publishers as Json)[key])]),
+		);
 	}
 	for (const collection of COLLECTIONS) {
 		const declared = spec[collection];

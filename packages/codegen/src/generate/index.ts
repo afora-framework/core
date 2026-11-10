@@ -1,6 +1,12 @@
 import { posix } from "node:path";
 import { ExceptionLayers } from "@afora/core";
 import { catalog, stdProperty } from "../catalog";
+import {
+	CYCLES,
+	cyclesOf,
+	eventEntriesOf,
+	eventsConstOf,
+} from "../entity-events";
 import { fieldsOfDecl, orderOf } from "../graph";
 import { type Field, parseFields } from "../model";
 import { defaultMessageOf, normalizeSpec } from "../normalize";
@@ -11,6 +17,7 @@ import { isIdentifier, isObject } from "../spec/field";
 import {
 	type CodegenOptions,
 	DEFAULT_OUTPUT_DIR,
+	type EventPolicyCatalogEntry,
 	type ProviderCatalogEntry,
 	type ResolvedSpec,
 	type Spec,
@@ -367,8 +374,10 @@ function propertyDoc(decl: Decl, e: Emitter): Doc {
 	return ["export const ", decl.name, " = ", expression, ";"];
 }
 
-function recordDoc(decl: Decl, e: Emitter): Doc {
+function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	const entity = decl.kind === "entity";
+	const cycles = entity ? cyclesOf(decl.spec.events) : {};
+	const holder = eventsConstOf(decl.name);
 	const fields = fieldsOfDecl(decl) as Record<string, Field>;
 	// The declared name, so the class can be renamed by a bundler.
 	const options: [string, Doc][] = [["name", literal(decl.name)]];
@@ -400,6 +409,15 @@ function recordDoc(decl: Decl, e: Emitter): Doc {
 			],
 		]);
 	}
+	for (const cycle of CYCLES) {
+		const list = cycles[cycle];
+		if (!list || list.length === 0) continue;
+		const refs = list.map((entry) => `${holder}.${entry.name}`);
+		options.push([
+			cycle,
+			refs.length === 1 ? `() => ${refs[0]}` : `() => [${refs.join(", ")}]`,
+		]);
+	}
 	const args: Doc[] = [
 		blueprintDoc(fields, e, false),
 		// Alone, the name stays on one line.
@@ -419,6 +437,53 @@ function recordDoc(decl: Decl, e: Emitter): Doc {
 			")",
 		],
 		" {}",
+		...eventsDoc(decl, e, providers),
+	];
+}
+
+/**
+ * `export const PostEvents: { readonly created: EventDefinition } = { created: eventOf("created", Post) };`
+ * after an entity whose spec names events; the type breaks the circle between the class and its events.
+ */
+function eventsDoc(decl: Decl, e: Emitter, providers: Providers): Doc[] {
+	const entries = eventEntriesOf(decl.spec.events);
+	if (entries.length === 0) return [];
+	e.use("type EventDefinition");
+	const type = "EventDefinition";
+	const eventOf = e.use("eventOf");
+	const members = entries.map((entry): readonly [string, Doc] => {
+		const args = [literal(entry.name), decl.name];
+		if (entry.handler !== undefined) {
+			const { module, name } = parseImportRef(entry.handler) as {
+				module: string;
+				name: string;
+			};
+			args.push(e.bind(module, name, providers.taken));
+		}
+		return [entry.name, call(eventOf, args)];
+	});
+	return [
+		hardline,
+		hardline,
+		"export const ",
+		eventsConstOf(decl.name),
+		": ",
+		group([
+			"{",
+			indent([
+				line,
+				join(
+					[";", line],
+					entries.map((entry) => `readonly ${entry.name}: ${type}`),
+				),
+			]),
+			ifBreak(";"),
+			line,
+			"}",
+		]),
+		" = ",
+		objectDoc(members, true),
+		";",
 	];
 }
 
@@ -445,6 +510,8 @@ interface Providers {
 	readonly catalog: ReadonlyMap<string, ProviderCatalogEntry>;
 	/** The stage factories supplied to codegen, by name. */
 	readonly stages: ReadonlyMap<string, StageCatalogEntry>;
+	/** The event policy factories supplied to codegen, by name. */
+	readonly policies: ReadonlyMap<string, EventPolicyCatalogEntry>;
 	readonly taken: ReadonlySet<string>;
 	/** The keys of `providers` in scope, and where an inherited one is imported from. */
 	readonly keys: ReadonlyMap<string, { readonly from?: string }>;
@@ -838,7 +905,9 @@ function commandDoc(
 			"events",
 			spec.events === "manual"
 				? literal("manual")
-				: importedDoc(spec.events, e, providers),
+				: isObject(spec.events) && Object.hasOwn(spec.events, "policy")
+					? policyDoc(spec.events, e, providers)
+					: importedDoc(spec.events, e, providers),
 		]);
 	}
 	if (spec.onEventError !== undefined) {
@@ -851,6 +920,23 @@ function commandDoc(
 		callWithObject(e.use("commandOf"), objectDoc(props, true)),
 		";",
 	];
+}
+
+/** `publishEvents({ ... })`, or the factory of a policy supplied to codegen. */
+function policyDoc(
+	entry: Record<string, unknown>,
+	e: Emitter,
+	providers: Providers,
+): Doc {
+	const name = entry.policy as string;
+	const supplied = providers.policies.get(name);
+	const factory = supplied
+		? e.bind(supplied.module, supplied.export, providers.taken)
+		: e.use(name);
+	const options = entry.options as Record<string, unknown> | undefined;
+	return options && Object.keys(options).length > 0
+		? callWithObject(factory, literal(options))
+		: `${factory}()`;
 }
 
 /** `select({ tags: ["public"] })`, `openapi({ ... })` or the imported stage. */
@@ -905,7 +991,10 @@ function outputDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 
 // ---------------------------------------------------------------- files
 
-function compareSpecifiers(a: string, b: string): number {
+function compareSpecifiers(left: string, right: string): number {
+	// A `type` modifier does not count, as in Biome.
+	const a = left.replace(/^type /, "");
+	const b = right.replace(/^type /, "");
 	// Case-insensitive on letters; at the first letter whose case differs, uppercase first.
 	const length = Math.min(a.length, b.length);
 	for (let i = 0; i < length; i++) {
@@ -1069,6 +1158,9 @@ export function generate(
 			(options.providers ?? []).map((entry) => [entry.name, entry]),
 		),
 		stages: new Map((options.stages ?? []).map((entry) => [entry.name, entry])),
+		policies: new Map(
+			(options.policies ?? []).map((entry) => [entry.name, entry]),
+		),
 		taken: new Set([
 			...catalog().reservedDeclarationNames,
 			...takenNames,
@@ -1127,7 +1219,7 @@ export function generate(
 			}
 			case "record":
 			case "entity":
-				body.push(recordDoc(decl, e));
+				body.push(recordDoc(decl, e, providers));
 				break;
 			case "environment":
 				body.push(environmentDoc(decl, e));
@@ -1238,6 +1330,21 @@ export function generate(
 	}
 	if (spec.log !== undefined) {
 		props.push(["log", logDoc(spec.log, app, providers)]);
+	}
+	const publishers = (spec as { publishers?: Record<string, unknown> })
+		.publishers;
+	if (publishers && Object.keys(publishers).length > 0) {
+		props.push([
+			"publishers",
+			objectDoc(
+				Object.entries(publishers).map(
+					([key, publisher]) =>
+						[key, importedDoc(publisher, app, providers)] as const,
+				),
+				false,
+				true,
+			),
+		]);
 	}
 	for (const [key, kind] of [
 		["properties", "property"],

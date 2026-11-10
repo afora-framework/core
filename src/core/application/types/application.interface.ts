@@ -8,6 +8,10 @@ import type {
 	AnyEnvironment,
 	EnvironmentValue,
 } from "../../environment/environment";
+import type {
+	EventPolicyDescription,
+	IEventPublisher,
+} from "../../event-policy/types/event-policy.interface";
 import type { ExceptionLayers } from "../../exception/enums/exception-layers";
 import type { ILogger, LogLevel, LogSettings } from "../../logger/logger";
 import type {
@@ -129,6 +133,13 @@ export interface ApplicationSettings<
 	 * it, the one of the last extended application that has one; none by default.
 	 */
 	readonly log?: LogSettings | LogFactory;
+	/**
+	 * Where event policies such as `publishEvents` publish, by key: a
+	 * WebSocket hub, a queue, a broker. Commands of the application find them
+	 * by key, those of the extended applications included; a command whose
+	 * policy names a key that is not here throws `UnregisteredApplicationReference`.
+	 */
+	readonly publishers?: Readonly<Record<string, IEventPublisher>>;
 }
 
 /**
@@ -367,6 +378,18 @@ export interface RecordDescription {
 		readonly change: readonly string[];
 	};
 	readonly plugins: readonly RecordPluginDescriptor[];
+	/**
+	 * The lifecycle events of an entity, by cycle: each event's name and
+	 * whether `eventOf` was given a handler. Present only when it has some.
+	 */
+	readonly events?: Readonly<
+		Partial<
+			Record<
+				"onCreate" | "onUpdate" | "onDelete",
+				readonly { readonly name: string; readonly handler: boolean }[]
+			>
+		>
+	>;
 }
 
 /** What a use case depends on, by the name it has in the application. */
@@ -440,7 +463,12 @@ export interface CommandDescription {
 	readonly transaction: boolean;
 	/** The names of its environments, when it declares any. */
 	readonly environments?: readonly string[];
-	readonly events: "after-commit" | "manual" | { readonly kind: "opaque" };
+	/** The policy: a name, a policy made by `eventPolicyOf` by name and options, else opaque. */
+	readonly events:
+		| "after-commit"
+		| "manual"
+		| EventPolicyDescription
+		| { readonly kind: "opaque" };
 	readonly onEventError?: { readonly kind: "opaque" };
 }
 
@@ -489,6 +517,8 @@ export interface ApplicationDescription {
 	>;
 	/** Its `log` (or the one of the last extended application), present only when configured. */
 	readonly log?: LogDescription | { readonly kind: "opaque" };
+	/** Its publishers (inherited ones included), by key, with the application that declared each; present only when it has some. */
+	readonly publishers?: Readonly<Record<string, { readonly from: string }>>;
 	readonly properties: Readonly<
 		Record<string, PropertyDescription & { readonly from: string }>
 	>;

@@ -67,8 +67,11 @@ const entriesOf = new WeakMap<
 	readonly (readonly [string, BlueprintField])[]
 >();
 
-/** `Object.entries(properties)`, kept for the next time. */
-function fieldsOf(
+/**
+ * `Object.entries(properties)`, kept for the next time.
+ * @internal
+ */
+export function fieldsOf(
 	properties: IBlueprintCollection,
 ): readonly (readonly [string, BlueprintField])[] {
 	let entries = entriesOf.get(properties);
@@ -79,8 +82,13 @@ function fieldsOf(
 	return entries;
 }
 
-/** Whether `value` is an object made by `{}` or `Object.create(null)`, as parsed JSON is. */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+/**
+ * Whether `value` is an object made by `{}` or `Object.create(null)`, as parsed JSON is.
+ * @internal
+ */
+export function isPlainObject(
+	value: unknown,
+): value is Record<string, unknown> {
 	if (typeof value !== "object" || value === null) return false;
 	const prototype = Object.getPrototypeOf(value);
 	return prototype === Object.prototype || prototype === null;

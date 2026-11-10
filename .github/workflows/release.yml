@@ -117,6 +117,7 @@ jobs:
           publish packages/codegen
           publish packages/mcp
           publish packages/hono
+          publish packages/ws
           publish packages/drizzle
       - name: Create the tag and the GitHub release
         run: |

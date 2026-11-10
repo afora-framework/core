@@ -13,7 +13,7 @@ const Users = commandOf({
 	useCases: { register: Register, login: Login },
 	transaction: true, // optional, default false
 	environmentDependencies: [Mail, Queue], // optional: one environment or a list, merged in order
-	events: "after-commit", // "after-commit" (default) | "manual" | handler
+	events: "after-commit", // "after-commit" (default) | "manual" | a policy (publishEvents(...)) | handler
 	onEventError: (error, event, info) => {}, // optional, "after-commit" only
 });
 
@@ -40,7 +40,7 @@ const Blog = commandOf({
 });
 ```
 
-In an application, register commands under `commands: { Users }` (keyed by `commandName`, else `InvalidApplicationDeclaration`); every use case of every command must be in `useCases` (`UnregisteredApplicationReference`, `details: { command, useCase }`), except those a use case plugin made, which the command registers itself under their `useCaseName`. With a `provider`, `app.commands.Users` (or `app.command(Users)`) is the same command rebuilt over the bound use cases, memoized, with the same settings; the transaction check runs again against the bound providers and throws `InvalidCommandDeclaration` at `applicationOf`. Every environment of a command must be in `environments` (`UnregisteredApplicationReference`, `details: { command }`), and the rebuilt command keeps them. `app.describe().commands` gives each command's operations (`{ ref }` of the use case), `transaction`, `environments` (by name, only when it declares any), `events` (a handler appears as `{ kind: "opaque" }`) and `onEventError` (only when set).
+In an application, register commands under `commands: { Users }` (keyed by `commandName`, else `InvalidApplicationDeclaration`); every use case of every command must be in `useCases` (`UnregisteredApplicationReference`, `details: { command, useCase }`), except those a use case plugin made, which the command registers itself under their `useCaseName`. With a `provider`, `app.commands.Users` (or `app.command(Users)`) is the same command rebuilt over the bound use cases, memoized, with the same settings; the transaction check runs again against the bound providers and throws `InvalidCommandDeclaration` at `applicationOf`. Every environment of a command must be in `environments` (`UnregisteredApplicationReference`, `details: { command }`), and the rebuilt command keeps them. `app.describe().commands` gives each command's operations (`{ ref }` of the use case), `transaction`, `environments` (by name, only when it declares any), `events` (a policy made by `eventPolicyOf` appears as `{ kind: "policy", name, options }`, any other handler as `{ kind: "opaque" }`) and `onEventError` (only when set).
 
 `run(op, input, options)` does this:
 
@@ -52,10 +52,60 @@ In an application, register commands under `commands: { Users }` (keyed by `comm
 6. The event policy applies, in `run` only:
    - `"after-commit"`: awaits `event.handle()` in emission order. On the first failure, `onEventError(error, event, info)` is awaited (`info` as a handler gets it, below) and the next event runs; without it, `run` throws `CommandEventFailed` (`cause`, `details: { operation, event, handled, remaining }`). The commit already happened, so the data is saved even when this error is thrown.
    - `"manual"`: `run` drops the events; use `execute` to get them.
-   - a function: awaited with `(events, { command, operation, context, env, logger })`; a rejection is a `CommandEventFailed`. `logger` is the one of the application that bound the command (see [Logging](logging.md)), and an event handled by `"after-commit"` gets it too.
+   - a function: awaited with `(events, { command, operation, context, env, logger, publisher })`; a rejection is a `CommandEventFailed`, and a `CommandEventFailed` the function throws itself (saying which event failed) is passed up as it is. `logger` is the one of the application that bound the command (see [Logging](logging.md)), and an event handled by `"after-commit"` gets it too. `publisher(name)` gives a publisher of the application (see [Event policies](#event-policies)).
 7. The validated response is returned.
 
 `execute` performs steps 1 to 5 and returns `{ value, events }` without applying the policy, for outboxes and tests. The whole call runs under a `Command` guard, so errors gain the frame `command @ Users.register`. Concurrent calls are independent; each builds its own use case.
+
+## Event policies
+
+An event policy is a handler made by a factory of `eventPolicyOf`, with JSON options. A command runs it like any handler, and an application describes it by name and options, so it can be written in an `afora.json` (`"events": { "policy": "publishEvents", "options": {...} }`).
+
+**`publishEvents`** publishes the events of a call to a publisher of the application, once the call succeeded and committed: to a WebSocket hub (`wsHub` of [`@afora/ws`](../packages/ws/README.md)), a queue, a broker.
+
+```ts
+import { applicationOf, commandOf, publishEvents } from "@afora/core";
+
+const Posts = commandOf({
+	name: "Posts",
+	useCases: { create: CreatePost },
+	events: publishEvents({ publisher: "realtime", topic: "posts/{id}" }),
+});
+
+const App = applicationOf({
+	name: "Blog",
+	commands: { Posts },
+	// ...the rest of the declarations
+	publishers: { realtime: hub }, // any { publish(topic, event) }
+});
+```
+
+For each event, in emission order, it runs the event's own handler (as `"after-commit"` does), then publishes `{ name, command, operation, entity }` to the topic. `entity` is the entity as JSON, through its `toJSON`, so sensitive values are masked; the context and the variables are never published.
+
+| Option           | Meaning                                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| `publisher`      | The key of the publisher in `applicationOf({ publishers })`.                                              |
+| `topic`          | The topic of each event; `{event}`, `{command}`, `{operation}` and `{id}` (the entity's id) are replaced. |
+| `events`         | The names of the events to publish; all of them by default. Their handlers run either way.                |
+| `handle`         | `false` skips the events' own handlers, so the policy only publishes. `true` by default.                  |
+| `onPublishError` | `"log"` (default) or `"throw"`, below.                                                                    |
+
+What fails:
+
+| Failure                                 | Result                                                                                                                                                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An event's handler                      | `CommandEventFailed` with `details: { operation, event, handled, remaining }`, as with `"after-commit"`; later events are neither handled nor published.                                                                                             |
+| A publish, with `onPublishError: "log"` | An `error` line `event-publish-failed` (`command`, `operation`, `event`, `publisher`, `topic`, `exception`) on the logger of the application, and the next event goes on. The call already committed, so a lost push does not turn it into an error. |
+| A publish, with `"throw"`               | `CommandEventFailed` for that event.                                                                                                                                                                                                                 |
+| A publisher no application declares     | `CommandEventFailed` caused by `PublisherNotBound` (`Application` layer, `details.publisher`).                                                                                                                                                       |
+
+`onEventError` only applies to `"after-commit"`, so a command with a policy cannot have it. Invalid options throw `InvalidEventPolicy` (`Event` layer, `details.reason`) when the policy is made.
+
+**Publishers.** `applicationOf({ publishers: { realtime: hub } })` declares them by key (an identifier; the value an object with a `publish(topic, event)` method, else `InvalidApplicationDeclaration`). An application has those of the applications it extends too, its own winning a key. A command whose policy names a key the application does not have throws `UnregisteredApplicationReference` at `applicationOf`. A call finds the publisher in the application that bound the command, else in the started application, so a command used alone works once an application with the publisher has started. `app.describe().publishers` gives each key with the application that declared it.
+
+**Your own policies.** `eventPolicyOf({ name, validate?, handle, publishers? })` makes a factory: `validate(options)` returns why the options cannot be used (or `undefined`), `handle(events, info, options)` is the handler, and `publishers(options)` names the publisher keys it uses, so an application checks them. `eventPolicyDescriptionOf(handler)` gives `{ kind: "policy", name, options }` or `undefined`, and `eventPolicyCatalogOf(...factories)` groups factories by name, as codegen resolves them (`StdEventPolicies` holds `publishEvents`; `--policies` adds yours, see [afora.json](afora-json.md#catalogs-providers-stages-and-event-policies)).
+
+`memoryPublisher()` from `@afora/core/testing` keeps each `{ topic, event }` in `published`, for tests.
 
 ## Environments
 

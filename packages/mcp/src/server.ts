@@ -1,5 +1,6 @@
 import {
 	catalog,
+	type EventPolicyCatalogEntry,
 	type ProviderCatalogEntry,
 	type StageCatalogEntry,
 	specSchema,
@@ -25,6 +26,8 @@ export interface ServerOptions {
 	readonly providers?: readonly ProviderCatalogEntry[];
 	/** External stages an output's `pipe` may name; `select` and `openapi` are built in. */
 	readonly stages?: readonly StageCatalogEntry[];
+	/** External event policies a command's `events` may name; `publishEvents` is built in. */
+	readonly policies?: readonly EventPolicyCatalogEntry[];
 }
 
 const RESOURCES = [
@@ -66,6 +69,7 @@ export async function createServer(
 		options.app,
 		options.providers,
 		options.stages,
+		options.policies,
 	);
 	const server = new Server(
 		{ name: "afora", version: "0.0.1" },

@@ -16,11 +16,23 @@ import {
 import type { AnyCommand } from "../command/types/command.interface";
 import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
+import { eventHasHandler, lifecycleEventsOf } from "../entity/event";
 import {
 	type AnyEnvironment,
 	InvalidEnvironment,
 	isEnvironment,
 } from "../environment/environment";
+import {
+	eventPolicyDescriptionOf,
+	eventPolicyPublishersOf,
+} from "../event-policy/event-policy";
+import {
+	ApplicationPublishersKey,
+	bindPublishers,
+	isEventPublisher,
+	type Publishers,
+} from "../event-policy/publishers";
+import type { IEventPublisher } from "../event-policy/types/event-policy.interface";
 import {
 	declaredMessageOf,
 	Exception,
@@ -182,6 +194,67 @@ export function isApplication(value: unknown): value is AnyApplication {
 
 function invalid(source: string, reason: string): never {
 	throw new InvalidApplicationDeclaration({ source, details: { reason } });
+}
+
+/** The application that declared each publisher of an application, by key. */
+const publisherOrigins = new WeakMap<
+	object,
+	Readonly<Record<string, string>>
+>();
+
+/**
+ * The publishers of an application: those of the applications it extends,
+ * then its own, a later one winning a key; with the application that
+ * declared each.
+ */
+function publishersOf(
+	name: string,
+	declared: unknown,
+	extended: readonly AnyApplication[],
+): {
+	readonly publishers: Publishers;
+	readonly origins: Record<string, string>;
+} {
+	const merged: Record<string, IEventPublisher> = {};
+	const origins: Record<string, string> = {};
+	for (const other of extended) {
+		Object.assign(
+			merged,
+			(other as { readonly [ApplicationPublishersKey]?: Publishers })[
+				ApplicationPublishersKey
+			],
+		);
+		Object.assign(origins, publisherOrigins.get(other));
+	}
+	if (declared !== undefined) {
+		if (
+			typeof declared !== "object" ||
+			declared === null ||
+			Array.isArray(declared)
+		) {
+			invalid(
+				name,
+				"Expected `publishers` to be an object of publishers by key.",
+			);
+		}
+		for (const [key, publisher] of Object.entries(declared)) {
+			if (!/^[A-Za-z_$][\w$]*$/.test(key)) {
+				invalid(
+					name,
+					`Expected the publisher key "${key}" to be an identifier.`,
+				);
+			}
+			if (!isEventPublisher(publisher)) {
+				invalid(
+					name,
+					`Expected the publisher "${key}" to be an object with a publish(topic, event) method.`,
+				);
+			}
+			merged[key] = publisher;
+			origins[key] = name;
+		}
+	}
+	return { publishers: Object.freeze(merged), origins };
 }
 
 /** Whether `value` is a declaration of `collection`'s kind. */
@@ -759,6 +832,17 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 			const field = Record.blueprint.properties[key];
 			return !(flag && isProperty(field) && field.type[flag] === true);
 		});
+	const lifecycle =
+		entry.collection === "entities" ? lifecycleEventsOf(Record) : {};
+	const events = Object.fromEntries(
+		Object.entries(lifecycle).map(([cycle, list]) => [
+			cycle,
+			list.map((event) => ({
+				name: event.name,
+				handler: eventHasHandler(event),
+			})),
+		]),
+	);
 	return {
 		from: entry.from,
 		fields: fieldsDescriptionOf(Record.blueprint.properties, scope, skip),
@@ -768,6 +852,7 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 			change: own(Record.options.change),
 		},
 		plugins,
+		...(Object.keys(events).length > 0 ? { events } : {}),
 	};
 }
 
@@ -778,6 +863,7 @@ function describeRegistry(
 	provider: ProviderDescription | ProviderReference | undefined,
 	named: ReadonlyMap<string, NamedProvider>,
 	log: Required<LogSettings> | "opaque" | undefined,
+	publishers: Readonly<Record<string, string>>,
 ): ApplicationDescription {
 	const scope: Scope = {
 		properties: referencesOf(registry, "properties"),
@@ -915,6 +1001,13 @@ function describeRegistry(
 							}),
 						},
 					}),
+		...(Object.keys(publishers).length === 0
+			? {}
+			: {
+					publishers: Object.fromEntries(
+						Object.entries(publishers).map(([key, from]) => [key, { from }]),
+					),
+				}),
 		properties: each("properties", (entry) => ({
 			from: entry.from,
 			...propertyDescriptionOf(entry.value as BlueprintField, scope),
@@ -1044,7 +1137,8 @@ function describeRegistry(
 						}),
 				events:
 					typeof command.events === "function"
-						? ({ kind: "opaque" } as const)
+						? (eventPolicyDescriptionOf(command.events) ??
+							({ kind: "opaque" } as const))
 						: command.events,
 				...(command.onEventError === undefined
 					? {}
@@ -1315,10 +1409,31 @@ export function applicationOf<
 		log?.set(checkLogSettings(declaredLog));
 	}
 	const logger = log?.logger;
-	// Use cases, commands and outputs are rebound for a provider or a logger.
-	// Repositories are bound for a provider, its own or one of `providersOf`.
+	const { publishers, origins } = publishersOf(
+		name,
+		settings.publishers,
+		extended,
+	);
+	const hasPublishers = Object.keys(publishers).length > 0;
+	for (const entry of registry.commands.values()) {
+		for (const key of eventPolicyPublishersOf(
+			(entry.value as AnyCommand).events,
+		)) {
+			if (!Object.hasOwn(publishers, key)) {
+				throw new UnregisteredApplicationReference({
+					source: name,
+					details: {
+						holder: `command "${entry.name}"`,
+						reference: `publisher "${key}"`,
+					},
+				});
+			}
+		}
+	}
+	// Use cases, commands and outputs are rebound for a provider, a logger or
+	// publishers. Repositories are bound for a provider, its own or one of `providersOf`.
 	const bindsProviders = provider !== undefined || instances.size > 0;
-	const rebinds = bindsProviders || logger !== undefined;
+	const rebinds = bindsProviders || logger !== undefined || hasPublishers;
 
 	const collection = (key: ApplicationCollectionKey) =>
 		Object.freeze(
@@ -1402,6 +1517,7 @@ export function applicationOf<
 					onEventError: declared.onEventError,
 				} as never);
 		if (bindsProviders) verifyCommand(rebuilt);
+		if (hasPublishers) bindPublishers(rebuilt, publishers);
 		boundCommandOf.set(entry.value, rebuilt);
 		commands[entry.name] = rebuilt;
 	}
@@ -1503,6 +1619,7 @@ export function applicationOf<
 		logger: logger ?? silentLogger,
 		context,
 		...(logger ? { [ApplicationLoggerKey]: logger } : {}),
+		...(hasPublishers ? { [ApplicationPublishersKey]: publishers } : {}),
 		properties: collection("properties"),
 		blueprints: collection("blueprints"),
 		records: collection("records"),
@@ -1575,6 +1692,7 @@ export function applicationOf<
 						: providerDescriptionOf(provider),
 				named,
 				isLogFactory(declaredLog) ? "opaque" : log?.settings,
+				origins,
 			),
 		get started() {
 			return started;
@@ -1656,5 +1774,6 @@ export function applicationOf<
 	namedProviders.set(application, named);
 	if (defaultSlot !== undefined) defaultSlots.set(application, defaultSlot);
 	if (declaredLog !== undefined) logSettings.set(application, declaredLog);
+	publisherOrigins.set(application, Object.freeze(origins));
 	return application as never;
 }

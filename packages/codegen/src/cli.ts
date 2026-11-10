@@ -8,6 +8,7 @@ import { generate, InvalidSpecError } from "./generate";
 import { loadSpec, SpecLoadError } from "./load";
 import type {
 	CodegenOptions,
+	EventPolicyCatalogEntry,
 	ProviderCatalogEntry,
 	SpecIssue,
 	StageCatalogEntry,
@@ -18,9 +19,9 @@ import { writeGenerated } from "./write";
 const USAGE = `afora-codegen: generate @afora/core code from an afora.json
 
 Usage:
-  afora-codegen check [afora.json] [--providers module] [--stages module]
+  afora-codegen check [afora.json] [--providers module] [--stages module] [--policies module]
                                                     validate the spec
-  afora-codegen generate [afora.json] [--out dir] [--providers module] [--stages module]
+  afora-codegen generate [afora.json] [--out dir] [--providers module] [--stages module] [--policies module]
                                                     write the code (to output.dir, or --out)
   afora-codegen extract <file.ts>#App [--output-dir dir] [--import key=./file.ts#name]...
                                                     print the afora.json of an application
@@ -30,18 +31,21 @@ Usage:
 --stages is the same for the stages an output pipe may name: a module exporting \`stages\`
 (or a default export), an array of { name, module, export, kind? } entries (select and openapi
 are built in).
+--policies is the same for the event policies a command may name: a module exporting \`policies\`
+(or a default export), an array of { name, module, export } entries (publishEvents is built in).
 --import maps what cannot be described to the export it is imported from: a provider
 created without providerOf ("provider", "repositories.<Name>.provider" or
 "providers.<key>"), a use case
 with a hand-written execute ("useCases.<Name>") or a run function of a steps use case
 ("useCases.<Name>.run.<name>"), a command handler ("commands.<Name>.events" or
-"commands.<Name>.onEventError") or a stage written by hand ("outputs.<Name>.pipe.<index>").
+"commands.<Name>.onEventError"), a publisher ("publishers.<key>") or a stage written by hand
+("outputs.<Name>.pipe.<index>").
 extract imports the file: use Bun, or Node >= 23.6 for TypeScript files.`;
 
 /** A catalog exported by a module: `key`, or the default export. */
 async function loadCatalog<Entry>(
 	path: string | undefined,
-	key: "providers" | "stages",
+	key: "providers" | "stages" | "policies",
 ): Promise<readonly Entry[] | undefined> {
 	if (path === undefined) return undefined;
 	const module = (await import(pathToFileURL(resolve(path)).href)) as Record<
@@ -104,9 +108,14 @@ export async function main(argv: string[]): Promise<number> {
 				flag(args, "--stages"),
 				"stages",
 			);
+			const policies = await loadCatalog<EventPolicyCatalogEntry>(
+				flag(args, "--policies"),
+				"policies",
+			);
 			const options: CodegenOptions = {
 				...(providers ? { providers } : {}),
 				...(stages ? { stages } : {}),
+				...(policies ? { policies } : {}),
 			};
 			const file = resolve(args[0] ?? "afora.json");
 			const { spec, extended } = await loadSpec(file);
