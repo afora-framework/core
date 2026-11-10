@@ -79,6 +79,9 @@ a file of your own.
   \`"inMemory"\` is not a valid key. Keys of a spec extended directly can be named too. Each application makes its own
   instance of a provider made on start (an \`{ "import" }\` of a \`providerFrom\`), so independent applications do not share it.
 - Repository \`deletion\`: \`"hard"\` (default) physically removes rows; \`"soft"\` retains \`deletedAt\` and hides deleted rows from reads, counts and relations.
+- Repository \`indexes\`: \`{ "<name>": { "where": [keys], "orderBy"?: key } }\`, the access patterns a query reads through
+  (every \`where\` key by equality, the first order being \`orderBy\`); \`scans\`: \`"allow"\` (default), \`"warn"\` (logs
+  \`repository-scan\`) or \`"reject"\` (a query no index or unique key serves throws). \`explain\` gives the plan of a query.
 - \`relations\` must list exactly one repository for each entity the repository's entity holds, at any depth (inside
   records, blueprints and nested objects), not through another entity.
 - Environments hold properties only (no lists, no objects).

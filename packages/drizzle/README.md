@@ -78,7 +78,9 @@ export const App = applicationOf({
 
 // Once the application binds it, the repository is reached through it.
 const users = App.repositories.Users;
-await users.create(new User({ name: "Ana", email: "ana@example.com", age: 30 }));
+await users.create(
+	new User({ name: "Ana", email: "ana@example.com", age: 30 }),
+);
 await users.findPage({
 	where: { age: { in: [30, 31] } },
 	orderBy: [{ key: "name" }],
@@ -121,7 +123,7 @@ export const users = sqliteTable(
 );
 ```
 
-With soft deletion, a partial index (`` .where(sql`"deletedAt" IS NULL`) ``) keeps the deleted rows out of it. `capabilities.indexes` stays unset: the provider does not serve indexes itself, and `providerContract` checks with `{ indexes: true }` that an indexed query answers as the scan does.
+With soft deletion, a partial index (``.where(sql`"deletedAt" IS NULL`)``) keeps the deleted rows out of it. `capabilities.indexes` stays unset: the provider does not serve indexes itself, and `providerContract` checks with `{ indexes: true }` that an indexed query answers as the scan does.
 
 ## Unique keys
 

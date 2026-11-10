@@ -6,6 +6,9 @@
 
 - `CommandEventInfo` has `publisher(name)`, and a handler policy that throws a `CommandEventFailed` itself has it passed up as it is instead of wrapped.
 - An application with `publishers` rebinds its use cases and commands, as one with a `provider` or a `log` does, so `app.commands.X` is not the declared command.
+- **Breaking.** A repository declared at module level throws the new `RepositoryUsedOutsideApplication` (layer `repository`) once an application with a provider binds it, instead of reading and writing its own store; the message points to `app.repositories.X`, `app.run` and `execute`. Repositories no application binds work as before. See Migration below and `docs/repositories.md`.
+- **Breaking (types).** `findCursor` is left out of the repository type when the declared `provider` cannot read by cursor (its `capabilities.keyset` type cannot be `true`); `inMemoryProvider()` (now typed `InMemoryProvider`), `providerOf` and `drizzleProvider` (`DrizzleProvider`) keep literal capabilities. Declaring `findCursor` with such a provider throws `InvalidRepositoryDeclaration`, and `app.start()` throws `InvalidApplicationDeclaration` when the provider it makes lacks `keyset` and a repository declares `findCursor`. `RepositoryOf` (type) takes a fourth parameter, `Keyset`, and `RepositorySettings` a fourth, `Provider`.
+- `app.describe().repositories.<Name>` has `indexes` and `scans`.
 
 ### Added
 
@@ -17,6 +20,41 @@
 - `@afora/ws`, a new package: the `websocket` sink serves the operations of an output over JSON messages (`{ id?, op, input? }`), on any runtime, with topic subscriptions (`{ subscribe }`) that `publishEvents` fills through `wsHub()`. See `packages/ws/README.md`.
 - `coerceTextValues(blueprint, texts)`: text values as the scalar fields of a blueprint take them (numbers, booleans), for sinks that read text; `@afora/hono` and `@afora/mcp` now use it instead of their own copies.
 - `@afora/hono`: the `webhooks` option verifies the signatures of incoming webhooks (Stripe, GitHub, Standard Webhooks, plain HMAC-SHA256) and can strip undeclared keys. See `packages/hono/README.md#webhooks`.
+- Repositories declare indexes: `repositoryOf({ indexes: { byTypeStatus: { where: ["type", "status"], orderBy: "publishedAt" } } })`, typed by the entity keys and checked at declaration (unknown, sensitive or repeated keys, a non-scalar `orderBy`, duplicate indexes throw `InvalidRepositoryDeclaration`). The provider gets them as `context.indexes` and the one that serves a query as `ProviderQuery.index`; `ProviderCapabilities.indexes` says a provider serves them from storage. See `docs/repositories.md#indexes`.
+- Query cost: each read is planned as `id`, `unique`, `index` or `scan`; the new `explain(query)` action gives the plan without reading, and `scans: "allow" | "warn" | "reject"` runs a scan, logs `repository-scan` and runs it, or throws `InvalidRepositoryQuery` (`details.scan: true`) before the provider is called. New types `RepositoryIndex`, `RepositoryPlan`, `RepositoryScans`, `RepositoryExplain`, `ProviderKeyset`, `InMemoryProvider`. See `docs/repositories.md#query-cost`.
+- `providerContract` takes `{ indexes }` (default `capabilities.indexes`) and checks that a query given `index` answers as the scan does; `inMemoryProvider` and `@afora/drizzle` pass it.
+- `afora.json`: repositories take `indexes` and `scans` and the action `explain`, validated (new issues `unknown_index_key` and `invalid_index`), generated, normalized and extracted. See `docs/afora-json.md#indexes-and-query-cost`.
+- `@afora/drizzle`: accepts `ProviderQuery.index` with the same rows, and its README tells how to declare the matching SQL index.
+
+### Migration
+
+**Module-level repositories after binding.** Before, the module-level repository silently read another store once an application bound it:
+
+```ts
+const app = applicationOf({ name: "blog", repositories: { Users }, provider });
+await Users.findById(id); // read the in-memory store of the declaration, not `provider`
+```
+
+After, it throws `RepositoryUsedOutsideApplication`; go through the application:
+
+```ts
+await app.repositories.Users.findById(id);
+await app.run(Register, input); // or new app.useCases.Register(input).execute()
+await new Register(input).execute({ users: app.repositories.Users });
+```
+
+**`findCursor` and providers without keyset.** Before, the type offered `findCursor` on any provider, and the call threw at run time:
+
+```ts
+const Posts = repositoryOf({
+	entity: Post,
+	actions: ["findCursor"],
+	provider: kv,
+});
+await Posts.findCursor(); // InvalidRepositoryQuery: the provider does not read by cursor
+```
+
+After, `repositoryOf` throws `InvalidRepositoryDeclaration` and the type has no `findCursor`. Page with `findPage`, or give the provider `capabilities: { keyset: true }` and honor `after` in its `findMany`. A provider typed as the wide `IRepositoryProvider` keeps `findCursor` in the type; `const kv = { ..., capabilities: { keyset: true } } as const` (or `providerOf`) keeps the literal.
 
 ## 0.0.7 — unreleased (draft: dated when it is published)
 

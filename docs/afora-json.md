@@ -86,6 +86,26 @@ The events come from the lifecycle of the entities. An entity (not a record) dec
 
 A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
 
+## Indexes and query cost
+
+A repository declares its [indexes](repositories.md#indexes) and what it does with a [scan](repositories.md#query-cost) as in TypeScript:
+
+```json
+"repositories": {
+	"Entries": {
+		"entity": "Entry",
+		"actions": ["create", "findMany", "findCursor", "explain"],
+		"indexes": {
+			"byTypeStatus": { "where": ["type", "status"], "orderBy": "publishedAt" },
+			"byOwner": { "where": ["ownerSub"] }
+		},
+		"scans": "reject"
+	}
+}
+```
+
+They are generated as `indexes` and `scans` of `repositoryOf`, given by `describe()` and extracted back; normalization leaves out no indexes and `"scans": "allow"`, the default. A key that is not a key of the entity is an `unknown_index_key` issue; a sensitive key, an `orderBy` that is not scalar, a key listed twice, an empty or malformed index and two indexes on the same keys and order are `invalid_index`.
+
 ## Standard use cases
 
 A use case that a [standard use case](std-use-cases.md) covers is declared by naming it and the repository it is for, in place of its input, response and steps:
