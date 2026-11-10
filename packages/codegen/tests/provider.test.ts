@@ -269,7 +269,14 @@ describe("validation", () => {
 	});
 
 	test("the schema rejects what is not a provider", () => {
-		for (const provider of [3, "memory", {}, { use: 1 }, { import: "nope" }]) {
+		for (const provider of [
+			3,
+			"Memory",
+			"",
+			{},
+			{ use: 1 },
+			{ import: "nope" },
+		]) {
 			expect(Value.Check(specSchema, spec({ provider } as never))).toBe(false);
 		}
 	});

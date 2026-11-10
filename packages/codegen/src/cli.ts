@@ -31,7 +31,8 @@ Usage:
 (or a default export), an array of { name, module, export, kind? } entries (select and openapi
 are built in).
 --import maps what cannot be described to the export it is imported from: a provider
-created without providerOf ("provider" or "repositories.<Name>.provider"), a use case
+created without providerOf ("provider", "repositories.<Name>.provider" or
+"providers.<key>"), a use case
 with a hand-written execute ("useCases.<Name>") or a run function of a steps use case
 ("useCases.<Name>.run.<name>"), a command handler ("commands.<Name>.events" or
 "commands.<Name>.onEventError") or a stage written by hand ("outputs.<Name>.pipe.<index>").

@@ -35,6 +35,8 @@ const CEILING: Record<string, number> = {
 	queries: 51_500,
 	"steps use case": 53_200,
 	"command and output": 64_000,
+	// Added on 2026-11-10, measured plus 2%.
+	"named providers": 50_700,
 };
 
 /** About 100 ms per edit: what IntelliSense should cost. */

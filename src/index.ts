@@ -6,10 +6,18 @@ export {
 	DuplicateApplicationDeclaration,
 	InvalidApplicationDeclaration,
 	InvalidApplicationEnvironment,
+	ProviderNotBound,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
 	UnregisteredUseCaseDependency,
 } from "./core/application/exceptions";
+export {
+	isProviderSlot,
+	isProviderStorage,
+	type ProviderSlot,
+	type ProviderStorage,
+	providersOf,
+} from "./core/application/providers";
 export {
 	type Register,
 	type RegisteredApplication,
@@ -41,6 +49,7 @@ export type {
 	PropertyDescription,
 	PropertyLineageDescription,
 	PropertyReference,
+	ProviderReference,
 	RecordDescription,
 	UseCaseDependencyDescription,
 	UseCaseDescription,

@@ -726,6 +726,49 @@ export const memoryProvider = (options: { label?: string } = {}) =>
 		expect(await readFile(join(dir, "afora.json"), "utf8")).toBe(before);
 	});
 
+	test("named providers are written in order and referenced by key", async () => {
+		const { dir, client } = await withItem();
+		const spec = {
+			...JSON.parse(await readFile(join(dir, "afora.json"), "utf8")),
+			repositories: {
+				Items: { entity: "Item", actions: ["create"], provider: "audt" },
+			},
+			providers: { main: "inMemory", audit: "inMemory" },
+			provider: "main",
+		};
+		const bad = await client.call("afora_spec_write", { spec });
+		expect(bad.data.written).toBe(false);
+		expect(bad.data.issues).toContainEqual(
+			expect.objectContaining({
+				code: "unknown_provider",
+				path: ["repositories", "Items", "provider"],
+				message: expect.stringContaining("main, audit"),
+			}),
+		);
+		const written = await client.call("afora_spec_write", {
+			spec: {
+				...spec,
+				repositories: {
+					Items: { entity: "Item", actions: ["create"], provider: "audit" },
+				},
+			},
+		});
+		expect(written.data.written, JSON.stringify(written.data)).toBe(true);
+		const onDisk = JSON.parse(await readFile(join(dir, "afora.json"), "utf8"));
+		expect(Object.keys(onDisk)).toEqual([
+			"version",
+			"provider",
+			"providers",
+			"entities",
+			"repositories",
+		]);
+		const generated = await client.call("afora_generate");
+		expect(generated.data.typecheck).toMatchObject({ ok: true });
+		expect(
+			await readFile(join(dir, "src/domain/repositories.ts"), "utf8"),
+		).toContain("provider: Providers.audit");
+	}, 120_000);
+
 	test("without the catalog a catalog provider is unknown", async () => {
 		const { client } = await setup();
 		const result = await client.call("afora_spec_validate", {

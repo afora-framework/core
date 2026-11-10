@@ -360,13 +360,13 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface ApplicationContext { readonly name: string; env<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; readonly logger: ILogger; }",
   ],
   "ApplicationDescription": [
-    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription; readonly log?: LogDescription | { readonly kind: "opaque"; }; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly commands: Readonly<Record<string, CommandDescription>>; readonly outputs: Readonly<Record<string, OutputDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
+    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; readonly providers?: Readonly<Record<string, ProviderDescription & { readonly from: string; }>>; readonly log?: LogDescription | { readonly kind: "opaque"; }; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly commands: Readonly<Record<string, CommandDescription>>; readonly outputs: Readonly<Record<string, OutputDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
   ],
   "ApplicationNotStarted": [
     "ApplicationNotStarted: import("../../index.js").DeclaredExceptionClass<{ readonly application?: string; }>",
   ],
   "ApplicationSettings": [
-    "export interface ApplicationSettings<Name extends string, Extended extends readonly AnyApplication[], Collections extends ApplicationCollections> { readonly name: Name; readonly extends?: Extended; readonly properties?: Collections["properties"]; readonly blueprints?: Collections["blueprints"]; readonly records?: Collections["records"]; readonly entities?: Collections["entities"]; readonly environments?: Collections["environments"]; readonly repositories?: Collections["repositories"]; readonly useCases?: Collections["useCases"]; readonly commands?: Collections["commands"]; readonly outputs?: Collections["outputs"]; readonly exceptions?: Collections["exceptions"]; readonly provider?: IRepositoryProvider | ProviderFactory; readonly log?: LogSettings | LogFactory; }",
+    "export interface ApplicationSettings<Name extends string, Extended extends readonly AnyApplication[], Collections extends ApplicationCollections> { readonly name: Name; readonly extends?: Extended; readonly properties?: Collections["properties"]; readonly blueprints?: Collections["blueprints"]; readonly records?: Collections["records"]; readonly entities?: Collections["entities"]; readonly environments?: Collections["environments"]; readonly repositories?: Collections["repositories"]; readonly useCases?: Collections["useCases"]; readonly commands?: Collections["commands"]; readonly outputs?: Collections["outputs"]; readonly exceptions?: Collections["exceptions"]; readonly provider?: IRepositoryProvider | ProviderFactory; readonly providers?: ProviderStorage; readonly log?: LogSettings | LogFactory; }",
   ],
   "ApplicationStartOptions": [
     "export interface ApplicationStartOptions { readonly register?: boolean; readonly replace?: boolean; }",
@@ -630,7 +630,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
   ],
   "IApplication": [
-    "export interface IApplication<Name extends string, Collections extends ApplicationCollections> { readonly [Kind]: "application"; readonly name: Name; readonly extends: readonly AnyApplication[]; readonly provider: IRepositoryProvider | undefined; readonly logger: ILogger; readonly context: ApplicationContext; readonly properties: Collections["properties"]; readonly blueprints: Collections["blueprints"]; readonly records: Collections["records"]; readonly entities: Collections["entities"]; readonly environments: Collections["environments"]; readonly repositories: Collections["repositories"]; readonly useCases: Collections["useCases"]; readonly commands: Collections["commands"]; readonly outputs: Collections["outputs"]; readonly exceptions: Collections["exceptions"]; repository<Repository extends AnyRepository>(repository: Repository): Repository; useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; command<Command extends AnyCommand>(command: Command): Command; output<Output extends AnyOutput>(output: Output): Output; extend<const Others extends readonly AnyApplication[]>(...others: Others): IApplication<Name, MergedCollections<Collections, Others>>; describe(): ApplicationDescription; start(options?: ApplicationStartOptions): Promise<IApplication<Name, Collections>>; stop(): Promise<void>; get<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; get<Command extends AnyCommand>(command: Command): Command; get<Output extends AnyOutput>(output: Output): Output; get<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; get<Repository extends AnyRepository>(repository: Repository): Repository; readonly started: boolean; }",
+    "export interface IApplication<Name extends string, Collections extends ApplicationCollections> { readonly [Kind]: "application"; readonly name: Name; readonly extends: readonly AnyApplication[]; readonly provider: IRepositoryProvider | undefined; readonly logger: ILogger; readonly context: ApplicationContext; readonly properties: Collections["properties"]; readonly blueprints: Collections["blueprints"]; readonly records: Collections["records"]; readonly entities: Collections["entities"]; readonly environments: Collections["environments"]; readonly repositories: Collections["repositories"]; readonly useCases: Collections["useCases"]; readonly commands: Collections["commands"]; readonly outputs: Collections["outputs"]; readonly exceptions: Collections["exceptions"]; repository<Repository extends AnyRepository>(repository: Repository): Repository; useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; command<Command extends AnyCommand>(command: Command): Command; output<Output extends AnyOutput>(output: Output): Output; extend<const Others extends readonly AnyApplication[]>(...others: Others): IApplication<Name, MergedCollections<Collections, Others>>; describe(): ApplicationDescription; start(options?: ApplicationStartOptions): Promise<IApplication<Name, Collections>>; stop(): Promise<void>; get<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; get<Command extends AnyCommand>(command: Command): Command; get<Output extends AnyOutput>(output: Output): Output; get<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; get<Repository extends AnyRepository>(repository: Repository): Repository; get(provider: ProviderSlot): IRepositoryProvider; readonly started: boolean; }",
   ],
   "IBlueprint": [
     "export interface IBlueprint<Properties extends IBlueprintCollection, Optional extends boolean = false> { readonly [Kind]: "blueprint"; readonly plugins: readonly IBlueprintPlugin[]; readonly properties: Properties; readonly schema: ISchema<BlueprintSchema<Properties>, BlueprintData<Properties>>; readonly optional: Optional; safeParse(value: unknown): ParseResult<Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; readonly "~standard": StandardSchemaV1.Props<Optional extends true ? BlueprintInput<Properties> | undefined : BlueprintInput<Properties>, Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; join<const Blueprints extends readonly AnyBlueprint[]>(...blueprints: Blueprints): IBlueprint<JoinedProperties<readonly [ { readonly properties: Properties; }, ...Blueprints ]>>; }",
@@ -965,14 +965,26 @@ exports[`exports of the package and their declarations 1`] = `
   "ProviderFactory": [
     "export interface ProviderFactory<Environment extends EnvironmentDependencies = EnvironmentDependencies> { readonly [Kind]: "provider-factory"; readonly environments: readonly AnyEnvironment[]; readonly create: (env: MergedEnvironment<Environment>) => IRepositoryProvider | Promise<IRepositoryProvider>; readonly withContext: boolean; }",
   ],
+  "ProviderNotBound": [
+    "ProviderNotBound: import("../../index.js").DeclaredExceptionClass<{ readonly provider: string; }>",
+  ],
   "ProviderOption": [
     "export type ProviderOption = null | boolean | number | string | readonly ProviderOption[] | { readonly [key: string]: ProviderOption; };",
   ],
   "ProviderOptions": [
     "export type ProviderOptions = Readonly<Record<string, ProviderOption>>;",
   ],
+  "ProviderReference": [
+    "export interface ProviderReference { readonly kind: "ref"; readonly key: string; }",
+  ],
   "ProviderSettings": [
     "export interface ProviderSettings<Options extends ProviderOptions = ProviderOptions, Provider extends IRepositoryProvider = IRepositoryProvider> { readonly name: string; readonly options?: Options; readonly create: (options: Options) => Provider; }",
+  ],
+  "ProviderSlot": [
+    "export type ProviderSlot<Key extends string = string> = IRepositoryProvider & { readonly [Kind]: "provider-slot"; readonly key: Key; };",
+  ],
+  "ProviderStorage": [
+    "export type ProviderStorage<Keys extends string = string> = { readonly [Key in Keys]: ProviderSlot<Key>; } & { readonly [Kind]: "provider-storage"; };",
   ],
   "Publishable": [
     "Publishable: import("../index.js").IRecordPlugin<typeof PublishableRecord, "publishable">",
@@ -1389,6 +1401,12 @@ exports[`exports of the package and their declarations 1`] = `
   "isProviderFactory": [
     "export declare function isProviderFactory(value: unknown): value is ProviderFactory;",
   ],
+  "isProviderSlot": [
+    "export declare function isProviderSlot(value: unknown): value is ProviderSlot;",
+  ],
+  "isProviderStorage": [
+    "export declare function isProviderStorage(value: unknown): value is ProviderStorage;",
+  ],
   "isRecordClass": [
     "export declare function isRecordClass(value: unknown): value is AnyRecordClass;",
   ],
@@ -1465,6 +1483,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "providerOf": [
     "export declare function providerOf<Options extends ProviderOptions = ProviderOptions, Provider extends IRepositoryProvider = IRepositoryProvider>(settings: ProviderSettings<Options, Provider>): Provider;",
+  ],
+  "providersOf": [
+    "export declare function providersOf<const Entries extends Readonly<Record<string, IRepositoryProvider | ProviderFactory>>>(entries: Entries): ProviderStorage<keyof Entries & string>;",
   ],
   "recordBuilderOf": [
     "export declare function recordBuilderOf<const Catalogs extends readonly IRecordPluginCatalog[]>(...catalogs: Catalogs): RecordBuilder<RecordPluginContext<Catalogs>>;",
@@ -3006,8 +3027,102 @@ exports[`afora.json schema 1`] = `
           ],
           "type": "object",
         },
+        {
+          "description": "A key of the top-level "providers" (camelCase; "inMemory" is the built-in provider).",
+          "pattern": "^[a-z][A-Za-z0-9]*$",
+          "type": "string",
+        },
       ],
-      "description": ""inMemory", { "use": "<catalog name>", "options": {...} } or { "import": "./file.ts#provider" }.",
+      "description": ""inMemory", { "use": ... }, { "import": ... }, or a key of the top-level "providers", e.g. "audit".",
+    },
+    "providers": {
+      "description": "Named providers, by camelCase key (generated as \`Providers\` with providersOf): a repository or the application names one with "provider": "<key>".",
+      "patternProperties": {
+        "^[a-z][A-Za-z0-9]*$": {
+          "anyOf": [
+            {
+              "const": "inMemory",
+              "type": "string",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "options": {
+                  "description": "Options passed to the provider factory.",
+                  "patternProperties": {
+                    "^.*$": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                        },
+                        {
+                          "type": "number",
+                        },
+                        {
+                          "type": "boolean",
+                        },
+                        {
+                          "type": "null",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "import": {
+                              "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                              "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "import",
+                          ],
+                          "type": "object",
+                        },
+                        {
+                          "items": {},
+                          "type": "array",
+                        },
+                        {
+                          "patternProperties": {
+                            "^.*$": {},
+                          },
+                          "type": "object",
+                        },
+                      ],
+                      "description": "A JSON value, or { "import": "./file.ts#name" } for a value created by hand (nested at any depth).",
+                    },
+                  },
+                  "type": "object",
+                },
+                "use": {
+                  "description": "A provider of the catalog given to codegen (inMemory is built in).",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "use",
+              ],
+              "type": "object",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "import": {
+                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "import",
+              ],
+              "type": "object",
+            },
+          ],
+          "description": ""inMemory", { "use": "<catalog name>", "options": {...} } or { "import": "./file.ts#provider" }.",
+        },
+      },
+      "type": "object",
     },
     "records": {
       "additionalProperties": false,
@@ -3182,8 +3297,13 @@ exports[`afora.json schema 1`] = `
                   ],
                   "type": "object",
                 },
+                {
+                  "description": "A key of the top-level "providers" (camelCase; "inMemory" is the built-in provider).",
+                  "pattern": "^[a-z][A-Za-z0-9]*$",
+                  "type": "string",
+                },
               ],
-              "description": ""inMemory", { "use": "<catalog name>", "options": {...} } or { "import": "./file.ts#provider" }.",
+              "description": ""inMemory", { "use": ... }, { "import": ... }, or a key of the top-level "providers", e.g. "audit".",
             },
             "relations": {
               "description": "Repositories of every entity the entity holds, at any depth.",

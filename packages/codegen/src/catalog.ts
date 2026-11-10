@@ -228,7 +228,7 @@ function build(): Catalog {
 				builtin: true as const,
 			}))
 			.sort((a, b) => (a.name < b.name ? -1 : 1)),
-		reservedDeclarationNames: [...Object.keys(core), "App"].sort(),
+		reservedDeclarationNames: [...Object.keys(core), "App", "Providers"].sort(),
 	};
 }
 

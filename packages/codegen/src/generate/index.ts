@@ -7,7 +7,7 @@ import { defaultMessageOf, normalizeSpec } from "../normalize";
 import { pipeKindOf } from "../output";
 import { isImportObject, parseImportRef } from "../provider";
 import { type Decl, type Scope, scopeOf } from "../scope";
-import { isIdentifier } from "../spec/field";
+import { isIdentifier, isObject } from "../spec/field";
 import {
 	type CodegenOptions,
 	DEFAULT_OUTPUT_DIR,
@@ -48,6 +48,7 @@ export const GENERATED_FILES = [
 	"records.ts",
 	"entities.ts",
 	"environments.ts",
+	"providers.ts",
 	"repositories.ts",
 	"exceptions.ts",
 	"use-cases.ts",
@@ -441,10 +442,34 @@ interface Providers {
 	/** The stage factories supplied to codegen, by name. */
 	readonly stages: ReadonlyMap<string, StageCatalogEntry>;
 	readonly taken: ReadonlySet<string>;
+	/** The keys of `providers` in scope, and where an inherited one is imported from. */
+	readonly keys: ReadonlyMap<string, { readonly from?: string }>;
 }
 
-/** `inMemoryProvider()`, `drizzleProvider({ db })` or the imported provider. */
+/** `Providers.<key>`, the storage imported from this spec or the extended one. */
+function providerKeyDoc(key: string, e: Emitter, providers: Providers): Doc {
+	const { from } = providers.keys.get(key) ?? {};
+	if (from === undefined) {
+		const taken = new Set(providers.taken);
+		taken.delete("Providers");
+		return `${e.bind("./providers", "Providers", taken)}.${key}`;
+	}
+	return `${e.bind(from, "Providers", providers.taken)}.${key}`;
+}
+
+/** `Providers`, the storage of this spec, imported. */
+function providerKeyDocOfStorage(e: Emitter, providers: Providers): Doc {
+	const taken = new Set(providers.taken);
+	taken.delete("Providers");
+	return e.bind("./providers", "Providers", taken);
+}
+
+/** `inMemoryProvider()`, `drizzleProvider({ db })`, the imported provider or `Providers.<key>`. */
 function providerDoc(value: unknown, e: Emitter, providers: Providers): Doc {
+	if (typeof value === "string" && value !== "inMemory") {
+		return providerKeyDoc(value, e, providers);
+	}
+	if (value === "inMemory") return `${e.use("inMemoryProvider")}()`;
 	const imported = (reference: string): string => {
 		const { module, name } = parseImportRef(reference) as {
 			module: string;
@@ -996,6 +1021,18 @@ export function generate(
 				.filter((decl) => decl.kind === "useCase" && isImported(decl.spec))
 				.map((decl) => `${decl.name}Base`),
 		]),
+		keys: new Map(
+			[...scope.providerKeys.values()]
+				.filter((found) => found.nested !== true)
+				.map((found) => [
+					found.key,
+					found.via === undefined
+						? {}
+						: {
+								from: (extendedInfo.get(found.via) as { from: string }).from,
+							},
+				]),
+		),
 	};
 
 	const emitters = new Map<string, Emitter>();
@@ -1058,6 +1095,30 @@ export function generate(
 		}
 	}
 
+	// providers.ts: the storage of the named providers of this spec.
+	if (isObject(spec.providers) && Object.keys(spec.providers).length > 0) {
+		const e = new Emitter("providers.ts", scope, fileOf);
+		emitters.set("providers.ts", e);
+		bodies.set("providers.ts", [
+			[
+				"export const Providers = ",
+				callWithObject(
+					e.use("providersOf"),
+					objectDoc(
+						Object.entries(spec.providers).map(
+							([key, value]): readonly [string, Doc] => [
+								key,
+								providerDoc(value, e, providers),
+							],
+						),
+						true,
+					),
+				),
+				";",
+			],
+		]);
+	}
+
 	const importsOf = (e: Emitter): Doc[] => {
 		const imports: [string, Doc][] = [];
 		if (e.core.size > 0)
@@ -1113,6 +1174,9 @@ export function generate(
 				),
 			),
 		]);
+	}
+	if (emitters.has("providers.ts")) {
+		props.push(["providers", providerKeyDocOfStorage(app, providers)]);
 	}
 	if (spec.provider !== undefined) {
 		props.push(["provider", providerDoc(spec.provider, app, providers)]);

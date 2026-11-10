@@ -109,6 +109,12 @@ export type ProviderSpec =
 	  }
 	| ImportRef;
 
+/**
+ * A key of the top-level `providers` (camelCase), naming one of its
+ * providers, e.g. `"audit"`.
+ */
+export type ProviderKeySpec = string;
+
 /** A log provider: the built-in `"console"` or `"json"`, or an import of one made by hand. */
 export type LogProviderSpec = "console" | "json" | ImportRef;
 
@@ -156,8 +162,8 @@ export interface CodegenOptions {
 export interface RepositorySpec {
 	readonly entity: string;
 	readonly actions: readonly string[];
-	/** Its own provider; it uses the application's when omitted. */
-	readonly provider?: ProviderSpec;
+	/** Its own provider, or a key of `providers`; it uses the application's when omitted. */
+	readonly provider?: ProviderSpec | ProviderKeySpec;
 	/** Physical removal (default), or retained rows hidden by deletedAt. */
 	readonly deletion?: "hard" | "soft";
 	/** The repositories of the entities the entity holds. */
@@ -309,8 +315,10 @@ export interface Spec {
 	/** Other specs whose declarations this one uses: a relative path or a package. */
 	readonly extends?: readonly string[];
 	readonly output?: { readonly dir: string };
-	/** The provider the repositories use unless they declare their own. */
-	readonly provider?: ProviderSpec;
+	/** The provider the repositories use unless they declare their own, or a key of `providers`. */
+	readonly provider?: ProviderSpec | ProviderKeySpec;
+	/** Named providers (generated as `Providers`, made by `providersOf`), by camelCase key. */
+	readonly providers?: Readonly<Record<string, ProviderSpec>>;
 	/** How the application logs. */
 	readonly log?: LogSpec;
 	readonly properties?: Readonly<Record<string, PropertySpec>>;
