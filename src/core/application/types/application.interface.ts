@@ -4,6 +4,7 @@ import type {
 	IBlueprint,
 } from "../../blueprint/types/blueprint.interface";
 import type { AnyCommand } from "../../command/types/command.interface";
+import type { EntityExpires } from "../../entity/types/entity.interface";
 import type {
 	AnyEnvironment,
 	EnvironmentValue,
@@ -394,6 +395,14 @@ export interface RecordDescription {
 			>
 		>
 	>;
+	/** Whether the entity is versioned (`entityOf(..., { versioned: true })`); present only when it is. */
+	readonly versioned?: true;
+	/**
+	 * When the records of an entity expire, as `entityOf` was given it:
+	 * `{ after: duration }` (kept in its `expiresAt` identity key, left out of
+	 * `fields`) or `{ at: key }`. Present only when it has one.
+	 */
+	readonly expires?: EntityExpires;
 }
 
 /** What a use case depends on, by the name it has in the application. */

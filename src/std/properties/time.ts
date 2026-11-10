@@ -67,3 +67,9 @@ export class DeletedAt extends dateTimeOf({
 	name: "deletedAt",
 	optional: true,
 }) {}
+
+/** When a record expires, for entities declared with `expires: { after }`. */
+export class ExpiresAt extends dateTimeOf({
+	name: "expiresAt",
+	default: DEMO_DATE_TIME,
+}) {}

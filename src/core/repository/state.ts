@@ -1,4 +1,9 @@
-import { EntityUniqueKeys } from "../entity/abstract-entity";
+import {
+	EntitySettings,
+	EntityUniqueKeys,
+	EXPIRES_AT,
+} from "../entity/abstract-entity";
+import type { EntityStorageSettings } from "../entity/types/entity.interface";
 import {
 	type EnvironmentDependencies,
 	loadEnvironments,
@@ -56,13 +61,25 @@ export function stateOf(repository: object): RepositoryState {
 	return state;
 }
 
+/** The key holding the date at which the entities of `entity` expire, if they do. */
+function expiryKeyOf(entity: object): string | undefined {
+	const expires = (
+		entity as { readonly [EntitySettings]?: EntityStorageSettings }
+	)[EntitySettings]?.expires;
+	if (expires === undefined) return undefined;
+	return "at" in expires ? expires.at : EXPIRES_AT;
+}
+
 /** The context of the provider, with the environment read on first use. */
 export function contextOf(state: RepositoryState): RepositoryContext {
-	state.context ??= Object.freeze({
+	if (state.context) return state.context;
+	const key = expiryKeyOf(state.entity);
+	state.context = Object.freeze({
 		entity: state.entity,
 		name: state.name,
 		unique: state.entity[EntityUniqueKeys],
 		indexes: state.indexes,
+		...(key === undefined ? {} : { expiry: Object.freeze({ key }) }),
 		env: loadEnvironments(state.environment),
 	});
 	return state.context;

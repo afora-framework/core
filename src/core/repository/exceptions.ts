@@ -82,3 +82,42 @@ export const RepositoryEntityNotFound = exceptionOf({
 	message: ({ id }: { readonly id: string }, source) =>
 		`"${source}" holds no entity of id "${id}".`,
 });
+
+/**
+ * `update` of a versioned entity found another version stored than the one
+ * it read: someone else wrote it in between (optimistic concurrency).
+ * `actual` is the stored version, when the provider knows it; `source` is the
+ * repository name. An output answers it with 409.
+ */
+export const RepositoryConcurrencyConflict = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "RepositoryConcurrencyConflict",
+	message: (
+		{
+			id,
+			expected,
+		}: {
+			readonly id: string;
+			readonly expected: number;
+			readonly actual?: number;
+		},
+		source,
+	) =>
+		`"${source}" holds another version of "${id}" than ${expected}: it changed since it was read.`,
+});
+
+/**
+ * `increment` got deltas it cannot apply: a key that is not a number in the
+ * `change` list of the entity, or a value that is not a finite number. Its
+ * `issues` name each, so an output answers it as invalid input.
+ */
+export const InvalidRepositoryIncrement = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "InvalidRepositoryIncrement",
+	message: ({
+		reason,
+	}: {
+		readonly reason: string;
+		readonly issues: readonly Issue[];
+	}) => reason,
+});

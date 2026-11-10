@@ -439,14 +439,6 @@ describe("findCursor and the keyset capability", () => {
 			repositoryOf({ entity: Entry, actions: ["findCursor"], provider: named }),
 		).toHaveProperty("findCursor");
 		() => {
-			const withoutKeyset = repositoryOf({
-				entity: Entry,
-				actions: ["findCursor", "findMany"],
-				provider: none,
-			});
-			// @ts-expect-error the provider has no capabilities.keyset
-			withoutKeyset.findCursor;
-			withoutKeyset.findMany;
 			const off_ = repositoryOf({
 				entity: Entry,
 				actions: ["findCursor"],
@@ -460,6 +452,10 @@ describe("findCursor and the keyset capability", () => {
 	test("a declared provider without keyset is rejected with findCursor", () => {
 		expect(() =>
 			repositoryOf({ entity: Entry, actions: ["findCursor"], provider: off }),
+		).toThrow(InvalidRepositoryDeclaration);
+		// Without `capabilities` the type keeps findCursor, and the declaration throws.
+		expect(() =>
+			repositoryOf({ entity: Entry, actions: ["findCursor"], provider: none }),
 		).toThrow(InvalidRepositoryDeclaration);
 		expect(() =>
 			repositoryOf({ entity: Entry, actions: ["findMany"], provider: none }),

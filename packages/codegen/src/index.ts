@@ -31,6 +31,7 @@ export type {
 	CoreExceptionRef,
 	EntityEventSpec,
 	EntityEventsSpec,
+	EntityExpiresSpec,
 	EnumField,
 	EnumValue,
 	EnvironmentSpec,

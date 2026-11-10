@@ -12,6 +12,7 @@ import type {
 	OptionalRecord,
 } from "../../core/blueprint/types/blueprint.interface";
 import type { EntityIdentityKey } from "../../core/entity/types/entity.interface";
+import type { EntityVersion } from "../../core/entity/version";
 import type { OptionalProperty } from "../../core/property/types/optional-property.type";
 import type { AnyPropertyConstructor } from "../../core/property/types/property-collection.type";
 import type {
@@ -305,9 +306,19 @@ type LeftOut<Options> =
 	| (Options extends { readonly omit: readonly (infer Key)[] } ? Key : never)
 	| (Options extends { readonly values: infer Values } ? keyof Values : never);
 
+/** `"version"` for a versioned entity, whose `version` is part of its identity. */
+type VersionKey<Repository> =
+	Props<Repository> extends {
+		readonly version: typeof EntityVersion;
+	}
+		? "version"
+		: never;
+
 /** The input of `create`: the keys of the entity, an entity it holds by `<key>Id`. */
 type CreateInput<Repository, Options> = {
-	readonly [Key in KeyOf<Repository> as Key extends LeftOut<Options>
+	readonly [Key in KeyOf<Repository> as Key extends
+		| LeftOut<Options>
+		| VersionKey<Repository>
 		? never
 		: Props<Repository>[Key] extends AnyRepositoryEntity
 			? `${Key}Id`
