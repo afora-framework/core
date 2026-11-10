@@ -195,7 +195,7 @@ export interface CoreExceptionRef {
 export type StepSpec =
 	| {
 			readonly find: string;
-			readonly args?: readonly StepValueSpec[];
+			readonly args?: readonly StepValueSpec[] | string;
 			readonly as?: string;
 	  }
 	| {
@@ -214,12 +214,13 @@ export type StepSpec =
 			readonly change: string;
 			readonly key: string;
 			readonly value: StepValueSpec;
+			readonly ifPresent?: boolean;
 			readonly as?: string;
 	  }
 	| {
 			readonly invoke: string;
 			readonly method: string;
-			readonly args?: readonly StepValueSpec[];
+			readonly args?: readonly StepValueSpec[] | string;
 			readonly as?: string;
 	  }
 	| {
@@ -238,6 +239,11 @@ export type StepSpec =
 			readonly as?: string;
 	  }
 	| {
+			readonly restore: string;
+			readonly value: StepValueSpec;
+			readonly as?: string;
+	  }
+	| {
 			readonly call: string;
 			readonly input: StepValueSpec;
 			readonly as?: string;
@@ -246,7 +252,7 @@ export type StepSpec =
 			readonly run: string;
 			/** The function, imported as it is. */
 			readonly fn: ImportRef;
-			readonly args?: readonly StepValueSpec[];
+			readonly args?: readonly StepValueSpec[] | string;
 			readonly as?: string;
 	  }
 	| { readonly return: StepValueSpec };
@@ -268,6 +274,33 @@ export interface UseCaseSpec {
 	/** Declared exceptions or core exceptions (by class name) a caller should expect. */
 	readonly errors?: readonly string[];
 	readonly implementation: UseCaseImplementationSpec;
+	/** Only a standard use case has them (`GenericUseCaseSpec`). */
+	readonly generic?: undefined;
+	readonly repository?: undefined;
+	readonly options?: undefined;
+}
+
+/**
+ * A standard use case made for a repository (`StdUseCases`): what it takes,
+ * returns and does follows the repository and its entity.
+ */
+export interface GenericUseCaseSpec {
+	/** The standard use case: `create`, `list`, `publish`... */
+	readonly generic: string;
+	/** The name of a declared repository. */
+	readonly repository: string;
+	/** Its options, as JSON; exceptions in `errors` by name, or `{ "core": "Name" }`. */
+	readonly options?: Readonly<Record<string, unknown>>;
+	readonly description?: string;
+	readonly tags?: readonly string[];
+	readonly deprecated?: boolean;
+	/** Only a use case written in the spec has them (`UseCaseSpec`). */
+	readonly input?: undefined;
+	readonly response?: undefined;
+	readonly context?: undefined;
+	readonly dependencies?: undefined;
+	readonly errors?: undefined;
+	readonly implementation?: undefined;
 }
 
 /** A command (`commandOf`). */
@@ -328,7 +361,9 @@ export interface Spec {
 	readonly environments?: Readonly<Record<string, EnvironmentSpec>>;
 	readonly repositories?: Readonly<Record<string, RepositorySpec>>;
 	readonly exceptions?: Readonly<Record<string, ExceptionSpec>>;
-	readonly useCases?: Readonly<Record<string, UseCaseSpec>>;
+	readonly useCases?: Readonly<
+		Record<string, UseCaseSpec | GenericUseCaseSpec>
+	>;
 	readonly commands?: Readonly<Record<string, CommandSpec>>;
 	readonly outputs?: Readonly<Record<string, OutputSpec>>;
 }

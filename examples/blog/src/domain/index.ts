@@ -7,5 +7,6 @@ export * from "./environments";
 export * from "./exceptions";
 export * from "./outputs";
 export * from "./properties";
+export * from "./providers";
 export * from "./repositories";
 export * from "./use-cases";

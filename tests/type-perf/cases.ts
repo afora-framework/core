@@ -305,6 +305,57 @@ const /*@hover*/document = Api.build();
 `,
 	},
 	{
+		name: "standard use cases",
+		perf: true,
+		// One entity: two with plugins cost 75k before any use case.
+		code: `import { blueprintOf, commandOf, entityOf, repositoryOf } from "@afora/core";
+
+class Post extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string, status: ctx.string })),
+	{ change: ["title", "status"], plugins: (ctx) => [ctx.publishable] },
+) {}
+const Posts = repositoryOf({
+	entity: Post,
+	actions: ["findById", "findPage", "create", "update", "delete"],
+});
+
+const Blog = commandOf({
+	name: "Blog",
+	useCases: (/*@hover*/ctx) => ({
+		create: ctx./*@hover*/create(Posts, {
+			as: "post",
+			omit: ["publishedAt"],
+			values: { status: "draft" },
+		}),
+		list: ctx.list(Posts),
+		update: ctx.update(Posts),
+		publish: ctx.publish(Posts, { set: { status: "published" } }),
+		remove: ctx.delete(Posts),
+	}),
+});
+const { /*@hover*/post } = await Blog.run("create", /*@signature*/{ title: "Hi" });
+const { /*@hover*/items } = await Blog.run("list", {});
+await Blog.run("update", { id: post.id, /*@complete*/ });
+`,
+	},
+	{
+		name: "errors: standard use cases",
+		perf: false,
+		code: `import { blueprintOf, commandOf, entityOf, repositoryOf } from "@afora/core";
+class Note extends entityOf(blueprintOf((ctx) => ({ text: ctx.string })), { change: ["text"] }) {}
+const Notes = repositoryOf({ entity: Note, actions: ["findById", "create"] });
+commandOf({
+	name: "Notebook",
+	useCases: (ctx) => ({
+		update: ctx.update(Notes),
+		publish: ctx.publish(Notes),
+		create: ctx.create(Notes, { omit: ["nope"] }),
+		get: ctx.get(Notes, { owner: {} }),
+	}),
+});
+`,
+	},
+	{
 		name: "completions: blueprint context",
 		perf: false,
 		code: `import { blueprintOf } from "@afora/core";

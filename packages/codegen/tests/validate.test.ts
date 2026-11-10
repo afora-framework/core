@@ -547,6 +547,16 @@ describe("repositories", () => {
 			),
 		).toEqual([]);
 	});
+	test("restore needs soft deletion", () => {
+		expectIssue(
+			repo({ actions: ["restore"] }),
+			"restore_needs_soft",
+			"repositories.Things.actions.0",
+		);
+		expect(
+			validateSpec(repo({ actions: ["restore"], deletion: "soft" })),
+		).toEqual([]);
+	});
 	test("findBy needs a unique key", () => {
 		expectIssue(
 			repo({ actions: ["findByName"] }),

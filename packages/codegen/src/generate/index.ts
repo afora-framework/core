@@ -17,7 +17,7 @@ import {
 	type SpecIssue,
 	type StageCatalogEntry,
 } from "../spec/types";
-import { errorNameOf, isImported } from "../use-case";
+import { errorNameOf, isGeneric, isImported } from "../use-case";
 import { validateSpec } from "../validate";
 import {
 	type Doc,
@@ -632,6 +632,56 @@ function stepDoc(
 	return objectDoc(props);
 }
 
+/** A standard use case: the plugin of `StdUseCases` called with its repository and options. */
+function genericUseCaseDoc(decl: Decl, e: Emitter, scope: Scope): Doc {
+	const { spec } = decl;
+	const options = (spec.options as Record<string, Json> | undefined) ?? {};
+	// The name is given always: the default one follows the entity, not the key.
+	const props: [string, Doc][] = [["name", literal(decl.name)]];
+	for (const [key, value] of Object.entries(options)) {
+		if (key === "name") continue;
+		if (key === "errors") {
+			props.push([
+				key,
+				objectDoc(
+					Object.entries(value as Record<string, unknown>).map(
+						([kind, error]) => {
+							const name = errorNameOf(error) as string;
+							return [
+								kind,
+								scope.decls.get(name)?.kind === "exception"
+									? e.ref(name)
+									: e.use(name),
+							] as const;
+						},
+					),
+				),
+			]);
+			continue;
+		}
+		props.push([key, literal(value)]);
+	}
+	if (typeof spec.description === "string") {
+		props.push(["description", literal(spec.description)]);
+	}
+	if (Array.isArray(spec.tags) && spec.tags.length > 0) {
+		props.push(["tags", literal(spec.tags)]);
+	}
+	if (spec.deprecated === true) props.push(["deprecated", "true"]);
+	return [
+		"export const ",
+		decl.name,
+		" = ",
+		`${e.use("StdUseCases")}.context.${spec.generic as string}`,
+		"(",
+		e.ref(spec.repository as string),
+		", ",
+		objectDoc(props, true),
+		")",
+		";",
+	];
+}
+
 function useCaseDoc(
 	decl: Decl,
 	e: Emitter,
@@ -639,6 +689,7 @@ function useCaseDoc(
 	providers: Providers,
 ): Doc {
 	const { spec } = decl;
+	if (isGeneric(spec)) return genericUseCaseDoc(decl, e, scope);
 	const props: [string, Doc][] = [
 		["name", literal(decl.name)],
 		["blueprint", blueprintRefDoc(spec.input, e)],

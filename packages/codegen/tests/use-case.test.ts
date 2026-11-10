@@ -486,6 +486,27 @@ describe("validation", () => {
 			"invalid_reference@useCases.Register.implementation.steps.5.change",
 		],
 		[
+			"change ifPresent",
+			(c) =>
+				steps(c).splice(5, 0, {
+					change: "$saved",
+					key: "name",
+					value: "x",
+					ifPresent: "yes",
+				}),
+			"invalid_step@useCases.Register.implementation.steps.5.ifPresent",
+		],
+		[
+			"args reference",
+			(c) =>
+				steps(c).splice(5, 0, {
+					invoke: "$saved",
+					method: "tag",
+					args: "$nope",
+				}),
+			"unbound_reference@useCases.Register.implementation.steps.5.args",
+		],
+		[
 			"invoke method",
 			(c) => steps(c).splice(5, 0, { invoke: "$saved", method: "" }),
 			"invalid_step@useCases.Register.implementation.steps.5.method",

@@ -54,6 +54,7 @@ import {
 import type { ProviderDescription } from "../repository/types/query.interface";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import { useCaseOriginOf } from "../use-case/plugin";
 import { describeSteps } from "../use-case/steps/describe";
 import { interpretedStepsOf } from "../use-case/steps/run";
 import { type AnyUseCaseClass, isUseCaseClass } from "../use-case/use-case";
@@ -102,6 +103,7 @@ import type {
 	PropertyReference,
 	ProviderReference,
 	RecordDescription,
+	UseCaseDescription,
 } from "./types/application.interface";
 
 const KEYS = [
@@ -336,6 +338,22 @@ function resolve(
 				value,
 				key: keyOf(collection, value),
 				from: source,
+			});
+		}
+	}
+	// The use cases a plugin made (`ctx.create(Posts)`) need no listing: the
+	// commands that hold them register them, by name.
+	for (const entry of [...registry.commands.values()]) {
+		for (const UseCase of Object.values((entry.value as AnyCommand).useCases)) {
+			if (useCaseOriginOf(UseCase) === undefined || byKey.has(UseCase)) {
+				continue;
+			}
+			add({
+				collection: "useCases",
+				name: UseCase.useCaseName,
+				value: UseCase,
+				key: UseCase,
+				from: entry.from,
 			});
 		}
 	}
@@ -790,6 +808,51 @@ function describeRegistry(
 					}),
 				} as const);
 	};
+	// The classes among the options of a plugin, by name; the rest as it is.
+	const describeOption = (value: unknown): unknown => {
+		if (typeof value === "function") {
+			if (isDeclaredException(value)) {
+				return (
+					exceptionRefs.get(value) ?? { core: (value as { name: string }).name }
+				);
+			}
+			return (
+				scope.entities.get(value) ??
+				scope.records.get(value) ?? { kind: "opaque" }
+			);
+		}
+		if (Array.isArray(value)) return value.map(describeOption);
+		if (typeof value === "object" && value !== null) {
+			return Object.fromEntries(
+				Object.entries(value)
+					.filter(([, item]) => item !== undefined)
+					.map(([key, item]) => [key, describeOption(item)]),
+			);
+		}
+		return value;
+	};
+	const describeGeneric = (
+		UseCase: AnyUseCaseClass,
+	): { generic?: NonNullable<UseCaseDescription["generic"]> } => {
+		const origin = useCaseOriginOf(UseCase);
+		// A class that extends one a plugin made and writes its own `execute`
+		// is no longer what the plugin made.
+		if (!origin || interpretedStepsOf(UseCase) === undefined) return {};
+		const repository = repositories.get(
+			(inspectRepository(origin.repository) as RepositoryInspection).state,
+		);
+		if (repository === undefined) return {};
+		return {
+			generic: {
+				name: origin.plugin.name,
+				version: origin.plugin.version,
+				repository,
+				options: describeOption(origin.options) as Readonly<
+					Record<string, unknown>
+				>,
+			},
+		};
+	};
 	// The names of the registered blueprints a use case or command is typed with.
 	const refsOf = (
 		blueprints: Record<string, AnyBlueprint | undefined>,
@@ -947,6 +1010,7 @@ function describeRegistry(
 					]),
 				),
 				implementation: describeImplementation(UseCase),
+				...describeGeneric(UseCase),
 			};
 		}),
 		commands: each("commands", (entry) => {

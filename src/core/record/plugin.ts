@@ -32,9 +32,7 @@ export function isVersion(version: unknown): version is string {
 }
 
 /** The major, minor and patch of a semantic version. */
-export function versionParts(
-	version: string,
-): readonly [number, number, number] {
+function versionParts(version: string): readonly [number, number, number] {
 	const [, major, minor, patch] = SEMVER.exec(version) as unknown as [
 		string,
 		string,
@@ -42,6 +40,20 @@ export function versionParts(
 		string,
 	];
 	return [Number(major), Number(minor), Number(patch)];
+}
+
+/**
+ * Whether a plugin of version `available` satisfies a reference to
+ * `requested`: the same major version (the same minor below `1.0.0`), and
+ * not older.
+ */
+export function satisfies(available: string, requested: string): boolean {
+	const [major, minor, patch] = versionParts(available);
+	const [wantedMajor, wantedMinor, wantedPatch] = versionParts(requested);
+	if (major !== wantedMajor) return false;
+	if (major === 0 && minor !== wantedMinor) return false;
+	if (minor !== wantedMinor) return minor > wantedMinor;
+	return patch >= wantedPatch;
 }
 
 /** The members a plugin's record class takes to the records it is applied to. */

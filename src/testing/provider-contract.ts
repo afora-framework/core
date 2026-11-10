@@ -204,6 +204,17 @@ export function providerContract(
 				).toEqual({ ...data, name: "Other" });
 			});
 
+			it("update clears a value that is left out", async () => {
+				const { provider, context, seed } = await fixture();
+				const data = row({ deletedAt: "2024-01-01T00:00:00.000Z" });
+				await seed(data);
+				const { deletedAt: _deletedAt, ...alive } = data;
+				await provider.update(context, alive);
+				expect(
+					await provider.findOne(context, { where: { id: data.id } }),
+				).toEqual(alive);
+			});
+
 			it("soft-deleted rows keep occupying unique values", async () => {
 				const { provider, context, seed } = await fixture();
 				await seed(

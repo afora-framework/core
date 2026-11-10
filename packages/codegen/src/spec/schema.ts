@@ -281,7 +281,7 @@ const RepositoryDeclaration = Type.Object(
 		),
 		actions: Type.Array(Type.String(), {
 			description:
-				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, count.",
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), count.",
 		}),
 		provider: Type.Optional(ProviderOrKey),
 		relations: Type.Optional(
@@ -325,7 +325,12 @@ const StepValue = Type.Unknown({
 	description:
 		'A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.',
 });
-const StepArgs = Type.Optional(Type.Array(StepValue));
+const StepArgs = Type.Optional(
+	Type.Union([Type.Array(StepValue), Type.String({ pattern: "^\\$" })], {
+		description:
+			'The arguments: a list of values, or one "$reference" to a list, which is spread.',
+	}),
+);
 const StepAs = Type.Optional(Type.String({ description: "Binds the result." }));
 const StepErrorRef = Type.Union([
 	Type.String(),
@@ -378,6 +383,12 @@ const Step = Type.Union(
 				change: Type.String({ description: "A $reference to a record." }),
 				key: Type.String(),
 				value: StepValue,
+				ifPresent: Type.Optional(
+					Type.Boolean({
+						description:
+							"Skips the step when the value is absent: a partial update.",
+					}),
+				),
 				as: StepAs,
 			},
 			{ additionalProperties: false },
@@ -417,6 +428,16 @@ const Step = Type.Union(
 		),
 		Type.Object(
 			{
+				restore: Type.String({
+					description: "A repository dependency with soft deletion.",
+				}),
+				value: StepValue,
+				as: StepAs,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
 				call: Type.String({ description: "A use case dependency." }),
 				input: StepValue,
 				as: StepAs,
@@ -436,11 +457,39 @@ const Step = Type.Union(
 	],
 	{
 		description:
-			"A step: find, ensure, build, change, invoke, create, update, delete, call, run or return (exactly one, last).",
+			"A step: find, ensure, build, change, invoke, create, update, delete, restore, call, run or return (exactly one, last).",
 	},
 );
 
-const UseCaseDeclaration = Type.Object(
+const GenericUseCaseDeclaration = Type.Object(
+	{
+		generic: Type.String({
+			description:
+				"A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register or login.",
+		}),
+		repository: Type.String({
+			pattern: NAME,
+			description:
+				"The declared repository it is made for: it must have the actions, and its entity the plugins, the use case needs.",
+		}),
+		options: Type.Optional(
+			Type.Record(Type.String({ pattern: KEY }), Type.Unknown(), {
+				description:
+					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy".',
+			}),
+		),
+		description: Type.Optional(Type.String()),
+		tags: Type.Optional(StringList("Tags, for documentation.")),
+		deprecated: Type.Optional(Type.Boolean({ default: false })),
+	},
+	{
+		additionalProperties: false,
+		description:
+			"A standard use case made for a repository: its input, response, dependencies and steps follow the repository and its entity.",
+	},
+);
+
+const WrittenUseCaseDeclaration = Type.Object(
 	{
 		description: Type.Optional(Type.String()),
 		tags: Type.Optional(StringList("Tags, for documentation.")),
@@ -474,6 +523,14 @@ const UseCaseDeclaration = Type.Object(
 		),
 	},
 	{ additionalProperties: false },
+);
+
+const UseCaseDeclaration = Type.Union(
+	[WrittenUseCaseDeclaration, GenericUseCaseDeclaration],
+	{
+		description:
+			'A use case written here (input, response, implementation) or a standard one made for a repository ({ "generic": "create", "repository": "Posts" }).',
+	},
 );
 
 const CommandDeclaration = Type.Object(

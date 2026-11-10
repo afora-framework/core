@@ -86,16 +86,23 @@ describe("find", () => {
 		).toBe("unknown_action");
 	});
 
-	test("args must be a list of values", () => {
+	test("args must be a list of values or a reference", () => {
 		const details = invalidStep(() =>
 			stepsCase({
 				dependencies: { users: usersRepository() },
-				steps: [
-					{ find: "users.findById", args: "$input.name" },
-					{ return: {} },
-				],
+				steps: [{ find: "users.findById", args: "id" }, { return: {} }],
 			}),
 		);
 		expect(details).toMatchObject({ index: 0, code: "invalid_step" });
+	});
+
+	test("args as a reference must resolve to a list", async () => {
+		const Case = stepsCase({
+			dependencies: { users: usersRepository() },
+			steps: [{ find: "users.findById", args: "$input.name" }, { return: {} }],
+		});
+		const error = await new Case(sample).execute().catch((e) => e);
+		expect(error.name).toBe("InvalidUseCaseStep");
+		expect(error.message).toContain("args must resolve to a list");
 	});
 });

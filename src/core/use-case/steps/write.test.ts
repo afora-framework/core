@@ -62,6 +62,38 @@ describe("create, update and delete", () => {
 		expect(await Users.findById(saved.id)).toBeUndefined();
 	});
 
+	test("restore brings a soft-deleted entity back and binds it", async () => {
+		const Users = repositoryOf({
+			entity: User,
+			provider: inMemoryProvider(),
+			deletion: "soft",
+			actions: ["findById", "create", "delete", "restore"],
+		});
+		const saved = await Users.create(
+			new User({ name: "Ana", email: sample.email, password: "h" }),
+		);
+		await Users.delete(saved);
+		const Case = stepsCase({
+			dependencies: { users: Users },
+			response: UserResponse,
+			steps: [
+				{ restore: "users", value: saved.id, as: "user" },
+				{ return: { user: "$user" } },
+			],
+		});
+		const { user } = (await new Case(sample).execute()) as { user: User };
+		expect(user.isDeleted).toBe(false);
+		expect((await Users.findById(saved.id))?.name).toBe("Ana");
+		expect(
+			invalidStep(() =>
+				stepsCase({
+					dependencies: { users: usersRepository() },
+					steps: [{ restore: "users", value: "x" }, { return: {} }],
+				}),
+			).code,
+		).toBe("unknown_action");
+	});
+
 	test("declaration rules", () => {
 		const Users = usersRepository();
 		const declare = (

@@ -40,3 +40,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 *.sandbox.ts
 # test scratch projects of the workspace packages
 packages/*/tests/.tmp
+
+# planning notes (kept local)
+docs/plans/

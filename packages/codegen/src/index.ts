@@ -35,6 +35,7 @@ export type {
 	ExceptionSpec,
 	FieldSpec,
 	FieldsSpec,
+	GenericUseCaseSpec,
 	ImportRef,
 	InlineField,
 	ListBounds,

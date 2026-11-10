@@ -104,6 +104,31 @@ function declarationOf(state: RepositoryState): RepositoryState {
 	return origins.get(state) ?? state;
 }
 
+/** The repository `repositoryOf` made for each declaration. */
+const declared = new WeakMap<RepositoryState, object>();
+
+/** Keeps `repository` as the one `repositoryOf` made for `state`. */
+export function declareRepository(
+	state: RepositoryState,
+	repository: object,
+): void {
+	declared.set(state, repository);
+}
+
+/**
+ * The repository `repositoryOf` made for the entity class `Entity` that the
+ * entities of `repository` hold; `undefined` when it has no such relation.
+ *
+ * @internal
+ */
+export function relatedRepositoryOf(
+	repository: object,
+	Entity: object,
+): object | undefined {
+	const related = findState(repository)?.relations.get(Entity);
+	return related ? declared.get(declarationOf(related)) : undefined;
+}
+
 /**
  * `state` reading and writing through `provider`, unless it declared its own;
  * a provider it declared that is a key of `instances` (a slot of

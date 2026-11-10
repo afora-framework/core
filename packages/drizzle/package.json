@@ -1,6 +1,6 @@
 {
 	"name": "@afora/drizzle",
-	"version": "0.0.6",
+	"version": "0.0.7",
 	"description": "A repository provider for @afora/core on Drizzle ORM (SQLite and Postgres).",
 	"keywords": [
 		"afora",
@@ -48,7 +48,7 @@
 		"test": "bun test"
 	},
 	"devDependencies": {
-		"@electric-sql/pglite": "0.5.15",
+		"@electric-sql/pglite": "0.4.6",
 		"@types/bun": "^1.4.4",
 		"drizzle-orm": "0.45.4",
 		"typebox": "^1.4.3"

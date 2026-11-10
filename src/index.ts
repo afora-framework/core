@@ -99,7 +99,7 @@ export type {
 	IBlueprintFactories,
 	IBlueprintPlugin,
 } from "./core/blueprint/types/blueprint-plugin.interface";
-export { commandOf, isCommand } from "./core/command/command";
+export { commandBuilderOf, isCommand } from "./core/command/command";
 export {
 	CommandEventFailed,
 	InvalidCommandContext,
@@ -109,6 +109,8 @@ export {
 } from "./core/command/exceptions";
 export type {
 	AnyCommand,
+	CommandBuilder,
+	CommandBuilderSettings,
 	CommandEnvOption,
 	CommandEventErrorHandler,
 	CommandEventHandler,
@@ -122,6 +124,7 @@ export type {
 	CommandResponse,
 	CommandSettings,
 	CommandUseCases,
+	CommandUseCasesOption,
 } from "./core/command/types/command.interface";
 export {
 	AbstractEntity,
@@ -284,6 +287,8 @@ export {
 	InvalidPropertyValue,
 	PropertyRequired,
 } from "./core/property/exceptions";
+export type { IPropertyInput } from "./core/property/input";
+export { PropertyInput, propertyInputOf } from "./core/property/input";
 export { isProperty } from "./core/property/is-property";
 export type { PropertyLineage } from "./core/property/lineage";
 export { propertyLineageOf } from "./core/property/lineage";
@@ -417,6 +422,7 @@ export type {
 	RepositoryDelete,
 	RepositoryFindBy,
 	RepositoryFindManyBy,
+	RepositoryRestore,
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
 export type { SchemaClass } from "./core/schema/schema";
@@ -430,8 +436,27 @@ export { Demo } from "./core/symbols/demo";
 export { Kind } from "./core/symbols/kind";
 export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
-export { InvalidUseCaseStep } from "./core/use-case/exceptions";
+export {
+	IncompatibleUseCasePlugin,
+	InvalidUseCasePlugin,
+	InvalidUseCaseStep,
+	UnknownUseCasePlugin,
+	UseCaseEntityConflict,
+	UseCaseEntityNotFound,
+	UseCaseInvalidCredentials,
+	UseCaseUnavailable,
+} from "./core/use-case/exceptions";
+export {
+	isUseCasePlugin,
+	useCaseOriginOf,
+	useCasePluginOf,
+} from "./core/use-case/plugin";
+export {
+	isUseCaseCatalog,
+	useCaseCatalogOf,
+} from "./core/use-case/plugin-catalog";
 export type {
+	StepArgs,
 	StepEnsureKind,
 	StepErrorDescription,
 	StepFindTarget,
@@ -442,6 +467,27 @@ export type {
 	UseCaseStep,
 	UseCaseStepDescription,
 } from "./core/use-case/steps/types/steps.interface";
+export { useCaseTargetOf } from "./core/use-case/target";
+export type {
+	AnyUseCasePlugin,
+	EntityOfRepository,
+	IUseCaseCatalog,
+	IUseCasePlugin,
+	MissingRecordPlugin,
+	MissingRepositoryAction,
+	UseCaseCompilation,
+	UseCaseContextOf,
+	UseCaseFieldPlan,
+	UseCaseMaker,
+	UseCaseOriginInfo,
+	UseCasePluginContext,
+	UseCasePluginDescriptor,
+	UseCasePluginRequirements,
+	UseCasePluginSettings,
+	UseCasePluginsByName,
+	UseCaseTarget,
+	UseCaseTargetInfo,
+} from "./core/use-case/types/plugin.interface";
 export type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
@@ -471,6 +517,7 @@ export {
 } from "./core/use-case/use-case";
 export { blueprintOf } from "./std/blueprint";
 export { Std } from "./std/blueprint-plugin";
+export { commandOf } from "./std/command";
 export { entityOf } from "./std/entity";
 export { Email, Ip, Phone, Url } from "./std/properties/contact";
 export type { EnumClass } from "./std/properties/enum";
@@ -483,6 +530,7 @@ export {
 	PASSWORD_MIN_LENGTH,
 	PASSWORD_SPECIAL_CHARACTERS,
 	Password,
+	PlainPassword,
 	passwordIssues,
 } from "./std/properties/password";
 export {
@@ -520,3 +568,26 @@ export {
 	SyncVerifyUnsupported,
 } from "./std/runtime";
 export { StdStages } from "./std/stages";
+export { StdUseCases } from "./std/use-cases/index";
+export type {
+	ArchiveMaker,
+	CreateMaker,
+	DeleteMaker,
+	GetMaker,
+	ListMaker,
+	LoginMaker,
+	PublishMaker,
+	RegisterMaker,
+	RestoreMaker,
+	StdCreateOptions,
+	StdEntityOptions,
+	StdLifecycleOptions,
+	StdListOptions,
+	StdOwnerOption,
+	StdUseCaseContext,
+	StdUseCaseErrors,
+	StdUseCaseOptions,
+	StdUseCasePlugins,
+	TagMaker,
+	UpdateMaker,
+} from "./std/use-cases/types";

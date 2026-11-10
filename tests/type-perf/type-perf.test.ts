@@ -37,6 +37,8 @@ const CEILING: Record<string, number> = {
 	"command and output": 64_000,
 	// Added on 2026-11-10, measured plus 2%.
 	"named providers": 50_700,
+	// Added on 2026-11-10 with the standard use cases, measured plus 2%.
+	"standard use cases": 95_000,
 };
 
 /** About 100 ms per edit: what IntelliSense should cost. */

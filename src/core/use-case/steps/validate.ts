@@ -30,11 +30,15 @@ const SHAPES = {
 		optional: ["other", "details"],
 	},
 	build: { required: ["build", "values", "as"], optional: [] },
-	change: { required: ["change", "key", "value"], optional: ["as"] },
+	change: {
+		required: ["change", "key", "value"],
+		optional: ["ifPresent", "as"],
+	},
 	invoke: { required: ["invoke", "method"], optional: ["args", "as"] },
 	create: { required: ["create", "value"], optional: ["as"] },
 	update: { required: ["update", "value"], optional: ["as"] },
 	delete: { required: ["delete", "value"], optional: ["as"] },
+	restore: { required: ["restore", "value"], optional: ["as"] },
 	call: { required: ["call", "input"], optional: ["as"] },
 	run: { required: ["run", "fn"], optional: ["args", "as"] },
 	return: { required: ["return"], optional: [] },
@@ -53,7 +57,7 @@ const ENSURE_KINDS = new Set([
 ]);
 const READ_ACTION =
 	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|findCursor|count)$/;
-const WRITE_ACTIONS = new Set(["create", "update", "delete"]);
+const WRITE_ACTIONS = new Set(["create", "update", "delete", "restore"]);
 
 /** What is known of a name bound by a step: the class `build` made, if known. */
 interface Bound {
@@ -165,8 +169,16 @@ export function validateSteps(
 
 	const checkArgs = (index: number, args: unknown): void => {
 		if (args === undefined) return;
+		if (typeof args === "string" && args.startsWith("$")) {
+			checkReference(index, args);
+			return;
+		}
 		if (!Array.isArray(args)) {
-			fail(index, "invalid_step", "args must be a list of values.");
+			fail(
+				index,
+				"invalid_step",
+				"args must be a list of values or a reference to one.",
+			);
 		}
 		checkValue(index, args, "args");
 	};
@@ -328,6 +340,12 @@ export function validateSteps(
 				if (typeof record.key !== "string" || record.key === "") {
 					fail(index, "invalid_step", "change.key must be a string.");
 				}
+				if (
+					record.ifPresent !== undefined &&
+					typeof record.ifPresent !== "boolean"
+				) {
+					fail(index, "invalid_step", "change.ifPresent must be a boolean.");
+				}
 				const reference = parseReference(record.change as string);
 				const known =
 					reference && reference.path.length === 0
@@ -359,7 +377,8 @@ export function validateSteps(
 			}
 			case "create":
 			case "update":
-			case "delete": {
+			case "delete":
+			case "restore": {
 				repositoryOf(index, record[kind], kind);
 				checkValue(index, record.value, "value");
 				break;

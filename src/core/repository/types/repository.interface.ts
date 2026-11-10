@@ -100,6 +100,16 @@ export interface RepositoryDelete<Entity> {
 	): Promise<EntityInstanceOf<Entity>>;
 }
 
+/**
+ * `restore`: brings back a soft-deleted entity (or the one of the id) and
+ * gives it, alive; only for a repository with `deletion: "soft"`.
+ */
+export interface RepositoryRestore<Entity> {
+	restore(
+		entity: EntityInstanceOf<Entity> | string,
+	): Promise<EntityInstanceOf<Entity>>;
+}
+
 /** `count`: how many entities it holds. */
 export interface RepositoryCount<Entity = unknown> {
 	count(query?: RepositoryQuery<Entity>): Promise<number>;
@@ -148,6 +158,7 @@ export type RepositoryMethods<
 	("create" extends Actions ? RepositoryCreate<Entity> : unknown) &
 	("update" extends Actions ? RepositoryUpdate<Entity> : unknown) &
 	("delete" extends Actions ? RepositoryDelete<Entity> : unknown) &
+	("restore" extends Actions ? RepositoryRestore<Entity> : unknown) &
 	("count" extends Actions ? RepositoryCount<Entity> : unknown) &
 	("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) &
 	("exists" extends Actions ? RepositoryExists<Entity> : unknown) &
@@ -161,6 +172,7 @@ export type RepositoryAction<Entity> =
 	| "create"
 	| "update"
 	| "delete"
+	| "restore"
 	| "count"
 	| "findMany"
 	| "exists"

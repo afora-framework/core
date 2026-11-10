@@ -24,7 +24,7 @@ const json = (body: unknown, headers: Record<string, string> = {}) => ({
 const ana = {
 	name: "Ana",
 	email: "ana@example.com",
-	plainPassword: "S3cret-pass!",
+	password: "S3cret-pass!",
 };
 
 describe("generated code", () => {
@@ -75,12 +75,12 @@ describe("the API", () => {
 	test("login: right password 200, wrong password 401", async () => {
 		const ok = await api.request(
 			"/api/accounts/login",
-			json({ email: ana.email, plainPassword: ana.plainPassword }),
+			json({ email: ana.email, password: ana.password }),
 		);
 		expect(ok.status).toBe(200);
 		const bad = await api.request(
 			"/api/accounts/login",
-			json({ email: ana.email, plainPassword: "wrong" }),
+			json({ email: ana.email, password: "wrong" }),
 		);
 		expect(bad.status).toBe(401);
 		const problem = await body(bad);
@@ -112,13 +112,13 @@ describe("the API", () => {
 
 		const missingHeader = await api.request(
 			"/api/blog/publish",
-			json({ postId }),
+			json({ id: postId }),
 		);
 		expect(missingHeader.status).toBe(400);
 
 		const published = await api.request(
 			"/api/blog/publish",
-			json({ postId }, headers),
+			json({ id: postId }, headers),
 		);
 		expect(published.status).toBe(200);
 		const { post } = await body(published);
@@ -139,13 +139,13 @@ describe("the API", () => {
 		const bobId = (await body(bob)).user.id;
 		const stranger = await api.request(
 			"/api/blog/delete-post",
-			json({ postId }, { "x-user-id": bobId }),
+			json({ id: postId }, { "x-user-id": bobId }),
 		);
 		expect(stranger.status).toBe(404);
 
 		const deleted = await api.request(
 			"/api/blog/delete-post",
-			json({ postId }, headers),
+			json({ id: postId }, headers),
 		);
 		expect(deleted.status).toBe(200);
 		const after = await body(await api.request("/api/blog/list-posts"));
@@ -156,7 +156,7 @@ describe("the API", () => {
 
 		const gone = await api.request(
 			"/api/blog/publish",
-			json({ postId }, headers),
+			json({ id: postId }, headers),
 		);
 		expect(gone.status).toBe(404);
 	});
@@ -178,16 +178,17 @@ describe("round trip", () => {
 		const { spec } = await loadSpec("afora.json");
 		const extracted = extractSpec(App, {
 			imports: {
-				provider: "../provider.ts#provider",
-				"useCases.Register.run.hashPassword":
-					"../handlers/password.ts#hashPassword",
+				"providers.database": "../provider.ts#database",
 			},
 		});
 		const expected = normalizeSpec(spec);
 		const actual = normalizeSpec(extracted);
 		// the provider of providerFrom is opaque (it is code): extraction needs
 		// it mapped to its import, and gives back the spec as written
-		expect(actual.provider).toEqual({ import: "../provider.ts#provider" });
+		expect(actual.providers).toEqual({
+			database: { import: "../provider.ts#database" },
+		});
+		expect(actual.provider).toBe("database");
 		expect(actual).toEqual(expected);
 	});
 });

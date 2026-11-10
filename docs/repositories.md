@@ -1,6 +1,6 @@
 # Repositories
 
-`repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `count`, and the queries `findMany`, `exists`, `findPage` and `findCursor`. Every method is async.
+`repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `restore` (with soft deletion), `count`, and the queries `findMany`, `exists`, `findPage` and `findCursor`. Every method is async.
 
 ```ts
 import {
@@ -87,6 +87,8 @@ A cursor is opaque text (base64url) that holds the values of the order keys of t
 `create` takes an entity or the input that builds one. `delete` takes an entity or an id, calls `destroy()` (so `onDelete` is queued) and gives the entity. Entities read back are rebuilt from their stored value, with their identity, so they do not queue `onCreate` again.
 
 `repositoryOf({ entity, actions, deletion: "hard" | "soft" })` defaults to `"hard"`: deletion physically removes the stored row. With `"soft"`, deletion persists `deletedAt` through the provider's `update`. Finds and counts exclude these rows; unique values remain occupied. A relation pointing to a soft-deleted entity still loads it, deleted (`isDeleted` is true and it no longer changes): an order keeps its deleted product. Soft reads send `withDeleted: false` to the provider, and soft `delete` requires `update` instead of `remove`. `app.describe()` includes each repository's resolved `deletion` mode.
+
+The `restore` action brings a soft-deleted entity back: `await Posts.restore(post)` (or its id) reads the row with deleted ones included, clears `deletedAt`, stamps `updatedAt` and saves it through the provider's `update`, which must therefore clear a value that is left out. It gives a new entity, alive; the deleted instance stays as it is. An entity that is not deleted is given as it is stored, and an unknown id throws `RepositoryEntityNotFound`. Listing `restore` without `deletion: "soft"` throws `InvalidRepositoryDeclaration`.
 
 **Providers.** A repository reads and writes through an `IRepositoryProvider` (v2), on plain unmasked values, each call getting a `context` with the `entity`, the repository `name`, its `unique` keys and `env`:
 
@@ -203,4 +205,4 @@ import { myProvider } from "./my-provider";
 providerContract({ describe, it, expect }, () => myProvider());
 ```
 
-It checks `insert`, `findOne`, `findMany`, `update`, `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; and, when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints.
+It checks `insert`, `findOne`, `findMany`, `update` (which also clears a value that is left out, as `restore` needs), `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; and, when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints.

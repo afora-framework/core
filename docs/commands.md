@@ -23,7 +23,24 @@ const { value, events } = await Users.execute("register", input, { context }); /
 
 The keys of `useCases` are the operation names: identifiers holding concrete use case classes. `commandOf` validates its settings and throws `InvalidCommandDeclaration` (`Command` layer, `details.reason`) for anything else. The command is frozen and exposes `commandName`, `description`, `tags`, `context`, `useCases`, `transaction`, `environments`, `env`, `events`, `onEventError` and `operations`; `isCommand` identifies one.
 
-In an application, register commands under `commands: { Users }` (keyed by `commandName`, else `InvalidApplicationDeclaration`); every use case of every command must be in `useCases` (`UnregisteredApplicationReference`, `details: { command, useCase }`). With a `provider`, `app.commands.Users` (or `app.command(Users)`) is the same command rebuilt over the bound use cases, memoized, with the same settings; the transaction check runs again against the bound providers and throws `InvalidCommandDeclaration` at `applicationOf`. Every environment of a command must be in `environments` (`UnregisteredApplicationReference`, `details: { command }`), and the rebuilt command keeps them. `app.describe().commands` gives each command's operations (`{ ref }` of the use case), `transaction`, `environments` (by name, only when it declares any), `events` (a handler appears as `{ kind: "opaque" }`) and `onEventError` (only when set).
+`useCases` may also be a function of the [standard use cases](std-use-cases.md), each made for a repository: `useCases: (ctx) => ({ create: ctx.create(Posts), login: Login })`. `commandOf` is `commandBuilderOf(StdUseCases)`:
+
+`commandBuilderOf(...catalogs)` gives a `commandOf` whose `useCases` may also be a function of the use case plugins of the catalogs (see [Use cases](use-cases.md#plugins)), each called with a repository; classes written by hand go beside them. The function runs once, at declaration, and a plugin that cannot make its use case throws `UseCaseUnavailable` there. A later catalog wins a name; anything that is not a catalog throws `InvalidCommandDeclaration`.
+
+```ts
+const commandOf = commandBuilderOf(useCaseCatalogOf(get, publish));
+
+const Blog = commandOf({
+	name: "Blog",
+	useCases: (ctx) => ({
+		post: ctx.get(Posts),
+		publish: ctx.publish(Posts), // a type error if Post is not publishable
+		custom: MyUseCase,
+	}),
+});
+```
+
+In an application, register commands under `commands: { Users }` (keyed by `commandName`, else `InvalidApplicationDeclaration`); every use case of every command must be in `useCases` (`UnregisteredApplicationReference`, `details: { command, useCase }`), except those a use case plugin made, which the command registers itself under their `useCaseName`. With a `provider`, `app.commands.Users` (or `app.command(Users)`) is the same command rebuilt over the bound use cases, memoized, with the same settings; the transaction check runs again against the bound providers and throws `InvalidCommandDeclaration` at `applicationOf`. Every environment of a command must be in `environments` (`UnregisteredApplicationReference`, `details: { command }`), and the rebuilt command keeps them. `app.describe().commands` gives each command's operations (`{ ref }` of the use case), `transaction`, `environments` (by name, only when it declares any), `events` (a handler appears as `{ kind: "opaque" }`) and `onEventError` (only when set).
 
 `run(op, input, options)` does this:
 

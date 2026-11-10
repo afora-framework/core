@@ -26,6 +26,12 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) ArchivableRecord_base": [
     "ArchivableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ archivedAt: import("../index.js").CallableProperty<Omit<typeof import("../index.js").DateTime, "prototype" | "safeParse" | "type" | "~standard" | typeof import("../core/property/types/property-options.interface.js").Callable> & { new (value: string | undefined): import("../index.js").AbstractProperty<import("typebox").TOptional<import("typebox").TString>, string> & Omit<import("../index.js").DateTime, keyof import("../index.js").AbstractProperty<import("typebox").TSchema, unknown>>; readonly type: import("../index.js").IPropertyType<import("typebox").TOptional<import("typebox").TString>, string>; safeParse(value: unknown): import("../index.js").ParseResult<string | undefined>; readonly "~standard": import("../index.js").StandardSchemaV1.Props<string | undefined, string | undefined>; }>; }>, [ ], never, unknown, never, never>",
   ],
+  "(internal) AsOf": [
+    "type AsOf<Options> = Options extends { readonly as: infer Key extends string; } ? Key : "item";",
+  ],
+  "(internal) Authenticatable": [
+    "type Authenticatable = { verifyPassword(plain: string): Promise<boolean>; };",
+  ],
   "(internal) AuthenticatableRecord": [
     "export declare class AuthenticatableRecord extends AuthenticatableRecord_base { verifyPassword(plain: string): Promise<boolean>; }",
   ],
@@ -34,6 +40,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) BlueprintFactoryContext": [
     "export type BlueprintFactoryContext<Sources extends readonly BlueprintSource[]> = Sources extends readonly [ infer Head, ...infer Tail extends readonly BlueprintSource[] ] ? Override<Head extends { readonly factories?: infer Factories; } ? NonNullable<Factories> extends infer Defined extends IBlueprintFactories ? string extends keyof Defined ? Record<never, never> : Defined : Record<never, never> : Record<never, never>, BlueprintFactoryContext<Tail>> : Record<never, never>;",
+  ],
+  "(internal) ById": [
+    "type ById<Repository> = { readonly id: IdField<Repository>; };",
   ],
   "(internal) Callable": [
     "Callable: unique symbol",
@@ -44,6 +53,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) CallableProperties": [
     "export type CallableProperties<Fields> = { readonly [Key in keyof Fields]: Fields[Key] extends AnyPropertyConstructor ? CallableProperty<Fields[Key]> : Fields[Key]; };",
   ],
+  "(internal) ChangeKey": [
+    "type ChangeKey<Repository> = EntityInstanceOf<EntityOf<Repository>> extends { readonly change: infer Changes; } ? keyof Changes & KeyOf<Repository> : never;",
+  ],
   "(internal) CollectionSchema": [
     "type CollectionSchema<Properties extends IBlueprintCollection, Mode extends FieldMode> = TObject<{ [Key in keyof Properties]: FieldSchema<Properties[Key], Mode>; }>;",
   ],
@@ -52,6 +64,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) ContextFields": [
     "type ContextFields<Sources extends readonly BlueprintSource[]> = Omit<BlueprintPluginContext<Sources>, keyof BlueprintFactoryContext<Sources>>;",
+  ],
+  "(internal) CreateInput": [
+    "type CreateInput<Repository, Options> = { readonly [Key in KeyOf<Repository> as Key extends LeftOut<Options> ? never : Props<Repository>[Key] extends AnyRepositoryEntity ? \`\${Key}Id\` : HoldsEntity<Props<Repository>[Key]> extends true ? never : Key]: Props<Repository>[Key] extends AnyRepositoryEntity ? FieldAt<PropertiesOf<Props<Repository>[Key]>, "id"> : Props<Repository>[Key]; };",
   ],
   "(internal) CreatedAt_base": [
     "CreatedAt_base: DateTimeClass<false>",
@@ -71,8 +86,17 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) EntityClassBrand": [
     "EntityClassBrand: unique symbol",
   ],
+  "(internal) EntityOf": [
+    "type EntityOf<Repository> = Repository extends { readonly entity: infer Entity extends AnyRepositoryEntity; } ? Entity : never;",
+  ],
   "(internal) EntityPropertiesOf": [
     "type EntityPropertiesOf<Entity> = Entity extends { readonly blueprint: IBlueprint<infer Properties>; } ? Properties : never;",
+  ],
+  "(internal) EntityResponse": [
+    "type EntityResponse<Repository, Options> = { readonly [Key in AsOf<Options>]: EntityOf<Repository>; };",
+  ],
+  "(internal) EntityUseCase": [
+    "type EntityUseCase<Repository extends AnyRepository, Options, Input extends IBlueprintCollection> = StepsUseCaseConstructor<Input, EntityResponse<Repository, Options>, { readonly repository: Repository; }, OwnerContext<Repository, Options>>;",
   ],
   "(internal) Evaluate": [
     "type Evaluate<Type> = { [Key in keyof Type]: Type[Key]; } & {};",
@@ -83,6 +107,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) FailureResult": [
     "interface FailureResult { readonly issues: ReadonlyArray<Issue>; }",
   ],
+  "(internal) FieldAt": [
+    "type FieldAt<Properties, Key extends string> = Properties extends { readonly [Name in Key]: infer Field extends BlueprintField; } ? Field : never;",
+  ],
   "(internal) FieldMode": [
     "type FieldMode = "data" | "value" | "input";",
   ],
@@ -91,6 +118,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) FieldValue": [
     "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : never;",
+  ],
+  "(internal) HoldsEntity": [
+    "type HoldsEntity<Field> = Field extends AnyRepositoryEntity ? true : Field extends { readonly record: AnyRepositoryEntity; } ? true : Field extends IBlueprintList<infer Item> ? Item extends AnyRepositoryEntity ? true : false : false;",
+  ],
+  "(internal) IdField": [
+    "type IdField<Repository> = FieldAt<Props<Repository>, "id">;",
   ],
   "(internal) Id_base": [
     "Id_base: import("../../index.js").PropertyClass<Type.TString, string>",
@@ -117,6 +150,12 @@ exports[`exports of the package and their declarations 1`] = `
     "export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };",
     "type JsonValue<Properties extends IBlueprintCollection, Sensitive, Result = 0 extends 1 & Properties ? Readonly<Record<string, unknown>> : string extends keyof Properties ? Readonly<Record<string, unknown>> : JsonKeys<Properties, BlueprintData<Properties>, Sensitive>> = Result;",
   ],
+  "(internal) KeyOf": [
+    "type KeyOf<Repository> = keyof Props<Repository> & string;",
+  ],
+  "(internal) LeftOut": [
+    "type LeftOut<Options> = EntityIdentityKey | OwnerKey<Options> | (Options extends { readonly omit: readonly (infer Key)[]; } ? Key : never) | (Options extends { readonly values: infer Values; } ? keyof Values : never);",
+  ],
   "(internal) ListProperties": [
     "export type ListProperties<Properties> = { readonly [Key in keyof Properties]: Properties[Key] extends BlueprintField ? IBlueprintList<Properties[Key]> : never; };",
   ],
@@ -134,6 +173,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) Named": [
     "type Named<Value> = Readonly<Record<string, Value>>;",
+  ],
+  "(internal) None": [
+    "type None = Record<never, never>;",
+  ],
+  "(internal) Optional": [
+    "type Optional<Field> = Field extends AnyPropertyConstructor ? OptionalProperty<Field> : Field extends AnyBlueprintList ? OptionalBlueprintList<Field> : Field extends AnyBlueprint ? OptionalBlueprint<Field> : Field extends AnyRecordClass ? OptionalRecord<Field> : never;",
   ],
   "(internal) OptionalKeys": [
     "type OptionalKeys<Schemas> = { [Key in keyof Schemas]: Schemas[Key] extends TOptional<TSchema> ? Schemas[Key] extends TReadonly<Schemas[Key]> ? never : Key : never; }[keyof Schemas];",
@@ -156,11 +201,20 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) OwnableRecord_base": [
     "OwnableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ ownerId: import("../index.js").CallableProperty<typeof import("../index.js").Id>; }>, [ ], never, unknown, never, never>",
   ],
+  "(internal) OwnerContext": [
+    "type OwnerContext<Repository, Options> = Options extends { readonly owner: { readonly context: infer Key extends string; }; } ? { readonly [Name in Key]: IdField<Repository>; } : undefined;",
+  ],
+  "(internal) OwnerKey": [
+    "type OwnerKey<Options> = Options extends { readonly owner: infer Owner; } ? Owner extends { readonly key: infer Key; } ? Key : "ownerId" : never;",
+  ],
   "(internal) Password_base": [
     "Password_base: import("../../index.js").PropertyClass<Type.TString, string> & { readonly type: { readonly sensitive: true; }; }",
   ],
   "(internal) PathSegment": [
     "interface PathSegment { readonly key: PropertyKey; }",
+  ],
+  "(internal) PlainPassword_base": [
+    "PlainPassword_base: import("../../index.js").PropertyClass<Type.TString, string> & { readonly type: { readonly sensitive: true; }; }",
   ],
   "(internal) PluginInstance": [
     "type PluginInstance<Plugin> = Plugin extends { readonly record: abstract new (value: never) => infer Instance; } ? Instance : never;",
@@ -174,11 +228,15 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) PluginSensitiveKey": [
     "export type PluginSensitiveKey<Plugins extends readonly AnyRecordPlugin[]> = Plugins[number] extends infer Plugin ? Plugin extends { readonly record: { readonly [RecordSensitiveKeys]?: infer Key; }; } ? Extract<Key, string> : never : never;",
   ],
+  "(internal) PropertiesOf": [
+    "type PropertiesOf<Entity> = Entity extends { readonly blueprint: IBlueprint<infer Properties extends IBlueprintCollection>; } ? Properties : never;",
+  ],
   "(internal) PropertyOfArgs": [
     "type PropertyOfArgs<SchemaType extends TSchema, Optional extends boolean = false, Unique extends boolean = false, Sensitive extends boolean = false, Value = Static<SchemaType>> = { name: string; schema: SchemaType; default?: NoInfer<Value>; optional?: Optional; sensitive?: Sensitive; unique?: Unique; preHandle?: (value: NoInfer<Value>) => NoInfer<Value>; afterHandle?: (value: NoInfer<Value>) => NoInfer<Value>; };",
   ],
   "(internal) Props": [
     "interface Props<Input = unknown, Output = Input> { readonly version: 1; readonly vendor: string; readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>; readonly types?: Types<Input, Output> | undefined; }",
+    "type Props<Repository> = PropertiesOf<EntityOf<Repository>>;",
   ],
   "(internal) PublishableRecord": [
     "export declare class PublishableRecord extends PublishableRecord_base { get isPublished(): boolean; publish(at?: string): this; unpublish(): this; }",
@@ -235,7 +293,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type RepositoryKeys<Dependencies> = { [Key in keyof Dependencies & string]: Dependencies[Key] extends AnyRepository ? Key : never; }[keyof Dependencies & string];",
   ],
   "(internal) RepositoryMethods": [
-    "export type RepositoryMethods<Entity, Actions extends string = string> = RepositoryFindBy<Entity, Actions> & RepositoryFindManyBy<Entity, Actions> & ("create" extends Actions ? RepositoryCreate<Entity> : unknown) & ("update" extends Actions ? RepositoryUpdate<Entity> : unknown) & ("delete" extends Actions ? RepositoryDelete<Entity> : unknown) & ("count" extends Actions ? RepositoryCount<Entity> : unknown) & ("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) & ("exists" extends Actions ? RepositoryExists<Entity> : unknown) & ("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown) & ("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown);",
+    "export type RepositoryMethods<Entity, Actions extends string = string> = RepositoryFindBy<Entity, Actions> & RepositoryFindManyBy<Entity, Actions> & ("create" extends Actions ? RepositoryCreate<Entity> : unknown) & ("update" extends Actions ? RepositoryUpdate<Entity> : unknown) & ("delete" extends Actions ? RepositoryDelete<Entity> : unknown) & ("restore" extends Actions ? RepositoryRestore<Entity> : unknown) & ("count" extends Actions ? RepositoryCount<Entity> : unknown) & ("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) & ("exists" extends Actions ? RepositoryExists<Entity> : unknown) & ("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown) & ("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown);",
   ],
   "(internal) RepositoryOf": [
     "export type RepositoryOf<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment = Readonly<Record<never, never>>> = AbstractRepository<Entity, Actions, Environment> & RepositoryMethods<Entity, Actions[number]>;",
@@ -281,6 +339,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) UniqueTypeOf": [
     "export type UniqueTypeOf<Property> = Property extends { readonly type: { readonly unique: true; }; } ? { readonly unique: true; } : unknown;",
+  ],
+  "(internal) UpdateInput": [
+    "type UpdateInput<Repository> = { readonly [Key in "id" | ChangeKey<Repository> as Key extends "id" ? Key : HoldsEntity<Props<Repository>[Key]> extends true ? never : Key]: Key extends "id" ? IdField<Repository> : Optional<Props<Repository>[Key]>; };",
   ],
   "(internal) UpdatedAt_base": [
     "UpdatedAt_base: DateTimeClass<true>",
@@ -366,6 +427,9 @@ exports[`exports of the package and their declarations 1`] = `
   "AnyUseCaseClass": [
     "export interface AnyUseCaseClass { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: AnyBlueprint; readonly response: AnyBlueprint; readonly dependencies: UseCaseCollection; readonly context: AnyBlueprint | undefined; readonly description: string | undefined; readonly tags: readonly string[]; readonly deprecated: boolean; readonly errors: readonly AnyExceptionClass[]; new (input: any, ...options: any[]): { execute(): Promise<unknown>; pullEvents(): EntityEvent[]; }; }",
   ],
+  "AnyUseCasePlugin": [
+    "export type AnyUseCasePlugin = IUseCasePlugin<string, any>;",
+  ],
   "ApplicationAlreadyStarted": [
     "ApplicationAlreadyStarted: import("../../index.js").DeclaredExceptionClass<{ readonly current: string; readonly attempted: string; }>",
   ],
@@ -398,6 +462,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "Archivable": [
     "Archivable: import("../index.js").IRecordPlugin<typeof ArchivableRecord, "archivable">",
+  ],
+  "ArchiveMaker": [
+    "export type ArchiveMaker = <Repository extends AnyRepository, const Options extends StdLifecycleOptions<Repository> = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", { archive(at?: string): unknown; readonly isArchived: boolean; }, "archivable">, options?: Options) => EntityUseCase<Repository, Options, ById<Repository>>;",
   ],
   "Authenticatable": [
     "Authenticatable: import("../index.js").IRecordPlugin<typeof AuthenticatableRecord, "authenticatable">",
@@ -447,6 +514,12 @@ exports[`exports of the package and their declarations 1`] = `
   "CallableProperty": [
     "export type CallableProperty<Property extends { readonly type: IPropertyType<TSchema>; }> = Property & { (options?: OptionsOfProperty<Property>): Property; readonly [Callable]: Property; };",
   ],
+  "CommandBuilder": [
+    "export type CommandBuilder<Generics> = <const UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined = undefined, Environment extends EnvironmentDependencies | undefined = undefined>(settings: CommandBuilderSettings<UseCases, Context, Environment, Generics>) => CommandOf<UseCases, Context, Environment>;",
+  ],
+  "CommandBuilderSettings": [
+    "export interface CommandBuilderSettings<UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined, Environment extends EnvironmentDependencies | undefined, Generics> extends Omit<CommandSettings<UseCases, Context, Environment>, "useCases"> { readonly useCases: CommandUseCasesOption<UseCases, Generics>; }",
+  ],
   "CommandDescription": [
     "export interface CommandDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly context?: FieldsDescription; readonly refs?: { readonly context?: string; }; readonly operations: Readonly<Record<string, { readonly ref: string; }>>; readonly transaction: boolean; readonly environments?: readonly string[]; readonly events: "after-commit" | "manual" | { readonly kind: "opaque"; }; readonly onEventError?: { readonly kind: "opaque"; }; }",
   ],
@@ -492,6 +565,12 @@ exports[`exports of the package and their declarations 1`] = `
   "CommandUseCases": [
     "export type CommandUseCases = Readonly<Record<string, AnyUseCaseClass>>;",
   ],
+  "CommandUseCasesOption": [
+    "export type CommandUseCasesOption<UseCases extends CommandUseCases, Generics> = UseCases | ((ctx: Generics) => UseCases);",
+  ],
+  "CreateMaker": [
+    "export type CreateMaker = <Repository extends AnyRepository, const Options extends StdCreateOptions<Repository> = None>(repository: Repository & UseCaseTarget<Repository, "create">, options?: Options) => EntityUseCase<Repository, Options, CreateInput<Repository, Options>>;",
+  ],
   "CreatedAt": [
     "export declare class CreatedAt extends CreatedAt_base { }",
   ],
@@ -512,6 +591,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "DeclaredRecordInstance": [
     "export type DeclaredRecordInstance<Properties extends IBlueprintCollection, Change extends readonly string[], Members = unknown, Sensitive extends string = never> = AbstractRecord<Properties, Sensitive> & Readonly<BlueprintValue<Properties>> & RecordChanges<Properties, Change> & Members;",
+  ],
+  "DeleteMaker": [
+    "export type DeleteMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "delete">, options?: Options) => EntityUseCase<Repository, Options, ById<Repository>>;",
   ],
   "DeletedAt": [
     "export declare class DeletedAt extends DeletedAt_base { }",
@@ -575,6 +657,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "EntityNonUniqueKeyOf": [
     "export type EntityNonUniqueKeyOf<Entity> = string extends EntityUniqueKeyOf<Entity> ? EntityKeyOf<Entity> : Exclude<EntityKeyOf<Entity>, EntityUniqueKeyOf<Entity>>;",
+  ],
+  "EntityOfRepository": [
+    "export type EntityOfRepository<Repository> = Repository extends { readonly entity: infer Entity; } ? Entity : never;",
   ],
   "EntityOptions": [
     "export type EntityOptions<Properties extends IBlueprintCollection, Change extends readonly RecordKey<Properties>[] = readonly RecordKey<Properties>[], Unique extends readonly RecordKey<Properties>[] = readonly RecordKey<Properties>[], Plugins extends readonly AnyRecordPlugin[] = readonly AnyRecordPlugin[], Context = unknown, Sensitive extends readonly RecordKey<Properties>[] = readonly RecordKey<Properties>[]> = RecordOptions<Properties, Change, Unique, Plugins, Context, Sensitive> & EntityEvents;",
@@ -654,6 +739,9 @@ exports[`exports of the package and their declarations 1`] = `
   "FieldsDescription": [
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
   ],
+  "GetMaker": [
+    "export type GetMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> = None>(repository: Repository & UseCaseTarget<Repository, "findById">, options?: Options) => EntityUseCase<Repository, Options, ById<Repository>>;",
+  ],
   "IApplication": [
     "export interface IApplication<Name extends string, Collections extends ApplicationCollections> { readonly [Kind]: "application"; readonly name: Name; readonly extends: readonly AnyApplication[]; readonly provider: IRepositoryProvider | undefined; readonly logger: ILogger; readonly context: ApplicationContext; readonly properties: Collections["properties"]; readonly blueprints: Collections["blueprints"]; readonly records: Collections["records"]; readonly entities: Collections["entities"]; readonly environments: Collections["environments"]; readonly repositories: Collections["repositories"]; readonly useCases: Collections["useCases"]; readonly commands: Collections["commands"]; readonly outputs: Collections["outputs"]; readonly exceptions: Collections["exceptions"]; repository<Repository extends AnyRepository>(repository: Repository): Repository; useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; run<UseCase extends AnyUseCaseClass>(useCase: UseCase, ...args: ApplicationRunArgs<UseCase>): Promise<UseCaseResponse<UseCase>>; command<Command extends AnyCommand>(command: Command): Command; output<Output extends AnyOutput>(output: Output): Output; extend<const Others extends readonly AnyApplication[]>(...others: Others): IApplication<Name, MergedCollections<Collections, Others>>; describe(): ApplicationDescription; start(options?: ApplicationStartOptions): Promise<IApplication<Name, Collections>>; stop(): Promise<void>; get<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; get<Command extends AnyCommand>(command: Command): Command; get<Output extends AnyOutput>(output: Output): Output; get<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; get<Repository extends AnyRepository>(repository: Repository): Repository; get(provider: ProviderSlot): IRepositoryProvider; readonly started: boolean; }",
   ],
@@ -693,6 +781,9 @@ exports[`exports of the package and their declarations 1`] = `
   "IPropertyCollection": [
     "export type IPropertyCollection = Record<string, AnyPropertyConstructor>;",
   ],
+  "IPropertyInput": [
+    "export interface IPropertyInput<Value = unknown> { readonly accepts: AnyPropertyConstructor; convert(value: Value): Value | Promise<Value>; }",
+  ],
   "IPropertyType": [
     "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; }",
   ],
@@ -717,6 +808,12 @@ exports[`exports of the package and their declarations 1`] = `
   "IStageCatalog": [
     "export interface IStageCatalog<Factories extends Readonly<Record<string, StageFactory>> = Readonly<Record<string, StageFactory>>> { readonly [Kind]: "stage-catalog"; readonly stages: Factories; readonly list: readonly StageFactory[]; resolve(name: string, options?: StageOptions): Stage; }",
   ],
+  "IUseCaseCatalog": [
+    "export interface IUseCaseCatalog<Plugins extends Readonly<Record<string, AnyUseCasePlugin>> = Readonly<Record<string, AnyUseCasePlugin>>> { readonly [Kind]: "use-case-catalog"; readonly plugins: Plugins; readonly list: readonly AnyUseCasePlugin[]; readonly context: UseCaseContextOf<Plugins>; resolve(reference: string): AnyUseCasePlugin; }",
+  ],
+  "IUseCasePlugin": [
+    "export interface IUseCasePlugin<Name extends string = string, Make extends UseCaseMaker = UseCaseMaker> { readonly [Kind]: "use-case-plugin"; readonly name: Name; readonly version: string; readonly description?: string; readonly requires: Required<UseCasePluginRequirements>; readonly make: Make; toJSON(): UseCasePluginDescriptor; }",
+  ],
   "Id": [
     "export declare class Id extends Id_base { static generate(): Id; }",
   ],
@@ -728,6 +825,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "IncompatibleRecordPlugin": [
     "IncompatibleRecordPlugin: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
+  "IncompatibleUseCasePlugin": [
+    "IncompatibleUseCasePlugin: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
   ],
   "Integer": [
     "Integer: import("../../index.js").PropertyClass<Type.TInteger, number>",
@@ -792,6 +892,9 @@ exports[`exports of the package and their declarations 1`] = `
   "InvalidUseCaseDependencies": [
     "InvalidUseCaseDependencies: DeclaredExceptionClass<undefined>",
   ],
+  "InvalidUseCasePlugin": [
+    "InvalidUseCasePlugin: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
   "InvalidUseCaseStep": [
     "InvalidUseCaseStep: import("../../index.js").DeclaredExceptionClass<{ readonly index: number; readonly reason: string; readonly code?: string; }>",
   ],
@@ -806,6 +909,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "Kind": [
     "Kind: unique symbol",
+  ],
+  "ListMaker": [
+    "export type ListMaker = <Repository extends AnyRepository, const Options extends StdListOptions<Repository> = None>(repository: Repository & UseCaseTarget<Repository, "findPage">, options?: Options) => StepsUseCaseConstructor<{ readonly limit: OptionalProperty<typeof Integer>; readonly offset: OptionalProperty<typeof Integer>; }, { readonly items: IBlueprintList<EntityOf<Repository>>; readonly total: typeof Integer; readonly limit: typeof Integer; readonly offset: typeof Integer; }, { readonly repository: Repository; }, OwnerContext<Repository, Options>>;",
   ],
   "LogDescription": [
     "export interface LogDescription { readonly level: LogLevel; readonly providers: readonly ({ readonly kind: "log-provider"; readonly name: string; } | { readonly kind: "opaque"; })[]; }",
@@ -837,6 +943,9 @@ exports[`exports of the package and their declarations 1`] = `
   "LoggerDeclaration": [
     "export interface LoggerDeclaration { readonly [Kind]: "logger"; }",
   ],
+  "LoginMaker": [
+    "export type LoginMaker = <Repository extends AnyRepository, const Options extends StdUseCaseOptions & { readonly as?: string; } = None>(repository: Repository & UseCaseTarget<Repository, "findByEmail", Authenticatable, "authenticatable">, options?: Options) => StepsUseCaseConstructor<{ readonly email: FieldAt<Props<Repository>, "email">; readonly password: typeof StringProperty; }, EntityResponse<Repository, Options>, { readonly repository: Repository; }>;",
+  ],
   "MASK": [
     "MASK = "********"",
   ],
@@ -851,6 +960,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "Meta": [
     "Meta: unique symbol",
+  ],
+  "MissingRecordPlugin": [
+    "export interface MissingRecordPlugin<Plugin extends string> { readonly "this use case needs the entity to have the plugin": Plugin; }",
+  ],
+  "MissingRepositoryAction": [
+    "export interface MissingRepositoryAction<Action extends string> { readonly "this use case needs the repository to declare the action": Action; }",
   ],
   "NumberConstraints": [
     "export interface NumberConstraints { readonly min?: number; readonly max?: number; readonly exclusiveMin?: number; readonly exclusiveMax?: number; readonly multipleOf?: number; }",
@@ -937,7 +1052,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type ParseResult<Output> = { readonly value: Output; readonly issues?: undefined; } | { readonly issues: readonly Issue[]; };",
   ],
   "Password": [
-    "export declare class Password extends Password_base { static hash(plain: string): Promise<Password>; verify(input: string): Promise<boolean>; verifySync(input: string): boolean; }",
+    "export declare class Password extends Password_base { static readonly [PropertyInput]: IPropertyInput<string>; static hash(plain: string): Promise<Password>; verify(input: string): Promise<boolean>; verifySync(input: string): boolean; }",
   ],
   "PasswordHasher": [
     "export interface PasswordHasher { hash(plain: string): Promise<string>; verify(plain: string, hash: string): Promise<boolean>; verifySync?(plain: string, hash: string): boolean; }",
@@ -950,6 +1065,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "PipeResult": [
     "export type PipeResult<Pipe extends readonly Stage[]> = Pipe extends readonly [ ...Stage[], SinkStage<infer Result, any> ] ? Result : never;",
+  ],
+  "PlainPassword": [
+    "export declare class PlainPassword extends PlainPassword_base { }",
   ],
   "PluginUniqueKey": [
     "export type PluginUniqueKey<Plugins extends readonly AnyRecordPlugin[]> = Plugins[number] extends infer Plugin ? Plugin extends { readonly record: { readonly [RecordUniqueKeys]?: infer Key; }; } ? Extract<Key, string> : never : never;",
@@ -965,6 +1083,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "PropertyDescription": [
     "export interface PropertyDescription { readonly name: string; readonly optional: boolean; readonly sensitive: boolean; readonly unique: boolean; readonly schema: Readonly<Record<string, unknown>>; readonly lineage?: PropertyLineageDescription; }",
+  ],
+  "PropertyInput": [
+    "PropertyInput: unique symbol",
   ],
   "PropertyLineage": [
     "export type PropertyLineage = { readonly kind: "refined"; readonly base: AnyPropertyConstructor; readonly options: Readonly<Record<string, unknown>>; } | { readonly kind: "optional"; readonly base: AnyPropertyConstructor; } | { readonly kind: "factory"; readonly factory: string; readonly args: Readonly<Record<string, unknown>>; };",
@@ -1022,6 +1143,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "ProviderStorage": [
     "export type ProviderStorage<Keys extends string = string> = { readonly [Key in Keys]: ProviderSlot<Key>; } & { readonly [Kind]: "provider-storage"; };",
+  ],
+  "PublishMaker": [
+    "export type PublishMaker = <Repository extends AnyRepository, const Options extends StdLifecycleOptions<Repository> = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", { publish(at?: string): unknown; unpublish(): unknown; }, "publishable">, options?: Options) => EntityUseCase<Repository, Options, ById<Repository>>;",
   ],
   "Publishable": [
     "Publishable: import("../index.js").IRecordPlugin<typeof PublishableRecord, "publishable">",
@@ -1092,11 +1216,14 @@ exports[`exports of the package and their declarations 1`] = `
   "Register": [
     "export interface Register { }",
   ],
+  "RegisterMaker": [
+    "export type RegisterMaker = <Repository extends AnyRepository, const Options extends StdCreateOptions<Repository> = None>(repository: Repository & UseCaseTarget<Repository, "findByEmail" | "create", Authenticatable, "authenticatable">, options?: Options) => EntityUseCase<Repository, Options, CreateInput<Repository, Options>>;",
+  ],
   "RegisteredApplication": [
     "export type RegisteredApplication = Register extends { readonly application: infer Application extends AnyApplication; } ? Application : AnyApplication;",
   ],
   "RepositoryAction": [
-    "export type RepositoryAction<Entity> = keyof RepositoryFindBy<Entity> | keyof RepositoryFindManyBy<Entity> | "create" | "update" | "delete" | "count" | "findMany" | "exists" | "findPage" | "findCursor";",
+    "export type RepositoryAction<Entity> = keyof RepositoryFindBy<Entity> | keyof RepositoryFindManyBy<Entity> | "create" | "update" | "delete" | "restore" | "count" | "findMany" | "exists" | "findPage" | "findCursor";",
   ],
   "RepositoryContext": [
     "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly env: Environment; }",
@@ -1156,6 +1283,9 @@ exports[`exports of the package and their declarations 1`] = `
   "RepositoryQuery": [
     "export interface RepositoryQuery<Entity = unknown> { readonly where?: RepositoryWhere<Entity>; readonly orderBy?: readonly RepositoryOrder<QueryKey<Entity>>[]; readonly limit?: number; readonly offset?: number; readonly withDeleted?: boolean; }",
   ],
+  "RepositoryRestore": [
+    "export interface RepositoryRestore<Entity> { restore(entity: EntityInstanceOf<Entity> | string): Promise<EntityInstanceOf<Entity>>; }",
+  ],
   "RepositorySettings": [
     "export interface RepositorySettings<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment extends EnvironmentDependencies | undefined> { readonly entity: Entity; readonly actions: Actions; readonly deletion?: "hard" | "soft"; readonly provider?: IRepositoryProvider<MergedEnvironment<Environment>>; readonly environmentDependencies?: Environment; readonly relations?: readonly AnyRepository[]; }",
   ],
@@ -1176,6 +1306,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "ReservedRecordKey": [
     "ReservedRecordKey: import("../../index.js").DeclaredExceptionClass<{ readonly key: string; }>",
+  ],
+  "RestoreMaker": [
+    "export type RestoreMaker = <Repository extends AnyRepository, const Options extends StdUseCaseOptions & { readonly as?: string; } = None>(repository: Repository & UseCaseTarget<Repository, "restore">, options?: Options) => StepsUseCaseConstructor<ById<Repository>, EntityResponse<Repository, Options>, { readonly repository: Repository; }>;",
   ],
   "RouteOptions": [
     "export interface RouteOptions { readonly basePath?: string; readonly route?: OpenAPISinkOptions["route"]; }",
@@ -1232,11 +1365,44 @@ exports[`exports of the package and their declarations 1`] = `
   "Std": [
     "Std: import("../index.js").IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: import("../index.js").PropertyClass<import("typebox").TString, string>; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof DateTime; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; schema: typeof SchemaProperty; }, { enumOf: typeof enumOf; }> & { readonly factories: { enumOf: typeof enumOf; }; }",
   ],
+  "StdCreateOptions": [
+    "export interface StdCreateOptions<Repository> extends StdEntityOptions<Repository> { readonly omit?: readonly KeyOf<Repository>[]; readonly values?: { readonly [Key in KeyOf<Repository>]?: unknown; }; }",
+  ],
+  "StdEntityOptions": [
+    "export interface StdEntityOptions<Repository> extends StdUseCaseOptions, StdOwnerOption<Repository> { readonly as?: string; }",
+  ],
+  "StdLifecycleOptions": [
+    "export interface StdLifecycleOptions<Repository> extends StdEntityOptions<Repository> { readonly set?: { readonly [Key in KeyOf<Repository>]?: unknown; }; }",
+  ],
+  "StdListOptions": [
+    "export interface StdListOptions<Repository> extends StdUseCaseOptions, StdOwnerOption<Repository> { readonly orderBy?: readonly { readonly key: KeyOf<Repository>; readonly direction?: "asc" | "desc"; }[]; }",
+  ],
+  "StdOwnerOption": [
+    "export interface StdOwnerOption<Repository> { readonly owner?: { readonly key?: KeyOf<Repository>; readonly context: string; }; }",
+  ],
   "StdRecordPlugins": [
     "StdRecordPlugins: import("../index.js").IRecordPluginCatalog<import("../core/record/types/plugin.interface.js").RecordPluginsByName<readonly [ import("../index.js").IRecordPlugin<typeof PublishableRecord, "publishable">, import("../index.js").IRecordPlugin<typeof ArchivableRecord, "archivable">, import("../index.js").IRecordPlugin<typeof TaggableRecord, "taggable">, import("../index.js").IRecordPlugin<typeof OwnableRecord, "ownable">, import("../index.js").IRecordPlugin<typeof AuthenticatableRecord, "authenticatable"> ]>>",
   ],
   "StdStages": [
     "StdStages: import("../index.js").IStageCatalog<Readonly<Record<string, import("../index.js").StageFactory>>>",
+  ],
+  "StdUseCaseContext": [
+    "export interface StdUseCaseContext { readonly create: CreateMaker; readonly get: GetMaker; readonly list: ListMaker; readonly update: UpdateMaker; readonly delete: DeleteMaker; readonly restore: RestoreMaker; readonly publish: PublishMaker; readonly unpublish: PublishMaker; readonly archive: ArchiveMaker; readonly unarchive: ArchiveMaker; readonly tag: TagMaker; readonly untag: TagMaker; readonly register: RegisterMaker; readonly login: LoginMaker; }",
+  ],
+  "StdUseCaseErrors": [
+    "export interface StdUseCaseErrors { readonly notFound?: AnyExceptionClass; readonly conflict?: AnyExceptionClass; readonly invalid?: AnyExceptionClass; readonly owner?: AnyExceptionClass; }",
+  ],
+  "StdUseCaseOptions": [
+    "export interface StdUseCaseOptions { readonly name?: string; readonly description?: string; readonly tags?: readonly string[]; readonly deprecated?: boolean; readonly errors?: StdUseCaseErrors; }",
+  ],
+  "StdUseCasePlugins": [
+    "export type StdUseCasePlugins = { readonly [Name in keyof StdUseCaseContext]: IUseCasePlugin<Name, StdUseCaseContext[Name]>; };",
+  ],
+  "StdUseCases": [
+    "StdUseCases: IUseCaseCatalog<StdUseCasePlugins>",
+  ],
+  "StepArgs": [
+    "export type StepArgs = readonly StepValue[] | StepReference;",
   ],
   "StepEnsureKind": [
     "export type StepEnsureKind = "exists" | "absent" | "equals" | "notEquals" | "true" | "false";",
@@ -1271,6 +1437,9 @@ exports[`exports of the package and their declarations 1`] = `
   "SyncVerifyUnsupported": [
     "SyncVerifyUnsupported: import("../index.js").DeclaredExceptionClass<undefined>",
   ],
+  "TagMaker": [
+    "export type TagMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", { tag(...tags: string[]): unknown; untag(...tags: string[]): unknown; }, "taggable">, options?: Options) => EntityUseCase<Repository, Options, ById<Repository> & { readonly tags: IBlueprintList<typeof StringProperty>; }>;",
+  ],
   "Taggable": [
     "Taggable: import("../index.js").IRecordPlugin<typeof TaggableRecord, "taggable">",
   ],
@@ -1304,6 +1473,9 @@ exports[`exports of the package and their declarations 1`] = `
   "UnknownRecordPlugin": [
     "UnknownRecordPlugin: import("../../index.js").DeclaredExceptionClass<{ readonly name: string; }>",
   ],
+  "UnknownUseCasePlugin": [
+    "UnknownUseCasePlugin: import("../../index.js").DeclaredExceptionClass<{ readonly name: string; }>",
+  ],
   "UnregisteredApplicationReference": [
     "UnregisteredApplicationReference: import("../../index.js").DeclaredExceptionClass<{ readonly holder: string; readonly reference: string; }>",
   ],
@@ -1312,6 +1484,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "UnregisteredUseCaseDependency": [
     "UnregisteredUseCaseDependency: import("../../index.js").DeclaredExceptionClass<{ readonly useCase: string; readonly dependency: string; }>",
+  ],
+  "UpdateMaker": [
+    "export type UpdateMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update">, options?: Options) => EntityUseCase<Repository, Options, UpdateInput<Repository>>;",
   ],
   "UpdatedAt": [
     "export declare class UpdatedAt extends UpdatedAt_base { }",
@@ -1325,11 +1500,17 @@ exports[`exports of the package and their declarations 1`] = `
   "UseCaseCollection": [
     "export type UseCaseCollection = Readonly<Record<string, UseCaseDependency>>;",
   ],
+  "UseCaseCompilation": [
+    "export interface UseCaseCompilation extends Omit<UseCaseStepsSettings<any, any, any, any>, "steps"> { readonly steps: readonly Readonly<Record<string, unknown>>[]; }",
+  ],
   "UseCaseConstructor": [
     "export type UseCaseConstructor<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> = (abstract new (input: BlueprintInput<Input>, ...options: OptionsArgs<Context>) => AbstractUseCase<Input, Output, Dependencies> & UseCaseInstanceContext<Context>) & UseCaseStatics<Input, Output, Dependencies, Context>;",
   ],
   "UseCaseContext": [
     "export type UseCaseContext<Class extends { readonly context: unknown; }> = Class["context"] extends IBlueprint<infer Properties> ? Readonly<BlueprintValue<Properties>> : undefined;",
+  ],
+  "UseCaseContextOf": [
+    "export type UseCaseContextOf<Plugins> = { readonly [Name in keyof Plugins]: Plugins[Name] extends { readonly make: infer Make; } ? Make : never; };",
   ],
   "UseCaseDependencies": [
     "export type UseCaseDependencies<Class extends Declaration> = DependencyFunctions<Class["dependencies"]>;",
@@ -1341,13 +1522,46 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface UseCaseDependencyDescription { readonly kind: "use-case" | "repository" | "environment" | "logger"; readonly ref: string; }",
   ],
   "UseCaseDescription": [
-    "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly context?: FieldsDescription; readonly refs?: { readonly input?: string; readonly response?: string; readonly context?: string; }; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; }",
+    "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly context?: FieldsDescription; readonly refs?: { readonly input?: string; readonly response?: string; readonly context?: string; }; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; readonly generic?: { readonly name: string; readonly version: string; readonly repository: string; readonly options: Readonly<Record<string, unknown>>; }; }",
+  ],
+  "UseCaseEntityConflict": [
+    "UseCaseEntityConflict: import("../../index.js").DeclaredExceptionClass<undefined>",
+  ],
+  "UseCaseEntityNotFound": [
+    "UseCaseEntityNotFound: import("../../index.js").DeclaredExceptionClass<undefined>",
+  ],
+  "UseCaseFieldPlan": [
+    "export interface UseCaseFieldPlan { readonly key: string; readonly field: BlueprintField; readonly identity: boolean; readonly plugin: string | undefined; readonly sensitive: boolean; readonly unique: boolean; readonly optional: boolean; readonly change: boolean; readonly kind: "property" | "blueprint" | "list" | "record" | "entity" | "entity-list"; readonly related: AnyRepositoryEntity | undefined; readonly input: { readonly key: string; readonly field: BlueprintField; }; readonly convert: ((value: unknown) => unknown) | undefined; }",
   ],
   "UseCaseInput": [
     "export type UseCaseInput<Class extends Declaration> = BlueprintInput<Class["blueprint"]["properties"]>;",
   ],
+  "UseCaseInvalidCredentials": [
+    "UseCaseInvalidCredentials: import("../../index.js").DeclaredExceptionClass<undefined>",
+  ],
+  "UseCaseMaker": [
+    "export type UseCaseMaker = (repository: any, options?: any) => AnyUseCaseClass;",
+  ],
   "UseCaseOptions": [
     "export type UseCaseOptions<Context extends IBlueprintCollection | undefined = undefined> = Context extends IBlueprintCollection ? { readonly context: BlueprintInput<Context>; } : { readonly context?: undefined; };",
+  ],
+  "UseCaseOriginInfo": [
+    "export interface UseCaseOriginInfo { readonly plugin: AnyUseCasePlugin; readonly repository: AnyRepository; readonly options: Readonly<Record<string, unknown>>; }",
+  ],
+  "UseCasePluginContext": [
+    "export type UseCasePluginContext<Catalogs extends readonly IUseCaseCatalog[]> = Catalogs extends readonly [ infer Head extends IUseCaseCatalog, ...infer Tail extends readonly IUseCaseCatalog[] ] ? Omit<Head["context"], keyof UseCasePluginContext<Tail>> & UseCasePluginContext<Tail> : Record<never, never>;",
+  ],
+  "UseCasePluginDescriptor": [
+    "export interface UseCasePluginDescriptor { readonly kind: "use-case-plugin"; readonly name: string; readonly version: string; readonly description?: string; readonly requires: Required<UseCasePluginRequirements>; }",
+  ],
+  "UseCasePluginRequirements": [
+    "export interface UseCasePluginRequirements { readonly actions?: readonly string[]; readonly plugins?: readonly string[]; }",
+  ],
+  "UseCasePluginSettings": [
+    "export interface UseCasePluginSettings { readonly version?: string; readonly description?: string; readonly requires?: UseCasePluginRequirements; compile(target: UseCaseTargetInfo, options: Readonly<Record<string, unknown>>): UseCaseCompilation; }",
+  ],
+  "UseCasePluginsByName": [
+    "export type UseCasePluginsByName<Plugins extends readonly AnyUseCasePlugin[]> = { readonly [Plugin in Plugins[number] as Plugin["name"]]: Plugin; };",
   ],
   "UseCaseResponse": [
     "export type UseCaseResponse<Class extends Declaration> = BlueprintValue<Class["response"]["properties"]>;",
@@ -1356,13 +1570,22 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface UseCaseSettings<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> { readonly name: string; readonly blueprint: IBlueprint<Input>; readonly response: IBlueprint<Output>; readonly dependencies?: Dependencies; readonly context?: IBlueprint<Exclude<Context, undefined>>; readonly description?: string; readonly tags?: readonly string[]; readonly deprecated?: boolean; readonly errors?: readonly AnyExceptionClass[]; }",
   ],
   "UseCaseStep": [
-    "export type UseCaseStep<Dependencies extends UseCaseCollection = UseCaseCollection> = { readonly find: StepFindTarget<Dependencies>; readonly args?: readonly StepValue[]; readonly as?: string; } | { readonly ensure: "exists" | "absent" | "true" | "false"; readonly value: StepValue; readonly other?: undefined; readonly error: AnyExceptionClass; readonly details?: StepValue; } | { readonly ensure: "equals" | "notEquals"; readonly value: StepValue; readonly other: StepValue; readonly error: AnyExceptionClass; readonly details?: StepValue; } | { readonly build: AnyRecordClass; readonly values: StepValue; readonly as: string; } | { readonly change: StepReference; readonly key: string; readonly value: StepValue; readonly as?: string; } | { readonly invoke: StepReference; readonly method: string; readonly args?: readonly StepValue[]; readonly as?: string; } | { readonly create: StepRepositoryWith<Dependencies, "create">; readonly value: StepValue; readonly as?: string; } | { readonly update: StepRepositoryWith<Dependencies, "update">; readonly value: StepValue; readonly as?: string; } | { readonly delete: StepRepositoryWith<Dependencies, "delete">; readonly value: StepValue; readonly as?: string; } | { readonly call: UseCaseKeys<Dependencies>; readonly input: StepValue; readonly as?: string; } | { readonly run: string; readonly fn: (...args: any[]) => unknown; readonly args?: readonly StepValue[]; readonly as?: string; } | { readonly return: StepValue; };",
+    "export type UseCaseStep<Dependencies extends UseCaseCollection = UseCaseCollection> = { readonly find: StepFindTarget<Dependencies>; readonly args?: StepArgs; readonly as?: string; } | { readonly ensure: "exists" | "absent" | "true" | "false"; readonly value: StepValue; readonly other?: undefined; readonly error: AnyExceptionClass; readonly details?: StepValue; } | { readonly ensure: "equals" | "notEquals"; readonly value: StepValue; readonly other: StepValue; readonly error: AnyExceptionClass; readonly details?: StepValue; } | { readonly build: AnyRecordClass; readonly values: StepValue; readonly as: string; } | { readonly change: StepReference; readonly key: string; readonly value: StepValue; readonly ifPresent?: boolean; readonly as?: string; } | { readonly invoke: StepReference; readonly method: string; readonly args?: StepArgs; readonly as?: string; } | { readonly create: StepRepositoryWith<Dependencies, "create">; readonly value: StepValue; readonly as?: string; } | { readonly update: StepRepositoryWith<Dependencies, "update">; readonly value: StepValue; readonly as?: string; } | { readonly delete: StepRepositoryWith<Dependencies, "delete">; readonly value: StepValue; readonly as?: string; } | { readonly restore: StepRepositoryWith<Dependencies, "restore">; readonly value: StepValue; readonly as?: string; } | { readonly call: UseCaseKeys<Dependencies>; readonly input: StepValue; readonly as?: string; } | { readonly run: string; readonly fn: (...args: any[]) => unknown; readonly args?: StepArgs; readonly as?: string; } | { readonly return: StepValue; };",
   ],
   "UseCaseStepDescription": [
-    "export type UseCaseStepDescription = { readonly find: string; readonly args?: readonly StepValue[]; readonly as?: string; } | { readonly ensure: StepEnsureKind; readonly value: StepValue; readonly other?: StepValue; readonly error: StepErrorDescription; readonly details?: StepValue; } | { readonly build: string; readonly values: StepValue; readonly as: string; } | { readonly change: string; readonly key: string; readonly value: StepValue; readonly as?: string; } | { readonly invoke: string; readonly method: string; readonly args?: readonly StepValue[]; readonly as?: string; } | { readonly create: string; readonly value: StepValue; readonly as?: string; } | { readonly update: string; readonly value: StepValue; readonly as?: string; } | { readonly delete: string; readonly value: StepValue; readonly as?: string; } | { readonly call: string; readonly input: StepValue; readonly as?: string; } | { readonly run: string; readonly fn: { readonly kind: "opaque"; }; readonly args?: readonly StepValue[]; readonly as?: string; } | { readonly return: StepValue; };",
+    "export type UseCaseStepDescription = { readonly find: string; readonly args?: StepArgs; readonly as?: string; } | { readonly ensure: StepEnsureKind; readonly value: StepValue; readonly other?: StepValue; readonly error: StepErrorDescription; readonly details?: StepValue; } | { readonly build: string; readonly values: StepValue; readonly as: string; } | { readonly change: string; readonly key: string; readonly value: StepValue; readonly ifPresent?: boolean; readonly as?: string; } | { readonly invoke: string; readonly method: string; readonly args?: StepArgs; readonly as?: string; } | { readonly create: string; readonly value: StepValue; readonly as?: string; } | { readonly update: string; readonly value: StepValue; readonly as?: string; } | { readonly delete: string; readonly value: StepValue; readonly as?: string; } | { readonly restore: string; readonly value: StepValue; readonly as?: string; } | { readonly call: string; readonly input: StepValue; readonly as?: string; } | { readonly run: string; readonly fn: { readonly kind: "opaque"; }; readonly args?: StepArgs; readonly as?: string; } | { readonly return: StepValue; };",
   ],
   "UseCaseStepsSettings": [
     "export interface UseCaseStepsSettings<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> extends UseCaseSettings<Input, Output, Dependencies, Context> { readonly steps: readonly UseCaseStep<NoInfer<Dependencies>>[]; }",
+  ],
+  "UseCaseTarget": [
+    "export type UseCaseTarget<Repository, Action extends string, Members = unknown, Plugin extends string = never> = [ Action ] extends [ ActionsOf<Repository> ] ? EntityInstanceOf<EntityOfRepository<Repository>> extends Members ? unknown : MissingRecordPlugin<Plugin> : MissingRepositoryAction<Exclude<Action, ActionsOf<Repository>>>;",
+  ],
+  "UseCaseTargetInfo": [
+    "export interface UseCaseTargetInfo { readonly repository: AnyRepository; readonly repositoryName: string; readonly entity: AnyRepositoryEntity; readonly entityName: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly fields: readonly UseCaseFieldPlan[]; readonly changeKeys: readonly string[]; readonly uniqueKeys: readonly string[]; field(key: string): UseCaseFieldPlan; relation(key: string, actions?: readonly string[]): AnyRepository; unavailable(reason: string): never; }",
+  ],
+  "UseCaseUnavailable": [
+    "UseCaseUnavailable: import("../../index.js").DeclaredExceptionClass<{ readonly repository: string; readonly reason: string; readonly missing?: { readonly actions: readonly string[]; readonly plugins: readonly string[]; }; }>",
   ],
   "applicationOf": [
     "export declare function applicationOf<const Name extends string, const Extended extends readonly AnyApplication[] = readonly [ ], const Properties extends ApplicationCollections["properties"] = Record<never, never>, const Blueprints extends ApplicationCollections["blueprints"] = Record<never, never>, const Records extends ApplicationCollections["records"] = Record<never, never>, const Entities extends ApplicationCollections["entities"] = Record<never, never>, const Environments extends ApplicationCollections["environments"] = Record<never, never>, const Repositories extends ApplicationCollections["repositories"] = Record<never, never>, const UseCases extends ApplicationCollections["useCases"] = Record<never, never>, const Commands extends ApplicationCollections["commands"] = Record<never, never>, const Outputs extends ApplicationCollections["outputs"] = Record<never, never>, const Exceptions extends ApplicationCollections["exceptions"] = Record<never, never>>(settings: ApplicationSettings<Name, Extended, { properties: Properties; blueprints: Blueprints; records: Records; entities: Entities; environments: Environments; repositories: Repositories; useCases: UseCases; commands: Commands; outputs: Outputs; exceptions: Exceptions; }>): IApplication<Name, MergedCollections<{ properties: Properties; blueprints: Blueprints; records: Records; entities: Entities; environments: Environments; repositories: Repositories; useCases: UseCases; commands: Commands; outputs: Outputs; exceptions: Exceptions; }, Extended>>;",
@@ -1377,8 +1600,11 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function blueprintPluginOf<Properties extends IBlueprintCollection, Factories extends Record<keyof Factories, BlueprintFactory>>(name: string, properties: Properties, factories: Factories): IBlueprintPlugin<Properties, Factories> & { readonly factories: Factories; };",
     "export declare function blueprintPluginOf<Properties extends IBlueprintCollection>(name: string, properties: Properties): IBlueprintPlugin<Properties, Record<never, never>> & { readonly factories: Record<never, never>; };",
   ],
+  "commandBuilderOf": [
+    "export declare function commandBuilderOf<const Catalogs extends readonly IUseCaseCatalog[] = [ ]>(...catalogs: Catalogs): CommandBuilder<UseCasePluginContext<Catalogs>>;",
+  ],
   "commandOf": [
-    "export declare function commandOf<const UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined = undefined, Environment extends EnvironmentDependencies | undefined = undefined>(settings: CommandSettings<UseCases, Context, Environment>): CommandOf<UseCases, Context, Environment>;",
+    "commandOf: CommandBuilder<StdUseCaseContext>",
   ],
   "configure": [
     "export declare function configure(services: RuntimeServices): void;",
@@ -1471,8 +1697,14 @@ exports[`exports of the package and their declarations 1`] = `
   "isUseCase": [
     "export declare function isUseCase(value: unknown): value is AbstractUseCase<IBlueprintCollection, IBlueprintCollection, UseCaseCollection>;",
   ],
+  "isUseCaseCatalog": [
+    "export declare function isUseCaseCatalog(value: unknown): value is IUseCaseCatalog;",
+  ],
   "isUseCaseClass": [
     "export declare function isUseCaseClass(value: unknown): value is AnyUseCaseClass;",
+  ],
+  "isUseCasePlugin": [
+    "export declare function isUseCasePlugin(value: unknown): value is AnyUseCasePlugin;",
   ],
   "jsonLogProvider": [
     "export declare function jsonLogProvider(): ILogProvider;",
@@ -1519,6 +1751,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "problemOf": [
     "export declare function problemOf(error: unknown, options: ProblemOptions): Problem;",
+  ],
+  "propertyInputOf": [
+    "export declare function propertyInputOf(field: unknown): IPropertyInput | undefined;",
   ],
   "propertyLineageOf": [
     "export declare function propertyLineageOf(Property: unknown): PropertyLineage | undefined;",
@@ -1600,9 +1835,21 @@ exports[`exports of the package and their declarations 1`] = `
   "useApplication": [
     "export declare function useApplication(): RegisteredApplication;",
   ],
+  "useCaseCatalogOf": [
+    "export declare function useCaseCatalogOf<const Plugins extends readonly AnyUseCasePlugin[]>(...plugins: Plugins): IUseCaseCatalog<UseCasePluginsByName<Plugins>>;",
+  ],
   "useCaseOf": [
     "export declare function useCaseOf<Input extends IBlueprintCollection, Output extends IBlueprintCollection, const Dependencies extends UseCaseCollection = Record<never, never>, Context extends IBlueprintCollection | undefined = undefined>(settings: UseCaseSettings<Input, Output, Dependencies, Context>): UseCaseConstructor<Input, Output, Dependencies, Context>;",
     "export declare function useCaseOf<Input extends IBlueprintCollection, Output extends IBlueprintCollection, const Dependencies extends UseCaseCollection = Record<never, never>, Context extends IBlueprintCollection | undefined = undefined>(settings: UseCaseStepsSettings<Input, Output, Dependencies, Context>): StepsUseCaseConstructor<Input, Output, Dependencies, Context>;",
+  ],
+  "useCaseOriginOf": [
+    "export declare function useCaseOriginOf(UseCase: unknown): UseCaseOriginInfo | undefined;",
+  ],
+  "useCasePluginOf": [
+    "export declare function useCasePluginOf<const Name extends string, Make extends UseCaseMaker = UseCaseMaker>(name: Name, settings: UseCasePluginSettings): IUseCasePlugin<Name, Make>;",
+  ],
+  "useCaseTargetOf": [
+    "export declare function useCaseTargetOf(repository: AnyRepository, source?: string): UseCaseTargetInfo;",
   ],
 }
 `;
@@ -3286,7 +3533,7 @@ exports[`afora.json schema 1`] = `
           "additionalProperties": false,
           "properties": {
             "actions": {
-              "description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, count.",
+              "description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), count.",
               "items": {
                 "type": "string",
               },
@@ -3427,467 +3674,565 @@ exports[`afora.json schema 1`] = `
       "description": "Use cases, by name.",
       "patternProperties": {
         "^[A-Z][A-Za-z0-9]*$": {
-          "additionalProperties": false,
-          "properties": {
-            "context": {
-              "anyOf": [
-                {
-                  "description": "The name of a declared blueprint.",
-                  "pattern": "^[A-Z][A-Za-z0-9]*$",
-                  "type": "string",
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "fields": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "context": {
+                  "anyOf": [
+                    {
+                      "description": "The name of a declared blueprint.",
+                      "pattern": "^[A-Z][A-Za-z0-9]*$",
+                      "type": "string",
+                    },
+                    {
                       "additionalProperties": false,
-                      "description": "Fields by key.",
-                      "patternProperties": {
-                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
-                          "$ref": "#/$defs/Field",
+                      "properties": {
+                        "fields": {
+                          "additionalProperties": false,
+                          "description": "Fields by key.",
+                          "patternProperties": {
+                            "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                              "$ref": "#/$defs/Field",
+                            },
+                          },
+                          "type": "object",
                         },
                       },
+                      "required": [
+                        "fields",
+                      ],
                       "type": "object",
                     },
-                  },
-                  "required": [
-                    "fields",
                   ],
+                  "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
+                },
+                "dependencies": {
+                  "description": "Key -> name of a declared use case, repository or environment.",
+                  "patternProperties": {
+                    "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                      "type": "string",
+                    },
+                  },
                   "type": "object",
                 },
-              ],
-              "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
-            },
-            "dependencies": {
-              "description": "Key -> name of a declared use case, repository or environment.",
-              "patternProperties": {
-                "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                "deprecated": {
+                  "default": false,
+                  "type": "boolean",
+                },
+                "description": {
                   "type": "string",
                 },
-              },
-              "type": "object",
-            },
-            "deprecated": {
-              "default": false,
-              "type": "boolean",
-            },
-            "description": {
-              "type": "string",
-            },
-            "errors": {
-              "description": "Declared exceptions, or exceptions exported by @afora/core (afora_catalog coreExceptions), a caller should expect.",
-              "items": {
-                "type": "string",
-              },
-              "type": "array",
-            },
-            "implementation": {
-              "anyOf": [
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "steps": {
-                      "items": {
-                        "anyOf": [
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "args": {
-                                "items": {
-                                  "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                                },
-                                "type": "array",
-                              },
-                              "as": {
-                                "description": "Binds the result.",
-                                "type": "string",
-                              },
-                              "find": {
-                                "description": ""<repository>.<read action>", e.g. "users.findByEmail".",
-                                "type": "string",
-                              },
-                            },
-                            "required": [
-                              "find",
-                            ],
-                            "type": "object",
-                          },
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "details": {
-                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                              },
-                              "ensure": {
-                                "anyOf": [
-                                  {
-                                    "const": "exists",
-                                    "type": "string",
-                                  },
-                                  {
-                                    "const": "absent",
-                                    "type": "string",
-                                  },
-                                  {
-                                    "const": "equals",
-                                    "type": "string",
-                                  },
-                                  {
-                                    "const": "notEquals",
-                                    "type": "string",
-                                  },
-                                  {
-                                    "const": "true",
-                                    "type": "string",
-                                  },
-                                  {
-                                    "const": "false",
-                                    "type": "string",
-                                  },
-                                ],
-                                "description": "What to check; throws \`error\` when it fails.",
-                              },
-                              "error": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                  },
-                                  {
-                                    "additionalProperties": false,
-                                    "properties": {
-                                      "core": {
-                                        "type": "string",
-                                      },
-                                    },
-                                    "required": [
-                                      "core",
-                                    ],
-                                    "type": "object",
-                                  },
-                                ],
-                              },
-                              "other": {
-                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                              },
-                              "value": {
-                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                              },
-                            },
-                            "required": [
-                              "ensure",
-                              "value",
-                              "error",
-                            ],
-                            "type": "object",
-                          },
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "as": {
-                                "type": "string",
-                              },
-                              "build": {
-                                "description": "A declared record or entity.",
-                                "type": "string",
-                              },
-                              "values": {
-                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                              },
-                            },
-                            "required": [
-                              "build",
-                              "values",
-                              "as",
-                            ],
-                            "type": "object",
-                          },
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "as": {
-                                "description": "Binds the result.",
-                                "type": "string",
-                              },
-                              "change": {
-                                "description": "A $reference to a record.",
-                                "type": "string",
-                              },
-                              "key": {
-                                "type": "string",
-                              },
-                              "value": {
-                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                              },
-                            },
-                            "required": [
-                              "change",
-                              "key",
-                              "value",
-                            ],
-                            "type": "object",
-                          },
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "args": {
-                                "items": {
-                                  "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                                },
-                                "type": "array",
-                              },
-                              "as": {
-                                "description": "Binds the result.",
-                                "type": "string",
-                              },
-                              "invoke": {
-                                "description": "A $reference to a record.",
-                                "type": "string",
-                              },
-                              "method": {
-                                "type": "string",
-                              },
-                            },
-                            "required": [
-                              "invoke",
-                              "method",
-                            ],
-                            "type": "object",
-                          },
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "as": {
-                                "description": "Binds the result.",
-                                "type": "string",
-                              },
-                              "create": {
-                                "description": "A repository dependency.",
-                                "type": "string",
-                              },
-                              "value": {
-                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                              },
-                            },
-                            "required": [
-                              "create",
-                              "value",
-                            ],
-                            "type": "object",
-                          },
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "as": {
-                                "description": "Binds the result.",
-                                "type": "string",
-                              },
-                              "update": {
-                                "description": "A repository dependency.",
-                                "type": "string",
-                              },
-                              "value": {
-                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                              },
-                            },
-                            "required": [
-                              "update",
-                              "value",
-                            ],
-                            "type": "object",
-                          },
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "as": {
-                                "description": "Binds the result.",
-                                "type": "string",
-                              },
-                              "delete": {
-                                "description": "A repository dependency.",
-                                "type": "string",
-                              },
-                              "value": {
-                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                              },
-                            },
-                            "required": [
-                              "delete",
-                              "value",
-                            ],
-                            "type": "object",
-                          },
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "as": {
-                                "description": "Binds the result.",
-                                "type": "string",
-                              },
-                              "call": {
-                                "description": "A use case dependency.",
-                                "type": "string",
-                              },
-                              "input": {
-                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                              },
-                            },
-                            "required": [
-                              "call",
-                              "input",
-                            ],
-                            "type": "object",
-                          },
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "args": {
-                                "items": {
-                                  "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
-                                },
-                                "type": "array",
-                              },
-                              "as": {
-                                "description": "Binds the result.",
-                                "type": "string",
-                              },
-                              "fn": {
+                "errors": {
+                  "description": "Declared exceptions, or exceptions exported by @afora/core (afora_catalog coreExceptions), a caller should expect.",
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+                "implementation": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "steps": {
+                          "items": {
+                            "anyOf": [
+                              {
                                 "additionalProperties": false,
                                 "properties": {
-                                  "import": {
-                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
-                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "args": {
+                                    "anyOf": [
+                                      {
+                                        "items": {
+                                          "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                        },
+                                        "type": "array",
+                                      },
+                                      {
+                                        "pattern": "^\\$",
+                                        "type": "string",
+                                      },
+                                    ],
+                                    "description": "The arguments: a list of values, or one "$reference" to a list, which is spread.",
+                                  },
+                                  "as": {
+                                    "description": "Binds the result.",
+                                    "type": "string",
+                                  },
+                                  "find": {
+                                    "description": ""<repository>.<read action>", e.g. "users.findByEmail".",
                                     "type": "string",
                                   },
                                 },
                                 "required": [
-                                  "import",
+                                  "find",
                                 ],
                                 "type": "object",
                               },
-                              "run": {
-                                "description": "A name, unique in the use case.",
-                                "type": "string",
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "details": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                  "ensure": {
+                                    "anyOf": [
+                                      {
+                                        "const": "exists",
+                                        "type": "string",
+                                      },
+                                      {
+                                        "const": "absent",
+                                        "type": "string",
+                                      },
+                                      {
+                                        "const": "equals",
+                                        "type": "string",
+                                      },
+                                      {
+                                        "const": "notEquals",
+                                        "type": "string",
+                                      },
+                                      {
+                                        "const": "true",
+                                        "type": "string",
+                                      },
+                                      {
+                                        "const": "false",
+                                        "type": "string",
+                                      },
+                                    ],
+                                    "description": "What to check; throws \`error\` when it fails.",
+                                  },
+                                  "error": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                      },
+                                      {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                          "core": {
+                                            "type": "string",
+                                          },
+                                        },
+                                        "required": [
+                                          "core",
+                                        ],
+                                        "type": "object",
+                                      },
+                                    ],
+                                  },
+                                  "other": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                  "value": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                },
+                                "required": [
+                                  "ensure",
+                                  "value",
+                                  "error",
+                                ],
+                                "type": "object",
                               },
-                            },
-                            "required": [
-                              "run",
-                              "fn",
-                            ],
-                            "type": "object",
-                          },
-                          {
-                            "additionalProperties": false,
-                            "properties": {
-                              "return": {
-                                "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "as": {
+                                    "type": "string",
+                                  },
+                                  "build": {
+                                    "description": "A declared record or entity.",
+                                    "type": "string",
+                                  },
+                                  "values": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                },
+                                "required": [
+                                  "build",
+                                  "values",
+                                  "as",
+                                ],
+                                "type": "object",
                               },
-                            },
-                            "required": [
-                              "return",
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "as": {
+                                    "description": "Binds the result.",
+                                    "type": "string",
+                                  },
+                                  "change": {
+                                    "description": "A $reference to a record.",
+                                    "type": "string",
+                                  },
+                                  "ifPresent": {
+                                    "description": "Skips the step when the value is absent: a partial update.",
+                                    "type": "boolean",
+                                  },
+                                  "key": {
+                                    "type": "string",
+                                  },
+                                  "value": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                },
+                                "required": [
+                                  "change",
+                                  "key",
+                                  "value",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "args": {
+                                    "anyOf": [
+                                      {
+                                        "items": {
+                                          "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                        },
+                                        "type": "array",
+                                      },
+                                      {
+                                        "pattern": "^\\$",
+                                        "type": "string",
+                                      },
+                                    ],
+                                    "description": "The arguments: a list of values, or one "$reference" to a list, which is spread.",
+                                  },
+                                  "as": {
+                                    "description": "Binds the result.",
+                                    "type": "string",
+                                  },
+                                  "invoke": {
+                                    "description": "A $reference to a record.",
+                                    "type": "string",
+                                  },
+                                  "method": {
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "invoke",
+                                  "method",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "as": {
+                                    "description": "Binds the result.",
+                                    "type": "string",
+                                  },
+                                  "create": {
+                                    "description": "A repository dependency.",
+                                    "type": "string",
+                                  },
+                                  "value": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                },
+                                "required": [
+                                  "create",
+                                  "value",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "as": {
+                                    "description": "Binds the result.",
+                                    "type": "string",
+                                  },
+                                  "update": {
+                                    "description": "A repository dependency.",
+                                    "type": "string",
+                                  },
+                                  "value": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                },
+                                "required": [
+                                  "update",
+                                  "value",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "as": {
+                                    "description": "Binds the result.",
+                                    "type": "string",
+                                  },
+                                  "delete": {
+                                    "description": "A repository dependency.",
+                                    "type": "string",
+                                  },
+                                  "value": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                },
+                                "required": [
+                                  "delete",
+                                  "value",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "as": {
+                                    "description": "Binds the result.",
+                                    "type": "string",
+                                  },
+                                  "restore": {
+                                    "description": "A repository dependency with soft deletion.",
+                                    "type": "string",
+                                  },
+                                  "value": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                },
+                                "required": [
+                                  "restore",
+                                  "value",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "as": {
+                                    "description": "Binds the result.",
+                                    "type": "string",
+                                  },
+                                  "call": {
+                                    "description": "A use case dependency.",
+                                    "type": "string",
+                                  },
+                                  "input": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                },
+                                "required": [
+                                  "call",
+                                  "input",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "args": {
+                                    "anyOf": [
+                                      {
+                                        "items": {
+                                          "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                        },
+                                        "type": "array",
+                                      },
+                                      {
+                                        "pattern": "^\\$",
+                                        "type": "string",
+                                      },
+                                    ],
+                                    "description": "The arguments: a list of values, or one "$reference" to a list, which is spread.",
+                                  },
+                                  "as": {
+                                    "description": "Binds the result.",
+                                    "type": "string",
+                                  },
+                                  "fn": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "import": {
+                                        "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                        "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                        "type": "string",
+                                      },
+                                    },
+                                    "required": [
+                                      "import",
+                                    ],
+                                    "type": "object",
+                                  },
+                                  "run": {
+                                    "description": "A name, unique in the use case.",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "run",
+                                  "fn",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "return": {
+                                    "description": "A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.",
+                                  },
+                                },
+                                "required": [
+                                  "return",
+                                ],
+                                "type": "object",
+                              },
                             ],
-                            "type": "object",
+                            "description": "A step: find, ensure, build, change, invoke, create, update, delete, restore, call, run or return (exactly one, last).",
                           },
-                        ],
-                        "description": "A step: find, ensure, build, change, invoke, create, update, delete, call, run or return (exactly one, last).",
+                          "minItems": 1,
+                          "type": "array",
+                        },
                       },
-                      "minItems": 1,
-                      "type": "array",
+                      "required": [
+                        "steps",
+                      ],
+                      "type": "object",
                     },
-                  },
-                  "required": [
-                    "steps",
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "import": {
+                          "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                          "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "import",
+                      ],
+                      "type": "object",
+                    },
                   ],
-                  "type": "object",
+                  "description": "{ "steps": [...] } (complete, no hand-written file) or { "import": "./file.ts#Class" } (a class extending the generated <Name>Base).",
                 },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "import": {
-                      "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
-                      "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                "input": {
+                  "anyOf": [
+                    {
+                      "description": "The name of a declared blueprint.",
+                      "pattern": "^[A-Z][A-Za-z0-9]*$",
                       "type": "string",
                     },
-                  },
-                  "required": [
-                    "import",
-                  ],
-                  "type": "object",
-                },
-              ],
-              "description": "{ "steps": [...] } (complete, no hand-written file) or { "import": "./file.ts#Class" } (a class extending the generated <Name>Base).",
-            },
-            "input": {
-              "anyOf": [
-                {
-                  "description": "The name of a declared blueprint.",
-                  "pattern": "^[A-Z][A-Za-z0-9]*$",
-                  "type": "string",
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "fields": {
+                    {
                       "additionalProperties": false,
-                      "description": "Fields by key.",
-                      "patternProperties": {
-                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
-                          "$ref": "#/$defs/Field",
+                      "properties": {
+                        "fields": {
+                          "additionalProperties": false,
+                          "description": "Fields by key.",
+                          "patternProperties": {
+                            "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                              "$ref": "#/$defs/Field",
+                            },
+                          },
+                          "type": "object",
                         },
                       },
+                      "required": [
+                        "fields",
+                      ],
                       "type": "object",
                     },
-                  },
-                  "required": [
-                    "fields",
                   ],
-                  "type": "object",
+                  "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
                 },
-              ],
-              "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
-            },
-            "response": {
-              "anyOf": [
-                {
-                  "description": "The name of a declared blueprint.",
-                  "pattern": "^[A-Z][A-Za-z0-9]*$",
-                  "type": "string",
-                },
-                {
-                  "additionalProperties": false,
-                  "properties": {
-                    "fields": {
+                "response": {
+                  "anyOf": [
+                    {
+                      "description": "The name of a declared blueprint.",
+                      "pattern": "^[A-Z][A-Za-z0-9]*$",
+                      "type": "string",
+                    },
+                    {
                       "additionalProperties": false,
-                      "description": "Fields by key.",
-                      "patternProperties": {
-                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
-                          "$ref": "#/$defs/Field",
+                      "properties": {
+                        "fields": {
+                          "additionalProperties": false,
+                          "description": "Fields by key.",
+                          "patternProperties": {
+                            "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                              "$ref": "#/$defs/Field",
+                            },
+                          },
+                          "type": "object",
                         },
                       },
+                      "required": [
+                        "fields",
+                      ],
                       "type": "object",
                     },
-                  },
-                  "required": [
-                    "fields",
                   ],
-                  "type": "object",
+                  "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
                 },
-              ],
-              "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
-            },
-            "tags": {
-              "description": "Tags, for documentation.",
-              "items": {
-                "type": "string",
+                "tags": {
+                  "description": "Tags, for documentation.",
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
               },
-              "type": "array",
+              "required": [
+                "input",
+                "response",
+                "implementation",
+              ],
+              "type": "object",
             },
-          },
-          "required": [
-            "input",
-            "response",
-            "implementation",
+            {
+              "additionalProperties": false,
+              "description": "A standard use case made for a repository: its input, response, dependencies and steps follow the repository and its entity.",
+              "properties": {
+                "deprecated": {
+                  "default": false,
+                  "type": "boolean",
+                },
+                "description": {
+                  "type": "string",
+                },
+                "generic": {
+                  "description": "A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register or login.",
+                  "type": "string",
+                },
+                "options": {
+                  "description": "Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy".",
+                  "patternProperties": {
+                    "^[A-Za-z_$][A-Za-z0-9_$]*$": {},
+                  },
+                  "type": "object",
+                },
+                "repository": {
+                  "description": "The declared repository it is made for: it must have the actions, and its entity the plugins, the use case needs.",
+                  "pattern": "^[A-Z][A-Za-z0-9]*$",
+                  "type": "string",
+                },
+                "tags": {
+                  "description": "Tags, for documentation.",
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+              },
+              "required": [
+                "generic",
+                "repository",
+              ],
+              "type": "object",
+            },
           ],
-          "type": "object",
+          "description": "A use case written here (input, response, implementation) or a standard one made for a repository ({ "generic": "create", "repository": "Posts" }).",
         },
       },
       "type": "object",
