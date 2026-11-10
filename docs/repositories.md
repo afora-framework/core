@@ -44,7 +44,7 @@ await Users.findManyByName("Ana"); // User[]
 // repositoryOf({ entity: User, actions: ["findByName"] }) does not compile, and throws: name is not unique
 ```
 
-**Queries.** `findMany`, `exists`, `findPage` and `count` take a typed `RepositoryQuery<Entity>`: `where`, `orderBy`, `limit`, `offset` and `withDeleted`. `where` maps entity keys to a value (equality) or to `{ in: [...] }` (membership, an empty list matches nothing); conditions on several keys are ANDed. Values are normalized before they reach the provider: a record becomes its plain data and an entity its id, also inside `in`. `orderBy` is a list of `{ key, direction?: "asc" | "desc" }` on scalar fields (default `asc`): missing values come first when ascending and last when descending, strings sort by code point, numbers numerically, ties keep their order. A query with unknown keys or options, an invalid direction, an unorderable field or a negative, fractional or nonfinite `limit`/`offset` throws `InvalidRepositoryQuery` before the provider is called.
+**Queries.** `findMany`, `exists`, `findPage` and `count` take a typed `RepositoryQuery<Entity>`: `where`, `orderBy`, `limit`, `offset`, `withDeleted` and `withExpired` (see [Records that expire](#records-that-expire)). `where` maps entity keys to a value (equality) or to `{ in: [...] }` (membership, an empty list matches nothing); conditions on several keys are ANDed. Values are normalized before they reach the provider: a record becomes its plain data and an entity its id, also inside `in`. `orderBy` is a list of `{ key, direction?: "asc" | "desc" }` on scalar fields (default `asc`): missing values come first when ascending and last when descending, strings sort by code point, numbers numerically, ties keep their order. A query with unknown keys or options, an invalid direction, an unorderable field or a negative, fractional or nonfinite `limit`/`offset` throws `InvalidRepositoryQuery` before the provider is called.
 
 ```ts
 const adults = await Users.findMany({
@@ -78,7 +78,7 @@ do {
 } while (after !== undefined);
 ```
 
-It reads a page with one provider call and no count, costs the same on the last page as on the first, and a row added or removed between two pages never repeats or skips another, which `offset` cannot promise. The query takes `where`, `orderBy`, `limit` and `withDeleted`, which must stay the same from one page to the next; `offset` is rejected, and there is no `total` (use `count`). The `id` is added as the last order, so every row has one position even when the others tie.
+It reads a page with one provider call and no count, costs the same on the last page as on the first, and a row added or removed between two pages never repeats or skips another, which `offset` cannot promise. The query takes `where`, `orderBy`, `limit`, `withDeleted` and `withExpired`, which must stay the same from one page to the next; `offset` is rejected, and there is no `total` (use `count`). The `id` is added as the last order, so every row has one position even when the others tie.
 
 A cursor is opaque text (base64url) that holds the values of the order keys of the last row. It is neither encrypted nor signed: whoever receives it can read those values, so a key in `options.sensitive` cannot order a cursor (`InvalidRepositoryQuery`), and a changed cursor only moves the position inside the same `where`. An `after` that is not a cursor of `findCursor`, or that was made for another `orderBy`, throws `InvalidRepositoryCursor`, which an output answers with 400. The provider must read by cursor, `capabilities.keyset` (`inMemoryProvider` and `@afora/drizzle` do); otherwise `findCursor` throws `InvalidRepositoryQuery`.
 
@@ -90,22 +90,16 @@ A cursor is opaque text (base64url) that holds the values of the order keys of t
 
 The `restore` action brings a soft-deleted entity back: `await Posts.restore(post)` (or its id) reads the row with deleted ones included, clears `deletedAt`, stamps `updatedAt` and saves it through the provider's `update`, which must therefore clear a value that is left out. It gives a new entity, alive; the deleted instance stays as it is. An entity that is not deleted is given as it is stored, and an unknown id throws `RepositoryEntityNotFound`. Listing `restore` without `deletion: "soft"` throws `InvalidRepositoryDeclaration`.
 
-**Providers.** A repository reads and writes through an `IRepositoryProvider` (v2), on plain unmasked values, each call getting a `context` with the `entity`, the repository `name`, its `unique` keys and `env`:
+**Providers.** A repository reads and writes through an `IRepositoryProvider` (v2), on plain unmasked values, each call getting a `context` with the `entity`, the repository `name`, its `unique` keys, `env` and, for an entity that expires, `expiry` (`{ key }`):
 
 ```ts
 interface IRepositoryProvider<Environment = unknown> {
-	findOne(
-		context,
-		query?: RepositoryQuery,
-	): Promise<RepositoryData | undefined>; // first row after offset
-	findMany(
-		context,
-		query?: RepositoryQuery,
-	): Promise<readonly RepositoryData[]>;
+	findOne(context, query?: ProviderQuery): Promise<RepositoryData | undefined>; // first row after offset
+	findMany(context, query?: ProviderQuery): Promise<readonly RepositoryData[]>;
 	insert(context, data): Promise<void>;
 	update(context, data): Promise<void>;
 	remove(context, id: string): Promise<void>;
-	count(context, query?: RepositoryQuery): Promise<number>; // ignores orderBy, limit and offset
+	count(context, query?: ProviderQuery): Promise<number>; // ignores orderBy, limit and offset
 	capabilities?: ProviderCapabilities; // e.g. { transactions: true }
 	transaction?<Result>(
 		run: (provider: IRepositoryProvider<Environment>) => Promise<Result>,
@@ -118,7 +112,9 @@ interface IRepositoryProvider<Environment = unknown> {
 
 A provider that sets `capabilities.keyset` also honors `after` on `findMany` (`ProviderQuery`): one value for each order of `orderBy`, those of the last row read, for which it gives only the rows strictly after that position in the same order (missing values first when ascending, last when descending). `count` ignores it. A provider without the capability is never given `after`. `providerContract` runs these cases when the capability is set.
 
-The bare `RepositoryQuery` uses string keys and stored values. Equality and `in` are mandatory; a provider excludes rows with `deletedAt !== undefined` unless `withDeleted` is `true`. A provider enforces `context.unique` (`RepositoryUniqueViolation`) and rejects an unknown id on `update` and `remove` (`RepositoryEntityNotFound`). Relations load with `findMany(context, { where: { id: { in: ids } } })` (the v1 `findIn` and the key/value signatures are gone). By default each repository gets its own `inMemoryProvider()`; repositories given the same provider share the table of their entity. A provider of `providersOf` (`provider: Providers.audit`) is resolved by each application to its own instance (see [Named providers](applications.md#named-providers)). `repositoryOf` checks that the provider has the methods its actions call.
+A provider that sets `capabilities.expiry` leaves expired rows out of `findOne`, `findMany` (with `after` too) and `count`: when `context.expiry` is set and `withExpired` is not `true`, it gives only the rows whose `context.expiry.key` is missing (or `null`) or later than `query.now`. The repository gives `now` (an ISO 8601 string, from the clock of the entity) and `withExpired` only for an entity that expires; a provider called without `now` uses the current time. Dates are stored as ISO 8601 strings, which compare as text when they are all UTC (`toISOString()`), as the ones `std` makes. Unique keys still count expired rows. `providerContract` runs these cases when the capability is set.
+
+The bare `RepositoryQuery` uses string keys and stored values. Equality and `in` are mandatory; a provider excludes rows with `deletedAt !== undefined` unless `withDeleted` is `true`, and, with `capabilities.expiry`, expired rows unless `withExpired` is `true`. A provider enforces `context.unique` (`RepositoryUniqueViolation`) and rejects an unknown id on `update` and `remove` (`RepositoryEntityNotFound`). Relations load with `findMany(context, { where: { id: { in: ids } } })` (the v1 `findIn` and the key/value signatures are gone). By default each repository gets its own `inMemoryProvider()`; repositories given the same provider share the table of their entity. A provider of `providersOf` (`provider: Providers.audit`) is resolved by each application to its own instance (see [Named providers](applications.md#named-providers)). `repositoryOf` checks that the provider has the methods its actions call.
 
 `transaction(run)` is optional: `run` gets a scoped provider whose writes commit when it resolves and roll back when it rejects; the scoped provider must not be used after `run` ends. `inMemoryProvider()` runs transactions on isolated snapshots, one at a time, makes other operations wait for the active one (so a rollback never discards unrelated writes), treats nested transactions through the scoped provider as savepoints, and clones data on write and read.
 
@@ -193,6 +189,25 @@ class Register extends useCaseOf({
 }
 ```
 
+## Records that expire
+
+For an entity declared with [`expires`](entities.md#records-that-expire), every read (`findMany`, `count`, `exists`, `findPage`, `findCursor`, `findBy<Key>`, `findManyBy<Key>`, and the read of `delete` and `restore` given an id) leaves out the records whose date (`expiresAt`, or the key of `at`) is at or before now, by the clock of the entity; a record without a date never expires. `withExpired: true` includes them.
+
+```ts
+const AuditEvents = repositoryOf({
+	entity: AuditEvent, // expires: { after: { days: 400 } }
+	actions: ["create", "findMany", "count"],
+});
+await AuditEvents.count(); // the events of the last 400 days
+await AuditEvents.count({ withExpired: true }); // every stored event
+```
+
+- Unique keys still count expired records, as they count soft-deleted ones: a new record cannot take the unique value of an expired one until the row is removed.
+- A relation pointing to an expired entity still loads it (relations read with `withDeleted` and `withExpired`): a reference is data, not a missing id.
+- Writes do not look at the date: `update` and `delete` of an expired entity you hold work as for any other, but `delete(id)` and `restore(id)` read the row first, so an expired one is not found (`RepositoryEntityNotFound`).
+- The provider must leave expired records out, `capabilities.expiry` (`inMemoryProvider` and `@afora/drizzle` do); otherwise every read throws `InvalidRepositoryQuery`. Writes work without it.
+- Records are only left out, not removed: purge them in the database (a TTL, a scheduled `DELETE`).
+
 ## Testing a provider
 
 `@afora/core/testing` has a contract test kit for `IRepositoryProvider` implementations. It does not import a test runner: pass the `describe`, `it` and `expect` of yours, and a factory of fresh, empty providers (called once per case).
@@ -205,4 +220,4 @@ import { myProvider } from "./my-provider";
 providerContract({ describe, it, expect }, () => myProvider());
 ```
 
-It checks `insert`, `findOne`, `findMany`, `update` (which also clears a value that is left out, as `restore` needs), `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; and, when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints.
+It checks `insert`, `findOne`, `findMany`, `update` (which also clears a value that is left out, as `restore` needs), `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints; and, with `capabilities.expiry` (or `{ expiry: true }`), that `findOne`, `findMany`, `count` and reads after a position leave out rows whose `expiresAt` is at or before `now` (its table needs an `expiresAt` column), that a row without one never expires, that `withExpired` gives them back and that unique keys still count them.

@@ -18,6 +18,13 @@
 - `coerceTextValues(blueprint, texts)`: text values as the scalar fields of a blueprint take them (numbers, booleans), for sinks that read text; `@afora/hono` and `@afora/mcp` now use it instead of their own copies.
 - `@afora/hono`: the `webhooks` option verifies the signatures of incoming webhooks (Stripe, GitHub, Standard Webhooks, plain HMAC-SHA256) and can strip undeclared keys. See `packages/hono/README.md#webhooks`.
 
+### Records that expire (#35)
+
+- `entityOf(blueprint, { expires })`: `{ after: { days?, hours?, minutes?, seconds? } }` keeps `createdAt` plus the duration in a read-only `expiresAt` identity key (the new std property `ExpiresAt`), and `{ at: key }` expires on the date held by a key of the blueprint (typed as one of its keys); a record without a date never expires. An invalid option throws the new `InvalidEntityExpiry` when the entity is declared. `entityBuilderOf` takes an `expiresAt` field for it. New types `ExpiresAtField` and `ExpiringIdentity`; `EntityExpires`, `EntityStorageOptions` and `EntityOptions` take the key of `at` as a parameter. See `docs/entities.md#records-that-expire`.
+- Repositories leave expired records out of every read (`findOne`, `findMany`, `count`, `exists`, `findPage`, `findCursor`, `findBy<Key>`, `findManyBy<Key>`) unless the query has `withExpired: true`, a new option of `RepositoryQuery` and `RepositoryCursorQuery`. Unique keys still count expired records, relations still load them (`loadByIds` reads with `withExpired: true`), and `update` / `delete` of an expired entity you hold are unchanged. See `docs/repositories.md#records-that-expire`.
+- Providers: `RepositoryContext.expiry` (`{ key }`) for an entity that expires, `ProviderQuery.now` (ISO 8601, from the clock of the entity) and `withExpired`, given only for such an entity; `findOne` and `count` of `IRepositoryProvider` take a `ProviderQuery`. A provider leaves expired rows out when it sets `capabilities.expiry`, which an entity that expires needs (otherwise its reads throw `InvalidRepositoryQuery`). `inMemoryProvider()` and `@afora/drizzle` have it, and `providerContract` checks it in its `expiry` cases (the table needs an `expiresAt` column).
+- `describe()` gives `entities.<Name>.expires` as declared (an `expiresAt` of `after` is left out of `fields`, as the identity is), and `afora.json` takes `"expires"` on an entity: validated (`invalid_expires`, `identity_key` for a field named `expiresAt` with `after`), generated as the option of `entityOf` and extracted back. `@afora/mcp` teaches it in its guide.
+
 ## 0.0.7 — unreleased (draft: dated when it is published)
 
 ### Changed
