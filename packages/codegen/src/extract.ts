@@ -8,7 +8,7 @@ import {
 	type ProviderReference,
 	Std,
 } from "@afora/core";
-import { stdProperty } from "./catalog";
+import { genericUseCase, stdProperty } from "./catalog";
 import type { Field } from "./model";
 import { canonicalField, compactSpec } from "./normalize";
 import { DEFAULT_OUTPUT_DIR, type Spec } from "./spec/types";
@@ -428,6 +428,33 @@ export function extractSpec(
 			: { message: value.message }),
 	}));
 	const useCases = entries(description.useCases, (value, name) => {
+		// A standard use case is given back as it was asked for, not as its steps.
+		// One made by a plugin of another catalog cannot be named in a spec:
+		// it is described by its steps, as a use case written by hand.
+		if (
+			value.generic !== undefined &&
+			genericUseCase(value.generic.name) !== undefined
+		) {
+			const {
+				name: _name,
+				description: _description,
+				tags: _tags,
+				deprecated: _deprecated,
+				...options
+			} = value.generic.options;
+			return {
+				generic: value.generic.name,
+				repository: value.generic.repository,
+				...(Object.keys(options).length > 0
+					? { options: structuredClone(options) }
+					: {}),
+				...(value.description === undefined
+					? {}
+					: { description: value.description }),
+				...(value.tags.length > 0 ? { tags: [...value.tags] } : {}),
+				...(value.deprecated ? { deprecated: true } : {}),
+			};
+		}
 		const steps =
 			value.implementation.kind === "steps"
 				? value.implementation.steps.map((step) => {

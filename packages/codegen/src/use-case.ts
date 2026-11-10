@@ -1,4 +1,4 @@
-import { catalog, recordPlugin } from "./catalog";
+import { catalog, genericUseCase, recordPlugin } from "./catalog";
 import { fieldsOfDecl } from "./graph";
 import type { Field } from "./model";
 import { checkImport, isImportObject } from "./provider";
@@ -239,25 +239,45 @@ export function isImported(spec: Record<string, unknown>): boolean {
 	return isObject(spec.implementation) && isImportObject(spec.implementation);
 }
 
-/** Checks one `useCases` declaration: metadata, references and the steps. */
-export function checkUseCase(
+/** Whether a use case declaration is a standard use case made for a repository. */
+export function isGeneric(spec: Record<string, unknown>): boolean {
+	return Object.hasOwn(spec, "generic");
+}
+
+const GENERIC_ERRORS = ["notFound", "conflict", "invalid", "owner"];
+
+/** The keys of an entity declaration: identity, fields and the keys of its plugins. */
+function entityKeysOf(decl: Decl): string[] {
+	const plugins = Array.isArray(decl.spec.plugins) ? decl.spec.plugins : [];
+	return [
+		...catalog().identityKeys,
+		...Object.keys(fieldsOfDecl(decl) ?? {}),
+		...plugins.flatMap((name) =>
+			typeof name === "string" ? (recordPlugin(name)?.keys ?? []) : [],
+		),
+	];
+}
+
+/**
+ * Checks a standard use case: that it exists, that the repository has its
+ * actions and the entity its plugins, and the shape of its options. What an
+ * option asks of the entity beyond its keys is checked by the use case
+ * itself, when the generated code loads.
+ */
+function checkGenericUseCase(
 	decl: Decl,
 	scope: Scope,
-	inline: InlineChecker,
 	issues: SpecIssue[],
 ): void {
 	const path: Path = ["useCases", decl.name];
 	const { spec } = decl;
 	const allowed = [
+		"generic",
+		"repository",
+		"options",
 		"description",
 		"tags",
 		"deprecated",
-		"input",
-		"response",
-		"context",
-		"dependencies",
-		"errors",
-		"implementation",
 	];
 	for (const key of Object.keys(spec)) {
 		if (!allowed.includes(key)) {
@@ -265,11 +285,183 @@ export function checkUseCase(
 				issue(
 					[...path, key],
 					"unknown_key",
-					`"${key}" is not valid here. Valid keys: ${allowed.join(", ")}.`,
+					`"${key}" is not valid in a standard use case. Valid keys: ${allowed.join(", ")}.`,
 				),
 			);
 		}
 	}
+	checkMetadata(spec, path, issues);
+	const names = catalog().useCases.map((useCase) => useCase.name);
+	const info =
+		typeof spec.generic === "string" ? genericUseCase(spec.generic) : undefined;
+	if (!info) {
+		issues.push(
+			issue(
+				[...path, "generic"],
+				"unknown_generic",
+				`"${String(spec.generic)}" is not a standard use case. Use one of: ${names.join(", ")}.`,
+			),
+		);
+	}
+	const repository =
+		typeof spec.repository === "string"
+			? scope.decls.get(spec.repository)
+			: undefined;
+	if (repository?.kind !== "repository") {
+		issues.push(
+			issue(
+				[...path, "repository"],
+				repository ? "wrong_kind" : "unknown_repository",
+				repository
+					? `"${spec.repository}" is a ${repository.kind}; a standard use case is made for a repository.`
+					: `"repository" must name a declared repository${typeof spec.repository === "string" ? ` ("${spec.repository}" is not)` : ""}.`,
+			),
+		);
+	}
+	const entity =
+		repository?.kind === "repository" &&
+		typeof repository.spec.entity === "string"
+			? scope.decls.get(repository.spec.entity)
+			: undefined;
+	if (info && repository?.kind === "repository") {
+		const actions = Array.isArray(repository.spec.actions)
+			? repository.spec.actions
+			: [];
+		for (const action of info.actions) {
+			if (!actions.includes(action)) {
+				issues.push(
+					issue(
+						[...path, "repository"],
+						"generic_requires_action",
+						`"${info.name}" needs the action "${action}" in the actions of "${repository.name}".`,
+					),
+				);
+			}
+		}
+		const plugins =
+			entity?.kind === "entity" && Array.isArray(entity.spec.plugins)
+				? entity.spec.plugins
+				: [];
+		for (const plugin of info.plugins) {
+			if (entity?.kind === "entity" && !plugins.includes(plugin)) {
+				issues.push(
+					issue(
+						[...path, "repository"],
+						"generic_requires_plugin",
+						`"${info.name}" needs the plugin "${plugin}" on the entity "${entity.name}".`,
+					),
+				);
+			}
+		}
+	}
+
+	const { options } = spec;
+	if (options === undefined) return;
+	const invalid = (key: string | undefined, message: string): void => {
+		issues.push(
+			issue(
+				key === undefined ? [...path, "options"] : [...path, "options", key],
+				"invalid_generic_option",
+				message,
+			),
+		);
+	};
+	if (!isObject(options)) {
+		invalid(undefined, '"options" must be an object.');
+		return;
+	}
+	const known = ["errors", ...(info?.options ?? [])];
+	const keys = entity?.kind === "entity" ? entityKeysOf(entity) : undefined;
+	const isKey = (key: unknown): boolean =>
+		typeof key === "string" && (keys === undefined || keys.includes(key));
+	for (const [key, value] of Object.entries(options)) {
+		if (info && !known.includes(key)) {
+			invalid(
+				key,
+				key === "name" || allowed.includes(key)
+					? `"${key}" is not an option here: the name is the key of the declaration, and description, tags and deprecated go beside "generic".`
+					: `"${info.name}" has no option "${key}". Options: ${known.join(", ")}.`,
+			);
+			continue;
+		}
+		if (key === "as" && !(typeof value === "string" && isIdentifier(value))) {
+			invalid(key, '"as" must be an identifier: the key of the response.');
+		}
+		if (key === "owner") {
+			if (
+				!isObject(value) ||
+				typeof value.context !== "string" ||
+				!isIdentifier(value.context) ||
+				Object.keys(value).some((name) => name !== "key" && name !== "context")
+			) {
+				invalid(
+					key,
+					'"owner" is { "key"?: a key of the entity, "context": the context key with the id of the caller }.',
+				);
+			} else if (!isKey(value.key === undefined ? "ownerId" : value.key)) {
+				invalid(
+					key,
+					`"${String(value.key ?? "ownerId")}" is not a key of the entity${value.key === undefined ? ' (the default "key", of the ownable plugin)' : ""}.`,
+				);
+			}
+		}
+		if (key === "omit") {
+			if (!Array.isArray(value) || !value.every(isKey)) {
+				invalid(key, '"omit" must be a list of keys of the entity.');
+			}
+		}
+		if (key === "values" || key === "set") {
+			if (!isObject(value) || !Object.keys(value).every(isKey)) {
+				invalid(key, `"${key}" must be an object by key of the entity.`);
+			}
+		}
+		if (key === "orderBy") {
+			if (
+				!Array.isArray(value) ||
+				!value.every(
+					(order) =>
+						isObject(order) &&
+						isKey(order.key) &&
+						(order.direction === undefined ||
+							order.direction === "asc" ||
+							order.direction === "desc"),
+				)
+			) {
+				invalid(
+					key,
+					'"orderBy" must be a list of { "key": a key of the entity, "direction"?: "asc" | "desc" }.',
+				);
+			}
+		}
+		if (key === "errors") {
+			if (!isObject(value)) {
+				invalid(key, '"errors" must be an object of exception names.');
+				continue;
+			}
+			for (const [kind, error] of Object.entries(value)) {
+				const name = errorNameOf(error);
+				if (!GENERIC_ERRORS.includes(kind)) {
+					invalid(
+						key,
+						`"errors.${kind}" is not one of ${GENERIC_ERRORS.join(", ")}.`,
+					);
+				} else if (name === undefined || !isKnownException(name, scope)) {
+					invalid(
+						key,
+						`"errors.${kind}" must name a declared exception or a core one (a string, or { "core": "Name" }).`,
+					);
+				}
+			}
+		}
+	}
+}
+
+/** Checks the `description`, `tags` and `deprecated` of a use case. */
+function checkMetadata(
+	spec: Record<string, unknown>,
+	path: Path,
+	issues: SpecIssue[],
+): void {
 	if (spec.description !== undefined && typeof spec.description !== "string") {
 		issues.push(
 			issue(
@@ -304,6 +496,44 @@ export function checkUseCase(
 			);
 		}
 	}
+}
+
+/** Checks one `useCases` declaration: metadata, references and the steps. */
+export function checkUseCase(
+	decl: Decl,
+	scope: Scope,
+	inline: InlineChecker,
+	issues: SpecIssue[],
+): void {
+	const path: Path = ["useCases", decl.name];
+	const { spec } = decl;
+	if (isGeneric(spec)) {
+		checkGenericUseCase(decl, scope, issues);
+		return;
+	}
+	const allowed = [
+		"description",
+		"tags",
+		"deprecated",
+		"input",
+		"response",
+		"context",
+		"dependencies",
+		"errors",
+		"implementation",
+	];
+	for (const key of Object.keys(spec)) {
+		if (!allowed.includes(key)) {
+			issues.push(
+				issue(
+					[...path, key],
+					"unknown_key",
+					`"${key}" is not valid here. Valid keys: ${allowed.join(", ")}.`,
+				),
+			);
+		}
+	}
+	checkMetadata(spec, path, issues);
 
 	const blueprint = (key: "input" | "response" | "context") => {
 		if (spec[key] === undefined) {

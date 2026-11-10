@@ -39,6 +39,19 @@ export interface RecordPluginInfo {
 	readonly members: readonly string[];
 }
 
+/** A standard use case: what its repository and its entity must have. */
+export interface GenericUseCaseInfo {
+	readonly name: string;
+	readonly version: string;
+	readonly description?: string;
+	/** The actions the repository must declare. */
+	readonly actions: readonly string[];
+	/** The record plugins the entity must have. */
+	readonly plugins: readonly string[];
+	/** The options it takes, beside name, description, tags, deprecated and errors. */
+	readonly options: readonly string[];
+}
+
 export interface FactoryInfo {
 	readonly name: string;
 	/** How to write it in a spec. */
@@ -73,6 +86,8 @@ export interface Catalog {
 	readonly stages: readonly StageInfo[];
 	/** Everything `@afora/core` exports; a declaration cannot take one of these names. */
 	readonly reservedDeclarationNames: readonly string[];
+	/** The standard use cases a use case declaration can name in `generic`. */
+	readonly useCases: readonly GenericUseCaseInfo[];
 }
 
 /** The metadata options every property takes. */
@@ -237,8 +252,40 @@ function build(): Catalog {
 			}))
 			.sort((a, b) => (a.name < b.name ? -1 : 1)),
 		reservedDeclarationNames: [...Object.keys(core), "App", "Providers"].sort(),
+		useCases: core.StdUseCases.list.map((plugin) => {
+			const { name, version, description, requires } = plugin.toJSON();
+			return {
+				name,
+				version,
+				...(description === undefined ? {} : { description }),
+				actions: requires.actions,
+				plugins: requires.plugins,
+				options: GENERIC_OPTIONS[name] ?? [],
+			};
+		}),
 	};
 }
+
+/**
+ * The options of each standard use case, which a plugin does not describe:
+ * checked against the plugins themselves by the tests of the catalog.
+ */
+const GENERIC_OPTIONS: Readonly<Record<string, readonly string[]>> = {
+	create: ["as", "owner", "omit", "values"],
+	get: ["as", "owner"],
+	list: ["owner", "orderBy"],
+	update: ["as", "owner"],
+	delete: ["as", "owner"],
+	restore: ["as"],
+	publish: ["as", "owner", "set"],
+	unpublish: ["as", "owner", "set"],
+	archive: ["as", "owner", "set"],
+	unarchive: ["as", "owner", "set"],
+	tag: ["as", "owner"],
+	untag: ["as", "owner"],
+	register: ["as", "owner", "omit", "values"],
+	login: ["as"],
+};
 
 let cached: Catalog | undefined;
 
@@ -256,6 +303,11 @@ export function catalog(): Catalog {
 /** The info of a Std property by its spec name. */
 export function stdProperty(name: string): StdPropertyInfo | undefined {
 	return catalog().properties.find((property) => property.name === name);
+}
+
+/** The info of a standard use case by name. */
+export function genericUseCase(name: string): GenericUseCaseInfo | undefined {
+	return catalog().useCases.find((useCase) => useCase.name === name);
 }
 
 /** The info of a Std record plugin by name. */

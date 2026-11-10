@@ -4,6 +4,7 @@
 
 ### Changed
 
+- `Spec.useCases` holds `UseCaseSpec | GenericUseCaseSpec`. Each has the keys of the other as optional `undefined`, so reading `spec.useCases.Register.input` still type-checks, now possibly `undefined`.
 - `findCursor` is accepted in the `actions` of a repository and as the action of a `find` step, listed in `catalog().repositoryActions` and in `afora.schema.json`. The generated code needs `@afora/core` 0.0.6 or later.
 - Records and entities are generated with their declared name, `recordOf(blueprint, { name: "User" })` and `entityOf(blueprint, { name: "User" })`, so the name a provider keys its storage by does not depend on the class name, which bundlers rename. The generated code needs `@afora/core` 0.0.6 or later.
 
@@ -11,6 +12,9 @@
 - Record and entity fields may now be named `blueprint` and `options`, following the core's move of instance metadata to `Meta`. Covered by generation, persistence and extraction round trips; the spec shape is unchanged.
 
 ### Added
+
+- Standard use cases in `afora.json`: `{ "generic": "create", "repository": "Posts", "options": {...} }` declares a use case of `StdUseCases` made for a repository, generated as `export const CreatePost = StdUseCases.context.create(Posts, {...})` and extracted back as written, with no import to map. `catalog().useCases` lists them (`GenericUseCaseInfo`: `actions`, `plugins`, `options`), and the validator reports `unknown_generic`, `unknown_repository`, `generic_requires_action`, `generic_requires_plugin` and `invalid_generic_option`. Also exported: `GenericUseCaseSpec`. Needs an `@afora/core` with `StdUseCases`.
+- The `restore` repository action (`restore_needs_soft` without `"deletion": "soft"`) and the `restore` step; `ifPresent` on a `change` step; `args` as one `$reference` to a list.
 
 - `commands.<Name>.environments`: the environments of a command, checked like those of a repository (`unknown_environment`, `duplicate_environment`, `invalid_option`), generated as `environmentDependencies`, dropped when empty by normalization, and extracted back from `describe().commands`.
 - Round-trip suite of complete applications, `tests/roundtrip` (`bun run test:roundtrip`): three specs that use every feature (extending another spec included) go JSON -> app -> JSON and keep the same normalized spec after type-check, Biome and a behavioral run, and two hand-written applications go app -> JSON -> app with the same behavior functions passing on the original and on the generated code.

@@ -49,6 +49,32 @@ Some things are code, not data: a provider made by hand, a `run` function, an `e
 
 The value is always `"./file.ts#export"`.
 
+## Standard use cases
+
+A use case that a [standard use case](std-use-cases.md) covers is declared by naming it and the repository it is for, in place of its input, response and steps:
+
+```json
+"useCases": {
+	"CreatePost": {
+		"generic": "create",
+		"repository": "Posts",
+		"description": "Writes a draft as the caller.",
+		"options": {
+			"as": "post",
+			"omit": ["publishedAt"],
+			"values": { "status": "draft" },
+			"owner": { "key": "author", "context": "userId" },
+			"errors": { "owner": "InvalidCredentials" }
+		}
+	},
+	"ListPosts": { "generic": "list", "repository": "Posts" }
+}
+```
+
+It generates `export const CreatePost = StdUseCases.context.create(Posts, { name: "CreatePost", ... })`, the same class a command would pick with `ctx.create(Posts, ...)`, and commands name it as any other use case. The options are those of the TypeScript form, with the exceptions of `errors` by name (declared, or exported by `@afora/core`); the name is the key of the declaration, and `description`, `tags` and `deprecated` go beside `generic`. `catalog().useCases` lists the standard use cases with the `actions` the repository needs, the `plugins` the entity needs and the `options` each takes.
+
+The validator checks that the use case exists (`unknown_generic`), that the repository is declared (`unknown_repository`) and has the actions (`generic_requires_action`), that the entity has the plugins (`generic_requires_plugin`), and the shape of the options and the keys they name (`invalid_generic_option`). What an option asks of the entity beyond its keys, such as omitting a required key, is checked by the use case itself when the generated code loads, which throws `UseCaseUnavailable`. `extractSpec` gives the declaration back as written, from `describe().useCases.<Name>.generic`, and needs no import mapped, a hashing function included.
+
 ## Catalogs: providers and stages
 
 A provider or a stage that is not built in is not part of the spec. The spec names it (`"provider": { "use": "drizzle", "options": {...} }`, `{ "sink": "hono" }`) and a catalog, a codegen option, says which module and export make it.
@@ -77,6 +103,7 @@ What the spec and the round trip do not cover. Each is reported by an issue or a
 - **Provider options come back as JSON.** A provider made with `providerOf({ name, options, create })` comes back as `"inMemory"` or `{ use, options }` with the JSON options it was given. A value that was an import reference when generating is not recovered.
 - **Opaque properties.** A property declared with `propertyOf` that is not a Std one, or built on one that is not (custom handlers included), cannot be recreated, so it becomes `{ "opaque": true, "import": ... }`, imported from the key named after the property in `imports` or, when unmapped, from `./opaque` (a default that you must provide or map).
 - **Function messages.** An exception whose message is a function comes back without `message`, so generation gives it the default `"<Name>."`.
+- **Standard use cases come from `@afora/core`.** `generic` names a use case of `StdUseCases`; a use case plugin of another catalog cannot be named in a spec yet. A use case made by one in hand-written code is extracted as its steps.
 - **Names are shared.** Every kind of declaration shares one namespace, so a command cannot be called `Users` while a repository already is.
 - **Imported use cases and dependencies.** A use case cannot list an imported use case (a hand-written class, `{ "import": ... }`) as a dependency: its handler imports the generated file that would import it back, which is an import cycle. The validator reports `import_dependency`.
 - **Hand-written use cases.** With `{ "import": "../handlers/register#Register" }`, the generated file has `export abstract class RegisterBase extends useCaseOf({...}) {}`; your class extends it and implements `execute`, and `application.ts` registers your class. Extraction needs the `useCases.<Name>` mapping.

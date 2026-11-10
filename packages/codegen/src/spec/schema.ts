@@ -461,7 +461,35 @@ const Step = Type.Union(
 	},
 );
 
-const UseCaseDeclaration = Type.Object(
+const GenericUseCaseDeclaration = Type.Object(
+	{
+		generic: Type.String({
+			description:
+				"A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register or login.",
+		}),
+		repository: Type.String({
+			pattern: NAME,
+			description:
+				"The declared repository it is made for: it must have the actions, and its entity the plugins, the use case needs.",
+		}),
+		options: Type.Optional(
+			Type.Record(Type.String({ pattern: KEY }), Type.Unknown(), {
+				description:
+					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy".',
+			}),
+		),
+		description: Type.Optional(Type.String()),
+		tags: Type.Optional(StringList("Tags, for documentation.")),
+		deprecated: Type.Optional(Type.Boolean({ default: false })),
+	},
+	{
+		additionalProperties: false,
+		description:
+			"A standard use case made for a repository: its input, response, dependencies and steps follow the repository and its entity.",
+	},
+);
+
+const WrittenUseCaseDeclaration = Type.Object(
 	{
 		description: Type.Optional(Type.String()),
 		tags: Type.Optional(StringList("Tags, for documentation.")),
@@ -495,6 +523,14 @@ const UseCaseDeclaration = Type.Object(
 		),
 	},
 	{ additionalProperties: false },
+);
+
+const UseCaseDeclaration = Type.Union(
+	[WrittenUseCaseDeclaration, GenericUseCaseDeclaration],
+	{
+		description:
+			'A use case written here (input, response, implementation) or a standard one made for a repository ({ "generic": "create", "repository": "Posts" }).',
+	},
 );
 
 const CommandDeclaration = Type.Object(
