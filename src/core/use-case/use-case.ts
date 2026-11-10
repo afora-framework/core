@@ -17,12 +17,34 @@ import {
 	isEnvironment,
 } from "../environment/environment";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
-import { Exception, exceptionOf } from "../exception/exception";
+import {
+	type DeclaredExceptionClass,
+	Exception,
+	exceptionOf,
+	isDeclaredException,
+} from "../exception/exception";
 import { guard } from "../exception/guard";
+import {
+	clock,
+	elapsed,
+	type ILogger,
+	isLogger,
+	isLoggerDeclaration,
+	type LoggerDeclaration,
+	logFailure,
+	resolveLogger,
+	silentLogger,
+	writeLog,
+} from "../logger/logger";
 import type { Issue } from "../parse/types/parse.interface";
 import { AbstractRepository, isRepository } from "../repository/repository";
 import type { AnyRepository } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import { type ExecutionScope, ScopeKey } from "./scope";
+import { freezeData } from "./steps/references";
+import { executeSteps } from "./steps/run";
+import type { UseCaseStep } from "./steps/types/steps.interface";
+import { validateSteps } from "./steps/validate";
 
 /** A concrete UseCase declaration, usable as a dependency. */
 export interface AnyUseCaseClass {
@@ -31,23 +53,35 @@ export interface AnyUseCaseClass {
 	readonly blueprint: AnyBlueprint;
 	readonly response: AnyBlueprint;
 	readonly dependencies: UseCaseCollection;
+	readonly context: AnyBlueprint | undefined;
+	readonly description: string | undefined;
+	readonly tags: readonly string[];
+	readonly deprecated: boolean;
+	readonly errors: readonly AnyExceptionClass[];
 	new (
 		// biome-ignore lint/suspicious/noExplicitAny: heterogeneous concrete UseCase constructors
 		input: any,
+		// biome-ignore lint/suspicious/noExplicitAny: with or without a context
+		...options: any[]
 	): {
 		execute(): Promise<unknown>;
 		pullEvents(): EntityEvent[];
 	};
 }
 
+/** Any class made by `exceptionOf`. */
+// biome-ignore lint/suspicious/noExplicitAny: exceptions with any details
+export type AnyExceptionClass = DeclaredExceptionClass<any>;
+
 /**
  * What a use case can depend on: another use case, a repository made by
- * `repositoryOf`, or an environment made by `environmentOf`.
+ * `repositoryOf`, an environment made by `environmentOf`, or `Logger`.
  */
 export type UseCaseDependency =
 	| AnyUseCaseClass
 	| AnyRepository
-	| AnyEnvironment;
+	| AnyEnvironment
+	| LoggerDeclaration;
 
 export type UseCaseCollection = Readonly<Record<string, UseCaseDependency>>;
 
@@ -65,16 +99,39 @@ export type UseCaseResponse<Class extends Declaration> = BlueprintValue<
 >;
 export type UseCaseDependencies<Class extends Declaration> =
 	DependencyFunctions<Class["dependencies"]>;
+/** The context of a use case class, as `this.context` gives it; `undefined` without one. */
+export type UseCaseContext<Class extends { readonly context: unknown }> =
+	Class["context"] extends IBlueprint<infer Properties>
+		? Readonly<BlueprintValue<Properties>>
+		: undefined;
+
+/**
+ * The second argument of the constructor of a use case: `{ context }`,
+ * required when the use case declares a context, not accepted otherwise.
+ */
+export type UseCaseOptions<
+	Context extends IBlueprintCollection | undefined = undefined,
+> = Context extends IBlueprintCollection
+	? { readonly context: BlueprintInput<Context> }
+	: { readonly context?: undefined };
+
+/** @internal */
+type OptionsArgs<Context extends IBlueprintCollection | undefined> =
+	Context extends IBlueprintCollection
+		? [options: UseCaseOptions<Context>]
+		: [];
 
 /**
  * What a use case gets for a dependency: a function for a use case, the
- * repository itself, or the variables of an environment.
+ * repository itself, the variables of an environment, or an `ILogger`.
  */
 export type DependencyOf<Dependency> = Dependency extends AnyUseCaseClass
 	? (input: UseCaseInput<Dependency>) => Promise<UseCaseResponse<Dependency>>
 	: Dependency extends AnyEnvironment
 		? EnvironmentValue<Dependency>
-		: Dependency;
+		: Dependency extends LoggerDeclaration
+			? ILogger
+			: Dependency;
 
 export type DependencyFunctions<Dependencies extends UseCaseCollection> = {
 	readonly [Key in keyof Dependencies]: DependencyOf<Dependencies[Key]>;
@@ -94,11 +151,33 @@ export interface UseCaseSettings<
 	Input extends IBlueprintCollection,
 	Output extends IBlueprintCollection,
 	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined = undefined,
 > {
 	readonly name: string;
 	readonly blueprint: IBlueprint<Input>;
 	readonly response: IBlueprint<Output>;
 	readonly dependencies?: Dependencies;
+	/** What the caller supplies with each call, e.g. the user and the request; validated by this blueprint. */
+	readonly context?: IBlueprint<Exclude<Context, undefined>>;
+	readonly description?: string;
+	readonly tags?: readonly string[];
+	readonly deprecated?: boolean;
+	/** The exceptions (made by `exceptionOf`) a caller should expect; documentation only. */
+	readonly errors?: readonly AnyExceptionClass[];
+}
+
+/** `UseCaseSettings` with the `steps` that are its `execute`. */
+export interface UseCaseStepsSettings<
+	Input extends IBlueprintCollection,
+	Output extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined = undefined,
+> extends UseCaseSettings<Input, Output, Dependencies, Context> {
+	/**
+	 * What the use case does, as data (see `UseCaseStep`): validated here,
+	 * interpreted by its `execute`, and described by `describe()`.
+	 */
+	readonly steps: readonly UseCaseStep<NoInfer<Dependencies>>[];
 }
 
 export const InvalidUseCaseDeclaration = exceptionOf({
@@ -120,13 +199,23 @@ export const InvalidUseCaseDependencies = exceptionOf({
 
 interface RuntimeDeclaration extends Declaration {
 	readonly useCaseName: string;
+	readonly context: AnyBlueprint | undefined;
 }
 interface ExecutionState {
+	readonly context: object | undefined;
+	readonly scope: ExecutionScope | undefined;
 	started: boolean;
 	active: boolean;
 	readonly events: EntityEvent[];
 	readonly dependencies: Record<string, unknown>;
 	resolved?: Record<string, unknown>;
+	/** The class the use case was made from (bound by an application, maybe). */
+	readonly owner: object;
+}
+
+/** The logger a call writes to, if any (see `resolveLogger`). */
+function loggerOfCall(state: ExecutionState): ILogger | undefined {
+	return resolveLogger(state.scope?.logger, state.owner);
 }
 const states = new WeakMap<object, ExecutionState>();
 
@@ -137,7 +226,12 @@ function invalidValue(
 ): never {
 	throw new Exception({
 		layer: ExceptionLayers.UseCase,
-		name: phase === "input" ? "InvalidUseCaseInput" : "InvalidUseCaseResponse",
+		name:
+			phase === "input"
+				? "InvalidUseCaseInput"
+				: phase === "context"
+					? "InvalidUseCaseContext"
+					: "InvalidUseCaseResponse",
 		source,
 		message: `Invalid UseCase ${phase}.`,
 		details: { issues },
@@ -224,14 +318,22 @@ function bindRepository(
 	source: string,
 ): object {
 	const Entity = repository.entity;
+	const repositoryName = Entity.name;
 	const bound: Record<string, unknown> = Object.create(null);
 	// What the methods of the repository get as `this`: the bound methods, and the
 	// repository for the rest, as the receiver, so that its getters see the view.
 	const view: object = new Proxy(Object.create(repository), {
-		get: (_target, key, receiver) =>
-			typeof key === "string" && Object.hasOwn(bound, key)
-				? bound[key]
-				: Reflect.get(repository, key, receiver),
+		get: (_target, key, receiver) => {
+			if (typeof key === "string" && Object.hasOwn(bound, key)) {
+				return bound[key];
+			}
+			if (key === ScopeKey) return state.scope;
+			const value = Reflect.get(repository, key, receiver);
+			// The provider of the call, if its scope replaces the declared one.
+			return key === "provider" && state.scope
+				? (state.scope.providers.get(value) ?? value)
+				: value;
+		},
 		set: (_target, key, value) => Reflect.set(repository, key, value),
 		defineProperty: (_target, key, descriptor) =>
 			Reflect.defineProperty(repository, key, descriptor),
@@ -243,7 +345,14 @@ function bindRepository(
 		] as (...args: unknown[]) => unknown;
 		bound[name] = async (...args: unknown[]) => {
 			if (!state.active) throw new InvalidUseCaseDependencies({ source });
+			const started = clock();
 			const result = await method.apply(receiver, args);
+			writeLog(loggerOfCall(state), "debug", "repository", {
+				repository: repositoryName,
+				method: name,
+				useCase: source,
+				ms: elapsed(started),
+			});
 			for (const arg of args) pullEntities(arg, Entity, state.events);
 			pullEntities(result, Entity, state.events);
 			return result;
@@ -265,8 +374,27 @@ function bindRepository(
 	return Object.freeze(bound);
 }
 
+/**
+ * The context a child gets: the keys of its own context blueprint picked from
+ * the one of its parent. A child without a context gets none.
+ */
+function narrowedContext(
+	Child: AnyUseCaseClass,
+	parent: object | undefined,
+): object | undefined {
+	if (!Child.context || parent === undefined) return undefined;
+	const picked: Record<string, unknown> = {};
+	for (const key of Object.keys(Child.context.properties)) {
+		if (Object.hasOwn(parent, key)) {
+			picked[key] = (parent as Record<string, unknown>)[key];
+		}
+	}
+	return picked;
+}
+
 /** Whether `value` can replace `dependency` in `execute`. */
 function isOverrideOf(dependency: UseCaseDependency, value: unknown): boolean {
+	if (isLoggerDeclaration(dependency)) return isLogger(value);
 	if (isRepository(dependency) || isEnvironment(dependency)) {
 		return typeof value === "object" && value !== null && !Array.isArray(value);
 	}
@@ -281,12 +409,27 @@ export abstract class AbstractUseCase<
 > {
 	readonly input: Readonly<BlueprintValue<Input>>;
 
-	constructor(input: BlueprintInput<Input>) {
+	constructor(input: BlueprintInput<Input>, ...args: unknown[]) {
 		const declaration = this.constructor as unknown as RuntimeDeclaration;
 		const source = declaration.useCaseName;
 		const parsed = declaration.blueprint.safeParse(input);
 		if (parsed.issues) invalidValue(parsed.issues, source, "input");
 		this.input = parsed.value as BlueprintValue<Input>;
+		const options = args[0] as
+			| { context?: unknown; [ScopeKey]?: ExecutionScope }
+			| undefined;
+		const scope = options?.[ScopeKey];
+		let context: object | undefined;
+		if (declaration.context) {
+			const checked = declaration.context.safeParse(options?.context);
+			if (checked.issues) invalidValue(checked.issues, source, "context");
+			context = Object.freeze(checked.value as object);
+		}
+		// `context` is typed by `UseCaseConstructor`, which knows the declaration.
+		Object.defineProperty(this, "context", {
+			value: context,
+			enumerable: true,
+		});
 		Object.defineProperty(this, "input", {
 			writable: false,
 			configurable: false,
@@ -300,10 +443,13 @@ export abstract class AbstractUseCase<
 			});
 		}
 		const state: ExecutionState = {
+			context,
+			scope,
 			started: false,
 			active: false,
 			events: [],
 			dependencies: Object.create(null),
+			owner: this.constructor,
 		};
 		states.set(this, state);
 		for (const [key, dependency] of Object.entries(declaration.dependencies)) {
@@ -316,10 +462,21 @@ export abstract class AbstractUseCase<
 				);
 				continue;
 			}
-			if (isEnvironment(dependency)) {
-				// Read on use, so that a use case is built without its environment.
+			if (isLoggerDeclaration(dependency)) {
+				// The logger of the call, resolved on use: a started application
+				// can give one after the use case was built.
 				Object.defineProperty(state.dependencies, key, {
-					get: () => dependency.load(),
+					get: () => loggerOfCall(state) ?? silentLogger,
+					enumerable: true,
+				});
+				continue;
+			}
+			if (isEnvironment(dependency)) {
+				// Read on use, so that a use case is built without its environment;
+				// a command running the call may give its variables instead.
+				Object.defineProperty(state.dependencies, key, {
+					get: () =>
+						state.scope?.environments?.get(dependency) ?? dependency.load(),
 					enumerable: true,
 				});
 				continue;
@@ -327,7 +484,10 @@ export abstract class AbstractUseCase<
 			const Child = dependency;
 			state.dependencies[key] = async (value: unknown) => {
 				if (!state.active) throw new InvalidUseCaseDependencies({ source });
-				const child = new Child(value);
+				const child = new Child(value, {
+					context: narrowedContext(Child, state.context),
+					[ScopeKey]: state.scope,
+				});
 				try {
 					return await child.execute();
 				} finally {
@@ -375,6 +535,10 @@ export abstract class AbstractUseCase<
 						);
 						continue;
 					}
+					if (isLoggerDeclaration(dependency)) {
+						dependencies[key] = substitute;
+						continue;
+					}
 					if (isEnvironment(dependency)) {
 						const parsed = dependency.blueprint.safeParse(substitute);
 						if (parsed.issues) throw new InvalidUseCaseDependencies({ source });
@@ -401,6 +565,7 @@ export abstract class AbstractUseCase<
 				}
 				state.resolved = Object.freeze(dependencies);
 				state.active = true;
+				const started = clock();
 				try {
 					const result = await guard(
 						{ layer: ExceptionLayers.UseCase, source },
@@ -413,7 +578,20 @@ export abstract class AbstractUseCase<
 					const parsed = declaration.response.safeParse(result);
 					if (parsed.issues) invalidValue(parsed.issues, source, "response");
 					collectEvents(declaration.response, parsed.value, state.events);
+					writeLog(loggerOfCall(state), "debug", "use-case", {
+						useCase: source,
+						outcome: "ok",
+						ms: elapsed(started),
+					});
 					return parsed.value;
+				} catch (error) {
+					logFailure(
+						loggerOfCall(state),
+						"use-case-failed",
+						{ useCase: source, ms: elapsed(started) },
+						error,
+					);
+					throw error;
 				} finally {
 					state.active = false;
 					state.resolved = undefined;
@@ -439,29 +617,107 @@ export abstract class AbstractUseCase<
 	}
 }
 
-export type UseCaseConstructor<
+/** What every use case class carries, abstract or not. */
+type UseCaseStatics<
 	Input extends IBlueprintCollection,
 	Output extends IBlueprintCollection,
 	Dependencies extends UseCaseCollection,
-> = (abstract new (
-	input: BlueprintInput<Input>,
-) => AbstractUseCase<Input, Output, Dependencies>) & {
+	Context extends IBlueprintCollection | undefined,
+> = {
 	readonly [Kind]: "use-case";
 	readonly useCaseName: string;
 	readonly blueprint: IBlueprint<Input>;
 	readonly response: IBlueprint<Output>;
 	readonly dependencies: Dependencies;
+	/** The blueprint of the context of each call, or `undefined`. */
+	readonly context: Context extends IBlueprintCollection
+		? IBlueprint<Context>
+		: undefined;
+	readonly description: string | undefined;
+	readonly tags: readonly string[];
+	readonly deprecated: boolean;
+	/** The exceptions a caller should expect. */
+	readonly errors: readonly AnyExceptionClass[];
 };
 
-/** Declares an abstract operation. Extend it and implement an async execute method. */
+/** What a use case instance carries beyond `AbstractUseCase`. */
+type UseCaseInstanceContext<Context extends IBlueprintCollection | undefined> =
+	{
+		/** What the caller supplied with the call, parsed and frozen; `undefined` without a declared context. */
+		readonly context: Context extends IBlueprintCollection
+			? Readonly<BlueprintValue<Context>>
+			: undefined;
+	};
+
+export type UseCaseConstructor<
+	Input extends IBlueprintCollection,
+	Output extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined = undefined,
+> = (abstract new (
+	input: BlueprintInput<Input>,
+	...options: OptionsArgs<Context>
+) => AbstractUseCase<Input, Output, Dependencies> &
+	UseCaseInstanceContext<Context>) &
+	UseCaseStatics<Input, Output, Dependencies, Context>;
+
+/**
+ * What `useCaseOf` gives with `steps`: concrete, its `execute` interprets the
+ * steps. A subclass may still override `execute`.
+ */
+export type StepsUseCaseConstructor<
+	Input extends IBlueprintCollection,
+	Output extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined = undefined,
+> = (new (
+	input: BlueprintInput<Input>,
+	...options: OptionsArgs<Context>
+) => Omit<AbstractUseCase<Input, Output, Dependencies>, "execute"> &
+	UseCaseInstanceContext<Context> & {
+		execute(
+			dependencies?: DependencyOverrides<Dependencies>,
+		): Promise<BlueprintValue<Output>>;
+	}) &
+	UseCaseStatics<Input, Output, Dependencies, Context>;
+
+/**
+ * Declares an operation. With `steps` the class is concrete: its `execute`
+ * interprets them. Without, it is abstract: extend it and implement an async
+ * execute method.
+ */
 export function useCaseOf<
 	Input extends IBlueprintCollection,
 	Output extends IBlueprintCollection,
 	const Dependencies extends UseCaseCollection = Record<never, never>,
+	Context extends IBlueprintCollection | undefined = undefined,
 >(
-	settings: UseCaseSettings<Input, Output, Dependencies>,
-): UseCaseConstructor<Input, Output, Dependencies> {
-	const { name, blueprint, response } = settings;
+	settings: UseCaseStepsSettings<Input, Output, Dependencies, Context>,
+): StepsUseCaseConstructor<Input, Output, Dependencies, Context>;
+export function useCaseOf<
+	Input extends IBlueprintCollection,
+	Output extends IBlueprintCollection,
+	const Dependencies extends UseCaseCollection = Record<never, never>,
+	Context extends IBlueprintCollection | undefined = undefined,
+>(
+	settings: UseCaseSettings<Input, Output, Dependencies, Context>,
+): UseCaseConstructor<Input, Output, Dependencies, Context>;
+export function useCaseOf(
+	settings: UseCaseSettings<
+		IBlueprintCollection,
+		IBlueprintCollection,
+		UseCaseCollection,
+		IBlueprintCollection | undefined
+	> & { readonly steps?: unknown },
+): unknown {
+	type Input = IBlueprintCollection;
+	type Output = IBlueprintCollection;
+	type Dependencies = UseCaseCollection;
+	type Context = IBlueprintCollection | undefined;
+	const { name, blueprint, response, context } = settings;
+	const { description, deprecated = false } = settings;
+	const tags = settings.tags === undefined ? [] : settings.tags;
+	const errors = settings.errors === undefined ? [] : settings.errors;
 	const dependencies =
 		settings.dependencies === undefined ? {} : settings.dependencies;
 	if (
@@ -484,9 +740,43 @@ export function useCaseOf<
 			source: typeof name === "string" ? name : "useCaseOf",
 			details: {
 				reason:
-					"Expected a name, input and response blueprints, and UseCase classes, repositories or environments as dependencies.",
+					"Expected a name, input and response blueprints, and UseCase classes, repositories, environments or Logger as dependencies.",
 			},
 		});
+	}
+	const invalidSetting = (reason: string): never => {
+		throw new InvalidUseCaseDeclaration({ source: name, details: { reason } });
+	};
+	if (context !== undefined && (!isBlueprint(context) || context.optional)) {
+		invalidSetting("Expected context to be a non-optional blueprint.");
+	}
+	if (description !== undefined && typeof description !== "string") {
+		invalidSetting("Expected description to be a string.");
+	}
+	if (typeof deprecated !== "boolean") {
+		invalidSetting("Expected deprecated to be a boolean.");
+	}
+	if (
+		!Array.isArray(tags) ||
+		tags.some((tag) => typeof tag !== "string" || tag === "") ||
+		new Set(tags).size !== tags.length
+	) {
+		invalidSetting("Expected tags to be distinct, non-empty strings.");
+	}
+	if (
+		!Array.isArray(errors) ||
+		!errors.every(isDeclaredException) ||
+		new Set(errors).size !== errors.length
+	) {
+		invalidSetting(
+			"Expected errors to be distinct classes made by exceptionOf.",
+		);
+	}
+	if (settings.steps !== undefined) {
+		validateSteps(
+			{ name, blueprint, context, dependencies, errors },
+			settings.steps,
+		);
 	}
 	abstract class DeclaredUseCase extends AbstractUseCase<
 		Input,
@@ -500,14 +790,38 @@ export function useCaseOf<
 		static readonly dependencies = Object.freeze({
 			...dependencies,
 		}) as Dependencies;
+		static readonly context = context as Context extends IBlueprintCollection
+			? IBlueprint<Context>
+			: undefined;
+		static readonly description = description;
+		static readonly tags = Object.freeze([...tags]);
+		static readonly deprecated = deprecated;
+		static readonly errors = Object.freeze([
+			...errors,
+		]) as readonly AnyExceptionClass[];
 	}
 	Object.defineProperty(DeclaredUseCase, "name", { value: name });
+	if (settings.steps !== undefined) {
+		Object.defineProperty(DeclaredUseCase, "steps", {
+			value: freezeData(settings.steps),
+		});
+		Object.defineProperty(DeclaredUseCase.prototype, "execute", {
+			value: executeSteps,
+			writable: true,
+			configurable: true,
+		});
+	}
 	return DeclaredUseCase;
 }
 
 /** Whether `value` can be a dependency of a use case. */
 function isDependency(value: unknown): value is UseCaseDependency {
-	return isUseCaseClass(value) || isRepository(value) || isEnvironment(value);
+	return (
+		isUseCaseClass(value) ||
+		isRepository(value) ||
+		isEnvironment(value) ||
+		isLoggerDeclaration(value)
+	);
 }
 
 export function isUseCaseClass(value: unknown): value is AnyUseCaseClass {

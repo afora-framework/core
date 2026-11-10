@@ -3,6 +3,7 @@ import type {
 	TArray,
 	TObject,
 	TOptional,
+	TReadonly,
 	TSchema,
 	TUnsafe,
 } from "typebox";
@@ -95,7 +96,8 @@ type FieldMode = "data" | "value" | "input";
 type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field
 	? TSchema
 	: Field extends {
-				readonly type: IPropertyType<infer SchemaType extends TSchema>;
+				// biome-ignore lint/suspicious/noExplicitAny: only the schema is inferred
+				readonly type: IPropertyType<infer SchemaType extends TSchema, any>;
 			}
 		? SchemaType
 		: Field extends AnyRecordClass
@@ -161,7 +163,10 @@ type CollectionSchema<
 	[Key in keyof Properties]: FieldSchema<Properties[Key], Mode>;
 }>;
 
-/** The schema of a single field of a blueprint; a record is its blueprint's object. */
+/**
+ * The schema of a single field of a blueprint; a record is its blueprint's object.
+ * @internal
+ */
 export type BlueprintPropertySchema<Field> = FieldSchema<Field, "data">;
 
 /** The object schema described by a collection, one key per field. */
@@ -169,29 +174,121 @@ export type BlueprintSchema<Properties extends IBlueprintCollection> =
 	CollectionSchema<Properties, "data">;
 
 /**
+ * The value of a single field of a blueprint, its records as `Mode` says:
+ * `Static` of its `FieldSchema`, read from the fields themselves. A property
+ * gives the value its type carries, so `Static` is never measured on a
+ * generic schema, which costs TypeScript about a second on every check.
+ */
+type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field
+	? Static<TSchema>
+	: Field extends {
+				readonly type: IPropertyType<infer SchemaType, infer Value>;
+			}
+		? 0 extends 1 & SchemaType
+			? Static<TSchema>
+			: Value
+		: Field extends AnyRecordClass
+			? RecordValueOf<Field, Mode>
+			: Field extends OptionalRecord<infer Record>
+				? RecordValueOf<Record, Mode>
+				: Field extends {
+							readonly properties: infer Properties extends
+								IBlueprintCollection;
+						}
+					? CollectionValue<Properties, Mode>
+					: Field extends { readonly item: infer Item }
+						? FieldValue<Item, Mode>[]
+						: never;
+
+/** The value of a record field, as `RecordSchema` describes it. */
+type RecordValueOf<
+	Record extends AnyRecordClass,
+	Mode extends FieldMode,
+> = Mode extends "value"
+	? InstanceType<Record>
+	: Mode extends "input"
+		? InstanceType<Record> | RecordInput<Record> | AcceptedBy<Record>
+		: Record["blueprint"] extends IBlueprint<infer Properties, boolean>
+			? CollectionValue<Properties, "data">
+			: never;
+
+/*
+ * The keys of an object schema by their modifiers, as TypeBox sorts them to
+ * build its value. They only read the schemas, never `Static`.
+ */
+type ReadonlyOptionalKeys<Schemas> = {
+	[Key in keyof Schemas]: Schemas[Key] extends TReadonly<TSchema>
+		? Schemas[Key] extends TOptional<Schemas[Key]>
+			? Key
+			: never
+		: never;
+}[keyof Schemas];
+type ReadonlyKeys<Schemas> = {
+	[Key in keyof Schemas]: Schemas[Key] extends TReadonly<TSchema>
+		? Schemas[Key] extends TOptional<Schemas[Key]>
+			? never
+			: Key
+		: never;
+}[keyof Schemas];
+type OptionalKeys<Schemas> = {
+	[Key in keyof Schemas]: Schemas[Key] extends TOptional<TSchema>
+		? Schemas[Key] extends TReadonly<Schemas[Key]>
+			? never
+			: Key
+		: never;
+}[keyof Schemas];
+type RequiredKeys<Schemas> = keyof Omit<
+	Schemas,
+	ReadonlyOptionalKeys<Schemas> | ReadonlyKeys<Schemas> | OptionalKeys<Schemas>
+>;
+
+/**
+ * `Static` of `CollectionSchema`, built as TypeBox builds the value of an
+ * object (the same keys and modifiers, in the same order, so it displays the
+ * same), but from the value of each field. `Result` is a parameter so that no
+ * alias names the object.
+ */
+type CollectionValue<
+	Properties extends IBlueprintCollection,
+	Mode extends FieldMode,
+	Schemas = { [Key in keyof Properties]: FieldSchema<Properties[Key], Mode> },
+	Values extends Record<PropertyKey, unknown> = {
+		[Key in keyof Properties]: FieldValue<Properties[Key], Mode>;
+	},
+	WithModifiers extends Record<PropertyKey, unknown> = Evaluate<
+		Readonly<Partial<Pick<Values, ReadonlyOptionalKeys<Schemas>>>> &
+			Readonly<Pick<Values, ReadonlyKeys<Schemas>>> &
+			Partial<Pick<Values, OptionalKeys<Schemas>>> &
+			Required<Pick<Values, RequiredKeys<Schemas>>>
+	>,
+	Result = keyof Properties extends never
+		? object
+		: { [Key in keyof WithModifiers]: WithModifiers[Key] },
+> = Result;
+
+type Evaluate<Type> = { [Key in keyof Type]: Type[Key] } & {};
+
+/**
  * The value accepted by a collection; optional fields become optional keys,
  * and a record field takes an instance of its class, e.g. `{ author: User }`.
  */
-export type BlueprintValue<Properties extends IBlueprintCollection> = Static<
-	CollectionSchema<Properties, "value">
->;
+export type BlueprintValue<Properties extends IBlueprintCollection> =
+	CollectionValue<Properties, "value">;
 
 /**
  * What a blueprint accepts to build its value: as `BlueprintValue`, but a
  * record field also takes the plain input of its blueprint, which becomes an
  * instance of the record, e.g. `{ author: { name: "Jane" } }`.
  */
-export type BlueprintInput<Properties extends IBlueprintCollection> = Static<
-	CollectionSchema<Properties, "input">
->;
+export type BlueprintInput<Properties extends IBlueprintCollection> =
+	CollectionValue<Properties, "input">;
 
 /**
  * The plain value of a collection, as its schema describes it: a record
  * field is the object of the record's blueprint, as its `toJSON` gives.
  */
-export type BlueprintData<Properties extends IBlueprintCollection> = Static<
-	BlueprintSchema<Properties>
->;
+export type BlueprintData<Properties extends IBlueprintCollection> =
+	CollectionValue<Properties, "data">;
 
 type Override<Base, Overrides> = {
 	[Key in keyof Base | keyof Overrides]: Key extends keyof Overrides
@@ -219,6 +316,7 @@ export type BlueprintPluginContext<
 /**
  * The field factories of every plugin source, in order; a later source
  * replaces a factory of an earlier one with the same name.
+ * @internal
  */
 export type BlueprintFactoryContext<
 	Sources extends readonly BlueprintSource[],
@@ -239,7 +337,10 @@ export type BlueprintFactoryContext<
 		>
 	: Record<never, never>;
 
-/** The fields of the joined blueprints; a later one replaces a key of an earlier one. */
+/**
+ * The fields of the joined blueprints; a later one replaces a key of an earlier one.
+ * @internal
+ */
 export type JoinedProperties<
 	Blueprints extends readonly { readonly properties: IBlueprintCollection }[],
 > =
@@ -248,7 +349,10 @@ export type JoinedProperties<
 		? Properties
 		: never;
 
-/** A list of every field of a collection, e.g. `{ tags: IBlueprintList<Tag> }`. */
+/**
+ * A list of every field of a collection, e.g. `{ tags: IBlueprintList<Tag> }`.
+ * @internal
+ */
 export type ListProperties<Properties> = {
 	readonly [Key in keyof Properties]: Properties[Key] extends BlueprintField
 		? IBlueprintList<Properties[Key]>
@@ -292,6 +396,7 @@ export type BlueprintContext<Sources extends readonly BlueprintSource[]> =
 /**
  * Every field of a collection, its properties callable with options, as
  * `ctx.number({ min: 1 })`.
+ * @internal
  */
 export type CallableProperties<Fields> = {
 	readonly [Key in keyof Fields]: Fields[Key] extends AnyPropertyConstructor
@@ -299,7 +404,10 @@ export type CallableProperties<Fields> = {
 		: Fields[Key];
 };
 
-/** The optional version of every field of a collection, blueprints and records included. */
+/**
+ * The optional version of every field of a collection, blueprints and records included.
+ * @internal
+ */
 export type OptionalProperties<Properties> = {
 	readonly [Key in keyof Properties]: Properties[Key] extends AnyPropertyConstructor
 		? OptionalProperty<Properties[Key]>
@@ -329,7 +437,10 @@ export interface IBlueprint<
 	/** The fields picked by the blueprint's definition. */
 	readonly properties: Properties;
 	/** The general schema of every field of the blueprint. */
-	readonly schema: ISchema<BlueprintSchema<Properties>>;
+	readonly schema: ISchema<
+		BlueprintSchema<Properties>,
+		BlueprintData<Properties>
+	>;
 	/** Whether, as a field of another blueprint, it accepts `undefined`. */
 	readonly optional: Optional;
 	/**
@@ -427,8 +538,8 @@ type ListShape<
 	Mode extends FieldMode,
 	Optional extends boolean,
 > = Optional extends true
-	? Static<TArray<FieldSchema<Item, Mode>>> | undefined
-	: Static<TArray<FieldSchema<Item, Mode>>>;
+	? FieldValue<Item, Mode>[] | undefined
+	: FieldValue<Item, Mode>[];
 
 /** `List` as a field that accepts `undefined`. */
 export type OptionalBlueprintList<List extends AnyBlueprintList> =

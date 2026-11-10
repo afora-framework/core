@@ -88,11 +88,12 @@ describe("document", () => {
 		expectIssue({ version: 2 }, "unsupported_version", "version");
 		expectIssue({}, "unsupported_version", "version");
 	});
-	test("useCases is reserved", () => {
+	test("useCases and exceptions are collections", () => {
+		expectIssue({ version: 1, useCases: [] }, "invalid_collection", "useCases");
 		expectIssue(
-			{ version: 1, useCases: {} },
-			"use_cases_not_supported",
-			"useCases",
+			{ version: 1, exceptions: { x: { layer: "use-case" } } },
+			"invalid_name",
+			"exceptions.x",
 		);
 	});
 	test("output.dir stays inside the project", () => {

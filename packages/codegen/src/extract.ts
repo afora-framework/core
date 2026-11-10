@@ -4,6 +4,8 @@ import {
 	type FieldDescription,
 	type PropertyDescription,
 	type PropertyReference,
+	type ProviderDescription,
+	type ProviderReference,
 	Std,
 } from "@afora/core";
 import { stdProperty } from "./catalog";
@@ -17,8 +19,23 @@ export interface ExtractOptions {
 	readonly extends?: Readonly<Record<string, string>>;
 	/** `output.dir` of the spec. `src/domain` by default. */
 	readonly outputDir?: string;
-	/** Where a property that cannot be recreated is imported from, by its name. `./opaque` by default. */
+	/**
+	 * Where a property that cannot be recreated is imported from, by its name
+	 * (`./opaque` by default). A provider created without `providerOf` cannot be
+	 * described: it needs an entry `"./db.ts#provider"` under the key `provider`
+	 * (the application's), `repositories.<Name>.provider` or `providers.<key>`
+	 * (one of `providersOf`, e.g. made by `providerFrom`). A use case with a
+	 * hand-written `execute` needs `useCases.<Name>`, and a `run` function of a
+	 * steps use case `useCases.<Name>.run.<name>`, a command with a handler
+	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, and a stage
+	 * written by hand `outputs.<Name>.pipe.<index>`, all `"./file.ts#export"`.
+	 */
 	readonly imports?: Readonly<Record<string, string>>;
+}
+
+/** Thrown by `extractSpec` when the application holds something the spec cannot express without help. */
+export class ExtractionError extends Error {
+	override readonly name = "ExtractionError";
 }
 
 type Json = Record<string, unknown>;
@@ -29,6 +46,100 @@ const pascalOf = (text: string): string =>
 		.filter(Boolean)
 		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
 		.join("") || "Property";
+
+/**
+ * A provider as the spec says it. A named one (`providerOf`) is its name and
+ * the JSON options it was given; an import reference that produced an option
+ * cannot be recovered, so the options are those values.
+ */
+function providerSpec(
+	description: ProviderDescription | ProviderReference,
+	key: string,
+	imports: Readonly<Record<string, string>> | undefined,
+): unknown {
+	// A provider of `providersOf`: its key.
+	if (description.kind === "ref") return description.key;
+	if (description.kind === "provider") {
+		return description.name === "inMemory" &&
+			Object.keys(description.options).length === 0
+			? "inMemory"
+			: {
+					use: description.name,
+					...(Object.keys(description.options).length > 0
+						? { options: description.options }
+						: {}),
+				};
+	}
+	const reference = imports?.[key];
+	if (reference === undefined) {
+		throw new ExtractionError(
+			`The provider of ${key === "provider" ? "the application" : key.startsWith("providers.") ? `the key "${key.slice("providers.".length)}" of providers` : `"${key.slice("repositories.".length, -".provider".length)}"`} was not created with providerOf, so it cannot be described. Create it with providerOf({ name, options, create }), or pass imports: { "${key}": "./path/to/file.ts#exportName" } to import it as it is.`,
+		);
+	}
+	return { import: reference };
+}
+
+/**
+ * The providers of `providersOf` the application registers itself (not
+ * inherited ones), by key; one made by `providerFrom` needs an import in
+ * `imports` (`"providers.<key>"`).
+ */
+function providersSpec(
+	description: ApplicationDescription,
+	imports: Readonly<Record<string, string>> | undefined,
+): { providers?: Record<string, unknown> } {
+	const own = Object.entries(description.providers ?? {}).filter(
+		([, value]) => value.from === description.name,
+	);
+	if (own.length === 0) return {};
+	return {
+		providers: Object.fromEntries(
+			own.map(([key, { from: _, ...value }]) => [
+				key,
+				providerSpec(value, `providers.${key}`, imports),
+			]),
+		),
+	};
+}
+
+/**
+ * The `log` as the spec says it: the built-in console and json providers by
+ * name; any other provider, or a `log` of `logFrom`, needs an import in
+ * `imports` (`"log"`, or `"log.providers.<index>"`).
+ */
+function logSpec(
+	description: NonNullable<ApplicationDescription["log"]>,
+	imports: Readonly<Record<string, string>> | undefined,
+): unknown {
+	if (!("level" in description)) {
+		const reference = imports?.log;
+		if (reference === undefined) {
+			throw new ExtractionError(
+				'The log of the application is made on start (logFrom), so it cannot be described. Pass imports: { "log": "./path/to/file.ts#exportName" } to import it as it is.',
+			);
+		}
+		return { import: reference };
+	}
+	return {
+		...(description.level === "info" ? {} : { level: description.level }),
+		providers: description.providers.map((provider, index) => {
+			if (
+				provider.kind === "log-provider" &&
+				(provider.name === "console" || provider.name === "json")
+			) {
+				return provider.name;
+			}
+			const key = `log.providers.${index}`;
+			const reference = imports?.[key];
+			if (reference === undefined) {
+				throw new ExtractionError(
+					`Log provider ${index} of the application is not "console" or "json", so the spec cannot name it. Pass imports: { "${key}": "./path/to/file.ts#exportName" } to import it as it is.`,
+				);
+			}
+			return { import: reference };
+		}),
+	};
+}
 
 class Extraction {
 	readonly opaque = new Map<string, string>();
@@ -46,6 +157,10 @@ class Extraction {
 			...Object.keys(description.entities),
 			...Object.keys(description.environments),
 			...Object.keys(description.repositories),
+			...Object.keys(description.exceptions),
+			...Object.keys(description.useCases),
+			...Object.keys(description.commands),
+			...Object.keys(description.outputs),
 		]);
 	}
 
@@ -205,6 +320,20 @@ class Extraction {
 	}
 }
 
+function importFor(
+	imports: Readonly<Record<string, string>> | undefined,
+	key: string,
+	what: string,
+): string {
+	const reference = imports?.[key];
+	if (reference === undefined) {
+		throw new ExtractionError(
+			`${what} cannot be described. Pass imports: { "${key}": "./path/to/file.ts#exportName" } to import it as it is.`,
+		);
+	}
+	return reference;
+}
+
 /**
  * The `afora.json` of an application: the inverse of `generate`. Only the
  * declarations the application registered itself are included; those it
@@ -252,10 +381,10 @@ export function extractSpec(
 		] as const;
 	const entries = <Value extends { readonly from: string }>(
 		collection: Readonly<Record<string, Value>>,
-		map: (value: Value) => Json,
+		map: (value: Value, name: string) => Json,
 	): Json =>
 		Object.fromEntries(
-			own(collection).map(([name, value]) => [name, map(value)]),
+			own(collection).map(([name, value]) => [name, map(value, name)]),
 		);
 
 	const blueprints = entries(description.blueprints, (value) => ({
@@ -272,13 +401,168 @@ export function extractSpec(
 	const environments = entries(description.environments, (value) => ({
 		fields: extraction.json(value.fields),
 	}));
-	const repositories = entries(description.repositories, (value) => ({
+	const repositories = entries(description.repositories, (value, name) => ({
 		entity: value.entity,
 		actions: [...value.actions],
+		...(value.provider === undefined
+			? {}
+			: {
+					provider: providerSpec(
+						value.provider,
+						`repositories.${name}.provider`,
+						options.imports,
+					),
+				}),
+		...(value.deletion === "soft" ? { deletion: "soft" } : {}),
 		...(value.relations.length > 0 ? { relations: [...value.relations] } : {}),
 		...(value.environments.length > 0
 			? { environments: [...value.environments] }
 			: {}),
+	}));
+
+	const exceptions = entries(description.exceptions, (value, name) => ({
+		layer: value.layer,
+		// Declared with a function as its message: not recreated, so the default one is used.
+		...(value.message === undefined || value.message === `${name}.`
+			? {}
+			: { message: value.message }),
+	}));
+	const useCases = entries(description.useCases, (value, name) => {
+		const steps =
+			value.implementation.kind === "steps"
+				? value.implementation.steps.map((step) => {
+						if ("run" in step && "fn" in step) {
+							const key = `useCases.${name}.run.${step.run}`;
+							return {
+								...step,
+								fn: {
+									import: importFor(
+										options.imports,
+										key,
+										`The function of the step run "${step.run}" of the use case "${name}"`,
+									),
+								},
+							};
+						}
+						return { ...step };
+					})
+				: undefined;
+		return {
+			...(value.description === undefined
+				? {}
+				: { description: value.description }),
+			...(value.tags.length > 0 ? { tags: [...value.tags] } : {}),
+			...(value.deprecated ? { deprecated: true } : {}),
+			input: value.refs?.input ?? { fields: extraction.json(value.input) },
+			response: value.refs?.response ?? {
+				fields: extraction.json(value.response),
+			},
+			...(value.context === undefined
+				? {}
+				: {
+						context: value.refs?.context ?? {
+							fields: extraction.json(value.context),
+						},
+					}),
+			...(Object.keys(value.dependencies).length > 0
+				? {
+						dependencies: Object.fromEntries(
+							Object.entries(value.dependencies).map(([key, dep]) => [
+								key,
+								dep.ref,
+							]),
+						),
+					}
+				: {}),
+			...(value.errors.length > 0
+				? {
+						errors: value.errors.map((error) =>
+							error.kind === "core" ? error.name : error.ref,
+						),
+					}
+				: {}),
+			implementation: steps
+				? { steps }
+				: {
+						import: importFor(
+							options.imports,
+							`useCases.${name}`,
+							`The use case "${name}" has a hand-written execute, so it`,
+						),
+					},
+		};
+	});
+
+	const commands = entries(description.commands, (value, name) => ({
+		...(value.description === undefined
+			? {}
+			: { description: value.description }),
+		...(value.tags.length > 0 ? { tags: [...value.tags] } : {}),
+		...(value.context === undefined
+			? {}
+			: {
+					context: value.refs?.context ?? {
+						fields: extraction.json(value.context),
+					},
+				}),
+		useCases: Object.fromEntries(
+			Object.entries(value.operations).map(([op, operation]) => [
+				op,
+				operation.ref,
+			]),
+		),
+		...(value.transaction ? { transaction: true } : {}),
+		...(value.environments && value.environments.length > 0
+			? { environments: [...value.environments] }
+			: {}),
+		...(value.events === "after-commit"
+			? {}
+			: {
+					events:
+						value.events === "manual"
+							? "manual"
+							: {
+									import: importFor(
+										options.imports,
+										`commands.${name}.events`,
+										`The events handler of the command "${name}"`,
+									),
+								},
+				}),
+		...(value.onEventError === undefined
+			? {}
+			: {
+					onEventError: {
+						import: importFor(
+							options.imports,
+							`commands.${name}.onEventError`,
+							`The onEventError handler of the command "${name}"`,
+						),
+					},
+				}),
+	}));
+	const outputs = entries(description.outputs, (value, name) => ({
+		commands: [...value.commands],
+		...(Object.keys(value.statuses).length > 0
+			? { statuses: { ...value.statuses } }
+			: {}),
+		pipe: value.pipe.map((stage, index) => {
+			if (stage.kind === "opaque") {
+				return {
+					import: importFor(
+						options.imports,
+						`outputs.${name}.pipe.${index}`,
+						`The stage ${index} of the output "${name}" was written by hand, so it`,
+					),
+				};
+			}
+			return {
+				[stage.kind]: stage.name,
+				...(Object.keys(stage.options).length > 0
+					? { options: JSON.parse(JSON.stringify(stage.options)) }
+					: {}),
+			};
+		}),
 	}));
 
 	const allProperties = { ...extraction.generated, ...properties };
@@ -293,6 +577,19 @@ export function extractSpec(
 				}
 			: {}),
 		output: { dir: options.outputDir ?? DEFAULT_OUTPUT_DIR },
+		...(description.provider === undefined
+			? {}
+			: {
+					provider: providerSpec(
+						description.provider,
+						"provider",
+						options.imports,
+					),
+				}),
+		...providersSpec(description, options.imports),
+		...(description.log === undefined
+			? {}
+			: { log: logSpec(description.log, options.imports) }),
 		...(Object.keys(allProperties).length > 0
 			? { properties: allProperties }
 			: {}),
@@ -301,6 +598,10 @@ export function extractSpec(
 		...(Object.keys(entities).length > 0 ? { entities } : {}),
 		...(Object.keys(environments).length > 0 ? { environments } : {}),
 		...(Object.keys(repositories).length > 0 ? { repositories } : {}),
+		...(Object.keys(exceptions).length > 0 ? { exceptions } : {}),
+		...(Object.keys(useCases).length > 0 ? { useCases } : {}),
+		...(Object.keys(commands).length > 0 ? { commands } : {}),
+		...(Object.keys(outputs).length > 0 ? { outputs } : {}),
 	};
 	return compactSpec(spec as unknown as Spec);
 }

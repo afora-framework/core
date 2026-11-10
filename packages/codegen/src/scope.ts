@@ -20,8 +20,23 @@ export interface Decl {
 	readonly via?: string;
 }
 
+/** A key of the top-level `providers`, of the spec or of one it extends. */
+interface ProviderKey {
+	readonly key: string;
+	/** The provider as written (compared by identity). */
+	readonly spec: unknown;
+	/** The label of the spec that declares it. */
+	readonly origin: string;
+	/** For an inherited key: the reference of the extended spec it comes through. */
+	readonly via?: string;
+	/** Declared by a spec the extended one extends: not importable from here. */
+	readonly nested?: boolean;
+}
+
 export interface Scope {
 	readonly decls: ReadonlyMap<string, Decl>;
+	/** The keys of `providers`, its own and inherited ones. */
+	readonly providerKeys: ReadonlyMap<string, ProviderKey>;
 	/** The extended specs, by reference, in order. */
 	readonly extended: ReadonlyMap<string, ResolvedSpec>;
 }
@@ -66,6 +81,36 @@ function declarationsOf(
 	}
 	return found;
 }
+
+/** Every key of `providers` that `resolved` declares or inherits, in order. */
+function providerKeysOf(
+	resolved: ResolvedSpec,
+	ref: string,
+	seen: Set<ResolvedSpec>,
+): ProviderKey[] {
+	if (seen.has(resolved)) return [];
+	seen.add(resolved);
+	const found: ProviderKey[] = [];
+	for (const [childRef, child] of Object.entries(resolved.extends ?? {})) {
+		for (const key of providerKeysOf(child, childRef, seen)) {
+			found.push({ ...key, nested: true });
+		}
+	}
+	const providers = (resolved.spec as unknown as Record<string, unknown>)
+		?.providers;
+	if (isObject(providers)) {
+		for (const [key, value] of Object.entries(providers)) {
+			found.push({ key, spec: value, origin: labelOf(resolved, ref) });
+		}
+	}
+	return found;
+}
+
+/** The keys of `providers` a `provider` of the spec can name: its own and those of the specs it extends directly. */
+export const usableProviderKeys = (scope: Scope): string[] =>
+	[...scope.providerKeys.values()]
+		.filter((found) => found.nested !== true)
+		.map((found) => found.key);
 
 /**
  * The declarations in scope: those of `spec` and of the specs it extends.
@@ -158,7 +203,7 @@ export function scopeOf(
 					issue(
 						path,
 						"reserved_name",
-						`"${name}" is exported by @afora/core (or is "App") and the generated code imports or exports it. Pick another name.`,
+						`"${name}" is exported by @afora/core (or is "App" or "Providers") and the generated code imports or exports it. Pick another name.`,
 					),
 				);
 				continue;
@@ -192,5 +237,79 @@ export function scopeOf(
 			byObject.set(value, decl);
 		}
 	}
-	return { decls, extended: extendedRefs };
+	const providerKeys = new Map<string, ProviderKey>();
+	const keySeen = new Set<ResolvedSpec>();
+	const addKey = (found: ProviderKey, path: readonly (string | number)[]) => {
+		const same = providerKeys.get(found.key);
+		if (same === undefined) {
+			providerKeys.set(found.key, found);
+			return;
+		}
+		if (same.spec === found.spec) return;
+		issues.push(
+			issue(
+				path,
+				"provider_conflict",
+				`The provider "${found.key}" of "${found.origin}" is a different provider from the "${found.key}" of "${same.origin}". Rename one of them.`,
+			),
+		);
+	};
+	for (const [index, ref] of refs.entries()) {
+		const resolved = extendedRefs.get(ref);
+		if (resolved === undefined) continue;
+		for (const found of providerKeysOf(resolved, ref, keySeen)) {
+			addKey({ ...found, via: ref }, ["extends", index]);
+		}
+	}
+	if (isObject(spec.providers)) {
+		for (const [key, value] of Object.entries(spec.providers)) {
+			addKey(
+				{
+					key,
+					spec: value,
+					origin: typeof spec.name === "string" ? spec.name : "this spec",
+				},
+				["providers", key],
+			);
+		}
+	}
+	return { decls, providerKeys, extended: extendedRefs };
+}
+
+/**
+ * Checks `value` as the `environments` of a declaration at `path`: a list of
+ * distinct names of declared environments. Gives the names, when a list.
+ */
+export function checkEnvironmentNames(
+	value: unknown,
+	path: readonly (string | number)[],
+	scope: Scope,
+	issues: SpecIssue[],
+): string[] {
+	if (value === undefined) return [];
+	if (
+		!Array.isArray(value) ||
+		!value.every((item) => typeof item === "string")
+	) {
+		issues.push(issue(path, "invalid_option", "Must be an array of strings."));
+		return [];
+	}
+	for (const [index, name] of value.entries()) {
+		const here = [...path, index];
+		const other = scope.decls.get(name);
+		if (other?.kind !== "environment") {
+			issues.push(
+				issue(
+					here,
+					"unknown_environment",
+					`"${name}" is not a declared environment.`,
+				),
+			);
+		} else if (value.indexOf(name) !== index) {
+			issues.push(
+				issue(here, "duplicate_environment", `"${name}" is listed twice.`),
+			);
+		}
+	}
+	return value;
 }

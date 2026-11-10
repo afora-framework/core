@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`@afora/core` (the Standard Schema vendor is still `"afora"`) is a TypeScript library published on npm for domain modeling on TypeBox: properties → blueprints → records → entities, plus repositories, use cases, environments and layered exceptions, with Standard Schema V1 on every field. `README.md` is the user-facing spec of behavior; `CHANGELOG.md` (`## Unreleased`) records every public change and should be updated alongside features.
+`@afora/core` (the Standard Schema vendor is still `"afora"`) is a TypeScript library published on npm for domain modeling on TypeBox: properties → blueprints → records → entities, plus repositories, use cases, environments and layered exceptions, with Standard Schema V1 on every field. `README.md` is the entry point (intro, install, a tested quick start, overview) and `docs/` holds the user-facing spec of behavior, one file per concept (`docs/README.md` is the index; `docs/afora-json.md` is the JSON-first guide). A change in behavior goes into the matching `docs/*.md`, and the quick start code in `README.md` must stay equal to `examples/interop/quickstart.ts` and `quickstart.afora.json`, which `bun run test:interop` checks. `CHANGELOG.md` (`## Unreleased`) records every public change and should be updated alongside features.
 
 ## Tooling
 
@@ -18,13 +18,16 @@ bun check                                # type check (reads tsconfig.json)
 bun run lint                             # biome lint
 bun run fmt                              # biome format + fix (tabs, double quotes, organized imports)
 bun run build                            # dist/: bun build (ESM, node target, deps external) + tsc declarations, then scripts/add-dts-extensions.ts
-bun run test:interop                     # examples/interop: real Hono, tRPC, TanStack Form tests, incl. the README quick start
+bun run test:api                         # tests/api-surface: snapshot of every export of dist/ with its declaration, and of packages/codegen/afora.schema.json (the public contract); update with -u on purpose
+bun run test:interop                     # examples/interop: real Hono, tRPC, TanStack Form tests, incl. the README quick start (TypeScript and afora.json)
+bun run docs:links                       # every relative link and #anchor in README.md, docs/ and the package READMEs resolves
 bun run test:types                       # packs the package and type-checks tests/types-compat on TS 5.5, latest 5.x and 7, bundler + nodenext
+bun run test:type-perf                   # tests/type-perf: per-edit type instantiations of README code (budgeted) + snapshot of hovers/completions/diagnostics, src and dist
 bun run smoke                            # build, then run scripts/smoke.mjs on plain Node
 bun run bench                            # bench/ vs TypeBox, Zod, Valibot, ArkType; results in bench/RESULTS.md
 ```
 
-`examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
+`packages/*` (`codegen`, `mcp`, `hono`, `drizzle`) are workspaces with their own build and tests (`bun run build:packages`). `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
 
 ## Runtime constraint
 
@@ -37,6 +40,7 @@ The library ships to Bun **and** Node >= 22 (and must load in browsers/Workers).
 **`src/core/` vs `src/std/`.** `core` holds the generic machinery (builders like `blueprintBuilderOf`, `entityBuilderOf`, `recordOf`, `repositoryOf`, `useCaseOf`, `environmentOf`, exceptions, parsing, Standard Schema). `std` instantiates it with concrete properties (`Id`, `Slug`, `Email`, `Password`, time stamps, `enumOf`…) and exports the ready-made `blueprintOf` (= `blueprintBuilderOf(Std)`) and `entityOf`. **`core` must never import from `std`** — enforced by `src/core/layers.test.ts` (test and `*.sandbox.ts` files are exempt).
 
 **The layering of concepts**, each built on the previous:
+
 - **Property** (`core/property`): a class wrapping one value, run through `preHandle → TypeBox validation → afterHandle`; flags `optional`, `sensitive`, `unique` propagate up to records.
 - **Blueprint** (`core/blueprint`): an object shape built from a context `ctx` supplied by plugins (`blueprintPluginOf`), with `listOf`, `optionalOf`, `join`, nested blueprints and record classes as fields. `optional`, `list`, `listOf`, `optionalOf`, `propertyOf` are reserved context keys.
 - **Record** (`core/record`): `recordOf(blueprint, { sensitive, unique, change })` returns a class. Values live in a `WeakMap`; keys are prototype getters (so spreading a record yields nothing — use `toJSON()`). `set` is protected; `change: [...]` exposes `instance.change.<key>(value)` (a `change` namespace getter); `toJSON` masks sensitive leaves at any depth; undeclared keys are rejected at any depth; keys colliding with record members or `Object.prototype` throw `ReservedRecordKey`.
@@ -47,7 +51,7 @@ The library ships to Bun **and** Node >= 22 (and must load in browsers/Workers).
 
 **Cross-cutting pieces.** `core/exception`: `exceptionOf({ layer, name, message })` and `guard({ layer, source }, fn)`; each exception carries an `ExceptionLayers` value and a `trace` that grows as it crosses layers — new error types should be declared per module in an `exceptions.ts` with the right layer. `core/parse` + `core/standard`: `safeParse` and `~standard.validate` never throw for invalid input and collect every `Issue` (`code`, `path`, `source`); `Record.safeParse` goes through the class constructor. The invalid-input path is performance-sensitive (see `bench/`). `core/symbols`: `Kind`, `State`, `Demo` symbols brand values so blueprints, lists and records are distinguished by brand, not by shape.
 
-**Type-level work is a large part of the code.** Inference of inputs/outputs, unique keys (`MarkedUniqueKey`, literal `options.unique`), the `change.<key>` namespace members and generated `findBy<Key>` method names, etc. live in each module's `types/*.interface.ts`. Changes to public types should be checked with `bun run test:types`, not just `bun check`.
+**Type-level work is a large part of the code.** Inference of inputs/outputs, unique keys (`MarkedUniqueKey`, literal `options.unique`), the `change.<key>` namespace members and generated `findBy<Key>` method names, etc. live in each module's `types/*.interface.ts`. Changes to public types should be checked with `bun run test:types`, not just `bun check`, and with `bun run test:type-perf`: it keeps the editor cost per edit under budget and the writing experience (hovers, completions, error messages) unchanged unless its snapshot is updated on purpose (`-u`).
 
 ## Conventions
 

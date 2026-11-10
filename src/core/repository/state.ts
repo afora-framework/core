@@ -14,6 +14,7 @@ export interface RepositoryState {
 	readonly name: string;
 	readonly entity: AnyRepositoryEntity;
 	readonly actions: readonly string[];
+	readonly deletion: "hard" | "soft";
 	readonly provider: IRepositoryProvider;
 	/** Whether `settings.provider` was given, and not the default one. */
 	readonly explicitProvider: boolean;
@@ -61,7 +62,10 @@ export function contextOf(state: RepositoryState): RepositoryContext {
 export interface RepositoryInspection {
 	readonly entity: AnyRepositoryEntity;
 	readonly actions: readonly string[];
+	readonly deletion: "hard" | "soft";
 	readonly explicitProvider: boolean;
+	/** The provider, only when the repository declared it. */
+	readonly provider: IRepositoryProvider | undefined;
 	readonly environments: readonly object[];
 	/** The repository state of each related entity class; compare with `inspect(...).state`. */
 	readonly relations: readonly object[];
@@ -79,7 +83,9 @@ export function inspectRepository(
 	return {
 		entity: state.entity,
 		actions: state.actions,
+		deletion: state.deletion,
 		explicitProvider: state.explicitProvider,
+		provider: state.explicitProvider ? state.provider : undefined,
 		environments:
 			environment === undefined
 				? []
@@ -100,23 +106,28 @@ function declarationOf(state: RepositoryState): RepositoryState {
 
 /**
  * `state` reading and writing through `provider`, unless it declared its own;
- * its relations are bound the same way. The original is left as it is.
+ * a provider it declared that is a key of `instances` (a slot of
+ * `providersOf`) is replaced by its value. Its relations are bound the same
+ * way. The original is left as it is.
  */
 function bindState(
 	state: RepositoryState,
-	provider: IRepositoryProvider,
+	provider: IRepositoryProvider | undefined,
+	instances: ReadonlyMap<object, IRepositoryProvider> | undefined,
 	bound = new Map<RepositoryState, RepositoryState>(),
 ): RepositoryState {
 	const done = bound.get(state);
 	if (done) return done;
 	const copy: RepositoryState = {
 		...state,
-		provider: state.explicitProvider ? state.provider : provider,
+		provider: state.explicitProvider
+			? (instances?.get(state.provider) ?? state.provider)
+			: (provider ?? state.provider),
 		context: undefined,
 		relations: new Map(
 			[...state.relations].map(([target, related]) => [
 				target,
-				bindState(related, provider, bound),
+				bindState(related, provider, instances, bound),
 			]),
 		),
 	};
@@ -127,16 +138,18 @@ function bindState(
 
 /**
  * A repository sharing the declaration of `repository` that reads and writes
- * through `provider`, unless it declared a provider of its own.
+ * through `provider`, unless it declared a provider of its own; a declared
+ * provider found in `instances` is replaced by its value.
  */
 export function bindRepository<Repository extends object>(
 	repository: Repository,
-	provider: IRepositoryProvider,
+	provider: IRepositoryProvider | undefined,
+	instances?: ReadonlyMap<object, IRepositoryProvider>,
 ): Repository {
 	const state = stateOf(repository);
 	const Declared = repository.constructor as new () => object;
 	class Bound extends Declared {}
 	Object.defineProperty(Bound, "name", { value: Declared.name });
-	states.set(Bound, bindState(state, provider));
+	states.set(Bound, bindState(state, provider, instances));
 	return Object.freeze(new Bound()) as Repository;
 }

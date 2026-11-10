@@ -48,7 +48,10 @@ export type EnvironmentDependencies =
 	| AnyEnvironment
 	| readonly AnyEnvironment[];
 
-/** The variables of every environment of `Dependencies`, merged. */
+/**
+ * The variables of every environment of `Dependencies`, merged.
+ * @internal
+ */
 export type MergedEnvironment<
 	Dependencies extends EnvironmentDependencies | undefined,
 > = Dependencies extends AnyEnvironment

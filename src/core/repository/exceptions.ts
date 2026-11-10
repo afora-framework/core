@@ -1,6 +1,13 @@
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { exceptionOf } from "../exception/exception";
 
+/** A query contains unsupported keys, ordering or pagination. */
+export const InvalidRepositoryQuery = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "InvalidRepositoryQuery",
+	message: ({ reason }: { readonly reason: string }) => reason,
+});
+
 /** `repositoryOf` got something other than an entity, actions and a provider. */
 export const InvalidRepositoryDeclaration = exceptionOf({
 	layer: ExceptionLayers.Repository,

@@ -39,22 +39,23 @@ function parsingDefinitionOf(Class: {
 	return definition;
 }
 
-export abstract class AbstractProperty<SchemaType extends TSchema>
-	implements IProperty<SchemaType>
+/** A property instance; `Value` is the value of its schema, as in `ISchema`. */
+export abstract class AbstractProperty<
+	SchemaType extends TSchema,
+	Value = Static<SchemaType>,
+> implements IProperty<SchemaType, Value>
 {
 	get [State](): PropertyStates {
 		return this.definition[State];
 	}
-	readonly definition: AbstractDefineProperty<SchemaType>;
-	readonly value: PropertyValue<SchemaType>;
+	readonly definition: AbstractDefineProperty<SchemaType, Value>;
+	readonly value: PropertyValue<SchemaType, Value>;
 
-	constructor(value: PropertyValue<SchemaType>) {
+	constructor(value: PropertyValue<SchemaType, Value>) {
 		this.definition = this.createDefinition();
 		this.value = this.definition.make(
-			value === Demo
-				? (this.definition.type[Demo] as Static<SchemaType>)
-				: (value as Static<SchemaType>),
-		) as PropertyValue<SchemaType>;
+			value === Demo ? (this.definition.type[Demo] as Value) : (value as Value),
+		) as PropertyValue<SchemaType, Value>;
 	}
 
 	/**
@@ -95,9 +96,9 @@ export abstract class AbstractProperty<SchemaType extends TSchema>
 	 */
 	static with<Self extends AnyPropertyConstructor>(
 		this: Self,
-		options: PropertyOptions<
-			Self["type"] extends IPropertyType<infer SchemaType> ? SchemaType : never
-		>,
+		options: Self["type"] extends IPropertyType<infer SchemaType, infer Value>
+			? PropertyOptions<SchemaType, Value>
+			: never,
 	): Self {
 		// biome-ignore lint/complexity/noThisInStatic: the class it is called on, a subclass included
 		return refinePropertyOf(this, options);
@@ -113,5 +114,8 @@ export abstract class AbstractProperty<SchemaType extends TSchema>
 		return standardOfClass(this);
 	}
 
-	protected abstract createDefinition(): AbstractDefineProperty<SchemaType>;
+	protected abstract createDefinition(): AbstractDefineProperty<
+		SchemaType,
+		Value
+	>;
 }

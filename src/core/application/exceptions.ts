@@ -65,3 +65,86 @@ export const UnregisteredRepositoryDependency = exceptionOf({
 	}) =>
 		`Repository ${repository} depends on ${dependency}, which is not registered in the application.`,
 });
+
+/** A dependency of a use case of the application (a use case, repository or environment) is not registered in it. */
+export const UnregisteredUseCaseDependency = exceptionOf({
+	layer: ExceptionLayers.Application,
+	name: "UnregisteredUseCaseDependency",
+	message: ({
+		useCase,
+		dependency,
+	}: {
+		readonly useCase: string;
+		readonly dependency: string;
+	}) =>
+		`Use case ${useCase} depends on ${dependency}, which is not registered in the application.`,
+});
+
+/**
+ * The application provider is made by `providerFrom` and the application has
+ * not been started: `await app.start()` creates it.
+ */
+export const ApplicationNotStarted = exceptionOf({
+	layer: ExceptionLayers.Application,
+	name: "ApplicationNotStarted",
+	message: ({
+		application,
+	}: {
+		/** The application, or none when `useApplication()` found none started. */
+		readonly application?: string;
+	}) =>
+		application === undefined
+			? "No application is started: call await app.start() first."
+			: `The application "${application}" is not started: call await app.start() first.`,
+});
+
+/**
+ * A repository read or wrote through a provider of `providersOf` made by
+ * `providerFrom` outside an application: an application that registers the
+ * storage makes it on start, and its bound repositories use it.
+ */
+export const ProviderNotBound = exceptionOf({
+	layer: ExceptionLayers.Application,
+	name: "ProviderNotBound",
+	message: ({
+		provider,
+	}: {
+		/** The key of the provider in its storage. */
+		readonly provider: string;
+	}) =>
+		`The provider "${provider}" is made by an application: register its storage in applicationOf({ providers }) and call the repository through the application.`,
+});
+
+/**
+ * `app.start()` was called while another application is the started one of
+ * the process; `start({ replace: true })` stops it and takes its place.
+ */
+export const ApplicationAlreadyStarted = exceptionOf({
+	layer: ExceptionLayers.Application,
+	name: "ApplicationAlreadyStarted",
+	message: ({
+		current,
+		attempted,
+	}: {
+		readonly current: string;
+		readonly attempted: string;
+	}) =>
+		`The application "${current}" is already started, so "${attempted}" cannot be: stop it, or call start({ replace: true }).`,
+});
+
+/**
+ * `app.start()` found environments whose variables are missing or rejected;
+ * `details.environments` gives the keys of each, by name.
+ */
+export const InvalidApplicationEnvironment = exceptionOf({
+	layer: ExceptionLayers.Environment,
+	name: "InvalidApplicationEnvironment",
+	message: ({
+		environments,
+	}: {
+		readonly environments: Readonly<Record<string, readonly string[]>>;
+	}) =>
+		`Invalid environment variables: ${Object.entries(environments)
+			.map(([name, keys]) => `${name} (${keys.join(", ")})`)
+			.join("; ")}.`,
+});

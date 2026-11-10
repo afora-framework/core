@@ -9,9 +9,9 @@ import type { IPropertyType } from "./property-type.interface";
  */
 export type AnyPropertyConstructor = {
 	// biome-ignore lint/suspicious/noExplicitAny: any property, whatever its schema
-	new (value: any): AbstractProperty<any>;
+	new (value: any): AbstractProperty<any, any>;
 	// biome-ignore lint/suspicious/noExplicitAny: see above
-	readonly type: IPropertyType<any>;
+	readonly type: IPropertyType<any, any>;
 	// biome-ignore lint/suspicious/noExplicitAny: see above
 	safeParse(value: unknown): ParseResult<any>;
 	// biome-ignore lint/suspicious/noExplicitAny: see above

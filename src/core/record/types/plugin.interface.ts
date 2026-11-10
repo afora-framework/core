@@ -112,7 +112,10 @@ export interface IRecordPluginCatalog<
 	): readonly AnyRecordPlugin[];
 }
 
-/** The plugins of a catalog made of `Plugins`, by name. */
+/**
+ * The plugins of a catalog made of `Plugins`, by name.
+ * @internal
+ */
 export type RecordPluginsByName<Plugins extends readonly AnyRecordPlugin[]> = {
 	readonly [Plugin in Plugins[number] as Plugin["name"]]: Plugin;
 };
@@ -120,6 +123,7 @@ export type RecordPluginsByName<Plugins extends readonly AnyRecordPlugin[]> = {
 /**
  * What `options.plugins` picks from: the plugins of every catalog, by name; a
  * later catalog replaces a plugin of an earlier one with the same name.
+ * @internal
  */
 export type RecordPluginContext<
 	Catalogs extends readonly IRecordPluginCatalog[],
@@ -154,7 +158,10 @@ type PluginProperties<Plugin> = Plugin extends {
 	? Properties
 	: never;
 
-/** The fields of a record, and those of each of its plugins. */
+/**
+ * The fields of a record, and those of each of its plugins.
+ * @internal
+ */
 export type WithPluginProperties<
 	Properties extends IBlueprintCollection,
 	Plugins extends readonly AnyRecordPlugin[],
@@ -174,7 +181,10 @@ type PluginInstance<Plugin> = Plugin extends {
 	? Instance
 	: never;
 
-/** What the plugins add to the records they are applied to: their keys and methods. */
+/**
+ * What the plugins add to the records they are applied to: their keys and methods.
+ * @internal
+ */
 export type PluginMembers<Plugins extends readonly AnyRecordPlugin[]> = [
 	Plugins[number],
 ] extends [never]

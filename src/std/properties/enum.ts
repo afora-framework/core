@@ -7,7 +7,8 @@ export type EnumClass<
 	Values extends TEnumValue[],
 	Optional extends boolean = false,
 > = PropertyClass<
-	Optional extends true ? TOptional<TEnum<Values>> : TEnum<Values>
+	Optional extends true ? TOptional<TEnum<Values>> : TEnum<Values>,
+	Values[number]
 >;
 
 /**

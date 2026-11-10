@@ -1,0 +1,16 @@
+{
+	"name": "afora-blog",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"generate": "bun ../../packages/codegen/src/cli.ts generate afora.json --providers ./catalogs.ts --stages ./catalogs.ts",
+		"start": "bun src/server.ts"
+	},
+	"devDependencies": {
+		"@seriousme/openapi-schema-validator": "^2.4.1",
+		"@types/bun": "^1.4.4",
+		"drizzle-orm": "0.45.4",
+		"hono": "^4.13.14",
+		"typebox": "^1"
+	}
+}

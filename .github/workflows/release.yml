@@ -1,24 +1,82 @@
 name: Release
 
+# Publishes when the version in package.json has no tag yet. Bump the version in
+# a pull request; merging it to main runs CI, publishes and creates the tag.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths:
+      - package.json
+      - packages/*/package.json
+  # re-runs a release that failed halfway
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  detect:
+    name: Detect a new version
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.version.outputs.release }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - id: version
+        name: Compare package.json with the tags and npm
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # The tag is created last, so a missing tag also means an unfinished release.
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "v$version is already released, nothing to do"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # All the packages are released together, under one version and one tag.
+          for dir in packages/*/; do
+            other="$(node -p "require('./${dir}package.json').version")"
+            if [ "$other" != "$version" ]; then
+              echo "::error::$dir is at $other, but package.json is at $version"
+              exit 1
+            fi
+          done
+
+          # Never move the latest dist-tag backwards.
+          latest="$(npm view @afora/core version)"
+          if [ "$(bun -e "console.log(Bun.semver.order('$version', '$latest'))")" = "-1" ]; then
+            echo "::error::package.json is at $version, behind $latest on npm"
+            exit 1
+          fi
+
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
   ci:
+    needs: detect
+    if: needs.detect.outputs.release == 'true'
     uses: ./.github/workflows/ci.yml
 
   publish:
     name: Publish to npm
-    needs: ci
+    needs: [detect, ci]
     runs-on: ubuntu-latest
     environment: npm
     permissions:
       contents: write
       id-token: write
+    env:
+      VERSION: ${{ needs.detect.outputs.version }}
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -29,27 +87,23 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
-      - name: Check that the tag matches package.json
-        run: |
-          version="$(node -p 'require("./package.json").version')"
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match package.json version $version" >&2
-            exit 1
-          fi
       - run: bun run build:packages
       - name: Publish
         # core first, then the packages that depend on it. A version that is
-        # already on npm is skipped, so a tag can be re-run after a partial failure.
+        # already on npm is skipped, so a run can be repeated after a partial failure.
+        # Publishing uses trusted publishing (OIDC). NPM_TOKEN is only needed for
+        # the first publish of a package, which npm cannot do through OIDC.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           publish() {
             dir="$1"
             name="$(node -p "require('./$dir/package.json').name")"
-            version="$(node -p "require('./$dir/package.json').version")"
-            if npm view "$name@$version" version >/dev/null 2>&1; then
-              echo "$name@$version is already on npm, skipping"
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION is already on npm, skipping"
               return
             fi
-            case "$version" in
+            case "$VERSION" in
               *-*) tag=next ;;
               *) tag=latest ;;
             esac
@@ -57,13 +111,19 @@ jobs:
           }
 
           # npm does not rewrite the workspace: protocol, so pin the real version.
-          codegen_version="$(node -p 'require("./packages/codegen/package.json").version')"
-          (cd packages/mcp && npm pkg set "dependencies.@afora/codegen=^$codegen_version")
+          (cd packages/mcp && npm pkg set "dependencies.@afora/codegen=^$VERSION")
 
           publish .
           publish packages/codegen
           publish packages/mcp
-      - name: Create GitHub release
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+          publish packages/hono
+          publish packages/drizzle
+      - name: Create the tag and the GitHub release
+        run: |
+          prerelease=""
+          case "$VERSION" in
+            *-*) prerelease="--prerelease" ;;
+          esac
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --generate-notes $prerelease
         env:
           GH_TOKEN: ${{ github.token }}

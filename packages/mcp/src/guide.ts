@@ -23,6 +23,7 @@ a file of your own.
   "version": 1,
   "name": "blog",
   "output": { "dir": "src/domain" },
+  "provider": "inMemory",
   "properties":   { "Age": { "base": "integer", "with": { "min": 0, "max": 150 } },
                     "Status": { "enum": ["draft", "published"] } },
   "blueprints":   { "Address": { "fields": { "street": "string", "zip": "string" } } },
@@ -58,15 +59,102 @@ a file of your own.
 - Declaration names are PascalCase and unique across every kind; names exported by @afora/core are taken.
 - No circular references between declarations (store an id instead of the entity).
 - An entity cannot declare \`id\`, \`createdAt\`, \`updatedAt\`, \`deletedAt\` (it gets them). No record member names
-  (\`toJSON\`, \`set\`, \`options\`...); see \`reservedRecordKeys\` in the catalog.
+  (\`toJSON\`, \`set\`, \`onSet\`...); see \`reservedRecordKeys\` in the catalog. \`blueprint\` and \`options\` are valid fields.
 - \`unique\`, \`sensitive\`, \`change\` must name fields (or keys of its plugins); \`change\` cannot name an identity key.
   \`password\` is always sensitive and \`slug\` always unique; \`id\` is always unique.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.
 - Repository actions: \`findById\`; \`findBy<Key>\` only for unique keys (id, \`unique\`, slug fields, unique plugin keys such as
-  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`count\`.
+  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`count\`, and the
+  queries \`findMany\`, \`exists\`, \`findPage\` (no key needed; \`where\`, \`orderBy\`, \`limit\`, \`offset\` at runtime).
+- \`provider\` (top level for the application, and optionally on a repository, which then uses its own): \`"inMemory"\`,
+  \`{ "use": "<name>", "options": {...} }\` with a name from the \`providers\` of \`afora_catalog\` (external ones are given
+  to the server with \`--providers\`), or \`{ "import": "./db.ts#provider" }\` for one created by hand. Options are JSON or
+  \`{ "import": "./db.ts#db" }\` references (any depth); imports are relative to \`output.dir\` and never run by the validator.
+  Omitting \`provider\` is not the same as \`"inMemory"\`: a repository without one uses the application's. For a provider
+  not created with \`providerOf\`, \`afora_extract\` needs \`imports\` (\`provider\` / \`repositories.<Name>.provider\` /
+  \`providers.<key>\`).
+- Named providers: the top-level \`providers\` is \`{ "<camelCaseKey>": <provider> }\` (generated as \`Providers\`, made by
+  \`providersOf\`); a repository or the top-level \`provider\` names one with \`"provider": "<key>"\`, e.g. \`"audit"\`.
+  \`"inMemory"\` is not a valid key. Keys of a spec extended directly can be named too. Each application makes its own
+  instance of a provider made on start (an \`{ "import" }\` of a \`providerFrom\`), so independent applications do not share it.
+- Repository \`deletion\`: \`"hard"\` (default) physically removes rows; \`"soft"\` retains \`deletedAt\` and hides deleted rows from reads, counts and relations.
 - \`relations\` must list exactly one repository for each entity the repository's entity holds, at any depth (inside
   records, blueprints and nested objects), not through another entity.
 - Environments hold properties only (no lists, no objects).
 - \`extends\`: other specs (relative path to their afora.json, or a package) whose declarations you can reference;
-  the same name for different declarations is a conflict. \`useCases\` is reserved (not supported yet).
+  the same name for different declarations is a conflict.
+
+## Exceptions and use cases
+
+\`\`\`json
+{
+  "exceptions": { "UserAlreadyExists": { "layer": "use-case", "message": "A user with this email already exists." } },
+  "useCases": {
+    "Register": {
+      "description": "Signs a user up.", "tags": ["users"],
+      "input": { "fields": { "name": "text", "email": "email", "plainPassword": "string" } },
+      "response": { "fields": { "user": "User" } },
+      "dependencies": { "users": "Users" },
+      "errors": ["UserAlreadyExists", "RepositoryUniqueViolation"],
+      "implementation": { "steps": [
+        { "find": "users.findByEmail", "args": ["$input.email"], "as": "existing" },
+        { "ensure": "absent", "value": "$existing", "error": "UserAlreadyExists" },
+        { "run": "hashPassword", "fn": { "import": "../hash#hashPassword" }, "args": ["$input.plainPassword"], "as": "hash" },
+        { "build": "User", "values": { "name": "$input.name", "email": "$input.email", "password": "$hash" }, "as": "user" },
+        { "create": "users", "value": "$user", "as": "saved" },
+        { "return": { "user": "$saved" } }
+      ] }
+    }
+  }
+}
+\`\`\`
+
+- \`exceptions\`: \`{ layer, message? }\`; \`layer\` is one of \`exceptionLayers\` of \`afora_catalog\`; the message is "<Name>." when omitted.
+- \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`. \`dependencies\` map a key to a use case, repository
+  or environment, or to \`"Logger"\` for the logger of the application (an \`ILogger\`; no step reads it). \`errors\` are declared exceptions or exceptions exported by @afora/core (\`coreExceptions\` of \`afora_catalog\`).
+- \`implementation\` is \`{ "steps": [...] }\` (generated complete, no hand-written file) or \`{ "import": "../handlers/x.ts#Name" }\`:
+  the generated file has \`abstract class <Name>Base\`; write \`class Name extends <Name>Base\` with \`execute\` at that path.
+  A use case cannot list an imported (hand-written) use case as a dependency.
+- Steps run in order and \`return\` is last, exactly once: \`find\` ("<repo>.<read action>"), \`ensure\` (exists | absent | equals | notEquals | true | false;
+  \`other\` for the comparisons, \`error\` a declared exception name or a core one, listed in \`errors\`; optional \`details\`), \`build\` (a record or
+  entity name, \`values\`, \`as\`), \`change\` ($ref, \`key\` in the class's change keys, \`value\`), \`invoke\` ($ref, \`method\`, \`args\`),
+  \`create\` / \`update\` / \`delete\` (repository key, \`value\`), \`call\` (use case key, \`input\`) and \`run\` (a unique name, \`fn\` is
+  \`{ "import": "../x.ts#fn" }\`, \`args\`; the function gets (...args, { context })). \`as\` binds the result.
+- Values: \`"$input.key"\`, \`"$context.key"\`, \`"$env.<dependency>.VAR"\`, \`"$name.path.0"\` (a bound result); a literal; \`{ "literal": "$5" }\` for a string that
+  starts with $; or an object/array of values. No expressions: compute with \`run\`.
+- \`afora_extract\` needs \`imports\` for \`useCases.<Name>\` (hand-written execute) and \`useCases.<Name>.run.<name>\` (run functions).
+
+## Commands and outputs
+
+\`\`\`json
+{
+  "commands": {
+    "Users": {
+      "description": "Accounts.", "tags": ["public"],
+      "context": { "fields": { "userId": "id?" } },
+      "useCases": { "register": "Register" },
+      "transaction": true
+    }
+  },
+  "outputs": {
+    "Api": {
+      "commands": ["Users"],
+      "statuses": { "UserAlreadyExists": 409 },
+      "pipe": [
+        { "transform": "select", "options": { "tags": ["public"] } },
+        { "sink": "openapi", "options": { "info": { "title": "Blog", "version": "1.0.0" } } }
+      ]
+    }
+  }
+}
+\`\`\`
+
+- \`commands\`: \`useCases\` maps an operation name (an identifier) to a declared use case; \`context\` is a blueprint name or \`{ "fields": {...} }\`.
+  \`transaction: true\` runs each call in a transaction of the repositories' provider: it is checked when the code runs, not by the validator
+  (the provider is unknown then). \`events\` is \`"after-commit"\` (default), \`"manual"\` or \`{ "import": "./events.ts#dispatch" }\` (a handler);
+  \`onEventError\` is an import and only with \`after-commit\`. Defaults (\`transaction: false\`, \`events: "after-commit"\`, no tags) are not written.
+- \`outputs\`: \`commands\` are declared commands; \`statuses\` maps an exception name (declared or exported by @afora/core) to a status from 400 to 599;
+  \`pipe\` is transforms and, last, at most one sink, each \`{ "transform" | "sink": name, "options"?: {...JSON} }\` with a name from the \`stages\` of
+  \`afora_catalog\` (\`select\`, \`openapi\`, plus the ones given to the server with \`--stages\`), or \`{ "import": "./stages.ts#auth" }\` for a stage written by hand.
+- \`afora_extract\` needs \`imports\` for \`commands.<Name>.events\`, \`commands.<Name>.onEventError\` and \`outputs.<Name>.pipe.<index>\` (hand-written ones).
 `;

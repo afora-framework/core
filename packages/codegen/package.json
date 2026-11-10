@@ -1,6 +1,6 @@
 {
 	"name": "@afora/codegen",
-	"version": "0.0.1",
+	"version": "0.0.5",
 	"description": "Generates idiomatic @afora/core TypeScript from an afora.json spec, and extracts the spec back from an application.",
 	"keywords": [
 		"afora",
@@ -35,7 +35,7 @@
 		"afora.schema.json"
 	],
 	"bin": {
-		"afora-codegen": "./dist/cli.js"
+		"afora-codegen": "dist/cli.js"
 	},
 	"engines": {
 		"bun": ">=1.4.4",
@@ -49,15 +49,15 @@
 		"typecheck": "bun check",
 		"schema": "bun scripts/schema.ts",
 		"build": "rm -rf dist && bun scripts/schema.ts && bun build ./src/index.ts ./src/cli.ts --outdir ./dist --target node --format esm --packages external --tsconfig-override tsconfig.build.json && tsc -p tsconfig.build.json && bun ../../scripts/add-dts-extensions.ts dist",
-		"test": "bun test"
-	},
-	"dependencies": {
-		"typebox": "^1.4.3"
+		"test": "bun test --path-ignore-patterns \"tests/roundtrip/**\"",
+		"test:roundtrip": "bun test tests/roundtrip"
 	},
 	"devDependencies": {
-		"@types/bun": "^1.4.4"
+		"@types/bun": "^1.4.4",
+		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.2"
+		"@afora/core": ">=0.0.5",
+		"typebox": "^1"
 	}
 }

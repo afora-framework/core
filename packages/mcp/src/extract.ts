@@ -44,6 +44,7 @@ export async function extractFromApp(
 	root: string,
 	reference: string,
 	outputDir?: string,
+	imports?: Readonly<Record<string, string>>,
 ): Promise<Spec> {
 	const { file, name } = parseAppReference(reference);
 	const confined = await confinePath(root, file);
@@ -57,7 +58,13 @@ export async function extractFromApp(
 	const bun = process.versions.bun ? process.execPath : "bun";
 	const result = await run(
 		bun,
-		[childPath(), real, name, ...(outputDir ? [outputDir] : [])],
+		[
+			childPath(),
+			real,
+			name,
+			outputDir ?? "",
+			...(imports ? [JSON.stringify(imports)] : []),
+		],
 		{ cwd: root, timeoutMs: 60_000 },
 	);
 	if (result.missing) {

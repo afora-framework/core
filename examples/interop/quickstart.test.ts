@@ -1,89 +1,95 @@
 import { expect, test } from "bun:test";
-import { type Exception, MASK, Password } from "../../src/index.ts";
-import { app, changePassword, User } from "./quickstart.ts";
+import { generate, validateSpec } from "@afora/codegen";
+import { stages } from "@afora/hono";
+import { api } from "./quickstart.ts";
 
-const body = {
-	email: "  Jane@Example.COM ",
-	slug: "Olá Mundo",
+const read = (path: string) => Bun.file(new URL(path, import.meta.url)).text();
+
+const ana = {
+	name: "Ana",
+	email: "  Ana@Example.COM ",
 	plainPassword: "Str0ng!Pass",
-	address: { street: "Main St", zip: "01310-100" },
-	tags: ["a", "b"],
 };
 
 const post = (value: unknown) =>
-	app.request("/users", {
+	api.request("/api/accounts/register", {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify(value),
 	});
 
 test("quickstart: the README shows the code of quickstart.ts", async () => {
-	const source = await Bun.file(
-		new URL("./quickstart.ts", import.meta.url),
-	).text();
-	const readme = await Bun.file(
-		new URL("../../README.md", import.meta.url),
-	).text();
+	const source = await read("./quickstart.ts");
+	const readme = await read("../../README.md");
 
-	expect(readme).toContain(
-		source.trim().replace('"../../src/index.ts"', '"@afora/core"'),
-	);
+	expect(readme).toContain(source.trim());
+});
+
+test("quickstart: the README shows the afora.json of quickstart.afora.json", async () => {
+	const spec = await read("./quickstart.afora.json");
+	const readme = await read("../../README.md");
+
+	expect(readme).toContain(spec.trim());
 });
 
 test("quickstart: a body becomes a saved user, password masked", async () => {
-	const response = await post(body);
+	const response = await post(ana);
+	const { user } = (await response.json()) as { user: Record<string, unknown> };
 
-	expect(response.status).toBe(201);
-	expect(await response.json()).toEqual({
-		email: "jane@example.com",
-		slug: "ola-mundo",
-		password: MASK,
-		address: { street: "Main St", zip: "01310-100" },
-		tags: ["a", "b"],
-	});
-	expect(User.options.unique).toEqual(["email", "slug"]);
+	expect(response.status).toBe(200);
+	expect(user.name).toBe("Ana");
+	expect(user.email).toBe("ana@example.com");
+	expect(user.password).toBe("********");
+	expect(typeof user.id).toBe("string");
 });
 
-test("quickstart: the repository enforces the unique keys", async () => {
-	const response = await post({ ...body, email: "other@example.com" });
+test("quickstart: the same email again is a 409 problem", async () => {
+	const response = await post({ ...ana, name: "Other" });
+	const problem = (await response.json()) as { title: string; layer: string };
 
-	// same slug: the repository throws, and Hono answers 500 as nothing handles it
-	expect(response.status).toBe(500);
+	expect(response.status).toBe(409);
+	expect(response.headers.get("content-type")).toContain(
+		"application/problem+json",
+	);
+	expect(problem.title).toBe("UserAlreadyExists");
+	expect(problem.layer).toBe("use-case");
 });
 
 test("quickstart: an invalid body is a 400 with issue paths", async () => {
-	const response = await post({ ...body, email: "nope", tags: "x" });
-	const result = (await response.json()) as { error: { path: unknown[] }[] };
+	const response = await post({ name: "Ana", email: "nope" });
+	const problem = (await response.json()) as {
+		issues: { path: unknown[] }[];
+	};
 
 	expect(response.status).toBe(400);
-	expect(result.error.map((issue) => issue.path)).toEqual([
+	expect(problem.issues.map((issue) => issue.path)).toEqual([
 		["email"],
-		["tags"],
+		["plainPassword"],
 	]);
 });
 
-test("quickstart: an error carries its trace across layers", () => {
-	const user = new User({
-		email: "a@b.co",
-		slug: "a",
-		password: Password.demo().value,
-		address: { street: "s", zip: "z" },
-		tags: [],
-	});
+test("quickstart: the OpenAPI document lists the operation", async () => {
+	const response = await api.request("/openapi.json");
+	const document = (await response.json()) as { paths: object };
 
-	let thrown: Exception | undefined;
-	try {
-		changePassword(user, "plain text");
-	} catch (error) {
-		thrown = error as Exception;
-	}
+	expect(response.status).toBe(200);
+	expect(Object.keys(document.paths)).toEqual(["/api/accounts/register"]);
+});
 
-	expect(
-		thrown?.trace.map((frame) => `${frame.layer}:${frame.source}`),
-	).toEqual([
-		"property:password",
-		"record:User",
-		"use-case:ChangePassword",
-		"output:PATCH /password",
-	]);
+test("quickstart: the afora.json validates and generates the same app", async () => {
+	const spec = JSON.parse(await read("./quickstart.afora.json"));
+	const options = { stages };
+
+	expect(validateSpec(spec, [], options)).toEqual([]);
+	const files = generate(spec, [], options);
+	const contents = (name: string) =>
+		files.find((file) => file.path.endsWith(`/${name}`))?.contents ?? "";
+
+	expect(contents("outputs.ts")).toContain('from "@afora/hono"');
+	expect(contents("outputs.ts")).toContain("UserAlreadyExists: 409");
+	expect(contents("use-cases.ts")).toContain(
+		"class Register extends useCaseOf",
+	);
+	expect(contents("use-cases.ts")).toContain("../hash-password.ts");
+	expect(contents("commands.ts")).toContain("transaction: true");
 });

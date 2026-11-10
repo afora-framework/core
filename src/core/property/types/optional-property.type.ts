@@ -12,7 +12,9 @@ import type { IPropertyType, UniqueTypeOf } from "./property-type.interface";
  * own methods and statics (e.g. `Password#verify`, `Id.generate`) are kept.
  */
 export type OptionalProperty<Property extends AnyPropertyConstructor> =
-	Property extends { readonly type: IPropertyType<infer SchemaType> }
+	Property extends {
+		readonly type: IPropertyType<infer SchemaType, infer Value>;
+	}
 		? SchemaType extends TOptional<TSchema>
 			? StoredField<Property>
 			: Omit<
@@ -20,17 +22,17 @@ export type OptionalProperty<Property extends AnyPropertyConstructor> =
 					"type" | "prototype" | "safeParse" | "~standard" | CallableKey
 				> & {
 					new (
-						value: PropertyValue<TOptional<SchemaType>>,
-					): AbstractProperty<TOptional<SchemaType>> &
+						value: PropertyValue<TOptional<SchemaType>, Value>,
+					): AbstractProperty<TOptional<SchemaType>, Value> &
 						Omit<InstanceType<Property>, keyof AbstractProperty<TSchema>>;
-					readonly type: IPropertyType<TOptional<SchemaType>> &
+					readonly type: IPropertyType<TOptional<SchemaType>, Value> &
 						UniqueTypeOf<Property>;
 					safeParse(
 						value: unknown,
-					): ParseResult<PropertyValue<TOptional<SchemaType>>>;
+					): ParseResult<PropertyValue<TOptional<SchemaType>, Value>>;
 					readonly "~standard": StandardSchemaV1.Props<
-						PropertyValue<TOptional<SchemaType>>,
-						PropertyValue<TOptional<SchemaType>>
+						PropertyValue<TOptional<SchemaType>, Value>,
+						PropertyValue<TOptional<SchemaType>, Value>
 					>;
 				}
 		: never;

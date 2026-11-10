@@ -5,7 +5,10 @@ const DEMO_DATE_TIME = "2026-01-01T00:00:00.000Z";
 
 /** A class declared with `dateTimeOf`. */
 interface DateTimeClass<Optional extends boolean>
-	extends PropertyClass<Optional extends true ? TOptional<TString> : TString> {
+	extends PropertyClass<
+		Optional extends true ? TOptional<TString> : TString,
+		string
+	> {
 	/** An instance holding the current date and time. */
 	now<Self>(this: new (value: string) => Self): Self;
 }

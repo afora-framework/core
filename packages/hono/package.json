@@ -1,0 +1,60 @@
+{
+	"name": "@afora/hono",
+	"version": "0.0.5",
+	"description": "A Hono sink for afora outputs: one route per operation, problem+json errors, sensitive data masked and an optional OpenAPI document.",
+	"keywords": [
+		"afora",
+		"hono",
+		"openapi",
+		"problem-json",
+		"http",
+		"api"
+	],
+	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
+	"license": "MIT",
+	"homepage": "https://github.com/afora-framework/core/tree/main/packages/hono#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/afora-framework/core.git",
+		"directory": "packages/hono"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"bun": ">=1.4.4",
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"typecheck": "bun check",
+		"build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target node --format esm --packages external --tsconfig-override tsconfig.build.json && tsc -p tsconfig.build.json && bun ../../scripts/add-dts-extensions.ts dist",
+		"test": "bun test"
+	},
+	"devDependencies": {
+		"@seriousme/openapi-schema-validator": "2.11.0",
+		"@types/bun": "^1.4.4",
+		"hono": "^4.13.14",
+		"typebox": "^1.4.3"
+	},
+	"peerDependencies": {
+		"@afora/core": ">=0.0.1",
+		"hono": "^4.13.14",
+		"typebox": "^1"
+	}
+}

@@ -1,4 +1,5 @@
 import type {
+	AnyBlueprint,
 	BlueprintData,
 	BlueprintInput,
 	BlueprintValue,
@@ -9,6 +10,7 @@ import type {
 import type { ParseResult } from "../../parse/types/parse.interface";
 import type { StandardSchemaV1 } from "../../standard/standard-schema";
 import type { Kind } from "../../symbols/kind";
+import type { Meta } from "../../symbols/meta";
 import type { AbstractRecord } from "../abstract-record";
 import type {
 	AnyRecordPlugin,
@@ -17,14 +19,18 @@ import type {
 } from "./plugin.interface";
 
 /** The value of a record, read from its blueprint. */
-export type RecordValue<Record extends AnyRecordShape> =
-	Record["blueprint"] extends IBlueprint<infer Properties>
+export type RecordValue<Record extends AnyRecordShape> = Record extends {
+	readonly [Meta]: { readonly blueprint: IBlueprint<infer Properties> };
+}
+	? BlueprintValue<Properties>
+	: Record extends { readonly blueprint: IBlueprint<infer Properties> }
 		? BlueprintValue<Properties>
 		: never;
 
-/** Anything with a blueprint, as records are. */
-// biome-ignore lint/suspicious/noExplicitAny: any blueprint, whatever its properties
-type AnyRecordShape = { readonly blueprint: IBlueprint<any> };
+/** A record instance's metadata, or a record class's statics. */
+type AnyRecordShape =
+	| { readonly blueprint: AnyBlueprint }
+	| { readonly [Meta]: { readonly blueprint: AnyBlueprint } };
 
 /** A side effect of a change to a key: its new value and the one it replaced. */
 export type RecordEffect<Value> = (value: Value, previous: Value) => void;
@@ -135,10 +141,11 @@ type RecordChangeMethods<
 };
 
 export interface IRecord<Properties extends IBlueprintCollection> {
-	/** The blueprint whose shape the record implements. */
-	readonly blueprint: IBlueprint<Properties>;
-	/** Which keys are sensitive, unique or have a `change.<key>` method. */
-	readonly options: RecordSettings<Properties>;
+	/** Declaration metadata, separate from domain keys. */
+	readonly [Meta]: {
+		readonly blueprint: IBlueprint<Properties>;
+		readonly options: RecordSettings<Properties>;
+	};
 	/** The value with the sensitive keys, and every `sensitive` property, masked. */
 	toJSON(): Readonly<Partial<BlueprintData<Properties>>>;
 }

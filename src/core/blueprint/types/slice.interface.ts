@@ -1,5 +1,6 @@
 import type { RecordUniqueKeys } from "../../record/types/plugin.interface";
 import type { RecordConstructor } from "../../record/types/record.interface";
+import type { Meta } from "../../symbols/meta";
 import type {
 	AnyBlueprint,
 	AnyBlueprintList,
@@ -116,7 +117,7 @@ type SlicedRecord<Original extends AnyRecordClass, Mask> =
 				KeptChange<InstanceType<Original>, keyof Properties>[],
 				KeptUnique<Original, keyof Properties>,
 				unknown,
-				{ readonly blueprint: Original["blueprint"] }
+				{ readonly [Meta]: { readonly blueprint: Original["blueprint"] } }
 			>
 		: never;
 
@@ -149,7 +150,9 @@ export type SlicedBlueprint<Properties, Mask> = AsBlueprint<
 export type SlicedValue<Value, Mask> = Value extends readonly (infer Item)[]
 	? SlicedValue<Item, Mask>[]
 	: Value extends {
-				readonly blueprint: IBlueprint<infer Properties, boolean>;
+				readonly [Meta]: {
+					readonly blueprint: IBlueprint<infer Properties, boolean>;
+				};
 				toJSON(): unknown;
 			}
 		? SlicedValue<BlueprintData<Properties>, Mask>

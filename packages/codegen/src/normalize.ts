@@ -11,6 +11,7 @@ import {
 	type Spec,
 	type SpecIssue,
 } from "./spec/types";
+import { errorNameOf } from "./use-case";
 
 type Json = Record<string, unknown>;
 
@@ -131,6 +132,135 @@ function canonicalProperty(name: string, value: Json): Json {
 }
 
 /**
+ * A provider in its long form: `"inMemory"` is `{ use: "inMemory", options: {} }`.
+ * A provider that is not declared stays undeclared: it is never the same as a shared one.
+ */
+function canonicalProvider(value: unknown): unknown {
+	if (value === "inMemory") return { use: "inMemory", options: {} };
+	if (isObject(value) && typeof value.use === "string") {
+		return {
+			use: value.use,
+			options: isObject(value.options) ? value.options : {},
+		};
+	}
+	return value;
+}
+
+/** The default message of a declared exception without one. */
+export const defaultMessageOf = (name: string): string => `${name}.`;
+
+function canonicalException(name: string, value: Json): Json {
+	return {
+		layer: value.layer,
+		...(typeof value.message === "string" &&
+		value.message !== defaultMessageOf(name)
+			? { message: value.message }
+			: {}),
+	};
+}
+
+/** A blueprint reference as written: a name stays a name, fields get canonical. */
+function canonicalBlueprintRef(value: unknown): unknown {
+	return isObject(value) ? { fields: fieldsOf(value.fields) } : value;
+}
+
+function cloneJson<Value>(value: Value): Value {
+	return JSON.parse(JSON.stringify(value)) as Value;
+}
+
+/** A core exception is `{ core }` in a step; a declared one is its name. */
+function canonicalStep(step: unknown): unknown {
+	if (!isObject(step)) return step;
+	const copy = cloneJson(step) as Json;
+	if (Object.hasOwn(copy, "ensure")) {
+		const name = errorNameOf(copy.error);
+		if (name !== undefined && catalog().coreExceptions.includes(name)) {
+			copy.error = { core: name };
+		}
+	}
+	return copy;
+}
+
+function canonicalUseCase(value: Json): Json {
+	const tags = keep(value.tags);
+	const errors = keep(value.errors);
+	const dependencies =
+		isObject(value.dependencies) && Object.keys(value.dependencies).length > 0
+			? { dependencies: { ...value.dependencies } }
+			: {};
+	const implementation = isObject(value.implementation)
+		? Array.isArray(value.implementation.steps)
+			? { steps: value.implementation.steps.map(canonicalStep) }
+			: { ...value.implementation }
+		: value.implementation;
+	return {
+		...(typeof value.description === "string"
+			? { description: value.description }
+			: {}),
+		...(tags ? { tags } : {}),
+		...(value.deprecated === true ? { deprecated: true } : {}),
+		input: canonicalBlueprintRef(value.input),
+		response: canonicalBlueprintRef(value.response),
+		...(value.context === undefined
+			? {}
+			: { context: canonicalBlueprintRef(value.context) }),
+		...dependencies,
+		...(errors ? { errors } : {}),
+		implementation,
+	};
+}
+
+function canonicalCommand(value: Json): Json {
+	const tags = keep(value.tags);
+	return {
+		...(typeof value.description === "string"
+			? { description: value.description }
+			: {}),
+		...(tags ? { tags } : {}),
+		...(value.context === undefined
+			? {}
+			: { context: canonicalBlueprintRef(value.context) }),
+		useCases: isObject(value.useCases) ? { ...value.useCases } : value.useCases,
+		...(value.transaction === true ? { transaction: true } : {}),
+		...(Array.isArray(value.environments) && value.environments.length > 0
+			? { environments: [...value.environments] }
+			: {}),
+		...(value.events !== undefined && value.events !== "after-commit"
+			? { events: cloneJson(value.events) }
+			: {}),
+		...(value.onEventError === undefined
+			? {}
+			: { onEventError: cloneJson(value.onEventError) }),
+	};
+}
+
+function canonicalPipeEntry(entry: unknown): unknown {
+	if (!isObject(entry)) return entry;
+	const kind = Object.hasOwn(entry, "sink") ? "sink" : "transform";
+	if (!Object.hasOwn(entry, kind)) return cloneJson(entry);
+	const options = entry.options;
+	return {
+		[kind]: entry[kind],
+		...(isObject(options) && Object.keys(options).length > 0
+			? { options: cloneJson(options) }
+			: {}),
+	};
+}
+
+function canonicalOutput(value: Json): Json {
+	return {
+		commands: Array.isArray(value.commands) ? [...value.commands] : [],
+		...(isObject(value.statuses) && Object.keys(value.statuses).length > 0
+			? { statuses: { ...value.statuses } }
+			: {}),
+		pipe: Array.isArray(value.pipe) ? value.pipe.map(canonicalPipeEntry) : [],
+	};
+}
+
+const providerOf = (value: unknown): Json =>
+	value === undefined ? {} : { provider: canonicalProvider(value) };
+
+/**
  * The spec in a canonical form, where equivalent specs are equal: every field
  * in object form, defaults left out, `unique`/`sensitive` without what a
  * property or plugin already implies, and `output.dir` filled in. Two specs
@@ -154,6 +284,26 @@ export function normalizeSpec(
 				? spec.output.dir
 				: DEFAULT_OUTPUT_DIR,
 	};
+	Object.assign(out, providerOf(spec.provider));
+	// Named providers in their long form, by key in order.
+	if (isObject(spec.providers) && Object.keys(spec.providers).length > 0) {
+		out.providers = Object.fromEntries(
+			Object.keys(spec.providers)
+				.sort()
+				.map((key) => [key, canonicalProvider((spec.providers as Json)[key])]),
+		);
+	}
+	// The level in full (info when omitted); an import stays as it is.
+	if (isObject(spec.log)) {
+		out.log = Object.hasOwn(spec.log, "import")
+			? { ...spec.log }
+			: {
+					level: typeof spec.log.level === "string" ? spec.log.level : "info",
+					providers: Array.isArray(spec.log.providers)
+						? [...spec.log.providers]
+						: [],
+				};
+	}
 	for (const collection of COLLECTIONS) {
 		const declared = spec[collection];
 		if (!isObject(declared)) continue;
@@ -175,6 +325,14 @@ export function normalizeSpec(
 							name,
 							canonicalRecord(name, value, collection === "entities", scope),
 						];
+					case "exceptions":
+						return [name, canonicalException(name, value)];
+					case "useCases":
+						return [name, canonicalUseCase(value)];
+					case "commands":
+						return [name, canonicalCommand(value)];
+					case "outputs":
+						return [name, canonicalOutput(value)];
 					default: {
 						const relations = keep(value.relations);
 						const environments = keep(value.environments);
@@ -183,6 +341,8 @@ export function normalizeSpec(
 							{
 								entity: value.entity,
 								actions: Array.isArray(value.actions) ? [...value.actions] : [],
+								...providerOf(value.provider),
+								...(value.deletion === "soft" ? { deletion: "soft" } : {}),
 								...(relations ? { relations } : {}),
 								...(environments ? { environments } : {}),
 							},
@@ -222,9 +382,36 @@ function compactField(field: Json): FieldSpec {
 	} as unknown as FieldSpec;
 }
 
+/** A provider in its shortest form: `"inMemory"`, or `{ use }` without empty options. */
+function compactProvider(value: unknown): unknown {
+	if (!isObject(value) || typeof value.use !== "string") return value;
+	const empty =
+		!isObject(value.options) || Object.keys(value.options).length === 0;
+	if (!empty) return { use: value.use, options: value.options };
+	return value.use === "inMemory" ? "inMemory" : { use: value.use };
+}
+
 /** A normalized spec with its fields in shorthand wherever the shorthand says the same. */
 export function compactSpec(normalized: Spec): Spec {
 	const spec = JSON.parse(JSON.stringify(normalized)) as Json;
+	if (spec.provider !== undefined) {
+		spec.provider = compactProvider(spec.provider);
+	}
+	if (isObject(spec.providers)) {
+		for (const [key, value] of Object.entries(spec.providers)) {
+			spec.providers[key] = compactProvider(value);
+		}
+	}
+	if (isObject(spec.log) && spec.log.level === "info") {
+		delete spec.log.level;
+	}
+	if (isObject(spec.repositories)) {
+		for (const value of Object.values(spec.repositories)) {
+			if (isObject(value) && value.provider !== undefined) {
+				value.provider = compactProvider(value.provider);
+			}
+		}
+	}
 	const compactFields = (value: unknown): Json =>
 		Object.fromEntries(
 			Object.entries(isObject(value) ? value : {}).map(([key, field]) => [
@@ -242,6 +429,22 @@ export function compactSpec(normalized: Spec): Spec {
 		if (!isObject(declared)) continue;
 		for (const value of Object.values(declared)) {
 			if (isObject(value)) value.fields = compactFields(value.fields);
+		}
+	}
+	if (isObject(spec.commands)) {
+		for (const value of Object.values(spec.commands)) {
+			if (isObject(value) && isObject(value.context)) {
+				value.context.fields = compactFields(value.context.fields);
+			}
+		}
+	}
+	if (isObject(spec.useCases)) {
+		for (const value of Object.values(spec.useCases)) {
+			if (!isObject(value)) continue;
+			for (const key of ["input", "response", "context"]) {
+				const ref = value[key];
+				if (isObject(ref)) ref.fields = compactFields(ref.fields);
+			}
 		}
 	}
 	return spec as unknown as Spec;

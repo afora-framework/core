@@ -180,17 +180,17 @@ describe("applicationOf", () => {
 				from: "blog",
 				entity: "User",
 				actions: ["findById", "findByEmail", "create", "update"],
+				deletion: "hard",
 				relations: [],
 				environments: ["Database"],
-				provider: false,
 			},
 			Posts: {
 				from: "blog",
 				entity: "Post",
 				actions: ["findById", "create"],
+				deletion: "hard",
 				relations: ["Users"],
 				environments: [],
-				provider: false,
 			},
 		});
 	});
@@ -502,7 +502,24 @@ describe("applicationOf", () => {
 				repositories: { Pinned },
 				provider: inMemoryProvider(),
 			});
-			expect(describeOf(app).repositories.Pinned.provider).toBe(true);
+			expect(describeOf(app).repositories.Pinned.provider).toEqual({
+				kind: "provider",
+				name: "inMemory",
+				options: {},
+			});
+			expect(describeOf(app).provider).toEqual({
+				kind: "provider",
+				name: "inMemory",
+				options: {},
+			});
+			const anonymous = applicationOf({
+				name: "anonymous",
+				provider: { ...inMemoryProvider() },
+			});
+			expect(anonymous.describe().provider).toEqual({ kind: "opaque" });
+			expect(applicationOf({ name: "none" }).describe()).not.toHaveProperty(
+				"provider",
+			);
 			const ana = await app.repositories.Pinned.create(input);
 			expect(await Pinned.findById(ana.id)).toBeDefined();
 		});

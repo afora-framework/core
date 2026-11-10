@@ -6,7 +6,7 @@ export {
 	type SchemaKind,
 	type StdPropertyInfo,
 } from "./catalog";
-export { type ExtractOptions, extractSpec } from "./extract";
+export { ExtractionError, type ExtractOptions, extractSpec } from "./extract";
 export {
 	BANNER,
 	GENERATED_FILES,
@@ -24,21 +24,40 @@ export {
 export { compactSpec, normalizeSpec } from "./normalize";
 export { declarationSchemas, fieldDefinition, specSchema } from "./spec/schema";
 export type {
+	BlueprintRefSpec,
 	BlueprintSpec,
+	CodegenOptions,
+	CommandSpec,
+	CoreExceptionRef,
 	EnumField,
 	EnumValue,
 	EnvironmentSpec,
+	ExceptionSpec,
 	FieldSpec,
 	FieldsSpec,
+	ImportRef,
 	InlineField,
 	ListBounds,
+	LogProviderSpec,
+	LogSpec,
+	OutputSpec,
+	PipeEntrySpec,
 	PropertySpec,
+	ProviderCatalogEntry,
+	ProviderKeySpec,
+	ProviderOptionSpec,
+	ProviderSpec,
 	RecordSpec,
 	RepositorySpec,
 	ResolvedSpec,
 	Spec,
 	SpecIssue,
+	StageCatalogEntry,
+	StepSpec,
+	StepValueSpec,
 	TypeField,
+	UseCaseImplementationSpec,
+	UseCaseSpec,
 	WithOptions,
 } from "./spec/types";
 export { COLLECTIONS as COLLECTION_KEYS } from "./spec/types";

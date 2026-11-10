@@ -2,11 +2,18 @@ import type { Static, TSchema } from "typebox";
 import type { ISchema } from "../../schema/types/schema.interface";
 import { Demo } from "../../symbols/demo";
 
-export interface IPropertyType<SchemaType extends TSchema> {
+/**
+ * What a property declares about itself. `Value` is the value of its schema,
+ * computed where `SchemaType` is known, as in `ISchema`.
+ */
+export interface IPropertyType<
+	SchemaType extends TSchema,
+	Value = Static<SchemaType>,
+> {
 	/** Value used by `demo()`; it is the property's `default`, when there is one. */
-	readonly [Demo]: Static<SchemaType> | undefined;
+	readonly [Demo]: Value | undefined;
 	readonly name: string;
-	readonly schema: ISchema<SchemaType>;
+	readonly schema: ISchema<SchemaType, Value>;
 	readonly optional?: boolean;
 	/** Whether a record masks its value in `toJSON`, at any depth. */
 	readonly sensitive?: boolean;

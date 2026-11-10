@@ -6,6 +6,7 @@ import type {
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
 import { isEntityClass } from "../entity/entity";
+import { type ExecutionScope, scopedProvider } from "../use-case/scope";
 import {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
@@ -130,13 +131,9 @@ export function relationsOf(
 		if (related.some((other) => other.entity === state.entity)) {
 			return invalid(`Relation "${state.entity.name}" is duplicated.`);
 		}
-		const { provider } = state;
-		if (
-			typeof provider.findIn !== "function" &&
-			typeof provider.findOne !== "function"
-		) {
+		if (typeof state.provider.findMany !== "function") {
 			return invalid(
-				`The provider of "${state.name}" has no "findIn" or "findOne" to load it.`,
+				`The provider of "${state.name}" has no "findMany" to load it.`,
 			);
 		}
 		related.push(state);
@@ -187,20 +184,20 @@ export function parseEntity(state: RepositoryState, data: RepositoryData) {
 /** What one read shares: the entities it loaded, by repository and id. */
 export type ReferenceSession = Map<RepositoryState, Map<string, object>>;
 
-/** The stored values of `ids`, in one `findIn` or one `findOne` for each. */
-async function loadByIds(
+/**
+ * The stored values of `ids`, in one `findMany`. A soft-deleted entity is
+ * still loaded: a reference to it is data (an order keeps its deleted
+ * product), not a missing id.
+ */
+function loadByIds(
 	state: RepositoryState,
 	ids: readonly string[],
+	scope: ExecutionScope | undefined,
 ): Promise<readonly RepositoryData[]> {
-	const context = contextOf(state);
-	const { provider } = state;
-	if (typeof provider.findIn === "function") {
-		return provider.findIn(context, "id", ids);
-	}
-	const found = await Promise.all(
-		ids.map((id) => provider.findOne(context, "id", id)),
-	);
-	return found.filter((data) => data !== undefined);
+	return scopedProvider(scope, state.provider).findMany(contextOf(state), {
+		where: { id: { in: ids } },
+		withDeleted: true,
+	});
 }
 
 /**
@@ -208,12 +205,14 @@ async function loadByIds(
  * entity they hold replaced by the entity, loaded in one batch for each
  * relation. An entity loaded twice in `session` is the same instance. Throws
  * `InvalidRepositoryData`, caused by `RepositoryEntityNotFound`, for an id
- * with no entity.
+ * with no entity. The providers of the `scope` of the call, if any, replace
+ * those of the relations.
  */
 export async function resolveReferences(
 	state: RepositoryState,
 	datas: readonly RepositoryData[],
 	session: ReferenceSession,
+	scope?: ExecutionScope,
 ): Promise<readonly RepositoryData[]> {
 	if (state.relations.size === 0) return datas;
 	const { properties } = state.entity.blueprint;
@@ -236,8 +235,8 @@ export async function resolveReferences(
 		const missing = [...ids].filter((id) => !loaded.has(id));
 		if (missing.length === 0) continue;
 
-		const found = await loadByIds(relation, missing);
-		const resolved = await resolveReferences(relation, found, session);
+		const found = await loadByIds(relation, missing, scope);
+		const resolved = await resolveReferences(relation, found, session, scope);
 		for (const data of resolved) {
 			const id = data.id as string;
 			if (!loaded.has(id)) loaded.set(id, parseEntity(relation, data));

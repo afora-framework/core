@@ -1,6 +1,6 @@
 {
 	"name": "@afora/mcp",
-	"version": "0.0.1",
+	"version": "0.0.5",
 	"description": "An MCP server that lets an agent discover the afora catalog, edit afora.json, validate it, generate the code and check the result.",
 	"keywords": [
 		"afora",
@@ -33,7 +33,7 @@
 		"dist"
 	],
 	"bin": {
-		"afora-mcp": "./dist/bin.js"
+		"afora-mcp": "dist/bin.js"
 	},
 	"engines": {
 		"bun": ">=1.4.4",
@@ -50,13 +50,14 @@
 	},
 	"dependencies": {
 		"@afora/codegen": "workspace:*",
-		"@modelcontextprotocol/sdk": "^1.32.0",
-		"typebox": "^1.4.3"
+		"@modelcontextprotocol/sdk": "^1.32.0"
 	},
 	"devDependencies": {
-		"@types/bun": "^1.4.4"
+		"@types/bun": "^1.4.4",
+		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.2"
+		"@afora/core": ">=0.0.1",
+		"typebox": "^1"
 	}
 }

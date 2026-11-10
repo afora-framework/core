@@ -1,0 +1,60 @@
+{
+	"name": "@afora/drizzle",
+	"version": "0.0.5",
+	"description": "A repository provider for @afora/core on Drizzle ORM (SQLite and Postgres).",
+	"keywords": [
+		"afora",
+		"drizzle",
+		"drizzle-orm",
+		"repository",
+		"provider",
+		"sqlite",
+		"postgres"
+	],
+	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
+	"license": "MIT",
+	"homepage": "https://github.com/afora-framework/core/tree/main/packages/drizzle#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/afora-framework/core.git",
+		"directory": "packages/drizzle"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"bun": ">=1.4.4",
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"typecheck": "bun check",
+		"build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target node --format esm --packages external --tsconfig-override tsconfig.build.json && tsc -p tsconfig.build.json && bun ../../scripts/add-dts-extensions.ts dist",
+		"test": "bun test"
+	},
+	"devDependencies": {
+		"@electric-sql/pglite": "0.4.6",
+		"@types/bun": "^1.4.4",
+		"drizzle-orm": "0.45.4",
+		"typebox": "^1.4.3"
+	},
+	"peerDependencies": {
+		"@afora/core": ">=0.0.1",
+		"drizzle-orm": "^0.45.4"
+	}
+}
