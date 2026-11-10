@@ -13,6 +13,8 @@ bun add -d @afora/codegen
 afora-codegen check [afora.json] [--providers module] [--stages module]                 # validate
 afora-codegen generate [afora.json] [--out dir] [--providers module] [--stages module]  # write the code into output.dir
 afora-codegen extract src/app.ts#App [--import provider=./db.ts#provider] > afora.json
+afora-codegen schema lock src/app.ts#App [--out afora.lock.json] [--force]             # write the schema lock
+afora-codegen schema check src/app.ts#App [--lock afora.lock.json]                     # CI: fail on a stale lock
 ```
 
 `extract` imports the file, so use Bun (or Node >= 23.6) for TypeScript files. The CLI runs on Node >= 22 or Bun.
@@ -169,7 +171,19 @@ export class User extends entityOf(
 
 **Fields.** A string is a shorthand: `"email"`, `"Age?"` (optional), `"string[]"` (list), `"User[]?"` (optional list). The object form is `{ "type", "optional", "list": true | { "minItems", "maxItems" }, "with": {...} }`, `{ "enum": [...] }` or `{ "fields": {...} }` (a nested object). Lowercase names are Std properties (`email`, `text`, `integer`, ...), PascalCase names are declarations of the spec. `with` is `Property.with` / `ctx.<property>(options)` and only takes the options valid for the type (`pattern` is not valid for an `integer`).
 
-**Declarations.** `properties` are `{ base, with?, optional? }`, `{ enum, name?, default? }` or `{ opaque: true, ref?, import }` (a hand-written property, imported relative to the output directory instead of recreated). `blueprints` and `environments` have `fields`. `records` and `entities` have `fields`, `sensitive`, `unique`, `change` and `plugins` (`authenticatable`, `taggable`, ...); each is generated with its key as its declared `name` (`entityOf(blueprint, { name: "User" })`), so providers that find a table by name keep working when the application is minified. `repositories` have `entity`, `actions`, `provider`, `deletion`, `relations`, `environments`, `indexes` and `scans`. `exceptions` are `{ layer, message? }` (`layer` is one of `ExceptionLayers`; the message is `"<Name>."` when omitted). `useCases`, `commands` and `outputs` are described below.
+**Schema evolution.** A type or enum field (not a list) takes `"fill"`, the value a repository gives the key when a stored row lacks it (unlike `with.default`, the demo value), and `"renamedFrom"`, the key that held it in older rows: `{ "enum": ["pt", "en"], "fill": "pt" }` is generated as `ctx.enumOf(["pt", "en"]).with({ fill: "pt" })`, `{ "type": "text", "renamedFrom": "name" }` as `ctx.text({ renamedFrom: "name" })`. An entity takes `"schemaVersion"` (a positive integer), `"upgrade"` (`{ "2": { "import": "./upgrades#toV2" } }`, a hand-written step per version from 2 to `schemaVersion`, generated as an imported binding) and `"previousNames"` (identifiers other than its name). Issues: `invalid_option` (`schemaVersion`, a step outside `2..schemaVersion`, a previous name), `invalid_import` (a step that is not an import), `invalid_field` (`fill`/`renamedFrom` on a list, a `renamedFrom` that is not an identifier), `invalid_enum` (a `fill` outside the enum). Extraction gives them back; an upgrade step needs the import key `entities.<Name>.upgrade.<n>`. See [Schema evolution](../../docs/schema-evolution.md).
+
+`afora-codegen schema lock` writes `afora.lock.json` (`schemaLockOf(app.describe())` of `@afora/core`), to commit. It refuses to replace a lock when a change needs a declaration the code lacks (a `fill`, `renamedFrom`, `previousNames` or `upgrade` step) or an entity needs a higher `schemaVersion`, unless `--force`. `afora-codegen schema check` is the CI check: it fails when the lock is stale (any change from `diffSchemas`, each printed), when a declared change is not satisfied, when an entity of the lock is gone without `previousNames` or its `schemaVersion` went down, and prints a stub for each missing step:
+
+```text
+Entry:
+	schemaVersion: 2,
+	upgrade: {
+		2: (data) => ({ ...data /* locale: ... */ }),
+	},
+```
+
+**Declarations.** `properties` are `{ base, with?, optional? }`, `{ enum, name?, default? }` or `{ opaque: true, ref?, import }` (a hand-written property, imported relative to the output directory instead of recreated). `blueprints` and `environments` have `fields`. `records` and `entities` have `fields`, `sensitive`, `unique`, `change` and `plugins` (`authenticatable`, `taggable`, ...), and entities `events`, `versioned`, `expires`, `schemaVersion`, `upgrade` and `previousNames`; each is generated with its key as its declared `name` (`entityOf(blueprint, { name: "User" })`), so providers that find a table by name keep working when the application is minified. `repositories` have `entity`, `actions`, `provider`, `deletion`, `relations`, `environments`, `indexes` and `scans`. `exceptions` are `{ layer, message? }` (`layer` is one of `ExceptionLayers`; the message is `"<Name>."` when omitted). `useCases`, `commands` and `outputs` are described below.
 
 **Standard use cases.** `{ generic, repository, options?, description?, tags?, deprecated? }` is a use case of `StdUseCases` made for a declared repository, generated as `export const CreatePost = StdUseCases.context.create(Posts, { ... })`: its input, response, dependencies and steps follow the repository and its entity (see `docs/std-use-cases.md` of `@afora/core`). `catalog().useCases` lists them, with the `actions` the repository must have, the `plugins` the entity must have and the `options` each takes; `options.errors` names declared exceptions or core ones. The validator reports `unknown_generic`, `unknown_repository`, `generic_requires_action`, `generic_requires_plugin` and `invalid_generic_option`; what an option asks of the entity beyond its keys is checked by the use case when the generated code loads (`UseCaseUnavailable`). Extraction gives the declaration back as written, with no import to map.
 

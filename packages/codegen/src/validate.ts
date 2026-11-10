@@ -2,6 +2,7 @@ import { catalog, identityKeysOf, recordPlugin } from "./catalog";
 import { checkCommand } from "./command";
 import { checkEntityEvents } from "./entity-events";
 import { checkEntityExpires } from "./entity-expires";
+import { checkEntitySchema } from "./entity-schema";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
@@ -582,6 +583,9 @@ function checkFieldsOf(
 					"events",
 					"versioned",
 					"expires",
+					"schemaVersion",
+					"upgrade",
+					"previousNames",
 				]
 			: owner === "record"
 				? ["fields", "sensitive", "unique", "change", "plugins"]
@@ -643,6 +647,10 @@ function checkRecord(
 			scope,
 			issues,
 		);
+	}
+
+	if (owner === "entity") {
+		checkEntitySchema(decl.name, decl.spec, path, issues);
 	}
 
 	if (owner === "entity" && decl.spec.expires !== undefined) {

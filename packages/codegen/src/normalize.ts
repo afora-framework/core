@@ -1,6 +1,7 @@
 import { catalog, identityKeysOf, recordPlugin } from "./catalog";
 import { cyclesOf } from "./entity-events";
 import { canonicalExpires } from "./entity-expires";
+import { canonicalEntitySchema } from "./entity-schema";
 import { flagOf } from "./graph";
 import { type Field, parseField } from "./model";
 import { type Scope, scopeOf } from "./scope";
@@ -36,8 +37,18 @@ export function canonicalField(field: Field): Json {
 						...(field.default === undefined ? {} : { default: field.default }),
 					}
 				: { fields: canonicalFields(field.fields) };
+	const evolution =
+		field.kind === "inline"
+			? {}
+			: {
+					...(field.fill === undefined ? {} : { fill: field.fill }),
+					...(field.renamedFrom === undefined
+						? {}
+						: { renamedFrom: field.renamedFrom }),
+				};
 	return {
 		...base,
+		...evolution,
 		...(field.optional ? { optional: true } : {}),
 		...(field.list ? { list: { ...field.list } } : {}),
 	};
@@ -143,6 +154,7 @@ function canonicalRecord(
 		...(Object.keys(events).length > 0 ? { events } : {}),
 		...(entity && value.versioned === true ? { versioned: true } : {}),
 		...(expires ? { expires: expires as Json } : {}),
+		...(entity ? canonicalEntitySchema(value) : {}),
 	};
 }
 

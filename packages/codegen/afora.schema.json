@@ -720,6 +720,37 @@
 								}
 							],
 							"description": "Entities only: when their records expire, which reads then leave out (unless withExpired): { \"after\": { \"days\": 400 } } or { \"at\": \"until\" }. Unique keys still count expired records."
+						},
+						"schemaVersion": {
+							"type": "integer",
+							"minimum": 1,
+							"description": "Entities only: the version of the stored shape (1 when absent). Rows store it under $v; reads bring older rows up through upgrade."
+						},
+						"upgrade": {
+							"type": "object",
+							"patternProperties": {
+								"^[1-9][0-9]*$": {
+									"type": "object",
+									"required": ["import"],
+									"properties": {
+										"import": {
+											"type": "string",
+											"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+											"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+										}
+									},
+									"additionalProperties": false
+								}
+							},
+							"additionalProperties": false,
+							"description": "Entities only: the hand-written step that brings a stored row up to each version: { \"2\": { \"import\": \"./upgrades.ts#toV2\" } }, each (data) => data. Keys from 2 to schemaVersion."
+						},
+						"previousNames": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Entities only: the names the entity had before; app.migrate moves their rows and start({ lock }) accepts the rename."
 						}
 					},
 					"additionalProperties": false
@@ -1046,6 +1077,37 @@
 								}
 							],
 							"description": "Entities only: when their records expire, which reads then leave out (unless withExpired): { \"after\": { \"days\": 400 } } or { \"at\": \"until\" }. Unique keys still count expired records."
+						},
+						"schemaVersion": {
+							"type": "integer",
+							"minimum": 1,
+							"description": "Entities only: the version of the stored shape (1 when absent). Rows store it under $v; reads bring older rows up through upgrade."
+						},
+						"upgrade": {
+							"type": "object",
+							"patternProperties": {
+								"^[1-9][0-9]*$": {
+									"type": "object",
+									"required": ["import"],
+									"properties": {
+										"import": {
+											"type": "string",
+											"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+											"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+										}
+									},
+									"additionalProperties": false
+								}
+							},
+							"additionalProperties": false,
+							"description": "Entities only: the hand-written step that brings a stored row up to each version: { \"2\": { \"import\": \"./upgrades.ts#toV2\" } }, each (data) => data. Keys from 2 to schemaVersion."
+						},
+						"previousNames": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Entities only: the names the entity had before; app.migrate moves their rows and start({ lock }) accepts the rename."
 						}
 					},
 					"additionalProperties": false
@@ -2036,6 +2098,14 @@
 							},
 							"description": "Options of the property: title, description, examples, deprecated, readOnly, writeOnly, default; min, max, pattern for strings; min, max, exclusiveMin, exclusiveMax, multipleOf for numbers. See afora_catalog for what each property takes."
 						},
+						"fill": {
+							"description": "The value a repository gives the key when a stored row lacks it, on read and in app.migrate; unlike `default` (the demo value), it fills real data. Not for list fields."
+						},
+						"renamedFrom": {
+							"type": "string",
+							"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+							"description": "The key that held the value in rows stored before the key was renamed: moved on read and in app.migrate. Not for list fields."
+						},
 						"optional": {
 							"type": "boolean",
 							"description": "The key may be absent."
@@ -2097,6 +2167,14 @@
 									"type": "number"
 								}
 							]
+						},
+						"fill": {
+							"description": "The value a repository gives the key when a stored row lacks it, on read and in app.migrate; unlike `default` (the demo value), it fills real data. Not for list fields."
+						},
+						"renamedFrom": {
+							"type": "string",
+							"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+							"description": "The key that held the value in rows stored before the key was renamed: moved on read and in app.migrate. Not for list fields."
 						},
 						"optional": {
 							"type": "boolean",

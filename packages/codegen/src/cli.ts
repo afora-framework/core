@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 
-import { realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { extractSpec } from "./extract";
 import { generate, InvalidSpecError } from "./generate";
 import { loadSpec, SpecLoadError } from "./load";
+import {
+	changeLine,
+	lockOfApplication,
+	schemaCheckOf,
+	stubOf,
+} from "./schema-lock";
 import type {
 	CodegenOptions,
 	EventPolicyCatalogEntry,
@@ -25,6 +31,11 @@ Usage:
                                                     write the code (to output.dir, or --out)
   afora-codegen extract <file.ts>#App [--output-dir dir] [--import key=./file.ts#name]...
                                                     print the afora.json of an application
+  afora-codegen schema lock <file.ts>#App [--out afora.lock.json] [--force]
+                                                    write the schema lock of the application
+  afora-codegen schema check <file.ts>#App [--lock afora.lock.json]
+                                                    fail when the lock is stale or a change
+                                                    is not declared
 
 --providers is a module exporting \`providers\` (or a default export): an array of
 { name, module, export } entries for the providers "use" may name (inMemory is built in).
@@ -38,8 +49,11 @@ created without providerOf ("provider", "repositories.<Name>.provider" or
 "providers.<key>"), a use case
 with a hand-written execute ("useCases.<Name>") or a run function of a steps use case
 ("useCases.<Name>.run.<name>"), a command handler ("commands.<Name>.events" or
-"commands.<Name>.onEventError"), a publisher ("publishers.<key>") or a stage written by hand
-("outputs.<Name>.pipe.<index>").
+"commands.<Name>.onEventError"), a publisher ("publishers.<key>"), a stage written by hand
+("outputs.<Name>.pipe.<index>") or an upgrade step of an entity ("entities.<Name>.upgrade.<n>").
+schema lock refuses to replace a lock when a change needs a declaration the code lacks
+(a fill, renamedFrom, previousNames or an upgrade step) unless --force; schema check prints
+an upgrade stub for each missing step.
 extract imports the file: use Bun, or Node >= 23.6 for TypeScript files.`;
 
 /** A catalog exported by a module: `key`, or the default export. */
@@ -91,6 +105,112 @@ function report(issues: readonly SpecIssue[]): void {
 		);
 	}
 	console.error(`${issues.length} problem${issues.length === 1 ? "" : "s"}.`);
+}
+
+/** The application `target` (`file.ts#Name`) exports; prints why not and gives `undefined`. */
+async function loadApplication(
+	target: string | undefined,
+	command: string,
+): Promise<Parameters<typeof extractSpec>[0] | undefined> {
+	if (!target?.includes("#")) {
+		console.error(`${command} needs <file.ts>#ExportName.\n`);
+		console.error(USAGE);
+		return undefined;
+	}
+	const [path, name] = target.split("#") as [string, string];
+	const module = (await import(pathToFileURL(resolve(path)).href)) as Record<
+		string,
+		unknown
+	>;
+	const app = module[name];
+	if (
+		typeof app !== "object" ||
+		app === null ||
+		typeof (app as { describe?: unknown }).describe !== "function"
+	) {
+		console.error(`${path} does not export an application named ${name}.`);
+		return undefined;
+	}
+	return app as Parameters<typeof extractSpec>[0];
+}
+
+/** `schema lock` and `schema check`; gives the exit code. */
+async function schema(args: string[]): Promise<number> {
+	const sub = args.shift();
+	if (sub !== "lock" && sub !== "check") {
+		console.error(USAGE);
+		return 2;
+	}
+	const file = resolve(
+		flag(args, sub === "lock" ? "--out" : "--lock") ?? "afora.lock.json",
+	);
+	const force = args.includes("--force");
+	const app = await loadApplication(
+		args.find((arg) => arg !== "--force"),
+		`schema ${sub}`,
+	);
+	if (!app) return 1;
+	const current = lockOfApplication(app);
+	const exists = existsSync(file);
+	if (!exists && sub === "check") {
+		console.error(
+			`${file} does not exist: write it with afora-codegen schema lock.`,
+		);
+		return 1;
+	}
+	const check = exists
+		? schemaCheckOf(JSON.parse(readFileSync(file, "utf8")), current)
+		: undefined;
+	const blocking =
+		check !== undefined &&
+		(check.unsatisfied.length > 0 ||
+			check.problems.length > 0 ||
+			check.missingSteps.length > 0);
+	const explain = () => {
+		if (!check) return;
+		for (const problem of check.problems) console.error(problem);
+		for (const missing of check.missingSteps) {
+			if (missing.bump) {
+				console.error(
+					`${missing.entity}: schemaVersion must go above ${missing.locked} for its upgrade step.`,
+				);
+			}
+		}
+		if (check.missingSteps.length > 0) {
+			console.error("\nAdd to the options of entityOf:\n");
+			for (const missing of check.missingSteps) {
+				console.error(`${stubOf(missing)}\n`);
+			}
+		}
+	};
+	if (sub === "lock") {
+		if (blocking && !force) {
+			for (const change of check?.unsatisfied ?? []) {
+				console.error(changeLine(change));
+			}
+			explain();
+			console.error(
+				`Not written: declare what the changes need, or pass --force.`,
+			);
+			return 1;
+		}
+		writeFileSync(file, `${JSON.stringify(current, null, "\t")}\n`);
+		console.log(`wrote ${file}`);
+		return 0;
+	}
+	const changes = check?.changes ?? [];
+	if (changes.length === 0 && !blocking) {
+		console.log(`${file} is up to date.`);
+		return 0;
+	}
+	for (const change of changes) console.error(changeLine(change));
+	explain();
+	if (changes.length > 0) {
+		console.error(
+			`${file} is stale: ${changes.length} change${changes.length === 1 ? "" : "s"}; update it with afora-codegen schema lock.`,
+		);
+	}
+	return 1;
 }
 
 /** Runs the CLI; returns the exit code. */
@@ -147,6 +267,7 @@ export async function main(argv: string[]): Promise<number> {
 			}
 			return 0;
 		}
+		if (command === "schema") return await schema(args);
 		if (command === "extract") {
 			const outputDir = flag(args, "--output-dir");
 			const imports = importFlags(args);
