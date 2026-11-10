@@ -4,7 +4,7 @@ import {
 	InvalidRecordPlugin,
 	UnknownRecordPlugin,
 } from "./exceptions";
-import { isRecordPlugin, isVersion, versionParts } from "./plugin";
+import { isRecordPlugin, isVersion, satisfies } from "./plugin";
 import type {
 	AnyRecordPlugin,
 	IRecordPluginCatalog,
@@ -12,20 +12,6 @@ import type {
 	RecordPluginReference,
 	RecordPluginsByName,
 } from "./types/plugin.interface";
-
-/**
- * Whether a plugin of version `available` satisfies a reference to
- * `requested`: the same major version (the same minor below `1.0.0`), and
- * not older.
- */
-function satisfies(available: string, requested: string): boolean {
-	const [major, minor, patch] = versionParts(available);
-	const [wantedMajor, wantedMinor, wantedPatch] = versionParts(requested);
-	if (major !== wantedMajor) return false;
-	if (major === 0 && minor !== wantedMinor) return false;
-	if (minor !== wantedMinor) return minor > wantedMinor;
-	return patch >= wantedPatch;
-}
 
 const LISTS = ["keys", "sensitive", "unique", "change", "members"] as const;
 
