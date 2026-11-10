@@ -1,4 +1,11 @@
-import { describe, expect, expectTypeOf, test } from "bun:test";
+import {
+	afterEach,
+	describe,
+	expect,
+	expectTypeOf,
+	setSystemTime,
+	test,
+} from "bun:test";
 import {
 	blueprintOf,
 	type EventDefinition,
@@ -352,5 +359,51 @@ describe("increment", () => {
 				provider: rest as IRepositoryProvider,
 			}),
 		).toThrow(InvalidRepositoryDeclaration);
+	});
+
+	describe("on an entity that expires", () => {
+		afterEach(() => {
+			setSystemTime();
+		});
+
+		test("create replaces an expired record: the rate-limit window", async () => {
+			class Hits extends entityOf(
+				blueprintOf((ctx) => ({ key: ctx.string, count: ctx.integer })),
+				{
+					name: "Hits",
+					change: ["count"],
+					versioned: true,
+					expires: { after: { minutes: 1 } },
+				},
+			) {}
+			const Windows = repositoryOf({
+				entity: Hits,
+				actions: ["increment", "findById"],
+			});
+			const id = Id.generate().value;
+			const hit = () =>
+				Windows.increment(id, { count: 1 }, { create: { key: "token" } });
+			setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+			await hit();
+			await hit();
+			const second = await hit();
+			expect([second.count, second.version]).toEqual([3, 3]);
+			// The window is over: the record expired, and the next hit opens a new one.
+			setSystemTime(new Date("2026-06-01T12:01:30.000Z"));
+			expect(await Windows.findById(id)).toBeUndefined();
+			expect(
+				await Windows.increment(id, { count: 1 }).catch((error) => error),
+			).toBeInstanceOf(RepositoryEntityNotFound);
+			const fresh = await hit();
+			expect([fresh.count, fresh.version, fresh.updatedAt]).toEqual([
+				1,
+				1,
+				undefined,
+			]);
+			expect(fresh.createdAt).toBe("2026-06-01T12:01:30.000Z");
+			expect(fresh.expiresAt).toBe("2026-06-01T12:02:30.000Z");
+			expect((await Windows.findById(id))?.count).toBe(1);
+			expect((await hit()).count).toBe(2);
+		});
 	});
 });

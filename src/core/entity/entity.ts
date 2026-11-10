@@ -1,9 +1,11 @@
+import { blueprintFromProperties } from "../blueprint/blueprint";
 import { isRecordClass } from "../blueprint/record-field";
 import type {
 	AnyBlueprint,
 	AnyRecordClass,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isProperty } from "../property/is-property";
 import { IdentifiedRecord } from "../record/plugin";
 import { declareRecord, pluginContextOf } from "../record/record";
 import type {
@@ -16,8 +18,10 @@ import {
 	ENTITY_MEMBERS,
 	ENTITY_VERSION_KEY,
 	EntityClock,
+	EntityLifetime,
 	EntitySettings,
 	EntityUniqueKeys,
+	EXPIRES_AT,
 	RESERVED_ENTITY_KEYS,
 } from "./abstract-entity";
 import {
@@ -25,11 +29,17 @@ import {
 	EntityClassBrand,
 	EntityEventSettings,
 } from "./event";
-import { ImmutableEntityKey, ReservedEntityKey } from "./exceptions";
+import {
+	ImmutableEntityKey,
+	InvalidEntityExpiry,
+	ReservedEntityKey,
+} from "./exceptions";
 import type {
 	EntityBuilder,
 	EntityBuilderSettings,
+	EntityDuration,
 	EntityOptions,
+	ExpiresAtField,
 	IEntityIdentity,
 } from "./types/entity.interface";
 import { VersionIdentity } from "./version";
@@ -47,6 +57,7 @@ export function entityBuilderOf<
 	identity,
 	generateId,
 	now,
+	expiresAt,
 	plugins: catalogs,
 }: EntityBuilderSettings<Identity, Catalogs>): EntityBuilder<
 	Identity,
@@ -59,29 +70,49 @@ export function entityBuilderOf<
 		blueprint: AnyBlueprint,
 		options: EntityOptions<IBlueprintCollection> = {},
 	) => {
+		const lifetime = lifetimeOf(blueprint, options);
+		const expiring = lifetime !== undefined;
 		const versioned = options.versioned === true;
-		const identityKeys: readonly string[] = versioned
-			? [...ENTITY_IDENTITY_KEYS, ENTITY_VERSION_KEY]
-			: ENTITY_IDENTITY_KEYS;
+		const added = [
+			...(versioned ? [ENTITY_VERSION_KEY] : []),
+			...(expiring ? [EXPIRES_AT] : []),
+		];
+		if (expiring && expiresAt === undefined) {
+			throw new InvalidEntityExpiry({
+				source: options.name ?? "entity",
+				details: {
+					reason:
+						"the entity builder has no expiresAt field, which expires: { after } needs.",
+				},
+			});
+		}
 		for (const key of Object.keys(blueprint.properties)) {
-			if (
-				RESERVED_ENTITY_KEYS.includes(key) ||
-				(versioned && key === ENTITY_VERSION_KEY)
-			) {
+			if (RESERVED_ENTITY_KEYS.includes(key) || added.includes(key)) {
 				throw new ReservedEntityKey({ source: "entity", details: { key } });
 			}
 		}
 		for (const key of options.change ?? []) {
-			if (identityKeys.includes(key)) {
+			if (
+				(ENTITY_IDENTITY_KEYS as readonly string[]).includes(key) ||
+				added.includes(key)
+			) {
 				throw new ImmutableEntityKey({ source: "entity", details: { key } });
 			}
 		}
 
 		const DeclaredEntity = declareRecord(
 			AbstractEntity,
-			versioned
-				? identity.join(VersionIdentity, blueprint)
-				: identity.join(blueprint),
+			identity.join(
+				...(versioned ? [VersionIdentity] : []),
+				...(expiring
+					? [
+							blueprintFromProperties([], {
+								[EXPIRES_AT]: expiresAt as ExpiresAtField,
+							}),
+						]
+					: []),
+				blueprint,
+			),
 			{
 				...withoutStorage(options),
 				unique: ["id", ...(options.unique ?? [])],
@@ -101,6 +132,7 @@ export function entityBuilderOf<
 			).options.unique,
 		});
 
+		Object.defineProperty(DeclaredEntity, EntityLifetime, { value: lifetime });
 		Object.defineProperty(DeclaredEntity, EntitySettings, {
 			value: Object.freeze({
 				versioned,
@@ -140,4 +172,78 @@ function withoutStorage(
 ): EntityOptions<IBlueprintCollection> {
 	const { versioned: _versioned, expires: _expires, ...rest } = options;
 	return rest;
+}
+
+const DURATION_UNITS: Readonly<Record<keyof EntityDuration, number>> = {
+	days: 86_400_000,
+	hours: 3_600_000,
+	minutes: 60_000,
+	seconds: 1000,
+};
+
+/** Whether `field` holds a date, or a date and time, as an ISO 8601 string. */
+function isDateField(field: unknown): boolean {
+	if (!isProperty(field)) return false;
+	const schema = (
+		field as {
+			readonly type: {
+				readonly schema: { readonly type: { Type(): unknown } };
+			};
+		}
+	).type.schema.type.Type() as {
+		readonly type?: unknown;
+		readonly format?: unknown;
+	};
+	return (
+		schema.type === "string" &&
+		(schema.format === "date-time" || schema.format === "date")
+	);
+}
+
+/**
+ * The milliseconds of `options.expires.after`, `undefined` without one;
+ * throws `InvalidEntityExpiry` for an `expires` that is not a duration of
+ * positive numbers, nor `at` a date key of `blueprint`.
+ */
+function lifetimeOf(
+	blueprint: AnyBlueprint,
+	options: EntityOptions<IBlueprintCollection>,
+): number | undefined {
+	const { expires } = options;
+	if (expires === undefined) return undefined;
+	const fail = (reason: string): never => {
+		throw new InvalidEntityExpiry({
+			source: options.name ?? "entity",
+			details: { reason },
+		});
+	};
+	const plain = (value: unknown): value is Record<string, unknown> =>
+		typeof value === "object" && value !== null && !Array.isArray(value);
+	if (!plain(expires) || Object.keys(expires).length !== 1)
+		return fail("expected { after: duration } or { at: key }.");
+	if ("at" in expires) {
+		const { at } = expires;
+		if (typeof at !== "string" || !Object.hasOwn(blueprint.properties, at))
+			return fail(`"${String(at)}" is not a key of the blueprint.`);
+		if (!isDateField(blueprint.properties[at]))
+			return fail(`"${at}" does not hold a date.`);
+		return undefined;
+	}
+	if (!("after" in expires)) {
+		return fail("expected { after: duration } or { at: key }.");
+	}
+	const { after } = expires as { readonly after: unknown };
+	if (!plain(after) || Object.keys(after).length === 0)
+		return fail("after must be a non-empty duration, e.g. { days: 400 }.");
+	let total = 0;
+	for (const [unit, amount] of Object.entries(after)) {
+		if (!Object.hasOwn(DURATION_UNITS, unit))
+			return fail(
+				`"${unit}" is not a unit of a duration (days, hours, minutes, seconds).`,
+			);
+		if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0)
+			return fail(`${unit} must be a positive finite number.`);
+		total += amount * DURATION_UNITS[unit as keyof EntityDuration];
+	}
+	return total;
 }

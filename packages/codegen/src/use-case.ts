@@ -916,6 +916,12 @@ function checkSteps(steps: unknown, implPath: Path, ctx: StepsContext): void {
 					fail("invalid_step", 'find must be "<repository>.<action>".', "find");
 				} else if (WRITE_ACTIONS.has(action)) {
 					fail("write_in_find", `find cannot call "${action}".`, "find");
+				} else if (action === "forEachPage") {
+					fail(
+						"unknown_action",
+						'"forEachPage" runs a function on each page and cannot be a step; call it from a use case written in TypeScript.',
+						"find",
+					);
 				} else if (!READ_ACTION.test(action)) {
 					fail("unknown_action", `"${action}" is not a read action.`, "find");
 				} else repository(repo, action, "find");

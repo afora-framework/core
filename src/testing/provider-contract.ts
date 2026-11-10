@@ -1079,11 +1079,221 @@ export function providerContract(
 					).toBe(1);
 				},
 			);
+
+			atomic(
+				"an expired row counts as absent: not found, or replaced by create",
+				async () => {
+					const provider = await makeProvider();
+					if ((options.expiry ?? provider.capabilities?.expiry) !== true)
+						return;
+					const now = "2026-06-01T12:00:00.000Z";
+					const context = {
+						...contextOf(),
+						expiry: { key: "expiresAt" },
+					} as RepositoryContext;
+					const window = row({
+						visits: 7,
+						expiresAt: "2026-06-01T11:00:00.000Z",
+					});
+					const live = row({
+						visits: 1,
+						expiresAt: "2026-06-01T13:00:00.000Z",
+					});
+					await provider.insert(context, window);
+					await provider.insert(context, live);
+					const missing = await failure(
+						increment(
+							provider,
+							context,
+							window.id as string,
+							{ visits: 1 },
+							{
+								now,
+							},
+						),
+					);
+					expect(missing instanceof RepositoryEntityNotFound).toBe(true);
+					const fresh = {
+						id: window.id,
+						email: window.email,
+						name: "fresh",
+						visits: 1,
+						expiresAt: "2026-06-01T13:00:00.000Z",
+					};
+					const created = await increment(
+						provider,
+						context,
+						window.id as string,
+						{ visits: 1 },
+						{ create: fresh, set: { name: "incremented" }, now },
+					);
+					expect(created).toEqual(fresh);
+					const again = await increment(
+						provider,
+						context,
+						window.id as string,
+						{ visits: 1 },
+						{ create: fresh, set: { name: "incremented" }, now },
+					);
+					expect([again.visits, again.name]).toEqual([2, "incremented"]);
+					const counted = await increment(
+						provider,
+						context,
+						live.id as string,
+						{ visits: 1 },
+						{ create: { ...live, visits: 100 }, now },
+					);
+					expect(counted.visits).toBe(2);
+				},
+			);
 		});
 
 		describe("expiry", () => {
 			const expiring = gated("expiry");
-			void expiring;
+			const NOW = "2026-06-01T12:00:00.000Z";
+			const seeded = async () => {
+				const provider = await makeProvider();
+				const context = {
+					...contextOf(),
+					expiry: { key: "expiresAt" },
+				} as RepositoryContext;
+				// By id: expired, expiring exactly now, never (no date), later.
+				const [past, edge, never, future] = [
+					row({ n: 1, expiresAt: "2026-05-01T00:00:00.000Z" }),
+					row({ n: 2, expiresAt: NOW }),
+					row({ n: 3 }),
+					row({ n: 4, expiresAt: "2026-07-01T00:00:00.000Z" }),
+				] as [Row, Row, Row, Row];
+				for (const data of [past, edge, never, future])
+					await provider.insert(context, data);
+				return { provider, context, past, edge, never, future };
+			};
+
+			expiring(
+				"reads leave out rows whose date is at or before now",
+				async () => {
+					const { provider, context, past, edge, never, future } =
+						await seeded();
+					const query = { now: NOW };
+					expect(ids(await provider.findMany(context, query))).toEqual([
+						never.id,
+						future.id,
+					]);
+					expect(await provider.count(context, query)).toBe(2);
+					expect(
+						await provider.findOne(context, {
+							...query,
+							where: { id: past.id },
+						}),
+					).toBe(undefined);
+					expect(
+						await provider.findOne(context, {
+							...query,
+							where: { id: edge.id },
+						}),
+					).toBe(undefined);
+					expect(
+						(
+							await provider.findOne(context, {
+								...query,
+								where: { id: future.id },
+							})
+						)?.id,
+					).toBe(future.id);
+					expect(
+						ids(
+							await provider.findMany(context, {
+								...query,
+								where: { id: { in: [past.id, never.id] } },
+							}),
+						),
+					).toEqual([never.id]);
+				},
+			);
+
+			expiring("a row without a date never expires", async () => {
+				const { provider, context, never } = await seeded();
+				const later = { now: "2999-01-01T00:00:00.000Z" };
+				expect(ids(await provider.findMany(context, later))).toEqual([
+					never.id,
+				]);
+				expect(await provider.count(context, later)).toBe(1);
+			});
+
+			expiring("withExpired gives the expired rows too", async () => {
+				const { provider, context, past, edge, never, future } = await seeded();
+				const query = { now: NOW, withExpired: true };
+				expect(ids(await provider.findMany(context, query))).toEqual([
+					past.id,
+					edge.id,
+					never.id,
+					future.id,
+				]);
+				expect(await provider.count(context, query)).toBe(4);
+				expect(
+					(
+						await provider.findOne(context, {
+							...query,
+							where: { id: past.id },
+						})
+					)?.id,
+				).toBe(past.id);
+			});
+
+			expiring(
+				"leaves expired rows out of a read after a position",
+				async () => {
+					const enabled =
+						options.keyset ?? (await makeProvider()).capabilities?.keyset;
+					if (enabled !== true) return;
+					const { provider, context, past, edge, never, future } =
+						await seeded();
+					const orderBy = [{ key: "n" }, { key: "id" }] as const;
+					expect(
+						ids(
+							await provider.findMany(context, {
+								now: NOW,
+								orderBy,
+								after: [0, ""],
+							}),
+						),
+					).toEqual([never.id, future.id]);
+					expect(
+						ids(
+							await provider.findMany(context, {
+								now: NOW,
+								orderBy,
+								after: [1, past.id],
+								withExpired: true,
+							}),
+						),
+					).toEqual([edge.id, never.id, future.id]);
+				},
+			);
+
+			expiring("unique keys still count expired rows", async () => {
+				const { provider, context, past } = await seeded();
+				const error = await failure(
+					provider.insert(context, row({ email: past.email })),
+				);
+				expect(error instanceof RepositoryUniqueViolation).toBe(true);
+				expect((error as { details: { key: string } }).details.key).toBe(
+					"email",
+				);
+				expect(
+					await provider.count(context, { now: NOW, withExpired: true }),
+				).toBe(4);
+			});
+
+			expiring("an entity that does not expire ignores now", async () => {
+				const { provider, context, seed } = await fixture();
+				const data = row({ expiresAt: "2000-01-01T00:00:00.000Z" });
+				await seed(data);
+				expect(ids(await provider.findMany(context, { now: NOW }))).toEqual([
+					data.id,
+				]);
+				expect(await provider.count(context, { now: NOW })).toBe(1);
+			});
 		});
 	});
 }

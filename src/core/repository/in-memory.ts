@@ -5,7 +5,7 @@ import {
 	RepositoryUniqueViolation,
 } from "./exceptions";
 import { providerOf } from "./provider";
-import { matchesQuery, sameValue, selectRows } from "./query";
+import { matchesQuery, nowOf, sameValue, selectRows } from "./query";
 import type {
 	IRepositoryProvider,
 	RepositoryContext,
@@ -80,17 +80,23 @@ function scopeOf(initial: Tables, root: boolean) {
 			keyset: true,
 			versioning: true,
 			atomic: true,
+			expiry: true,
 		}),
 		findOne: (context, query = {}) =>
 			whenIdle(() => {
-				const [first] = selectRows(tableOf(context).values(), {
-					...query,
-					limit: Math.min(query.limit ?? 1, 1),
-				});
+				const [first] = selectRows(
+					tableOf(context).values(),
+					{ ...query, limit: Math.min(query.limit ?? 1, 1) },
+					context.expiry?.key,
+				);
 				return first === undefined ? undefined : copy(first);
 			}),
 		findMany: (context, query = {}) =>
-			whenIdle(() => selectRows(tableOf(context).values(), query).map(copy)),
+			whenIdle(() =>
+				selectRows(tableOf(context).values(), query, context.expiry?.key).map(
+					copy,
+				),
+			),
 		insert: (context, data) =>
 			whenIdle(() => {
 				const table = tableOf(context);
@@ -132,7 +138,14 @@ function scopeOf(initial: Tables, root: boolean) {
 		increment: (context, id, deltas, options = {}) =>
 			whenIdle(() => {
 				const table = tableOf(context);
-				const stored = table.get(id);
+				const found = table.get(id);
+				const expiry = context.expiry?.key;
+				// An expired row is gone: created again, or not found.
+				const expired =
+					found !== undefined &&
+					expiry !== undefined &&
+					!matchesQuery(found, { withDeleted: true, now: options.now }, expiry);
+				const stored = expired ? undefined : found;
 				if (!stored || stored.deletedAt != null) {
 					if (!options.create) {
 						throw new RepositoryEntityNotFound({
@@ -149,6 +162,7 @@ function scopeOf(initial: Tables, root: boolean) {
 					}
 					const created = { ...options.create, id };
 					assertUnique(context, created);
+					// Replaces an expired row.
 					table.set(id, copy(created));
 					return copy(created);
 				}
@@ -171,9 +185,11 @@ function scopeOf(initial: Tables, root: boolean) {
 			}),
 		count: (context, query = {}) =>
 			whenIdle(() => {
+				const expiry = context.expiry?.key;
+				const now = expiry === undefined ? 0 : nowOf(query);
 				let total = 0;
 				for (const data of tableOf(context).values()) {
-					if (matchesQuery(data, query)) total++;
+					if (matchesQuery(data, query, expiry, now)) total++;
 				}
 				return total;
 			}),

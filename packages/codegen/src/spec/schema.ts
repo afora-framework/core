@@ -300,6 +300,45 @@ const EntityEvents = Type.Object(
 	},
 );
 
+const DurationAmount = Type.Optional(Type.Number({ exclusiveMinimum: 0 }));
+
+const EntityExpires = Type.Union(
+	[
+		Type.Object(
+			{
+				after: Type.Object(
+					{
+						days: DurationAmount,
+						hours: DurationAmount,
+						minutes: DurationAmount,
+						seconds: DurationAmount,
+					},
+					{
+						additionalProperties: false,
+						minProperties: 1,
+						description:
+							'A duration from createdAt, e.g. { "days": 400 }; the entity gets an expiresAt identity key.',
+					},
+				),
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				at: Type.String({
+					description:
+						"A date field (dateTime or date, optional or not) holding when the record expires; without a value it never does.",
+				}),
+			},
+			{ additionalProperties: false },
+		),
+	],
+	{
+		description:
+			'Entities only: when their records expire, which reads then leave out (unless withExpired): { "after": { "days": 400 } } or { "at": "until" }. Unique keys still count expired records.',
+	},
+);
+
 const RecordDeclaration = Type.Object(
 	{
 		fields: Fields,
@@ -328,6 +367,7 @@ const RecordDeclaration = Type.Object(
 					"Entities only: adds a version identity key that update checks (optimistic concurrency, RepositoryConcurrencyConflict on a stale write) and bumps.",
 			}),
 		),
+		expires: Type.Optional(EntityExpires),
 	},
 	{ additionalProperties: false },
 );
@@ -343,7 +383,7 @@ const RepositoryDeclaration = Type.Object(
 		),
 		actions: Type.Array(Type.String(), {
 			description:
-				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), increment (number keys in change, atomic), count.",
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, forEachPage (walks the pages of a cursor query; not a step), create, update, delete, restore (soft deletion only), increment (number keys in change, atomic), count.",
 		}),
 		provider: Type.Optional(ProviderOrKey),
 		relations: Type.Optional(

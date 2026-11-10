@@ -52,38 +52,52 @@ export const EntityUniqueKeys = Symbol("entityUniqueKeys");
 /** The storage options of an entity class (`versioned`, `expires`). */
 export const EntitySettings = Symbol("entitySettings");
 
+/**
+ * The milliseconds after `createdAt` at which the entities of a class
+ * declared with `expires: { after }` expire, kept in `expiresAt`.
+ *
+ * @internal
+ */
+export const EntityLifetime = Symbol("entityLifetime");
+
+/** The key the entities of a class declared with `expires: { after }` keep their expiry in. */
+export const EXPIRES_AT = "expiresAt";
+
 /** The key a versioned entity adds to its identity. */
 export const ENTITY_VERSION_KEY = "version";
 
-/** The storage settings of an entity class; `undefined` for any other value. */
-function entitySettingsOf(
-	entityClass: unknown,
-): EntityStorageSettings | undefined {
-	if (typeof entityClass !== "function") return undefined;
-	return (entityClass as { readonly [EntitySettings]?: EntityStorageSettings })[
-		EntitySettings
-	];
-}
-
 /** Whether `entityClass` was declared with `versioned: true`. */
 export function isVersionedEntityClass(entityClass: unknown): boolean {
-	return entitySettingsOf(entityClass)?.versioned === true;
+	if (typeof entityClass !== "function") return false;
+	return (
+		(entityClass as { readonly [EntitySettings]?: EntityStorageSettings })[
+			EntitySettings
+		]?.versioned === true
+	);
 }
 
 /**
- * The identity keys of `entityClass`: `ENTITY_IDENTITY_KEYS`, and `version`
- * when it is versioned.
+ * The identity keys of the entities of `entityClass`, which only the entity
+ * changes: `ENTITY_IDENTITY_KEYS`, `version` when it is versioned, and
+ * `expiresAt` when it expires `after` a duration.
  */
 export function identityKeysOf(entityClass: unknown): readonly string[] {
-	return isVersionedEntityClass(entityClass)
-		? VERSIONED_IDENTITY_KEYS
-		: ENTITY_IDENTITY_KEYS;
+	const keys: string[] = [...ENTITY_IDENTITY_KEYS];
+	if (isVersionedEntityClass(entityClass)) keys.push(ENTITY_VERSION_KEY);
+	if (
+		typeof entityClass === "function" &&
+		(entityClass as { readonly [EntityLifetime]?: number })[EntityLifetime] !==
+			undefined
+	) {
+		keys.push(EXPIRES_AT);
+	}
+	return keys;
 }
 
-const VERSIONED_IDENTITY_KEYS: readonly string[] = Object.freeze([
-	...ENTITY_IDENTITY_KEYS,
-	ENTITY_VERSION_KEY,
-]);
+/** Whether `key` is an identity key of the entities of `Entity`, which only the entity changes. */
+function isIdentityKey(Entity: unknown, key: string): boolean {
+	return identityKeysOf(Entity).includes(key);
+}
 
 /**
  * Stores `version` as the version of `entity`, as its repository does once
@@ -129,32 +143,44 @@ function assertAlive(entity: { readonly isDeleted: boolean }): void {
 }
 
 /**
- * `value` with an `id` and a `createdAt` made by `clock` when it has none; any
- * other value as is, for the record to reject.
+ * `value` with an `id` and a `createdAt` made by `clock` when it has none,
+ * and, when the class expires `lifetime` milliseconds after `createdAt`, an
+ * `expiresAt` when it has none; any other value as is, for the record to
+ * reject.
  */
 function withIdentity(
 	value: unknown,
 	clock: EntityClockSettings,
+	lifetime: number | undefined,
 	versioned: boolean,
 ): unknown {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		return value;
 	}
-	const { id, createdAt, version } = value as {
+	const { id, createdAt, expiresAt, version } = value as {
 		id?: unknown;
 		createdAt?: unknown;
+		expiresAt?: unknown;
 		version?: unknown;
 	};
-	const missingVersion = versioned && version === undefined;
-	if (id !== undefined && createdAt !== undefined && !missingVersion) {
+	const expiring = lifetime !== undefined && expiresAt === undefined;
+	const unversioned = versioned && version === undefined;
+	if (id !== undefined && createdAt !== undefined && !expiring && !unversioned)
 		return value;
-	}
-	return {
+	const created = createdAt === undefined ? clock.now() : createdAt;
+	const identity: Record<string, unknown> = {
 		...value,
 		id: id === undefined ? clock.generateId() : id,
-		createdAt: createdAt === undefined ? clock.now() : createdAt,
-		...(missingVersion ? { version: 1 } : {}),
+		createdAt: created,
+		...(unversioned ? { [ENTITY_VERSION_KEY]: 1 } : {}),
 	};
+	if (expiring) {
+		const start = typeof created === "string" ? Date.parse(created) : NaN;
+		if (!Number.isNaN(start)) {
+			identity[EXPIRES_AT] = new Date(start + lifetime).toISOString();
+		}
+	}
+	return identity;
 }
 
 /**
@@ -172,6 +198,9 @@ export abstract class AbstractEntity<
 			withIdentity(
 				value,
 				(new.target as unknown as Clocked)[EntityClock],
+				(new.target as unknown as { readonly [EntityLifetime]?: number })[
+					EntityLifetime
+				],
 				isVersionedEntityClass(new.target),
 			) as BlueprintInput<Properties>,
 		);
@@ -228,7 +257,7 @@ export abstract class AbstractEntity<
 		value: BlueprintValue<Properties>[Key],
 	): this {
 		const name = String(key);
-		if (identityKeysOf(this.constructor).includes(name)) {
+		if (isIdentityKey(this.constructor, name)) {
 			throw new ImmutableEntityKey({
 				source: recordNameOf(this.constructor),
 				details: { key: name },

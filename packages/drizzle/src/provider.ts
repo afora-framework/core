@@ -14,6 +14,7 @@ import {
 	type Column,
 	eq,
 	getTableColumns,
+	gt,
 	inArray,
 	isNotNull,
 	isNull,
@@ -67,8 +68,19 @@ function badQuery(reason: string): never {
 	throw new InvalidRepositoryQuery({ source: SOURCE, details: { reason } });
 }
 
-/** A query with the `after` of `findCursor`, on any version of `@afora/core`. */
-type KeysetQuery = RepositoryQuery & { readonly after?: readonly unknown[] };
+/**
+ * A query with the `after` of `findCursor` and the `now` and `withExpired` of
+ * an entity that expires, on any version of `@afora/core`.
+ */
+type KeysetQuery = RepositoryQuery & {
+	readonly after?: readonly unknown[];
+	readonly now?: string;
+	readonly withExpired?: boolean;
+};
+
+/** The key holding the expiry of the entities of `context`, on any version of `@afora/core`. */
+const expiryKeyOf = (context: RepositoryContext): string | undefined =>
+	(context as { readonly expiry?: { readonly key: string } }).expiry?.key;
 
 interface Mapping {
 	readonly table: DrizzleTable;
@@ -189,13 +201,22 @@ function conditionOf(column: Column, condition: unknown): SQL {
 
 function whereOf(
 	mapping: Mapping,
-	query: RepositoryQuery = {},
+	context: RepositoryContext,
+	query: KeysetQuery = {},
 ): SQL | undefined {
 	const parts: (SQL | undefined)[] = [];
 	for (const [key, condition] of Object.entries(query.where ?? {}))
 		parts.push(conditionOf(columnOf(mapping, key), condition));
 	const deleted = mapping.columns.deletedAt;
 	if (deleted && query.withDeleted !== true) parts.push(isNull(deleted));
+	const expiry = expiryKeyOf(context);
+	if (expiry !== undefined && query.withExpired !== true) {
+		// Alive while the date is missing or later than now; an ISO 8601 text
+		// column compares as text, a timestamp column as a date.
+		const column = columnOf(mapping, expiry);
+		const now = query.now ?? new Date().toISOString();
+		parts.push(or(isNull(column), gt(column, toColumn(column, now))));
+	}
 	return and(...parts);
 }
 
@@ -334,7 +355,7 @@ function providerOver(
 		let builder = exec
 			.select()
 			.from(mapping.table)
-			.where(and(whereOf(mapping, query), keysetOf(mapping, query)))
+			.where(and(whereOf(mapping, context, query), keysetOf(mapping, query)))
 			.orderBy(...orderOf(mapping, query));
 		if (limit !== undefined || query.offset)
 			builder = builder.limit(limit ?? NO_LIMIT);
@@ -426,6 +447,7 @@ function providerOver(
 			keyset: true,
 			versioning: true,
 			atomic: true,
+			expiry: true,
 		}),
 		findOne: (context, query = {}) =>
 			hooks.guard(async () => (await select(context, query, true))[0]),
@@ -437,7 +459,7 @@ function providerOver(
 				const [found] = await exec
 					.select({ total: sql<number>`count(*)` })
 					.from(mapping.table)
-					.where(whereOf(mapping, { ...query, limit: undefined }));
+					.where(whereOf(mapping, context, { ...query, limit: undefined }));
 				return Number(found?.total ?? 0);
 			}),
 		insert: (context, data) =>
@@ -502,12 +524,29 @@ function providerOver(
 				const changes = incrementOf(context, mapping, deltas, options.set);
 				const deleted = mapping.columns.deletedAt;
 				const alive = deleted ? isNull(deleted) : undefined;
+				// For an entity that expires, an expired row counts as absent.
+				const expiry = expiryKeyOf(context);
+				const expiryColumn =
+					expiry === undefined ? undefined : columnOf(mapping, expiry);
+				const fresh =
+					expiryColumn === undefined
+						? undefined
+						: or(
+								isNull(expiryColumn),
+								gt(
+									expiryColumn,
+									toColumn(
+										expiryColumn,
+										options.now ?? new Date().toISOString(),
+									),
+								),
+							);
 				if (options.create === undefined) {
 					const [updated] = (await write(context, mapping, () =>
 						exec
 							.update(mapping.table)
 							.set(changes)
-							.where(and(eq(idColumn, id), alive))
+							.where(and(eq(idColumn, id), alive, fresh))
 							.returning(),
 					)) as Record<string, unknown>[];
 					if (!updated) throw notFound(context, id);
@@ -521,7 +560,10 @@ function providerOver(
 						.values(row)
 						.onConflictDoUpdate({
 							target: idColumn,
-							set: changes,
+							set:
+								fresh === undefined
+									? changes
+									: replacingExpired(mapping, changes, fresh),
 							...(alive ? { setWhere: alive } : {}),
 						})
 						.returning(),
@@ -547,6 +589,26 @@ function providerOver(
 			}),
 		transaction: hooks.transaction,
 	};
+}
+
+/**
+ * What the upsert of `increment` sets on a row that holds the id: `changes`
+ * while it is `fresh`, and every column of the row it was to insert once it
+ * expired, which so replaces it.
+ */
+function replacingExpired(
+	mapping: Mapping,
+	changes: Readonly<Record<string, unknown>>,
+	fresh: SQL,
+): Record<string, unknown> {
+	const set: Record<string, unknown> = {};
+	for (const [key, column] of Object.entries(mapping.columns)) {
+		if (key === "id") continue;
+		const kept = Object.hasOwn(changes, key) ? changes[key] : column;
+		set[key] =
+			sql`CASE WHEN ${fresh} THEN ${kept} ELSE excluded.${sql.identifier(column.name)} END`;
+	}
+	return set;
 }
 
 /** Wraps a provider so that it fails once `alive()` is false. */

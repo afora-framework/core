@@ -146,6 +146,7 @@ export { eventOf } from "./core/entity/event";
 export {
 	DeletedEntity,
 	ImmutableEntityKey,
+	InvalidEntityExpiry,
 	ReservedEntityKey,
 } from "./core/entity/exceptions";
 export type {
@@ -162,6 +163,8 @@ export type {
 	EntityStorageOptions,
 	EntityStorageSettings,
 	EntityUniqueKey,
+	ExpiresAtField,
+	ExpiringIdentity,
 	IEntityIdentity,
 	IEntityVersion,
 	VersionedIdentity,
@@ -430,9 +433,13 @@ export type {
 	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
+	RepositoryForEachPage,
 	RepositoryOrder,
 	RepositoryPage,
 	RepositoryQuery,
+	RepositoryWalkOptions,
+	RepositoryWalkPage,
+	RepositoryWalkResult,
 	RepositoryWhere,
 } from "./core/repository/types/query.interface";
 export type {
@@ -584,6 +591,7 @@ export {
 	DateProperty,
 	DateTime,
 	DeletedAt,
+	ExpiresAt,
 	UpdatedAt,
 } from "./std/properties/time";
 export { recordOf } from "./std/record";

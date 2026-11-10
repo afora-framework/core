@@ -1,3 +1,4 @@
+import type { TString } from "typebox";
 import type {
 	BlueprintField,
 	BlueprintInput,
@@ -7,6 +8,7 @@ import type {
 	JoinedProperties,
 } from "../../blueprint/types/blueprint.interface";
 import type { ParseResult } from "../../parse/types/parse.interface";
+import type { PropertyClass } from "../../property/property";
 import type {
 	AnyRecordPlugin,
 	IRecordPluginCatalog,
@@ -60,6 +62,11 @@ export interface EntityBuilderSettings<
 	/** The current date and time, as the timestamps accept it. */
 	readonly now: () => string;
 	/**
+	 * The field of `expiresAt`, a date and time, which entities declared with
+	 * `expires: { after }` get; without it such a declaration throws.
+	 */
+	readonly expiresAt?: ExpiresAtField;
+	/**
 	 * Catalogs of plugins, made by `recordPluginCatalogOf`, that
 	 * `options.plugins` picks from, as `(ctx) => [ctx.publishable]`.
 	 */
@@ -98,20 +105,33 @@ export type EntityOptions<
 	Context = unknown,
 	Sensitive extends
 		readonly RecordKey<Properties>[] = readonly RecordKey<Properties>[],
+	Expires extends EntityExpires<RecordKey<Properties>> | undefined =
+		| EntityExpires<RecordKey<Properties>>
+		| undefined,
 > = RecordOptions<Properties, Change, Unique, Plugins, Context, Sensitive> &
 	EntityEvents &
-	EntityStorageOptions;
+	EntityStorageOptions<RecordKey<Properties>, Expires>;
 
 /** How an entity is stored: optimistic concurrency and expiry. */
-export interface EntityStorageOptions {
+export interface EntityStorageOptions<
+	Key extends string = string,
+	Expires extends EntityExpires<Key> | undefined =
+		| EntityExpires<Key>
+		| undefined,
+> {
 	/**
 	 * Adds a `version` identity key (1 when created) that the `update` of its
 	 * repository checks and increments, throwing `RepositoryConcurrencyConflict`
 	 * when the stored one differs: optimistic concurrency.
 	 */
 	readonly versioned?: boolean;
-	/** When records of the entity expire (#35). */
-	readonly expires?: EntityExpires;
+	/**
+	 * When records of the entity expire, which reads then leave out:
+	 * `{ after: { days: 400 } }` from `createdAt`, kept in an `expiresAt`
+	 * identity key, or `{ at: "until" }`, the date held by a key of the
+	 * blueprint. A record with no date never expires.
+	 */
+	readonly expires?: Expires;
 }
 
 /** A duration, e.g. `{ days: 400 }`. */
@@ -122,10 +142,27 @@ export interface EntityDuration {
 	readonly seconds?: number;
 }
 
-/** `after` a duration from `createdAt`, or `at` the date held by a key. */
-export type EntityExpires =
+/**
+ * `after` a duration from `createdAt` (stored as `expiresAt`), or `at` the
+ * date held by a key of the blueprint, `Key`.
+ */
+export type EntityExpires<Key extends string = string> =
 	| { readonly after: EntityDuration }
-	| { readonly at: string };
+	| { readonly at: Key };
+
+/**
+ * The field `expiresAt` of the entities that expire `after` a duration: a
+ * required date and time, as `createdAt`.
+ */
+export type ExpiresAtField = PropertyClass<TString, string>;
+
+/** `Identity`, with `expiresAt` when `Expires` is `{ after }`. */
+export type ExpiringIdentity<
+	Identity extends IEntityIdentity,
+	Expires,
+> = Expires extends { readonly after: EntityDuration }
+	? Identity & { readonly expiresAt: ExpiresAtField }
+	: Identity;
 
 /** What `entityOf` stores under `EntitySettings`. */
 export interface EntityStorageSettings {
@@ -222,6 +259,9 @@ export type EntityBuilder<
 	const Plugins extends readonly AnyRecordPlugin[] = [],
 	const Sensitive extends readonly RecordKey<Properties>[] = [],
 	const Versioned extends boolean = false,
+	const Expires extends
+		| EntityExpires<RecordKey<Properties>>
+		| undefined = undefined,
 >(
 	blueprint: IBlueprint<Properties, boolean>,
 	options?: EntityOptions<
@@ -230,10 +270,11 @@ export type EntityBuilder<
 		Unique,
 		Plugins,
 		Context,
-		Sensitive
+		Sensitive,
+		Expires
 	> & { readonly versioned?: Versioned },
 ) => EntityConstructor<
-	VersionedIdentity<Identity, Versioned>,
+	VersionedIdentity<ExpiringIdentity<Identity, Expires>, Versioned>,
 	WithPluginProperties<Properties, Plugins>,
 	Change,
 	readonly (Unique[number] | PluginUniqueKey<Plugins>)[],

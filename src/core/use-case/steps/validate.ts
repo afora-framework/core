@@ -273,6 +273,13 @@ export function validateSteps(
 				if (WRITE_ACTIONS.has(action as string)) {
 					fail(index, "write_in_find", `find cannot call "${action}".`);
 				}
+				if (action === "forEachPage") {
+					fail(
+						index,
+						"unknown_action",
+						'"forEachPage" runs a function on each page and cannot be a step; call it from a use case written in TypeScript.',
+					);
+				}
 				if (!READ_ACTION.test(action as string)) {
 					fail(index, "unknown_action", `"${action}" is not a read action.`);
 				}

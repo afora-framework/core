@@ -1,6 +1,7 @@
 import { catalog, identityKeysOf, recordPlugin } from "./catalog";
 import { checkCommand } from "./command";
 import { checkEntityEvents } from "./entity-events";
+import { checkEntityExpires } from "./entity-expires";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
@@ -580,6 +581,7 @@ function checkFieldsOf(
 					"plugins",
 					"events",
 					"versioned",
+					"expires",
 				]
 			: owner === "record"
 				? ["fields", "sensitive", "unique", "change", "plugins"]
@@ -638,6 +640,16 @@ function checkRecord(
 			decl.name,
 			decl.spec.events,
 			[...path, "events"],
+			scope,
+			issues,
+		);
+	}
+
+	if (owner === "entity" && decl.spec.expires !== undefined) {
+		checkEntityExpires(
+			decl.spec.expires,
+			fields,
+			[...path, "expires"],
 			scope,
 			issues,
 		);
@@ -829,6 +841,7 @@ function checkRepository(
 					"exists",
 					"findPage",
 					"findCursor",
+					"forEachPage",
 				].includes(action)
 			)
 				continue;
@@ -850,7 +863,7 @@ function checkRepository(
 					issue(
 						here,
 						"unknown_action",
-						`"${action}" is not an action. Use create, update, delete, restore, increment, count, findMany, exists, findPage, findCursor, findBy<Key> or findManyBy<Key>.`,
+						`"${action}" is not an action. Use create, update, delete, restore, increment, count, findMany, exists, findPage, findCursor, forEachPage, findBy<Key> or findManyBy<Key>.`,
 					),
 				);
 				continue;

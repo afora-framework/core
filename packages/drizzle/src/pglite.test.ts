@@ -19,6 +19,7 @@ const accountTable = (name: string) =>
 		visits: integer("visits"),
 		version: integer("version"),
 		deletedAt: text("deletedAt"),
+		expiresAt: text("expiresAt"),
 	});
 
 /** One PGlite instance (Postgres compiled to WASM) serves every case; each gets fresh tables. */
@@ -37,7 +38,7 @@ async function freshDatabase() {
 	};
 	for (const table of Object.values(names)) {
 		await client.exec(
-			`CREATE TABLE ${table} (id text PRIMARY KEY, email text UNIQUE, name text, age integer, active boolean, address jsonb, tags jsonb, "group" integer, n integer, visits integer, version integer, "deletedAt" text)`,
+			`CREATE TABLE ${table} (id text PRIMARY KEY, email text UNIQUE, name text, age integer, active boolean, address jsonb, tags jsonb, "group" integer, n integer, visits integer, version integer, "deletedAt" text, "expiresAt" text)`,
 		);
 	}
 	return {
@@ -102,5 +103,41 @@ describe("repositoryOf on Postgres", () => {
 		expect(await Members.count()).toBe(1);
 		const [ana] = await Members.findMany({ orderBy: [{ key: "createdAt" }] });
 		expect(ana?.name).toBe("Ana");
+	});
+
+	it("leaves expired rows out over a timestamp column", async () => {
+		const { blueprintOf, entityOf, repositoryOf } = await import("@afora/core");
+		const { uuid, timestamp } = await import("drizzle-orm/pg-core");
+		const stamp = (name: string) =>
+			timestamp(name, { mode: "date", withTimezone: true });
+		const sessions = pgTable("sessions", {
+			id: uuid("id").primaryKey(),
+			createdAt: stamp("createdAt"),
+			updatedAt: stamp("updatedAt"),
+			deletedAt: stamp("deletedAt"),
+			expiresAt: stamp("expiresAt"),
+			name: text("name").notNull(),
+		});
+		await client.exec(
+			`CREATE TABLE sessions (id uuid PRIMARY KEY, "createdAt" timestamptz, "updatedAt" timestamptz, "deletedAt" timestamptz, "expiresAt" timestamptz, name text NOT NULL)`,
+		);
+		class Session extends entityOf(
+			blueprintOf((ctx) => ({ name: ctx.string })),
+			{ name: "Session", expires: { after: { minutes: 5 } } },
+		) {}
+		const Sessions = repositoryOf({
+			entity: Session,
+			provider: drizzleProvider({
+				db: drizzle(client),
+				tables: { Session: sessions },
+			}),
+			actions: ["create", "count", "findMany"],
+		});
+		const old = new Date(Date.now() - 10 * 60_000).toISOString();
+		await Sessions.create(new Session({ name: "old", createdAt: old }));
+		await Sessions.create({ name: "new" });
+		expect((await Sessions.findMany()).map((s) => s.name)).toEqual(["new"]);
+		expect(await Sessions.count()).toBe(1);
+		expect(await Sessions.count({ withExpired: true })).toBe(2);
 	});
 });

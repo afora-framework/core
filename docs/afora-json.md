@@ -110,6 +110,17 @@ The events come from the lifecycle of the entities. An entity (not a record) dec
 
 A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
 
+## Records that expire
+
+An entity (not a record) declares when its records expire with `expires`, generated as the [option of `entityOf`](entities.md#records-that-expire) and extracted back from `describe()`:
+
+```json
+"AuditEvent": { "fields": { "action": "text" }, "expires": { "after": { "days": 400 } } },
+"Window": { "fields": { "hits": "integer", "until": "dateTime?" }, "expires": { "at": "until" } }
+```
+
+`after` is a non-empty duration (`days`, `hours`, `minutes`, `seconds`, each a positive number) from `createdAt`, kept in an `expiresAt` identity key, so no field may be named `expiresAt` (`identity_key`). `at` names a `dateTime` or `date` field of the entity (optional or not); a record without a value never expires. Anything else is an `invalid_expires` issue. Repositories of the entity leave expired records out of every read unless `withExpired: true` (see [Repositories](repositories.md#records-that-expire)), and need a provider with `capabilities.expiry` (`"inMemory"` and `drizzle` have it).
+
 ## Standard use cases
 
 A use case that a [standard use case](std-use-cases.md) covers is declared by naming it and the repository it is for, in place of its input, response and steps:

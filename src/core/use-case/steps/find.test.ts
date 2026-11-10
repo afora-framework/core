@@ -67,6 +67,9 @@ describe("find", () => {
 			"unknown_action",
 		);
 		expect(invalidStep(declare("users.drop")).code).toBe("unknown_action");
+		const walk = invalidStep(declare("users.forEachPage"));
+		expect(walk.code).toBe("unknown_action");
+		expect(walk.reason).toContain("cannot be a step");
 		expect(invalidStep(declare("nope.findById")).code).toBe(
 			"unknown_dependency",
 		);

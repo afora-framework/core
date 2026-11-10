@@ -566,7 +566,14 @@ describe("repositories", () => {
 		expect(
 			validateSpec(
 				repo({
-					actions: ["findMany", "exists", "findPage", "findCursor", "count"],
+					actions: [
+						"findMany",
+						"exists",
+						"findPage",
+						"findCursor",
+						"forEachPage",
+						"count",
+					],
 				}),
 			),
 		).toEqual([]);

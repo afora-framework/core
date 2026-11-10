@@ -259,6 +259,10 @@ function build(): Catalog {
 				action: "findCursor",
 				rule: "Gives { items, limit, next } for { where?, orderBy?, limit?, after? }: pages by position, `after` being the `next` of the page before. No offset and no total. Needs no key, and a provider that reads by cursor (inMemory and drizzle do).",
 			},
+			{
+				action: "forEachPage",
+				rule: "forEachPage(query, fn, { until? }) runs fn on each page of a findCursor query and gives { done, next?, pages, items }; until (a Date, epoch ms or a function) is checked between pages, and next is the after to resume from. Called from TypeScript, not a step. Needs no key, and a provider that reads by cursor.",
+			},
 		],
 		exceptionLayers: Object.values(core.ExceptionLayers),
 		coreExceptions: exportsOf

@@ -195,6 +195,31 @@ describe("applicationOf", () => {
 		});
 	});
 
+	test("describes when the records of an entity expire", () => {
+		class Audit extends entityOf(
+			blueprintOf((ctx) => ({ action: ctx.string })),
+			{ name: "Audit", expires: { after: { days: 400 } } },
+		) {}
+		class Window extends entityOf(
+			blueprintOf((ctx) => ({ until: ctx.dateTime })),
+			{ name: "Window", expires: { at: "until" } },
+		) {}
+		const description = describeOf(
+			applicationOf({ name: "expiring", entities: { Audit, Window } }),
+		);
+		expect(description.entities.Audit.expires).toEqual({
+			after: { days: 400 },
+		});
+		expect(Object.keys(description.entities.Audit.fields)).toEqual(["action"]);
+		expect(description.entities.Window.expires).toEqual({ at: "until" });
+		expect(Object.keys(description.entities.Window.fields)).toEqual(["until"]);
+		expect(description.entities.User).toBeUndefined();
+		expect(
+			describeOf(applicationOf({ name: "plain", entities: { User } })).entities
+				.User,
+		).not.toHaveProperty("expires");
+	});
+
 	test("describes what cannot be recreated as an opaque property", () => {
 		const Raw = propertyOf({
 			name: "raw",

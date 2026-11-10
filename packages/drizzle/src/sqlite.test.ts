@@ -27,6 +27,7 @@ const accountTable = (name: string) =>
 		visits: integer("visits"),
 		version: integer("version"),
 		deletedAt: text("deletedAt"),
+		expiresAt: text("expiresAt"),
 	});
 
 function contractDatabase() {
@@ -38,7 +39,7 @@ function contractDatabase() {
 	};
 	for (const table of ["accounts", "one", "two"]) {
 		sqlite.run(
-			`CREATE TABLE ${table} (id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, age INTEGER, active INTEGER, address TEXT, tags TEXT, "group" INTEGER, n INTEGER, visits INTEGER, version INTEGER, deletedAt TEXT)`,
+			`CREATE TABLE ${table} (id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, age INTEGER, active INTEGER, address TEXT, tags TEXT, "group" INTEGER, n INTEGER, visits INTEGER, version INTEGER, deletedAt TEXT, expiresAt TEXT)`,
 		);
 	}
 	return { db: drizzle(sqlite), tables };

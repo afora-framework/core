@@ -17,6 +17,7 @@ import type {
 	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
+	RepositoryForEachPage,
 	RepositoryQuery,
 } from "./query.interface";
 
@@ -213,7 +214,8 @@ export type RepositoryMethods<
 	("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) &
 	("exists" extends Actions ? RepositoryExists<Entity> : unknown) &
 	("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown) &
-	("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown);
+	("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown) &
+	("forEachPage" extends Actions ? RepositoryForEachPage<Entity> : unknown);
 
 /** A method a repository of `Entity` can have, e.g. `"findByEmail"`. */
 export type RepositoryAction<Entity> =
@@ -228,7 +230,8 @@ export type RepositoryAction<Entity> =
 	| "findMany"
 	| "exists"
 	| "findPage"
-	| "findCursor";
+	| "findCursor"
+	| "forEachPage";
 
 /**
  * A repository of `Entity` with the methods of `Actions`, whose provider gets
@@ -259,8 +262,18 @@ export interface ProviderUpdateOptions {
 export interface ProviderIncrementOptions {
 	/** Values stored as they are by the same write, e.g. `updatedAt`. */
 	readonly set?: RepositoryData;
-	/** The row to insert when the id holds none. */
+	/**
+	 * The row to insert when the id holds none, or holds one that expired
+	 * (which it replaces).
+	 */
 	readonly create?: RepositoryData;
+	/**
+	 * For an entity that expires (`context.expiry`), the current date and
+	 * time (ISO 8601) by the clock of the entity: a row whose expiry is at or
+	 * before it counts as absent. A provider called without it uses the
+	 * current time.
+	 */
+	readonly now?: string;
 }
 
 /** What a provider gets with every call: whose entities, and the environment. */
@@ -274,6 +287,13 @@ export interface RepositoryContext<Environment = unknown> {
 	readonly name: string;
 	/** The keys no two entities may share, `id` first. */
 	readonly unique: readonly string[];
+	/**
+	 * For an entity declared with `expires`, the key holding the date at which
+	 * a record expires (`expiresAt`, or the key of `at`): reads leave out the
+	 * records whose date is at or before `query.now`, unless
+	 * `query.withExpired`. A record without a date never expires.
+	 */
+	readonly expiry?: { readonly key: string };
 	/** The variables of the `environmentDependencies` of the repository. */
 	readonly env: Environment;
 }
@@ -287,7 +307,7 @@ export interface RepositoryContext<Environment = unknown> {
 export interface IRepositoryProvider<Environment = unknown> {
 	findOne(
 		context: RepositoryContext<Environment>,
-		query?: RepositoryQuery,
+		query?: ProviderQuery,
 	): Promise<RepositoryData | undefined>;
 	/** `query.after` is only given to a provider with `capabilities.keyset`. */
 	findMany(
@@ -312,10 +332,13 @@ export interface IRepositoryProvider<Environment = unknown> {
 	/**
 	 * Adds each of `deltas` to the stored number of its key (a missing one
 	 * counts as 0) and stores `options.set` in the same atomic write, then
-	 * gives the row as stored. Only rows that are not soft-deleted match. When
-	 * the id holds none, inserts `options.create` as it is and gives it, or
-	 * throws `RepositoryEntityNotFound` without it; a concurrent insert of the
-	 * same id still gets the deltas added. Advertised by `capabilities.atomic`.
+	 * gives the row as stored. Only rows that are not soft-deleted, nor expired
+	 * (`context.expiry`, at `options.now`), match. When the id holds none (or
+	 * an expired one), inserts `options.create` as it is, replacing the expired
+	 * row, and gives it, or throws `RepositoryEntityNotFound` without it; a
+	 * concurrent insert of the same id still gets the deltas added. A
+	 * soft-deleted row with `create` is a `RepositoryUniqueViolation` on `id`.
+	 * Advertised by `capabilities.atomic`.
 	 */
 	increment?(
 		context: RepositoryContext<Environment>,
@@ -325,7 +348,7 @@ export interface IRepositoryProvider<Environment = unknown> {
 	): Promise<RepositoryData>;
 	count(
 		context: RepositoryContext<Environment>,
-		query?: RepositoryQuery,
+		query?: ProviderQuery,
 	): Promise<number>;
 	readonly capabilities?: ProviderCapabilities;
 	transaction?<Result>(
