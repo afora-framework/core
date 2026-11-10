@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
+import { useCaseOriginOf, useCaseTargetOf } from "../../experimental";
 import {
 	type AnyRepository,
 	applicationOf,
@@ -18,9 +19,7 @@ import {
 	type UseCaseTarget,
 	useCaseCatalogOf,
 	useCaseOf,
-	useCaseOriginOf,
 	useCasePluginOf,
-	useCaseTargetOf,
 } from "../../index";
 
 const fields = blueprintBuilderOf();

@@ -1,6 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import {
-	AbstractUseCase,
 	blueprintOf,
 	type EventDefinition,
 	Exception,
@@ -21,6 +20,7 @@ import {
 	type UseCaseResponse,
 	useCaseOf,
 } from "../../index";
+import { AbstractUseCase } from "./use-case";
 
 const Input = blueprintOf((ctx) => ({ name: ctx.string }));
 const Empty = blueprintOf(() => ({}));

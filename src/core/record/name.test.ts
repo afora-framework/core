@@ -1,12 +1,11 @@
 import { expect, expectTypeOf, test } from "bun:test";
+import type { IRepositoryProvider, RepositoryContext } from "../../adapters";
 import {
 	blueprintOf,
 	Exception,
 	entityOf,
 	InvalidRecordDeclaration,
-	type IRepositoryProvider,
 	inMemoryProvider,
-	type RepositoryContext,
 	recordNameOf,
 	recordOf,
 	repositoryOf,

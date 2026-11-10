@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-	outputOf,
-	PROBLEM_MEDIA_TYPE,
-	StdStages,
-	stageDescriptionOf,
-} from "@afora/core";
+import { outputOf, StdStages } from "@afora/core";
+import { PROBLEM_MEDIA_TYPE } from "@afora/core/adapters";
+import { stageDescriptionOf } from "@afora/core/experimental";
 import { type SpecData, Validator } from "@seriousme/openapi-schema-validator";
 import type { Hono } from "hono";
 import { HonoStages, hono, stages } from "../src/index";

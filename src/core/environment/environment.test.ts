@@ -6,8 +6,8 @@ import {
 	ExceptionLayers,
 	environmentOf,
 	InvalidEnvironment,
-	isEnvironment,
 } from "../../index";
+import { isEnvironment } from "./environment";
 
 const Variables = blueprintOf((ctx) => ({
 	DATABASE_URL: ctx.url,

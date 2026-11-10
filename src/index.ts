@@ -1,4 +1,10 @@
-export { applicationOf, isApplication } from "./core/application/application";
+/**
+ * `@afora/core`: the stable API, what application code imports. Plumbing for
+ * sinks, providers and code generators is in `@afora/core/adapters`, features
+ * that may still change in `@afora/core/experimental`. A new export goes in
+ * the tier `docs/api-tiers.md` describes, and in that table.
+ */
+export { applicationOf } from "./core/application/application";
 export {
 	ApplicationAlreadyStarted,
 	ApplicationConflict,
@@ -12,8 +18,6 @@ export {
 	UnregisteredUseCaseDependency,
 } from "./core/application/exceptions";
 export {
-	isProviderSlot,
-	isProviderStorage,
 	type ProviderSlot,
 	type ProviderStorage,
 	providersOf,
@@ -25,7 +29,6 @@ export {
 	useApplication,
 } from "./core/application/registry";
 export {
-	isLogFactory,
 	isProviderFactory,
 	type LogFactory,
 	logFrom,
@@ -36,25 +39,11 @@ export type {
 	AnyApplication,
 	ApplicationCollections,
 	ApplicationContext,
-	ApplicationDescription,
 	ApplicationRunArgs,
 	ApplicationRunOptions,
 	ApplicationSettings,
 	ApplicationStartOptions,
-	CommandDescription,
-	ExceptionDescription,
-	FieldDescription,
-	FieldsDescription,
 	IApplication,
-	LogDescription,
-	OutputDescription,
-	PropertyDescription,
-	PropertyLineageDescription,
-	PropertyReference,
-	ProviderReference,
-	RecordDescription,
-	UseCaseDependencyDescription,
-	UseCaseDescription,
 } from "./core/application/types/application.interface";
 export { blueprintBuilderOf } from "./core/blueprint/blueprint";
 export { blueprintPluginOf } from "./core/blueprint/blueprint-plugin";
@@ -62,14 +51,8 @@ export {
 	ReservedBlueprintKey,
 	UndeclaredBlueprintProperty,
 } from "./core/blueprint/exceptions";
-export { isBlueprint } from "./core/blueprint/is-blueprint";
-export { isBlueprintList, listOf } from "./core/blueprint/list";
+export { listOf } from "./core/blueprint/list";
 export { optionalOf } from "./core/blueprint/optional";
-export {
-	isOptionalRecord,
-	isRecordClass,
-	recordFieldOf,
-} from "./core/blueprint/record-field";
 export type {
 	AnyBlueprint,
 	AnyBlueprintList,
@@ -127,11 +110,8 @@ export type {
 	CommandUseCasesOption,
 } from "./core/command/types/command.interface";
 export {
-	AbstractEntity,
-	ENTITY_IDENTITY_KEYS,
 	EntitySettings,
 	EntityUniqueKeys,
-	RESERVED_ENTITY_KEYS,
 } from "./core/entity/abstract-entity";
 export { entityBuilderOf, isEntity, isEntityClass } from "./core/entity/entity";
 export type {
@@ -181,20 +161,14 @@ export type {
 export {
 	environmentOf,
 	InvalidEnvironment,
-	isEnvironment,
 } from "./core/environment/environment";
-export {
-	eventPolicyCatalogOf,
-	eventPolicyDescriptionOf,
-	eventPolicyOf,
-} from "./core/event-policy/event-policy";
+export { eventPolicyOf } from "./core/event-policy/event-policy";
 export {
 	InvalidEventPolicy,
 	PublisherNotBound,
 } from "./core/event-policy/exceptions";
 export { publishEvents } from "./core/event-policy/publish";
 export type {
-	EventPolicyDescription,
 	EventPolicyFactory,
 	EventPolicyOptions,
 	EventPolicySettings,
@@ -205,11 +179,7 @@ export type {
 } from "./core/event-policy/types/event-policy.interface";
 export { ExceptionLayers } from "./core/exception/enums/exception-layers";
 export type { DeclaredExceptionClass } from "./core/exception/exception";
-export {
-	Exception,
-	exceptionOf,
-	UNEXPECTED_ERROR,
-} from "./core/exception/exception";
+export { Exception, exceptionOf } from "./core/exception/exception";
 export { guard } from "./core/exception/guard";
 export type {
 	ExceptionArgs,
@@ -248,7 +218,6 @@ export type {
 	OpenAPIOptions,
 	OpenAPISchema,
 } from "./core/openapi/types/openapi.interface";
-export { coerceTextValues } from "./core/output/coerce";
 export {
 	DuplicateOperation,
 	InvalidOutputStage,
@@ -258,39 +227,19 @@ export type {
 	OpenAPIMethod,
 	OpenAPISecurityScheme,
 	OpenAPISinkOptions,
-	OperationRoute,
 	RouteOptions,
 	RouteStatus,
 	SecurityRequirement,
 } from "./core/output/openapi-sink";
-export {
-	openapi,
-	operationRoutes,
-	ROUTE_OPTION_KEYS,
-	requestIdHeaderOf,
-	routeOptionsIssue,
-} from "./core/output/openapi-sink";
+export { openapi } from "./core/output/openapi-sink";
 export { isOutput, operationOf, outputOf } from "./core/output/output";
-export {
-	outputValueOf,
-	PROBLEM_MEDIA_TYPE,
-	problemOf,
-} from "./core/output/problem";
 export type { SelectOptions } from "./core/output/select";
 export { select } from "./core/output/select";
-export {
-	sinkOf,
-	stageCatalogOf,
-	stageDescriptionOf,
-	stageKindOf,
-	transformOf,
-} from "./core/output/stage";
-export { statusOf } from "./core/output/status";
+export { transformOf } from "./core/output/stage";
 export type {
 	AnyOutput,
 	IStageCatalog,
 	OperationCallOptions,
-	OperationDescriptor,
 	OperationPatch,
 	OutputApplication,
 	OutputOf,
@@ -298,14 +247,8 @@ export type {
 	OutputSource,
 	OutputStatuses,
 	PipeResult,
-	Problem,
-	ProblemOptions,
-	SinkFactory,
-	SinkSettings,
-	SinkStage,
 	Stage,
 	StageContext,
-	StageDescription,
 	StageFactory,
 	StageOptions,
 	TransformFactory,
@@ -318,18 +261,12 @@ export type {
 	IssueCode,
 	ParseResult,
 } from "./core/parse/types/parse.interface";
-export { AbstractProperty } from "./core/property/abstract-property";
-export { AbstractDefineProperty } from "./core/property/define-property";
-export { PropertyStates } from "./core/property/enums/property-states";
 export {
 	InvalidPropertyValue,
 	PropertyRequired,
 } from "./core/property/exceptions";
 export type { IPropertyInput } from "./core/property/input";
 export { PropertyInput, propertyInputOf } from "./core/property/input";
-export { isProperty } from "./core/property/is-property";
-export type { PropertyLineage } from "./core/property/lineage";
-export { propertyLineageOf } from "./core/property/lineage";
 export type { DeclaredProperty, PropertyClass } from "./core/property/property";
 export { propertyOf } from "./core/property/property";
 export type { AbstractPropertyConstructor } from "./core/property/types/abstract-property-constructor.type";
@@ -354,10 +291,6 @@ export type {
 	UniqueMark,
 } from "./core/property/types/property-type.interface";
 export {
-	AbstractRecord,
-	RESERVED_RECORD_KEYS,
-} from "./core/record/abstract-record";
-export {
 	IncompatibleRecordPlugin,
 	InvalidRecordDeclaration,
 	InvalidRecordPlugin,
@@ -369,12 +302,7 @@ export {
 } from "./core/record/exceptions";
 export { MASK } from "./core/record/mask";
 export { recordNameOf } from "./core/record/name";
-export {
-	hasPlugin,
-	isRecordPlugin,
-	pluginsOf,
-	recordPluginOf,
-} from "./core/record/plugin";
+export { hasPlugin, pluginsOf, recordPluginOf } from "./core/record/plugin";
 export { recordPluginCatalogOf } from "./core/record/plugin-catalog";
 export type { RecordBuilder } from "./core/record/record";
 export { recordBuilderOf } from "./core/record/record";
@@ -421,20 +349,12 @@ export {
 	type InMemoryProvider,
 	inMemoryProvider,
 } from "./core/repository/in-memory";
-export { providerDescriptionOf, providerOf } from "./core/repository/provider";
+export { providerOf } from "./core/repository/provider";
 export type { RepositorySettings } from "./core/repository/repository";
-export {
-	AbstractRepository,
-	isRepository,
-	RepositoryOf,
-	repositoryOf,
-} from "./core/repository/repository";
+export { RepositoryOf, repositoryOf } from "./core/repository/repository";
 export type {
-	ProviderCapabilities,
-	ProviderDescription,
 	ProviderOption,
 	ProviderOptions,
-	ProviderQuery,
 	ProviderSettings,
 	RepositoryCursorPage,
 	RepositoryCursorQuery,
@@ -464,17 +384,11 @@ export type {
 	EntityNonUniqueKeyOf,
 	EntityUniqueKeyOf,
 	EntityValueOf,
-	IRepositoryProvider,
-	ProviderIncrementOptions,
-	ProviderKeyset,
-	ProviderUpdateOptions,
 	QueryValueOf,
 	RepositoryAction,
-	RepositoryContext,
 	RepositoryCount,
 	RepositoryCreate,
 	RepositoryCreateInput,
-	RepositoryData,
 	RepositoryDelete,
 	RepositoryFindBy,
 	RepositoryFindManyBy,
@@ -484,15 +398,11 @@ export type {
 	RepositoryRestore,
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
-export type { SchemaClass } from "./core/schema/schema";
-export { schemaOf } from "./core/schema/schema";
 export type {
 	ISchema,
 	ISchemaType,
 } from "./core/schema/types/schema.interface";
 export type { StandardSchemaV1 } from "./core/standard/standard-schema";
-export { Demo } from "./core/symbols/demo";
-export { Kind } from "./core/symbols/kind";
 export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
 export {
@@ -505,11 +415,7 @@ export {
 	UseCaseInvalidCredentials,
 	UseCaseUnavailable,
 } from "./core/use-case/exceptions";
-export {
-	isUseCasePlugin,
-	useCaseOriginOf,
-	useCasePluginOf,
-} from "./core/use-case/plugin";
+export { isUseCasePlugin, useCasePluginOf } from "./core/use-case/plugin";
 export {
 	isUseCaseCatalog,
 	useCaseCatalogOf,
@@ -526,7 +432,6 @@ export type {
 	UseCaseStep,
 	UseCaseStepDescription,
 } from "./core/use-case/steps/types/steps.interface";
-export { useCaseTargetOf } from "./core/use-case/target";
 export type {
 	AnyUseCasePlugin,
 	EntityOfRepository,
@@ -535,15 +440,11 @@ export type {
 	MissingRecordPlugin,
 	MissingRepositoryAction,
 	UseCaseCompilation,
-	UseCaseContextOf,
 	UseCaseFieldPlan,
 	UseCaseMaker,
-	UseCaseOriginInfo,
-	UseCasePluginContext,
 	UseCasePluginDescriptor,
 	UseCasePluginRequirements,
 	UseCasePluginSettings,
-	UseCasePluginsByName,
 	UseCaseTarget,
 	UseCaseTargetInfo,
 } from "./core/use-case/types/plugin.interface";
@@ -566,7 +467,6 @@ export type {
 	UseCaseStepsSettings,
 } from "./core/use-case/use-case";
 export {
-	AbstractUseCase,
 	InvalidUseCaseDeclaration,
 	InvalidUseCaseDependencies,
 	isUseCase,
@@ -595,15 +495,7 @@ export {
 	jsonOf,
 	jsonSchemaIssues,
 } from "./std/properties/json";
-export {
-	isPasswordHash,
-	PASSWORD_MAX_LENGTH,
-	PASSWORD_MIN_LENGTH,
-	PASSWORD_SPECIAL_CHARACTERS,
-	Password,
-	PlainPassword,
-	passwordIssues,
-} from "./std/properties/password";
+export { Password, PlainPassword } from "./std/properties/password";
 export {
 	BooleanProperty,
 	Integer,

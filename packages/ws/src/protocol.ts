@@ -1,4 +1,5 @@
-import type { Problem, PublishedEvent } from "@afora/core";
+import type { PublishedEvent } from "@afora/core";
+import type { Problem } from "@afora/core/adapters";
 
 /** The id a client gives a request, echoed in the reply. */
 export type WsRequestId = string | number;

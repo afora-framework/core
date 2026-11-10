@@ -40,6 +40,11 @@
 			"import": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
+		"./adapters": {
+			"types": "./dist/adapters.d.ts",
+			"import": "./dist/adapters.js",
+			"default": "./dist/adapters.js"
+		},
 		"./experimental": {
 			"types": "./dist/experimental.d.ts",
 			"import": "./dist/experimental.js",
@@ -68,7 +73,7 @@
 		"lint": "biome lint .",
 		"fmt": "biome check --write .",
 		"knip": "knip",
-		"build": "rm -rf dist && bun build ./src/index.ts ./src/experimental.ts ./src/testing/index.ts --outdir ./dist --target node --format esm --splitting --packages external && tsc -p tsconfig.build.json",
+		"build": "rm -rf dist && bun build ./src/index.ts ./src/adapters.ts ./src/experimental.ts ./src/testing/index.ts --outdir ./dist --target node --format esm --splitting --packages external && tsc -p tsconfig.build.json",
 		"postbuild": "bun scripts/add-dts-extensions.ts",
 		"bench": "cd bench && bun install && bun run.ts",
 		"smoke": "bun run build && node scripts/smoke.mjs",

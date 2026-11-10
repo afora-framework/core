@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
+import type { IRepositoryProvider } from "../../adapters";
 import {
 	applicationOf,
 	blueprintOf,
@@ -7,7 +8,6 @@ import {
 	InvalidRepositoryCursor,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryQuery,
-	type IRepositoryProvider,
 	inMemoryProvider,
 	type RepositoryCursorPage,
 	repositoryOf,

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+	eventPolicyCatalogOf,
+	eventPolicyDescriptionOf,
+} from "../../experimental";
+import {
 	applicationOf,
 	blueprintOf,
 	CommandEventFailed,
@@ -7,8 +11,6 @@ import {
 	type EventDefinition,
 	entityOf,
 	eventOf,
-	eventPolicyCatalogOf,
-	eventPolicyDescriptionOf,
 	eventPolicyOf,
 	type IEventPublisher,
 	InvalidEventPolicy,

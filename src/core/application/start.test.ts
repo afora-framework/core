@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import type { IRepositoryProvider } from "../../adapters";
 import {
 	ApplicationNotStarted,
 	applicationOf,
@@ -11,7 +12,6 @@ import {
 	InvalidApplicationDeclaration,
 	InvalidApplicationEnvironment,
 	InvalidCommandDeclaration,
-	type IRepositoryProvider,
 	inMemoryProvider,
 	isProviderFactory,
 	providerFrom,

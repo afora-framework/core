@@ -1,0 +1,67 @@
+/**
+ * `@afora/core/adapters`: the plumbing for authors of sinks, providers and
+ * code generators (`@afora/hono`, `@afora/drizzle`, `@afora/codegen`...).
+ * Part of the compatibility policy in `VERSIONING.md`, like the main entry.
+ * Application code needs only `@afora/core`. See `docs/api-tiers.md`.
+ */
+export type {
+	ApplicationDescription,
+	CommandDescription,
+	ExceptionDescription,
+	FieldDescription,
+	FieldsDescription,
+	LogDescription,
+	OutputDescription,
+	PropertyDescription,
+	PropertyLineageDescription,
+	PropertyReference,
+	ProviderReference,
+	RecordDescription,
+	UseCaseDependencyDescription,
+	UseCaseDescription,
+} from "./core/application/types/application.interface";
+export {
+	ENTITY_IDENTITY_KEYS,
+	RESERVED_ENTITY_KEYS,
+} from "./core/entity/abstract-entity";
+export type { EventPolicyDescription } from "./core/event-policy/types/event-policy.interface";
+export { coerceTextValues } from "./core/output/coerce";
+export {
+	type OperationRoute,
+	operationRoutes,
+	ROUTE_OPTION_KEYS,
+	requestIdHeaderOf,
+	routeOptionsIssue,
+} from "./core/output/openapi-sink";
+export {
+	outputValueOf,
+	PROBLEM_MEDIA_TYPE,
+	problemOf,
+} from "./core/output/problem";
+export { sinkOf, stageCatalogOf, stageKindOf } from "./core/output/stage";
+export { statusOf } from "./core/output/status";
+export type {
+	OperationDescriptor,
+	Problem,
+	ProblemOptions,
+	SinkFactory,
+	SinkSettings,
+	SinkStage,
+	StageDescription,
+} from "./core/output/types/output.interface";
+export { RESERVED_RECORD_KEYS } from "./core/record/abstract-record";
+export type {
+	ProviderCapabilities,
+	ProviderDescription,
+	ProviderQuery,
+} from "./core/repository/types/query.interface";
+export type {
+	IRepositoryProvider,
+	ProviderIncrementOptions,
+	ProviderKeyset,
+	ProviderUpdateOptions,
+	RepositoryContext,
+	RepositoryData,
+} from "./core/repository/types/repository.interface";
+export { Demo } from "./core/symbols/demo";
+export { Kind } from "./core/symbols/kind";

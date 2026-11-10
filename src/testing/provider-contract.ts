@@ -1,11 +1,13 @@
+import type {
+	IRepositoryProvider,
+	ProviderQuery,
+	RepositoryContext,
+	RepositoryData,
+} from "../adapters";
 import {
 	blueprintOf,
 	entityOf,
-	type IRepositoryProvider,
-	type ProviderQuery,
 	RepositoryConcurrencyConflict,
-	type RepositoryContext,
-	type RepositoryData,
 	RepositoryEntityNotFound,
 	type RepositoryQuery,
 	RepositoryUniqueViolation,

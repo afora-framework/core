@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import type { IRepositoryProvider } from "../../adapters";
 import {
 	blueprintOf,
 	entityOf,
 	InvalidRepositoryQuery,
-	type IRepositoryProvider,
 	inMemoryProvider,
 	type RepositoryQuery,
 	recordOf,
