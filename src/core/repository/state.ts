@@ -70,16 +70,34 @@ function expiryKeyOf(entity: object): string | undefined {
 	return "at" in expires ? expires.at : EXPIRES_AT;
 }
 
+/** The key of each stored row holding its schema version. */
+export const SCHEMA_VERSION_KEY = "$v";
+
+/** `RepositoryContext.schema` of `entity`, when it declares `schemaVersion`. */
+function schemaOf(entity: object): RepositoryContext["schema"] {
+	const settings = (
+		entity as { readonly [EntitySettings]?: EntityStorageSettings }
+	)[EntitySettings];
+	if (!settings?.schemaVersioned) return undefined;
+	return Object.freeze({
+		version: settings.schemaVersion,
+		key: SCHEMA_VERSION_KEY,
+		previousNames: settings.previousNames,
+	});
+}
+
 /** The context of the provider, with the environment read on first use. */
 export function contextOf(state: RepositoryState): RepositoryContext {
 	if (state.context) return state.context;
 	const key = expiryKeyOf(state.entity);
+	const schema = schemaOf(state.entity);
 	state.context = Object.freeze({
 		entity: state.entity,
 		name: state.name,
 		unique: state.entity[EntityUniqueKeys],
 		indexes: state.indexes,
 		...(key === undefined ? {} : { expiry: Object.freeze({ key }) }),
+		...(schema === undefined ? {} : { schema }),
 		env: loadEnvironments(state.environment),
 	});
 	return state.context;

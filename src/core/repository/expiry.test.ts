@@ -82,7 +82,14 @@ describe("entityOf expires", () => {
 		expect(Window.blueprint.properties).not.toHaveProperty("expiresAt");
 		expect(
 			(Window as unknown as Record<symbol, unknown>)[EntitySettings],
-		).toEqual({ versioned: false, expires: { at: "until" } });
+		).toEqual({
+			versioned: false,
+			expires: { at: "until" },
+			schemaVersioned: false,
+			schemaVersion: 1,
+			upgrade: {},
+			previousNames: [],
+		});
 	});
 
 	test("an entity that does not expire may have a key named expiresAt", () => {

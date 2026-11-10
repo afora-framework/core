@@ -132,6 +132,34 @@ export interface EntityStorageOptions<
 	 * blueprint. A record with no date never expires.
 	 */
 	readonly expires?: Expires;
+	/**
+	 * The version of the stored shape of the entity, 1 when absent. When set,
+	 * every write stores it in each row under `SCHEMA_VERSION_KEY`, and reads
+	 * bring older rows up to it with `upgrade` before parsing them.
+	 */
+	readonly schemaVersion?: number;
+	/**
+	 * The steps that bring a stored row from the version before each key up
+	 * to that key: `{ 2: (data) => ({ ...data, slug: data.path }) }`. Each
+	 * gets the raw stored data, without the version key.
+	 */
+	readonly upgrade?: EntityUpgrades;
+	/**
+	 * The names the entity had before (its `name` option), so a backfill
+	 * (`app.migrate`) moves their rows to the current name, and `start()`
+	 * accepts the rename.
+	 */
+	readonly previousNames?: readonly string[];
+}
+
+/** A step of `upgrade`: the stored data of a version, as the next one. */
+export type EntityUpgrade = (
+	data: Readonly<Record<string, unknown>>,
+) => Record<string, unknown>;
+
+/** The `upgrade` steps of an entity, keyed by the version each one reaches. */
+export interface EntityUpgrades {
+	readonly [version: number]: EntityUpgrade;
 }
 
 /** A duration, e.g. `{ days: 400 }`. */
@@ -168,6 +196,12 @@ export type ExpiringIdentity<
 export interface EntityStorageSettings {
 	readonly versioned: boolean;
 	readonly expires?: EntityExpires;
+	/** Whether `schemaVersion` was declared, so rows carry the version key. */
+	readonly schemaVersioned: boolean;
+	/** `schemaVersion`, 1 when absent. */
+	readonly schemaVersion: number;
+	readonly upgrade: EntityUpgrades;
+	readonly previousNames: readonly string[];
 }
 
 /**

@@ -133,6 +133,10 @@ export function refinePropertyOf<Property extends AnyPropertyConstructor>(
 		...base,
 		[Demo]: settings.default ?? examples?.[0] ?? base[Demo],
 		schema: new SchemaConstructor(),
+		...(settings.fill !== undefined && { fill: settings.fill }),
+		...(typeof settings.renamedFrom === "string" && {
+			renamedFrom: settings.renamedFrom,
+		}),
 	};
 
 	const Refined = derivePropertyOf(Property, type) as Property;

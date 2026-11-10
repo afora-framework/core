@@ -24,6 +24,7 @@ export {
 	resetApplication,
 	useApplication,
 } from "./core/application/registry";
+export { diffSchemas, schemaLockOf } from "./core/application/schema";
 export {
 	isLogFactory,
 	isProviderFactory,
@@ -163,6 +164,8 @@ export type {
 	EntityStorageOptions,
 	EntityStorageSettings,
 	EntityUniqueKey,
+	EntityUpgrade,
+	EntityUpgrades,
 	ExpiresAtField,
 	ExpiringIdentity,
 	IEntityIdentity,
@@ -429,6 +432,7 @@ export {
 	RepositoryOf,
 	repositoryOf,
 } from "./core/repository/repository";
+export { SCHEMA_VERSION_KEY } from "./core/repository/state";
 export type {
 	ProviderCapabilities,
 	ProviderDescription,
@@ -482,8 +486,18 @@ export type {
 	RepositoryIncrementDeltas,
 	RepositoryIncrementOptions,
 	RepositoryRestore,
+	RepositorySchema,
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
+export type {
+	SchemaChange,
+	SchemaChangeClass,
+	SchemaChangeKind,
+	SchemaLock,
+	SchemaLockEntity,
+	SchemaLockField,
+	SchemaPlan,
+} from "./core/repository/types/schema.interface";
 export type { SchemaClass } from "./core/schema/schema";
 export { schemaOf } from "./core/schema/schema";
 export type {

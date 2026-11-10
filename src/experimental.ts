@@ -9,3 +9,12 @@ export type {
 	SliceMask,
 	ValueMask,
 } from "./core/blueprint/types/slice.interface";
+
+// For providers that filter, order and page rows themselves (document stores):
+// the same rules as `inMemoryProvider`.
+export {
+	matchesQuery,
+	prepareQuery,
+	sameValue,
+	selectRows,
+} from "./core/repository/query";

@@ -137,6 +137,10 @@ export function entityBuilderOf<
 			value: Object.freeze({
 				versioned,
 				expires: options.expires,
+				schemaVersioned: options.schemaVersion !== undefined,
+				schemaVersion: options.schemaVersion ?? 1,
+				upgrade: Object.freeze({ ...options.upgrade }),
+				previousNames: Object.freeze([...(options.previousNames ?? [])]),
 			}),
 		});
 
@@ -170,7 +174,14 @@ export function isEntity(
 function withoutStorage(
 	options: EntityOptions<IBlueprintCollection>,
 ): EntityOptions<IBlueprintCollection> {
-	const { versioned: _versioned, expires: _expires, ...rest } = options;
+	const {
+		versioned: _versioned,
+		expires: _expires,
+		schemaVersion: _schemaVersion,
+		upgrade: _upgrade,
+		previousNames: _previousNames,
+		...rest
+	} = options;
 	return rest;
 }
 
