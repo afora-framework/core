@@ -1006,7 +1006,7 @@
 							"items": {
 								"type": "string"
 							},
-							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), count."
+							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, explain, create, update, delete, restore (soft deletion only), count."
 						},
 						"provider": {
 							"anyOf": [
@@ -1103,6 +1103,49 @@
 								"type": "string"
 							},
 							"description": "Environments it depends on."
+						},
+						"indexes": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"type": "object",
+									"required": ["where"],
+									"properties": {
+										"where": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"minItems": 1,
+											"description": "Keys the query matches by equality."
+										},
+										"orderBy": {
+											"type": "string",
+											"description": "The scalar key it reads in order of."
+										}
+									},
+									"additionalProperties": false
+								}
+							},
+							"description": "Access patterns by name; a query that matches one reads through it, and the provider can build it (a GSI, an SQL index)."
+						},
+						"scans": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "allow"
+								},
+								{
+									"type": "string",
+									"const": "warn"
+								},
+								{
+									"type": "string",
+									"const": "reject"
+								}
+							],
+							"default": "allow",
+							"description": "A query only a scan serves: runs, logs repository-scan, or throws InvalidRepositoryQuery."
 						}
 					},
 					"additionalProperties": false

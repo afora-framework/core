@@ -675,6 +675,148 @@ function checkRecord(
 	}
 }
 
+/**
+ * The `indexes` of a repository: `{ name: { where: [keys], orderBy?: key } }`
+ * over the keys of `entity` (when it is known), none of them sensitive, with
+ * a scalar `orderBy`, and no two the same.
+ */
+function checkIndexes(
+	indexes: unknown,
+	path: Path,
+	entity: Decl | undefined,
+	scope: Scope,
+	issues: SpecIssue[],
+): void {
+	if (indexes === undefined) return;
+	if (!isObject(indexes)) {
+		issues.push(
+			issue(
+				path,
+				"invalid_index",
+				"Expected an object of indexes by name: { name: { where: [keys], orderBy?: key } }.",
+			),
+		);
+		return;
+	}
+	const keys = entity ? new Set(keysOf(entity)) : undefined;
+	const fields = entity ? (fieldsOfDecl(entity) ?? {}) : {};
+	const sensitive = new Set<string>(
+		entity && Array.isArray(entity.spec.sensitive)
+			? entity.spec.sensitive.filter(
+					(key): key is string => typeof key === "string",
+				)
+			: [],
+	);
+	for (const [key, field] of Object.entries(fields)) {
+		if (flagOf(field, "sensitive", scope)) sensitive.add(key);
+	}
+	const seen = new Map<string, string>();
+	for (const [name, index] of Object.entries(indexes)) {
+		const here = [...path, name];
+		if (!isIdentifier(name)) {
+			issues.push(
+				issue(here, "invalid_index", `"${name}" must be an identifier.`),
+			);
+			continue;
+		}
+		if (
+			!isObject(index) ||
+			Object.keys(index).some((key) => key !== "where" && key !== "orderBy") ||
+			!Array.isArray(index.where) ||
+			index.where.length === 0 ||
+			index.where.some((key) => typeof key !== "string") ||
+			(index.orderBy !== undefined && typeof index.orderBy !== "string")
+		) {
+			issues.push(
+				issue(
+					here,
+					"invalid_index",
+					'Expected { "where": [keys], "orderBy"?: key }, with at least one key.',
+				),
+			);
+			continue;
+		}
+		const where = index.where as string[];
+		const orderBy = index.orderBy as string | undefined;
+		let valid = true;
+		const named: [Path, string][] = [
+			...where.map((key, at): [Path, string] => [[...here, "where", at], key]),
+			...(orderBy === undefined
+				? []
+				: [[[...here, "orderBy"], orderBy] as [Path, string]]),
+		];
+		for (const [at, key] of named) {
+			if (keys && !keys.has(key)) {
+				issues.push(
+					issue(
+						at,
+						"unknown_index_key",
+						`"${key}" is not a key of "${entity?.name}". Keys: ${[...keys].join(", ")}.`,
+					),
+				);
+				valid = false;
+			} else if (sensitive.has(key)) {
+				issues.push(
+					issue(
+						at,
+						"invalid_index",
+						`"${key}" is sensitive and cannot be indexed.`,
+					),
+				);
+				valid = false;
+			}
+		}
+		if (new Set(where).size !== where.length) {
+			issues.push(
+				issue(
+					[...here, "where"],
+					"invalid_index",
+					"A key is listed twice in where.",
+				),
+			);
+			valid = false;
+		}
+		const ordered = orderBy === undefined ? undefined : fields[orderBy];
+		if (ordered && !isScalarField(ordered, scope)) {
+			issues.push(
+				issue(
+					[...here, "orderBy"],
+					"invalid_index",
+					`"${orderBy}" is not scalar; an index orders by a scalar key.`,
+				),
+			);
+			valid = false;
+		}
+		if (!valid) continue;
+		const signature = JSON.stringify([[...where].sort(), orderBy ?? null]);
+		const other = seen.get(signature);
+		if (other !== undefined) {
+			issues.push(
+				issue(
+					here,
+					"invalid_index",
+					`"${name}" is the same index as "${other}".`,
+				),
+			);
+			continue;
+		}
+		seen.set(signature, name);
+	}
+}
+
+/** Whether `field` holds one scalar: not a list, an inline object, or a blueprint, record or entity. */
+function isScalarField(field: Field, scope: Scope): boolean {
+	if (field.list || field.kind === "inline") return false;
+	if (field.kind !== "type" || !/^[A-Z]/.test(field.type)) return true;
+	const decl = scope.decls.get(field.type);
+	return (
+		decl === undefined ||
+		(decl.kind !== "blueprint" &&
+			decl.kind !== "record" &&
+			decl.kind !== "entity")
+	);
+}
+
 function checkRepository(
 	decl: Decl,
 	scope: Scope,
@@ -692,13 +834,15 @@ function checkRepository(
 				"deletion",
 				"relations",
 				"environments",
+				"indexes",
+				"scans",
 			].includes(key)
 		) {
 			issues.push(
 				issue(
 					[...path, key],
 					"unknown_key",
-					`"${key}" is not valid here. Valid keys: entity, actions, provider, deletion, relations, environments.`,
+					`"${key}" is not valid here. Valid keys: entity, actions, provider, deletion, relations, environments, indexes, scans.`,
 				),
 			);
 		}
@@ -725,8 +869,29 @@ function checkRepository(
 			),
 		);
 	}
+	if (
+		spec.scans !== undefined &&
+		spec.scans !== "allow" &&
+		spec.scans !== "warn" &&
+		spec.scans !== "reject"
+	) {
+		issues.push(
+			issue(
+				[...path, "scans"],
+				"invalid_option",
+				'Expected "allow", "warn" or "reject".',
+			),
+		);
+	}
 	const target =
 		typeof spec.entity === "string" ? scope.decls.get(spec.entity) : undefined;
+	checkIndexes(
+		spec.indexes,
+		[...path, "indexes"],
+		target?.kind === "entity" ? target : undefined,
+		scope,
+		issues,
+	);
 	if (target?.kind !== "entity") {
 		issues.push(
 			issue(
@@ -785,6 +950,7 @@ function checkRepository(
 					"exists",
 					"findPage",
 					"findCursor",
+					"explain",
 				].includes(action)
 			)
 				continue;
@@ -794,7 +960,7 @@ function checkRepository(
 					issue(
 						here,
 						"unknown_action",
-						`"${action}" is not an action. Use create, update, delete, restore, count, findMany, exists, findPage, findCursor, findBy<Key> or findManyBy<Key>.`,
+						`"${action}" is not an action. Use create, update, delete, restore, count, findMany, exists, findPage, findCursor, explain, findBy<Key> or findManyBy<Key>.`,
 					),
 				);
 				continue;

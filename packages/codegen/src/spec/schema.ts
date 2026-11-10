@@ -337,7 +337,7 @@ const RepositoryDeclaration = Type.Object(
 		),
 		actions: Type.Array(Type.String(), {
 			description:
-				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), count.",
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, explain, create, update, delete, restore (soft deletion only), count.",
 		}),
 		provider: Type.Optional(ProviderOrKey),
 		relations: Type.Optional(
@@ -346,6 +346,39 @@ const RepositoryDeclaration = Type.Object(
 			),
 		),
 		environments: Type.Optional(StringList("Environments it depends on.")),
+		indexes: Type.Optional(
+			Type.Record(
+				Type.String({ pattern: KEY }),
+				Type.Object(
+					{
+						where: Type.Array(Type.String(), {
+							minItems: 1,
+							description: "Keys the query matches by equality.",
+						}),
+						orderBy: Type.Optional(
+							Type.String({
+								description: "The scalar key it reads in order of.",
+							}),
+						),
+					},
+					{ additionalProperties: false },
+				),
+				{
+					description:
+						"Access patterns by name; a query that matches one reads through it, and the provider can build it (a GSI, an SQL index).",
+				},
+			),
+		),
+		scans: Type.Optional(
+			Type.Union(
+				[Type.Literal("allow"), Type.Literal("warn"), Type.Literal("reject")],
+				{
+					default: "allow",
+					description:
+						"A query only a scan serves: runs, logs repository-scan, or throws InvalidRepositoryQuery.",
+				},
+			),
+		),
 	},
 	{ additionalProperties: false },
 );

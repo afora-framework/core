@@ -238,6 +238,10 @@ function build(): Catalog {
 				action: "findCursor",
 				rule: "Gives { items, limit, next } for { where?, orderBy?, limit?, after? }: pages by position, `after` being the `next` of the page before. No offset and no total. Needs no key, and a provider that reads by cursor (inMemory and drizzle do).",
 			},
+			{
+				action: "explain",
+				rule: 'Gives how a query would be read, { access: "id" | "unique" | "index" | "scan", index? }, without reading. Needs no key.',
+			},
 		],
 		exceptionLayers: Object.values(core.ExceptionLayers),
 		coreExceptions: exportsOf

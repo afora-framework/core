@@ -42,7 +42,7 @@ const ENSURE_KINDS = [
 	"false",
 ];
 const READ_ACTION =
-	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|findCursor|count)$/;
+	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|findCursor|explain|count)$/;
 const WRITE_ACTIONS = new Set(["create", "update", "delete", "restore"]);
 /** The names a step cannot bind with `as`: they are roots or escapes of values. */
 const RESERVED_NAMES = ["input", "context", "env", "literal"];

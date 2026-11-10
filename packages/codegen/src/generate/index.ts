@@ -612,6 +612,17 @@ function repositoryDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	if (environments.length > 0) {
 		props.push(["environmentDependencies", listDoc(environments)]);
 	}
+	const indexes = spec.indexes;
+	if (
+		typeof indexes === "object" &&
+		indexes !== null &&
+		Object.keys(indexes).length > 0
+	) {
+		props.push(["indexes", literal(indexes)]);
+	}
+	if (spec.scans === "warn" || spec.scans === "reject") {
+		props.push(["scans", literal(spec.scans)]);
+	}
 	return [
 		"export const ",
 		decl.name,

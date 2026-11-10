@@ -442,6 +442,22 @@ export function extractSpec(
 		...(value.environments.length > 0
 			? { environments: [...value.environments] }
 			: {}),
+		...(Object.keys(value.indexes ?? {}).length > 0
+			? {
+					indexes: Object.fromEntries(
+						Object.entries(value.indexes).map(([index, { where, orderBy }]) => [
+							index,
+							{
+								where: [...where],
+								...(orderBy === undefined ? {} : { orderBy }),
+							},
+						]),
+					),
+				}
+			: {}),
+		...(value.scans === "warn" || value.scans === "reject"
+			? { scans: value.scans }
+			: {}),
 	}));
 
 	const exceptions = entries(description.exceptions, (value, name) => ({

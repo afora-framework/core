@@ -64,6 +64,28 @@ function keep(list: unknown): string[] | undefined {
 	return unique.length > 0 ? unique : undefined;
 }
 
+/** The indexes of a repository, by name in order, each with its `where` and `orderBy`; none when empty. */
+function canonicalIndexes(indexes: unknown): { indexes?: unknown } {
+	if (typeof indexes !== "object" || indexes === null || Array.isArray(indexes))
+		return {};
+	const entries = Object.entries(indexes as Record<string, unknown>)
+		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+		.map(([name, index]) => {
+			const { where, orderBy } = (index ?? {}) as {
+				where?: unknown;
+				orderBy?: unknown;
+			};
+			return [
+				name,
+				{
+					where: Array.isArray(where) ? [...where] : where,
+					...(orderBy === undefined ? {} : { orderBy }),
+				},
+			];
+		});
+	return entries.length > 0 ? { indexes: Object.fromEntries(entries) } : {};
+}
+
 function canonicalRecord(
 	name: string,
 	value: Json,
@@ -415,6 +437,10 @@ export function normalizeSpec(
 								...(value.deletion === "soft" ? { deletion: "soft" } : {}),
 								...(relations ? { relations } : {}),
 								...(environments ? { environments } : {}),
+								...canonicalIndexes(value.indexes),
+								...(value.scans === "warn" || value.scans === "reject"
+									? { scans: value.scans }
+									: {}),
 							},
 						];
 					}
