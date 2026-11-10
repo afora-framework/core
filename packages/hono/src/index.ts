@@ -1,23 +1,25 @@
 import {
-	coerceTextValues,
 	InvalidOutputStage,
 	type OpenAPISinkOptions,
+	openapi,
+	type RouteOptions,
+	stripUndeclared,
+} from "@afora/core";
+import {
+	coerceTextValues,
 	type OperationDescriptor,
 	type OperationRoute,
-	openapi,
 	operationRoutes,
 	outputValueOf,
 	PROBLEM_MEDIA_TYPE,
 	problemOf,
 	ROUTE_OPTION_KEYS,
-	type RouteOptions,
 	requestIdHeaderOf,
 	routeOptionsIssue,
 	sinkOf,
 	stageCatalogOf,
 	statusOf,
-	stripUndeclared,
-} from "@afora/core";
+} from "@afora/core/adapters";
 import { type Context, Hono } from "hono";
 import { InvalidWebhookSignature, WebhookSecretMissing } from "./exceptions";
 import {

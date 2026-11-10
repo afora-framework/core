@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
+import { statusOf } from "../../adapters";
 import {
 	applicationOf,
 	blueprintOf,
@@ -8,12 +9,11 @@ import {
 	entityOf,
 	exceptionOf,
 	inMemoryProvider,
-	isPasswordHash,
 	repositoryOf,
 	StdUseCases,
-	statusOf,
 	useCaseOf,
 } from "../../index";
+import { isPasswordHash } from "../properties/password";
 
 const PostNotFound = exceptionOf({
 	layer: ExceptionLayers.UseCase,

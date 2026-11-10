@@ -7,6 +7,7 @@
 		".": {
 			"entry": [
 				"src/index.ts",
+				"src/adapters.ts",
 				"src/experimental.ts",
 				"src/testing/index.ts",
 				"src/**/*.sandbox.ts",

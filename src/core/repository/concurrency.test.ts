@@ -6,6 +6,7 @@ import {
 	setSystemTime,
 	test,
 } from "bun:test";
+import { type IRepositoryProvider, statusOf } from "../../adapters";
 import {
 	blueprintOf,
 	type EventDefinition,
@@ -15,13 +16,11 @@ import {
 	ImmutableEntityKey,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryIncrement,
-	type IRepositoryProvider,
 	inMemoryProvider,
 	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 	ReservedEntityKey,
 	repositoryOf,
-	statusOf,
 	useCaseOf,
 } from "../../index";
 

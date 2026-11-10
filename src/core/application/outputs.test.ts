@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { sinkOf } from "../../adapters";
 import {
 	ApplicationConflict,
 	applicationOf,
@@ -14,7 +15,6 @@ import {
 	RepositoryUsedOutsideApplication,
 	repositoryOf,
 	select,
-	sinkOf,
 	UnregisteredApplicationReference,
 	useCaseOf,
 } from "../../index";

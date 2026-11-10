@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
+import { statusOf } from "../../adapters";
 import {
 	applicationOf,
 	blueprintOf,
@@ -11,7 +12,6 @@ import {
 	Logger,
 	repositoryOf,
 	StdUseCases,
-	statusOf,
 } from "../../index";
 
 const TypeNotFound = exceptionOf({

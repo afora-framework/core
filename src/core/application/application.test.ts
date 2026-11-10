@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import { Type } from "typebox";
+import { propertyLineageOf } from "../../experimental";
 import {
 	ApplicationConflict,
 	applicationOf,
@@ -12,10 +13,8 @@ import {
 	Integer,
 	InvalidApplicationDeclaration,
 	inMemoryProvider,
-	isApplication,
 	listOf,
 	optionalOf,
-	propertyLineageOf,
 	propertyOf,
 	RepositoryUsedOutsideApplication,
 	recordOf,
@@ -23,6 +22,7 @@ import {
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
 } from "../../index";
+import { isApplication } from "./application";
 
 const Age = Integer.with({ min: 0, max: 150, description: "In years" });
 const Status = enumOf(["draft", "published"]);
