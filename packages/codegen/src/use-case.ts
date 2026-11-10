@@ -24,6 +24,7 @@ const STEP_SHAPES = {
 	create: { required: ["create", "value"], optional: ["as"] },
 	update: { required: ["update", "value"], optional: ["as"] },
 	delete: { required: ["delete", "value"], optional: ["as"] },
+	restore: { required: ["restore", "value"], optional: ["as"] },
 	call: { required: ["call", "input"], optional: ["as"] },
 	run: { required: ["run", "fn"], optional: ["args", "as"] },
 	return: { required: ["return"], optional: [] },
@@ -42,7 +43,7 @@ const ENSURE_KINDS = [
 ];
 const READ_ACTION =
 	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|findCursor|count)$/;
-const WRITE_ACTIONS = new Set(["create", "update", "delete"]);
+const WRITE_ACTIONS = new Set(["create", "update", "delete", "restore"]);
 /** The names a step cannot bind with `as`: they are roots or escapes of values. */
 const RESERVED_NAMES = ["input", "context", "env", "literal"];
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -793,7 +794,8 @@ function checkSteps(steps: unknown, implPath: Path, ctx: StepsContext): void {
 			}
 			case "create":
 			case "update":
-			case "delete": {
+			case "delete":
+			case "restore": {
 				repository(step[kind], kind, kind);
 				checkValue(step.value, "value");
 				break;

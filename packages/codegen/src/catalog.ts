@@ -195,6 +195,10 @@ function build(): Catalog {
 			{ action: "update", rule: "Saves a changed entity." },
 			{ action: "delete", rule: "Destroys an entity (soft delete)." },
 			{
+				action: "restore",
+				rule: 'Brings back a soft-deleted entity, by entity or id. Needs deletion "soft".',
+			},
+			{
 				action: "count",
 				rule: "Counts the entities; takes an optional query to count only the matching ones.",
 			},

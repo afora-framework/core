@@ -424,6 +424,7 @@ export type {
 	RepositoryDelete,
 	RepositoryFindBy,
 	RepositoryFindManyBy,
+	RepositoryRestore,
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
 export type { SchemaClass } from "./core/schema/schema";

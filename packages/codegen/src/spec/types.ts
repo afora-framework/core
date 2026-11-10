@@ -239,6 +239,11 @@ export type StepSpec =
 			readonly as?: string;
 	  }
 	| {
+			readonly restore: string;
+			readonly value: StepValueSpec;
+			readonly as?: string;
+	  }
+	| {
 			readonly call: string;
 			readonly input: StepValueSpec;
 			readonly as?: string;

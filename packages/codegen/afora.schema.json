@@ -542,7 +542,7 @@
 							"items": {
 								"type": "string"
 							},
-							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, count."
+							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), count."
 						},
 						"provider": {
 							"anyOf": [
@@ -1020,6 +1020,24 @@
 													},
 													{
 														"type": "object",
+														"required": ["restore", "value"],
+														"properties": {
+															"restore": {
+																"type": "string",
+																"description": "A repository dependency with soft deletion."
+															},
+															"value": {
+																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+															},
+															"as": {
+																"type": "string",
+																"description": "Binds the result."
+															}
+														},
+														"additionalProperties": false
+													},
+													{
+														"type": "object",
 														"required": ["call", "input"],
 														"properties": {
 															"call": {
@@ -1089,7 +1107,7 @@
 														"additionalProperties": false
 													}
 												],
-												"description": "A step: find, ensure, build, change, invoke, create, update, delete, call, run or return (exactly one, last)."
+												"description": "A step: find, ensure, build, change, invoke, create, update, delete, restore, call, run or return (exactly one, last)."
 											},
 											"minItems": 1
 										}

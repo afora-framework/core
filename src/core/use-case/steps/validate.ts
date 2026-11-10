@@ -38,6 +38,7 @@ const SHAPES = {
 	create: { required: ["create", "value"], optional: ["as"] },
 	update: { required: ["update", "value"], optional: ["as"] },
 	delete: { required: ["delete", "value"], optional: ["as"] },
+	restore: { required: ["restore", "value"], optional: ["as"] },
 	call: { required: ["call", "input"], optional: ["as"] },
 	run: { required: ["run", "fn"], optional: ["args", "as"] },
 	return: { required: ["return"], optional: [] },
@@ -56,7 +57,7 @@ const ENSURE_KINDS = new Set([
 ]);
 const READ_ACTION =
 	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|findCursor|count)$/;
-const WRITE_ACTIONS = new Set(["create", "update", "delete"]);
+const WRITE_ACTIONS = new Set(["create", "update", "delete", "restore"]);
 
 /** What is known of a name bound by a step: the class `build` made, if known. */
 interface Bound {
@@ -376,7 +377,8 @@ export function validateSteps(
 			}
 			case "create":
 			case "update":
-			case "delete": {
+			case "delete":
+			case "restore": {
 				repositoryOf(index, record[kind], kind);
 				checkValue(index, record.value, "value");
 				break;

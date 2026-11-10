@@ -145,6 +145,12 @@ export type UseCaseStep<
 			readonly as?: string;
 	  }
 	| {
+			/** A soft-deleted entity or its id; the repository gives it back alive. */
+			readonly restore: StepRepositoryWith<Dependencies, "restore">;
+			readonly value: StepValue;
+			readonly as?: string;
+	  }
+	| {
 			readonly call: UseCaseKeys<Dependencies>;
 			readonly input: StepValue;
 			readonly as?: string;
@@ -205,6 +211,11 @@ export type UseCaseStepDescription =
 	  }
 	| {
 			readonly delete: string;
+			readonly value: StepValue;
+			readonly as?: string;
+	  }
+	| {
+			readonly restore: string;
 			readonly value: StepValue;
 			readonly as?: string;
 	  }

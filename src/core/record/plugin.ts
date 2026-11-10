@@ -32,9 +32,7 @@ export function isVersion(version: unknown): version is string {
 }
 
 /** The major, minor and patch of a semantic version. */
-function versionParts(
-	version: string,
-): readonly [number, number, number] {
+function versionParts(version: string): readonly [number, number, number] {
 	const [, major, minor, patch] = SEMVER.exec(version) as unknown as [
 		string,
 		string,

@@ -64,7 +64,7 @@ a file of your own.
   \`password\` is always sensitive and \`slug\` always unique; \`id\` is always unique.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.
 - Repository actions: \`findById\`; \`findBy<Key>\` only for unique keys (id, \`unique\`, slug fields, unique plugin keys such as
-  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`count\`, and the
+  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`restore\` (only with \`"deletion": "soft"\`), \`count\`, and the
   queries \`findMany\`, \`exists\`, \`findPage\` (no key needed; \`where\`, \`orderBy\`, \`limit\`, \`offset\` at runtime) and
   \`findCursor\` (pages by position: \`after\` is the \`next\` of the page before, no \`offset\`).
 - \`provider\` (top level for the application, and optionally on a repository, which then uses its own): \`"inMemory"\`,

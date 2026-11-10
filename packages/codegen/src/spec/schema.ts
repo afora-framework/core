@@ -281,7 +281,7 @@ const RepositoryDeclaration = Type.Object(
 		),
 		actions: Type.Array(Type.String(), {
 			description:
-				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, count.",
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), count.",
 		}),
 		provider: Type.Optional(ProviderOrKey),
 		relations: Type.Optional(
@@ -428,6 +428,16 @@ const Step = Type.Union(
 		),
 		Type.Object(
 			{
+				restore: Type.String({
+					description: "A repository dependency with soft deletion.",
+				}),
+				value: StepValue,
+				as: StepAs,
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
 				call: Type.String({ description: "A use case dependency." }),
 				input: StepValue,
 				as: StepAs,
@@ -447,7 +457,7 @@ const Step = Type.Union(
 	],
 	{
 		description:
-			"A step: find, ensure, build, change, invoke, create, update, delete, call, run or return (exactly one, last).",
+			"A step: find, ensure, build, change, invoke, create, update, delete, restore, call, run or return (exactly one, last).",
 	},
 );
 
