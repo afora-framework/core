@@ -77,6 +77,47 @@ await App.start(); // validates Database, then calls create once
 
 `await app.stop()` calls the optional `close()` of the provider (a new optional member of `IRepositoryProvider`, for connections and files). With `providerFrom`, it also forgets the provider: calls throw `ApplicationNotStarted` again, and the next `start()` makes a new one.
 
+## Named providers
+
+An application can read and write through several providers, e.g. one database for the domain and another for an audit log. `providersOf` declares them by key, in a module of their own, so that repositories can name one before any application exists:
+
+```ts
+// providers.ts
+import { providerFrom, providersOf } from "@afora/core";
+
+export const Providers = providersOf({
+	main: providerFrom(Database, (env) =>
+		drizzleProvider({ db: connect(env.DATABASE_URL), tables }),
+	),
+	audit: providerFrom(Audit, (env) => auditProvider(env.AUDIT_URL)),
+});
+
+// repositories.ts
+export const AuditLogs = repositoryOf({
+	entity: AuditLog,
+	actions: ["create"],
+	provider: Providers.audit,
+});
+
+// application.ts
+export const App = applicationOf({
+	name: "blog",
+	environments: { Database, Audit },
+	providers: Providers,
+	provider: Providers.main, // the repositories that name none
+	repositories: { Users, Posts, AuditLogs },
+});
+```
+
+`Providers.audit` (a `ProviderSlot`) completes in the editor and is renamed with its key. Each value is a provider or a factory of `providerFrom`; `providersOf` throws `InvalidApplicationDeclaration` for keys that are not identifiers (or are `inMemory`), for a value that is neither, and for one provider under two keys.
+
+- **Each application makes its own.** An application that registers the storage makes its own instance of each `providerFrom` on `start()`, in the order of the keys after its default provider, and closes them all on `stop()` (a failed start closes those it made). Two applications that register one storage do not share data; an application that `extends` another, or is made by `.extend()`, shares its instances. A provider object (not a factory) is the same object for every application, as `provider: object` is.
+- **Registered references.** A repository that names a provider of a storage the application does not register, and a `provider` that is not one of its `providers`, throw `UnregisteredApplicationReference` (`details.reference` is `provider "audit"`). The environments of each factory must be registered. Two storages with one key, through `extends`, throw `ApplicationConflict`.
+- **Outside an application.** A repository on a provider object works as is. On a factory, a call throws `ProviderNotBound`: only an application makes it.
+- **Transactions.** A transactional command must stay on one provider: repositories on two keys throw `InvalidCommandDeclaration` at declaration, and `start()` checks that each provider made runs the transactions of its commands.
+- **Introspection.** `app.get(Providers.audit)` gives the instance of this application. `describe().providers` gives each key, with `from`, as a `ProviderDescription` (`opaque` for a factory), and a repository (or the application) on one has `provider: { kind: "ref", key: "audit" }`.
+- **Import cycles.** The module of the storage must not import the repositories or the application that import it.
+
 ## The context of an application
 
 `app.context` (an `ApplicationContext`) is what an application knows of itself: its `name`, `env(Environment)` for the typed variables of an environment it registers (one it does not register throws `UnregisteredApplicationReference`), and its `logger`. Your code reaches it through the application, or through `useApplication().context` without importing it.

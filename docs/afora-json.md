@@ -33,18 +33,19 @@ afora-codegen extract src/app.ts#App [--import key=./file.ts#name] > afora.json
 
 Some things are code, not data: a provider made by hand, a `run` function, an `execute`, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
 
-| Key                            | Maps                                                                    |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| `provider`                     | the provider of the application, when created without `providerOf`      |
-| `log`                          | the `log` of the application, when made by `logFrom`                    |
-| `log.providers.<index>`        | a log provider other than `"console"` or `"json"`, by its position      |
-| `repositories.<Name>.provider` | the own provider of a repository, when created without `providerOf`     |
-| `useCases.<Name>`              | a use case with a hand-written `execute`                                |
-| `useCases.<Name>.run.<name>`   | the `fn` of a `run` step of a steps use case                            |
-| `commands.<Name>.events`       | the event handler of a command                                          |
-| `commands.<Name>.onEventError` | the `onEventError` handler of a command                                 |
-| `outputs.<Name>.pipe.<index>`  | a stage written by hand, by its position in the `pipe`                  |
-| `<property name>`              | the module of a property that cannot be recreated (see the limitations) |
+| Key                            | Maps                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------- |
+| `provider`                     | the provider of the application, when created without `providerOf`         |
+| `log`                          | the `log` of the application, when made by `logFrom`                       |
+| `log.providers.<index>`        | a log provider other than `"console"` or `"json"`, by its position         |
+| `repositories.<Name>.provider` | the own provider of a repository, when created without `providerOf`        |
+| `providers.<key>`              | a provider of the top-level `providers`, when created without `providerOf` |
+| `useCases.<Name>`              | a use case with a hand-written `execute`                                   |
+| `useCases.<Name>.run.<name>`   | the `fn` of a `run` step of a steps use case                               |
+| `commands.<Name>.events`       | the event handler of a command                                             |
+| `commands.<Name>.onEventError` | the `onEventError` handler of a command                                    |
+| `outputs.<Name>.pipe.<index>`  | a stage written by hand, by its position in the `pipe`                     |
+| `<property name>`              | the module of a property that cannot be recreated (see the limitations)    |
 
 The value is always `"./file.ts#export"`.
 
@@ -80,6 +81,7 @@ What the spec and the round trip do not cover. Each is reported by an issue or a
 - **Imported use cases and dependencies.** A use case cannot list an imported use case (a hand-written class, `{ "import": ... }`) as a dependency: its handler imports the generated file that would import it back, which is an import cycle. The validator reports `import_dependency`.
 - **Hand-written use cases.** With `{ "import": "../handlers/register#Register" }`, the generated file has `export abstract class RegisterBase extends useCaseOf({...}) {}`; your class extends it and implements `execute`, and `application.ts` registers your class. Extraction needs the `useCases.<Name>` mapping.
 - **`Register` is written by hand.** The generated `application.ts` does not augment `Register` (two generated applications in one project would conflict), so `useApplication()` is `AnyApplication` until a file of yours declares it (see [Applications](applications.md#the-started-application)). A `provider` made with `providerFrom` is code, so it is an `{ "import": ... }` (`examples/blog/src/provider.ts`).
+- **Named providers come from this spec or one it extends directly.** `"provider": "<key>"` names a key of the top-level `providers` of the spec or of a spec it `extends` directly (imported as `Providers` from its output). A key of a spec further up is reported as `unknown_provider`. A provider written as `"inMemory"` or `{ "use" }` is made when the module loads, so it is shared by every application that registers it; for one instance per application, import a `providerFrom` (`{ "import": "./audit.ts#audit" }`).
 - **Transactions are checked at run time.** `"transaction": true` needs a provider with transactions; the provider is unknown when the spec is validated, so `commandOf` throws `InvalidCommandDeclaration` when the code runs, not `validateSpec`.
 - **Constructs the core does not describe.** A `change` on a plugin key and the order of `plugins` are not recovered.
 - **Repositories point at the generated classes.** To add behavior, extend the generated class in a file of your own.

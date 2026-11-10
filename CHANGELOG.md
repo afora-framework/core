@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Breaking: `ApplicationDescription.provider` and the `provider` of each repository description are `ProviderDescription | ProviderReference`; code that switches over `kind` needs the `"ref"` case.
+
+### Added
+
+- Named providers: `providersOf({ main, audit })` declares providers (objects or `providerFrom` factories) by key in a module of their own, and a repository names one before any application exists, `repositoryOf({ provider: Providers.audit })`, completed by the editor. `applicationOf({ providers: Providers, provider: Providers.main })` registers the storage: each application makes its own instance of each factory on `start()` and closes them on `stop()`, an application that extends it shares them, and `app.get(Providers.audit)` gives the instance. A provider of a storage that is not registered throws `UnregisteredApplicationReference`, one key from two storages `ApplicationConflict`, and a factory used outside an application the new `ProviderNotBound`. `describe().providers` gives each key, and a repository on one has `provider: { kind: "ref", key }` (`ProviderReference`). Also exported: `ProviderSlot`, `ProviderStorage`, `isProviderSlot` and `isProviderStorage`. See `docs/applications.md#named-providers`.
+- `@afora/codegen`: the top-level `"providers": { "<key>": <provider> }` of an `afora.json`, generated as `providers.ts` (`Providers`), and `"provider": "<key>"` on a repository or at the top level, generated as `Providers.<key>`; keys of a spec extended directly can be named. New issues: `invalid_provider_key`, `provider_conflict`, and `unknown_provider` lists the keys. Extraction gives them back, with the import key `providers.<key>`. `Providers` is a reserved declaration name. The MCP server writes `providers` and `log` after `provider`.
+
 ## 0.0.4 — unreleased (draft: dated when it is published)
 
 ### Changed
