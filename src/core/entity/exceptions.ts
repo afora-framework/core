@@ -31,3 +31,15 @@ export const DeletedEntity = exceptionOf({
 	message: ({ id }: { readonly id: string }, source) =>
 		`Entity "${source}" of id "${id}" was destroyed and cannot change.`,
 });
+
+/**
+ * The `expires` option of an entity is invalid: `at` names no date key of its
+ * blueprint, `after` is not a duration of positive numbers, or the entity
+ * builder has no `expiresAt` field; `source` is the entity name.
+ */
+export const InvalidEntityExpiry = exceptionOf({
+	layer: ExceptionLayers.Entity,
+	name: "InvalidEntityExpiry",
+	message: ({ reason }: { readonly reason: string }, source) =>
+		`Invalid expires of entity "${source}": ${reason}`,
+});

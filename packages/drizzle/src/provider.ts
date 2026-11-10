@@ -13,6 +13,7 @@ import {
 	type Column,
 	eq,
 	getTableColumns,
+	gt,
 	inArray,
 	isNotNull,
 	isNull,
@@ -66,8 +67,19 @@ function badQuery(reason: string): never {
 	throw new InvalidRepositoryQuery({ source: SOURCE, details: { reason } });
 }
 
-/** A query with the `after` of `findCursor`, on any version of `@afora/core`. */
-type KeysetQuery = RepositoryQuery & { readonly after?: readonly unknown[] };
+/**
+ * A query with the `after` of `findCursor` and the `now` and `withExpired` of
+ * an entity that expires, on any version of `@afora/core`.
+ */
+type KeysetQuery = RepositoryQuery & {
+	readonly after?: readonly unknown[];
+	readonly now?: string;
+	readonly withExpired?: boolean;
+};
+
+/** The key holding the expiry of the entities of `context`, on any version of `@afora/core`. */
+const expiryKeyOf = (context: RepositoryContext): string | undefined =>
+	(context as { readonly expiry?: { readonly key: string } }).expiry?.key;
 
 interface Mapping {
 	readonly table: DrizzleTable;
@@ -188,13 +200,22 @@ function conditionOf(column: Column, condition: unknown): SQL {
 
 function whereOf(
 	mapping: Mapping,
-	query: RepositoryQuery = {},
+	context: RepositoryContext,
+	query: KeysetQuery = {},
 ): SQL | undefined {
 	const parts: (SQL | undefined)[] = [];
 	for (const [key, condition] of Object.entries(query.where ?? {}))
 		parts.push(conditionOf(columnOf(mapping, key), condition));
 	const deleted = mapping.columns.deletedAt;
 	if (deleted && query.withDeleted !== true) parts.push(isNull(deleted));
+	const expiry = expiryKeyOf(context);
+	if (expiry !== undefined && query.withExpired !== true) {
+		// Alive while the date is missing or later than now; an ISO 8601 text
+		// column compares as text, a timestamp column as a date.
+		const column = columnOf(mapping, expiry);
+		const now = query.now ?? new Date().toISOString();
+		parts.push(or(isNull(column), gt(column, toColumn(column, now))));
+	}
 	return and(...parts);
 }
 
@@ -333,7 +354,7 @@ function providerOver(
 		let builder = exec
 			.select()
 			.from(mapping.table)
-			.where(and(whereOf(mapping, query), keysetOf(mapping, query)))
+			.where(and(whereOf(mapping, context, query), keysetOf(mapping, query)))
 			.orderBy(...orderOf(mapping, query));
 		if (limit !== undefined || query.offset)
 			builder = builder.limit(limit ?? NO_LIMIT);
@@ -390,7 +411,11 @@ function providerOver(
 		new RepositoryEntityNotFound({ source: context.name, details: { id } });
 
 	return {
-		capabilities: Object.freeze({ transactions: true, keyset: true }),
+		capabilities: Object.freeze({
+			transactions: true,
+			keyset: true,
+			expiry: true,
+		}),
 		findOne: (context, query = {}) =>
 			hooks.guard(async () => (await select(context, query, true))[0]),
 		findMany: (context, query = {}) =>
@@ -401,7 +426,7 @@ function providerOver(
 				const [found] = await exec
 					.select({ total: sql<number>`count(*)` })
 					.from(mapping.table)
-					.where(whereOf(mapping, { ...query, limit: undefined }));
+					.where(whereOf(mapping, context, { ...query, limit: undefined }));
 				return Number(found?.total ?? 0);
 			}),
 		insert: (context, data) =>

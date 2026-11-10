@@ -31,7 +31,14 @@ function isMembership(
 }
 
 /** The options of a `RepositoryQuery`. */
-const QUERY_OPTIONS = ["where", "orderBy", "limit", "offset", "withDeleted"];
+const QUERY_OPTIONS = [
+	"where",
+	"orderBy",
+	"limit",
+	"offset",
+	"withDeleted",
+	"withExpired",
+];
 
 /** Validates query structure and optionally normalizes domain values for storage. */
 export function prepareQuery(
@@ -63,6 +70,8 @@ export function prepareQuery(
 	}
 	if (input.withDeleted !== undefined && typeof input.withDeleted !== "boolean")
 		fail("Expected withDeleted to be boolean.");
+	if (input.withExpired !== undefined && typeof input.withExpired !== "boolean")
+		fail("Expected withExpired to be boolean.");
 	let where: Record<string, unknown> | undefined;
 	if (input.where !== undefined) {
 		if (!plain(input.where)) return fail("Expected where to be an object.");
@@ -125,12 +134,43 @@ export function sameValue(a: unknown, b: unknown): boolean {
 	);
 }
 
+/**
+ * Whether the date of `value` is at or before `now`; a missing or unreadable
+ * date never expires.
+ */
+function isExpired(value: unknown, now: number): boolean {
+	if (value === undefined || value === null) return false;
+	const at =
+		value instanceof Date
+			? value.getTime()
+			: typeof value === "string"
+				? Date.parse(value)
+				: Number.NaN;
+	return !Number.isNaN(at) && at <= now;
+}
+
+/** The time of `query.now`, or the current one. */
+export function nowOf(query: ProviderQuery): number {
+	const now = query.now === undefined ? Number.NaN : Date.parse(query.now);
+	return Number.isNaN(now) ? Date.now() : now;
+}
+
+/**
+ * Whether `data` is a row of `query`: alive unless `withDeleted`, not expired
+ * by `expiry` (the key of `context.expiry`) unless `withExpired`, and matching
+ * `where`.
+ */
 export function matchesQuery(
 	data: RepositoryData,
-	query: RepositoryQuery,
+	query: ProviderQuery,
+	expiry?: string,
+	now: number = expiry === undefined ? 0 : nowOf(query),
 ): boolean {
 	return (
 		(query.withDeleted === true || data.deletedAt === undefined) &&
+		(expiry === undefined ||
+			query.withExpired === true ||
+			!isExpired(data[expiry], now)) &&
 		Object.entries(query.where ?? {}).every(([key, value]) =>
 			isMembership(value)
 				? value.in.some((candidate) => sameValue(data[key], candidate))
@@ -217,9 +257,11 @@ function rowsAfter(
 export function selectRows(
 	rows: Iterable<RepositoryData>,
 	query: ProviderQuery,
+	expiry?: string,
 ): RepositoryData[] {
+	const now = expiry === undefined ? 0 : nowOf(query);
 	const ordered = orderRows(
-		[...rows].filter((data) => matchesQuery(data, query)),
+		[...rows].filter((data) => matchesQuery(data, query, expiry, now)),
 		query,
 	);
 	const matched =
