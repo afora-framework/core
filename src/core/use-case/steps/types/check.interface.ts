@@ -132,7 +132,7 @@ type Below<
 			? never
 			: {
 					[Key in keyof Data & string]-?: PathsFrom<
-						Data[Key],
+						Data[Key] | (Value extends null | undefined ? undefined : never),
 						`${Prefix}.${Key}`,
 						Expected,
 						[...Depth, 0]
@@ -199,11 +199,14 @@ type RequiredKeys<Expected> = Expected extends { readonly [Meta]: unknown }
 		: never;
 
 /** The keys of `Value` that `Expected` takes, each checked; the others are excess properties. */
-type CheckKeys<Value, Expected, Scope> = {
-	readonly [Key in keyof Value as Key extends KnownKeys<Expected>
-		? Key
-		: never]: StepValueCheck<Value[Key], ExpectedAt<Expected, Key>, Scope>;
-};
+// The conditional keeps the mapping from being shown under the name of the alias.
+type CheckKeys<Value, Expected, Scope> = Value extends unknown
+	? {
+			readonly [Key in keyof Value as Key extends KnownKeys<Expected>
+				? Key
+				: never]: StepValueCheck<Value[Key], ExpectedAt<Expected, Key>, Scope>;
+		}
+	: never;
 
 type CheckMapping<Value, Expected, Scope> = unknown extends Expected
 	? {

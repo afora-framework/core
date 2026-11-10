@@ -709,3 +709,113 @@ exports[`package mode experience errors 1`] = `
   TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
     Type '"missing"' is not assignable to type '"n"'."
 `;
+
+exports[`source mode experience strict steps use case 1`] = `
+"hover L30:9 const { ‸user } = await new Register({ name: "Ana", email: "ana@example.com" }).execute();
+  const user: User
+diagnostics (0)"
+`;
+
+exports[`source mode experience completions: strict steps 1`] = `
+"complete L17:41 { find: "users.findByEmail", args: ["$‸"], as: "user" },
+  $input.address.zip (string)
+  $input.email (string)
+  $input.name (string)
+complete L18:28 { change: "$user", key: "‸", value: "$input.name", as: "renamed" },
+  name (string)
+complete L19:23 { return: { user: "$‸" } },
+  $input (string)
+  $input.address (string)
+  $input.address.zip (string)
+  $input.age (string)
+  $input.email (string)
+  $input.name (string)
+  $renamed (string)
+  $renamed.age (string)
+  $renamed.createdAt (string)
+  $renamed.deletedAt (string)
+  $renamed.email (string)
+  $renamed.id (string)
+  $renamed.name (string)
+  $renamed.updatedAt (string)
+  $user (string)
+  $user.age (string)
+  $user.createdAt (string)
+  $user.deletedAt (string)
+  $user.email (string)
+  $user.id (string)
+  $user.name (string)
+  $user.updatedAt (string)
+diagnostics (3)
+  TS2322 L17:39 { find: "users.findByEmail", args: [‸"$"], as: "user" },
+    Type '"$"' is not assignable to type '"$input.name" | "$input.email" | "$input.address.zip"'.
+  TS2322 L18:22 { change: "$user", ‸key: "", value: "$input.name", as: "renamed" },
+    Type '""' is not assignable to type '"name"'.
+  TS2322 L19:15 { return: { ‸user: "$" } },
+    Type '"$"' is not assignable to type '"$user" | "$input.name" | "$input" | "$input.email" | "$input.age" | "$input.address" | "$input.address.zip" | "$user.id" | "$user.email" | "$user.createdAt" | "$user.updatedAt" | ... 10 more ... | "$renamed.age"'."
+`;
+
+exports[`source mode experience errors: strict steps 1`] = `
+"diagnostics (3)
+  TS2820 L17:39 { find: "users.findByEmail", args: [‸"$input.adress.zip"], as: "existing" },
+    Type '"$input.adress.zip"' is not assignable to type '"$input.name" | "$input.email" | "$input.address.zip"'. Did you mean '"$input.address.zip"'?
+  TS2820 L18:39 { find: "users.findByEmail", args: [‸"$input.age"], as: "other" },
+    Type '"$input.age"' is not assignable to type '"$input.name" | "$input.email" | "$input.address.zip"'. Did you mean '"$input.name"'?
+  TS2353 L19:91 { build: User, values: { name: "$input.name", email: "$input.email", age: "$input.age", ‸nickname: "x" }, as: "user" },
+    Object literal may only specify known properties, and 'nickname' does not exist in type '{ readonly name: "$input.name"; readonly email: "$input.email"; readonly age: "$input.age"; }'."
+`;
+
+exports[`package mode experience strict steps use case 1`] = `
+"hover L30:9 const { ‸user } = await new Register({ name: "Ana", email: "ana@example.com" }).execute();
+  const user: User
+diagnostics (0)"
+`;
+
+exports[`package mode experience completions: strict steps 1`] = `
+"complete L17:41 { find: "users.findByEmail", args: ["$‸"], as: "user" },
+  $input.address.zip (string)
+  $input.email (string)
+  $input.name (string)
+complete L18:28 { change: "$user", key: "‸", value: "$input.name", as: "renamed" },
+  name (string)
+complete L19:23 { return: { user: "$‸" } },
+  $input (string)
+  $input.address (string)
+  $input.address.zip (string)
+  $input.age (string)
+  $input.email (string)
+  $input.name (string)
+  $renamed (string)
+  $renamed.age (string)
+  $renamed.createdAt (string)
+  $renamed.deletedAt (string)
+  $renamed.email (string)
+  $renamed.id (string)
+  $renamed.name (string)
+  $renamed.updatedAt (string)
+  $user (string)
+  $user.age (string)
+  $user.createdAt (string)
+  $user.deletedAt (string)
+  $user.email (string)
+  $user.id (string)
+  $user.name (string)
+  $user.updatedAt (string)
+diagnostics (3)
+  TS2322 L17:39 { find: "users.findByEmail", args: [‸"$"], as: "user" },
+    Type '"$"' is not assignable to type '"$input.name" | "$input.email" | "$input.address.zip"'.
+  TS2322 L18:22 { change: "$user", ‸key: "", value: "$input.name", as: "renamed" },
+    Type '""' is not assignable to type '"name"'.
+  TS2322 L19:15 { return: { ‸user: "$" } },
+    Type '"$"' is not assignable to type '"$user" | "$input.name" | "$input" | "$input.email" | "$input.age" | "$input.address" | "$input.address.zip" | "$user.id" | "$user.email" | "$user.createdAt" | "$user.updatedAt" | ... 10 more ... | "$renamed.age"'."
+`;
+
+exports[`package mode experience errors: strict steps 1`] = `
+"diagnostics (3)
+  TS2820 L17:39 { find: "users.findByEmail", args: [‸"$input.adress.zip"], as: "existing" },
+    Type '"$input.adress.zip"' is not assignable to type '"$input.name" | "$input.email" | "$input.address.zip"'. Did you mean '"$input.address.zip"'?
+  TS2820 L18:39 { find: "users.findByEmail", args: [‸"$input.age"], as: "other" },
+    Type '"$input.age"' is not assignable to type '"$input.name" | "$input.email" | "$input.address.zip"'. Did you mean '"$input.name"'?
+  TS2353 L19:91 { build: User, values: { name: "$input.name", email: "$input.email", age: "$input.age", ‸nickname: "x" }, as: "user" },
+    Object literal may only specify known properties, and 'nickname' does not exist in type '{ readonly name: "$input.name"; readonly email: "$input.email"; readonly age: "$input.age"; }'."
+`;

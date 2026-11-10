@@ -181,7 +181,7 @@ describe("strictSteps", () => {
 					{
 						run: "later",
 						fn: greet,
-						args: ["$env.mail.FROM", "$a.name"],
+						args: ["$env.mail.FROM", "$input.name"],
 						as: "later",
 					},
 					{ return: {} },

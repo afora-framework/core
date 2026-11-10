@@ -36,6 +36,8 @@ const CEILING: Record<string, number> = {
 	// Added on 2026-11-07 (T32), measured plus 2%.
 	queries: 52_100,
 	"steps use case": 53_900,
+	// Added on 2026-11-10 (#43): the steps checked with strictSteps, measured plus 2%.
+	"strict steps use case": 63_800,
 	"command and output": 64_000,
 	// Added on 2026-11-10, measured plus 2%.
 	"named providers": 50_700,
@@ -103,7 +105,7 @@ for (const mode of modes) {
 afterAll(() => {
 	const rows = [...costs].map(
 		([key, { instantiations, ms }]) =>
-			`${key.padEnd(28)} ${String(instantiations).padStart(10)} inst ${String(Math.round(ms)).padStart(6)} ms`,
+			`${key.padEnd(30)} ${String(instantiations).padStart(10)} inst ${String(Math.round(ms)).padStart(6)} ms`,
 	);
 	console.log(`\nEdit cost (target ${TARGET} inst)\n${rows.join("\n")}`);
 });
