@@ -166,7 +166,10 @@ export type {
 	ExpiresAtField,
 	ExpiringIdentity,
 	IEntityIdentity,
+	IEntityVersion,
+	VersionedIdentity,
 } from "./core/entity/types/entity.interface";
+export { EntityVersion } from "./core/entity/version";
 export type {
 	AnyEnvironment,
 	EnvironmentDependencies,
@@ -402,7 +405,9 @@ export {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
+	InvalidRepositoryIncrement,
 	InvalidRepositoryQuery,
+	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
 } from "./core/repository/exceptions";
@@ -440,12 +445,15 @@ export type {
 export type {
 	AnyRepository,
 	AnyRepositoryEntity,
+	EntityIncrementKeyOf,
 	EntityInstanceOf,
 	EntityKeyOf,
 	EntityNonUniqueKeyOf,
 	EntityUniqueKeyOf,
 	EntityValueOf,
 	IRepositoryProvider,
+	ProviderIncrementOptions,
+	ProviderUpdateOptions,
 	QueryValueOf,
 	RepositoryAction,
 	RepositoryContext,
@@ -456,6 +464,9 @@ export type {
 	RepositoryDelete,
 	RepositoryFindBy,
 	RepositoryFindManyBy,
+	RepositoryIncrement,
+	RepositoryIncrementDeltas,
+	RepositoryIncrementOptions,
 	RepositoryRestore,
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";

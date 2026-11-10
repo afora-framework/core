@@ -194,7 +194,7 @@ export function deferredProvider(
 		return provider;
 	};
 	const proxy: Record<string, unknown> = {};
-	for (const method of METHODS) {
+	for (const method of [...METHODS, "increment"]) {
 		proxy[method] = (...args: unknown[]) =>
 			(
 				real(method) as unknown as Record<

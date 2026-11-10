@@ -3,6 +3,7 @@ import {
 	entityOf,
 	type IRepositoryProvider,
 	type ProviderQuery,
+	RepositoryConcurrencyConflict,
 	type RepositoryContext,
 	type RepositoryData,
 	RepositoryEntityNotFound,
@@ -857,12 +858,294 @@ export function providerContract(
 
 		describe("versioning", () => {
 			const versioned = gated("versioning");
-			void versioned;
+
+			versioned(
+				"update writes with the expected version, and throws RepositoryConcurrencyConflict with a stale one",
+				async () => {
+					const { provider, context, seed } = await fixture();
+					const data = row({ version: 1 });
+					await seed(data);
+					await provider.update(
+						context,
+						{ ...data, name: "Bia", version: 2 },
+						{ expectedVersion: 1 },
+					);
+					const stale = await failure(
+						provider.update(
+							context,
+							{ ...data, name: "Caio", version: 2 },
+							{ expectedVersion: 1 },
+						),
+					);
+					expect(stale instanceof RepositoryConcurrencyConflict).toBe(true);
+					const { details } = stale as {
+						details: { id: unknown; expected: unknown };
+					};
+					expect([details.id, details.expected]).toEqual([data.id, 1]);
+					expect(
+						await provider.findOne(context, { where: { id: data.id } }),
+					).toEqual({ ...data, name: "Bia", version: 2 });
+				},
+			);
+
+			versioned(
+				"two updates with the same expected version: exactly one succeeds",
+				async () => {
+					const { provider, context, seed } = await fixture();
+					const data = row({ version: 1 });
+					await seed(data);
+					const results = await Promise.allSettled(
+						["Bia", "Caio"].map((name) =>
+							provider.update(
+								context,
+								{ ...data, name, version: 2 },
+								{ expectedVersion: 1 },
+							),
+						),
+					);
+					const rejected = results.filter(
+						(result) => result.status === "rejected",
+					) as PromiseRejectedResult[];
+					expect(rejected.length).toBe(1);
+					expect(
+						rejected[0]?.reason instanceof RepositoryConcurrencyConflict,
+					).toBe(true);
+					const stored = await provider.findOne(context, {
+						where: { id: data.id },
+					});
+					expect(stored?.version).toBe(2);
+				},
+			);
+
+			versioned(
+				"update without an expected version ignores the stored one",
+				async () => {
+					const { provider, context, seed } = await fixture();
+					const data = row({ version: 3 });
+					await seed(data);
+					await provider.update(context, { ...data, name: "Bia", version: 1 });
+					expect(
+						await provider.findOne(context, { where: { id: data.id } }),
+					).toEqual({ ...data, name: "Bia", version: 1 });
+				},
+			);
+
+			versioned("an unknown id is still RepositoryEntityNotFound", async () => {
+				const { provider, context } = await fixture();
+				const error = await failure(
+					provider.update(context, row({ version: 2 }), {
+						expectedVersion: 1,
+					}),
+				);
+				expect(error instanceof RepositoryEntityNotFound).toBe(true);
+			});
 		});
 
 		describe("atomic", () => {
 			const atomic = gated("atomic");
-			void atomic;
+			const increment = (
+				provider: IRepositoryProvider,
+				...args: Parameters<NonNullable<IRepositoryProvider["increment"]>>
+			) =>
+				(provider.increment as NonNullable<typeof provider.increment>)(...args);
+
+			atomic(
+				"increment adds the deltas, stores set and gives the row",
+				async () => {
+					const { provider, context, seed } = await fixture();
+					const data = row({ visits: 2, age: 30 });
+					await seed(data);
+					const stored = await increment(
+						provider,
+						context,
+						data.id as string,
+						{ visits: 3, age: -1, n: 5 },
+						{ set: { name: "Bia" } },
+					);
+					const expected = { ...data, visits: 5, age: 29, n: 5, name: "Bia" };
+					expect(stored).toEqual(expected);
+					expect(
+						await provider.findOne(context, { where: { id: data.id } }),
+					).toEqual(expected);
+				},
+			);
+
+			atomic("N concurrent increments sum to N", async () => {
+				const { provider, context, seed } = await fixture();
+				const data = row({ visits: 0 });
+				await seed(data);
+				await Promise.all(
+					Array.from({ length: 25 }, () =>
+						increment(provider, context, data.id as string, { visits: 1 }),
+					),
+				);
+				const stored = await provider.findOne(context, {
+					where: { id: data.id },
+				});
+				expect(stored?.visits).toBe(25);
+			});
+
+			atomic(
+				"a missing id is RepositoryEntityNotFound without create, and inserted with it",
+				async () => {
+					const { provider, context } = await fixture();
+					const data = row({ visits: 1 });
+					const missing = await failure(
+						increment(provider, context, data.id as string, { visits: 1 }),
+					);
+					expect(missing instanceof RepositoryEntityNotFound).toBe(true);
+					expect(await provider.count(context)).toBe(0);
+					const created = await increment(
+						provider,
+						context,
+						data.id as string,
+						{ visits: 1 },
+						{ create: data, set: { name: "Bia" } },
+					);
+					expect(created).toEqual(data);
+					const again = await increment(
+						provider,
+						context,
+						data.id as string,
+						{ visits: 1 },
+						{ create: data },
+					);
+					expect(again.visits).toBe(2);
+					expect(await provider.count(context)).toBe(1);
+				},
+			);
+
+			atomic("concurrent increments with create lose nothing", async () => {
+				const { provider, context } = await fixture();
+				const data = row({ visits: 1 });
+				await Promise.all(
+					Array.from({ length: 10 }, () =>
+						increment(
+							provider,
+							context,
+							data.id as string,
+							{ visits: 1 },
+							{ create: data },
+						),
+					),
+				);
+				const stored = await provider.findOne(context, {
+					where: { id: data.id },
+				});
+				expect(stored?.visits).toBe(10);
+			});
+
+			atomic("soft-deleted rows are not incremented", async () => {
+				const { provider, context, seed } = await fixture();
+				const data = row({ visits: 1, deletedAt: "2024-01-01T00:00:00.000Z" });
+				await seed(data);
+				const error = await failure(
+					increment(provider, context, data.id as string, { visits: 1 }),
+				);
+				expect(error instanceof RepositoryEntityNotFound).toBe(true);
+				const stored = await provider.findOne(context, {
+					where: { id: data.id },
+					withDeleted: true,
+				});
+				expect(stored?.visits).toBe(1);
+			});
+
+			atomic(
+				"an increment of version makes an update with the old one conflict",
+				async () => {
+					const { provider, context, seed } = await fixture();
+					if (
+						(options.versioning ?? provider.capabilities?.versioning) !== true
+					)
+						return;
+					const data = row({ visits: 0, version: 1 });
+					await seed(data);
+					const stored = await increment(provider, context, data.id as string, {
+						visits: 1,
+						version: 1,
+					});
+					expect(stored.version).toBe(2);
+					const error = await failure(
+						provider.update(
+							context,
+							{ ...data, name: "Bia", version: 2 },
+							{ expectedVersion: 1 },
+						),
+					);
+					expect(error instanceof RepositoryConcurrencyConflict).toBe(true);
+					expect(
+						(await provider.findOne(context, { where: { id: data.id } }))
+							?.visits,
+					).toBe(1);
+				},
+			);
+
+			atomic(
+				"an expired row counts as absent: not found, or replaced by create",
+				async () => {
+					const provider = await makeProvider();
+					if ((options.expiry ?? provider.capabilities?.expiry) !== true)
+						return;
+					const now = "2026-06-01T12:00:00.000Z";
+					const context = {
+						...contextOf(),
+						expiry: { key: "expiresAt" },
+					} as RepositoryContext;
+					const window = row({
+						visits: 7,
+						expiresAt: "2026-06-01T11:00:00.000Z",
+					});
+					const live = row({
+						visits: 1,
+						expiresAt: "2026-06-01T13:00:00.000Z",
+					});
+					await provider.insert(context, window);
+					await provider.insert(context, live);
+					const missing = await failure(
+						increment(
+							provider,
+							context,
+							window.id as string,
+							{ visits: 1 },
+							{
+								now,
+							},
+						),
+					);
+					expect(missing instanceof RepositoryEntityNotFound).toBe(true);
+					const fresh = {
+						id: window.id,
+						email: window.email,
+						name: "fresh",
+						visits: 1,
+						expiresAt: "2026-06-01T13:00:00.000Z",
+					};
+					const created = await increment(
+						provider,
+						context,
+						window.id as string,
+						{ visits: 1 },
+						{ create: fresh, set: { name: "incremented" }, now },
+					);
+					expect(created).toEqual(fresh);
+					const again = await increment(
+						provider,
+						context,
+						window.id as string,
+						{ visits: 1 },
+						{ create: fresh, set: { name: "incremented" }, now },
+					);
+					expect([again.visits, again.name]).toEqual([2, "incremented"]);
+					const counted = await increment(
+						provider,
+						context,
+						live.id as string,
+						{ visits: 1 },
+						{ create: { ...live, visits: 100 }, now },
+					);
+					expect(counted.visits).toBe(2);
+				},
+			);
 		});
 
 		describe("expiry", () => {

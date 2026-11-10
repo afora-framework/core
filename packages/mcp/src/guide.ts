@@ -58,13 +58,16 @@ a file of your own.
 
 - Declaration names are PascalCase and unique across every kind; names exported by @afora/core are taken.
 - No circular references between declarations (store an id instead of the entity).
-- An entity cannot declare \`id\`, \`createdAt\`, \`updatedAt\`, \`deletedAt\` (it gets them). No record member names
+- An entity cannot declare \`id\`, \`createdAt\`, \`updatedAt\`, \`deletedAt\` (it gets them), nor \`version\` when it is
+  \`"versioned": true\`, which adds that identity key (optimistic concurrency: \`update\` throws \`RepositoryConcurrencyConflict\`,
+  a 409, when someone else wrote the entity since it was read). No record member names
   (\`toJSON\`, \`set\`, \`onSet\`...); see \`reservedRecordKeys\` in the catalog. \`blueprint\` and \`options\` are valid fields.
 - \`unique\`, \`sensitive\`, \`change\` must name fields (or keys of its plugins); \`change\` cannot name an identity key.
   \`password\` is always sensitive and \`slug\` always unique; \`id\` is always unique.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.
 - Repository actions: \`findById\`; \`findBy<Key>\` only for unique keys (id, \`unique\`, slug fields, unique plugin keys such as
-  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`restore\` (only with \`"deletion": "soft"\`), \`count\`, and the
+  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`restore\` (only with \`"deletion": "soft"\`),
+  \`increment\` (atomic \`increment(id, { views: 1 }, { create? })\`, for the number keys of the entity's \`change\`; not a step), \`count\`, and the
   queries \`findMany\`, \`exists\`, \`findPage\` (no key needed; \`where\`, \`orderBy\`, \`limit\`, \`offset\` at runtime) and
   \`findCursor\` (pages by position: \`after\` is the \`next\` of the page before, no \`offset\`), and \`forEachPage\`
   (walks every page with a function, stops with \`until\` and resumes from \`next\`; called from TypeScript, never a step).

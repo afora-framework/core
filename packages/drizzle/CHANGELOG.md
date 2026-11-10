@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Optimistic concurrency and atomic increment (#44, #34)
+
+- `capabilities.versioning`: `update(context, data, { expectedVersion })` writes with `WHERE id = ? AND version = ?` and throws `RepositoryConcurrencyConflict` when no row matched while the id exists, so versioned entities of `@afora/core` work over it (a `version` column).
+- `capabilities.atomic`: `increment(context, id, deltas, { set?, create? })` adds with `SET x = coalesce(x, 0) + ?` in one statement, and with `create` upserts with `INSERT ... ON CONFLICT (id) DO UPDATE`, on SQLite and Postgres. Soft-deleted rows are left alone.
+- Needs the `@afora/core` that has versioned entities and `increment` for those actions; older versions are unaffected.
+
 ### Added
 
 - Records that expire (#35): `capabilities.expiry`. For an entity declared with `expires`, reads add `"<key>" IS NULL OR "<key>" > now` unless `withExpired`, on a text (ISO 8601) or timestamp column; unique keys still count expired rows. Needs the `@afora/core` that has records that expire; older versions are unaffected.

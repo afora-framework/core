@@ -391,6 +391,8 @@ export interface RecordDescription {
 			>
 		>
 	>;
+	/** Whether the entity is versioned (`entityOf(..., { versioned: true })`); present only when it is. */
+	readonly versioned?: true;
 	/**
 	 * When the records of an entity expire, as `entityOf` was given it:
 	 * `{ after: duration }` (kept in its `expiresAt` identity key, left out of

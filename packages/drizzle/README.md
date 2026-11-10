@@ -108,6 +108,13 @@ await Users.findPage({
 
 `context.unique` (`id` and the entity's `unique` keys) is checked before every `insert` and `update` with a query, so a violation is reported as `RepositoryUniqueViolation` with `details.key` even without a unique index, and soft-deleted rows keep occupying their values. The check does not close the race between concurrent writers: also declare unique indexes. The provider translates the database's unique errors (SQLite `UNIQUE constraint failed`, Postgres `23505`, including a driver error's `cause`) into the same exception, naming the key from the column. `update` and `remove` of an unknown id throw `RepositoryEntityNotFound`.
 
+## Versions and increment
+
+`capabilities.versioning` and `capabilities.atomic` are true.
+
+- A versioned entity (`entityOf(blueprint, { versioned: true })`) needs an integer `version` column. `update` with an expected version runs `UPDATE ... WHERE id = ? AND version = ?` with `RETURNING`: no row while the id exists is a `RepositoryConcurrencyConflict` (with the stored version as `actual`). The check and the write are one statement, so it holds across connections.
+- `increment` runs `UPDATE ... SET views = coalesce(views, 0) + ?, updatedAt = ? WHERE id = ? AND deletedAt IS NULL RETURNING *`, and with `create`, `INSERT ... ON CONFLICT (id) DO UPDATE SET ...` with the same `SET` (on SQLite and Postgres alike), so two calls creating the same id both count. A soft-deleted row is not incremented: without `create` it is `RepositoryEntityNotFound`, with it `RepositoryUniqueViolation` on `id`. For an entity that expires, an expired row is not incremented either: the `UPDATE` adds the expiry condition, and the upsert's `SET` replaces every column with the inserted row (`CASE WHEN <alive> THEN ... ELSE excluded.<column> END`).
+
 ## Transactions
 
 `capabilities.transactions` is true. `provider.transaction(run)` uses `db.transaction`, and a nested one a savepoint. Synchronous SQLite drivers (`bun:sqlite`, `better-sqlite3`) cannot run an asynchronous `db.transaction` callback, so there the provider issues `BEGIN` / `SAVEPOINT` itself and makes the other operations wait for the transaction, since there is one connection. The scoped provider throws once its callback ends. Use it with `commandOf({ transaction: true })`.

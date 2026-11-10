@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Optimistic concurrency and atomic increment (#44, #34)
+
+- The guide teaches `"versioned": true` on entities (the `version` identity key, `RepositoryConcurrencyConflict`) and the `increment` action.
+
 ### Added
 
 - The guide teaches records that expire (`"expires": { "after": { "days": 400 } }` or `{ "at": "until" }` on an entity).

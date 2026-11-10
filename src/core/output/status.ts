@@ -18,6 +18,7 @@ const NOT_FOUND = new Set([
 ]);
 const CONFLICT = new Set([
 	"RepositoryUniqueViolation",
+	"RepositoryConcurrencyConflict",
 	"UseCaseEntityConflict",
 ]);
 
@@ -42,7 +43,7 @@ export function raisedOf(error: Exception): Exception {
  * The HTTP-style status of an error, in this order: `statuses` by exception
  * name; 400 for invalid input or context (and any exception whose
  * `details.issues` is a list, except `InvalidCommandEnvironment`, a 500); 404 for a missing entity or operation; 409 for
- * a unique violation or an entity that already exists; 401 for
+ * a unique violation, a concurrency conflict or an entity that already exists; 401 for
  * `UseCaseInvalidCredentials`; 422 for a class in `operation.errors`; 500 for the
  * rest, errors that are not exceptions included. Exceptions match by name,
  * or by class for `operation.errors`.

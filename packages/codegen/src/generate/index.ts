@@ -410,6 +410,9 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 			],
 		]);
 	}
+	if (entity && decl.spec.versioned === true) {
+		options.push(["versioned", "true"]);
+	}
 	const expires = entity ? canonicalExpires(decl.spec.expires) : undefined;
 	if (expires) options.push(["expires", literal(expires)]);
 	for (const cycle of CYCLES) {

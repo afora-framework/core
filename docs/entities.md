@@ -36,7 +36,7 @@ class Post extends entityOf(
 new Post({ title: "Hi", author: { name: "Jane" }, coauthors: [user] }); // author gets its own id
 ```
 
-An entity declared with `expires: { after }` gets a fifth one, `expiresAt` (see [Records that expire](#records-that-expire)).
+An entity declared with `expires: { after }` gets a fifth one, `expiresAt` (see [Records that expire](#records-that-expire)), and a versioned entity one more, `version` (see [Versioned entities](#versioned-entities)).
 
 The identity keys are read-only: `set` throws `ImmutableEntityKey` for them, and they get no `change.<key>` method. The blueprint cannot declare them, nor the members of an entity (`destroy`, `isDeleted`, `equals`, `onDestroy`, `emit`, `pullEvents`): `entityOf` throws `ReservedEntityKey`. `user.equals(other)` compares entities of the same declaration by `id`. `isEntityClass` and `isEntity` tell entities apart from records. `entityBuilderOf({ identity, generateId, now, expiresAt })` makes an `entityOf` with your own identity fields and clock (`expiresAt`, a date and time property, is the field entities expiring `after` a duration get; without it such a declaration throws `InvalidEntityExpiry`).
 
@@ -130,3 +130,21 @@ class Window extends entityOf(
 - Anything else (an unknown key, a key that holds no date, an empty or negative duration, an unknown unit, both forms at once) throws `InvalidEntityExpiry` when the entity is declared.
 
 `entityOf` keeps the option under the `EntitySettings` symbol (`{ versioned, expires }`), and `app.describe().entities.<Name>.expires` gives it as declared. Expired records are only left out of reads: removing them for good (a purge) is up to the database for now, as a TTL of DynamoDB or a scheduled `DELETE` in SQL.
+
+## Versioned entities
+
+`entityOf(blueprint, { versioned: true })` adds a `version` identity key: a positive integer (`EntityVersion`), 1 when the entity is built without one, kept as given when it is loaded. Like the other identity keys it is read-only (no `change.version`, `set` throws `ImmutableEntityKey`) and the blueprint cannot declare it (`ReservedEntityKey`); only the repository moves it. On an entity that is not versioned, `version` is an ordinary key, and the instance type has `version: number` only when `versioned` is `true`.
+
+```ts
+class Doc extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{
+		change: ["title"],
+		versioned: true,
+	},
+) {}
+
+new Doc({ title: "Draft" }).version; // 1
+```
+
+The repository uses it for optimistic concurrency: `update` (and a soft `delete`, `restore` and `increment`) writes only when the stored version is the one the entity was read with, and bumps it; otherwise it throws `RepositoryConcurrencyConflict` (409). See [Repositories](repositories.md) (Concurrency). The standard use cases leave `version` out of their inputs, as any identity key, and `app.describe()` marks the entity `versioned: true`.

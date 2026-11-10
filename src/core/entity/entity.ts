@@ -16,6 +16,7 @@ import {
 	AbstractEntity,
 	ENTITY_IDENTITY_KEYS,
 	ENTITY_MEMBERS,
+	ENTITY_VERSION_KEY,
 	EntityClock,
 	EntityLifetime,
 	EntitySettings,
@@ -41,6 +42,7 @@ import type {
 	ExpiresAtField,
 	IEntityIdentity,
 } from "./types/entity.interface";
+import { VersionIdentity } from "./version";
 
 /**
  * An `entityOf` that gives every entity the `identity` fields, its ids made
@@ -70,6 +72,11 @@ export function entityBuilderOf<
 	) => {
 		const lifetime = lifetimeOf(blueprint, options);
 		const expiring = lifetime !== undefined;
+		const versioned = options.versioned === true;
+		const added = [
+			...(versioned ? [ENTITY_VERSION_KEY] : []),
+			...(expiring ? [EXPIRES_AT] : []),
+		];
 		if (expiring && expiresAt === undefined) {
 			throw new InvalidEntityExpiry({
 				source: options.name ?? "entity",
@@ -80,17 +87,14 @@ export function entityBuilderOf<
 			});
 		}
 		for (const key of Object.keys(blueprint.properties)) {
-			if (
-				RESERVED_ENTITY_KEYS.includes(key) ||
-				(expiring && key === EXPIRES_AT)
-			) {
+			if (RESERVED_ENTITY_KEYS.includes(key) || added.includes(key)) {
 				throw new ReservedEntityKey({ source: "entity", details: { key } });
 			}
 		}
 		for (const key of options.change ?? []) {
 			if (
 				(ENTITY_IDENTITY_KEYS as readonly string[]).includes(key) ||
-				(expiring && key === EXPIRES_AT)
+				added.includes(key)
 			) {
 				throw new ImmutableEntityKey({ source: "entity", details: { key } });
 			}
@@ -98,14 +102,17 @@ export function entityBuilderOf<
 
 		const DeclaredEntity = declareRecord(
 			AbstractEntity,
-			expiring
-				? identity.join(
-						blueprintFromProperties([], {
-							[EXPIRES_AT]: expiresAt as ExpiresAtField,
-						}),
-						blueprint,
-					)
-				: identity.join(blueprint),
+			identity.join(
+				...(versioned ? [VersionIdentity] : []),
+				...(expiring
+					? [
+							blueprintFromProperties([], {
+								[EXPIRES_AT]: expiresAt as ExpiresAtField,
+							}),
+						]
+					: []),
+				blueprint,
+			),
 			{
 				...withoutStorage(options),
 				unique: ["id", ...(options.unique ?? [])],
@@ -128,7 +135,7 @@ export function entityBuilderOf<
 		Object.defineProperty(DeclaredEntity, EntityLifetime, { value: lifetime });
 		Object.defineProperty(DeclaredEntity, EntitySettings, {
 			value: Object.freeze({
-				versioned: options.versioned === true,
+				versioned,
 				expires: options.expires,
 			}),
 		});

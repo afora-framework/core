@@ -24,6 +24,8 @@ const accountTable = (name: string) =>
 		tags: text("tags", { mode: "json" }),
 		group: integer("group"),
 		n: integer("n"),
+		visits: integer("visits"),
+		version: integer("version"),
 		deletedAt: text("deletedAt"),
 		expiresAt: text("expiresAt"),
 	});
@@ -37,7 +39,7 @@ function contractDatabase() {
 	};
 	for (const table of ["accounts", "one", "two"]) {
 		sqlite.run(
-			`CREATE TABLE ${table} (id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, age INTEGER, active INTEGER, address TEXT, tags TEXT, "group" INTEGER, n INTEGER, deletedAt TEXT, expiresAt TEXT)`,
+			`CREATE TABLE ${table} (id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, age INTEGER, active INTEGER, address TEXT, tags TEXT, "group" INTEGER, n INTEGER, visits INTEGER, version INTEGER, deletedAt TEXT, expiresAt TEXT)`,
 		);
 	}
 	return { db: drizzle(sqlite), tables };
@@ -98,6 +100,58 @@ function world() {
 }
 
 describe("repositoryOf", () => {
+	it("checks versions and increments atomically", async () => {
+		const sqlite = new Database(":memory:");
+		sqlite.run(
+			`CREATE TABLE pages (id TEXT PRIMARY KEY, createdAt TEXT NOT NULL, updatedAt TEXT, deletedAt TEXT, version INTEGER NOT NULL, title TEXT NOT NULL, views INTEGER NOT NULL)`,
+		);
+		const pages = sqliteTable("pages", {
+			id: text("id").primaryKey(),
+			createdAt: text("createdAt").notNull(),
+			updatedAt: text("updatedAt"),
+			deletedAt: text("deletedAt"),
+			version: integer("version").notNull(),
+			title: text("title").notNull(),
+			views: integer("views").notNull(),
+		});
+		class Page extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string, views: ctx.integer })),
+			{ name: "Page", change: ["title", "views"], versioned: true },
+		) {}
+		const Pages = repositoryOf({
+			entity: Page,
+			provider: drizzleProvider({
+				db: drizzle(sqlite),
+				tables: { Page: pages },
+			}),
+			actions: ["create", "update", "increment", "findById"],
+		});
+		const page = await Pages.create({ title: "a", views: 0 });
+		const stale = (await Pages.findById(page.id)) as Page;
+		const counted = await Pages.increment(page.id, { views: 2 });
+		expect([counted.views, counted.version]).toEqual([2, 2]);
+		expect(counted.updatedAt).toBeDefined();
+		await expect(Pages.update(stale.change.title("b"))).rejects.toMatchObject({
+			name: "RepositoryConcurrencyConflict",
+			details: { id: page.id, expected: 1, actual: 2 },
+		});
+		const saved = await Pages.update(counted.change.title("b"));
+		expect(saved.version).toBe(3);
+		const id = "01a173d2-051c-77bb-8166-a371e999573e";
+		const created = await Pages.increment(
+			id,
+			{ views: 1 },
+			{ create: { title: "new" } },
+		);
+		expect([created.views, created.version]).toEqual([1, 1]);
+		const again = await Pages.increment(
+			id,
+			{ views: 1 },
+			{ create: { title: "new" } },
+		);
+		expect([again.views, again.version]).toEqual([2, 2]);
+	});
+
 	it("finds the table by the declared name of a renamed class", async () => {
 		const sqlite = new Database(":memory:");
 		for (const statement of DDL) sqlite.run(statement);

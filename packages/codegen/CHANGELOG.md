@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Optimistic concurrency and atomic increment (#44, #34)
+
+- An entity takes `"versioned": true`, generated as `entityOf(..., { versioned: true })` and extracted back from `describe()`. Its identity has `version`, so a field `version` is `identity_key` and `change: ["version"]` is `change_identity`; on a record it is `unknown_key`, and a value that is not a boolean is `invalid_option`.
+- `increment` is a repository action, listed in `catalog().repositoryActions` and `afora.schema.json`; it needs a number key in the entity's `change` (`increment_needs_number`), and a `find` step cannot call it (`write_in_find`). The generated code needs the `@afora/core` that has it.
+
 ### Added
 
 - Records that expire (#35): `"expires": { "after": { "days": 400 } }` or `{ "at": "<a dateTime or date field>" }` on an entity, generated as the `expires` option of `entityOf` and extracted back from `describe()`. New issue `invalid_expires`; with `after`, a field named `expiresAt` is `identity_key`. New type `EntityExpiresSpec`. Generated code with `expires` needs the `@afora/core` that has records that expire.

@@ -77,6 +77,8 @@ export interface RecordSpec {
 	readonly plugins?: readonly string[];
 	/** Entities only: the events each lifecycle cycle raises. */
 	readonly events?: EntityEventsSpec;
+	/** Entities only: a `version` identity key checked by `update`. */
+	readonly versioned?: boolean;
 	/** Entities only: when their records expire, which reads then leave out. */
 	readonly expires?: EntityExpiresSpec;
 }

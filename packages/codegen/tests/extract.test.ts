@@ -185,6 +185,45 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 		expect(normalizeSpec(extractSpec(App))).toEqual(normalizeSpec(spec));
 	});
 
+	test("a versioned entity and increment round trip", async () => {
+		const spec: Spec = {
+			version: 1,
+			name: "Counting",
+			output: { dir: "src/domain" },
+			entities: {
+				Counter: {
+					fields: { name: "text", views: "integer" },
+					change: ["views"],
+					versioned: true,
+				},
+			},
+			repositories: {
+				Counters: {
+					entity: "Counter",
+					actions: ["create", "increment", "update", "findById"],
+				},
+			},
+		};
+		expect(validateSpec(spec)).toEqual([]);
+		expect(
+			generate(spec).find((file) => file.path.endsWith("entities.ts"))
+				?.contents,
+		).toContain("versioned: true");
+		const dir = await generated({ ".": { spec } });
+		const { App } = await import(join(dir, "src/domain/index.ts"));
+		const counter = await App.repositories.Counters.create({
+			name: "a",
+			views: 0,
+		});
+		const next = await App.repositories.Counters.increment(counter.id, {
+			views: 2,
+		});
+		expect([next.views, next.version]).toEqual([2, 2]);
+		const extracted = extractSpec(App);
+		expect(extracted.entities?.Counter?.versioned).toBe(true);
+		expect(normalizeSpec(extracted)).toEqual(normalizeSpec(spec));
+	});
+
 	test("the shorthand is used where it says the same", async () => {
 		const dir = await generated({ ".": { spec: blogSpec } });
 		const domain = await import(join(dir, "src/domain/index.ts"));

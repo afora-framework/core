@@ -491,3 +491,43 @@ describe("in an application", () => {
 		expect((await Users.findById(id))?.name).toBe("Guest");
 	});
 });
+
+describe("versioned entities", () => {
+	class Page extends entityOf(
+		blueprintOf((ctx) => ({ title: ctx.string })),
+		{ change: ["title"], versioned: true },
+	) {}
+	const Pages = repositoryOf({
+		entity: Page,
+		deletion: "soft",
+		actions: ["findById", "create", "update", "delete", "restore"],
+	});
+	const Wiki = commandOf({
+		name: "Wiki",
+		useCases: (ctx) => ({
+			create: ctx.create(Pages, { as: "page" }),
+			update: ctx.update(Pages, { as: "page" }),
+			remove: ctx.delete(Pages, { as: "page" }),
+			restore: ctx.restore(Pages, { as: "page" }),
+		}),
+	});
+
+	test("create, update, delete and restore check and bump the version", async () => {
+		expectTypeOf<CommandInput<typeof Wiki, "create">>().toEqualTypeOf<{
+			readonly title: string;
+		}>();
+		const { page } = await Wiki.run("create", { title: "a" });
+		expect(page.version).toBe(1);
+		const stale = (await Pages.findById(page.id)) as Page;
+		const updated = await Wiki.run("update", { id: page.id, title: "b" });
+		expect(updated.page.version).toBe(2);
+		expect((await Pages.findById(page.id))?.version).toBe(2);
+		const conflict = await Pages.update(stale.change.title("c")).catch(
+			(error) => error,
+		);
+		expect(conflict.name).toBe("RepositoryConcurrencyConflict");
+		expect(statusOf(conflict)).toBe(409);
+		expect((await Wiki.run("remove", { id: page.id })).page.version).toBe(3);
+		expect((await Wiki.run("restore", { id: page.id })).page.version).toBe(4);
+	});
+});
