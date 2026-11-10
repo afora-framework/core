@@ -409,3 +409,64 @@ describe("publishEvents", () => {
 		expect(live.published).toEqual([]);
 	});
 });
+
+describe("events without a handler", () => {
+	test("are published, handle nothing, and are described", async () => {
+		class Note extends entityOf(
+			blueprintOf((ctx) => ({ text: ctx.string })),
+			{
+				onCreate: () => [Created, Logged],
+				onUpdate: () => Created,
+				change: ["text"],
+			},
+		) {}
+		const Created: EventDefinition = eventOf("created", Note);
+		const Logged: EventDefinition = eventOf("logged", Note, async () => {});
+		expect(() => eventOf("bad", Note, "nope" as never)).toThrow(
+			"must be a function",
+		);
+
+		const Notes = repositoryOf({
+			entity: Note,
+			actions: ["create"],
+			provider: inMemoryProvider(),
+		});
+		class Write extends useCaseOf({
+			name: "Write",
+			blueprint: blueprintOf((ctx) => ({ text: ctx.string })),
+			response: blueprintOf(() => ({ note: Note })),
+			dependencies: { notes: Notes },
+		}) {
+			override async execute({ notes = this.dependencies.notes } = {}) {
+				return { note: await notes.create({ text: this.input.text }) };
+			}
+		}
+		const live = memoryPublisher();
+		const Command = commandOf({
+			name: "Notes",
+			useCases: { write: Write },
+			events: publishEvents({ publisher: "live", topic: "notes" }),
+		});
+		const app = applicationOf({
+			name: "notes",
+			entities: { Note },
+			repositories: { Notes },
+			useCases: { Write },
+			commands: { Notes: Command },
+			publishers: { live },
+		});
+		await app.commands.Notes.run("write", { text: "hi" });
+		expect(live.published.map((entry) => entry.event.name)).toEqual([
+			"created",
+			"logged",
+		]);
+		expect(app.describe().entities.Note?.events).toEqual({
+			onCreate: [
+				{ name: "created", handler: false },
+				{ name: "logged", handler: true },
+			],
+			onUpdate: [{ name: "created", handler: false }],
+		});
+		expect(app.describe().entities.Member).toBeUndefined();
+	});
+});

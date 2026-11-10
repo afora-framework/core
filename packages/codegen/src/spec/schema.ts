@@ -271,6 +271,35 @@ const Log = Type.Union(
 const StringList = (description: string) =>
 	Type.Array(Type.String(), { description });
 
+const EntityEvent = Type.Union([
+	Type.String({ pattern: KEY, description: "An event without a handler." }),
+	Type.Object(
+		{
+			name: Type.String({ pattern: KEY }),
+			handler: Type.Optional(ImportRef),
+		},
+		{ additionalProperties: false },
+	),
+]);
+
+const EntityEventList = Type.Union([
+	EntityEvent,
+	Type.Array(EntityEvent, { minItems: 1 }),
+]);
+
+const EntityEvents = Type.Object(
+	{
+		onCreate: Type.Optional(EntityEventList),
+		onUpdate: Type.Optional(EntityEventList),
+		onDelete: Type.Optional(EntityEventList),
+	},
+	{
+		additionalProperties: false,
+		description:
+			'Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.',
+	},
+);
+
 const RecordDeclaration = Type.Object(
 	{
 		fields: Fields,
@@ -292,6 +321,7 @@ const RecordDeclaration = Type.Object(
 				"Std record plugins: publishable, archivable, taggable, ownable, authenticatable.",
 			),
 		),
+		events: Type.Optional(EntityEvents),
 	},
 	{ additionalProperties: false },
 );
