@@ -46,7 +46,7 @@ An HTTP backend written by an agent (or in a hurry) tends to break the same few 
 | A business error is returned as a 500          | Exceptions know their layer; an output maps them to problem+json with a status (404, 409, 401, 422 for the errors a use case declares) and hides the detail of a real 500 ([outputs](docs/outputs.md)). |
 | A duplicate email is written twice             | `unique` keys are enforced by the repository and its provider, and a violation is a 409 ([repositories](docs/repositories.md)).                                                                         |
 
-[`examples/agent-built`](examples/agent-built/README.md) checks these four invariants on a backend built only through the MCP server, next to a Hono + Zod baseline built from the same brief.
+[`examples/agent-built`](examples/agent-built/README.md) checks these four invariants on the running API of a ticketing backend built only through the MCP server, and of a Hono + Zod baseline written from the same brief. In the committed run both hold all four, but the afora one wrote no code for any of them: the spec declares the fields and errors, and the runtime does the rest. Scripted runs that measure how often each approach holds them across independent agent runs are in the example, waiting to be run with an API key.
 
 afora is not a general-purpose validator. It models a domain on [TypeBox](https://github.com/sinclairzx81/typebox), and every field plugs into the validators your framework already accepts through [Standard Schema](https://standardschema.dev).
 
@@ -373,6 +373,8 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 
 `examples/blog` is a blog (users with the `authenticatable` plugin, posts with soft deletion, every use case a [standard one](docs/std-use-cases.md), a Hono API on Drizzle and SQLite) whose whole `src/domain` is generated from one `afora.json` by `@afora/codegen`. Only the database, the schema, the provider (made from a `Database` environment with `providerFrom` when the server calls `App.start()`, and named `database` in the `providers` of the spec) and the server are hand-written. Its tests check that the committed code is what the spec generates, drive the API end to end and extract the spec back from the application: `bun run test:blog`.
 
+`examples/agent-built` is an event ticketing API (organizers, events with a capacity, tickets) built only through the `@afora/mcp` tools from a written brief, with the tool calls committed and replayed byte for byte, and an evaluation of four invariants on its running API and on a Hono + Zod baseline: `bun run test:agent-built`. See [its write-up](examples/agent-built/README.md).
+
 ## Performance
 
 `bun run bench` compares afora with TypeBox (compiled), Zod 4, Valibot and ArkType on the same data, on Bun and on Node; the results are in `bench/RESULTS.md`. Absolute numbers depend on the machine, so read the ratios. On the measured machine (Apple M2):
@@ -417,6 +419,7 @@ bun run test:type-perf # build, then budget the editor cost per edit and snapsho
 bun run test:api      # build, then snapshot the public surface (exports and declarations) and the afora.json schema
 bun run test:interop  # Hono, tRPC and TanStack Form tests (examples/interop), including the quick start
 bun run test:blog     # the generated blog (examples/blog): drift, API and extraction
+bun run test:agent-built # the agent-built example (examples/agent-built): drift, replay, API and the invariant evaluation
 bun run smoke         # build, then run the package on plain Node
 bun run bench         # benchmark against TypeBox, Zod, Valibot and ArkType
 bun run lint          # biome lint

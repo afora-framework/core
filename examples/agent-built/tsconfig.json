@@ -1,0 +1,13 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"paths": {
+			"@afora/core": ["../../src/index.ts"],
+			"@afora/codegen": ["../../packages/codegen/src/index.ts"],
+			"@afora/hono": ["../../packages/hono/src/index.ts"],
+			"@afora/mcp": ["../../packages/mcp/src/index.ts"]
+		}
+	},
+	"include": ["**/*.ts"],
+	"exclude": ["node_modules", ".tmp"]
+}
