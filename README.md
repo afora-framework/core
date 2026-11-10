@@ -1,6 +1,9 @@
-<h1 align="center">afora</h1>
-
-<p align="center"><strong>Model the domain. Keep the invariants.</strong><br>Domain modeling for TypeScript, built on TypeBox.</p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/afora-banner-dark.png">
+    <img alt="afora — Model the domain. Keep the invariants." src=".github/assets/afora-banner-light.png" width="100%">
+  </picture>
+</p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@afora/core"><img alt="npm" src="https://img.shields.io/npm/v/@afora/core?color=cb3837&logo=npm"></a>
@@ -20,9 +23,34 @@
   <a href="https://github.com/afora-framework/core/discussions">Discussions</a>
 </p>
 
-Domain modeling on [TypeBox](https://github.com/sinclairzx81/typebox): entities with invariants, sensitive data masking and exceptions that know their layer, usable by any [Standard Schema](https://standardschema.dev) consumer.
+**A backend an agent can write without breaking its guarantees.** With afora the whole application is data: an `afora.json` declares the entities, repositories, use cases, commands and HTTP API, [`@afora/codegen`](packages/codegen/README.md) turns it into TypeScript you review and commit, [`@afora/mcp`](packages/mcp/README.md) lets an agent write it, and `extractSpec(app)` gives the spec back from code written by hand. Whoever writes the spec or the code, the runtime keeps the invariants: sensitive fields are masked, undeclared keys are rejected, unique keys are enforced and business errors become problem+json with the right status.
 
-afora is not a general-purpose validator. It is for code that models a domain, and it plugs into the validators your framework already accepts.
+### 30 seconds: from afora.json to a running API
+
+```bash
+bun add @afora/core @afora/hono hono typebox && bun add -d @afora/codegen
+bunx afora-codegen generate afora.json --stages ./stages.ts   # writes src/domain/*.ts
+bun src/server.ts
+```
+
+With the [quick start's `afora.json`](#the-same-app-as-an-aforajson) and three small files written by hand (the hashing function, the `hono` stage catalog and the server, shown there), that is the whole API: a `User` with a masked password and a unique email, a use case written as steps, problem+json errors and an OpenAPI document. The same app written by hand in TypeScript is the [quick start](#quick-start), and the [afora.json guide](docs/afora-json.md) covers the whole spec.
+
+## Why afora
+
+An HTTP backend written by an agent (or in a hurry) tends to break the same few guarantees. In afora each one is a mechanism of the runtime, not a convention the code has to remember:
+
+| What usually breaks                            | What afora does                                                                                                                                                                                         |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A password hash or token ends up in a response | A property declared `sensitive` (`Password`) is masked by `toJSON()` at any depth, so no serializer can leak it ([records](docs/records.md)).                                                           |
+| Extra fields in a request body are accepted    | Records reject undeclared keys at any depth (issue code `undeclared_key`), and the HTTP sink answers 400 ([Standard Schema](docs/standard-schema.md)).                                                  |
+| A business error is returned as a 500          | Exceptions know their layer; an output maps them to problem+json with a status (404, 409, 401, 422 for the errors a use case declares) and hides the detail of a real 500 ([outputs](docs/outputs.md)). |
+| A duplicate email is written twice             | `unique` keys are enforced by the repository and its provider, and a violation is a 409 ([repositories](docs/repositories.md)).                                                                         |
+
+[`examples/agent-built`](examples/agent-built/README.md) checks these four invariants on a backend built only through the MCP server, next to a Hono + Zod baseline built from the same brief.
+
+afora is not a general-purpose validator. It models a domain on [TypeBox](https://github.com/sinclairzx81/typebox), and every field plugs into the validators your framework already accepts through [Standard Schema](https://standardschema.dev).
+
+## Features
 
 - **Records with invariants.** Properties (`Email`, `Slug`, `Password`, your own) validate and normalize every value; blueprints compose them; a record (`class User extends recordOf(...)`) holds the handled value and rejects undeclared keys at any depth.
 - **Sensitive data masking.** A property declared `sensitive` (`Password`) is masked by `toJSON()` at any depth, so `JSON.stringify(user)` cannot leak it.
@@ -283,18 +311,29 @@ export async function hashPassword(plain: string) {
 }
 ```
 
-Then generate, telling codegen where the `hono` stage comes from, and serve the application:
+Then generate, telling codegen where the `hono` stage comes from in `stages.ts`:
+
+```ts
+export { stages } from "@afora/hono";
+```
 
 ```bash
 bun add -d @afora/codegen
-bunx afora-codegen generate afora.json --stages @afora/hono   # writes src/domain/*.ts
+bunx afora-codegen generate afora.json --stages ./stages.ts   # writes src/domain/*.ts
 ```
+
+and serve the application from `src/server.ts` (`bun src/server.ts`):
 
 ```ts
-import { App } from "./src/domain";
+import { App } from "./domain/index.ts";
 
-Bun.serve({ fetch: App.outputs.Api.build().fetch });
+await App.start();
+export const api = App.outputs.Api.build();
+
+if (import.meta.main) Bun.serve({ fetch: api.fetch });
 ```
+
+These three files are `examples/interop/from-json`, which `bun run test:interop` generates and serves.
 
 `generate` writes one file per kind (`entities.ts`, `repositories.ts`, `use-cases.ts`, `commands.ts`, `outputs.ts`...), an `application.ts` and an `index.ts`, each starting with a banner saying not to edit it. `afora-codegen extract` goes the other way and gives the `afora.json` of an `Application`. The guide is in [docs/afora-json.md](docs/afora-json.md).
 
