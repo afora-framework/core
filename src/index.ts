@@ -129,6 +129,7 @@ export type {
 export {
 	AbstractEntity,
 	ENTITY_IDENTITY_KEYS,
+	EntitySettings,
 	EntityUniqueKeys,
 	RESERVED_ENTITY_KEYS,
 } from "./core/entity/abstract-entity";
@@ -145,6 +146,7 @@ export { eventOf } from "./core/entity/event";
 export {
 	DeletedEntity,
 	ImmutableEntityKey,
+	InvalidEntityExpiry,
 	ReservedEntityKey,
 } from "./core/entity/exceptions";
 export type {
@@ -152,13 +154,22 @@ export type {
 	EntityBuilder,
 	EntityBuilderSettings,
 	EntityConstructor,
+	EntityDuration,
+	EntityExpires,
 	EntityIdentityKey,
 	EntityInput,
 	EntityOptions,
 	EntityProperties,
+	EntityStorageOptions,
+	EntityStorageSettings,
 	EntityUniqueKey,
+	ExpiresAtField,
+	ExpiringIdentity,
 	IEntityIdentity,
+	IEntityVersion,
+	VersionedIdentity,
 } from "./core/entity/types/entity.interface";
+export { EntityVersion } from "./core/entity/version";
 export type {
 	AnyEnvironment,
 	EnvironmentDependencies,
@@ -394,7 +405,9 @@ export {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
+	InvalidRepositoryIncrement,
 	InvalidRepositoryQuery,
+	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
 } from "./core/repository/exceptions";
@@ -420,20 +433,27 @@ export type {
 	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
+	RepositoryForEachPage,
 	RepositoryOrder,
 	RepositoryPage,
 	RepositoryQuery,
+	RepositoryWalkOptions,
+	RepositoryWalkPage,
+	RepositoryWalkResult,
 	RepositoryWhere,
 } from "./core/repository/types/query.interface";
 export type {
 	AnyRepository,
 	AnyRepositoryEntity,
+	EntityIncrementKeyOf,
 	EntityInstanceOf,
 	EntityKeyOf,
 	EntityNonUniqueKeyOf,
 	EntityUniqueKeyOf,
 	EntityValueOf,
 	IRepositoryProvider,
+	ProviderIncrementOptions,
+	ProviderUpdateOptions,
 	QueryValueOf,
 	RepositoryAction,
 	RepositoryContext,
@@ -444,6 +464,9 @@ export type {
 	RepositoryDelete,
 	RepositoryFindBy,
 	RepositoryFindManyBy,
+	RepositoryIncrement,
+	RepositoryIncrementDeltas,
+	RepositoryIncrementOptions,
 	RepositoryRestore,
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
@@ -568,6 +591,7 @@ export {
 	DateProperty,
 	DateTime,
 	DeletedAt,
+	ExpiresAt,
 	UpdatedAt,
 } from "./std/properties/time";
 export { recordOf } from "./std/record";

@@ -25,6 +25,30 @@ afora-codegen extract src/app.ts#App [--import key=./file.ts#name] > afora.json
 
 `extract` imports the file, so use Bun (or Node >= 23.6) for TypeScript files. The CLI runs on Node >= 22 or Bun. The same functions are available from code: `loadSpec`, `validateSpec`, `generate`, `writeGenerated`, `extractSpec`, `normalizeSpec`, `catalog`.
 
+## Versioned entities and increment
+
+An entity takes `"versioned": true`, generated as `entityOf(..., { versioned: true })` and extracted back from `describe()`: it gets a `version` identity key, so its fields cannot declare `version` (`identity_key`) nor its `change` name it (`change_identity`), and `update` throws `RepositoryConcurrencyConflict` (409) on a stale write (see [Repositories](repositories.md)). A record does not take it (`unknown_key`).
+
+A repository lists `"increment"` among its actions for atomic counters; the entity needs a number key (a Std `integer` or `number` property, not a list) in its `change` (`increment_needs_number` otherwise). It is called by code written by hand: a `find` step cannot call it (`write_in_find`), and there is no step for it.
+
+```json
+{
+	"entities": {
+		"PageViews": {
+			"fields": { "entry": "text", "views": "integer" },
+			"change": ["views"],
+			"versioned": true
+		}
+	},
+	"repositories": {
+		"Views": {
+			"entity": "PageViews",
+			"actions": ["findById", "update", "increment"]
+		}
+	}
+}
+```
+
 ## Round trip
 
 `extractSpec(app)` reads `app.describe()` and is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec, and `normalizeSpec` makes the shorthand and object forms of a field compare equal. This holds for code that was generated, and for code written by hand, as long as everything the core cannot describe is mapped to an export (next section). An unmapped piece makes extraction throw an `ExtractionError` naming the key, instead of guessing. `examples/blog` extracts its own spec back in its tests, and `bun run test:roundtrip` proves both directions on complete applications.
@@ -85,6 +109,17 @@ The events come from the lifecycle of the entities. An entity (not a record) dec
 ```
 
 A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
+
+## Records that expire
+
+An entity (not a record) declares when its records expire with `expires`, generated as the [option of `entityOf`](entities.md#records-that-expire) and extracted back from `describe()`:
+
+```json
+"AuditEvent": { "fields": { "action": "text" }, "expires": { "after": { "days": 400 } } },
+"Window": { "fields": { "hits": "integer", "until": "dateTime?" }, "expires": { "at": "until" } }
+```
+
+`after` is a non-empty duration (`days`, `hours`, `minutes`, `seconds`, each a positive number) from `createdAt`, kept in an `expiresAt` identity key, so no field may be named `expiresAt` (`identity_key`). `at` names a `dateTime` or `date` field of the entity (optional or not); a record without a value never expires. Anything else is an `invalid_expires` issue. Repositories of the entity leave expired records out of every read unless `withExpired: true` (see [Repositories](repositories.md#records-that-expire)), and need a provider with `capabilities.expiry` (`"inMemory"` and `drizzle` have it).
 
 ## Standard use cases
 

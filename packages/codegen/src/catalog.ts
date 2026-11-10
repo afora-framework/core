@@ -7,6 +7,20 @@ import {
 	StdRecordPlugins,
 } from "@afora/core";
 
+/** The key a versioned entity adds to its identity. */
+const VERSION_KEY = "version";
+
+/**
+ * The identity keys of an entity declaration: those of every entity, and
+ * `version` when it is `versioned`.
+ */
+export function identityKeysOf(spec: {
+	readonly versioned?: unknown;
+}): readonly string[] {
+	const keys = catalog().identityKeys;
+	return spec.versioned === true ? [...keys, VERSION_KEY] : keys;
+}
+
 /** The kind of JSON Schema a Std property validates; it tells which `with` options apply. */
 export type SchemaKind = "string" | "number" | "integer" | "boolean" | "other";
 
@@ -212,11 +226,18 @@ function build(): Catalog {
 				action: "create",
 				rule: "Takes an entity or the input that builds one.",
 			},
-			{ action: "update", rule: "Saves a changed entity." },
+			{
+				action: "update",
+				rule: 'Saves a changed entity. For a "versioned" entity, only when the stored version is still the one it read (else RepositoryConcurrencyConflict, 409), and the version goes up by one.',
+			},
 			{ action: "delete", rule: "Destroys an entity (soft delete)." },
 			{
 				action: "restore",
 				rule: 'Brings back a soft-deleted entity, by entity or id. Needs deletion "soft".',
+			},
+			{
+				action: "increment",
+				rule: 'Adds numbers to keys of the entity in one atomic write: increment(id, { views: 1 }, { create? }). Only number keys in its "change"; create gives the input of the entity to create when the id holds none. Bumps the version of a versioned entity. Needs a provider with atomic increment (inMemory and drizzle).',
 			},
 			{
 				action: "count",
@@ -237,6 +258,10 @@ function build(): Catalog {
 			{
 				action: "findCursor",
 				rule: "Gives { items, limit, next } for { where?, orderBy?, limit?, after? }: pages by position, `after` being the `next` of the page before. No offset and no total. Needs no key, and a provider that reads by cursor (inMemory and drizzle do).",
+			},
+			{
+				action: "forEachPage",
+				rule: "forEachPage(query, fn, { until? }) runs fn on each page of a findCursor query and gives { done, next?, pages, items }; until (a Date, epoch ms or a function) is checked between pages, and next is the after to resume from. Called from TypeScript, not a step. Needs no key, and a provider that reads by cursor.",
 			},
 		],
 		exceptionLayers: Object.values(core.ExceptionLayers),

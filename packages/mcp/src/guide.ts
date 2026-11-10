@@ -58,15 +58,19 @@ a file of your own.
 
 - Declaration names are PascalCase and unique across every kind; names exported by @afora/core are taken.
 - No circular references between declarations (store an id instead of the entity).
-- An entity cannot declare \`id\`, \`createdAt\`, \`updatedAt\`, \`deletedAt\` (it gets them). No record member names
+- An entity cannot declare \`id\`, \`createdAt\`, \`updatedAt\`, \`deletedAt\` (it gets them), nor \`version\` when it is
+  \`"versioned": true\`, which adds that identity key (optimistic concurrency: \`update\` throws \`RepositoryConcurrencyConflict\`,
+  a 409, when someone else wrote the entity since it was read). No record member names
   (\`toJSON\`, \`set\`, \`onSet\`...); see \`reservedRecordKeys\` in the catalog. \`blueprint\` and \`options\` are valid fields.
 - \`unique\`, \`sensitive\`, \`change\` must name fields (or keys of its plugins); \`change\` cannot name an identity key.
   \`password\` is always sensitive and \`slug\` always unique; \`id\` is always unique.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.
 - Repository actions: \`findById\`; \`findBy<Key>\` only for unique keys (id, \`unique\`, slug fields, unique plugin keys such as
-  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`restore\` (only with \`"deletion": "soft"\`), \`count\`, and the
+  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`restore\` (only with \`"deletion": "soft"\`),
+  \`increment\` (atomic \`increment(id, { views: 1 }, { create? })\`, for the number keys of the entity's \`change\`; not a step), \`count\`, and the
   queries \`findMany\`, \`exists\`, \`findPage\` (no key needed; \`where\`, \`orderBy\`, \`limit\`, \`offset\` at runtime) and
-  \`findCursor\` (pages by position: \`after\` is the \`next\` of the page before, no \`offset\`).
+  \`findCursor\` (pages by position: \`after\` is the \`next\` of the page before, no \`offset\`), and \`forEachPage\`
+  (walks every page with a function, stops with \`until\` and resumes from \`next\`; called from TypeScript, never a step).
 - \`provider\` (top level for the application, and optionally on a repository, which then uses its own): \`"inMemory"\`,
   \`{ "use": "<name>", "options": {...} }\` with a name from the \`providers\` of \`afora_catalog\` (external ones are given
   to the server with \`--providers\`), or \`{ "import": "./db.ts#provider" }\` for one created by hand. Options are JSON or
@@ -79,6 +83,10 @@ a file of your own.
   \`"inMemory"\` is not a valid key. Keys of a spec extended directly can be named too. Each application makes its own
   instance of a provider made on start (an \`{ "import" }\` of a \`providerFrom\`), so independent applications do not share it.
 - Repository \`deletion\`: \`"hard"\` (default) physically removes rows; \`"soft"\` retains \`deletedAt\` and hides deleted rows from reads, counts and relations.
+- Entity \`expires\` (records that expire, left out of every read unless \`withExpired: true\` at runtime): \`{ "after": { "days": 400 } }\`
+  (days, hours, minutes, seconds; positive) adds an \`expiresAt\` identity key, \`createdAt\` + the duration, so no field may be named
+  \`expiresAt\`; \`{ "at": "until" }\` names a \`dateTime\` or \`date\` field, and a record without a value never expires. Unique keys
+  still count expired records; relations still load them.
 - \`relations\` must list exactly one repository for each entity the repository's entity holds, at any depth (inside
   records, blueprints and nested objects), not through another entity.
 - Environments hold properties only (no lists, no objects).

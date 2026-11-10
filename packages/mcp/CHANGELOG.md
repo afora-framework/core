@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+### Optimistic concurrency and atomic increment (#44, #34)
+
+- The guide teaches `"versioned": true` on entities (the `version` identity key, `RepositoryConcurrencyConflict`) and the `increment` action.
+
 ### Added
 
+- The guide teaches records that expire (`"expires": { "after": { "days": 400 } }` or `{ "at": "until" }` on an entity).
 - The guide and the tool descriptions teach the lifecycle events of entities (`"events": { "onCreate": "created" }`).
 - The guide and the tool descriptions teach event policies (`"events": { "policy": "publishEvents", "options": {...} }`) and the top-level `publishers`; `afora_catalog` lists the policies under `policies`, and `--policies <module>` adds those of another catalog.
 

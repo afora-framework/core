@@ -1,5 +1,6 @@
-import { catalog, recordPlugin } from "./catalog";
+import { catalog, identityKeysOf, recordPlugin } from "./catalog";
 import { cyclesOf } from "./entity-events";
+import { canonicalExpires } from "./entity-expires";
 import { flagOf } from "./graph";
 import { type Field, parseField } from "./model";
 import { type Scope, scopeOf } from "./scope";
@@ -75,7 +76,7 @@ function canonicalRecord(
 	const pluginKeys = new Set(
 		(plugins ?? []).flatMap((plugin) => recordPlugin(plugin)?.keys ?? []),
 	);
-	const identity = new Set<string>(entity ? catalog().identityKeys : []);
+	const identity = new Set<string>(entity ? identityKeysOf(value) : []);
 	const implied = (key: string, flag: "unique" | "sensitive") => {
 		const parsed = parse(fields[key]);
 		return parsed ? flagOf(parsed, flag, scope) : false;
@@ -97,6 +98,7 @@ function canonicalRecord(
 		option("change"),
 	];
 	void name;
+	const expires = entity ? canonicalExpires(value.expires) : undefined;
 	// Events: a list per cycle, each a name or { name, handler }.
 	const events = Object.fromEntries(
 		Object.entries(entity ? cyclesOf(value.events) : {})
@@ -117,6 +119,8 @@ function canonicalRecord(
 		...(change ? { change } : {}),
 		...(plugins ? { plugins } : {}),
 		...(Object.keys(events).length > 0 ? { events } : {}),
+		...(entity && value.versioned === true ? { versioned: true } : {}),
+		...(expires ? { expires: expires as Json } : {}),
 	};
 }
 

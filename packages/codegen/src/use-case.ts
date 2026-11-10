@@ -1,4 +1,9 @@
-import { catalog, genericUseCase, recordPlugin } from "./catalog";
+import {
+	catalog,
+	genericUseCase,
+	identityKeysOf,
+	recordPlugin,
+} from "./catalog";
 import { fieldsOfDecl } from "./graph";
 import type { Field } from "./model";
 import { checkImport, isImportObject } from "./provider";
@@ -43,7 +48,13 @@ const ENSURE_KINDS = [
 ];
 const READ_ACTION =
 	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|findCursor|count)$/;
-const WRITE_ACTIONS = new Set(["create", "update", "delete", "restore"]);
+const WRITE_ACTIONS = new Set([
+	"create",
+	"update",
+	"delete",
+	"restore",
+	"increment",
+]);
 /** The names a step cannot bind with `as`: they are roots or escapes of values. */
 const RESERVED_NAMES = ["input", "context", "env", "literal"];
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -250,7 +261,7 @@ const GENERIC_ERRORS = ["notFound", "conflict", "invalid", "owner"];
 function entityKeysOf(decl: Decl): string[] {
 	const plugins = Array.isArray(decl.spec.plugins) ? decl.spec.plugins : [];
 	return [
-		...catalog().identityKeys,
+		...identityKeysOf(decl.spec),
 		...Object.keys(fieldsOfDecl(decl) ?? {}),
 		...plugins.flatMap((name) =>
 			typeof name === "string" ? (recordPlugin(name)?.keys ?? []) : [],
@@ -905,6 +916,12 @@ function checkSteps(steps: unknown, implPath: Path, ctx: StepsContext): void {
 					fail("invalid_step", 'find must be "<repository>.<action>".', "find");
 				} else if (WRITE_ACTIONS.has(action)) {
 					fail("write_in_find", `find cannot call "${action}".`, "find");
+				} else if (action === "forEachPage") {
+					fail(
+						"unknown_action",
+						'"forEachPage" runs a function on each page and cannot be a step; call it from a use case written in TypeScript.',
+						"find",
+					);
 				} else if (!READ_ACTION.test(action)) {
 					fail("unknown_action", `"${action}" is not a read action.`, "find");
 				} else repository(repo, action, "find");

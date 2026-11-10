@@ -6,7 +6,7 @@ import type {
 	BlueprintField,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
-import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
+import { identityKeysOf } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
 import { isProperty } from "../property/is-property";
 import { InvalidOpenAPIModel } from "./exceptions";
@@ -102,7 +102,7 @@ function recordSchemaOf(record: AnyRecordClass, scope: Scope): Schema {
 		).options ?? {};
 	return objectOf(record.blueprint.properties, scope, {
 		writeOnly: sensitive,
-		readOnly: isEntityClass(record) ? ENTITY_IDENTITY_KEYS : [],
+		readOnly: isEntityClass(record) ? identityKeysOf(record) : [],
 	});
 }
 
