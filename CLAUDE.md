@@ -27,7 +27,7 @@ bun run smoke                            # build, then run scripts/smoke.mjs on 
 bun run bench                            # bench/ vs TypeBox, Zod, Valibot, ArkType; results in bench/RESULTS.md
 ```
 
-`packages/*` (`codegen`, `mcp`, `hono`, `drizzle`) are workspaces with their own build and tests (`bun run build:packages`). `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
+`packages/*` (`codegen`, `mcp`, `hono`, `ws`, `drizzle`) are workspaces with their own build and tests (`bun run build:packages`). `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
 
 ## Runtime constraint
 

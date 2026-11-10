@@ -61,7 +61,7 @@ In an application, register commands under `commands: { Users }` (keyed by `comm
 
 An event policy is a handler made by a factory of `eventPolicyOf`, with JSON options. A command runs it like any handler, and an application describes it by name and options, so it can be written in an `afora.json` (`"events": { "policy": "publishEvents", "options": {...} }`).
 
-**`publishEvents`** publishes the events of a call to a publisher of the application, once the call succeeded and committed: to a WebSocket hub, a queue, a broker.
+**`publishEvents`** publishes the events of a call to a publisher of the application, once the call succeeded and committed: to a WebSocket hub (`wsHub` of [`@afora/ws`](../packages/ws/README.md)), a queue, a broker.
 
 ```ts
 import { applicationOf, commandOf, publishEvents } from "@afora/core";
