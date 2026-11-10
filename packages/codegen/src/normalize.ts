@@ -1,5 +1,6 @@
 import { catalog, recordPlugin } from "./catalog";
 import { cyclesOf } from "./entity-events";
+import { canonicalExpires } from "./entity-expires";
 import { flagOf } from "./graph";
 import { type Field, parseField } from "./model";
 import { type Scope, scopeOf } from "./scope";
@@ -97,6 +98,7 @@ function canonicalRecord(
 		option("change"),
 	];
 	void name;
+	const expires = entity ? canonicalExpires(value.expires) : undefined;
 	// Events: a list per cycle, each a name or { name, handler }.
 	const events = Object.fromEntries(
 		Object.entries(entity ? cyclesOf(value.events) : {})
@@ -117,6 +119,7 @@ function canonicalRecord(
 		...(change ? { change } : {}),
 		...(plugins ? { plugins } : {}),
 		...(Object.keys(events).length > 0 ? { events } : {}),
+		...(expires ? { expires: expires as Json } : {}),
 	};
 }
 

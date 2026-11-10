@@ -79,6 +79,10 @@ a file of your own.
   \`"inMemory"\` is not a valid key. Keys of a spec extended directly can be named too. Each application makes its own
   instance of a provider made on start (an \`{ "import" }\` of a \`providerFrom\`), so independent applications do not share it.
 - Repository \`deletion\`: \`"hard"\` (default) physically removes rows; \`"soft"\` retains \`deletedAt\` and hides deleted rows from reads, counts and relations.
+- Entity \`expires\` (records that expire, left out of every read unless \`withExpired: true\` at runtime): \`{ "after": { "days": 400 } }\`
+  (days, hours, minutes, seconds; positive) adds an \`expiresAt\` identity key, \`createdAt\` + the duration, so no field may be named
+  \`expiresAt\`; \`{ "at": "until" }\` names a \`dateTime\` or \`date\` field, and a record without a value never expires. Unique keys
+  still count expired records; relations still load them.
 - \`relations\` must list exactly one repository for each entity the repository's entity holds, at any depth (inside
   records, blueprints and nested objects), not through another entity.
 - Environments hold properties only (no lists, no objects).

@@ -1,6 +1,7 @@
 import { catalog, recordPlugin } from "./catalog";
 import { checkCommand } from "./command";
 import { checkEntityEvents } from "./entity-events";
+import { checkEntityExpires } from "./entity-expires";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
@@ -555,7 +556,15 @@ function checkFieldsOf(
 	const keys = Object.keys(decl.spec);
 	const allowed =
 		owner === "entity"
-			? ["fields", "sensitive", "unique", "change", "plugins", "events"]
+			? [
+					"fields",
+					"sensitive",
+					"unique",
+					"change",
+					"plugins",
+					"events",
+					"expires",
+				]
 			: owner === "record"
 				? ["fields", "sensitive", "unique", "change", "plugins"]
 				: ["fields"];
@@ -594,6 +603,16 @@ function checkRecord(
 			decl.name,
 			decl.spec.events,
 			[...path, "events"],
+			scope,
+			issues,
+		);
+	}
+
+	if (owner === "entity" && decl.spec.expires !== undefined) {
+		checkEntityExpires(
+			decl.spec.expires,
+			fields,
+			[...path, "expires"],
 			scope,
 			issues,
 		);
