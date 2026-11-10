@@ -1,6 +1,6 @@
 import type { Static, TSchema } from "typebox";
 import Compile from "typebox/compile";
-import { Locale, Settings } from "typebox/system";
+import * as System from "typebox/system";
 import type { ISchema, ISchemaType } from "./types/schema.interface";
 
 /** Keywords kept as they are: the types, and the references between schemas. */
@@ -198,6 +198,12 @@ function leafChecksOf(schema: unknown): readonly LeafCheck[] | undefined {
 	return checks;
 }
 
+/**
+ * The settings and the messages of TypeBox, read as they are on each value;
+ * a version of TypeBox without them leaves every error to `Errors`.
+ */
+const { Locale, Settings } = System as Partial<typeof System>;
+
 /** The leaf checks of each schema, `null` when it is not a leaf; made on its first rejected value. */
 const leafChecks = new WeakMap<object, readonly LeafCheck[] | null>();
 
@@ -215,9 +221,14 @@ export function errorsOfSchema(
 		checks = leafChecksOf(schema.type.Type()) ?? null;
 		leafChecks.set(schema, checks);
 	}
-	if (checks !== null) {
-		const { maxErrors } = Settings.Get();
-		const locale = Locale.Get();
+	const maxErrors = Settings?.Get?.().maxErrors;
+	const locale = Locale?.Get?.();
+	// Without the limit and the messages of TypeBox, only TypeBox can answer.
+	if (
+		checks !== null &&
+		typeof maxErrors === "number" &&
+		typeof locale === "function"
+	) {
 		const errors: SchemaError[] = [];
 		for (const { keyword, params, check } of checks) {
 			if (errors.length >= maxErrors) break;
