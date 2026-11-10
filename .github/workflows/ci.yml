@@ -61,6 +61,21 @@ jobs:
       - run: bun run test:blog
       - run: bun run docs:links
 
+  bench:
+    name: Validation speed against Zod 4
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      # the benchmark runs afora from src, which imports typebox and slugify from the root install
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: bench
+      # fails when blueprint.safeParse is over 1.15x Zod 4 safeParse in any of the four cases (GUARD_RATIO in bench/run.ts)
+      - run: bun run bench:guard
+
   api-surface:
     name: Public API surface
     runs-on: ubuntu-latest
