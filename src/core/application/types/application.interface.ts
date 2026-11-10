@@ -21,6 +21,7 @@ import type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
 } from "../../use-case/use-case";
+import type { ProviderSlot, ProviderStorage } from "../providers";
 import type { LogFactory, ProviderFactory } from "../start";
 
 type Named<Value> = Readonly<Record<string, Value>>;
@@ -73,9 +74,18 @@ export interface ApplicationSettings<
 	 * The provider of the repositories that did not declare one; the
 	 * repositories of the application read and write through it. With
 	 * `providerFrom`, it is made by `app.start()` from the variables of its
-	 * environments, and calls before that throw `ApplicationNotStarted`.
+	 * environments, and calls before that throw `ApplicationNotStarted`. A
+	 * provider of `providers` (`Providers.main`) names the instance this
+	 * application makes of it.
 	 */
 	readonly provider?: IRepositoryProvider | ProviderFactory;
+	/**
+	 * Named providers made by `providersOf`, which repositories name
+	 * (`repositoryOf({ provider: Providers.audit })`). The application makes
+	 * its own instance of each `providerFrom` on `start()` and binds the
+	 * repositories to it; an application that extends it shares them.
+	 */
+	readonly providers?: ProviderStorage;
 	/**
 	 * How it logs: the providers its lines go to and the lowest level kept.
 	 * Use cases, commands and repository calls of the application are logged
@@ -210,6 +220,8 @@ export interface IApplication<
 	get<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase;
 	/** The bound version of a repository registered in the application. */
 	get<Repository extends AnyRepository>(repository: Repository): Repository;
+	/** The instance this application reads and writes through for a provider of its `providers`. */
+	get(provider: ProviderSlot): IRepositoryProvider;
 	/** Whether `start()` completed and `stop()` was not called since. */
 	readonly started: boolean;
 }
@@ -397,13 +409,23 @@ export interface LogDescription {
 	)[];
 }
 
+/** How `describe` names a provider of `providersOf`: by its key. */
+export interface ProviderReference {
+	readonly kind: "ref";
+	readonly key: string;
+}
+
 /** The graph `describe` gives: every declaration by name, with its origin in `from`. */
 export interface ApplicationDescription {
 	readonly name: string;
 	/** The names of the applications it extends directly. */
 	readonly extends: readonly string[];
 	/** The provider of the application (or of the last extended one), present only when configured. */
-	readonly provider?: ProviderDescription;
+	readonly provider?: ProviderDescription | ProviderReference;
+	/** Its providers of `providersOf` (inherited ones included), by key; present only when it has some. */
+	readonly providers?: Readonly<
+		Record<string, ProviderDescription & { readonly from: string }>
+	>;
 	/** Its `log` (or the one of the last extended application), present only when configured. */
 	readonly log?: LogDescription | { readonly kind: "opaque" };
 	readonly properties: Readonly<
@@ -435,8 +457,8 @@ export interface ApplicationDescription {
 				readonly relations: readonly string[];
 				/** The names of its `environmentDependencies`. */
 				readonly environments: readonly string[];
-				/** Its own provider, present only when it declared one. */
-				readonly provider?: ProviderDescription;
+				/** Its own provider, present only when it declared one; a provider of `providersOf` by its key. */
+				readonly provider?: ProviderDescription | ProviderReference;
 			}
 		>
 	>;

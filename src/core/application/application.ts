@@ -50,6 +50,7 @@ import {
 	inspectRepository,
 	type RepositoryInspection,
 } from "../repository/state";
+import type { ProviderDescription } from "../repository/types/query.interface";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
 import { describeSteps } from "../use-case/steps/describe";
@@ -65,6 +66,13 @@ import {
 	UnregisteredRepositoryDependency,
 	UnregisteredUseCaseDependency,
 } from "./exceptions";
+import {
+	isProviderSlot,
+	isProviderStorage,
+	type ProviderSlot,
+	slotEntry,
+	slotsOf,
+} from "./providers";
 import { setStartedApplication, startedApplication } from "./registry";
 import {
 	checkTransactions,
@@ -91,6 +99,7 @@ import type {
 	PropertyDescription,
 	PropertyLineageDescription,
 	PropertyReference,
+	ProviderReference,
 	RecordDescription,
 } from "./types/application.interface";
 
@@ -124,6 +133,27 @@ type Registry = Record<ApplicationCollectionKey, Map<string, Entry>>;
 const internals = new WeakMap<object, Registry>();
 /** The `log` each application was declared with (or inherited), for `extends`. */
 const logSettings = new WeakMap<object, LogSettings | LogFactory>();
+
+/** A provider of `providersOf` an application registers, by key. */
+interface NamedProvider {
+	readonly slot: ProviderSlot;
+	/** The application that registered its storage. */
+	readonly from: string;
+	/** What the repositories of the application read and write through. */
+	readonly instance: IRepositoryProvider;
+}
+/** The providers of `providersOf` of each application, for `extends`. */
+const namedProviders = new WeakMap<
+	object,
+	ReadonlyMap<string, NamedProvider>
+>();
+/** The slot each application's default provider was declared with, if any. */
+const defaultSlots = new WeakMap<object, ProviderSlot>();
+
+/** How `describe` names a provider of `providersOf`. */
+function referenceOf(slot: ProviderSlot): ProviderReference {
+	return { kind: "ref", key: slotEntry(slot).key };
+}
 
 const KIND_OF: Readonly<Record<ApplicationCollectionKey, string>> = {
 	properties: "property",
@@ -723,7 +753,8 @@ function describeRegistry(
 	name: string,
 	extended: readonly AnyApplication[],
 	registry: Registry,
-	provider: IRepositoryProvider | undefined,
+	provider: ProviderDescription | ProviderReference | undefined,
+	named: ReadonlyMap<string, NamedProvider>,
 	log: Required<LogSettings> | "opaque" | undefined,
 ): ApplicationDescription {
 	const scope: Scope = {
@@ -783,9 +814,25 @@ function describeRegistry(
 	return {
 		name,
 		extends: extended.map((other) => other.name),
-		...(provider === undefined
+		...(provider === undefined ? {} : { provider }),
+		...(named.size === 0
 			? {}
-			: { provider: providerDescriptionOf(provider) }),
+			: {
+					providers: Object.fromEntries(
+						[...named].map(([key, { slot, from }]) => {
+							const { value } = slotEntry(slot);
+							return [
+								key,
+								{
+									from,
+									...(isProviderFactory(value)
+										? { kind: "opaque" as const }
+										: providerDescriptionOf(value)),
+								},
+							];
+						}),
+					),
+				}),
 		...(log === undefined
 			? {}
 			: log === "opaque"
@@ -836,7 +883,11 @@ function describeRegistry(
 				),
 				...(info.provider === undefined
 					? {}
-					: { provider: providerDescriptionOf(info.provider) }),
+					: {
+							provider: isProviderSlot(info.provider)
+								? referenceOf(info.provider)
+								: providerDescriptionOf(info.provider),
+						}),
 			};
 		}),
 		useCases: each("useCases", (entry) => {
@@ -1061,32 +1112,125 @@ export function applicationOf<
 	validateCommands(name, registry);
 	validateOutputs(name, registry);
 
+	// The providers of `providersOf`, by key: those of the extended
+	// applications (sharing their instances), then its own storage, whose
+	// factories get instances of this application.
+	if (
+		settings.providers !== undefined &&
+		!isProviderStorage(settings.providers)
+	) {
+		invalid(name, "Expected `providers` to be a storage made by providersOf.");
+	}
+	const named = new Map<string, NamedProvider>();
+	const addNamed = (entry: NamedProvider) => {
+		const { key } = slotEntry(entry.slot);
+		const current = named.get(key);
+		if (current !== undefined && current.slot !== entry.slot) {
+			throw new ApplicationConflict({
+				source: name,
+				details: {
+					reason: `The provider "${key}" is declared by different storages, in "${current.from}" and "${entry.from}".`,
+					origins: [current.from, entry.from],
+					declarations: [`provider ${key}`, `provider ${key}`],
+				},
+			});
+		}
+		named.set(key, entry);
+	};
+	for (const other of extended) {
+		for (const entry of namedProviders.get(other)?.values() ?? []) {
+			addNamed(entry);
+		}
+	}
+	for (const slot of settings.providers ? slotsOf(settings.providers) : []) {
+		const inherited = named.get(slotEntry(slot).key);
+		if (inherited?.slot === slot) continue;
+		const { value } = slotEntry(slot);
+		addNamed({
+			slot,
+			from: name,
+			instance: isProviderFactory(value)
+				? deferredProvider(value, name)
+				: value,
+		});
+	}
+	const instances = new Map<object, IRepositoryProvider>(
+		[...named.values()].map((entry) => [entry.slot, entry.instance]),
+	);
+	const instanceOf = (slot: ProviderSlot, holder: string) => {
+		const instance = instances.get(slot);
+		if (instance === undefined) {
+			throw new UnregisteredApplicationReference({
+				source: name,
+				details: {
+					holder,
+					reference: `provider "${slotEntry(slot).key}"`,
+				},
+			});
+		}
+		return instance;
+	};
+	for (const entry of registry.repositories.values()) {
+		const declared = (inspectRepository(entry.value) as RepositoryInspection)
+			.provider;
+		if (isProviderSlot(declared)) {
+			instanceOf(declared, `repository "${entry.name}"`);
+		}
+	}
+
+	const inheritedFrom =
+		settings.provider === undefined
+			? [...extended].reverse().find((other) => other.provider)
+			: undefined;
 	const declaredProvider: unknown =
-		settings.provider ??
-		[...extended].reverse().find((other) => other.provider)?.provider;
+		settings.provider ?? inheritedFrom?.provider;
 	if (declaredProvider !== undefined && typeof declaredProvider !== "object") {
 		invalid(name, "Expected `provider` to be a repository provider.");
 	}
+	const defaultSlot: ProviderSlot | undefined = isProviderSlot(declaredProvider)
+		? declaredProvider
+		: inheritedFrom === undefined
+			? undefined
+			: defaultSlots.get(inheritedFrom);
 	// A provider of `providerFrom` is made on start: until then the
 	// repositories are bound to one that forwards to it once it exists.
-	const provider: IRepositoryProvider | undefined = isProviderFactory(
-		declaredProvider,
-	)
-		? deferredProvider(declaredProvider, name)
-		: (declaredProvider as IRepositoryProvider | undefined);
+	const provider: IRepositoryProvider | undefined =
+		defaultSlot !== undefined
+			? instanceOf(defaultSlot, "the application")
+			: isProviderFactory(declaredProvider)
+				? deferredProvider(declaredProvider, name)
+				: (declaredProvider as IRepositoryProvider | undefined);
+	// Every provider it makes or closes: the default first, then the named ones.
+	const allProviders = [
+		...new Set(
+			[provider, ...instances.values()].filter(
+				(value): value is IRepositoryProvider => value !== undefined,
+			),
+		),
+	];
 	{
 		const registered = new Set(
 			[...registry.environments.values()].map((entry) => entry.key),
 		);
-		for (const environment of deferredEnvironments(provider)) {
-			if (registered.has(environment)) continue;
-			throw new UnregisteredApplicationReference({
-				source: name,
-				details: {
-					holder: "the provider",
-					reference: "an environment",
-				},
-			});
+		const holderOf = (instance: IRepositoryProvider) => {
+			const entry = [...named.values()].find(
+				(candidate) => candidate.instance === instance,
+			);
+			return entry === undefined || instance === provider
+				? "the provider"
+				: `provider "${slotEntry(entry.slot).key}"`;
+		};
+		for (const instance of allProviders) {
+			for (const environment of deferredEnvironments(instance)) {
+				if (registered.has(environment)) continue;
+				throw new UnregisteredApplicationReference({
+					source: name,
+					details: {
+						holder: holderOf(instance),
+						reference: "an environment",
+					},
+				});
+			}
 		}
 	}
 
@@ -1104,7 +1248,9 @@ export function applicationOf<
 	}
 	const logger = log?.logger;
 	// Use cases, commands and outputs are rebound for a provider or a logger.
-	const rebinds = provider !== undefined || logger !== undefined;
+	// Repositories are bound for a provider, its own or one of `providersOf`.
+	const bindsProviders = provider !== undefined || instances.size > 0;
+	const rebinds = bindsProviders || logger !== undefined;
 
 	const collection = (key: ApplicationCollectionKey) =>
 		Object.freeze(
@@ -1117,10 +1263,9 @@ export function applicationOf<
 	const boundByState = new Map<object, unknown>();
 	const repositories: Record<string, unknown> = {};
 	for (const entry of registry.repositories.values()) {
-		const repository =
-			provider === undefined
-				? entry.value
-				: bindRepository(entry.value as object, provider);
+		const repository = bindsProviders
+			? bindRepository(entry.value as object, provider, instances)
+			: entry.value;
 		bound.set(entry.value, repository);
 		boundByState.set(entry.key, repository);
 		repositories[entry.name] = repository;
@@ -1188,7 +1333,7 @@ export function applicationOf<
 					events: declared.events,
 					onEventError: declared.onEventError,
 				} as never);
-		if (provider !== undefined) verifyCommand(rebuilt);
+		if (bindsProviders) verifyCommand(rebuilt);
 		boundCommandOf.set(entry.value, rebuilt);
 		commands[entry.name] = rebuilt;
 	}
@@ -1261,9 +1406,10 @@ export function applicationOf<
 		if (isLogFactory(declaredLog)) {
 			log?.set(checkLogSettings(await declaredLog.create(context)));
 		}
-		if (provider !== undefined && isDeferredProvider(provider)) {
+		for (const instance of allProviders) {
+			if (!isDeferredProvider(instance)) continue;
 			const made = (await startDeferred(
-				provider,
+				instance,
 				context,
 			)) as IRepositoryProvider;
 			checkTransactions(
@@ -1273,7 +1419,7 @@ export function applicationOf<
 					.filter(
 						([, command]) =>
 							(command as AnyCommand).transaction &&
-							commandTransactionProvider(command as object) === provider,
+							commandTransactionProvider(command as object) === instance,
 					)
 					.map(([key]) => key),
 			);
@@ -1327,7 +1473,9 @@ export function applicationOf<
 			return applicationOf({
 				name,
 				extends: [application, ...others],
-				...(provider === undefined ? {} : { provider }),
+				...(provider === undefined
+					? {}
+					: { provider: defaultSlot ?? provider }),
 				...(declaredLog === undefined ? {} : { log: declaredLog }),
 			} as never);
 		},
@@ -1336,7 +1484,12 @@ export function applicationOf<
 				name,
 				extended,
 				registry,
-				provider,
+				defaultSlot !== undefined
+					? referenceOf(defaultSlot)
+					: provider === undefined
+						? undefined
+						: providerDescriptionOf(provider),
+				named,
 				isLogFactory(declaredLog) ? "opaque" : log?.settings,
 			),
 		get started() {
@@ -1363,8 +1516,8 @@ export function applicationOf<
 				() => application,
 				async (error: unknown) => {
 					starting = undefined;
-					if (provider !== undefined && isDeferredProvider(provider)) {
-						await stopProvider(provider);
+					for (const instance of allProviders) {
+						if (isDeferredProvider(instance)) await stopProvider(instance);
 					}
 					if (isLogFactory(declaredLog)) log?.set(undefined);
 					throw error;
@@ -1379,7 +1532,7 @@ export function applicationOf<
 			if (wasStarting) await wasStarting.catch(() => undefined);
 			if (startedApplication() === application)
 				setStartedApplication(undefined);
-			if (provider !== undefined) await stopProvider(provider);
+			for (const instance of allProviders) await stopProvider(instance);
 			await log?.flush();
 			if (isLogFactory(declaredLog)) log?.set(undefined);
 		},
@@ -1399,13 +1552,25 @@ export function applicationOf<
 			if (isRepository(declaration)) {
 				return application.repository(declaration);
 			}
+			if (isProviderSlot(declaration)) {
+				const instance = instances.get(declaration);
+				if (instance === undefined) {
+					invalid(
+						name,
+						"Expected a provider of a storage registered in the application.",
+					);
+				}
+				return instance;
+			}
 			return invalid(
 				name,
-				"Expected a repository, use case, command, output or environment registered in the application.",
+				"Expected a repository, use case, command, output, environment or provider registered in the application.",
 			);
 		},
 	});
 	internals.set(application, registry);
+	namedProviders.set(application, named);
+	if (defaultSlot !== undefined) defaultSlots.set(application, defaultSlot);
 	if (declaredLog !== undefined) logSettings.set(application, declaredLog);
 	return application as never;
 }

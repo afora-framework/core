@@ -73,7 +73,7 @@ const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
  * the repositories. With `declared`, only the providers the repositories
  * declared: the others are bound later by an application.
  */
-function providersOf(
+function repositoryProvidersOf(
 	useCases: CommandUseCases,
 	declared: boolean,
 ): Map<IRepositoryProvider, string[]> {
@@ -114,7 +114,7 @@ function transactionProviderOf(
 	useCases: CommandUseCases,
 	declared = false,
 ): IRepositoryProvider | undefined {
-	const providers = providersOf(useCases, declared);
+	const providers = repositoryProvidersOf(useCases, declared);
 	const invalid = (reason: string, repositories: readonly string[]): never => {
 		throw new InvalidCommandDeclaration({
 			source: name,

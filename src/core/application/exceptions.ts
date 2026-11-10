@@ -99,6 +99,23 @@ export const ApplicationNotStarted = exceptionOf({
 });
 
 /**
+ * A repository read or wrote through a provider of `providersOf` made by
+ * `providerFrom` outside an application: an application that registers the
+ * storage makes it on start, and its bound repositories use it.
+ */
+export const ProviderNotBound = exceptionOf({
+	layer: ExceptionLayers.Application,
+	name: "ProviderNotBound",
+	message: ({
+		provider,
+	}: {
+		/** The key of the provider in its storage. */
+		readonly provider: string;
+	}) =>
+		`The provider "${provider}" is made by an application: register its storage in applicationOf({ providers }) and call the repository through the application.`,
+});
+
+/**
  * `app.start()` was called while another application is the started one of
  * the process; `start({ replace: true })` stops it and takes its place.
  */

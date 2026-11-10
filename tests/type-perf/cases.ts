@@ -150,6 +150,34 @@ const /*@hover*/many = await Users.findManyByName("Ana");
 `,
 	},
 	{
+		name: "named providers",
+		perf: true,
+		code: `import { applicationOf, blueprintOf, entityOf, inMemoryProvider, providerFrom, providersOf, repositoryOf } from "@afora/core";
+
+const /*@hover*/Providers = providersOf({
+	main: inMemoryProvider(),
+	audit: providerFrom(() => inMemoryProvider()),
+});
+
+class Entry extends entityOf(blueprintOf((ctx) => ({ event: ctx.string }))) {}
+
+const Entries = repositoryOf({
+	entity: Entry,
+	actions: ["create", "count"],
+	provider: Providers./*@complete*/audit,
+});
+
+const App = applicationOf({
+	name: "audit",
+	entities: { Entry },
+	repositories: { Entries },
+	providers: Providers,
+	provider: Providers./*@hover*/main,
+});
+const /*@hover*/instance = App.get(Providers.audit);
+`,
+	},
+	{
 		name: "use case",
 		perf: true,
 		code: `import { blueprintOf, entityOf, useCaseOf } from "@afora/core";
