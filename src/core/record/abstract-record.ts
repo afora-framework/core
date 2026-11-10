@@ -1,7 +1,6 @@
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import type {
-	BlueprintData,
 	BlueprintField,
 	BlueprintInput,
 	BlueprintValue,
@@ -26,6 +25,7 @@ import type {
 	IRecord,
 	RecordChange,
 	RecordEffects,
+	RecordJson,
 	RecordSettings,
 } from "./types/record.interface";
 
@@ -194,7 +194,8 @@ function parseRecord(
 
 /** The value of `record`. */
 function recordValue<Properties extends IBlueprintCollection>(
-	record: AbstractRecord<Properties>,
+	// biome-ignore lint/suspicious/noExplicitAny: whatever its sensitive keys
+	record: AbstractRecord<Properties, any>,
 ): Readonly<BlueprintValue<Properties>> {
 	return values.get(record) as BlueprintValue<Properties>;
 }
@@ -357,8 +358,10 @@ export function runRecordEffects<Self extends object>(
 	return record;
 }
 
-export abstract class AbstractRecord<Properties extends IBlueprintCollection>
-	implements IRecord<Properties>
+export abstract class AbstractRecord<
+	Properties extends IBlueprintCollection,
+	Sensitive extends string = never,
+> implements IRecord<Properties, Sensitive>
 {
 	get [Meta](): RecordDeclaration<Properties> {
 		const Class = this.constructor;
@@ -412,12 +415,12 @@ export abstract class AbstractRecord<Properties extends IBlueprintCollection>
 	 * The value with the sensitive keys, and every property declared
 	 * `sensitive` (as `Password`), masked.
 	 */
-	toJSON(): Readonly<Partial<BlueprintData<Properties>>> {
+	toJSON(): RecordJson<Properties, Sensitive> {
 		return maskCollection(
 			this[Meta].blueprint.properties,
 			recordValue(this),
 			this[Meta].options.sensitive,
-		) as Partial<BlueprintData<Properties>>;
+		) as RecordJson<Properties, Sensitive>;
 	}
 
 	/**

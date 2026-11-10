@@ -1,5 +1,6 @@
 import type {
 	AnyBlueprint,
+	AnyRecordClass,
 	BlueprintData,
 	BlueprintInput,
 	BlueprintValue,
@@ -15,6 +16,7 @@ import type { AbstractRecord } from "../abstract-record";
 import type {
 	AnyRecordPlugin,
 	RecordPluginsOption,
+	RecordSensitiveKeys,
 	RecordUniqueKeys,
 } from "./plugin.interface";
 
@@ -67,6 +69,8 @@ export interface RecordOptions<
 		readonly RecordKey<Properties>[] = readonly RecordKey<Properties>[],
 	Plugins extends readonly AnyRecordPlugin[] = readonly AnyRecordPlugin[],
 	Context = unknown,
+	Sensitive extends
+		readonly RecordKey<Properties>[] = readonly RecordKey<Properties>[],
 > {
 	/**
 	 * The name of the record, read with `recordNameOf(Class)` (or
@@ -81,7 +85,7 @@ export interface RecordOptions<
 	 * key holding a property declared `sensitive` (as `Password`), or a list of
 	 * them, is always sensitive, and such a property is masked at any depth.
 	 */
-	readonly sensitive?: readonly RecordKey<Properties>[];
+	readonly sensitive?: Sensitive;
 	/**
 	 * Keys whose value no two records may share. Records only list them in
 	 * `options.unique`: repositories (or the database) enforce it. A key
@@ -148,14 +152,104 @@ type RecordChangeMethods<
 	) => Self;
 };
 
-export interface IRecord<Properties extends IBlueprintCollection> {
+/**
+ * A sensitive value as `toJSON` gives it: each leaf (string, number, boolean,
+ * bigint) is the string `MASK`; lists and objects keep their shape, and
+ * `null` and `undefined` stay.
+ */
+export type Masked<Value> = Value extends null | undefined
+	? Value
+	: Value extends readonly (infer Item)[]
+		? Masked<Item>[]
+		: Value extends object
+			? { readonly [Key in keyof Value]: Masked<Value[Key]> }
+			: string;
+
+/** What `toJSON` gives for `Field`, whose plain value is `Data`. */
+type JsonField<Field, Data> = Field extends {
+	readonly type: { readonly sensitive: true };
+}
+	? Masked<Data>
+	: Field extends { readonly type: unknown }
+		? Data
+		: Field extends AnyRecordClass
+			? JsonOfRecord<Field, Data>
+			: Field extends { readonly record: infer Class extends AnyRecordClass }
+				? JsonOfRecord<Class, Data>
+				: Field extends {
+							readonly properties: infer Properties extends
+								IBlueprintCollection;
+						}
+					? Data extends object
+						? JsonKeys<Properties, Data, never>
+						: Data
+					: Field extends { readonly item: infer Item }
+						? Data extends readonly (infer ItemData)[]
+							? JsonField<Item, ItemData>[]
+							: Data
+						: Data;
+
+/** What the `toJSON` of the records of `Class` gives, in place of their plain value. */
+type JsonOfRecord<Class extends AnyRecordClass, Data> =
+	InstanceType<Class> extends { toJSON(): infer Json }
+		? Data extends object
+			? Json
+			: Data
+		: Data;
+
+/**
+ * `Data`, the plain value of `Properties`, key by key as `toJSON` gives it.
+ * `Result` is a parameter so that no alias names the object.
+ */
+type JsonKeys<
+	Properties,
+	Data,
+	Sensitive,
+	Result = {
+		readonly [Key in keyof Data]: Key extends Sensitive
+			? Masked<Data[Key]>
+			: Key extends keyof Properties
+				? JsonField<Properties[Key], Data[Key]>
+				: Data[Key];
+	},
+> = Result;
+
+/**
+ * What `toJSON` of a record of `Properties` gives: every key of its plain
+ * value, with the keys of `Sensitive` and every property declared
+ * `sensitive`, at any depth, as `Masked`. `Result` is a parameter so that no
+ * alias names the object.
+ */
+type JsonValue<
+	Properties extends IBlueprintCollection,
+	Sensitive,
+	Result = 0 extends 1 & Properties
+		? Readonly<Record<string, unknown>>
+		: string extends keyof Properties
+			? Readonly<Record<string, unknown>>
+			: JsonKeys<Properties, BlueprintData<Properties>, Sensitive>,
+> = Result;
+
+/**
+ * The type of `toJSON()` of a record of `Properties` whose `options.sensitive`
+ * lists `Sensitive`: the plain value, no key left out, sensitive values masked.
+ */
+export type RecordJson<
+	Properties extends IBlueprintCollection,
+	Sensitive extends string = never,
+> = JsonValue<Properties, Sensitive>;
+
+export interface IRecord<
+	Properties extends IBlueprintCollection,
+	Sensitive extends string = never,
+> {
 	/** Declaration metadata, separate from domain keys. */
 	readonly [Meta]: {
 		readonly blueprint: IBlueprint<Properties>;
 		readonly options: RecordSettings<Properties>;
 	};
 	/** The value with the sensitive keys, and every `sensitive` property, masked. */
-	toJSON(): Readonly<Partial<BlueprintData<Properties>>>;
+	toJSON(): RecordJson<Properties, Sensitive>;
 }
 
 /**
@@ -166,7 +260,8 @@ export type DeclaredRecordInstance<
 	Properties extends IBlueprintCollection,
 	Change extends readonly string[],
 	Members = unknown,
-> = AbstractRecord<Properties> &
+	Sensitive extends string = never,
+> = AbstractRecord<Properties, Sensitive> &
 	Readonly<BlueprintValue<Properties>> &
 	RecordChanges<Properties, Change> &
 	Members;
@@ -182,10 +277,11 @@ export type RecordConstructor<
 	Unique extends string = never,
 	Members = unknown,
 	Accepts = never,
+	Sensitive extends string = never,
 > = {
 	new (
 		value: BlueprintInput<Properties>,
-	): DeclaredRecordInstance<Properties, Change, Members>;
+	): DeclaredRecordInstance<Properties, Change, Members, Sensitive>;
 	/**
 	 * The Standard Schema of the class: `validate` gives an instance of it, or
 	 * the issues that reject the value. Typed with the instance of the class
@@ -193,7 +289,7 @@ export type RecordConstructor<
 	 */
 	readonly "~standard": StandardSchemaV1.Props<
 		BlueprintInput<Properties>,
-		DeclaredRecordInstance<Properties, Change, Members>
+		DeclaredRecordInstance<Properties, Change, Members, Sensitive>
 	>;
 	/**
 	 * An instance of the class (a subclass included) for `value`, or every
@@ -216,6 +312,8 @@ export type RecordConstructor<
 	readonly plugins: readonly AnyRecordPlugin[];
 	/** The keys of `options.unique`, for the type of a plugin of the class. */
 	readonly [RecordUniqueKeys]?: Unique;
+	/** The keys of `options.sensitive`, for the type of a plugin of the class. */
+	readonly [RecordSensitiveKeys]?: Sensitive;
 	/** More values a field of this class takes, as a sliced record takes the original's records. */
 	readonly [RecordAccepts]?: Accepts;
 };

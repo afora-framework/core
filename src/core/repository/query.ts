@@ -2,7 +2,11 @@ import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import { recordFieldOf } from "../blueprint/record-field";
 import { InvalidRepositoryQuery } from "./exceptions";
-import type { RepositoryQuery } from "./types/query.interface";
+import type {
+	ProviderQuery,
+	RepositoryOrder,
+	RepositoryQuery,
+} from "./types/query.interface";
 import type {
 	RepositoryContext,
 	RepositoryData,
@@ -26,11 +30,15 @@ function isMembership(
 	);
 }
 
+/** The options of a `RepositoryQuery`. */
+const QUERY_OPTIONS = ["where", "orderBy", "limit", "offset", "withDeleted"];
+
 /** Validates query structure and optionally normalizes domain values for storage. */
 export function prepareQuery(
 	context: RepositoryContext,
 	input: unknown = {},
 	map: (key: string, value: unknown) => unknown = (_key, value) => value,
+	options: readonly string[] = QUERY_OPTIONS,
 ): RepositoryQuery {
 	const fail = (reason: string): never => {
 		throw new InvalidRepositoryQuery({
@@ -40,8 +48,7 @@ export function prepareQuery(
 	};
 	if (!plain(input)) return fail("Expected a query object.");
 	for (const key of Object.keys(input))
-		if (!["where", "orderBy", "limit", "offset", "withDeleted"].includes(key))
-			fail(`Unknown query option "${key}".`);
+		if (!options.includes(key)) fail(`Unknown query option "${key}".`);
 	const properties = context.entity.blueprint.properties;
 	const keyOf = (key: string) => {
 		if (!Object.hasOwn(properties, key)) fail(`Unknown query field "${key}".`);
@@ -163,39 +170,62 @@ function compareScalars(a: unknown, b: unknown): number {
 	return x < y ? -1 : x > y ? 1 : 0;
 }
 
-/** Sorts `rows` by `query.orderBy` (missing values first when ascending, last when descending); stable. */
+/** Where `a` goes relative to `b` in `orders`: missing values first when ascending, last when descending. */
+function compareRows(
+	orders: readonly RepositoryOrder[],
+	a: RepositoryData,
+	b: RepositoryData,
+): number {
+	for (const { key, direction } of orders) {
+		const [x, y] = [a[key], b[key]];
+		const [missingX, missingY] = [
+			x === undefined || x === null,
+			y === undefined || y === null,
+		];
+		let result =
+			missingX || missingY
+				? Number(!missingX) - Number(!missingY)
+				: compareScalars(x, y);
+		if (direction === "desc") result = -result;
+		if (result !== 0) return result;
+	}
+	return 0;
+}
+
+/** Sorts `rows` by `query.orderBy`; stable. */
 function orderRows(
 	rows: readonly RepositoryData[],
 	query: RepositoryQuery,
 ): RepositoryData[] {
 	const orders = query.orderBy ?? [];
-	return [...rows].sort((a, b) => {
-		for (const { key, direction } of orders) {
-			const [x, y] = [a[key], b[key]];
-			const [missingX, missingY] = [
-				x === undefined || x === null,
-				y === undefined || y === null,
-			];
-			let result =
-				missingX || missingY
-					? Number(!missingX) - Number(!missingY)
-					: compareScalars(x, y);
-			if (direction === "desc") result = -result;
-			if (result !== 0) return result;
-		}
-		return 0;
-	});
+	return [...rows].sort((a, b) => compareRows(orders, a, b));
 }
 
-/** The rows of `query` after ordering, offset and limit. */
+/** The rows that come strictly after the values of `after`, one for each order. */
+function rowsAfter(
+	rows: readonly RepositoryData[],
+	orders: readonly RepositoryOrder[],
+	after: readonly unknown[],
+): RepositoryData[] {
+	const position = Object.fromEntries(
+		orders.map(({ key }, index) => [key, after[index]]),
+	);
+	return rows.filter((row) => compareRows(orders, row, position) > 0);
+}
+
+/** The rows of `query` after ordering, `after`, offset and limit. */
 export function selectRows(
 	rows: Iterable<RepositoryData>,
-	query: RepositoryQuery,
+	query: ProviderQuery,
 ): RepositoryData[] {
-	const matched = orderRows(
+	const ordered = orderRows(
 		[...rows].filter((data) => matchesQuery(data, query)),
 		query,
 	);
+	const matched =
+		query.after === undefined
+			? ordered
+			: rowsAfter(ordered, query.orderBy ?? [], query.after);
 	const start = query.offset ?? 0;
 	return matched.slice(
 		start,

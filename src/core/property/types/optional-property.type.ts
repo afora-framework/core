@@ -5,7 +5,11 @@ import type { AbstractProperty } from "../abstract-property";
 import type { AnyPropertyConstructor } from "./property-collection.type";
 import type { PropertyValue } from "./property-constructor.type";
 import type { CallableKey, StoredField } from "./property-options.interface";
-import type { IPropertyType, UniqueTypeOf } from "./property-type.interface";
+import type {
+	IPropertyType,
+	SensitiveTypeOf,
+	UniqueTypeOf,
+} from "./property-type.interface";
 
 /**
  * `Property` accepting `undefined`: its schema becomes `TOptional`, while its
@@ -26,7 +30,8 @@ export type OptionalProperty<Property extends AnyPropertyConstructor> =
 					): AbstractProperty<TOptional<SchemaType>, Value> &
 						Omit<InstanceType<Property>, keyof AbstractProperty<TSchema>>;
 					readonly type: IPropertyType<TOptional<SchemaType>, Value> &
-						UniqueTypeOf<Property>;
+						UniqueTypeOf<Property> &
+						SensitiveTypeOf<Property>;
 					safeParse(
 						value: unknown,
 					): ParseResult<PropertyValue<TOptional<SchemaType>, Value>>;

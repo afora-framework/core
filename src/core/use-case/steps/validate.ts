@@ -52,7 +52,7 @@ const ENSURE_KINDS = new Set([
 	"false",
 ]);
 const READ_ACTION =
-	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|count)$/;
+	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|findCursor|count)$/;
 const WRITE_ACTIONS = new Set(["create", "update", "delete"]);
 
 /** What is known of a name bound by a step: the class `build` made, if known. */

@@ -307,6 +307,7 @@ export type {
 } from "./core/property/types/property-options.interface";
 export type {
 	IPropertyType,
+	SensitiveMark,
 	UniqueMark,
 } from "./core/property/types/property-type.interface";
 export {
@@ -349,17 +350,20 @@ export type {
 	DeclaredRecordInstance,
 	IRecord,
 	MarkedUniqueKey,
+	Masked,
 	RecordChange,
 	RecordChanges,
 	RecordConstructor,
 	RecordEffect,
 	RecordEffects,
+	RecordJson,
 	RecordKey,
 	RecordOptions,
 	RecordSettings,
 	RecordValue,
 } from "./core/record/types/record.interface";
 export {
+	InvalidRepositoryCursor,
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
@@ -381,8 +385,12 @@ export type {
 	ProviderDescription,
 	ProviderOption,
 	ProviderOptions,
+	ProviderQuery,
 	ProviderSettings,
+	RepositoryCursorPage,
+	RepositoryCursorQuery,
 	RepositoryExists,
+	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
 	RepositoryOrder,

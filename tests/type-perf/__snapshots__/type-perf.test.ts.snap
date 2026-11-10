@@ -39,16 +39,16 @@ hover L59:24 return users.save(new ‸User({ ...data, password: password.value }
 hover L67:17 user.change.‸password(value),
   (property) password: (value: string) => User
 hover L72:7 const ‸json = new User({
-  const json: Readonly<Partial<{
-      slug: string;
-      email: string;
-      password: string;
-      tags: string[];
-      address: {
-          street: string;
-          zip: string;
+  const json: {
+      readonly slug: string;
+      readonly email: string;
+      readonly password: string;
+      readonly tags: string[];
+      readonly address: {
+          readonly street: string;
+          readonly zip: string;
       };
-  }>>
+  }
 diagnostics (0)"
 `;
 
@@ -270,6 +270,7 @@ complete L10:55 const Users = repositoryOf({ entity: User, actions: ["‸"] });
   findByEmail (string)
   findById (string)
   findBySlug (string)
+  findCursor (string)
   findMany (string)
   findManyByCreatedAt (string)
   findManyByDeletedAt (string)
@@ -350,16 +351,16 @@ hover L59:24 return users.save(new ‸User({ ...data, password: password.value }
 hover L67:17 user.change.‸password(value),
   (property) password: (value: string) => User
 hover L72:7 const ‸json = new User({
-  const json: Readonly<Partial<{
-      password: string;
-      email: string;
-      slug: string;
-      address: {
-          street: string;
-          zip: string;
+  const json: {
+      readonly password: string;
+      readonly email: string;
+      readonly slug: string;
+      readonly address: {
+          readonly street: string;
+          readonly zip: string;
       };
-      tags: string[];
-  }>>
+      readonly tags: string[];
+  }
 diagnostics (0)"
 `;
 
@@ -577,6 +578,7 @@ complete L10:55 const Users = repositoryOf({ entity: User, actions: ["‸"] });
   findByEmail (string)
   findById (string)
   findBySlug (string)
+  findCursor (string)
   findMany (string)
   findManyByCreatedAt (string)
   findManyByDeletedAt (string)

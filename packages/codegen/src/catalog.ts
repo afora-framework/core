@@ -210,6 +210,10 @@ function build(): Catalog {
 				action: "findPage",
 				rule: "Gives { items, total, limit, offset } for a query (limit 20 by default). Needs no key.",
 			},
+			{
+				action: "findCursor",
+				rule: "Gives { items, limit, next } for { where?, orderBy?, limit?, after? }: pages by position, `after` being the `next` of the page before. No offset and no total. Needs no key, and a provider that reads by cursor (inMemory and drizzle do).",
+			},
 		],
 		exceptionLayers: Object.values(core.ExceptionLayers),
 		coreExceptions: exportsOf

@@ -23,6 +23,7 @@ import type {
 	AnyRecordPlugin,
 	IRecordPluginCatalog,
 	PluginMembers,
+	PluginSensitiveKey,
 	PluginUniqueKey,
 	RecordPluginContext,
 	WithPluginProperties,
@@ -43,6 +44,7 @@ export type RecordBuilder<Context> = <
 	const Change extends readonly RecordKey<Properties>[] = [],
 	const Unique extends readonly RecordKey<Properties>[] = [],
 	const Plugins extends readonly AnyRecordPlugin[] = [],
+	const Sensitive extends readonly RecordKey<Properties>[] = [],
 >(
 	blueprint: IBlueprint<Properties, boolean>,
 	options?: RecordOptions<
@@ -50,13 +52,16 @@ export type RecordBuilder<Context> = <
 		Change,
 		Unique,
 		Plugins,
-		Context
+		Context,
+		Sensitive
 	>,
 ) => RecordConstructor<
 	WithPluginProperties<Properties, Plugins>,
 	Change,
 	Unique[number] | PluginUniqueKey<Plugins>,
-	PluginMembers<Plugins>
+	PluginMembers<Plugins>,
+	never,
+	Sensitive[number] | PluginSensitiveKey<Plugins>
 >;
 
 /**

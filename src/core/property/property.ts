@@ -11,6 +11,7 @@ import type { PropertyValue } from "./types/property-constructor.type";
 import type { PropertyOptions } from "./types/property-options.interface";
 import type {
 	IPropertyType,
+	SensitiveMark,
 	UniqueMark,
 } from "./types/property-type.interface";
 
@@ -28,6 +29,7 @@ type PropertyOfArgs<
 	SchemaType extends TSchema,
 	Optional extends boolean = false,
 	Unique extends boolean = false,
+	Sensitive extends boolean = false,
 	Value = Static<SchemaType>,
 > = {
 	name: string;
@@ -35,7 +37,7 @@ type PropertyOfArgs<
 	default?: NoInfer<Value>;
 	optional?: Optional;
 	/** A record masks its value in `toJSON`, at any depth, as `Password`. */
-	sensitive?: boolean;
+	sensitive?: Sensitive;
 	/**
 	 * A record lists a key holding it in `options.unique`, as `Slug`; records
 	 * do not check it, repositories (or the database) enforce it.
@@ -98,20 +100,22 @@ export function propertyOf<
 	SchemaType extends TSchema,
 	Optional extends boolean = false,
 	const Unique extends boolean = false,
+	const Sensitive extends boolean = false,
 >({
 	name,
 	schema,
 	optional,
-	sensitive = false,
+	sensitive = false as Sensitive,
 	unique = false as Unique,
 	default: _default,
 	preHandle: onPreHandle,
 	afterHandle: onAfterHandle,
-}: PropertyOfArgs<SchemaType, Optional, Unique>): PropertyClass<
+}: PropertyOfArgs<SchemaType, Optional, Unique, Sensitive>): PropertyClass<
 	SchemaValueType<SchemaType, Optional>,
 	Static<SchemaType>
 > &
-	UniqueMark<Unique> {
+	UniqueMark<Unique> &
+	SensitiveMark<Sensitive> {
 	type ValueSchema = SchemaValueType<SchemaType, Optional>;
 
 	const valueSchema = (
@@ -155,5 +159,6 @@ export function propertyOf<
 		ValueSchema,
 		Static<SchemaType>
 	> &
-		UniqueMark<Unique>;
+		UniqueMark<Unique> &
+		SensitiveMark<Sensitive>;
 }
