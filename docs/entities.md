@@ -36,7 +36,9 @@ class Post extends entityOf(
 new Post({ title: "Hi", author: { name: "Jane" }, coauthors: [user] }); // author gets its own id
 ```
 
-The identity keys are read-only: `set` throws `ImmutableEntityKey` for them, and they get no `change.<key>` method. The blueprint cannot declare them, nor the members of an entity (`destroy`, `isDeleted`, `equals`, `onDestroy`, `emit`, `pullEvents`): `entityOf` throws `ReservedEntityKey`. `user.equals(other)` compares entities of the same declaration by `id`. `isEntityClass` and `isEntity` tell entities apart from records. `entityBuilderOf({ identity, generateId, now })` makes an `entityOf` with your own identity fields and clock.
+An entity declared with `expires: { after }` gets a fifth one, `expiresAt` (see [Records that expire](#records-that-expire)).
+
+The identity keys are read-only: `set` throws `ImmutableEntityKey` for them, and they get no `change.<key>` method. The blueprint cannot declare them, nor the members of an entity (`destroy`, `isDeleted`, `equals`, `onDestroy`, `emit`, `pullEvents`): `entityOf` throws `ReservedEntityKey`. `user.equals(other)` compares entities of the same declaration by `id`. `isEntityClass` and `isEntity` tell entities apart from records. `entityBuilderOf({ identity, generateId, now, expiresAt })` makes an `entityOf` with your own identity fields and clock (`expiresAt`, a date and time property, is the field entities expiring `after` a duration get; without it such a declaration throws `InvalidEntityExpiry`).
 
 Entities can queue domain events for an external consumer. `eventOf` accepts an entity class (including subclasses) and an optional async handler returning `Promise<void>`, called with the entity and `{ logger }` (the logger of the application whose command raised the event; see [Logging](logging.md)); `event.handle({ logger })` can give another. Definitions are immutable; incompatible entity instances are rejected when emitting. An event without a handler (`eventOf("created", Post)`) only carries the entity, for a policy such as [`publishEvents`](commands.md#event-policies); its `handle()` does nothing. `app.describe().entities.<Name>.events` gives the lifecycle events of an entity by cycle, each `{ name, handler }` (whether it has one).
 
@@ -97,3 +99,34 @@ for (const event of user.pullEvents()) {
 Each lifecycle option accepts a definition, a readonly list, or a function returning either. Functions are resolved only during their cycle, so definitions may follow the entity class but must exist before constructing instances. `onCreate` queues after base construction and validation only when **both** input `id` and `createdAt` are `undefined`. Supplying either identity field, as when loading persisted data, suppresses creation; parsing plain input follows the same rule. `onUpdate` queues after each valid `set` (including `change.<key>` and equal values) stores the value and `updatedAt`, before `onSetAll` and `onSet`. `onDelete` queues after `deletedAt` is stored, before `onDestroy`. Invalid operations and repeated deletion do not queue lifecycle events. If an existing hook throws after a mutation, its queued events remain.
 
 The consuming layer decides when to drain and execute events. `handle()` propagates handler failures and can be called more than once. There is no automatic execution, dispatcher, retry, or execution-once guarantee.
+
+## Records that expire
+
+`expires` declares when the records of an entity expire. [Repositories](repositories.md#records-that-expire) then leave them out of every read, whatever the provider, so an audit log, a daily salt or a rate-limit window needs no hand-written `ttl` and no filter of its own.
+
+```ts
+import { blueprintOf, entityOf, optionalOf } from "@afora/core";
+
+// 400 days after createdAt, kept in the identity key expiresAt
+class AuditEvent extends entityOf(
+	blueprintOf((ctx) => ({ action: ctx.string })),
+	{ name: "AuditEvent", expires: { after: { days: 400 } } },
+) {}
+new AuditEvent({ action: "login" }).expiresAt; // createdAt + 400 days
+
+// At the date held by a key of the blueprint; without one, never
+class Window extends entityOf(
+	blueprintOf((ctx) => ({
+		hits: ctx.integer,
+		until: optionalOf(ctx.dateTime),
+	})),
+	{ name: "Window", expires: { at: "until" } },
+) {}
+```
+
+- `{ after: { days?, hours?, minutes?, seconds? } }`: a non-empty duration of positive numbers (fractions allowed). The entity gets a read-only `expiresAt` identity key (a `std` `ExpiresAt`, a date and time), set to `createdAt` plus the duration when the value has none, so a row loaded without it gets it too; a value that has one keeps it. The blueprint cannot declare `expiresAt` (`ReservedEntityKey`) and `change` cannot list it (`ImmutableEntityKey`).
+- `{ at: key }`: `key` is a key of the blueprint (checked by the type of the option too) holding a date (`ctx.dateTime` or `ctx.date`, optional or not). The record expires at that date; a record without a value never expires. The key stays an ordinary one: `change` may list it to extend or cut the life of a record.
+- A record expires once its date is **at or before** now, by the clock of the entity (`now` of `entityBuilderOf`, the system clock in `std`).
+- Anything else (an unknown key, a key that holds no date, an empty or negative duration, an unknown unit, both forms at once) throws `InvalidEntityExpiry` when the entity is declared.
+
+`entityOf` keeps the option under the `EntitySettings` symbol (`{ versioned, expires }`), and `app.describe().entities.<Name>.expires` gives it as declared. Expired records are only left out of reads: removing them for good (a purge) is up to the database for now, as a TTL of DynamoDB or a scheduled `DELETE` in SQL.

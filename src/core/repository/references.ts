@@ -188,9 +188,9 @@ export function parseEntity(state: RepositoryState, data: RepositoryData) {
 export type ReferenceSession = Map<RepositoryState, Map<string, object>>;
 
 /**
- * The stored values of `ids`, in one `findMany`. A soft-deleted entity is
- * still loaded: a reference to it is data (an order keeps its deleted
- * product), not a missing id.
+ * The stored values of `ids`, in one `findMany`. A soft-deleted or expired
+ * entity is still loaded: a reference to it is data (an order keeps its
+ * deleted product), not a missing id.
  */
 function loadByIds(
 	state: RepositoryState,
@@ -200,6 +200,7 @@ function loadByIds(
 	return scopedProvider(scope, state.provider).findMany(contextOf(state), {
 		where: { id: { in: ids } },
 		withDeleted: true,
+		withExpired: true,
 	});
 }
 

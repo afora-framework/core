@@ -7,6 +7,7 @@ import {
 	eventEntriesOf,
 	eventsConstOf,
 } from "../entity-events";
+import { canonicalExpires } from "../entity-expires";
 import { fieldsOfDecl, orderOf } from "../graph";
 import { type Field, parseFields } from "../model";
 import { defaultMessageOf, normalizeSpec } from "../normalize";
@@ -409,6 +410,8 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 			],
 		]);
 	}
+	const expires = entity ? canonicalExpires(decl.spec.expires) : undefined;
+	if (expires) options.push(["expires", literal(expires)]);
 	for (const cycle of CYCLES) {
 		const list = cycles[cycle];
 		if (!list || list.length === 0) continue;

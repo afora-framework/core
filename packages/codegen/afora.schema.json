@@ -669,6 +669,53 @@
 							},
 							"additionalProperties": false,
 							"description": "Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name (\"created\"), raised for a policy such as publishEvents, or { \"name\": \"created\", \"handler\": { \"import\": \"./events.ts#onCreated\" } }."
+						},
+						"expires": {
+							"anyOf": [
+								{
+									"type": "object",
+									"required": ["after"],
+									"properties": {
+										"after": {
+											"type": "object",
+											"properties": {
+												"days": {
+													"type": "number",
+													"exclusiveMinimum": 0
+												},
+												"hours": {
+													"type": "number",
+													"exclusiveMinimum": 0
+												},
+												"minutes": {
+													"type": "number",
+													"exclusiveMinimum": 0
+												},
+												"seconds": {
+													"type": "number",
+													"exclusiveMinimum": 0
+												}
+											},
+											"additionalProperties": false,
+											"minProperties": 1,
+											"description": "A duration from createdAt, e.g. { \"days\": 400 }; the entity gets an expiresAt identity key."
+										}
+									},
+									"additionalProperties": false
+								},
+								{
+									"type": "object",
+									"required": ["at"],
+									"properties": {
+										"at": {
+											"type": "string",
+											"description": "A date field (dateTime or date, optional or not) holding when the record expires; without a value it never does."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"description": "Entities only: when their records expire, which reads then leave out (unless withExpired): { \"after\": { \"days\": 400 } } or { \"at\": \"until\" }. Unique keys still count expired records."
 						}
 					},
 					"additionalProperties": false
@@ -944,6 +991,53 @@
 							},
 							"additionalProperties": false,
 							"description": "Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name (\"created\"), raised for a policy such as publishEvents, or { \"name\": \"created\", \"handler\": { \"import\": \"./events.ts#onCreated\" } }."
+						},
+						"expires": {
+							"anyOf": [
+								{
+									"type": "object",
+									"required": ["after"],
+									"properties": {
+										"after": {
+											"type": "object",
+											"properties": {
+												"days": {
+													"type": "number",
+													"exclusiveMinimum": 0
+												},
+												"hours": {
+													"type": "number",
+													"exclusiveMinimum": 0
+												},
+												"minutes": {
+													"type": "number",
+													"exclusiveMinimum": 0
+												},
+												"seconds": {
+													"type": "number",
+													"exclusiveMinimum": 0
+												}
+											},
+											"additionalProperties": false,
+											"minProperties": 1,
+											"description": "A duration from createdAt, e.g. { \"days\": 400 }; the entity gets an expiresAt identity key."
+										}
+									},
+									"additionalProperties": false
+								},
+								{
+									"type": "object",
+									"required": ["at"],
+									"properties": {
+										"at": {
+											"type": "string",
+											"description": "A date field (dateTime or date, optional or not) holding when the record expires; without a value it never does."
+										}
+									},
+									"additionalProperties": false
+								}
+							],
+							"description": "Entities only: when their records expire, which reads then leave out (unless withExpired): { \"after\": { \"days\": 400 } } or { \"at\": \"until\" }. Unique keys still count expired records."
 						}
 					},
 					"additionalProperties": false

@@ -4,7 +4,7 @@ import {
 	RepositoryUniqueViolation,
 } from "./exceptions";
 import { providerOf } from "./provider";
-import { matchesQuery, sameValue, selectRows } from "./query";
+import { matchesQuery, nowOf, sameValue, selectRows } from "./query";
 import type {
 	IRepositoryProvider,
 	RepositoryContext,
@@ -74,17 +74,26 @@ function scopeOf(initial: Tables, root: boolean) {
 	};
 
 	const provider: IRepositoryProvider = {
-		capabilities: Object.freeze({ transactions: true, keyset: true }),
+		capabilities: Object.freeze({
+			transactions: true,
+			keyset: true,
+			expiry: true,
+		}),
 		findOne: (context, query = {}) =>
 			whenIdle(() => {
-				const [first] = selectRows(tableOf(context).values(), {
-					...query,
-					limit: Math.min(query.limit ?? 1, 1),
-				});
+				const [first] = selectRows(
+					tableOf(context).values(),
+					{ ...query, limit: Math.min(query.limit ?? 1, 1) },
+					context.expiry?.key,
+				);
 				return first === undefined ? undefined : copy(first);
 			}),
 		findMany: (context, query = {}) =>
-			whenIdle(() => selectRows(tableOf(context).values(), query).map(copy)),
+			whenIdle(() =>
+				selectRows(tableOf(context).values(), query, context.expiry?.key).map(
+					copy,
+				),
+			),
 		insert: (context, data) =>
 			whenIdle(() => {
 				const table = tableOf(context);
@@ -120,9 +129,11 @@ function scopeOf(initial: Tables, root: boolean) {
 			}),
 		count: (context, query = {}) =>
 			whenIdle(() => {
+				const expiry = context.expiry?.key;
+				const now = expiry === undefined ? 0 : nowOf(query);
 				let total = 0;
 				for (const data of tableOf(context).values()) {
-					if (matchesQuery(data, query)) total++;
+					if (matchesQuery(data, query, expiry, now)) total++;
 				}
 				return total;
 			}),

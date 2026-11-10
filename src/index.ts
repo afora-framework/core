@@ -146,6 +146,7 @@ export { eventOf } from "./core/entity/event";
 export {
 	DeletedEntity,
 	ImmutableEntityKey,
+	InvalidEntityExpiry,
 	ReservedEntityKey,
 } from "./core/entity/exceptions";
 export type {
@@ -162,6 +163,8 @@ export type {
 	EntityStorageOptions,
 	EntityStorageSettings,
 	EntityUniqueKey,
+	ExpiresAtField,
+	ExpiringIdentity,
 	IEntityIdentity,
 } from "./core/entity/types/entity.interface";
 export type {
@@ -577,6 +580,7 @@ export {
 	DateProperty,
 	DateTime,
 	DeletedAt,
+	ExpiresAt,
 	UpdatedAt,
 } from "./std/properties/time";
 export { recordOf } from "./std/record";

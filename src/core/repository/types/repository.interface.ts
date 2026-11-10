@@ -212,6 +212,13 @@ export interface RepositoryContext<Environment = unknown> {
 	readonly name: string;
 	/** The keys no two entities may share, `id` first. */
 	readonly unique: readonly string[];
+	/**
+	 * For an entity declared with `expires`, the key holding the date at which
+	 * a record expires (`expiresAt`, or the key of `at`): reads leave out the
+	 * records whose date is at or before `query.now`, unless
+	 * `query.withExpired`. A record without a date never expires.
+	 */
+	readonly expiry?: { readonly key: string };
 	/** The variables of the `environmentDependencies` of the repository. */
 	readonly env: Environment;
 }
@@ -225,7 +232,7 @@ export interface RepositoryContext<Environment = unknown> {
 export interface IRepositoryProvider<Environment = unknown> {
 	findOne(
 		context: RepositoryContext<Environment>,
-		query?: RepositoryQuery,
+		query?: ProviderQuery,
 	): Promise<RepositoryData | undefined>;
 	/** `query.after` is only given to a provider with `capabilities.keyset`. */
 	findMany(
@@ -243,7 +250,7 @@ export interface IRepositoryProvider<Environment = unknown> {
 	remove(context: RepositoryContext<Environment>, id: string): Promise<void>;
 	count(
 		context: RepositoryContext<Environment>,
-		query?: RepositoryQuery,
+		query?: ProviderQuery,
 	): Promise<number>;
 	readonly capabilities?: ProviderCapabilities;
 	transaction?<Result>(

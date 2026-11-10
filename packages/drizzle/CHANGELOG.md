@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Records that expire (#35): `capabilities.expiry`. For an entity declared with `expires`, reads add `"<key>" IS NULL OR "<key>" > now` unless `withExpired`, on a text (ISO 8601) or timestamp column; unique keys still count expired rows. Needs the `@afora/core` that has records that expire; older versions are unaffected.
+
 ## 0.0.1 — unreleased (draft: dated when it is published)
 
 ### Added

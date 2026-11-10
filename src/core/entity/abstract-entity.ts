@@ -49,6 +49,27 @@ export const EntityUniqueKeys = Symbol("entityUniqueKeys");
 /** The storage options of an entity class (`versioned`, `expires`). */
 export const EntitySettings = Symbol("entitySettings");
 
+/**
+ * The milliseconds after `createdAt` at which the entities of a class
+ * declared with `expires: { after }` expire, kept in `expiresAt`.
+ *
+ * @internal
+ */
+export const EntityLifetime = Symbol("entityLifetime");
+
+/** The key the entities of a class declared with `expires: { after }` keep their expiry in. */
+export const EXPIRES_AT = "expiresAt";
+
+/** Whether `key` is an identity key of the entities of `Entity`, which only the entity changes. */
+function isIdentityKey(Entity: unknown, key: string): boolean {
+	return (
+		(ENTITY_IDENTITY_KEYS as readonly string[]).includes(key) ||
+		(key === EXPIRES_AT &&
+			(Entity as { readonly [EntityLifetime]?: number })[EntityLifetime] !==
+				undefined)
+	);
+}
+
 /** What the statics of a class made by `entityOf` hold under `EntityClock`. */
 interface EntityClockSettings {
 	readonly generateId: () => string;
@@ -81,20 +102,39 @@ function assertAlive(entity: { readonly isDeleted: boolean }): void {
 }
 
 /**
- * `value` with an `id` and a `createdAt` made by `clock` when it has none; any
- * other value as is, for the record to reject.
+ * `value` with an `id` and a `createdAt` made by `clock` when it has none,
+ * and, when the class expires `lifetime` milliseconds after `createdAt`, an
+ * `expiresAt` when it has none; any other value as is, for the record to
+ * reject.
  */
-function withIdentity(value: unknown, clock: EntityClockSettings): unknown {
+function withIdentity(
+	value: unknown,
+	clock: EntityClockSettings,
+	lifetime: number | undefined,
+): unknown {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		return value;
 	}
-	const { id, createdAt } = value as { id?: unknown; createdAt?: unknown };
-	if (id !== undefined && createdAt !== undefined) return value;
-	return {
+	const { id, createdAt, expiresAt } = value as {
+		id?: unknown;
+		createdAt?: unknown;
+		expiresAt?: unknown;
+	};
+	const expiring = lifetime !== undefined && expiresAt === undefined;
+	if (id !== undefined && createdAt !== undefined && !expiring) return value;
+	const created = createdAt === undefined ? clock.now() : createdAt;
+	const identity: Record<string, unknown> = {
 		...value,
 		id: id === undefined ? clock.generateId() : id,
-		createdAt: createdAt === undefined ? clock.now() : createdAt,
+		createdAt: created,
 	};
+	if (expiring) {
+		const start = typeof created === "string" ? Date.parse(created) : NaN;
+		if (!Number.isNaN(start)) {
+			identity[EXPIRES_AT] = new Date(start + lifetime).toISOString();
+		}
+	}
+	return identity;
 }
 
 /**
@@ -111,6 +151,9 @@ export abstract class AbstractEntity<
 			withIdentity(
 				value,
 				(new.target as unknown as Clocked)[EntityClock],
+				(new.target as unknown as { readonly [EntityLifetime]?: number })[
+					EntityLifetime
+				],
 			) as BlueprintInput<Properties>,
 		);
 		const input = value as { id?: unknown; createdAt?: unknown };
@@ -166,7 +209,7 @@ export abstract class AbstractEntity<
 		value: BlueprintValue<Properties>[Key],
 	): this {
 		const name = String(key);
-		if ((ENTITY_IDENTITY_KEYS as readonly string[]).includes(name)) {
+		if (isIdentityKey(this.constructor, name)) {
 			throw new ImmutableEntityKey({
 				source: recordNameOf(this.constructor),
 				details: { key: name },

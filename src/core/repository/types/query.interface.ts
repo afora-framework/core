@@ -36,6 +36,11 @@ export interface RepositoryQuery<Entity = unknown> {
 	readonly offset?: number;
 	/** Include destroyed rows; repository defaults depend on its deletion policy. */
 	readonly withDeleted?: boolean;
+	/**
+	 * Include expired rows, of an entity declared with `expires`; `false` by
+	 * default.
+	 */
+	readonly withExpired?: boolean;
 }
 
 /** A page and the unpaginated number of matching live (or explicitly included) rows. */
@@ -48,8 +53,8 @@ export interface RepositoryPage<Entity> {
 
 /**
  * The query of `findCursor`: as `RepositoryQuery`, with the `next` of the
- * previous page as `after` in place of `offset`. `where`, `orderBy` and
- * `withDeleted` must stay the same from one page to the next.
+ * previous page as `after` in place of `offset`. `where`, `orderBy`,
+ * `withDeleted` and `withExpired` must stay the same from one page to the next.
  */
 export interface RepositoryCursorQuery<Entity = unknown>
 	extends Omit<RepositoryQuery<Entity>, "offset" | "limit"> {
@@ -68,13 +73,18 @@ export interface RepositoryCursorPage<Entity> {
 }
 
 /**
- * What a provider gets from `findCursor` on `findMany`: `after` holds one
+ * What a provider gets. From `findCursor` on `findMany`, `after` holds one
  * value for each order of `orderBy`, those of the last row already read, and
- * the provider gives the rows strictly after it in that order. Only a
- * provider with `capabilities.keyset` is given it.
+ * the provider gives the rows strictly after it in that order; only a
+ * provider with `capabilities.keyset` is given it. For an entity that expires
+ * (`context.expiry`), `now` is the current date and time as an ISO 8601
+ * string, from the clock of the entity: unless `withExpired`, the provider
+ * leaves out the rows whose `context.expiry.key` is at or before it.
  */
 export interface ProviderQuery extends RepositoryQuery {
 	readonly after?: readonly unknown[];
+	/** The current date and time (ISO 8601), given for entities that expire. */
+	readonly now?: string;
 }
 
 export interface RepositoryFindCursor<Entity> {

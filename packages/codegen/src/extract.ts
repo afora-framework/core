@@ -398,6 +398,9 @@ export function extractSpec(
 	);
 	const entities = entries(description.entities, (value, name) => ({
 		...(record(["", value])[1] as Record<string, unknown>),
+		...(value.expires === undefined
+			? {}
+			: { expires: structuredClone(value.expires) as Json }),
 		...(value.events === undefined
 			? {}
 			: {

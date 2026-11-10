@@ -33,7 +33,11 @@ import {
 	stateOf,
 	states,
 } from "./state";
-import type { RepositoryOrder, RepositoryQuery } from "./types/query.interface";
+import type {
+	ProviderQuery,
+	RepositoryOrder,
+	RepositoryQuery,
+} from "./types/query.interface";
 import type {
 	AnyRepository,
 	AnyRepositoryEntity,
@@ -178,16 +182,44 @@ function queryValueOf(context: RepositoryContext, key: string, value: unknown) {
 }
 
 /**
- * A query validated and normalized for the provider: records as plain data,
- * entities as ids (also inside `in`), and `withDeleted` set by the policy.
+ * For an entity that expires, `withExpired` (`false` by default) and the
+ * `now` of its clock; nothing for any other. Throws `InvalidRepositoryQuery`
+ * when the provider does not leave expired records out (`capabilities.expiry`).
  */
-function queryOf(self: Internal, query: unknown): RepositoryQuery {
+function expiryOf(
+	self: Internal,
+	withExpired: boolean | undefined,
+): Pick<ProviderQuery, "withExpired" | "now"> {
+	const { context, provider } = self;
+	if (context.expiry === undefined) return {};
+	if (provider.capabilities?.expiry !== true) {
+		throw new InvalidRepositoryQuery({
+			source: context.name,
+			details: {
+				reason:
+					"The provider does not leave expired records out (capabilities.expiry), which an entity with expires needs.",
+			},
+		});
+	}
+	const clock = (
+		context.entity as unknown as { readonly [EntityClock]: { now(): string } }
+	)[EntityClock];
+	return { withExpired: withExpired ?? false, now: clock.now() };
+}
+
+/**
+ * A query validated and normalized for the provider: records as plain data,
+ * entities as ids (also inside `in`), `withDeleted` set by the policy, and,
+ * for an entity that expires, `withExpired` and `now`.
+ */
+function queryOf(self: Internal, query: unknown): ProviderQuery {
 	const prepared = prepareQuery(self.context, query, (key, value) =>
 		queryValueOf(self.context, key, value),
 	);
 	return {
 		...prepared,
 		withDeleted: prepared.withDeleted ?? stateOf(self).deletion === "hard",
+		...expiryOf(self, prepared.withExpired),
 	};
 }
 
@@ -227,30 +259,42 @@ const findPage = action(async (self, query: unknown) => {
 		orderBy,
 		where,
 		withDeleted,
+		withExpired,
+		now,
 		limit = 20,
 		offset = 0,
 	} = queryOf(self, query);
+	const expiry = withExpired === undefined ? {} : { withExpired, now };
 	const [rows, total] = await Promise.all([
 		self.provider.findMany(self.context, {
 			where,
 			orderBy,
 			withDeleted,
+			...expiry,
 			limit,
 			offset,
 		}),
-		self.provider.count(self.context, { where, withDeleted }),
+		self.provider.count(self.context, { where, withDeleted, ...expiry }),
 	]);
 	return { items: await self.hydrateMany(rows), total, limit, offset };
 });
 
 /** The options of the query of `findCursor`. */
-const CURSOR_OPTIONS = ["where", "orderBy", "limit", "withDeleted", "after"];
+const CURSOR_OPTIONS = [
+	"where",
+	"orderBy",
+	"limit",
+	"withDeleted",
+	"withExpired",
+	"after",
+];
 
 /** A cursor query validated once, to read any number of its pages. */
 interface CursorRead {
 	readonly where: RepositoryQuery["where"];
 	readonly orderBy: readonly RepositoryOrder[];
 	readonly withDeleted: boolean;
+	readonly withExpired: boolean | undefined;
 	readonly limit: number;
 }
 
@@ -288,7 +332,15 @@ function cursorReadOf(self: Internal, query: unknown): CursorRead {
 	}
 	if (self.provider.capabilities?.keyset !== true)
 		fail("The provider does not read by cursor (capabilities.keyset).");
-	return { where, orderBy, withDeleted, limit };
+	// Checks the provider leaves expired records out, before any page is read.
+	expiryOf(self, prepared.withExpired);
+	return {
+		where,
+		orderBy,
+		withDeleted,
+		withExpired: prepared.withExpired,
+		limit,
+	};
 }
 
 /** The page of `read` after the cursor `after` (the first one when `undefined`). */
@@ -299,6 +351,8 @@ async function readCursor(self: Internal, read: CursorRead, after: unknown) {
 		where,
 		orderBy,
 		withDeleted,
+		// Read per page, so a long walk sees records expire as the clock moves.
+		...expiryOf(self, read.withExpired),
 		limit: limit + 1,
 		...(after === undefined
 			? {}
