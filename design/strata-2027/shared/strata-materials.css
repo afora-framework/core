@@ -1,0 +1,450 @@
+/* ============================================================
+   afora — "Strata · Matéria" (v3)
+   Texture, mineral colour, sediment gradients, a 3D layer stack.
+   Loaded after every board's own CSS.
+   ============================================================ */
+.st {
+  /* one mineral per layer, oldest (Property) to newest (UseCase), plus Environment */
+  --m1: #E9B04A; --m2: #EE8B4E; --m3: #E4572E; --m4: #A9361E; --m5: #4E7C5B; --m6: #21504F; --m7: #16201E;
+  --m1-hi: #F6D07E; --m2-hi: #F7AE77; --m3-hi: #F27C52; --m4-hi: #C0442A; --m5-hi: #74A27F; --m6-hi: #3A7673;
+  --bg-2: #E8E3D6;
+  --surface-hi: rgba(255,255,255,.75);
+  --glow-1: rgba(238,139,78,.55); --glow-2: rgba(233,176,74,.55); --glow-3: rgba(78,124,91,.38); --glow-4: rgba(228,87,46,.38);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='.33 .33 .33 0 -.27 .33 .33 .33 0 -.27 .33 .33 .33 0 -.27 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain-op: .42;
+  --lift: 0 1px 0 var(--surface-hi) inset, 0 1px 2px rgba(19,21,18,.06), 0 24px 48px -24px rgba(83,44,20,.35);
+  position: relative; isolation: isolate;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 60%, var(--bg-2) 100%);
+}
+.st[data-theme="dark"] {
+  --m1: #F0B85A; --m2: #F5965F; --m3: #FF6B3D; --m4: #C64B2B; --m5: #5F9471; --m6: #2E6A69; --m7: #0B1312;
+  --m1-hi: #FFD68A; --m2-hi: #FFB585; --m3-hi: #FF9268; --m4-hi: #C0442A; --m5-hi: #86BC95; --m6-hi: #357573;
+  --bg-2: #0A0C0B;
+  --surface-hi: rgba(255,255,255,.07);
+  --glow-1: rgba(255,107,61,.34); --glow-2: rgba(240,184,90,.24); --glow-3: rgba(95,148,113,.30); --glow-4: rgba(198,75,43,.38);
+  --grain-op: .55;
+  --lift: 0 1px 0 var(--surface-hi) inset, 0 1px 2px rgba(0,0,0,.5), 0 28px 56px -24px rgba(0,0,0,.85);
+}
+/* film grain over everything */
+.st::after { content: ""; position: absolute; inset: 0; z-index: 60; pointer-events: none; background-image: var(--grain); background-size: 220px 220px; mix-blend-mode: overlay; opacity: var(--grain-op); }
+/* grain inside a single surface: put this class on anything with a gradient */
+.st .grain { background-blend-mode: overlay, normal; }
+
+/* ---------- materials ---------- */
+.st .btn-ink, .st .term { background: linear-gradient(180deg, color-mix(in oklab, var(--ink) 82%, var(--m4)) 0%, var(--ink) 100%); box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, 0 10px 24px -12px rgba(19,21,18,.6); }
+.st[data-theme="dark"] .btn-ink, .st[data-theme="dark"] .term { background: linear-gradient(180deg, #FFFFFF 0%, var(--ink) 100%); box-shadow: 0 10px 28px -12px var(--glow-1); }
+.st .btn-ink:hover { background: linear-gradient(180deg, var(--m3-hi), var(--m4)); color: #fff; }
+.st .btn-line { background: var(--surface-hi); backdrop-filter: none; }
+.st .index { background: color-mix(in oklab, var(--surface) 80%, transparent); box-shadow: var(--lift); }
+
+/* ---------- hero: sediment light, no dot grid ---------- */
+.st .hero { position: relative; overflow: hidden; background: none; padding-bottom: 72px; }
+.st .hero > .wrap { position: relative; z-index: 1; }
+/* fluid field: two slow layers of blurred mineral colour */
+.st .hero::before, .st .hero::after { content: ""; position: absolute; z-index: 0; pointer-events: none; border-radius: 50%; filter: blur(48px); }
+.st .hero::before { right: -12%; top: -18%; width: 78%; height: 92%;
+  background: radial-gradient(40% 46% at 62% 36%, var(--glow-2), transparent 70%), radial-gradient(36% 40% at 40% 58%, var(--glow-1), transparent 72%), radial-gradient(30% 34% at 78% 70%, var(--glow-4), transparent 72%);
+  animation: st-flow-a 22s ease-in-out infinite alternate; }
+.st .hero::after { right: -20%; bottom: -30%; width: 70%; height: 80%;
+  background: radial-gradient(40% 44% at 40% 40%, var(--glow-3), transparent 72%), radial-gradient(30% 34% at 70% 60%, color-mix(in oklab, var(--m6) 40%, transparent), transparent 72%);
+  animation: st-flow-b 26s ease-in-out infinite alternate; }
+@keyframes st-flow-a { 0% { transform: translate(0, 0) rotate(0deg) scale(1); } 50% { transform: translate(-6%, 5%) rotate(14deg) scale(1.08); } 100% { transform: translate(4%, -3%) rotate(-10deg) scale(.96); } }
+@keyframes st-flow-b { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-10%, -8%) rotate(24deg) scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .st .hero::before, .st .hero::after { animation: none; } }
+.st .hero-top { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 0; align-items: center; }
+.st .hero-top .stack3d { margin-right: -48px; margin-left: -80px; }
+.st .hero-copy .h-display { font-size: 86px; }
+.st .hero-copy .h-display .caret { display: none; }
+.st .hero-copy .hero-lead { margin-top: 36px; max-width: 560px; border-top: 0; padding-top: 0; }
+.st .h-display em { background: linear-gradient(100deg, var(--m5) 0%, var(--m6) 55%, var(--m4) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .06em; }
+.st[data-theme="dark"] .h-display em { background-image: linear-gradient(100deg, var(--m5-hi) 0%, var(--m1) 60%, var(--m3) 100%); }
+
+/* ---------- the 3D stack ---------- */
+.st .stack3d { position: relative; height: 560px; margin: 0; perspective: 1600px; perspective-origin: 50% 30%; }
+.st .stack3d .rig { position: absolute; left: 50%; top: 60%; width: 0; height: 0; transform-style: preserve-3d; transform: rotateX(56deg) rotateZ(-34deg); animation: st-drift 9s ease-in-out infinite alternate; }
+@keyframes st-drift { from { transform: rotateX(57deg) rotateZ(-37deg); } to { transform: rotateX(53deg) rotateZ(-29deg); } }
+.st .slab { --gap: 54px; --z: calc(var(--i) * var(--gap)); position: absolute; left: calc(var(--w) * -1.7px); top: -46px; width: calc(var(--w) * 3.4px); height: 92px; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; border-radius: 999px;
+  transform-style: preserve-3d; transform: translateZ(var(--z)); transition: transform .55s cubic-bezier(.22,1,.36,1), filter .3s;
+  background-image: var(--grain), linear-gradient(120deg, var(--hi) 0%, var(--lo) 72%); background-size: 220px 220px, 100% 100%; background-blend-mode: overlay, normal;
+  box-shadow: 0 1px 0 rgba(255,255,255,.45) inset; color: var(--txt, #fff); font-weight: 650; font-size: 17px; text-align: left; }
+.st .slab::before, .st .slab::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--lo); pointer-events: none; }
+.st .slab::before { transform: translateZ(-7px); filter: brightness(.72); }
+.st .slab::after { transform: translateZ(-14px); filter: brightness(.5); box-shadow: 0 30px 40px -10px rgba(40,20,10,.45); }
+.st .slab b { font-weight: 680; letter-spacing: -.01em; }
+.st .slab span { font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 12px; opacity: .7; }
+.st .slab:hover { filter: brightness(1.06) saturate(1.05); }
+.st .slab.m1 { --hi: var(--m1-hi); --lo: var(--m1); --txt: #2A1A06; }
+.st .slab.m2 { --hi: var(--m2-hi); --lo: var(--m2); --txt: #2B1406; }
+.st .slab.m3 { --hi: var(--m3-hi); --lo: var(--m3); --txt: #1E0D05; }
+.st .slab.m4 { --hi: var(--m4-hi); --lo: var(--m4); }
+.st .slab.m5 { --hi: var(--m5-hi); --lo: var(--m5); --txt: #0F2418; }
+.st .slab.m6 { --hi: var(--m6-hi); --lo: var(--m6); }
+.st .slab.up { transform: translateZ(calc(var(--z) + 70px)); }
+.st .slab.on { transform: translateZ(calc(var(--z) + 26px)); box-shadow: 0 1px 0 rgba(255,255,255,.55) inset, 0 0 0 3px var(--ink), 0 0 60px 10px var(--glow-1); }
+.st .slab.on::after { box-shadow: 0 50px 60px -10px rgba(40,20,10,.55); }
+.st .env-plate { position: absolute; left: -230px; top: -150px; width: 460px; height: 300px; border-radius: 80px; transform: translateZ(-40px); border: 2px dashed color-mix(in oklab, var(--ink) 40%, transparent);
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--m1) 22%, transparent), transparent); transition: background .4s, border-color .4s; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 18px; }
+.st .env-plate span { font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.st .env-plate.on { border-color: var(--m3); background: radial-gradient(closest-side, color-mix(in oklab, var(--m3) 38%, transparent), transparent); }
+.st .env-plate.on span { color: var(--accent-ink); }
+.st .slab.lit { box-shadow: 0 1px 0 rgba(255,255,255,.45) inset, 0 0 0 1px color-mix(in oklab, var(--m3) 70%, transparent); }
+.st .stack-cap { position: absolute; right: 0; bottom: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.st .stack-hint { font-size: 13px; color: var(--muted); font-variation-settings: "CASL" 1; font-style: oblique 10deg; }
+@media (prefers-reduced-motion: reduce) { .st .stack3d .rig { animation: none; } .st .slab { transition: none; } }
+
+/* ---------- twin, now a wide two-pane instrument ---------- */
+.st .twin { margin-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "sh rh" "sb rb" "sb tr" "sm sm"; grid-template-rows: auto auto 1fr auto; border: 0; border-radius: 28px;
+  background-image: var(--grain), linear-gradient(160deg, var(--surface) 0%, color-mix(in oklab, var(--surface) 88%, var(--m2)) 100%); background-size: 220px 220px, 100% 100%; background-blend-mode: overlay, normal; box-shadow: var(--lift); }
+.st .twin > .twin-head:not(.out) { grid-area: sh; }
+.st .twin > .twin-body:not(.out) { grid-area: sb; }
+.st .twin > .twin-head.out { grid-area: rh; border-left: 1px solid var(--line); }
+.st .twin > .twin-body.out { grid-area: rb; border-left: 1px solid var(--line); }
+.st .twin > .try { grid-area: tr; align-self: end; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin: 0 20px 20px; padding: 16px; border: 0; border-radius: 20px; border-left: 1px solid var(--line); }
+.st .twin > .try .try-tag { grid-column: 1 / -1; justify-self: start; }
+.st .twin > .twin-body.out { border-bottom: 0; }
+.st .twin > .try { box-shadow: 0 0 0 1px var(--line) inset; }
+.st .twin > .seam { grid-area: sm; border-bottom: 0; background: transparent; border-top: 1px solid var(--line); }
+.st .out { background: linear-gradient(180deg, color-mix(in oklab, var(--m5) 9%, transparent), color-mix(in oklab, var(--m5) 4%, transparent)); }
+.st .try { background: color-mix(in oklab, var(--sunken) 70%, transparent); }
+.st .try input { background: var(--raised); box-shadow: 0 1px 0 var(--surface-hi) inset; }
+.st .try .try-tag { background: linear-gradient(120deg, var(--m3-hi), var(--m4)); color: #fff; }
+
+/* ---------- sediment band ---------- */
+.st .sed-band { position: relative; height: 150px; overflow: hidden; background: linear-gradient(to bottom, transparent 75%, var(--m7) 75%); }
+.st .sed-band .sed { position: absolute; inset: -14px 0 0 0; width: 100%; height: calc(100% + 14px); }
+.st .sed-band::after { content: ""; position: absolute; inset: 0; background-image: var(--grain); background-size: 220px; mix-blend-mode: overlay; opacity: .9; pointer-events: none; }
+.st .foot-band { height: 120px; margin-top: 40px; }
+.st .spec { border-top: 0; background: var(--m7); color: #ECEAE3; border-bottom: 0; }
+.st .spec .label, .st .spec small { color: rgba(236,234,227,.62); }
+.st .spec .wrap > * { border-left-color: rgba(236,234,227,.12); }
+
+/* ---------- seed (layer selector) in minerals ---------- */
+.st .layer { background-image: var(--grain), linear-gradient(110deg, var(--hi, var(--ink)), var(--lo, var(--ink))); background-size: 220px, 100%; background-blend-mode: overlay, normal; color: var(--txt, #fff); box-shadow: 0 1px 0 rgba(255,255,255,.3) inset, 0 10px 22px -14px rgba(60,30,10,.6); }
+.st .bar-row:nth-child(1) .layer { --hi: var(--m1-hi); --lo: var(--m1); --txt: #2A1A06; }
+.st .bar-row:nth-child(2) .layer { --hi: var(--m2-hi); --lo: var(--m2); --txt: #2B1406; }
+.st .bar-row:nth-child(3) .layer { --hi: var(--m3-hi); --lo: var(--m3); --txt: #1E0D05; }
+.st .bar-row:nth-child(4) .layer { --hi: var(--m4-hi); --lo: var(--m4); }
+.st .bar-row:nth-child(5) .layer { --hi: var(--m5-hi); --lo: var(--m5); --txt: #0F2418; }
+.st .bar-row:nth-child(6) .layer { --hi: var(--m6-hi); --lo: var(--m6); }
+.st .layer.soft { opacity: .28; box-shadow: none; }
+.st .layer[aria-pressed="true"] { color: var(--txt, #fff); box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 0 0 3px var(--bg), 0 0 0 5px var(--ink), 0 18px 36px -12px var(--glow-1); transform: translateX(10px); }
+.st .layer[aria-pressed="true"] span { opacity: .85; }
+.st .layer.env { background: transparent; color: var(--ink); border: 1.5px dashed var(--line-strong); box-shadow: none; }
+.st .layer.env[aria-pressed="true"] { background-image: var(--grain), linear-gradient(110deg, var(--m3-hi), var(--m4)); border-color: transparent; color: #fff; }
+.st .detail { --lc: var(--m4); border: 0; background-image: var(--grain), radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, var(--lc) 30%, transparent), transparent 60%), linear-gradient(var(--surface), var(--surface)); background-size: 220px, 100%, 100%; background-blend-mode: overlay, normal, normal; box-shadow: var(--lift); }
+.st .seed .detail { --lc: inherit; }
+.st .detail .code { background: color-mix(in oklab, var(--bg) 85%, transparent); border-color: color-mix(in oklab, var(--lc) 25%, var(--line)); }
+.st .chain span.on { border-color: transparent; background: color-mix(in oklab, var(--lc) 18%, transparent); color: var(--ink); }
+
+/* ---------- rules report ---------- */
+.st .report { border: 0; background-image: var(--grain), linear-gradient(180deg, var(--surface), color-mix(in oklab, var(--surface) 92%, var(--m5))); background-size: 220px, 100%; background-blend-mode: overlay, normal; box-shadow: var(--lift); }
+.st .report-head { background-image: linear-gradient(90deg, color-mix(in oklab, var(--m5) 22%, var(--sunken)), var(--sunken) 60%); border-bottom: 0; }
+.st .rule { border-left-color: color-mix(in oklab, var(--line) 70%, transparent); }
+.st .io > div { border: 0; background: color-mix(in oklab, var(--bg) 80%, transparent); box-shadow: 0 0 0 1px var(--line) inset; }
+.st .pass i { background: linear-gradient(140deg, var(--m5-hi), var(--m6)); color: #fff; }
+.st .pass.fail i { background: linear-gradient(140deg, var(--m3-hi), var(--m4)); }
+
+/* ---------- circuit ---------- */
+.st .core { position: relative; overflow: hidden; color: #ECEAE3; min-height: 280px;
+  background-image: var(--grain), radial-gradient(70% 90% at 100% 0%, color-mix(in oklab, var(--m3) 70%, transparent), transparent 62%), radial-gradient(80% 90% at 0% 100%, color-mix(in oklab, var(--m5) 80%, transparent), transparent 60%), linear-gradient(160deg, var(--m6), var(--m7));
+  background-size: 220px, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal; box-shadow: var(--lift); overflow: visible; }
+.st .core code { font-size: 26px; }
+.st .core::after { border-top: 2px solid var(--m3); }
+.st .pkgs::before { border-left: 2px solid var(--m3); }
+.st .pkg::before { border-top: 2px solid var(--m3); }
+.st .pkg::after { background: var(--m1); box-shadow: 0 0 0 4px color-mix(in oklab, var(--m1) 30%, transparent); animation: st-signal 2.4s ease-in-out infinite; }
+.st .pkg:nth-child(2)::after { animation-delay: .3s; } .st .pkg:nth-child(3)::after { animation-delay: .6s; } .st .pkg:nth-child(4)::after { animation-delay: .9s; }
+@keyframes st-signal { 50% { box-shadow: 0 0 0 8px color-mix(in oklab, var(--m1) 0%, transparent); } }
+.st .pkg { border: 0; background: var(--surface); box-shadow: var(--lift); }
+.st .pkg:hover { box-shadow: var(--lift), 0 0 0 2px var(--m3); }
+@media (prefers-reduced-motion: reduce) { .st .pkg::after { animation: none; } }
+
+/* ---------- journal ---------- */
+.st .jcard { border: 0; background-size: 220px, 100%; background-blend-mode: overlay, normal; box-shadow: var(--lift); transition: transform .3s cubic-bezier(.22,1,.36,1); }
+.st .jcard:nth-child(1) { background-image: var(--grain), linear-gradient(150deg, color-mix(in oklab, var(--m1) 34%, var(--surface)) 0%, var(--surface) 70%); }
+.st .jcard:nth-child(2) { background-image: var(--grain), linear-gradient(150deg, color-mix(in oklab, var(--m5) 30%, var(--surface)) 0%, var(--surface) 70%); }
+.st .jcard:hover { transform: translateY(-4px); }
+
+/* ---------- footer ---------- */
+.st .foot { border-top: 0; background: var(--m7); color: #ECEAE3; }
+.st .foot .foot-row { color: rgba(236,234,227,.62); }
+.st .foot .foot-row a:hover { color: #fff; }
+.st .giant { background-image: var(--grain), linear-gradient(180deg, var(--m1) 10%, var(--m2) 30%, var(--m3) 48%, var(--m4) 64%, var(--m5) 82%, var(--m6) 100%); background-size: 220px, 100%; background-blend-mode: overlay, normal; -webkit-background-clip: text; background-clip: text; color: transparent; }
+.st .foot-band { margin-top: 64px; }
+
+/* ---------- mobile ---------- */
+@media (max-width: 800px) {
+  .st .hero-top { grid-template-columns: 1fr; gap: 0; }
+  .st .hero-copy .h-display { font-size: 52px; }
+  .st .hero-copy .hero-lead { margin-top: 24px; }
+  .st .stack3d { height: 400px; margin: 40px -20px 0; }
+  .st .stack3d .rig { transform: scale(.62) rotateX(56deg) rotateZ(-34deg); animation: none; top: 64%; }
+  .st .stack-cap { right: 20px; }
+  .st .twin { grid-template-columns: minmax(0, 1fr); grid-template-areas: "sh" "sb" "tr" "sm" "rh" "rb"; }
+  .st .twin::before { margin: 0 20px; }
+  .st .twin > .twin-head.out, .st .twin > .twin-body.out { border-left: 0; }
+  .st .twin > .try { grid-template-columns: 1fr; margin: 0; border-radius: 0; box-shadow: none; }
+  .st .hero-top .stack3d { margin: 40px -20px 0; }
+  .st .circuit { grid-template-columns: 1fr; gap: 12px; }
+  .st .core { padding: 28px; }
+  .st .hero::before { width: 140%; right: -50%; }
+  .st .hero::after { width: 140%; }
+  .st .twin > .seam { background: color-mix(in oklab, var(--sunken) 70%, transparent); }
+  .st .sed-band { height: 90px; }
+  .st .foot-band { height: 72px; }
+  .st .layer[aria-pressed="true"] { transform: none; }
+  .st .core { min-height: 0; }
+}
+.st .bar-row .layer.soft { background-image: var(--grain), linear-gradient(110deg, var(--hi), var(--lo)); background-size: 220px, 100%; background-blend-mode: overlay, normal; opacity: .32; box-shadow: none; }
+.st .bars .layer[aria-pressed="true"]:not(.env) { background-image: var(--grain), linear-gradient(110deg, var(--hi), var(--lo)); background-size: 220px, 100%; background-blend-mode: overlay, normal; }
+
+/* ============================================================
+   CMS
+   ============================================================ */
+.st { --rail: #0F1716; --rail-2: rgba(255,255,255,.07); --rail-line: rgba(255,255,255,.09); }
+.st[data-theme="dark"] { --rail: #070B0A; --rail-2: rgba(255,255,255,.06); --rail-line: rgba(255,255,255,.07); }
+.st .rail { position: relative; overflow: hidden; background-image: var(--grain), radial-gradient(90% 40% at 0% 100%, color-mix(in oklab, var(--m5) 55%, transparent), transparent 70%), radial-gradient(80% 30% at 100% 0%, color-mix(in oklab, var(--m3) 32%, transparent), transparent 70%), linear-gradient(180deg, var(--m7), var(--rail));
+  background-size: 220px, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal; }
+.st .ritem[aria-current="page"] { color: #fff; background-image: linear-gradient(100deg, rgba(255,255,255,.14), rgba(255,255,255,.04)); box-shadow: 0 1px 0 rgba(255,255,255,.12) inset; }
+.st .ritem[aria-current="page"]::before { left: 0; width: 4px; height: 20px; margin-top: -10px; background: linear-gradient(180deg, var(--m1), var(--m3)); }
+.st .jump { background: rgba(255,255,255,.06); box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; }
+.st .top { border-bottom: 0; background: color-mix(in oklab, var(--bg) 70%, transparent); }
+.st .main { position: relative; }
+.st .main::before { content: ""; position: absolute; z-index: 0; right: -10%; top: -6%; width: 70%; height: 520px; pointer-events: none; filter: blur(50px); border-radius: 50%;
+  background: radial-gradient(40% 50% at 70% 40%, var(--glow-2), transparent 70%), radial-gradient(36% 44% at 40% 60%, var(--glow-1), transparent 72%), radial-gradient(30% 40% at 90% 80%, var(--glow-3), transparent 72%);
+  animation: st-flow-a 24s ease-in-out infinite alternate; opacity: .8; }
+.st .main > * { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .st .main::before { animation: none; } }
+
+/* overview cover */
+.st .ov-cover { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 340px; align-items: center; gap: 24px; min-height: 280px; padding: 36px 40px; border-radius: 32px; overflow: hidden; color: #F4F1EA;
+  background-image: var(--grain), radial-gradient(60% 90% at 100% 0%, color-mix(in oklab, var(--m2) 85%, transparent), transparent 62%), radial-gradient(50% 80% at 70% 100%, color-mix(in oklab, var(--m3) 80%, transparent), transparent 64%), radial-gradient(70% 100% at 0% 100%, color-mix(in oklab, var(--m5) 90%, transparent), transparent 70%), linear-gradient(140deg, var(--m6), var(--m7));
+  background-size: 220px, 100%, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal, normal; box-shadow: var(--lift); }
+.st .ov-cover .label { color: rgba(244,241,234,.7); }
+.st .ov-cover .sentence em { color: var(--m1-hi); }
+.st .ov-cover p { color: rgba(244,241,234,.78) !important; }
+.st .stack3d.mini { height: 240px; perspective: 1000px; }
+.st .stack3d.mini .rig { top: 58%; transform: scale(.62) rotateX(56deg) rotateZ(-34deg); animation: st-drift-mini 10s ease-in-out infinite alternate; }
+@keyframes st-drift-mini { from { transform: scale(.62) rotateX(57deg) rotateZ(-38deg); } to { transform: scale(.62) rotateX(52deg) rotateZ(-28deg); } }
+.st .stack3d.mini .slab { box-shadow: 0 1px 0 rgba(255,255,255,.45) inset; }
+.st .stack3d.mini .slab::after { box-shadow: 0 30px 40px -10px rgba(0,0,0,.45); }
+
+/* rulers become mineral cards */
+.st .rulers { gap: 12px; border-block: 0; }
+.st .ruler, .st .ruler:first-child { position: relative; padding: 20px 22px; border: 0; border-radius: 22px; background: var(--surface); box-shadow: var(--lift); overflow: hidden; }
+.st .ruler::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: linear-gradient(90deg, var(--rc-1), var(--rc-2)); }
+.st .ruler:nth-child(1) { --rc-1: var(--m1); --rc-2: var(--m2); }
+.st .ruler:nth-child(2) { --rc-1: var(--m5-hi); --rc-2: var(--m5); }
+.st .ruler:nth-child(3) { --rc-1: var(--m2); --rc-2: var(--m3); }
+.st .ruler:nth-child(4) { --rc-1: var(--m6-hi); --rc-2: var(--m6); }
+.st .ruler b { background: linear-gradient(180deg, var(--ink) 40%, color-mix(in oklab, var(--ink) 55%, var(--rc-2))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* panels */
+.st .panel, .st .vital { border: 0; background-image: var(--grain), linear-gradient(170deg, var(--surface), color-mix(in oklab, var(--surface) 94%, var(--m2))); background-size: 220px, 100%; background-blend-mode: overlay, normal; box-shadow: var(--lift); }
+.st .panel-head { border-bottom-color: color-mix(in oklab, var(--line) 70%, transparent); }
+.st .heat i { background: color-mix(in oklab, var(--sunken) 80%, transparent); }
+.st .heat i.l1 { background: color-mix(in oklab, var(--m1) 55%, var(--surface)); opacity: 1; }
+.st .heat i.l2 { background: linear-gradient(160deg, var(--m2), var(--m3)); opacity: 1; }
+.st .heat i.l3 { background: linear-gradient(160deg, var(--m3), var(--m4)); opacity: 1; }
+.st .heat i.today { box-shadow: 0 0 0 2px var(--ink); }
+.st .step.done i { background: linear-gradient(140deg, var(--m5-hi), var(--m6)); color: #fff; }
+.st .tag { background: color-mix(in oklab, var(--m5) 16%, transparent); }
+.st .tag.warm { background: color-mix(in oklab, var(--m3) 16%, transparent); }
+.st .vital b.has { background: linear-gradient(180deg, var(--ink) 40%, var(--m4)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.st .spark { background: repeating-linear-gradient(90deg, color-mix(in oklab, var(--m2) 40%, var(--sunken)) 0 6px, transparent 6px 9px); }
+
+/* entries */
+.st .erow[aria-current="true"] { color: #F4F1EA; background-image: var(--grain), linear-gradient(110deg, var(--m6), var(--m7)); background-size: 220px, 100%; background-blend-mode: overlay, normal; }
+.st .inv li i { background: linear-gradient(140deg, var(--m5-hi), var(--m6)); color: #fff; }
+.st .inv li.bad i { background: linear-gradient(140deg, var(--m3-hi), var(--m4)); color: #fff; }
+.st .inv li.warn i { background: linear-gradient(140deg, var(--m1-hi), var(--m1)); color: #2A1A06; }
+.st .ogcard { border: 0; color: #F4F1EA; background-image: var(--grain), radial-gradient(70% 100% at 100% 0%, var(--m2), transparent 62%), radial-gradient(60% 90% at 0% 100%, var(--m5), transparent 66%), linear-gradient(140deg, var(--m6), var(--m7)); background-size: 220px, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal; }
+.st .ogcard small { color: rgba(244,241,234,.7); }
+.st .ogcard .og-bar { background: linear-gradient(90deg, var(--m1), var(--m3)); }
+.st .palette-k { border: 0; box-shadow: var(--lift), 0 0 0 1px var(--line); }
+
+/* ============================================================
+   Docs + playground
+   ============================================================ */
+.st .dside { border-right: 0; background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 70%, transparent), transparent); }
+.st .dlink[aria-current="page"] { background: var(--surface); box-shadow: var(--lift); }
+.st .dlink[aria-current="page"] .pill { background: linear-gradient(90deg, var(--m1), var(--m3)); }
+.st .dmain article { position: relative; }
+.st .dmain article::before { content: ""; position: absolute; z-index: -1; right: -40px; top: -60px; width: 560px; height: 340px; border-radius: 50%; filter: blur(50px); pointer-events: none;
+  background: radial-gradient(45% 50% at 60% 40%, var(--glow-2), transparent 70%), radial-gradient(40% 46% at 35% 60%, var(--glow-1), transparent 72%), radial-gradient(30% 40% at 85% 75%, var(--glow-3), transparent 72%);
+  animation: st-flow-a 22s ease-in-out infinite alternate; }
+.st .minimap i:nth-child(6n+1) { --mc: var(--m1); } .st .minimap i:nth-child(6n+2) { --mc: var(--m2); } .st .minimap i:nth-child(6n+3) { --mc: var(--m3); }
+.st .minimap i:nth-child(6n+4) { --mc: var(--m4); } .st .minimap i:nth-child(6n+5) { --mc: var(--m5); } .st .minimap i:nth-child(6n) { --mc: var(--m6); }
+.st .minimap i { background: color-mix(in oklab, var(--mc) 28%, var(--line)); }
+.st .minimap i.on { background: linear-gradient(90deg, var(--mc), color-mix(in oklab, var(--mc) 60%, var(--m4))); }
+.st .codeblock { border: 0; box-shadow: var(--lift); background-image: var(--grain), linear-gradient(170deg, var(--surface), color-mix(in oklab, var(--surface) 92%, var(--m2))); background-size: 220px, 100%; background-blend-mode: overlay, normal; }
+.st .callout { background-image: linear-gradient(110deg, color-mix(in oklab, var(--m5) 22%, var(--surface)), color-mix(in oklab, var(--m5) 6%, var(--surface))); }
+.st .callout i { background: linear-gradient(140deg, var(--m5-hi), var(--m6)); color: #fff; }
+.st .callout.warm { background-image: linear-gradient(110deg, color-mix(in oklab, var(--m2) 26%, var(--surface)), color-mix(in oklab, var(--m1) 8%, var(--surface))); }
+.st .callout.warm i { background: linear-gradient(140deg, var(--m3-hi), var(--m4)); color: #fff; }
+.st .pager button { border: 0; background: var(--surface); box-shadow: var(--lift); }
+.st .pager button:hover { box-shadow: var(--lift), 0 0 0 2px var(--m3); }
+.st .toc a[aria-current="true"]::before { background: linear-gradient(90deg, var(--m1), var(--m3)); }
+.st .run { background: linear-gradient(120deg, var(--m1-hi), var(--m3)); box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 12px 28px -12px var(--glow-1); }
+.st .pg-bar { position: relative; overflow: hidden; border-bottom: 0; }
+.st .pg-bar::before { content: ""; position: absolute; inset: -80px -10% auto 30%; height: 220px; z-index: -1; filter: blur(50px); border-radius: 50%; background: radial-gradient(40% 50% at 40% 50%, var(--glow-1), transparent 70%), radial-gradient(40% 50% at 80% 50%, var(--glow-3), transparent 70%); animation: st-flow-b 20s ease-in-out infinite alternate; }
+.st .exbtn[aria-current="true"] { color: #F4F1EA; background-image: var(--grain), linear-gradient(110deg, var(--m6), var(--m7)); background-size: 220px, 100%; background-blend-mode: overlay, normal; box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; }
+.st .exbtn[aria-current="true"] i { background: linear-gradient(140deg, var(--m1-hi), var(--m3)); }
+.st .editor-pane { background-image: var(--grain), linear-gradient(170deg, var(--surface), color-mix(in oklab, var(--surface) 90%, var(--m6))); background-size: 220px, 100%; background-blend-mode: overlay, normal; }
+.st .out-pane { background: linear-gradient(180deg, color-mix(in oklab, var(--m5) 8%, transparent), transparent 60%); }
+.st .layer-badge { background: linear-gradient(110deg, color-mix(in oklab, var(--m3) 30%, transparent), color-mix(in oklab, var(--m1) 18%, transparent)); }
+.st .cl.hl { background: linear-gradient(90deg, color-mix(in oklab, var(--m3) 22%, transparent), transparent 80%); box-shadow: inset 3px 0 var(--m3); }
+.st .spinner { border-top-color: var(--m3); }
+@media (prefers-reduced-motion: reduce) { .st .dmain article::before, .st .pg-bar::before, .st .stack3d.mini .rig { animation: none; } }
+.st .main { overflow: clip; }
+.st .stack3d.mini .rig { top: 74%; }
+.st .heat i.l1 { background: linear-gradient(160deg, var(--m1), var(--m2)); opacity: .42; }
+.st .heat i.l2 { background: linear-gradient(160deg, var(--m2), var(--m3)); opacity: .78; }
+.st .heat i.l3 { background: linear-gradient(160deg, var(--m3-hi), var(--m4)); opacity: 1; }
+.st .minimap i { background: color-mix(in oklab, var(--mc) 50%, var(--line)); }
+.st .dlink:nth-of-type(7n+1) .pill { --mc: var(--m1); } .st .dlink:nth-of-type(7n+2) .pill { --mc: var(--m2); } .st .dlink:nth-of-type(7n+3) .pill { --mc: var(--m3); }
+.st .dlink:nth-of-type(7n+4) .pill { --mc: var(--m4); } .st .dlink:nth-of-type(7n+5) .pill { --mc: var(--m5); } .st .dlink:nth-of-type(7n+6) .pill { --mc: var(--m6); }
+.st .dlink .pill { background: color-mix(in oklab, var(--mc, var(--line-strong)) 70%, transparent); }
+.st .dlink[aria-current="page"] .pill { background: linear-gradient(90deg, var(--mc, var(--m1)), var(--m3)); }
+
+
+/* ============================================================
+   v3.1 — critique pass: section rhythm, consistency, a11y
+   ============================================================ */
+/* 02 rules: a moss-lagoon tinted band with its own fluid field */
+.st #rules { position: relative; overflow: hidden; padding-top: 112px !important; background: linear-gradient(180deg, transparent 0%, color-mix(in oklab, var(--m5) 9%, var(--bg)) 22%, color-mix(in oklab, var(--m6) 8%, var(--bg)) 78%, transparent 100%); }
+.st #rules::before { content: ""; position: absolute; z-index: 0; left: -14%; top: 8%; width: 62%; height: 70%; border-radius: 50%; filter: blur(60px); pointer-events: none;
+  background: radial-gradient(40% 50% at 40% 40%, var(--glow-3), transparent 72%), radial-gradient(34% 40% at 70% 70%, color-mix(in oklab, var(--m6) 30%, transparent), transparent 72%); animation: st-flow-b 24s ease-in-out infinite alternate; }
+.st #rules > .wrap { position: relative; z-index: 1; }
+/* 03 connect: a basalt band — the infrastructure lives in the dark */
+.st #connect { --ink: #ECEAE3; --muted: #A6ABA3; --line: rgba(236,234,227,.12); --line-strong: #6E756F; --surface: #18211F; --raised: #1F2927; --sunken: #0F1615; --accent-ink: #FF8A62; --s-kw: #8FCBA3; --s-type: #7CC4D6; --s-com: #8E948C;
+  --surface-hi: rgba(255,255,255,.06); --lift: 0 1px 0 rgba(255,255,255,.06) inset, 0 28px 56px -24px rgba(0,0,0,.85);
+  position: relative; overflow: hidden; padding-top: 112px !important; color: var(--ink);
+  background-image: var(--grain), radial-gradient(50% 60% at 90% 10%, color-mix(in oklab, var(--m3) 28%, transparent), transparent 70%), radial-gradient(60% 70% at 0% 100%, color-mix(in oklab, var(--m5) 34%, transparent), transparent 70%), linear-gradient(180deg, var(--m7), #0C1312);
+  background-size: 220px, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal; }
+.st #connect .pkg { background: var(--surface); }
+.st #connect .pkg code { color: var(--m5-hi); }
+.st #connect .core { box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 40px 80px -30px rgba(0,0,0,.9), 0 0 120px -20px color-mix(in oklab, var(--m3) 50%, transparent); }
+.st #journal { padding-top: 112px !important; }
+/* docs: tables share the surface material */
+.st .opt-table { border: 0; box-shadow: var(--lift); background: var(--surface); }
+.st .opt-table th { background: linear-gradient(90deg, color-mix(in oklab, var(--m2) 14%, var(--sunken)), var(--sunken) 70%); }
+.st .opt-table td { border-top-color: color-mix(in oklab, var(--line) 70%, transparent); }
+/* playground idle: the model waits, as a stack */
+.st .idle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.st .idle .stack3d.mini { width: 260px; height: 220px; }
+.st .idle .stack3d.mini .rig { top: 62%; transform: scale(.5) rotateX(56deg) rotateZ(-34deg); animation: st-drift-idle 8s ease-in-out infinite alternate; }
+@keyframes st-drift-idle { from { transform: scale(.5) rotateX(57deg) rotateZ(-38deg); } to { transform: scale(.5) rotateX(52deg) rotateZ(-28deg); } }
+/* the 3D stack responds to the pointer: hover lifts a slab a little */
+.st .slab:not(.on):hover { transform: translateZ(calc(var(--z) + 10px)); }
+.st .slab.up:not(.on):hover { transform: translateZ(calc(var(--z) + 80px)); }
+.st .slab:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { .st #rules::before, .st .idle .stack3d.mini .rig { animation: none; } }
+@media (max-width: 800px) { .st #rules, .st #connect, .st #journal { padding-top: 64px !important; } }
+
+/* v3.2 — hero panel follows the chosen layer */
+.st .twin { --lc: var(--m4); }
+.st .twin::before { content: ""; grid-column: 1 / -1; grid-row: 1; align-self: start; height: 4px; margin: 0 28px; border-radius: 0 0 99px 99px; background: linear-gradient(90deg, var(--lc), color-mix(in oklab, var(--lc) 40%, transparent)); z-index: 1; pointer-events: none; }
+.st .layer-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: color-mix(in oklab, var(--lc) 16%, transparent); color: var(--ink); letter-spacing: .06em; }
+.st .layer-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--lc); }
+.st .twin .code { animation: st-rise .35s cubic-bezier(.22,1,.36,1) both; }
+.st .twin-body .code { overflow-x: auto; }
+.st .try-hint { grid-column: 1 / -1; color: var(--muted); font-size: 12px; font-variation-settings: "CASL" 1; font-style: oblique 8deg; }
+.st .try label:first-of-type:last-of-type { grid-column: 1 / -1; }
+.st .pass.idle { color: var(--muted); }
+.st .pass.idle i { background: var(--sunken); color: var(--muted); }
+.st .errbox { white-space: pre-wrap; }
+@media (prefers-reduced-motion: reduce) { .st .twin .code { animation: none; } }
+
+/* v3.4 — top nav like the other boards, sections as a reading path */
+.st .tabs-nav { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in oklab, var(--surface) 80%, transparent); box-shadow: var(--lift); }
+.st .tabs-nav a { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 550; color: var(--muted); }
+.st .tabs-nav a[aria-current="page"] { background: var(--ink); color: var(--on-ink); }
+.st .tabs-nav a:hover:not([aria-current="page"]) { background: var(--sunken); color: var(--ink); }
+.st #model, .st #journal { position: relative; }
+.st .station { position: absolute; z-index: 2; left: 32px; top: 0; bottom: 0; width: 40px; pointer-events: none; }
+.st .station::before { content: ""; position: absolute; left: 19px; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: linear-gradient(180deg, var(--sc) 0%, var(--sc2) 100%); opacity: .75; }
+.st #model .station::before { top: 112px; }
+.st #journal .station::before { bottom: 72px; background: linear-gradient(180deg, var(--sc), transparent); }
+.st .station b { position: absolute; top: 112px; left: 0; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; pointer-events: auto;
+  background-image: var(--grain), linear-gradient(140deg, color-mix(in oklab, var(--sc) 70%, #fff), var(--sc)); background-size: 220px, 100%; background-blend-mode: overlay, normal;
+  box-shadow: 0 0 0 5px var(--bg), 0 10px 24px -10px var(--sc); color: #131512; font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 12px; font-weight: 700; transition: transform .25s cubic-bezier(.22,1,.36,1); }
+.st #connect .station b { box-shadow: 0 0 0 5px var(--m7), 0 10px 24px -10px var(--sc); }
+.st #rules .station b, .st #journal .station b { color: #fff; }
+.st .station span { position: absolute; top: 166px; left: 28px; writing-mode: vertical-rl; pointer-events: auto; font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.st .station:hover b { transform: scale(1.12); }
+.st .station:hover span { color: var(--ink); }
+@media (max-width: 800px) { .st .tabs-nav, .st .station { display: none; } }
+
+/* v3.7 — 05 Support */
+.st #support { position: relative; padding-bottom: 32px; }
+.st #journal .station::before { bottom: 0; background: linear-gradient(180deg, var(--sc), var(--m3)); }
+.st #support .station::before { bottom: 72px; background: linear-gradient(180deg, var(--sc), transparent); }
+.st #support .station b { color: #fff; }
+.st .support { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 520px); gap: 48px; padding: 56px; border-radius: 36px; overflow: hidden; color: #F4F1EA; box-shadow: var(--lift);
+  background-image: var(--grain), radial-gradient(60% 80% at 100% 0%, color-mix(in oklab, var(--m1) 80%, transparent), transparent 62%), radial-gradient(55% 80% at 70% 100%, color-mix(in oklab, var(--m3) 85%, transparent), transparent 64%), radial-gradient(70% 100% at 0% 100%, color-mix(in oklab, var(--m4) 90%, transparent), transparent 70%), linear-gradient(140deg, var(--m6), var(--m7));
+  background-size: 220px, 100%, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal, normal; }
+.st .support .sec-num b, .st .support .label { color: rgba(244,241,234,.78); }
+.st .support .h-sec { color: #FFF; }
+.st .sup-lead { margin-top: 18px; max-width: 34em; font-size: 17px; line-height: 1.6; color: rgba(244,241,234,.86); }
+.st .sup-funds { display: grid; gap: 10px; margin: 26px 0 0; padding: 0; list-style: none; font-size: 15px; }
+.st .sup-funds li { display: flex; align-items: center; gap: 12px; }
+.st .sup-funds i { width: 26px; height: 8px; border-radius: 99px; background: var(--c); box-shadow: 0 0 0 2px rgba(255,255,255,.18); }
+.st .sup-ways { display: flex; flex-direction: column; gap: 12px; }
+.st .sup-freq { align-self: flex-end; background: rgba(0,0,0,.22); border-color: rgba(255,255,255,.16); }
+.st .sup-freq button { color: rgba(244,241,234,.8); }
+.st .sup-freq button[aria-pressed="true"] { background: #F4F1EA; color: #131512; }
+.st .way { position: relative; display: block; padding: 20px 22px; border-radius: 22px; color: var(--ink); background: color-mix(in oklab, var(--surface) 94%, transparent); box-shadow: 0 1px 0 var(--surface-hi) inset, 0 18px 40px -24px rgba(0,0,0,.6); transition: transform .25s cubic-bezier(.22,1,.36,1); }
+.st a.way:hover { transform: translateY(-3px); }
+.st .way b { display: block; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+.st .way p { margin: 4px 0 14px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.st .way-main { box-shadow: 0 0 0 2px var(--m1), 0 24px 48px -24px rgba(0,0,0,.7); }
+.st .way-tag { position: absolute; top: 18px; right: 18px; padding: 3px 10px; border-radius: 99px; font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 11px; font-weight: 700; color: #2A1A06; background: linear-gradient(120deg, var(--m1-hi), var(--m1)); }
+.st .way-pix { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 16px; align-items: center; }
+.st .pix-qr { width: 92px; height: 92px; border-radius: 14px; background-color: #fff; box-shadow: 0 0 0 1px var(--line) inset;
+  background-image: linear-gradient(90deg, #131512 50%, transparent 50%), linear-gradient(#131512 50%, transparent 50%), conic-gradient(from 90deg, #131512 25%, transparent 0 50%, #131512 0 75%, transparent 0);
+  background-size: 14px 14px, 22px 22px, 10px 10px; background-position: 6px 6px, 3px 11px, 0 0; background-blend-mode: multiply; background-origin: content-box; padding: 8px; background-clip: content-box; }
+.st .sup-wall { margin: 4px 2px 0; font-size: 13px; color: rgba(244,241,234,.75); font-style: oblique 8deg; font-variation-settings: "CASL" 1; }
+@media (max-width: 800px) {
+  .st .support { grid-template-columns: 1fr; gap: 28px; padding: 28px 22px; border-radius: 28px; }
+  .st .sup-freq { align-self: flex-start; }
+}
+
+/* v3.8 — sponsors wall */
+.st .donors { margin-top: 20px; padding: 32px 36px; border-radius: 30px; background-image: var(--grain), linear-gradient(170deg, var(--surface), color-mix(in oklab, var(--surface) 92%, var(--m1))); background-size: 220px, 100%; background-blend-mode: overlay, normal; box-shadow: var(--lift); }
+.st .donors-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 22px; }
+.st .donors-head h3 { margin-top: 8px; font-size: 26px; line-height: 1.15; font-weight: 650; letter-spacing: -.025em; max-width: 22em; }
+.st .d-tier + .d-tier { margin-top: 22px; }
+.st .d-tier > .label { display: block; margin-bottom: 12px; }
+.st .d-companies { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.st .d-co { display: grid; grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 14px; align-items: center; padding: 16px 18px; border-radius: 20px; background: var(--bg); box-shadow: 0 0 0 1px var(--line) inset; transition: transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s; }
+.st .d-co:hover { transform: translateY(-2px); box-shadow: 0 0 0 2px var(--dc) inset; }
+.st .d-co i { grid-row: 1 / 3; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 16px; font-style: normal; font-family: var(--mono); font-variation-settings: "MONO" 1, "CASL" 1; font-weight: 700; color: #fff;
+  background-image: var(--grain), linear-gradient(140deg, color-mix(in oklab, var(--dc) 70%, #fff), var(--dc)); background-size: 220px, 100%; background-blend-mode: overlay, normal; }
+.st .d-co b { font-size: 17px; font-weight: 650; }
+.st .d-co small, .st .d-p small { font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 11px; color: var(--muted); }
+.st .d-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.st .d-p { display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 10px; border-radius: 999px; background: var(--bg); box-shadow: 0 0 0 1px var(--line) inset; min-width: 0; transition: box-shadow .25s; }
+.st .d-p:hover { box-shadow: 0 0 0 2px var(--dc, var(--ink)) inset; }
+.st .d-p i { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; font-style: normal; font-size: 13px; font-weight: 700; color: #131512;
+  background-image: var(--grain), linear-gradient(140deg, color-mix(in oklab, var(--dc, var(--m1)) 55%, #fff), var(--dc, var(--m1))); background-size: 220px, 100%; background-blend-mode: overlay, normal; }
+.st .d-p span { display: flex; flex-direction: column; min-width: 0; }
+.st .d-p b { font-size: 14px; font-weight: 620; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st .d-p small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st .d-you { background: transparent; box-shadow: 0 0 0 1.5px var(--line-strong) inset; border: 0; }
+.st .d-you i { background: transparent; color: var(--accent-ink); box-shadow: 0 0 0 1.5px var(--accent-ink) inset; font-size: 18px; }
+.st .d-first { display: flex; align-items: center; gap: 14px; padding: 8px 0; color: var(--muted); }
+.st .d-first .d-you { padding: 0; }
+.st .d-empty { color: var(--muted); font-size: 14px; }
+.st .d-note { margin-top: 20px; font-size: 12px; color: var(--muted); }
+@media (max-width: 800px) {
+  .st .donors { padding: 24px 20px; border-radius: 24px; }
+  .st .donors-head { flex-direction: column; align-items: flex-start; }
+  .st .donors-head h3 { font-size: 21px; }
+  .st .d-companies, .st .d-people { grid-template-columns: 1fr; }
+}
+
+/* v3.9 — footer shows the whole wordmark */
+.st .foot .giant { margin: 24px 0 0 -.04em; padding-bottom: .06em; line-height: .86; font-size: 280px; background-size: 220px, 100% 100%; }
+.st .foot-end { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 28px; padding: 18px 0 32px; border-top: 1px solid rgba(236,234,227,.12); font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 12px; color: rgba(236,234,227,.55); }
+@media (max-width: 800px) { .st .foot .giant { font-size: 118px; margin-top: 16px; } .st .foot-end { flex-direction: column; gap: 6px; padding-bottom: 24px; } }
