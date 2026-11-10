@@ -65,7 +65,8 @@ a file of your own.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.
 - Repository actions: \`findById\`; \`findBy<Key>\` only for unique keys (id, \`unique\`, slug fields, unique plugin keys such as
   \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`count\`, and the
-  queries \`findMany\`, \`exists\`, \`findPage\` (no key needed; \`where\`, \`orderBy\`, \`limit\`, \`offset\` at runtime).
+  queries \`findMany\`, \`exists\`, \`findPage\` (no key needed; \`where\`, \`orderBy\`, \`limit\`, \`offset\` at runtime) and
+  \`findCursor\` (pages by position: \`after\` is the \`next\` of the page before, no \`offset\`).
 - \`provider\` (top level for the application, and optionally on a repository, which then uses its own): \`"inMemory"\`,
   \`{ "use": "<name>", "options": {...} }\` with a name from the \`providers\` of \`afora_catalog\` (external ones are given
   to the server with \`--providers\`), or \`{ "import": "./db.ts#provider" }\` for one created by hand. Options are JSON or

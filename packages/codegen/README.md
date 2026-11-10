@@ -19,7 +19,7 @@ afora-codegen extract src/app.ts#App [--import provider=./db.ts#provider] > afor
 
 ## The spec
 
-Repository `actions` also accept the queries `findMany`, `exists` and `findPage` (they need no key; `count` takes an optional query at runtime), generated and extracted like the others.
+Repository `actions` also accept the queries `findMany`, `exists`, `findPage` and `findCursor` (they need no key; `count` takes an optional query at runtime), generated and extracted like the others.
 
 **Providers.** `provider` at the top of the spec sets the provider of the application, and a repository may declare its own:
 
