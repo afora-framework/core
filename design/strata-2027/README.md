@@ -36,6 +36,7 @@ The folder `design/strata-2027/` in that branch has:
 |---|---|---|
 | `deliverables/.github/assets/*` | `.github/assets/` | afora-banner-light.png and -dark.png (2560×640), plus brand/*.svg (fluid symbol, mono, app icon) |
 | `deliverables/github-settings/afora-social-preview.jpg` | **Settings → General → Social preview** (manual) | 1280×640, under 1 MB; a light version sits next to it |
+| `deliverables/github-settings/afora-org-avatar.png` | **Organization avatar** (manual): github.com/organizations/afora-framework/settings/profile → Profile picture | 1024×1024, square with no rounded corners (GitHub rounds it), the fluid symbol on basalt |
 
 ### Definition of done
 - **Shipped files:** every file in `deliverables/` is in place and loads, with no 404s in the network panel. For the website, that includes the favicon on light and dark tabs and the OG preview in a link debugger.
@@ -69,10 +70,11 @@ The folder `design/strata-2027/` in that branch has:
    Keep the badges and the text below it unchanged.
 3. **Package READMEs.** Do the same in `packages/*/README.md` only if they already have a header image. Do not add one where there is none.
 4. **Social preview (manual, for a maintainer).** This cannot be set from a PR. Go to **Settings → General → Social preview → Edit → Upload an image** and upload `deliverables/github-settings/afora-social-preview.jpg`. Mention it in the PR description so a maintainer does it.
-5. **Organization profile.** If `afora-framework/.github` has a `profile/README.md`, use the same `<picture>` banner there, with absolute raw URLs to the files in `core`.
-6. **Check:** open the README on GitHub in both light and dark themes. The banner switches, has no white edges and keeps its 4:1 ratio on mobile.
+5. **Organization avatar (manual, for an owner).** Upload `deliverables/github-settings/afora-org-avatar.png` in the organization settings (Profile picture). There is no API for it.
+6. **Organization profile.** If `afora-framework/.github` has a `profile/README.md`, use the same `<picture>` banner there, with absolute raw URLs to the files in `core`.
+7. **Check:** open the README on GitHub in both light and dark themes. The banner switches, has no white edges and keeps its 4:1 ratio on mobile.
 
 ## Done when
 - [ ] The README shows the light banner in the light theme and the dark one in the dark theme.
 - [ ] The symbol SVGs are in `.github/assets/brand/`.
-- [ ] A maintainer has uploaded the social preview.
+- [ ] A maintainer has uploaded the social preview and the organization avatar.
