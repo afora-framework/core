@@ -34,6 +34,7 @@ const accountTable = (name: string) =>
 		version: integer("version"),
 		deletedAt: text("deletedAt"),
 		expiresAt: text("expiresAt"),
+		schemaVersion: integer("schema_version"),
 	});
 
 function contractDatabase() {
@@ -45,7 +46,7 @@ function contractDatabase() {
 	};
 	for (const table of ["accounts", "one", "two"]) {
 		sqlite.run(
-			`CREATE TABLE ${table} (id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, age INTEGER, active INTEGER, address TEXT, tags TEXT, "group" INTEGER, n INTEGER, visits INTEGER, version INTEGER, deletedAt TEXT, expiresAt TEXT)`,
+			`CREATE TABLE ${table} (id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, age INTEGER, active INTEGER, address TEXT, tags TEXT, "group" INTEGER, n INTEGER, visits INTEGER, version INTEGER, deletedAt TEXT, expiresAt TEXT, schema_version INTEGER)`,
 		);
 	}
 	return { db: drizzle(sqlite), tables };
@@ -55,8 +56,7 @@ function contractDatabase() {
 providerContract(
 	{ describe, it, expect },
 	() => drizzleProvider(contractDatabase()),
-	// The contract tables have no column for the schema version key.
-	{ indexes: true, schemaVersionKey: false },
+	{ indexes: true },
 );
 
 describe("catalog", () => {

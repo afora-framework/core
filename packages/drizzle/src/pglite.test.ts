@@ -21,6 +21,7 @@ const accountTable = (name: string) =>
 		version: integer("version"),
 		deletedAt: text("deletedAt"),
 		expiresAt: text("expiresAt"),
+		schemaVersion: integer("schema_version"),
 	});
 
 /** One PGlite instance (Postgres compiled to WASM) serves every case; each gets fresh tables. */
@@ -39,7 +40,7 @@ async function freshDatabase() {
 	};
 	for (const table of Object.values(names)) {
 		await client.exec(
-			`CREATE TABLE ${table} (id text PRIMARY KEY, email text UNIQUE, name text, age integer, active boolean, address jsonb, tags jsonb, "group" integer, n integer, visits integer, version integer, "deletedAt" text, "expiresAt" text)`,
+			`CREATE TABLE ${table} (id text PRIMARY KEY, email text UNIQUE, name text, age integer, active boolean, address jsonb, tags jsonb, "group" integer, n integer, visits integer, version integer, "deletedAt" text, "expiresAt" text, schema_version integer)`,
 		);
 	}
 	return {
@@ -55,8 +56,7 @@ async function freshDatabase() {
 providerContract(
 	{ describe, it, expect },
 	async () => drizzleProvider(await freshDatabase()),
-	// The contract tables have no column for the schema version key.
-	{ indexes: true, schemaVersionKey: false },
+	{ indexes: true },
 );
 
 describe("repositoryOf on Postgres", () => {

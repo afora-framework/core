@@ -53,7 +53,7 @@
 		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.8",
+		"@afora/core": ">=0.0.9",
 		"@aws-sdk/client-dynamodb": "^3.1164.0",
 		"@aws-sdk/lib-dynamodb": "^3.1164.0"
 	}
