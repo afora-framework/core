@@ -1,5 +1,6 @@
 import {
 	blueprintOf,
+	checkJsonSchema,
 	commandOf,
 	type EventDefinition,
 	type Exception,
@@ -9,6 +10,7 @@ import {
 	exceptionOf,
 	guard,
 	type IRepositoryProvider,
+	type JsonValue,
 	listOf,
 	Meta,
 	openapi,
@@ -502,6 +504,66 @@ export const listed: Promise<{
 }> = Editorial.run("list", {});
 // @ts-expect-error Articles has no findByEmail action, and Article is not authenticatable
 commandOf({ name: "Bad", useCases: (ctx) => ({ login: ctx.login(Articles) }) });
+
+// before and after, typed by the repository and the other options.
+const Reviewed = commandOf({
+	name: "Reviewed",
+	useCases: (ctx) => ({
+		create: ctx.create(Articles, {
+			omit: ["publishedAt"],
+			dependencies: { members: ClubMembers },
+			throws: [ClubMemberExists],
+			before: async ({ input, dependencies }) => {
+				const title: string = input.title;
+				await dependencies.members.findByEmail(title);
+				return { ...input, title: title.trim() };
+			},
+			after: ({ entity }) => {
+				const created: Article = entity;
+				return created;
+			},
+		}),
+		update: ctx.update(Articles, {
+			before: ({ input, entity }) => {
+				const current: string = entity.title;
+				if (input.title === current) return;
+				return input;
+			},
+		}),
+	}),
+});
+export const reviewed: Promise<{ readonly item: Article }> = Reviewed.run(
+	"create",
+	{ title: "Hello" },
+);
+// biome-ignore format: the error is reported on one line by every version
+// @ts-expect-error get does not write, so it takes no before
+commandOf({ name: "Bad", useCases: (ctx) => ({ get: ctx.get(Articles, { before: () => {} }) }) });
+
+// JSON, any or checked by a schema.
+const Doc = recordOf(
+	blueprintOf((ctx) => ({
+		data: ctx.json,
+		seo: ctx.jsonOf({
+			schema: {
+				type: "object",
+				properties: { title: { type: "string" } },
+				required: ["title"],
+			},
+		}),
+	})),
+);
+const doc = new Doc({ data: [1, "a"], seo: { title: "Home" } });
+export const docData: JsonValue = doc.data;
+export const seoTitle: string = doc.seo.title;
+export const checked: { body: string } = checkJsonSchema(
+	{
+		type: "object",
+		properties: { body: { type: "string" } },
+		required: ["body"],
+	},
+	{ body: "Hi" },
+);
 
 const ClubApi = outputOf({
 	name: "ClubApi",

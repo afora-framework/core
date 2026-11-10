@@ -83,8 +83,52 @@ export interface RepositoryCursorPage<Entity> {
  */
 export interface ProviderQuery extends RepositoryQuery {
 	readonly after?: readonly unknown[];
+	/**
+	 * The name of the declared index (`context.indexes`) that serves the
+	 * query, when one does; a provider without `capabilities.indexes` can
+	 * ignore it, and the rows must be the same either way.
+	 */
+	readonly index?: string;
 	/** The current date and time (ISO 8601), given for entities that expire. */
 	readonly now?: string;
+}
+
+/**
+ * An access pattern a repository declares: queries whose `where` holds every
+ * key of `where` by equality, and whose first order (if any) is `orderBy`.
+ */
+export interface RepositoryIndex<Key extends string = string> {
+	/** The keys the query matches by equality, at least one. */
+	readonly where: readonly Key[];
+	/** The scalar key the rows are read in order of. */
+	readonly orderBy?: Key;
+}
+
+/**
+ * How a query reaches its rows: by `id`, by another unique key, through a
+ * declared index (named by `index`), or by reading every row (`scan`).
+ */
+export interface RepositoryPlan {
+	readonly access: "id" | "unique" | "index" | "scan";
+	/** The declared index that serves the query, when `access` is `"index"`. */
+	readonly index?: string;
+}
+
+/**
+ * What a repository does with a query that only a scan serves: run it
+ * (`"allow"`, the default), log `repository-scan` and run it (`"warn"`), or
+ * throw `InvalidRepositoryQuery` before the provider is called (`"reject"`).
+ */
+export type RepositoryScans = "allow" | "warn" | "reject";
+
+export interface RepositoryExplain<Entity> {
+	/**
+	 * How the query would be read (`{ access, index? }`), without reading
+	 * anything; takes the query of `findMany` or of `findCursor`.
+	 */
+	explain(
+		query?: RepositoryQuery<Entity> | RepositoryCursorQuery<Entity>,
+	): Promise<RepositoryPlan>;
 }
 
 export interface RepositoryFindCursor<Entity> {
@@ -191,6 +235,11 @@ export interface ProviderCapabilities {
 	readonly transactions?: boolean;
 	/** Whether `findMany` honors `after` (`ProviderQuery`), which `findCursor` needs. */
 	readonly keyset?: boolean;
+	/**
+	 * Whether the provider serves the indexes a repository declares
+	 * (`context.indexes`) from storage, reading `ProviderQuery.index`.
+	 */
+	readonly indexes?: boolean;
 	/** Whether `update` honors an expected `version` (versioned entities, #44). */
 	readonly versioning?: boolean;
 	/** Whether the provider has an atomic `increment` (#34). */

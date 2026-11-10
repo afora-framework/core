@@ -58,6 +58,7 @@ export const Users = repositoryOf({
 	entity: User,
 	provider,
 	deletion: "soft",
+	indexes: { byAge: { where: ["age"], orderBy: "name" } },
 	actions: [
 		"create",
 		"findById",
@@ -75,10 +76,12 @@ export const App = applicationOf({
 	repositories: [Users],
 });
 
-await Users.create(
+// Once the application binds it, the repository is reached through it.
+const users = App.repositories.Users;
+await users.create(
 	new User({ name: "Ana", email: "ana@example.com", age: 30 }),
 );
-await Users.findPage({
+await users.findPage({
 	where: { age: { in: [30, 31] } },
 	orderBy: [{ key: "name" }],
 	limit: 20,
@@ -103,6 +106,25 @@ await Users.findPage({
 - `orderBy`: ascending puts missing values first and descending last (`NULLS FIRST` / `NULLS LAST`). Strings compare by code point: SQLite's default `BINARY` collation does, and on Postgres the provider adds `COLLATE "C"` to `text`, `varchar` and `char` columns. Ties keep insertion order: by `rowid` on SQLite (the table must not be `WITHOUT ROWID`) and, on Postgres, which has no stable physical order, by `id`, which is creation order for UUID v7 ids (the default `Id`).
 - `limit` / `offset`, `withDeleted` (rows with `deletedAt IS NULL` unless true) and `count` (ignores order and pagination) as in the contract.
 - Records that expire (`capabilities.expiry`): for an entity declared with `expires` (`@afora/core` with records that expire), reads add `"<key>" IS NULL OR "<key>" > now`, on `expiresAt` (`expires: { after }`) or the key of `expires: { at }`, unless `withExpired` is true. The table needs that column: a `text` column compares ISO 8601 text, which orders as time when every value is UTC (`toISOString()`, as the entity writes them); a timestamp column compares as a date. Expired rows stay in the table and keep their unique values: purge them with a scheduled `DELETE ... WHERE "expiresAt" <= now()` of your own, and index the column if tables grow.
+
+## Indexes
+
+A repository's `indexes` (see [Indexes](../../docs/repositories.md#indexes)) reach the provider as `context.indexes`, and the index that serves a query as `query.index`. The provider takes them and gives the same rows: the SQL is the same, and the database picks its own index for the `WHERE` and `ORDER BY`. It does not create indexes, as it never changes the schema, so declare the matching SQL index next to the table, with the `where` keys first and the `orderBy` key last:
+
+```ts
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
+export const users = sqliteTable(
+	"users",
+	{
+		/* ...the columns above */
+	},
+	// indexes: { byAge: { where: ["age"], orderBy: "name" } }
+	(table) => [index("users_by_age").on(table.age, table.name)],
+);
+```
+
+With soft deletion, a partial index (``.where(sql`"deletedAt" IS NULL`)``) keeps the deleted rows out of it. `capabilities.indexes` stays unset: the provider does not serve indexes itself, and `providerContract` checks with `{ indexes: true }` that an indexed query answers as the scan does.
 
 ## Unique keys
 

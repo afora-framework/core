@@ -256,13 +256,18 @@ export {
 export type {
 	OpenAPIDocument,
 	OpenAPIMethod,
+	OpenAPISecurityScheme,
 	OpenAPISinkOptions,
 	OperationRoute,
 	RouteOptions,
+	RouteStatus,
+	SecurityRequirement,
 } from "./core/output/openapi-sink";
 export {
 	openapi,
 	operationRoutes,
+	ROUTE_OPTION_KEYS,
+	requestIdHeaderOf,
 	routeOptionsIssue,
 } from "./core/output/openapi-sink";
 export { isOutput, operationOf, outputOf } from "./core/output/output";
@@ -410,8 +415,12 @@ export {
 	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
+	RepositoryUsedOutsideApplication,
 } from "./core/repository/exceptions";
-export { inMemoryProvider } from "./core/repository/in-memory";
+export {
+	type InMemoryProvider,
+	inMemoryProvider,
+} from "./core/repository/in-memory";
 export { providerDescriptionOf, providerOf } from "./core/repository/provider";
 export type { RepositorySettings } from "./core/repository/repository";
 export {
@@ -430,13 +439,17 @@ export type {
 	RepositoryCursorPage,
 	RepositoryCursorQuery,
 	RepositoryExists,
+	RepositoryExplain,
 	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
 	RepositoryForEachPage,
+	RepositoryIndex,
 	RepositoryOrder,
 	RepositoryPage,
+	RepositoryPlan,
 	RepositoryQuery,
+	RepositoryScans,
 	RepositoryWalkOptions,
 	RepositoryWalkPage,
 	RepositoryWalkResult,
@@ -453,6 +466,7 @@ export type {
 	EntityValueOf,
 	IRepositoryProvider,
 	ProviderIncrementOptions,
+	ProviderKeyset,
 	ProviderUpdateOptions,
 	QueryValueOf,
 	RepositoryAction,
@@ -568,8 +582,19 @@ export { StdEventPolicies } from "./std/event-policies";
 export { Email, Ip, Phone, Url } from "./std/properties/contact";
 export type { EnumClass } from "./std/properties/enum";
 export { enumOf } from "./std/properties/enum";
+export {
+	InvalidJsonData,
+	InvalidJsonSchema,
+} from "./std/properties/exceptions";
 export { SchemaProperty } from "./std/properties/headless";
 export { Id, Slug } from "./std/properties/identity";
+export type { JsonClass, JsonValue } from "./std/properties/json";
+export {
+	checkJsonSchema,
+	JsonProperty,
+	jsonOf,
+	jsonSchemaIssues,
+} from "./std/properties/json";
 export {
 	isPasswordHash,
 	PASSWORD_MAX_LENGTH,
@@ -628,8 +653,11 @@ export type {
 	RestoreMaker,
 	StdCreateOptions,
 	StdEntityOptions,
+	StdHookArgs,
+	StdHookOptions,
 	StdLifecycleOptions,
 	StdListOptions,
+	StdNoHookOptions,
 	StdOwnerOption,
 	StdUseCaseContext,
 	StdUseCaseErrors,

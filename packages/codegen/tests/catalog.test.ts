@@ -50,6 +50,11 @@ describe("catalog", () => {
 		expect(get("integer")?.options).not.toContain("pattern");
 		expect(get("email")?.options).toContain("pattern");
 		expect(get("boolean")?.options).not.toContain("min");
+		expect(get("json")).toMatchObject({
+			export: "JsonProperty",
+			schemaType: "other",
+			usable: true,
+		});
 		expect(get("schema")?.usable).toBe(false);
 		expect(
 			c.properties.filter((p) => p.name !== "schema").every((p) => p.usable),

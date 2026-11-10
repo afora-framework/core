@@ -11,6 +11,7 @@ import {
 	InvalidApplicationDeclaration,
 	inMemoryProvider,
 	outputOf,
+	RepositoryUsedOutsideApplication,
 	repositoryOf,
 	select,
 	sinkOf,
@@ -179,7 +180,9 @@ describe("binding", () => {
 		const register = bound.operations.find((op) => op.id === "Users.register");
 		await register?.invoke({ name: "Ana" }, { context: { userId } });
 		expect(await app.repositories.Accounts.count()).toBe(1);
-		expect(await Accounts.count()).toBe(0);
+		await expect(Accounts.count()).rejects.toThrow(
+			RepositoryUsedOutsideApplication,
+		);
 	});
 
 	test("a sink is kept and builds from the bound operations", () => {

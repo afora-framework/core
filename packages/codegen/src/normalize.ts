@@ -65,6 +65,28 @@ function keep(list: unknown): string[] | undefined {
 	return unique.length > 0 ? unique : undefined;
 }
 
+/** The indexes of a repository, by name in order, each with its `where` and `orderBy`; none when empty. */
+function canonicalIndexes(indexes: unknown): { indexes?: unknown } {
+	if (typeof indexes !== "object" || indexes === null || Array.isArray(indexes))
+		return {};
+	const entries = Object.entries(indexes as Record<string, unknown>)
+		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+		.map(([name, index]) => {
+			const { where, orderBy } = (index ?? {}) as {
+				where?: unknown;
+				orderBy?: unknown;
+			};
+			return [
+				name,
+				{
+					where: Array.isArray(where) ? [...where] : where,
+					...(orderBy === undefined ? {} : { orderBy }),
+				},
+			];
+		});
+	return entries.length > 0 ? { indexes: Object.fromEntries(entries) } : {};
+}
+
 function canonicalRecord(
 	name: string,
 	value: Json,
@@ -203,19 +225,21 @@ function canonicalStep(step: unknown): unknown {
 /** The options of a standard use case: core exceptions as `{ core }`, no `name`. */
 function canonicalGenericOptions(options: Json): Json {
 	const { name: _name, ...rest } = cloneJson(options) as Json;
+	const canonicalError = (error: unknown): unknown => {
+		const name = errorNameOf(error);
+		return name !== undefined && catalog().coreExceptions.includes(name)
+			? { core: name }
+			: error;
+	};
 	if (isObject(rest.errors)) {
 		rest.errors = Object.fromEntries(
-			Object.entries(rest.errors).map(([kind, error]) => {
-				const name = errorNameOf(error);
-				return [
-					kind,
-					name !== undefined && catalog().coreExceptions.includes(name)
-						? { core: name }
-						: error,
-				];
-			}),
+			Object.entries(rest.errors).map(([kind, error]) => [
+				kind,
+				canonicalError(error),
+			]),
 		);
 	}
+	if (Array.isArray(rest.throws)) rest.throws = rest.throws.map(canonicalError);
 	return rest;
 }
 
@@ -419,6 +443,10 @@ export function normalizeSpec(
 								...(value.deletion === "soft" ? { deletion: "soft" } : {}),
 								...(relations ? { relations } : {}),
 								...(environments ? { environments } : {}),
+								...canonicalIndexes(value.indexes),
+								...(value.scans === "warn" || value.scans === "reject"
+									? { scans: value.scans }
+									: {}),
 							},
 						];
 					}

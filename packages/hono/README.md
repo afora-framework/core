@@ -1,6 +1,6 @@
 # @afora/hono
 
-A [Hono](https://hono.dev) sink for [`@afora/core`](../../README.md) outputs. It turns the operations of an output into a Hono app: validated input, `200` with the response (sensitive values masked), RFC 9457 `application/problem+json` errors, and an OpenAPI document of the same routes. Outputs, stages and `statusOf` are described in [docs/outputs.md](../../docs/outputs.md).
+A [Hono](https://hono.dev) sink for [`@afora/core`](../../README.md) outputs. It turns the operations of an output into a Hono app: validated input (from the body, the query and path parameters), the response with the status and headers you declare (sensitive values masked), RFC 9457 `application/problem+json` errors, and an OpenAPI document of the same routes. Outputs, stages and `statusOf` are described in [docs/outputs.md](../../docs/outputs.md).
 
 ```bash
 bun add @afora/core @afora/hono hono typebox
@@ -51,25 +51,61 @@ POST /api/users/register  { "email": "nope" }
 
 All options are JSON, so the stage can live in an `afora.json` (`{ "sink": "hono", "options": { ... } }`).
 
-| Option     | Meaning                                                                                                                                                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `basePath` | Prefix of every route, e.g. `"/api"`.                                                                                                                                                                                                      |
-| `route`    | `{ [operationId]: { method?, path? } }`, as in the `openapi` sink.                                                                                                                                                                         |
-| `docs`     | `{ path, info: { title, version, description? }, servers? }`: serves the `openapi` document of the same operations, routes and `basePath` at `path` (not under `basePath`). A `path` that is also a GET route throws `InvalidOutputStage`. |
-| `debug`    | `true` adds the `trace` to problems and the real `detail` to 5xx ones. Off by default.                                                                                                                                                     |
-| `context`  | `{ headers: { [contextKey]: headerName } }`.                                                                                                                                                                                               |
-| `webhooks` | `{ [operationId]: { scheme, secret, ... } }`: verifies the signature of each request to these operations before parsing it. See [Webhooks](#webhooks).                                                                                     |
+| Option      | Meaning                                                                                                                                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `basePath`  | Prefix of every route, e.g. `"/api"`.                                                                                                                                                                                                      |
+| `route`     | `{ [operationId]: { method?, path?, status? } }`, as in the `openapi` sink: `path` may hold `{name}` parameters, `status` is `200` (default), `201`, `202` or `204`. See [Routes, statuses and headers](#routes-statuses-and-headers).     |
+| `responses` | `{ [operationId]: { headers: { name: value } } }`: static headers of the success responses, such as `cache-control`.                                                                                                                       |
+| `requestId` | `true` (`x-request-id`) or a header name: every response carries the request's id, or a new one.                                                                                                                                           |
+| `security`  | `{ schemes, operations?, default? }`: security schemes and requirements for the OpenAPI document. Not enforced: see [Authentication and custom context](#authentication-and-custom-context).                                               |
+| `docs`      | `{ path, info: { title, version, description? }, servers? }`: serves the `openapi` document of the same operations, routes and `basePath` at `path` (not under `basePath`). A `path` that is also a GET route throws `InvalidOutputStage`. |
+| `debug`     | `true` adds the `trace` to problems and the real `detail` to 5xx ones. Off by default.                                                                                                                                                     |
+| `context`   | `{ headers?: { [contextKey]: headerName }, variables?: { [contextKey]: variableName } }`: the context of an operation from request headers and from what a middleware set with `c.set`.                                                    |
+| `webhooks`  | `{ [operationId]: { scheme, secret, ... } }`: verifies the signature of each request to these operations before parsing it. See [Webhooks](#webhooks).                                                                                     |
 
 Invalid options throw `InvalidOutputStage` when the stage is made, and unknown operation ids in `route` or two operations on one method and path when the app is built.
 
 ## Behavior
 
-- **Routes.** `POST {basePath}/{kebab(command)}/{kebab(operation)}` (`/users/change-password`); `route` changes the method and path. It is the routing of the `openapi` sink (`operationRoutes` in the core), so the served routes and the document agree.
-- **Input.** `post`, `put` and `patch` read a JSON body (an empty body is `{}`; invalid JSON is a 400 `InvalidRequestBody` problem). `get` and `delete` read the query string, converting a value to a number or boolean when the input field takes one rather than a string; anything else is kept for the blueprint to reject. The operation validates the input: a 400 problem with `issues` (`path`, `code`, `message`, no values).
-- **Context.** For an operation whose command or use case declares a `context`, each key listed in `context.headers` is read from its header; a missing header leaves the key out (so an optional key is `undefined`, a required one a 400 problem). Header values are converted like query values.
-- **Success.** `200` with `outputValueOf(response)`: records go through `toJSON`, so sensitive values (a `Password`) are `"********"`.
+- **Routes.** `POST {basePath}/{kebab(command)}/{kebab(operation)}` (`/users/change-password`); `route` changes the method, path and status. It is the routing of the `openapi` sink (`operationRoutes` in the core), so the served routes and the document agree.
+- **Input.** `post`, `put` and `patch` read a JSON body (an empty body is `{}`; invalid JSON is a 400 `InvalidRequestBody` problem). `get` and `delete` read the query string, converting a value to a number or boolean when the input field takes one rather than a string; anything else is kept for the blueprint to reject. A `{name}` segment of the path fills the input key `name`, decoded and converted the same way, and wins over a `name` in the body or the query. The operation validates the input: a 400 problem with `issues` (`path`, `code`, `message`, no values).
+- **Context.** For an operation whose command or use case declares a `context`, each key listed in `context.headers` is read from its header, and each key in `context.variables` from the variable a middleware set (`c.get(name)`); a missing one leaves the key out (so an optional key is `undefined`, a required one a 400 problem). Header values are converted like query values; variables are passed as they are (objects too), and the `context` blueprint validates both. A key cannot come from both.
+- **Success.** The `route` status (`200` by default) with `outputValueOf(response)`: records go through `toJSON`, so sensitive values (a `Password`) are `"********"`. A `204` has no body. The `responses` headers of the operation are added.
 - **Errors.** Status from `statusOf(error, operation, output.statuses)`: the output `statuses` first, then 400 for invalid input or context, 404 for a missing entity, 409 for a unique violation, 422 for an error the use case declares, else 500. The body is `problemOf` with `application/problem+json`; a 5xx says `"Internal error."` unless `debug` is on.
+- **Request id.** With `requestId`, every response of the app (successes, problems, unknown routes, the docs) carries the id in that header: the one the request sent, if it is 1 to 200 visible ASCII characters, else a new `crypto.randomUUID()`.
 - **Unknown routes** are a `404` problem (`urn:afora:exception:NotFound`) instead of Hono's plain text, and anything thrown outside an operation (your own middleware) is a problem too, through `app.onError`.
+
+## Routes, statuses and headers
+
+```ts
+hono({
+	route: {
+		"Entries.get": { method: "get", path: "/entries/{slug}" },
+		"Entries.create": { path: "/entries", status: 201 },
+		"Entries.update": { method: "patch", path: "/entries/{slug}" },
+		"Entries.remove": {
+			method: "delete",
+			path: "/entries/{slug}",
+			status: 204,
+		},
+	},
+	responses: {
+		"Entries.get": {
+			headers: { "cache-control": "public, max-age=60, s-maxage=86400" },
+		},
+	},
+	requestId: true,
+});
+```
+
+```
+GET /entries/hello            -> 200, cache-control and x-request-id; input { slug: "hello" }
+PATCH /entries/hello  { "title": "New" }  -> input { slug: "hello", title: "New" }
+DELETE /entries/hello         -> 204, no body
+```
+
+- **Path parameters.** `{name}` is a whole segment, and `name` must be a scalar key of the operation's input; otherwise the app (and the document) throw `InvalidOutputStage` when built. Hono patterns (`:name`, `*`) are rejected: the path is written once, for both the routes and the document, which gets an `in: path` parameter and leaves the key out of the body or query.
+- **Headers.** `responses` headers are static and only on successes, so a problem is never cached by a `cache-control` meant for the content; `content-type` is the sink's. Headers that depend on the request belong to a middleware.
 
 ## Webhooks
 
@@ -122,7 +158,43 @@ hono({
 
 ## Authentication and custom context
 
-Options are JSON, so there is no callback for the context. Cross-cutting rules such as authentication are a `transform` stage that wraps `invoke`: it sees the context the sink built from headers and can reject the call, which then goes through `statuses` like any other error.
+Options are JSON, so there is no callback for the context. The sink does not authenticate, and `security` does not change that: it only describes the schemes and scopes in the OpenAPI document. Two places enforce them.
+
+**A Hono middleware** resolves the caller once and sets it as a variable, which `context.variables` passes to the operation as it is. Mount the sink's app under the app that has the middleware, so it runs first:
+
+```ts
+import { Hono } from "hono";
+
+const api = outputOf({
+	name: "Cms",
+	commands: [Entries],
+	statuses: { Forbidden: 403 },
+	pipe: [
+		hono({
+			route: { "Entries.update": { method: "patch", path: "/entries/{slug}" } },
+			context: { variables: { caller: "caller" } },
+			security: {
+				schemes: { bearer: { type: "http", scheme: "bearer" } },
+				operations: {
+					"Entries.update": { scheme: "bearer", scopes: ["write"] },
+				},
+			},
+		}),
+	],
+}).build();
+
+const app = new Hono<{ Variables: { caller: Caller } }>();
+app.use(async (c, next) => {
+	const caller = await callerOf(c.req.header("authorization")); // your session or token check
+	if (caller) c.set("caller", caller);
+	await next();
+});
+app.route("/", api);
+```
+
+The operation's `context` blueprint declares `caller` (`ctx.optionalOf(blueprintOf((c) => ({ id: c.string, scopes: c.list.string })))`, say) and validates what the middleware set; the use case checks the scopes.
+
+**A `transform` stage** wraps `invoke`: it sees the context the sink built from headers and variables and can reject the call, which then goes through `statuses` like any other error.
 
 ```ts
 import {

@@ -215,6 +215,16 @@ export interface RepositorySpec {
 	readonly relations?: readonly string[];
 	/** The environments it depends on. */
 	readonly environments?: readonly string[];
+	/** Its access patterns by name, e.g. `{ "byOwner": { "where": ["owner"] } }`. */
+	readonly indexes?: Readonly<Record<string, RepositoryIndexSpec>>;
+	/** What a query only a scan serves does (default `"allow"`). */
+	readonly scans?: "allow" | "warn" | "reject";
+}
+
+/** An index of a repository: the keys matched by equality, and the order. */
+export interface RepositoryIndexSpec {
+	readonly where: readonly string[];
+	readonly orderBy?: string;
 }
 
 /** A declared exception (`exceptionOf`). */

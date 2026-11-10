@@ -69,11 +69,14 @@ function badQuery(reason: string): never {
 }
 
 /**
- * A query with the `after` of `findCursor` and the `now` and `withExpired` of
- * an entity that expires, on any version of `@afora/core`.
+ * A query with the `after` of `findCursor`, the declared `index` that serves
+ * it, and the `now` and `withExpired` of an entity that expires, on any
+ * version of `@afora/core`. The index changes nothing: the database picks its
+ * own SQL index for the `WHERE` and `ORDER BY`.
  */
 type KeysetQuery = RepositoryQuery & {
 	readonly after?: readonly unknown[];
+	readonly index?: string;
 	readonly now?: string;
 	readonly withExpired?: boolean;
 };
@@ -81,6 +84,20 @@ type KeysetQuery = RepositoryQuery & {
 /** The key holding the expiry of the entities of `context`, on any version of `@afora/core`. */
 const expiryKeyOf = (context: RepositoryContext): string | undefined =>
 	(context as { readonly expiry?: { readonly key: string } }).expiry?.key;
+
+/**
+ * The provider of `drizzleProvider`: it runs transactions, reads by cursor,
+ * honors expected versions, increments atomically and leaves expired records out.
+ */
+export type DrizzleProvider = IRepositoryProvider & {
+	readonly capabilities: {
+		readonly transactions: true;
+		readonly keyset: true;
+		readonly versioning: true;
+		readonly atomic: true;
+		readonly expiry: true;
+	};
+};
 
 interface Mapping {
 	readonly table: DrizzleTable;
@@ -732,7 +749,7 @@ function isSyncSqlite(db: Executor): boolean {
  */
 export function drizzleProvider(
 	options: DrizzleProviderOptions,
-): IRepositoryProvider {
+): DrizzleProvider {
 	if (
 		!options ||
 		typeof options !== "object" ||
@@ -743,9 +760,10 @@ export function drizzleProvider(
 		invalid("Expected { db, tables } with a Drizzle database and its tables.");
 	const { db, tables } = options;
 	const alwaysAlive = () => true;
-	if (isSyncSqlite(db)) return manualScope(tables, db, undefined, alwaysAlive);
+	if (isSyncSqlite(db))
+		return manualScope(tables, db, undefined, alwaysAlive) as DrizzleProvider;
 	return providerOver(tables, db, {
 		guard: (work) => work(),
 		transaction: nestedTransactions(tables, db),
-	});
+	}) as DrizzleProvider;
 }

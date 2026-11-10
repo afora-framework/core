@@ -83,6 +83,9 @@ a file of your own.
   \`"inMemory"\` is not a valid key. Keys of a spec extended directly can be named too. Each application makes its own
   instance of a provider made on start (an \`{ "import" }\` of a \`providerFrom\`), so independent applications do not share it.
 - Repository \`deletion\`: \`"hard"\` (default) physically removes rows; \`"soft"\` retains \`deletedAt\` and hides deleted rows from reads, counts and relations.
+- Repository \`indexes\`: \`{ "<name>": { "where": [keys], "orderBy"?: key } }\`, the access patterns a query reads through
+  (every \`where\` key by equality, the first order being \`orderBy\`); \`scans\`: \`"allow"\` (default), \`"warn"\` (logs
+  \`repository-scan\`) or \`"reject"\` (a query no index or unique key serves throws). \`explain\` gives the plan of a query.
 - Entity \`expires\` (records that expire, left out of every read unless \`withExpired: true\` at runtime): \`{ "after": { "days": 400 } }\`
   (days, hours, minutes, seconds; positive) adds an \`expiresAt\` identity key, \`createdAt\` + the duration, so no field may be named
   \`expiresAt\`; \`{ "at": "until" }\` names a \`dateTime\` or \`date\` field, and a record without a value never expires. Unique keys
@@ -139,9 +142,11 @@ a file of your own.
   Options: \`as\` (the response key, "item" by default), \`owner\` (\`{ "key"?, "context" }\`: the caller, whose id is in that context key,
   owns the entity), \`errors\` (\`{ "notFound" | "conflict" | "invalid" | "owner": an exception name }\`), and \`omit\`, \`values\`
   (create, register), \`set\` (publish, archive...), \`orderBy\` (list). \`description\`, \`tags\` and \`deprecated\` go beside \`generic\`.
-  Write steps only for what no standard use case does.
+  The ones that write (all but get, list, login) also take \`before\` and \`after\` (\`{ "import": "./file.ts#fn" }\`, run before and
+  after the write; \`before\` may give back the input to write), \`dependencies\` (key -> declared name, for them) and \`throws\`
+  (the exceptions they throw). Write steps only for what no standard use case does, nor its \`before\`/\`after\`.
 - \`afora_extract\` needs \`imports\` for \`useCases.<Name>\` (hand-written execute) and \`useCases.<Name>.run.<name>\` (run functions);
-  a standard use case needs none.
+  a standard use case needs none, but \`useCases.<Name>.before\` and \`.after\` for its hooks.
 
 ## Commands and outputs
 

@@ -54,6 +54,7 @@ export type {
 	ProviderOptionSpec,
 	ProviderSpec,
 	RecordSpec,
+	RepositoryIndexSpec,
 	RepositorySpec,
 	ResolvedSpec,
 	Spec,

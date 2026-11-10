@@ -383,7 +383,7 @@ const RepositoryDeclaration = Type.Object(
 		),
 		actions: Type.Array(Type.String(), {
 			description:
-				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, forEachPage (walks the pages of a cursor query; not a step), create, update, delete, restore (soft deletion only), increment (number keys in change, atomic), count.",
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, explain (how a query would be read, without reading), forEachPage (walks the pages of a cursor query; not a step), create, update, delete, restore (soft deletion only), increment (number keys in change, atomic), count.",
 		}),
 		provider: Type.Optional(ProviderOrKey),
 		relations: Type.Optional(
@@ -392,6 +392,39 @@ const RepositoryDeclaration = Type.Object(
 			),
 		),
 		environments: Type.Optional(StringList("Environments it depends on.")),
+		indexes: Type.Optional(
+			Type.Record(
+				Type.String({ pattern: KEY }),
+				Type.Object(
+					{
+						where: Type.Array(Type.String(), {
+							minItems: 1,
+							description: "Keys the query matches by equality.",
+						}),
+						orderBy: Type.Optional(
+							Type.String({
+								description: "The scalar key it reads in order of.",
+							}),
+						),
+					},
+					{ additionalProperties: false },
+				),
+				{
+					description:
+						"Access patterns by name; a query that matches one reads through it, and the provider can build it (a GSI, an SQL index).",
+				},
+			),
+		),
+		scans: Type.Optional(
+			Type.Union(
+				[Type.Literal("allow"), Type.Literal("warn"), Type.Literal("reject")],
+				{
+					default: "allow",
+					description:
+						"A query only a scan serves: runs, logs repository-scan, or throws InvalidRepositoryQuery.",
+				},
+			),
+		),
 	},
 	{ additionalProperties: false },
 );
@@ -577,7 +610,7 @@ const GenericUseCaseDeclaration = Type.Object(
 		options: Type.Optional(
 			Type.Record(Type.String({ pattern: KEY }), Type.Unknown(), {
 				description:
-					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy".',
+					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy"; those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").',
 			}),
 		),
 		description: Type.Optional(Type.String()),

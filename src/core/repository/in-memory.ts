@@ -12,6 +12,20 @@ import type {
 	RepositoryData,
 } from "./types/repository.interface";
 
+/**
+ * The provider of `inMemoryProvider`: it runs transactions, reads by cursor,
+ * honors expected versions, increments atomically and leaves expired records out.
+ */
+export type InMemoryProvider = IRepositoryProvider & {
+	readonly capabilities: {
+		readonly transactions: true;
+		readonly keyset: true;
+		readonly versioning: true;
+		readonly atomic: true;
+		readonly expiry: true;
+	};
+};
+
 type Table = Map<string, RepositoryData>;
 type Tables = Map<object, Table>;
 
@@ -231,10 +245,10 @@ function scopeOf(initial: Tables, root: boolean) {
  * on rejection, runs one at a time and makes other operations wait; nested
  * transactions are savepoints.
  */
-export function inMemoryProvider(): IRepositoryProvider {
+export function inMemoryProvider(): InMemoryProvider {
 	return providerOf({
 		name: "inMemory",
 		options: {},
-		create: () => scopeOf(new Map(), true).provider,
+		create: () => scopeOf(new Map(), true).provider as InMemoryProvider,
 	});
 }

@@ -25,8 +25,9 @@ export interface ExtractOptions {
 	 * described: it needs an entry `"./db.ts#provider"` under the key `provider`
 	 * (the application's), `repositories.<Name>.provider` or `providers.<key>`
 	 * (one of `providersOf`, e.g. made by `providerFrom`). A use case with a
-	 * hand-written `execute` needs `useCases.<Name>`, and a `run` function of a
-	 * steps use case `useCases.<Name>.run.<name>`, a command with a handler
+	 * hand-written `execute` needs `useCases.<Name>`, a `run` function of a
+	 * steps use case `useCases.<Name>.run.<name>`, the `before` and `after` of
+	 * a standard use case `useCases.<Name>.before` and `.after`, a command with a handler
 	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, the handler of
 	 * an entity event `entities.<Name>.events.<event>`, a publisher
 	 * `publishers.<key>`, and a stage
@@ -446,6 +447,22 @@ export function extractSpec(
 		...(value.environments.length > 0
 			? { environments: [...value.environments] }
 			: {}),
+		...(Object.keys(value.indexes ?? {}).length > 0
+			? {
+					indexes: Object.fromEntries(
+						Object.entries(value.indexes).map(([index, { where, orderBy }]) => [
+							index,
+							{
+								where: [...where],
+								...(orderBy === undefined ? {} : { orderBy }),
+							},
+						]),
+					),
+				}
+			: {}),
+		...(value.scans === "warn" || value.scans === "reject"
+			? { scans: value.scans }
+			: {}),
 	}));
 
 	const exceptions = entries(description.exceptions, (value, name) => ({
@@ -468,14 +485,25 @@ export function extractSpec(
 				description: _description,
 				tags: _tags,
 				deprecated: _deprecated,
-				...options
+				...given
 			} = value.generic.options;
+			const generic = structuredClone(given) as Record<string, unknown>;
+			// The functions run before and after the write are imported as they are.
+			for (const hook of ["before", "after"]) {
+				if (generic[hook] !== undefined) {
+					generic[hook] = {
+						import: importFor(
+							options.imports,
+							`useCases.${name}.${hook}`,
+							`The function "${hook}" of the standard use case "${name}"`,
+						),
+					};
+				}
+			}
 			return {
 				generic: value.generic.name,
 				repository: value.generic.repository,
-				...(Object.keys(options).length > 0
-					? { options: structuredClone(options) }
-					: {}),
+				...(Object.keys(generic).length > 0 ? { options: generic } : {}),
 				...(value.description === undefined
 					? {}
 					: { description: value.description }),

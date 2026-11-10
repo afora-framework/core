@@ -18,7 +18,7 @@ new Name("a"); // throws: Invalid value for property "name": ...
 Name.demo().value; // "Jane"
 ```
 
-Pass `optional: true` to accept `undefined`, `sensitive: true` to have records mask it (as `Password` does) and `unique: true` to have records list its key in `options.unique` (as `Slug` does). `Std` ships `Id`, `Slug`, `Email`, `Phone`, `Url`, `Ip`, `Password`, strings, numbers, booleans and date properties.
+Pass `optional: true` to accept `undefined`, `sensitive: true` to have records mask it (as `Password` does) and `unique: true` to have records list its key in `options.unique` (as `Slug` does). `Std` ships `Id`, `Slug`, `Email`, `Phone`, `Url`, `Ip`, `Password`, strings, numbers, booleans, date properties and [JSON](#json).
 
 A property whose callers give another form of its value than the one it stores says so with a static under the `PropertyInput` symbol: `{ accepts, convert }`, the property that validates what a caller gives (of the same value type) and the function that turns it into what is stored. `Password` declares `{ accepts: PlainPassword, convert }`, a plain password checked by the password rules and hashed, so what derives inputs from an entity, as the [standard use cases](std-use-cases.md) do, takes a plain password for a `Password` key and stores its hash. `propertyInputOf(field)` reads it (`undefined` for a property that takes its value as it stores it); a class extending or refining the property keeps it. `PlainPassword` is exported; it is not in the `Std` context.
 
@@ -58,3 +58,42 @@ const Post = blueprintOf((ctx) => ({
 	level: ctx.optionalOf(ctx.enumOf([1, 2, 3])), // or ctx.enumOf([1, 2, 3], { optional: true })
 }));
 ```
+
+## JSON
+
+`ctx.json` (`JsonProperty`) holds any JSON value: `null`, a boolean, a finite number, a string, or a list or plain object of them, at any depth, typed `JsonValue`. It rejects what `JSON.stringify` would lose or change: `undefined` (in a list or an object too), functions, `NaN` and `Infinity`, class instances such as `Date`, and cycles, with `InvalidPropertyValue` and the path of the value (`/a/1: is not JSON (undefined)`).
+
+`jsonOf({ schema, name?, optional?, default? })` holds JSON that a JSON Schema (draft 2020-12) known at declaration accepts, written as JSON or with TypeBox; its value is typed by the schema, as TypeBox's `Static` reads it. Its issues are at the path of the data that breaks the schema, and the schema is described with the property (`describe()`, OpenAPI). A schema that is not a JSON Schema throws `InvalidJsonSchema`. In a blueprint it is `ctx.jsonOf`:
+
+```ts
+import { blueprintOf } from "@afora/core";
+
+const Page = blueprintOf((ctx) => ({
+	data: ctx.json, // any JSON
+	seo: ctx.jsonOf({
+		schema: {
+			type: "object",
+			properties: { title: { type: "string", maxLength: 60 } },
+			required: ["title"],
+		},
+	}), // typed { title: string }
+}));
+```
+
+For a schema known only at runtime, such as the schema of a content type stored in a database, `checkJsonSchema(schema, value, { source })` gives `value`, typed by the schema, when the schema accepts it, and throws `InvalidJsonData` otherwise, whose `details.issues` are afora issues (`code`, `path`, `message`, `source`), so `statusOf` gives 400. `jsonSchemaIssues(schema, value, { source })` gives those issues without throwing (empty when there is none). Both reject what is not JSON before the schema sees it, throw `InvalidJsonSchema` for a schema that is not one, and check with TypeBox's `Value`, which walks the schema and compiles nothing, so they run where `new Function` cannot (Workers). The [standard use cases](std-use-cases.md#before-and-after) call it from `before`.
+
+```ts
+import { checkJsonSchema } from "@afora/core";
+
+const schema = {
+	type: "object",
+	properties: { body: { type: "string", minLength: 1 } },
+	required: ["body"],
+	additionalProperties: false,
+};
+checkJsonSchema(schema, { body: "Hi" }, { source: "post" }); // { body: "Hi" }
+checkJsonSchema(schema, { extra: 1 }, { source: "post" });
+// throws InvalidJsonData: Invalid JSON data for "post": /body: is required; /extra: is not declared
+```
+
+A required key that is missing is `required`, a key `additionalProperties: false` does not allow is `undeclared_key`, a value of the wrong type `invalid_type`, and any other keyword `invalid_value`.

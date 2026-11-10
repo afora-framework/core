@@ -1,5 +1,6 @@
 export type {
 	DrizzleDatabase,
+	DrizzleProvider,
 	DrizzleProviderOptions,
 	DrizzleTable,
 } from "./provider";

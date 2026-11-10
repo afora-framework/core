@@ -51,8 +51,10 @@ async function freshDatabase() {
 	};
 }
 
-providerContract({ describe, it, expect }, async () =>
-	drizzleProvider(await freshDatabase()),
+providerContract(
+	{ describe, it, expect },
+	async () => drizzleProvider(await freshDatabase()),
+	{ indexes: true },
 );
 
 describe("repositoryOf on Postgres", () => {

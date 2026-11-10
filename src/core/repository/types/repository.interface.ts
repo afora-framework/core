@@ -14,10 +14,12 @@ import type {
 	ProviderCapabilities,
 	ProviderQuery,
 	RepositoryExists,
+	RepositoryExplain,
 	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
 	RepositoryForEachPage,
+	RepositoryIndex,
 	RepositoryQuery,
 } from "./query.interface";
 
@@ -215,6 +217,7 @@ export type RepositoryMethods<
 	("exists" extends Actions ? RepositoryExists<Entity> : unknown) &
 	("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown) &
 	("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown) &
+	("explain" extends Actions ? RepositoryExplain<Entity> : unknown) &
 	("forEachPage" extends Actions ? RepositoryForEachPage<Entity> : unknown);
 
 /** A method a repository of `Entity` can have, e.g. `"findByEmail"`. */
@@ -231,7 +234,26 @@ export type RepositoryAction<Entity> =
 	| "exists"
 	| "findPage"
 	| "findCursor"
+	| "explain"
 	| "forEachPage";
+
+/**
+ * Whether a repository given `Provider` keeps `findCursor`: `false` when the
+ * type of its `capabilities.keyset` cannot be `true` (left out of the
+ * capabilities, or `false`), `true` for `true`, for a wide `boolean`, and
+ * with no provider (the default in-memory one reads by cursor). `repositoryOf`
+ * infers only the `capabilities` of a provider: one without them keeps
+ * `findCursor` in the type and is rejected at declaration.
+ */
+export type ProviderKeyset<Provider> = undefined extends Provider
+	? true
+	: Provider extends { readonly capabilities?: infer Capabilities }
+		? [NonNullable<Capabilities>] extends [{ readonly keyset?: infer Keyset }]
+			? true extends Keyset
+				? true
+				: false
+			: false
+		: false;
 
 /**
  * A repository of `Entity` with the methods of `Actions`, whose provider gets
@@ -242,8 +264,14 @@ export type RepositoryOf<
 	Entity extends AnyRepositoryEntity,
 	Actions extends readonly RepositoryAction<Entity>[],
 	Environment = Readonly<Record<never, never>>,
+	Keyset extends boolean = true,
 > = AbstractRepository<Entity, Actions, Environment> &
-	RepositoryMethods<Entity, Actions[number]>;
+	RepositoryMethods<
+		Entity,
+		Keyset extends true
+			? Actions[number]
+			: Exclude<Actions[number], "findCursor">
+	>;
 
 /** Any repository, whatever its entity, actions and environment. */
 // biome-ignore lint/suspicious/noExplicitAny: any repository
@@ -287,6 +315,12 @@ export interface RepositoryContext<Environment = unknown> {
 	readonly name: string;
 	/** The keys no two entities may share, `id` first. */
 	readonly unique: readonly string[];
+	/**
+	 * The indexes the repository declares, by name, for a provider to build
+	 * (a GSI, an SQL index); a repository always gives it, empty when it
+	 * declares none (optional for contexts built by hand).
+	 */
+	readonly indexes?: Readonly<Record<string, RepositoryIndex>>;
 	/**
 	 * For an entity declared with `expires`, the key holding the date at which
 	 * a record expires (`expiresAt`, or the key of `at`): reads leave out the

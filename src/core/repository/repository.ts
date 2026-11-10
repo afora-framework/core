@@ -1,4 +1,7 @@
 import { fieldOf } from "../blueprint/callable";
+import { isBlueprint } from "../blueprint/is-blueprint";
+import { isBlueprintList } from "../blueprint/list";
+import { recordFieldOf } from "../blueprint/record-field";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
 import {
 	EntityClock,
@@ -16,6 +19,7 @@ import {
 } from "../environment/environment";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { guard } from "../exception/guard";
+import { resolveLogger, writeLog } from "../logger/logger";
 import type { Issue } from "../parse/types/parse.interface";
 import { isProperty } from "../property/is-property";
 import {
@@ -35,9 +39,11 @@ import {
 	RepositoryEntityNotFound,
 } from "./exceptions";
 import { inMemoryProvider } from "./in-memory";
+import { planQuery } from "./plan";
 import { prepareQuery } from "./query";
 import { parseEntity, relationsOf, resolveReferences } from "./references";
 import {
+	assertUnbound,
 	contextOf,
 	declareRepository,
 	type RepositoryState,
@@ -45,15 +51,21 @@ import {
 	states,
 } from "./state";
 import type {
+	ProviderCapabilities,
 	ProviderQuery,
+	RepositoryIndex,
 	RepositoryOrder,
+	RepositoryPlan,
 	RepositoryQuery,
+	RepositoryScans,
 } from "./types/query.interface";
 import type {
 	AnyRepository,
 	AnyRepositoryEntity,
 	EntityInstanceOf,
+	EntityKeyOf,
 	IRepositoryProvider,
+	ProviderKeyset,
 	RepositoryAction,
 	RepositoryContext,
 	RepositoryData,
@@ -65,6 +77,7 @@ export interface RepositorySettings<
 	Entity extends AnyRepositoryEntity,
 	Actions extends readonly RepositoryAction<Entity>[],
 	Environment extends EnvironmentDependencies | undefined,
+	Capabilities extends ProviderCapabilities = ProviderCapabilities,
 > {
 	/** The entity class whose entities it holds. */
 	readonly entity: Entity;
@@ -72,8 +85,15 @@ export interface RepositorySettings<
 	readonly actions: Actions;
 	/** Physically remove rows (default), or retain them with `deletedAt`. */
 	readonly deletion?: "hard" | "soft";
-	/** How it reads and writes; a new `inMemoryProvider()` by default. */
-	readonly provider?: IRepositoryProvider<MergedEnvironment<Environment>>;
+	/**
+	 * How it reads and writes; a new `inMemoryProvider()` by default. When the
+	 * type of its `capabilities.keyset` cannot be `true`, the repository has no
+	 * `findCursor`. Only `capabilities` is inferred, so the methods of a
+	 * provider written inline keep their parameter types.
+	 */
+	readonly provider?: IRepositoryProvider<MergedEnvironment<Environment>> & {
+		readonly capabilities?: Capabilities;
+	};
 	/** The environments the provider gets, merged, as `context.env`. */
 	readonly environmentDependencies?: Environment;
 	/**
@@ -82,7 +102,35 @@ export interface RepositorySettings<
 	 * loaded when read.
 	 */
 	readonly relations?: readonly AnyRepository[];
+	/**
+	 * Its access patterns, by name, e.g.
+	 * `{ byTypeStatus: { where: ["type", "status"], orderBy: "publishedAt" } }`:
+	 * a query that matches one reads through it, and the provider gets its
+	 * name as `query.index` and every index as `context.indexes`.
+	 */
+	readonly indexes?: Readonly<
+		Record<string, RepositoryIndex<EntityKeyOf<Entity>>>
+	>;
+	/**
+	 * What a query only a scan serves does: runs (`"allow"`, the default),
+	 * logs `repository-scan` and runs (`"warn"`), or throws
+	 * `InvalidRepositoryQuery` (`"reject"`).
+	 */
+	readonly scans?: RepositoryScans;
 }
+
+/**
+ * The repository `repositoryOf` gives: without `findCursor` when its provider
+ * cannot read by cursor (`Keyset` is `false`).
+ */
+type RepositoryOfProvider<
+	Entity extends AnyRepositoryEntity,
+	Actions extends readonly RepositoryAction<Entity>[],
+	Environment,
+	Keyset extends boolean,
+> = Keyset extends true
+	? RepositoryType<Entity, Actions, Environment>
+	: RepositoryType<Entity, Actions, Environment, false>;
 
 /** Stores each entity a record holds as its id. */
 const REFERENCES: RecordDataOptions = {
@@ -177,9 +225,13 @@ function action(
 	method: (self: Internal, ...args: never[]) => Promise<unknown>,
 ): Method {
 	return function (this: object, ...args: never[]) {
+		const state = stateOf(this);
 		return guard(
-			{ layer: ExceptionLayers.Repository, source: stateOf(this).name },
-			() => method(this as unknown as Internal, ...args),
+			{ layer: ExceptionLayers.Repository, source: state.name },
+			async () => {
+				assertUnbound(state);
+				return method(this as unknown as Internal, ...args);
+			},
 		);
 	} as Method;
 }
@@ -237,6 +289,47 @@ function queryOf(self: Internal, query: unknown): ProviderQuery {
 const equals = (self: Internal, key: string, value: unknown) =>
 	queryOf(self, { where: { [key]: value } });
 
+/**
+ * `query` with the index that serves it, after the scan policy: a scan logs
+ * `repository-scan` with `scans: "warn"`, and throws `InvalidRepositoryQuery`
+ * (reason `scan`) with `"reject"`, before the provider is called.
+ */
+function planned<Query extends RepositoryQuery>(
+	self: Internal,
+	method: string,
+	query: Query,
+	orderBy: RepositoryQuery["orderBy"] = query.orderBy,
+): Query & ProviderQuery {
+	const state = stateOf(self);
+	const plan = planQuery(self.context, { where: query.where, orderBy });
+	if (plan.access === "scan" && state.scans !== "allow") {
+		const fields = {
+			repository: state.name,
+			method,
+			where: Object.keys(query.where ?? {}),
+			orderBy: (orderBy ?? []).map(({ key }) => key),
+		};
+		if (state.scans === "reject") {
+			throw new InvalidRepositoryQuery({
+				source: state.name,
+				details: {
+					reason: `"${method}" matches no index of ${state.name} and would read every row (scans: "reject").`,
+					scan: true,
+					...fields,
+				} as { reason: string },
+			});
+		}
+		const scope = (self as { [ScopeKey]?: ExecutionScope })[ScopeKey];
+		writeLog(
+			resolveLogger(scope?.logger ?? state.logger, undefined),
+			"warn",
+			"repository-scan",
+			fields,
+		);
+	}
+	return plan.index === undefined ? query : { ...query, index: plan.index };
+}
+
 const findBy = (key: string): Method =>
 	action(async (self, value: unknown) => {
 		const data = await self.provider.findOne(
@@ -249,20 +342,50 @@ const findBy = (key: string): Method =>
 const findManyBy = (key: string): Method =>
 	action(async (self, value: unknown) =>
 		self.hydrateMany(
-			await self.provider.findMany(self.context, equals(self, key, value)),
+			await self.provider.findMany(
+				self.context,
+				planned(self, `findManyBy${capitalize(key)}`, equals(self, key, value)),
+			),
 		),
 	);
 
 const findMany = action(async (self, query: unknown) =>
 	self.hydrateMany(
-		await self.provider.findMany(self.context, queryOf(self, query)),
+		await self.provider.findMany(
+			self.context,
+			planned(self, "findMany", queryOf(self, query)),
+		),
 	),
 );
 
 const exists = action(
 	async (self, query: unknown) =>
-		(await self.provider.findOne(self.context, queryOf(self, query))) !==
-		undefined,
+		(await self.provider.findOne(
+			self.context,
+			planned(self, "exists", queryOf(self, query)),
+		)) !== undefined,
+);
+
+/** The options of a query `explain` takes: those of `findMany` and of `findCursor`. */
+const EXPLAIN_OPTIONS = [
+	"where",
+	"orderBy",
+	"limit",
+	"offset",
+	"withDeleted",
+	"after",
+];
+
+const explain = action(
+	async (self, query: unknown = {}): Promise<RepositoryPlan> => {
+		const prepared = prepareQuery(
+			self.context,
+			query,
+			(key, value) => queryValueOf(self.context, key, value),
+			EXPLAIN_OPTIONS,
+		);
+		return planQuery(self.context, prepared);
+	},
 );
 
 const findPage = action(async (self, query: unknown) => {
@@ -274,7 +397,8 @@ const findPage = action(async (self, query: unknown) => {
 		now,
 		limit = 20,
 		offset = 0,
-	} = queryOf(self, query);
+		index,
+	} = planned(self, "findPage", queryOf(self, query));
 	const expiry = withExpired === undefined ? {} : { withExpired, now };
 	const [rows, total] = await Promise.all([
 		self.provider.findMany(self.context, {
@@ -284,8 +408,14 @@ const findPage = action(async (self, query: unknown) => {
 			...expiry,
 			limit,
 			offset,
+			...(index === undefined ? {} : { index }),
 		}),
-		self.provider.count(self.context, { where, withDeleted, ...expiry }),
+		self.provider.count(self.context, {
+			where,
+			withDeleted,
+			...expiry,
+			...(index === undefined ? {} : { index }),
+		}),
 	]);
 	return { items: await self.hydrateMany(rows), total, limit, offset };
 });
@@ -307,6 +437,8 @@ interface CursorRead {
 	readonly withDeleted: boolean;
 	readonly withExpired: boolean | undefined;
 	readonly limit: number;
+	/** The declared index that serves the query, if one does. */
+	readonly index?: string;
 }
 
 /**
@@ -343,6 +475,7 @@ function cursorReadOf(self: Internal, query: unknown): CursorRead {
 	}
 	if (self.provider.capabilities?.keyset !== true)
 		fail("The provider does not read by cursor (capabilities.keyset).");
+	const { index } = planned(self, "findCursor", { where }, declared);
 	// Checks the provider leaves expired records out, before any page is read.
 	expiryOf(self, prepared.withExpired);
 	return {
@@ -351,13 +484,14 @@ function cursorReadOf(self: Internal, query: unknown): CursorRead {
 		withDeleted,
 		withExpired: prepared.withExpired,
 		limit,
+		...(index === undefined ? {} : { index }),
 	};
 }
 
 /** The page of `read` after the cursor `after` (the first one when `undefined`). */
 async function readCursor(self: Internal, read: CursorRead, after: unknown) {
 	const { context } = self;
-	const { where, orderBy, withDeleted, limit } = read;
+	const { where, orderBy, withDeleted, limit, index } = read;
 	const rows = await self.provider.findMany(context, {
 		where,
 		orderBy,
@@ -365,6 +499,7 @@ async function readCursor(self: Internal, read: CursorRead, after: unknown) {
 		// Read per page, so a long walk sees records expire as the clock moves.
 		...expiryOf(self, read.withExpired),
 		limit: limit + 1,
+		...(index === undefined ? {} : { index }),
 		...(after === undefined
 			? {}
 			: { after: decodeCursor(context.name, orderBy, after) }),
@@ -690,9 +825,14 @@ const restore = action(async (self, target: unknown) => {
 	return self.hydrate(await write(self, restored));
 });
 
-const count = action(async (self, query: unknown) =>
-	self.provider.count(self.context, queryOf(self, query)),
-);
+const count = action(async (self, query: unknown) => {
+	const prepared = queryOf(self, query);
+	// The order does not change a count, so it does not keep an index out.
+	return self.provider.count(
+		self.context,
+		planned(self, "count", prepared, []),
+	);
+});
 
 /** The provider methods each action calls. */
 const NEEDS: Readonly<Record<string, readonly (keyof IRepositoryProvider)[]>> =
@@ -708,6 +848,7 @@ const NEEDS: Readonly<Record<string, readonly (keyof IRepositoryProvider)[]>> =
 		exists: ["findOne"],
 		findPage: ["findMany", "count"],
 		findCursor: ["findMany"],
+		explain: [],
 		increment: ["increment"],
 		forEachPage: ["findMany"],
 	};
@@ -742,6 +883,100 @@ function invalid(source: string, reason: string): never {
 	throw new InvalidRepositoryDeclaration({ source, details: { reason } });
 }
 
+const INDEX_NAME = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/**
+ * The indexes of `settings.indexes`, checked against `entity` and frozen:
+ * each holds known, distinct, non-sensitive `where` keys, at least one, and
+ * an optional scalar `orderBy`; two indexes on the same keys and order throw.
+ */
+function indexesOf(
+	name: string,
+	entity: AnyRepositoryEntity,
+	declared: unknown,
+): Readonly<Record<string, RepositoryIndex>> {
+	if (declared === undefined) return Object.freeze({});
+	if (
+		typeof declared !== "object" ||
+		declared === null ||
+		Array.isArray(declared)
+	) {
+		invalid(name, "Expected indexes to be an object of indexes by name.");
+	}
+	const properties = entity.blueprint.properties as Readonly<
+		Record<string, BlueprintField | undefined>
+	>;
+	const sensitive = entity.options.sensitive as readonly string[];
+	const keyOf = (index: string, key: unknown): string => {
+		if (typeof key !== "string" || !Object.hasOwn(properties, key)) {
+			invalid(
+				name,
+				`The index "${index}" names "${String(key)}", which is not a key of ${recordNameOf(entity)}.`,
+			);
+		}
+		if (sensitive.includes(key)) {
+			invalid(
+				name,
+				`The index "${index}" names "${key}", which is sensitive and cannot be indexed.`,
+			);
+		}
+		return key;
+	};
+	const seen = new Map<string, string>();
+	const indexes: Record<string, RepositoryIndex> = {};
+	for (const [index, value] of Object.entries(declared)) {
+		if (!INDEX_NAME.test(index) || index === "__proto__") {
+			invalid(
+				name,
+				`Expected the index "${index}" to be named by an identifier.`,
+			);
+		}
+		if (
+			typeof value !== "object" ||
+			value === null ||
+			Array.isArray(value) ||
+			Object.keys(value).some((key) => key !== "where" && key !== "orderBy") ||
+			!Array.isArray(value.where) ||
+			value.where.length === 0
+		) {
+			invalid(
+				name,
+				`Expected the index "${index}" to be { where: [keys], orderBy?: key }.`,
+			);
+		}
+		const where = (value.where as unknown[]).map((key) => keyOf(index, key));
+		if (new Set(where).size !== where.length) {
+			invalid(name, `The index "${index}" names a key twice in where.`);
+		}
+		const orderBy =
+			value.orderBy === undefined ? undefined : keyOf(index, value.orderBy);
+		if (orderBy !== undefined) {
+			const field = properties[orderBy];
+			if (
+				isBlueprint(field) ||
+				isBlueprintList(field) ||
+				recordFieldOf(field)
+			) {
+				invalid(
+					name,
+					`The index "${index}" orders by "${orderBy}", which is not scalar.`,
+				);
+			}
+		}
+		const signature = JSON.stringify([[...where].sort(), orderBy ?? null]);
+		const other = seen.get(signature);
+		if (other !== undefined) {
+			invalid(name, `The indexes "${other}" and "${index}" are the same.`);
+		}
+		seen.set(signature, index);
+		indexes[index] = Object.freeze({
+			where: Object.freeze(where),
+			...(orderBy === undefined ? {} : { orderBy }),
+		});
+	}
+	return Object.freeze(indexes);
+}
+
 /**
  * A repository of `entity` with the methods of `actions`: `findBy<Key>` for a
  * unique key (`id`, `options.unique`, a `unique` property), giving the entity
@@ -757,9 +992,15 @@ export function repositoryOf<
 	Entity extends AnyRepositoryEntity,
 	const Actions extends readonly RepositoryAction<Entity>[],
 	const Environment extends EnvironmentDependencies | undefined = undefined,
+	const Capabilities extends ProviderCapabilities = { readonly keyset: true },
 >(
-	settings: RepositorySettings<Entity, Actions, Environment>,
-): RepositoryType<Entity, Actions, MergedEnvironment<Environment>> {
+	settings: RepositorySettings<Entity, Actions, Environment, Capabilities>,
+): RepositoryOfProvider<
+	Entity,
+	Actions,
+	MergedEnvironment<Environment>,
+	ProviderKeyset<{ readonly capabilities: Capabilities }>
+> {
 	const { entity, actions, environmentDependencies } = settings ?? {};
 	if (!isEntityClass(entity) || !(EntityUniqueKeys in entity)) {
 		invalid("repositoryOf", "Expected an entity class made by entityOf.");
@@ -768,6 +1009,10 @@ export function repositoryOf<
 	const deletion = settings.deletion ?? "hard";
 	if (deletion !== "hard" && deletion !== "soft") {
 		invalid(name, 'Expected deletion to be "hard" or "soft".');
+	}
+	const scans = settings.scans ?? "allow";
+	if (scans !== "allow" && scans !== "warn" && scans !== "reject") {
+		invalid(name, 'Expected scans to be "allow", "warn" or "reject".');
 	}
 	const provider = (settings.provider ??
 		inMemoryProvider()) as IRepositoryProvider;
@@ -786,6 +1031,7 @@ export function repositoryOf<
 	}
 
 	const relations = relationsOf(name, entity, settings.relations);
+	const indexes = indexesOf(name, entity, settings.indexes);
 	const unique = entity[EntityUniqueKeys];
 	const methods = new Map<string, readonly [string, Method]>();
 	for (const key of Object.keys(entity.blueprint.properties)) {
@@ -805,6 +1051,7 @@ export function repositoryOf<
 	methods.set("exists", ["exists", exists]);
 	methods.set("findPage", ["findPage", findPage]);
 	methods.set("findCursor", ["findCursor", findCursor]);
+	methods.set("explain", ["explain", explain]);
 	methods.set("increment", ["increment", increment]);
 	methods.set("forEachPage", ["forEachPage", forEachPage]);
 
@@ -824,6 +1071,18 @@ export function repositoryOf<
 		const [kind, implementation] = method;
 		if (kind === "restore" && deletion !== "soft") {
 			invalid(name, '"restore" needs deletion to be "soft".');
+		}
+		// A provider of `providersOf` may only exist once an application starts.
+		if (
+			kind === "findCursor" &&
+			settings.provider !== undefined &&
+			(provider as { readonly [Kind]?: unknown })[Kind] !== "provider-slot" &&
+			provider.capabilities?.keyset !== true
+		) {
+			invalid(
+				name,
+				'"findCursor" needs a provider that reads by cursor (capabilities.keyset).',
+			);
 		}
 		const needs =
 			deletion === "soft" && kind === "delete"
@@ -850,15 +1109,18 @@ export function repositoryOf<
 		explicitProvider: settings.provider !== undefined,
 		environment: environmentDependencies,
 		relations,
+		indexes,
+		scans,
 	};
 	states.set(DeclaredRepository, state);
 	const repository = Object.freeze(new DeclaredRepository());
 	declareRepository(state, repository);
 
-	return repository as unknown as RepositoryType<
+	return repository as unknown as RepositoryOfProvider<
 		Entity,
 		Actions,
-		MergedEnvironment<Environment>
+		MergedEnvironment<Environment>,
+		ProviderKeyset<{ readonly capabilities: Capabilities }>
 	>;
 }
 
@@ -871,7 +1133,8 @@ export type RepositoryOf<
 	Entity extends AnyRepositoryEntity,
 	Actions extends readonly RepositoryAction<Entity>[],
 	Environment = Readonly<Record<never, never>>,
-> = RepositoryType<Entity, Actions, Environment>;
+	Keyset extends boolean = true,
+> = RepositoryType<Entity, Actions, Environment, Keyset>;
 
 /**
  * The class of `repository`, to extend: its instances share the entity,

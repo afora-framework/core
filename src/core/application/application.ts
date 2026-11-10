@@ -66,6 +66,7 @@ import { isRepository } from "../repository/repository";
 import {
 	bindRepository,
 	inspectRepository,
+	providerOfRepository,
 	type RepositoryInspection,
 } from "../repository/state";
 import type { ProviderDescription } from "../repository/types/query.interface";
@@ -94,6 +95,7 @@ import {
 } from "./providers";
 import { setStartedApplication, startedApplication } from "./registry";
 import {
+	checkCapabilities,
 	checkTransactions,
 	deferredEnvironments,
 	deferredProvider,
@@ -909,8 +911,16 @@ function describeRegistry(
 					}),
 				} as const);
 	};
-	// The classes among the options of a plugin, by name; the rest as it is.
+	// The classes and dependencies among the options of a plugin, by name; the rest as it is.
 	const describeOption = (value: unknown): unknown => {
+		if (isLoggerDeclaration(value)) return "Logger";
+		if (isUseCaseClass(value)) return useCaseRefs.get(value);
+		if (isEnvironment(value)) return environmentRefs.get(value);
+		if (isRepository(value)) {
+			return repositories.get(
+				(inspectRepository(value) as RepositoryInspection).state,
+			);
+		}
 		if (typeof value === "function") {
 			if (isDeclaredException(value)) {
 				return (
@@ -1050,6 +1060,8 @@ function describeRegistry(
 				entity: scope.entities.get(info.entity) as string,
 				actions: info.actions,
 				deletion: info.deletion,
+				indexes: info.indexes,
+				scans: info.scans,
 				relations: info.relations.map(
 					(relation) => repositories.get(relation) as string,
 				),
@@ -1462,7 +1474,11 @@ export function applicationOf<
 	const repositories: Record<string, unknown> = {};
 	for (const entry of registry.repositories.values()) {
 		const repository = bindsProviders
-			? bindRepository(entry.value as object, provider, instances)
+			? bindRepository(entry.value as object, provider, instances, {
+					application: name,
+					key: entry.name,
+					logger,
+				})
 			: entry.value;
 		bound.set(entry.value, repository);
 		boundByState.set(entry.key, repository);
@@ -1619,6 +1635,19 @@ export function applicationOf<
 						([, command]) =>
 							(command as AnyCommand).transaction &&
 							commandTransactionProvider(command as object) === instance,
+					)
+					.map(([key]) => key),
+			);
+			checkCapabilities(
+				name,
+				made,
+				Object.entries(repositories)
+					.filter(
+						([, repository]) =>
+							providerOfRepository(repository) === instance &&
+							(
+								inspectRepository(repository) as RepositoryInspection
+							).actions.includes("findCursor"),
 					)
 					.map(([key]) => key),
 			);

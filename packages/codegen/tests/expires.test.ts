@@ -159,9 +159,11 @@ describe("expires: round trip", () => {
 			after: { days: 400, hours: 6 },
 		});
 		expect(description.entities.Window.expires).toEqual({ at: "until" });
-		const created = await domain.AuditEvents.create({ action: "login" });
+		// Bound by the application, the repository is reached through it.
+		const AuditEvents = domain.App.repositories.AuditEvents;
+		const created = await AuditEvents.create({ action: "login" });
 		expect(typeof created.expiresAt).toBe("string");
-		expect(await domain.AuditEvents.count()).toBe(1);
+		expect(await AuditEvents.count()).toBe(1);
 		expect(canonical(extractSpec(domain.App))).toEqual(canonical(expiring));
 	}, 120_000);
 });

@@ -1108,7 +1108,7 @@
 							"items": {
 								"type": "string"
 							},
-							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, forEachPage (walks the pages of a cursor query; not a step), create, update, delete, restore (soft deletion only), increment (number keys in change, atomic), count."
+							"description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, explain (how a query would be read, without reading), forEachPage (walks the pages of a cursor query; not a step), create, update, delete, restore (soft deletion only), increment (number keys in change, atomic), count."
 						},
 						"provider": {
 							"anyOf": [
@@ -1205,6 +1205,49 @@
 								"type": "string"
 							},
 							"description": "Environments it depends on."
+						},
+						"indexes": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"type": "object",
+									"required": ["where"],
+									"properties": {
+										"where": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"minItems": 1,
+											"description": "Keys the query matches by equality."
+										},
+										"orderBy": {
+											"type": "string",
+											"description": "The scalar key it reads in order of."
+										}
+									},
+									"additionalProperties": false
+								}
+							},
+							"description": "Access patterns by name; a query that matches one reads through it, and the provider can build it (a GSI, an SQL index)."
+						},
+						"scans": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "allow"
+								},
+								{
+									"type": "string",
+									"const": "warn"
+								},
+								{
+									"type": "string",
+									"const": "reject"
+								}
+							],
+							"default": "allow",
+							"description": "A query only a scan serves: runs, logs repository-scan, or throws InvalidRepositoryQuery."
 						}
 					},
 					"additionalProperties": false
@@ -1718,7 +1761,7 @@
 									"patternProperties": {
 										"^[A-Za-z_$][A-Za-z0-9_$]*$": {}
 									},
-									"description": "Its options: \"as\" (the response key), \"owner\" ({ \"key\"?, \"context\" }), \"errors\" ({ \"notFound\" | \"conflict\" | \"invalid\" | \"owner\": an exception name }), and per use case \"omit\", \"values\", \"set\", \"orderBy\"."
+									"description": "Its options: \"as\" (the response key), \"owner\" ({ \"key\"?, \"context\" }), \"errors\" ({ \"notFound\" | \"conflict\" | \"invalid\" | \"owner\": an exception name }), and per use case \"omit\", \"values\", \"set\", \"orderBy\"; those that write also take \"before\" and \"after\" ({ \"import\": \"./file.ts#function\" }, run before and after the write), \"dependencies\" (key -> name of a use case, repository or environment, for them) and \"throws\" (the exceptions they throw, as in \"errors\")."
 								},
 								"description": {
 									"type": "string"

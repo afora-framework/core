@@ -194,7 +194,9 @@ function build(): Catalog {
 			spec:
 				name === "enumOf"
 					? '{ "enum": ["draft", "published"] } (a field or a property declaration)'
-					: name,
+					: name === "jsonOf"
+						? '"json" for any JSON value; a property made by jsonOf({ schema }) is imported ({ "import": "./file.ts#Property" })'
+						: name,
 		})),
 		recordPlugins: StdRecordPlugins.list.map((plugin) => {
 			const { description, ...rest } = plugin.toJSON();
@@ -260,6 +262,10 @@ function build(): Catalog {
 				rule: "Gives { items, limit, next } for { where?, orderBy?, limit?, after? }: pages by position, `after` being the `next` of the page before. No offset and no total. Needs no key, and a provider that reads by cursor (inMemory and drizzle do).",
 			},
 			{
+				action: "explain",
+				rule: 'Gives how a query would be read, { access: "id" | "unique" | "index" | "scan", index? }, without reading. Needs no key.',
+			},
+			{
 				action: "forEachPage",
 				rule: "forEachPage(query, fn, { until? }) runs fn on each page of a findCursor query and gives { done, next?, pages, items }; until (a Date, epoch ms or a function) is checked between pages, and next is the after to resume from. Called from TypeScript, not a step. Needs no key, and a provider that reads by cursor.",
 			},
@@ -300,23 +306,29 @@ function build(): Catalog {
 }
 
 /**
+ * The options of the standard use cases that write: functions run before and
+ * after the write (imports), the dependencies they get, the exceptions they throw.
+ */
+const GENERIC_HOOKS = ["before", "after", "dependencies", "throws"];
+
+/**
  * The options of each standard use case, which a plugin does not describe:
  * checked against the plugins themselves by the tests of the catalog.
  */
 const GENERIC_OPTIONS: Readonly<Record<string, readonly string[]>> = {
-	create: ["as", "owner", "omit", "values"],
+	create: ["as", "owner", "omit", "values", ...GENERIC_HOOKS],
 	get: ["as", "owner"],
 	list: ["owner", "orderBy"],
-	update: ["as", "owner"],
-	delete: ["as", "owner"],
-	restore: ["as"],
-	publish: ["as", "owner", "set"],
-	unpublish: ["as", "owner", "set"],
-	archive: ["as", "owner", "set"],
-	unarchive: ["as", "owner", "set"],
-	tag: ["as", "owner"],
-	untag: ["as", "owner"],
-	register: ["as", "owner", "omit", "values"],
+	update: ["as", "owner", ...GENERIC_HOOKS],
+	delete: ["as", "owner", ...GENERIC_HOOKS],
+	restore: ["as", ...GENERIC_HOOKS],
+	publish: ["as", "owner", "set", ...GENERIC_HOOKS],
+	unpublish: ["as", "owner", "set", ...GENERIC_HOOKS],
+	archive: ["as", "owner", "set", ...GENERIC_HOOKS],
+	unarchive: ["as", "owner", "set", ...GENERIC_HOOKS],
+	tag: ["as", "owner", ...GENERIC_HOOKS],
+	untag: ["as", "owner", ...GENERIC_HOOKS],
+	register: ["as", "owner", "omit", "values", ...GENERIC_HOOKS],
 	login: ["as"],
 };
 

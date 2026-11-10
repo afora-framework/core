@@ -29,16 +29,18 @@ const CEILING: Record<string, number> = {
 	"bare blueprint": 34_500,
 	"quick start": 44_900,
 	entity: 53_000,
-	repository: 53_900,
+	// Raised on 2026-11-10 when #51 (increment, forEachPage, expiry) met #52
+	// (indexes, explain, keyset-typed findCursor, hooks, JSON): measured plus 1%.
+	repository: 54_500,
 	"use case": 54_300,
 	// Added on 2026-11-07 (T32), measured plus 2%.
-	queries: 51_500,
-	"steps use case": 53_200,
+	queries: 52_100,
+	"steps use case": 53_900,
 	"command and output": 64_000,
 	// Added on 2026-11-10, measured plus 2%.
 	"named providers": 50_700,
 	// Added on 2026-11-10 with the standard use cases, measured plus 2%.
-	"standard use cases": 95_000,
+	"standard use cases": 96_300,
 };
 
 /** About 100 ms per edit: what IntelliSense should cost. */

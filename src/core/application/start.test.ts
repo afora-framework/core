@@ -288,6 +288,40 @@ describe("providerFrom", () => {
 		expect(app.started).toBe(false);
 	});
 
+	test("start fails when the provider does not read by cursor and a repository declares findCursor", async () => {
+		const Paged = repositoryOf({
+			entity: Note,
+			actions: ["create", "findCursor"],
+		});
+		const { capabilities: _, ...plain } = inMemoryProvider();
+		const app = applicationOf({
+			name: "paged",
+			entities: { Note },
+			environments: { Database },
+			repositories: { Paged },
+			provider: providerFrom(Database, () => plain as IRepositoryProvider),
+		});
+		const error = await app.start().then(
+			() => undefined,
+			(error: Error) => error,
+		);
+		expect(error).toBeInstanceOf(InvalidApplicationDeclaration);
+		expect(error?.message).toBe(
+			"The provider made on start does not read by cursor (capabilities.keyset), which the findCursor of Paged needs.",
+		);
+		expect(app.started).toBe(false);
+		const keyset = applicationOf({
+			name: "keyset",
+			entities: { Note },
+			environments: { Database },
+			repositories: { Paged },
+			provider: providerFrom(Database, () => inMemoryProvider()),
+		});
+		await keyset.start();
+		expect(keyset.started).toBe(true);
+		await keyset.stop();
+	});
+
 	test("an extending application shares the provider", async () => {
 		made.length = 0;
 		const base = appOf();

@@ -1,6 +1,6 @@
 # Repositories
 
-`repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `restore` (with soft deletion), `increment`, `count`, the queries `findMany`, `exists`, `findPage` and `findCursor`, and `forEachPage`, which walks the pages of a cursor query and can stop and resume. Every method is async.
+`repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `restore` (with soft deletion), `increment`, `count`, the queries `findMany`, `exists`, `findPage` and `findCursor`, `forEachPage`, which walks the pages of a cursor query and can stop and resume, and `explain` (see [Query cost](#query-cost)). Every method is async.
 
 ```ts
 import {
@@ -44,7 +44,7 @@ await Users.findManyByName("Ana"); // User[]
 // repositoryOf({ entity: User, actions: ["findByName"] }) does not compile, and throws: name is not unique
 ```
 
-**Queries.** `findMany`, `exists`, `findPage` and `count` take a typed `RepositoryQuery<Entity>`: `where`, `orderBy`, `limit`, `offset`, `withDeleted` and `withExpired` (see [Records that expire](#records-that-expire)). `where` maps entity keys to a value (equality) or to `{ in: [...] }` (membership, an empty list matches nothing); conditions on several keys are ANDed. Values are normalized before they reach the provider: a record becomes its plain data and an entity its id, also inside `in`. `orderBy` is a list of `{ key, direction?: "asc" | "desc" }` on scalar fields (default `asc`): missing values come first when ascending and last when descending, strings sort by code point, numbers numerically, ties keep their order. A query with unknown keys or options, an invalid direction, an unorderable field or a negative, fractional or nonfinite `limit`/`offset` throws `InvalidRepositoryQuery` before the provider is called.
+**Queries.** `findMany`, `exists`, `findPage` and `count` take a typed `RepositoryQuery<Entity>`: `where`, `orderBy`, `limit`, `offset`, `withDeleted` and `withExpired` (see [Records that expire](#records-that-expire)). `where` maps entity keys to a value (equality) or to `{ in: [...] }` (membership, an empty list matches nothing); conditions on several keys are ANDed. Values are normalized before they reach the provider: a record becomes its plain data and an entity its id, also inside `in`. `orderBy` is a list of `{ key, direction?: "asc" | "desc" }` on scalar fields (default `asc`): missing values come first when ascending and last when descending, strings sort by code point, numbers numerically, ties keep their order. Declared [indexes](#indexes) make some of them cheap, and [Query cost](#query-cost) says how each is read. A query with unknown keys or options, an invalid direction, an unorderable field or a negative, fractional or nonfinite `limit`/`offset` throws `InvalidRepositoryQuery` before the provider is called.
 
 ```ts
 const adults = await Users.findMany({
@@ -76,7 +76,7 @@ const page = await Users.findCursor({
 
 It reads a page with one provider call and no count, costs the same on the last page as on the first, and a row added or removed between two pages never repeats or skips another, which `offset` cannot promise. The query takes `where`, `orderBy`, `limit`, `withDeleted` and `withExpired`, which must stay the same from one page to the next; `offset` is rejected, and there is no `total` (use `count`). The `id` is added as the last order, so every row has one position even when the others tie.
 
-A cursor is opaque text (base64url) that holds the values of the order keys of the last row. It is neither encrypted nor signed: whoever receives it can read those values, so a key in `options.sensitive` cannot order a cursor (`InvalidRepositoryQuery`), and a changed cursor only moves the position inside the same `where`. An `after` that is not a cursor of `findCursor`, or that was made for another `orderBy`, throws `InvalidRepositoryCursor`, which an output answers with 400. The provider must read by cursor, `capabilities.keyset` (`inMemoryProvider` and `@afora/drizzle` do); otherwise `findCursor` throws `InvalidRepositoryQuery`.
+A cursor is opaque text (base64url) that holds the values of the order keys of the last row. It is neither encrypted nor signed: whoever receives it can read those values, so a key in `options.sensitive` cannot order a cursor (`InvalidRepositoryQuery`), and a changed cursor only moves the position inside the same `where`. An `after` that is not a cursor of `findCursor`, or that was made for another `orderBy`, throws `InvalidRepositoryCursor`, which an output answers with 400. The provider must read by cursor, `capabilities.keyset` (`inMemoryProvider` and `@afora/drizzle` do). The type says so: `findCursor` is left out of the repository when the type of the `provider` it declares cannot have `keyset: true` (no `capabilities`, or `keyset: false`); it stays with `keyset: true`, with a wide `boolean`, and without a `provider` (the default in-memory one reads by cursor). `inMemoryProvider()`, `providerOf` and `drizzleProvider` keep their capabilities as literal types for this. At run time, declaring `findCursor` with a provider without the capability throws `InvalidRepositoryDeclaration`, `app.start()` throws `InvalidApplicationDeclaration` when the provider it makes (`providerFrom`) lacks it and a repository declares `findCursor`, and a call that still reaches such a provider throws `InvalidRepositoryQuery`.
 
 **Walking every page.** `forEachPage(query, fn, { until? })` reads the pages of a `findCursor` query one after the other and awaits `fn(items, { index, next })` on each, for bulk work: deleting a content type with its entries, rewriting rows after a rename, a cleanup, a migration. It gives `{ done, next?, pages, items }`: the pages `fn` ran on and their items, and `done: true` once the last page is done.
 
@@ -186,7 +186,7 @@ interface IRepositoryProvider<Environment = unknown> {
 		deltas: Readonly<Record<string, number>>,
 		options?: { set?: RepositoryData; create?: RepositoryData; now?: string },
 	): Promise<RepositoryData>; // the row as stored
-	capabilities?: ProviderCapabilities; // e.g. { transactions: true, keyset: true, versioning: true, atomic: true }
+	capabilities?: ProviderCapabilities; // e.g. { transactions: true, keyset: true, indexes: true, versioning: true, atomic: true }
 	transaction?<Result>(
 		run: (provider: IRepositoryProvider<Environment>) => Promise<Result>,
 	): Promise<Result>;
@@ -241,6 +241,14 @@ const Recoveries = repositoryOf({
 await Recoveries.findManyByUser(user); // or findManyByUser(user.id)
 ```
 
+**In applications.** An application with a `provider` (or a provider of `providersOf`) binds each repository it registers: `app.repositories.X`, and the use cases and commands of the application, read and write through it. From then on, the repository declared at module level throws `RepositoryUsedOutsideApplication` (layer `repository`) on every method, instead of reading another store: use `app.repositories.X`, run its use cases with `app.run` (or `app.useCase`), or give the repository of the application to `execute`. What it exposes besides its methods (`entity`, `actions`) still works, and so does a repository that no application with a provider registered, as in tests and scripts.
+
+```ts
+const app = applicationOf({ name: "blog", repositories: { Users }, provider });
+await app.repositories.Users.findById(id); // through the provider of the application
+await Users.findById(id); // throws RepositoryUsedOutsideApplication
+```
+
 **Extending.** `RepositoryOf(repository)` is the class of a repository, to extend. Its instances share the entity, actions, provider and environment of the repository, and can use the protected `provider`, `context`, `env`, `dataOf(entity)`, and the async `hydrate(data)` and `hydrateMany(list)`, which also load the entities a stored value holds. `create`, `update`, `delete` and `count` are overridden as methods. `findBy<Key>` and `findManyBy<Key>` are named after the entity's keys, so TypeScript types them as properties: override them with a field, which can still call `super`.
 
 ```ts
@@ -277,6 +285,55 @@ class Register extends useCaseOf({
 }
 ```
 
+## Indexes
+
+`indexes` declares the access patterns of a repository, by name: the keys a query matches by equality (`where`, at least one) and, optionally, the key it reads in order of (`orderBy`). The keys are typed by the entity.
+
+```ts
+const Entries = repositoryOf({
+	entity: Entry,
+	actions: ["findMany", "findCursor", "explain"],
+	indexes: {
+		byTypeStatus: { where: ["type", "status"], orderBy: "publishedAt" },
+		byOwner: { where: ["ownerSub"] },
+	},
+});
+
+// Nothing changes at the call site: this query reads through byTypeStatus.
+await Entries.findCursor({
+	where: { type: "post", status: "published" },
+	orderBy: [{ key: "publishedAt", direction: "desc" }],
+});
+```
+
+A query uses an index when every `where` key of the index holds a condition by equality (not `in`) and, when the query has an `orderBy`, its first order is the `orderBy` of the index (in either direction). Other conditions are filtered within it. When several match, the one with the most keys wins, the first declared on a tie. A key that is not a key of the entity, a sensitive key, an `orderBy` that is not scalar (a blueprint, a list or a record), a key listed twice and two indexes on the same keys and order throw `InvalidRepositoryDeclaration`.
+
+The provider gets every index, normalized and frozen, as `context.indexes` (to create a GSI or an SQL index), and the name of the one that serves a query as `query.index` (`ProviderQuery`) on `findOne`, `findMany` and `count`. A provider that serves declared indexes from storage says `capabilities.indexes: true`; one that does not can ignore `query.index`, as the rows must be the same either way. `inMemoryProvider` ignores it, and `@afora/drizzle` leaves it to the SQL indexes of the schema (see its README). `app.describe()` gives `indexes` for each repository.
+
+## Query cost
+
+Every read is planned before the provider is called: `{ access: "id" | "unique" | "index" | "scan", index? }`. A condition on `id` or on another unique key, by equality or `in` (a batch of key lookups), is `id` or `unique`; a query an index serves is `index`; the rest, a query with no conditions included, is a `scan`, which reads every row of the entity. The `explain` action gives the plan of a query without reading anything; it takes the query of `findMany` or of `findCursor`:
+
+```ts
+await Entries.explain({ where: { ownerSub: "a" } }); // { access: "index", index: "byOwner" }
+await Entries.explain({ where: { title: "Hello" } }); // { access: "scan" }
+```
+
+`scans` says what a repository does with a scan: `"allow"` (the default) runs it, `"warn"` logs `repository-scan` (`warn`, with `repository`, `method`, `where` and `orderBy`, the keys of the query) on the logger of the application that bound it, or of the call, and runs it, and `"reject"` throws `InvalidRepositoryQuery` before the provider is called, with `details` `{ reason, scan: true, repository, method, where, orderBy }`. It applies to `findMany`, `findManyBy<Key>`, `exists`, `findPage`, `findCursor` and `count` (whose order is ignored). The plan is made by the core, so the in-memory provider of the tests rejects the same queries as the provider of production: a test that runs a query a strict repository would reject fails.
+
+```ts
+const Entries = repositoryOf({
+	entity: Entry,
+	actions: ["findMany"],
+	indexes: { byOwner: { where: ["ownerSub"] } },
+	scans: "reject",
+});
+await Entries.findMany({ where: { ownerSub: "a" } }); // reads through byOwner
+await Entries.findMany({ where: { title: "Hello" } }); // throws InvalidRepositoryQuery
+```
+
+`app.describe()` gives `scans` for each repository.
+
 ## Records that expire
 
 For an entity declared with [`expires`](entities.md#records-that-expire), every read (`findMany`, `count`, `exists`, `findPage`, `findCursor`, `findBy<Key>`, `findManyBy<Key>`, and the read of `delete` and `restore` given an id) leaves out the records whose date (`expiresAt`, or the key of `at`) is at or before now, by the clock of the entity; a record without a date never expires. `withExpired: true` includes them.
@@ -308,4 +365,4 @@ import { myProvider } from "./my-provider";
 providerContract({ describe, it, expect }, () => myProvider());
 ```
 
-It checks `insert`, `findOne`, `findMany`, `update` (which also clears a value that is left out, as `restore` needs), `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints; and, with `capabilities.expiry` (or `{ expiry: true }`), that `findOne`, `findMany`, `count` and reads after a position leave out rows whose `expiresAt` is at or before `now` (its table needs an `expiresAt` column), that a row without one never expires, that `withExpired` gives them back and that unique keys still count them. Likewise, `capabilities.versioning` (`{ versioning: true }`) runs the cases of `expectedVersion` (a stale version conflicts, two updates with the same one give exactly one conflict, no `expectedVersion` changes nothing), and `capabilities.atomic` (`{ atomic: true }`) those of `increment` (concurrent increments sum up, a missing id with and without `create`, concurrent creates, soft-deleted rows, and an increment of `version` making an update with the old one conflict). The rows of these cases use the columns `version` and `visits` (numbers).
+It checks `insert`, `findOne`, `findMany`, `update` (which also clears a value that is left out, as `restore` needs), `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints; when it advertises `capabilities.keyset` (or with `{ keyset: true }`), `after`; when it advertises `capabilities.indexes` (or with `{ indexes: true }`), that a query given `index` (with `context.indexes`) answers what the same query without it does, on `findMany`, `count` and `findOne`; and, with `capabilities.expiry` (or `{ expiry: true }`), that `findOne`, `findMany`, `count` and reads after a position leave out rows whose `expiresAt` is at or before `now` (its table needs an `expiresAt` column), that a row without one never expires, that `withExpired` gives them back and that unique keys still count them. Likewise, `capabilities.versioning` (`{ versioning: true }`) runs the cases of `expectedVersion` (a stale version conflicts, two updates with the same one give exactly one conflict, no `expectedVersion` changes nothing), and `capabilities.atomic` (`{ atomic: true }`) those of `increment` (concurrent increments sum up, a missing id with and without `create`, concurrent creates, soft-deleted rows, and an increment of `version` making an update with the old one conflict). The rows of these cases use the columns `version` and `visits` (numbers).

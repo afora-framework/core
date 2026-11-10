@@ -198,7 +198,10 @@ function referenceProvider(): IRepositoryProvider {
 
 providerContract({ describe, it, expect }, referenceProvider);
 describe("inMemoryProvider", () => {
-	providerContract({ describe, it, expect }, () => inMemoryProvider());
+	// It ignores indexes, so an indexed query answers as the scan does.
+	providerContract({ describe, it, expect }, () => inMemoryProvider(), {
+		indexes: true,
+	});
 });
 
 describe("providerContract options", () => {

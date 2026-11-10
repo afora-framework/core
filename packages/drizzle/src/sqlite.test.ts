@@ -45,8 +45,11 @@ function contractDatabase() {
 	return { db: drizzle(sqlite), tables };
 }
 
-providerContract({ describe, it, expect }, () =>
-	drizzleProvider(contractDatabase()),
+// It takes the declared index and leaves the plan to the database.
+providerContract(
+	{ describe, it, expect },
+	() => drizzleProvider(contractDatabase()),
+	{ indexes: true },
 );
 
 describe("catalog", () => {
