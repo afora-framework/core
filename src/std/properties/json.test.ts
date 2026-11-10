@@ -151,6 +151,13 @@ describe("checkJsonSchema", () => {
 		expect(statusOf(error)).toBe(400);
 	});
 
+	test("a schema loaded at runtime gives a JsonValue", () => {
+		const loaded: unknown = JSON.parse('{ "type": "number" }');
+		const value = checkJsonSchema(loaded, 1);
+		expectTypeOf(value).toEqualTypeOf<JsonValue>();
+		expect(value).toBe(1);
+	});
+
 	test("rejects what is not JSON before the schema sees it", () => {
 		expect(
 			jsonSchemaIssues({ type: "object" }, { at: new Date(0) }),
@@ -192,7 +199,7 @@ describe("checkJsonSchema", () => {
 					throws: [InvalidJsonData],
 					before: async ({ input, dependencies }) => {
 						const type = await dependencies.contentTypes.findBySlug(input.type);
-						checkJsonSchema(type?.schema as never, input.data, {
+						checkJsonSchema(type?.schema, input.data, {
 							source: input.type,
 						});
 					},

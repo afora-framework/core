@@ -145,7 +145,7 @@ function issuesOfErrors(
  * nothing. Throws `InvalidJsonSchema` when `schema` is not a JSON Schema.
  */
 export function jsonSchemaIssues(
-	schema: TSchema,
+	schema: unknown,
 	value: unknown,
 	{ source = "json" }: { readonly source?: string } = {},
 ): readonly Issue[] {
@@ -172,13 +172,24 @@ export function jsonSchemaIssues(
  * `value`, when it is JSON valid for `schema`; else throws `InvalidJsonData`
  * with every issue in `details.issues` (a 400 for `statusOf`). `source` names
  * what is checked in the issues and the exception, e.g. the content type.
- * See `jsonSchemaIssues`.
+ * The value is typed by a schema whose type is known (`Static`), else as
+ * `JsonValue`, as for a schema loaded at runtime. See `jsonSchemaIssues`.
  */
 export function checkJsonSchema<const Schema extends TSchema>(
 	schema: Schema,
 	value: unknown,
+	options?: { readonly source?: string },
+): Static<Schema>;
+export function checkJsonSchema(
+	schema: unknown,
+	value: unknown,
+	options?: { readonly source?: string },
+): JsonValue;
+export function checkJsonSchema(
+	schema: unknown,
+	value: unknown,
 	options: { readonly source?: string } = {},
-): Static<Schema> {
+): unknown {
 	const issues = jsonSchemaIssues(schema, value, options);
 	if (issues.length > 0) {
 		throw new InvalidJsonData({
@@ -186,7 +197,7 @@ export function checkJsonSchema<const Schema extends TSchema>(
 			details: { issues },
 		});
 	}
-	return value as Static<Schema>;
+	return value;
 }
 
 /** A value TypeBox makes from `schema`, if it can. */
