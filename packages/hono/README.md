@@ -58,6 +58,7 @@ All options are JSON, so the stage can live in an `afora.json` (`{ "sink": "hono
 | `docs`     | `{ path, info: { title, version, description? }, servers? }`: serves the `openapi` document of the same operations, routes and `basePath` at `path` (not under `basePath`). A `path` that is also a GET route throws `InvalidOutputStage`. |
 | `debug`    | `true` adds the `trace` to problems and the real `detail` to 5xx ones. Off by default.                                                                                                                                                     |
 | `context`  | `{ headers: { [contextKey]: headerName } }`.                                                                                                                                                                                               |
+| `webhooks` | `{ [operationId]: { scheme, secret, ... } }`: verifies the signature of each request to these operations before parsing it. See [Webhooks](#webhooks).                                                                                     |
 
 Invalid options throw `InvalidOutputStage` when the stage is made, and unknown operation ids in `route` or two operations on one method and path when the app is built.
 
@@ -69,6 +70,49 @@ Invalid options throw `InvalidOutputStage` when the stage is made, and unknown o
 - **Success.** `200` with `outputValueOf(response)`: records go through `toJSON`, so sensitive values (a `Password`) are `"********"`.
 - **Errors.** Status from `statusOf(error, operation, output.statuses)`: the output `statuses` first, then 400 for invalid input or context, 404 for a missing entity, 409 for a unique violation, 422 for an error the use case declares, else 500. The body is `problemOf` with `application/problem+json`; a 5xx says `"Internal error."` unless `debug` is on.
 - **Unknown routes** are a `404` problem (`urn:afora:exception:NotFound`) instead of Hono's plain text, and anything thrown outside an operation (your own middleware) is a problem too, through `app.onError`.
+
+## Webhooks
+
+`webhooks` names the operations that receive webhooks from another service. The sink checks the signature of each request over the raw body, byte for byte as it was sent, before it parses anything. A request that fails is a `401` problem `InvalidWebhookSignature`. Its `detail` never says what was wrong; the `trace` of a `debug` problem does. Change the status with the output `statuses` (`{ InvalidWebhookSignature: 403 }`).
+
+```ts
+hono({
+	webhooks: {
+		"Payments.received": {
+			scheme: "stripe",
+			secret: { env: "STRIPE_WEBHOOK_SECRET" },
+			unknownKeys: "strip",
+		},
+		"Repos.pushed": { scheme: "github", secret: { env: "GITHUB_WEBHOOK_SECRET" } },
+		"Mail.delivered": { scheme: "standard-webhooks", secret: { env: ["MAIL_SECRET", "MAIL_SECRET_OLD"] } },
+		"Partner.notified": {
+			scheme: "hmac-sha256",
+			secret: { env: "PARTNER_SECRET" },
+			header: "x-partner-signature",
+			prefix: "sha256=",
+		},
+	},
+});
+```
+
+| Field         | Meaning                                                                                                                                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scheme`      | `"stripe"` (`Stripe-Signature`), `"github"` (`X-Hub-Signature-256`), `"standard-webhooks"` (`webhook-id`, `webhook-timestamp`, `webhook-signature`; used by Svix, Resend, Clerk...) or `"hmac-sha256"` (a header you name). |
+| `secret`      | `{ env: "NAME" }`: the variable holding the secret. A list allows rotation: a request passes when any secret that is set verifies it.                                                                                       |
+| `header`      | `"hmac-sha256"` only, and required there: the header with the signature.                                                                                                                                                  |
+| `encoding`    | `"hmac-sha256"` only: `"hex"` (default) or `"base64"`.                                                                                                                                                                     |
+| `prefix`      | `"hmac-sha256"` only: text before the signature, such as `"sha256="`.                                                                                                                                                      |
+| `tolerance`   | `"stripe"` and `"standard-webhooks"` only: how many seconds the signed timestamp may be away from now, against replays. `300` by default; `0` turns the check off.                                                         |
+| `unknownKeys` | `"reject"` (default): a key the input does not declare is a 400, as on any route. `"strip"`: those keys are dropped first, with `stripUndeclared` from `@afora/core`, so the input declares only what the operation reads. |
+
+- **Secrets.** The variable is read on each request: first from the bindings of the request (`c.env`: Cloudflare Workers, or the third argument of `app.request` in tests), then from `process.env` (Bun, Node). A webhook with none of its variables set is a `500` problem `WebhookSecretMissing`, whose detail is masked. Secrets and variable names never reach the OpenAPI document.
+- **Signatures** are HMAC-SHA256 checked with Web Crypto (`crypto.subtle.verify`, which compares in constant time), so it runs on Bun, Node and Workers. Stripe's and standard-webhooks' headers may carry several signatures; any one that matches passes.
+- **Order.** Signature, then JSON (invalid JSON is the usual 400 `InvalidRequestBody`), then `unknownKeys`, then the context from headers, then the operation. Other routes are not affected.
+- **Idempotency.** Verification keeps no state, so a request sent twice (a retry) runs twice. Map the delivery id into the context (`context: { headers: { delivery: "webhook-id" } }`) and let the operation ignore one it has already handled.
+- **Routes.** A webhook operation needs a body: one routed with `get` or `delete`, or an id that is not an operation of the output, throws `InvalidOutputStage` when the app is built.
+- **OpenAPI.** The document at `docs.path` lists the signature headers of each webhook route as required parameters, adds its `401` response and marks it with `x-afora-webhook: { scheme }`.
+
+`verifyWebhook(options, secrets, { header, body, now? })` is the check on its own, for a route you write by hand: it resolves to `undefined` when the request is signed, or to why not (`"missing_signature"`, `"malformed_signature"`, `"expired"`, `"mismatch"`).
 
 ## Authentication and custom context
 
@@ -128,5 +172,5 @@ The context only reaches `invoke` for operations that declare one, so the key (`
 
 ```ts
 import { stages } from "@afora/hono";
-// [{ name: "hono", module: "@afora/hono", export: "hono" }]
+// [{ name: "hono", module: "@afora/hono", export: "hono", kind: "sink" }]
 ```

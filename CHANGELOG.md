@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `stripUndeclared(shape, value)`: a copy of `value` with only the keys `shape` declares, at any depth (nested blueprints, list items, `optionalOf`, records and entities held as fields), for payloads that carry more than an operation reads, before parsing. It does not validate, never throws and does not change `value`. See `docs/standard-schema.md`.
+- `@afora/hono`: the `webhooks` option verifies the signatures of incoming webhooks (Stripe, GitHub, Standard Webhooks, plain HMAC-SHA256) and can strip undeclared keys. See `packages/hono/README.md#webhooks`.
+
 ## 0.0.7 — unreleased (draft: dated when it is published)
 
 ### Changed

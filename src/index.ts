@@ -275,6 +275,7 @@ export type {
 	TransformSettings,
 	TransformStage,
 } from "./core/output/types/output.interface";
+export { stripUndeclared } from "./core/parse/strip";
 export type {
 	Issue,
 	IssueCode,

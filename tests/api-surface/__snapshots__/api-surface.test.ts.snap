@@ -1825,6 +1825,9 @@ exports[`exports of the package and their declarations 1`] = `
   "statusOf": [
     "export declare function statusOf(error: unknown, operation?: Pick<OperationDescriptor, "errors">, statuses?: OutputStatuses): number;",
   ],
+  "stripUndeclared": [
+    "export declare function stripUndeclared(shape: AnyBlueprint | AnyRecordClass | BlueprintField, value: unknown): unknown;",
+  ],
   "toOpenAPI": [
     "export declare function toOpenAPI(field: BlueprintField): OpenAPISchema;",
     "export declare function toOpenAPI<const Models extends Record<string, BlueprintField>>(models: Models, options?: OpenAPIOptions): OpenAPIComponents<keyof Models & string>;",
