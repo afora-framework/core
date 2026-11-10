@@ -148,6 +148,12 @@ export type EntityConstructor<
 		value: unknown,
 	): ParseResult<InstanceType<Self>>;
 	readonly [Kind]: "record";
+	/**
+	 * The name of the class as declared: the `name` option, which a bundler
+	 * does not rename, or the name of the class without one. A subclass may
+	 * give its own with `static override readonly recordName = "..."`.
+	 */
+	readonly recordName: string;
 	readonly blueprint: IBlueprint<EntityProperties<Identity, Properties>>;
 	readonly options: RecordSettings<EntityProperties<Identity, Properties>>;
 	/** Its plugins, those they require included, each once. */

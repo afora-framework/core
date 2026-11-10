@@ -69,6 +69,14 @@ export interface RecordOptions<
 	Context = unknown,
 > {
 	/**
+	 * The name of the record, read with `recordNameOf(Class)` (or
+	 * `Class.recordName`): an identifier that stays the same when a bundler
+	 * renames the class. It names the record in exceptions, in the context a
+	 * repository gives its provider (`context.name` is `<name>Repository`) and
+	 * in OpenAPI. Without it, the name of the class is used.
+	 */
+	readonly name?: string;
+	/**
 	 * Keys whose values `toJSON` masks, every leaf as `MASK`, at any depth. A
 	 * key holding a property declared `sensitive` (as `Password`), or a list of
 	 * them, is always sensitive, and such a property is masked at any depth.
@@ -196,6 +204,12 @@ export type RecordConstructor<
 		value: unknown,
 	): ParseResult<InstanceType<Self>>;
 	readonly [Kind]: "record";
+	/**
+	 * The name of the class as declared: the `name` option, which a bundler
+	 * does not rename, or the name of the class without one. A subclass may
+	 * give its own with `static override readonly recordName = "..."`.
+	 */
+	readonly recordName: string;
 	readonly blueprint: IBlueprint<Properties>;
 	readonly options: RecordSettings<Properties>;
 	/** Its plugins, those they require included, each once. */

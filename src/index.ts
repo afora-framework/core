@@ -315,6 +315,7 @@ export {
 } from "./core/record/abstract-record";
 export {
 	IncompatibleRecordPlugin,
+	InvalidRecordDeclaration,
 	InvalidRecordPlugin,
 	InvalidRecordValue,
 	RecordPluginConflict,
@@ -323,6 +324,7 @@ export {
 	UnknownRecordPlugin,
 } from "./core/record/exceptions";
 export { MASK } from "./core/record/mask";
+export { recordNameOf } from "./core/record/name";
 export {
 	hasPlugin,
 	isRecordPlugin,

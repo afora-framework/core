@@ -259,6 +259,7 @@ complete L9:6 User.‸;
   options (property)
   plugins (property)
   prototype (property)
+  recordName (property)
   safeParse (method)
   toString (method)
 complete L10:55 const Users = repositoryOf({ entity: User, actions: ["‸"] });
@@ -565,6 +566,7 @@ complete L9:6 User.‸;
   options (property)
   plugins (property)
   prototype (property)
+  recordName (property)
   safeParse (method)
   toString (method)
 complete L10:55 const Users = repositoryOf({ entity: User, actions: ["‸"] });

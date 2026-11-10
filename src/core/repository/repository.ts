@@ -13,6 +13,7 @@ import {
 	recordDataOf,
 	recordFieldDataOf,
 } from "../record/abstract-record";
+import { recordNameOf } from "../record/name";
 import { Kind } from "../symbols/kind";
 import { type ExecutionScope, ScopeKey } from "../use-case/scope";
 import {
@@ -348,7 +349,7 @@ export function repositoryOf<
 	if (!isEntityClass(entity) || !(EntityUniqueKeys in entity)) {
 		invalid("repositoryOf", "Expected an entity class made by entityOf.");
 	}
-	const name = `${entity.name}Repository`;
+	const name = `${recordNameOf(entity)}Repository`;
 	const deletion = settings.deletion ?? "hard";
 	if (deletion !== "hard" && deletion !== "soft") {
 		invalid(name, 'Expected deletion to be "hard" or "soft".');
@@ -397,7 +398,10 @@ export function repositoryOf<
 	for (const name_ of new Set<unknown>(actions)) {
 		const method = typeof name_ === "string" ? methods.get(name_) : undefined;
 		if (!method)
-			invalid(name, unknownAction(entity.name, String(name_), methods));
+			invalid(
+				name,
+				unknownAction(recordNameOf(entity), String(name_), methods),
+			);
 		const [kind, implementation] = method;
 		const needs =
 			deletion === "soft" && kind === "delete"

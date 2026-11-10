@@ -21,6 +21,7 @@ import {
 	UndeclaredRecordProperty,
 } from "./exceptions";
 import { maskCollection } from "./mask";
+import { recordNameOf } from "./name";
 import type {
 	IRecord,
 	RecordChange,
@@ -101,7 +102,10 @@ function checkMembers(record: object, keys: readonly string[]): void {
 			keys.includes(name),
 		);
 		if (key !== undefined) {
-			throw new ReservedRecordKey({ source: Class.name, details: { key } });
+			throw new ReservedRecordKey({
+				source: recordNameOf(Class),
+				details: { key },
+			});
 		}
 	}
 	checked.add(Class);
@@ -184,7 +188,7 @@ function parseRecord(
 	try {
 		return { value: new Class(value as never) };
 	} catch (error) {
-		return { issues: issuesOfError(error, Class.name) };
+		return { issues: issuesOfError(error, recordNameOf(Class)) };
 	}
 }
 
@@ -277,7 +281,7 @@ export function storeRecordValue(
 	key: string,
 	value: unknown,
 ): { readonly next: unknown; readonly previous: unknown } {
-	const source = record.constructor.name;
+	const source = recordNameOf(record.constructor);
 	const { properties } = record[Meta].blueprint;
 	if (!Object.hasOwn(properties, key)) {
 		throw exceptionOfIssues(
@@ -371,7 +375,7 @@ export abstract class AbstractRecord<Properties extends IBlueprintCollection>
 	constructor(value: BlueprintInput<Properties>) {
 		checkMembers(this, Object.keys(this[Meta].blueprint.properties));
 
-		const source = this.constructor.name;
+		const source = recordNameOf(this.constructor);
 		const result = parseCollection(
 			this[Meta].blueprint.properties,
 			value,

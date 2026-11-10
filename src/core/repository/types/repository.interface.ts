@@ -184,9 +184,12 @@ export type RepositoryData = Readonly<Record<string, unknown>>;
 
 /** What a provider gets with every call: whose entities, and the environment. */
 export interface RepositoryContext<Environment = unknown> {
-	/** The entity class, e.g. to name a table after it. */
+	/** The entity class; name a table after `recordNameOf(entity)`, not `entity.name`. */
 	readonly entity: AnyRepositoryEntity;
-	/** The name of the repository, for the source of its exceptions. */
+	/**
+	 * The name of the repository, `<entity name>Repository`, for the source of
+	 * its exceptions; stable under minification when the entity declares a `name`.
+	 */
 	readonly name: string;
 	/** The keys no two entities may share, `id` first. */
 	readonly unique: readonly string[];

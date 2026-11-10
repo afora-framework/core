@@ -8,6 +8,7 @@ import {
 	runRecordEffects,
 	storeRecordValue,
 } from "../record/abstract-record";
+import { recordNameOf } from "../record/name";
 import { Meta } from "../symbols/meta";
 import {
 	type EntityEvent,
@@ -71,7 +72,7 @@ type Clocked = { readonly [EntityClock]: EntityClockSettings };
 function assertAlive(entity: { readonly isDeleted: boolean }): void {
 	if (entity.isDeleted) {
 		throw new DeletedEntity({
-			source: entity.constructor.name,
+			source: recordNameOf(entity.constructor),
 			details: { id: identityOf(entity).id },
 		});
 	}
@@ -164,7 +165,7 @@ export abstract class AbstractEntity<
 		const name = String(key);
 		if ((ENTITY_IDENTITY_KEYS as readonly string[]).includes(name)) {
 			throw new ImmutableEntityKey({
-				source: this.constructor.name,
+				source: recordNameOf(this.constructor),
 				details: { key: name },
 			});
 		}

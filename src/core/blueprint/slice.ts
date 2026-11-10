@@ -1,4 +1,5 @@
 import { AbstractRecord } from "../record/abstract-record";
+import { recordNameOf } from "../record/name";
 import { declareRecord } from "../record/record";
 import { blueprintFromProperties } from "./blueprint";
 import { UndeclaredBlueprintProperty } from "./exceptions";
@@ -125,7 +126,7 @@ function slicedRecordOf(
 			unique: kept(unique),
 			change: kept(change),
 		},
-		Original.name,
+		recordNameOf(Original),
 	);
 	Object.defineProperty(Sliced, Symbol.hasInstance, {
 		value(this: object, value: unknown) {

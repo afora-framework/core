@@ -11,11 +11,13 @@ import {
 	RecordPluginHooks,
 } from "./abstract-record";
 import {
+	InvalidRecordDeclaration,
 	RecordPluginConflict,
 	ReservedRecordKey,
 	UndeclaredRecordProperty,
 } from "./exceptions";
 import { isMarked } from "./marks";
+import { isRecordName } from "./name";
 import { applyPlugins, RecordPlugins } from "./plugin";
 import type {
 	AnyRecordPlugin,
@@ -99,6 +101,7 @@ export const recordOf: RecordBuilder<Record<never, never>> = recordBuilderOf();
 
 /** The options `declareRecord` takes, untyped. */
 interface RecordOptionsInput {
+	readonly name?: string;
 	readonly sensitive?: readonly string[];
 	readonly unique?: readonly string[];
 	readonly change?: readonly string[];
@@ -115,13 +118,20 @@ interface RecordOptionsInput {
 export function declareRecord(
 	Base: abstract new (value: never) => AbstractRecord<IBlueprintCollection>,
 	declared: AnyBlueprint,
-	{ plugins = [], ...declaredOptions }: RecordOptionsInput,
-	name: string,
+	{ plugins = [], name: declaredName, ...declaredOptions }: RecordOptionsInput,
+	fallback: string,
 	reserved: readonly string[] = [],
 	context: Readonly<Record<string, AnyRecordPlugin>> = {},
 ): abstract new (
 	value: never,
 ) => AbstractRecord<IBlueprintCollection> {
+	if (declaredName !== undefined && !isRecordName(declaredName)) {
+		throw new InvalidRecordDeclaration({
+			source: fallback,
+			details: `"name" must be an identifier, got ${JSON.stringify(declaredName)}.`,
+		});
+	}
+	const name = declaredName ?? fallback;
 	const applied = applyPlugins(
 		declared,
 		typeof plugins === "function" ? plugins(context) : plugins,
@@ -199,6 +209,15 @@ export function declareRecord(
 		static readonly [RecordPlugins] = applied.plugins;
 		static readonly [RecordPluginHooks] = applied.hooks;
 	}
+
+	// The declared `name`; without one, the name of the class it is read on,
+	// so a subclass answers with its own.
+	Object.defineProperty(DeclaredRecord, "recordName", {
+		get(this: { readonly name: string }) {
+			return declaredName ?? this.name;
+		},
+		configurable: true,
+	});
 
 	exposeRecordKeys(DeclaredRecord.prototype, keys);
 	for (const [member, descriptor] of Object.entries(applied.descriptors)) {
