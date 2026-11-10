@@ -616,7 +616,6 @@ export type {
 	StdCreateOptions,
 	StdEntityOptions,
 	StdHookArgs,
-	StdHookable,
 	StdHookOptions,
 	StdLifecycleOptions,
 	StdListOptions,
