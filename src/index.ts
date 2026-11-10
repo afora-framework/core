@@ -363,6 +363,7 @@ export type {
 	RecordValue,
 } from "./core/record/types/record.interface";
 export {
+	InvalidRepositoryCursor,
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
@@ -384,8 +385,12 @@ export type {
 	ProviderDescription,
 	ProviderOption,
 	ProviderOptions,
+	ProviderQuery,
 	ProviderSettings,
+	RepositoryCursorPage,
+	RepositoryCursorQuery,
 	RepositoryExists,
+	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
 	RepositoryOrder,

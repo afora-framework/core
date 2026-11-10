@@ -2,6 +2,7 @@ import {
 	blueprintOf,
 	entityOf,
 	type IRepositoryProvider,
+	type ProviderQuery,
 	type RepositoryContext,
 	type RepositoryData,
 	RepositoryEntityNotFound,
@@ -24,6 +25,11 @@ export interface ProviderContractOptions {
 	 * Run the transaction cases. Defaults to `provider.capabilities?.transactions`.
 	 */
 	readonly transactions?: boolean;
+	/**
+	 * Run the cases of `after`, which `findCursor` gives to `findMany`. Defaults
+	 * to `provider.capabilities?.keyset`.
+	 */
+	readonly keyset?: boolean;
 }
 
 type Row = Record<string, unknown>;
@@ -512,6 +518,144 @@ export function providerContract(
 				});
 				expect(stored).toEqual(data);
 			});
+		});
+
+		describe("keyset", () => {
+			const keyset = (name: string, body: () => Promise<void>) =>
+				it(name, async () => {
+					const enabled =
+						options.keyset ?? (await makeProvider()).capabilities?.keyset;
+					if (enabled === true) await body();
+				});
+			const seeded = async () => {
+				const f = await fixture();
+				// By id: a, b, c, d, e, f; `n` is missing on b and e, tied on c and d.
+				const [a, b, c, d, e, g] = [
+					row({ n: 1, group: 1, name: "Gil" }),
+					row({ group: 1, name: "Érico" }),
+					row({ n: 2, group: 2, name: "Ana" }),
+					row({ n: 2, group: 1, name: "ana" }),
+					row({ group: 2, name: "Bia" }),
+					row({ n: 3, group: 2, name: "Zoe" }),
+				] as [Row, Row, Row, Row, Row, Row];
+				await f.seed(a, b, c, d, e, g);
+				const find = (query: ProviderQuery) =>
+					f.provider.findMany(f.context, query).then(ids);
+				return { ...f, a, b, c, d, e, g, find };
+			};
+			const by = (key: string, direction: "asc" | "desc" = "asc") =>
+				[{ key, direction }, { key: "id" }] as const;
+
+			keyset(
+				"gives the rows strictly after the position, ascending",
+				async () => {
+					const { find, a, c, d, g } = await seeded();
+					const orderBy = by("n");
+					expect(await find({ orderBy, after: [1, a.id] })).toEqual([
+						c.id,
+						d.id,
+						g.id,
+					]);
+					// Between two rows tied on the first key, the next key decides.
+					expect(await find({ orderBy, after: [2, c.id] })).toEqual([
+						d.id,
+						g.id,
+					]);
+					expect(await find({ orderBy, after: [3, g.id] })).toEqual([]);
+				},
+			);
+
+			keyset("follows a descending order", async () => {
+				const { find, a, c, d, g } = await seeded();
+				const orderBy = by("n", "desc");
+				expect(
+					await find({
+						orderBy,
+						after: [3, g.id],
+						where: { n: { in: [1, 2] } },
+					}),
+				).toEqual([c.id, d.id, a.id]);
+				expect(
+					await find({
+						orderBy,
+						after: [2, d.id],
+						where: { n: { in: [1, 2] } },
+					}),
+				).toEqual([a.id]);
+			});
+
+			keyset(
+				"missing values are first ascending and last descending",
+				async () => {
+					const { find, a, b, c, d, e, g } = await seeded();
+					expect(
+						await find({ orderBy: by("n"), after: [undefined, b.id] }),
+					).toEqual([e.id, a.id, c.id, d.id, g.id]);
+					expect(
+						await find({ orderBy: by("n"), after: [undefined, e.id] }),
+					).toEqual([a.id, c.id, d.id, g.id]);
+					expect(
+						await find({ orderBy: by("n", "desc"), after: [1, a.id] }),
+					).toEqual([b.id, e.id]);
+					expect(
+						await find({ orderBy: by("n", "desc"), after: [undefined, b.id] }),
+					).toEqual([e.id]);
+					expect(
+						await find({ orderBy: by("n", "desc"), after: [undefined, e.id] }),
+					).toEqual([]);
+				},
+			);
+
+			keyset("compares strings by code point", async () => {
+				const { find, a, b, c, d, e, g } = await seeded();
+				// Ana < Bia < Gil < Zoe < ana < Érico
+				expect(
+					await find({ orderBy: by("name"), after: ["Bia", e.id] }),
+				).toEqual([a.id, g.id, d.id, b.id]);
+				expect(
+					await find({ orderBy: by("name", "desc"), after: ["ana", d.id] }),
+				).toEqual([g.id, a.id, e.id, c.id]);
+			});
+
+			keyset(
+				"combines with where, withDeleted and limit; count ignores it",
+				async () => {
+					const { provider, context, find, a, b, d } = await seeded();
+					const orderBy = [{ key: "id" }] as const;
+					expect(
+						await find({
+							orderBy,
+							after: [a.id],
+							where: { group: 1 },
+							limit: 1,
+						}),
+					).toEqual([b.id]);
+					expect(
+						await find({ orderBy, after: [b.id], where: { group: 1 } }),
+					).toEqual([d.id]);
+					await provider.update(context, {
+						...d,
+						deletedAt: "2024-01-01T00:00:00.000Z",
+					});
+					expect(
+						await find({ orderBy, after: [b.id], where: { group: 1 } }),
+					).toEqual([]);
+					expect(
+						await find({
+							orderBy,
+							after: [b.id],
+							where: { group: 1 },
+							withDeleted: true,
+						}),
+					).toEqual([d.id]);
+					expect(
+						await provider.count(context, {
+							orderBy,
+							after: [b.id],
+						} as RepositoryQuery),
+					).toBe(5);
+				},
+			);
 		});
 
 		const withTransactions = async () => {

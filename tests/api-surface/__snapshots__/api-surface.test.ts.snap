@@ -235,7 +235,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type RepositoryKeys<Dependencies> = { [Key in keyof Dependencies & string]: Dependencies[Key] extends AnyRepository ? Key : never; }[keyof Dependencies & string];",
   ],
   "(internal) RepositoryMethods": [
-    "export type RepositoryMethods<Entity, Actions extends string = string> = RepositoryFindBy<Entity, Actions> & RepositoryFindManyBy<Entity, Actions> & ("create" extends Actions ? RepositoryCreate<Entity> : unknown) & ("update" extends Actions ? RepositoryUpdate<Entity> : unknown) & ("delete" extends Actions ? RepositoryDelete<Entity> : unknown) & ("count" extends Actions ? RepositoryCount<Entity> : unknown) & ("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) & ("exists" extends Actions ? RepositoryExists<Entity> : unknown) & ("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown);",
+    "export type RepositoryMethods<Entity, Actions extends string = string> = RepositoryFindBy<Entity, Actions> & RepositoryFindManyBy<Entity, Actions> & ("create" extends Actions ? RepositoryCreate<Entity> : unknown) & ("update" extends Actions ? RepositoryUpdate<Entity> : unknown) & ("delete" extends Actions ? RepositoryDelete<Entity> : unknown) & ("count" extends Actions ? RepositoryCount<Entity> : unknown) & ("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) & ("exists" extends Actions ? RepositoryExists<Entity> : unknown) & ("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown) & ("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown);",
   ],
   "(internal) RepositoryOf": [
     "export type RepositoryOf<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment = Readonly<Record<never, never>>> = AbstractRepository<Entity, Actions, Environment> & RepositoryMethods<Entity, Actions[number]>;",
@@ -706,7 +706,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface IRecordPluginCatalog<Plugins extends Readonly<globalThis.Record<string, AnyRecordPlugin>> = Readonly<globalThis.Record<string, AnyRecordPlugin>>> { readonly [Kind]: "record-plugin-catalog"; readonly plugins: Plugins; readonly list: readonly AnyRecordPlugin[]; resolve(reference: RecordPluginReference): AnyRecordPlugin; resolveAll(references: readonly RecordPluginReference[]): readonly AnyRecordPlugin[]; }",
   ],
   "IRepositoryProvider": [
-    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; count(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; }",
+    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; count(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; }",
   ],
   "ISchema": [
     "export interface ISchema<SchemaType extends TSchema, Value = Static<SchemaType>> { match(value: unknown): value is Value; matchShape(value: unknown): boolean; errors(value: unknown): string[]; toString(): string; get type(): ISchemaType<SchemaType, Value>; }",
@@ -770,6 +770,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "InvalidRecordValue": [
     "InvalidRecordValue: import("../../index.js").DeclaredExceptionClass<{ readonly key: string; readonly errors: readonly string[]; readonly issues: readonly Issue[]; }>",
+  ],
+  "InvalidRepositoryCursor": [
+    "InvalidRepositoryCursor: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; readonly issues: readonly Issue[]; }>",
   ],
   "InvalidRepositoryData": [
     "InvalidRepositoryData: import("../../index.js").DeclaredExceptionClass<undefined>",
@@ -988,7 +991,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type PropertyValue<SchemaType extends TSchema, Value = Static<SchemaType>> = SchemaType extends TOptional<TSchema> ? Value | undefined : Value;",
   ],
   "ProviderCapabilities": [
-    "export interface ProviderCapabilities { readonly operators?: readonly string[]; readonly transactions?: boolean; }",
+    "export interface ProviderCapabilities { readonly operators?: readonly string[]; readonly transactions?: boolean; readonly keyset?: boolean; }",
   ],
   "ProviderDescription": [
     "export type ProviderDescription = { readonly kind: "provider"; readonly name: string; readonly options: ProviderOptions; } | { readonly kind: "opaque"; };",
@@ -1004,6 +1007,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "ProviderOptions": [
     "export type ProviderOptions = Readonly<Record<string, ProviderOption>>;",
+  ],
+  "ProviderQuery": [
+    "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; }",
   ],
   "ProviderReference": [
     "export interface ProviderReference { readonly kind: "ref"; readonly key: string; }",
@@ -1090,7 +1096,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type RegisteredApplication = Register extends { readonly application: infer Application extends AnyApplication; } ? Application : AnyApplication;",
   ],
   "RepositoryAction": [
-    "export type RepositoryAction<Entity> = keyof RepositoryFindBy<Entity> | keyof RepositoryFindManyBy<Entity> | "create" | "update" | "delete" | "count" | "findMany" | "exists" | "findPage";",
+    "export type RepositoryAction<Entity> = keyof RepositoryFindBy<Entity> | keyof RepositoryFindManyBy<Entity> | "create" | "update" | "delete" | "count" | "findMany" | "exists" | "findPage" | "findCursor";",
   ],
   "RepositoryContext": [
     "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly env: Environment; }",
@@ -1103,6 +1109,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "RepositoryCreateInput": [
     "export type RepositoryCreateInput<Entity> = EntityInstanceOf<Entity> | (Entity extends new (value: infer Input) => unknown ? Input : never);",
+  ],
+  "RepositoryCursorPage": [
+    "export interface RepositoryCursorPage<Entity> { readonly items: readonly EntityInstanceOf<Entity>[]; readonly limit: number; readonly next: string | undefined; }",
+  ],
+  "RepositoryCursorQuery": [
+    "export interface RepositoryCursorQuery<Entity = unknown> extends Omit<RepositoryQuery<Entity>, "offset" | "limit"> { readonly limit?: number; readonly after?: string; }",
   ],
   "RepositoryData": [
     "export type RepositoryData = Readonly<Record<string, unknown>>;",
@@ -1118,6 +1130,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "RepositoryFindBy": [
     "export type RepositoryFindBy<Entity, Actions extends string = string> = { readonly [Key in EntityUniqueKeyOf<Entity> as \`findBy\${Capitalize<Key>}\` extends Actions ? \`findBy\${Capitalize<Key>}\` : never]: (value: QueryValueOf<NonNullable<ValueAt<Entity, Key>>>) => Promise<EntityInstanceOf<Entity> | undefined>; };",
+  ],
+  "RepositoryFindCursor": [
+    "export interface RepositoryFindCursor<Entity> { findCursor(query?: RepositoryCursorQuery<Entity>): Promise<RepositoryCursorPage<Entity>>; }",
   ],
   "RepositoryFindMany": [
     "export interface RepositoryFindMany<Entity> { findMany(query?: RepositoryQuery<Entity>): Promise<EntityInstanceOf<Entity>[]>; }",
@@ -1233,7 +1248,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type StepFindTarget<Dependencies> = { [Key in RepositoryKeys<Dependencies>]: \`\${Key}.\${Extract<ActionsOf<Dependencies[Key]>, StepReadAction>}\`; }[RepositoryKeys<Dependencies>];",
   ],
   "StepReadAction": [
-    "export type StepReadAction = \`findBy\${string}\` | \`findManyBy\${string}\` | "findMany" | "exists" | "findPage" | "count";",
+    "export type StepReadAction = \`findBy\${string}\` | \`findManyBy\${string}\` | "findMany" | "exists" | "findPage" | "findCursor" | "count";",
   ],
   "StepReference": [
     "export type StepReference = \`$\${string}\`;",
@@ -2117,7 +2132,7 @@ exports[`testing entry (contract) 1`] = `
     "export interface IRecord<Properties extends IBlueprintCollection, Sensitive extends string = never> { readonly [Meta]: { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }; toJSON(): RecordJson<Properties, Sensitive>; }",
   ],
   "(internal) IRepositoryProvider": [
-    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; count(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; }",
+    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; count(context: RepositoryContext<Environment>, query?: RepositoryQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; }",
   ],
   "(internal) ISchema": [
     "export interface ISchema<SchemaType extends TSchema, Value = Static<SchemaType>> { match(value: unknown): value is Value; matchShape(value: unknown): boolean; errors(value: unknown): string[]; toString(): string; get type(): ISchemaType<SchemaType, Value>; }",
@@ -2199,7 +2214,10 @@ exports[`testing entry (contract) 1`] = `
     "interface Props<Input = unknown, Output = Input> { readonly version: 1; readonly vendor: string; readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>; readonly types?: Types<Input, Output> | undefined; }",
   ],
   "(internal) ProviderCapabilities": [
-    "export interface ProviderCapabilities { readonly operators?: readonly string[]; readonly transactions?: boolean; }",
+    "export interface ProviderCapabilities { readonly operators?: readonly string[]; readonly transactions?: boolean; readonly keyset?: boolean; }",
+  ],
+  "(internal) ProviderQuery": [
+    "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; }",
   ],
   "(internal) QueryKey": [
     "type QueryKey<Entity> = unknown extends Entity ? string : EntityKeyOf<Entity>;",
@@ -2292,7 +2310,7 @@ exports[`testing entry (contract) 1`] = `
     "export interface ContractRunner { describe(name: string, body: () => void): void; it(name: string, body: () => unknown): void; expect(value: unknown): { toBe(expected: unknown): unknown; toEqual(expected: unknown): unknown; }; }",
   ],
   "ProviderContractOptions": [
-    "export interface ProviderContractOptions { readonly transactions?: boolean; }",
+    "export interface ProviderContractOptions { readonly transactions?: boolean; readonly keyset?: boolean; }",
   ],
   "providerContract": [
     "export declare function providerContract(runner: ContractRunner, makeProvider: () => IRepositoryProvider | Promise<IRepositoryProvider>, options?: ProviderContractOptions): void;",
@@ -3268,7 +3286,7 @@ exports[`afora.json schema 1`] = `
           "additionalProperties": false,
           "properties": {
             "actions": {
-              "description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, create, update, delete, count.",
+              "description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, count.",
               "items": {
                 "type": "string",
               },
