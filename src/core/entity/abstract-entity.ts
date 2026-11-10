@@ -102,7 +102,8 @@ function withIdentity(value: unknown, clock: EntityClockSettings): unknown {
  */
 export abstract class AbstractEntity<
 	Properties extends IBlueprintCollection,
-> extends AbstractRecord<Properties> {
+	Sensitive extends string = never,
+> extends AbstractRecord<Properties, Sensitive> {
 	constructor(value: BlueprintInput<Properties>) {
 		super(
 			withIdentity(
