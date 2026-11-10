@@ -151,7 +151,9 @@ export async function executeSteps(
 			bind(await child(value(step.input)));
 		} else if (Object.hasOwn(step, "run")) {
 			const fn = step.fn as Method;
-			bind(await fn(...list(step.args), { context: this.context }));
+			bind(
+				await fn(...list(step.args), { context: this.context, dependencies }),
+			);
 		} else {
 			// create, update, delete or restore
 			const action = ["create", "update", "delete", "restore"].find((kind) =>

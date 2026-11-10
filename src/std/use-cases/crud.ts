@@ -1,14 +1,16 @@
 import { listOf } from "../../core/blueprint/list";
 import { optionalOf } from "../../core/blueprint/optional";
 import type { BlueprintField } from "../../core/blueprint/types/blueprint.interface";
-import type { AnyRepository } from "../../core/repository/types/repository.interface";
 import { UseCaseEntityNotFound } from "../../core/use-case/exceptions";
 import { useCasePluginOf } from "../../core/use-case/plugin";
 import type {
 	UseCaseCompilation,
 	UseCaseTargetInfo,
 } from "../../core/use-case/types/plugin.interface";
-import type { AnyExceptionClass } from "../../core/use-case/use-case";
+import type {
+	AnyExceptionClass,
+	UseCaseDependency,
+} from "../../core/use-case/use-case";
 import { Integer } from "../properties/primitives";
 import {
 	asOf,
@@ -19,7 +21,10 @@ import {
 	entityUseCase,
 	errorOf,
 	fields,
+	HOOKS,
+	hooksOf,
 	idOf,
+	joinDependencies,
 	keysOf,
 	literal,
 	loadSteps,
@@ -39,19 +44,22 @@ import type {
 } from "./types";
 
 /**
- * The declaration of `create` and of `register`, which adds `before` and
- * its errors: an input of the keys of the entity, the entity built from it
- * and stored.
+ * The declaration of `create` and of `register`, which adds `checks` and
+ * their errors: an input of the keys of the entity, the entity built from
+ * it and stored. The option `before` runs first, and the steps after it read
+ * the input it gives; `checks` read it under `$input` all the same, rooted
+ * by the function given.
  */
 export function createCompilation(
 	target: UseCaseTargetInfo,
 	options: Options,
 	verb: string,
-	before: readonly Step[] = [],
+	checks: (input: string) => readonly Step[] = () => [],
 	errors: readonly AnyExceptionClass[] = [],
 ): UseCaseCompilation {
-	checkOptions(target, options, ["as", "owner", "omit", "values"]);
+	checkOptions(target, options, ["as", "owner", "omit", "values", ...HOOKS]);
 	const owner = ownerOf(target, options);
+	const hooks = hooksOf(target, options);
 	const omitted = keysOf(target, options, "omit");
 	const constants = valuesOf(target, options, "values");
 	const notFound = errorOf(target, options, "notFound", UseCaseEntityNotFound);
@@ -59,11 +67,11 @@ export function createCompilation(
 
 	const input: Record<string, BlueprintField> = {};
 	const values: Record<string, unknown> = {};
-	const dependencies: Record<string, AnyRepository> = {
+	const dependencies: Record<string, UseCaseDependency> = {
 		repository: target.repository,
 	};
 	const steps: Step[] = [];
-	const used = new Set<AnyExceptionClass>(errors);
+	const used = new Set<AnyExceptionClass>([...errors, ...hooks.throws]);
 	const take = (key: string, field: BlueprintField): void => {
 		if (Object.hasOwn(input, key)) {
 			target.unavailable(`two keys of the entity take the input "${key}"`);
@@ -119,7 +127,7 @@ export function createCompilation(
 			continue;
 		}
 		take(plan.input.key, plan.input.field);
-		const given = `$input.${plan.input.key}`;
+		const given = `${hooks.input}.${plan.input.key}`;
 		if (plan.kind === "entity") {
 			values[key] = load(key, given, notFound);
 		} else if (plan.convert) {
@@ -140,13 +148,15 @@ export function createCompilation(
 		blueprint: fields(() => input),
 		response: fields(() => ({ [asOf(target, options)]: target.entity })),
 		...contextOf(owner),
-		dependencies,
+		dependencies: joinDependencies(target, dependencies, hooks),
 		errors: distinct(...used),
 		steps: [
-			...before,
+			...hooks.before(),
+			...checks(hooks.input),
 			...steps,
 			{ build: target.entity, values, as: "built" },
 			{ create: "repository", value: "$built", as: "item" },
+			...hooks.after("$item"),
 			{ return: { [asOf(target, options)]: "$item" } },
 		],
 	};
@@ -237,8 +247,9 @@ export const update = useCasePluginOf<"update", UpdateMaker>("update", {
 		"Changes the change keys the input gives, leaving the others as they are, and stores the entity.",
 	requires: { actions: ["findById", "update"] },
 	compile: (target, options) => {
-		checkOptions(target, options, ["as", "owner"]);
+		checkOptions(target, options, ["as", "owner", ...HOOKS]);
 		const owner = ownerOf(target, options);
+		const hooks = hooksOf(target, options);
 		const notFound = errorOf(
 			target,
 			options,
@@ -257,7 +268,7 @@ export const update = useCasePluginOf<"update", UpdateMaker>("update", {
 		}
 		const steps: Step[] = [];
 		for (const plan of plans) {
-			const given = `$input.${plan.input.key}`;
+			const given = `${hooks.input}.${plan.input.key}`;
 			let value = given;
 			if (plan.convert) {
 				steps.push({
@@ -280,12 +291,18 @@ export const update = useCasePluginOf<"update", UpdateMaker>("update", {
 			})),
 			response: fields(() => ({ [asOf(target, options)]: target.entity })),
 			...contextOf(owner),
-			dependencies: { repository: target.repository },
-			errors: [notFound],
+			dependencies: joinDependencies(
+				target,
+				{ repository: target.repository },
+				hooks,
+			),
+			errors: distinct(notFound, ...hooks.throws),
 			steps: [
 				...loadSteps(owner, notFound),
+				...hooks.before("$item"),
 				...steps,
 				{ update: "repository", value: "$item", as: "saved" },
+				...hooks.after("$saved"),
 				{ return: { [asOf(target, options)]: "$saved" } },
 			],
 		};
@@ -298,10 +315,17 @@ const remove = useCasePluginOf<"delete", DeleteMaker>("delete", {
 		"Deletes the entity of an id, hard or soft as the repository declares, and gives it.",
 	requires: { actions: ["findById", "delete"] },
 	compile: (target, options) =>
-		entityUseCase(target, options, "Delete", [], () => ({
-			steps: [{ delete: "repository", value: "$item", as: "deleted" }],
-			result: "$deleted",
-		})),
+		entityUseCase(
+			target,
+			options,
+			"Delete",
+			[],
+			() => ({
+				steps: [{ delete: "repository", value: "$item", as: "deleted" }],
+				result: "$deleted",
+			}),
+			true,
+		),
 });
 
 export { remove as delete_ };
@@ -313,14 +337,22 @@ export const restore = useCasePluginOf<"restore", RestoreMaker>("restore", {
 	requires: { actions: ["restore"] },
 	compile: (target, options) => {
 		// A deleted entity cannot be read to check who owns it before it is back.
-		checkOptions(target, options, ["as"]);
+		checkOptions(target, options, ["as", ...HOOKS]);
+		const hooks = hooksOf(target, options);
 		return {
 			...metaOf(target, options, "Restore"),
 			blueprint: fields(() => ({ id: idOf(target) })),
 			response: fields(() => ({ [asOf(target, options)]: target.entity })),
-			dependencies: { repository: target.repository },
+			dependencies: joinDependencies(
+				target,
+				{ repository: target.repository },
+				hooks,
+			),
+			errors: distinct(...hooks.throws),
 			steps: [
-				{ restore: "repository", value: "$input.id", as: "item" },
+				...hooks.before(),
+				{ restore: "repository", value: `${hooks.input}.id`, as: "item" },
+				...hooks.after("$item"),
 				{ return: { [asOf(target, options)]: "$item" } },
 			],
 		};

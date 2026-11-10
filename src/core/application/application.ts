@@ -894,8 +894,16 @@ function describeRegistry(
 					}),
 				} as const);
 	};
-	// The classes among the options of a plugin, by name; the rest as it is.
+	// The classes and dependencies among the options of a plugin, by name; the rest as it is.
 	const describeOption = (value: unknown): unknown => {
+		if (isLoggerDeclaration(value)) return "Logger";
+		if (isUseCaseClass(value)) return useCaseRefs.get(value);
+		if (isEnvironment(value)) return environmentRefs.get(value);
+		if (isRepository(value)) {
+			return repositories.get(
+				(inspectRepository(value) as RepositoryInspection).state,
+			);
+		}
 		if (typeof value === "function") {
 			if (isDeclaredException(value)) {
 				return (
