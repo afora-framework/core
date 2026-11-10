@@ -46,7 +46,7 @@ Dependencies default to `{}`. Each dependency function creates a fresh child, re
 
 Events from managed children move to the parent when each child finishes, including on failure and when the parent's response omits the child result. Then the validated parent response is traversed through declared records, entities, nested blueprints and lists. Repeated object references are visited once; separately emitted duplicate events are preserved. Child events follow completion order, followed by remaining response events. No handlers run automatically. `pullEvents()` immediately drains the queue, which remains available after failure. Invalid responses are not drained. Overrides contribute events from their returned entities; hidden operations inside an override must expose their events separately.
 
-With a logger set (`configure({ logger })`), each execution, each repository call made through it and a failure, once, are logged; see [Logging](logging.md).
+In an application with a `log`, each execution, each repository call made through it and a failure, once, are logged. A use case that logs itself declares `Logger` as a dependency (`dependencies: { logger: Logger }`) and gets an `ILogger`, which `execute` can replace like any dependency; see [Logging](logging.md).
 
 ## Context and metadata
 

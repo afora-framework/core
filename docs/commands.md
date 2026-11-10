@@ -35,7 +35,7 @@ In an application, register commands under `commands: { Users }` (keyed by `comm
 6. The event policy applies, in `run` only:
    - `"after-commit"`: awaits `event.handle()` in emission order. On the first failure, `onEventError(error, event, info)` is awaited (`info` as a handler gets it, below) and the next event runs; without it, `run` throws `CommandEventFailed` (`cause`, `details: { operation, event, handled, remaining }`). The commit already happened, so the data is saved even when this error is thrown.
    - `"manual"`: `run` drops the events; use `execute` to get them.
-   - a function: awaited with `(events, { command, operation, context, env })`; a rejection is a `CommandEventFailed`.
+   - a function: awaited with `(events, { command, operation, context, env, logger })`; a rejection is a `CommandEventFailed`. `logger` is the one of the application that bound the command (see [Logging](logging.md)), and an event handled by `"after-commit"` gets it too.
 7. The validated response is returned.
 
 `execute` performs steps 1 to 5 and returns `{ value, events }` without applying the policy, for outboxes and tests. The whole call runs under a `Command` guard, so errors gain the frame `command @ Users.register`. Concurrent calls are independent; each builds its own use case.

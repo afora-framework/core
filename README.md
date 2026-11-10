@@ -35,8 +35,6 @@ const hasher: PasswordHasher = {
 configure({ hasher, idGenerator: () => myUuidV7() }); // both optional; `resetRuntime()` restores the defaults
 ```
 
-`configure({ logger })` also takes a logger, which then gets each use case, command and repository call, and each failure once; see [Logging](docs/logging.md).
-
 ## Quick start
 
 A `User` entity with a sensitive key and a unique key, a repository, a use case written as steps, a command that wraps it in a transaction, and an output that serves the command as an HTTP API with an OpenAPI document. Install what it uses:
