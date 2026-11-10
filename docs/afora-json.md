@@ -25,6 +25,30 @@ afora-codegen extract src/app.ts#App [--import key=./file.ts#name] > afora.json
 
 `extract` imports the file, so use Bun (or Node >= 23.6) for TypeScript files. The CLI runs on Node >= 22 or Bun. The same functions are available from code: `loadSpec`, `validateSpec`, `generate`, `writeGenerated`, `extractSpec`, `normalizeSpec`, `catalog`.
 
+## Versioned entities and increment
+
+An entity takes `"versioned": true`, generated as `entityOf(..., { versioned: true })` and extracted back from `describe()`: it gets a `version` identity key, so its fields cannot declare `version` (`identity_key`) nor its `change` name it (`change_identity`), and `update` throws `RepositoryConcurrencyConflict` (409) on a stale write (see [Repositories](repositories.md)). A record does not take it (`unknown_key`).
+
+A repository lists `"increment"` among its actions for atomic counters; the entity needs a number key (a Std `integer` or `number` property, not a list) in its `change` (`increment_needs_number` otherwise). It is called by code written by hand: a `find` step cannot call it (`write_in_find`), and there is no step for it.
+
+```json
+{
+	"entities": {
+		"PageViews": {
+			"fields": { "entry": "text", "views": "integer" },
+			"change": ["views"],
+			"versioned": true
+		}
+	},
+	"repositories": {
+		"Views": {
+			"entity": "PageViews",
+			"actions": ["findById", "update", "increment"]
+		}
+	}
+}
+```
+
 ## Round trip
 
 `extractSpec(app)` reads `app.describe()` and is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec, and `normalizeSpec` makes the shorthand and object forms of a field compare equal. This holds for code that was generated, and for code written by hand, as long as everything the core cannot describe is mapped to an export (next section). An unmapped piece makes extraction throw an `ExtractionError` naming the key, instead of guessing. `examples/blog` extracts its own spec back in its tests, and `bun run test:roundtrip` proves both directions on complete applications.

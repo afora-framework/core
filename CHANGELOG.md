@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Optimistic concurrency and atomic increment (#44, #34)
+
+- Versioned entities: `entityOf(blueprint, { versioned: true })` adds a `version` identity key (`EntityVersion`, a positive integer, 1 when built), read-only and present on the instance type only for a versioned entity (`VersionedIdentity`, `IEntityVersion`). The repository's `update` writes only when the stored version is still the one the entity was read with, and bumps it (also the entity's); otherwise it throws the new `RepositoryConcurrencyConflict` (Repository layer, `details: { id, expected, actual? }`), which `statusOf` maps to 409. A soft `delete` and `restore` check and bump it too. A provider without `capabilities.versioning` makes the first write of a versioned entity throw `InvalidRepositoryDeclaration`. The standard use cases leave `version` out of their inputs, `app.describe()` marks the entity `versioned: true`, and OpenAPI schemas give `version` as read-only. See `docs/entities.md#versioned-entities` and `docs/repositories.md`.
+- `IRepositoryProvider.update(context, data, options?: { expectedVersion? })` (`ProviderUpdateOptions`): with `expectedVersion`, a provider with `capabilities.versioning` compares the stored `version` in the same atomic step as the write. `inMemoryProvider()` advertises `versioning: true`.
+- The `increment` repository action: `increment(idOrEntity, deltas, { create? })` adds numbers to keys of the entity in one atomic write and gives the entity as stored; only number keys of its `change` list, checked by type (`EntityIncrementKeyOf`, `RepositoryIncrementDeltas`) and at runtime (the new `InvalidRepositoryIncrement`, with issues, a 400). It stamps `updatedAt`, bumps the version of a versioned entity and queues `onUpdate`; without `create` a missing id throws `RepositoryEntityNotFound`, with it the entity is built from `create` and the id (deltas added, validated, `onCreate`) and inserted, and a concurrent create loses nothing. Also exported: `RepositoryIncrement`, `RepositoryIncrementOptions`.
+- `IRepositoryProvider.increment?(context, id, deltas, { set?, create? })` (`ProviderIncrementOptions`), advertised with `capabilities.atomic`, and needed by the action. `inMemoryProvider()` implements it (`atomic: true`), as does a provider of `providersOf` or `providerFrom` that forwards to one.
+- `providerContract` runs the cases of `versioning` (a stale version, two updates with the same one, no expected version) and `atomic` (concurrent increments, a missing id with and without `create`, concurrent creates, soft-deleted rows, an increment then a stale update), gated by the capabilities or the options of the same names. Their rows use the `version` and `visits` columns.
+- Steps: a `find` step naming `increment` is `write_in_find`.
+
 ### Changed
 
 - `CommandEventInfo` has `publisher(name)`, and a handler policy that throws a `CommandEventFailed` itself has it passed up as it is instead of wrapped.

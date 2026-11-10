@@ -36,6 +36,8 @@ class Post extends entityOf(
 new Post({ title: "Hi", author: { name: "Jane" }, coauthors: [user] }); // author gets its own id
 ```
 
+A versioned entity has a fifth identity key, `version` (see [Versioned entities](#versioned-entities)).
+
 The identity keys are read-only: `set` throws `ImmutableEntityKey` for them, and they get no `change.<key>` method. The blueprint cannot declare them, nor the members of an entity (`destroy`, `isDeleted`, `equals`, `onDestroy`, `emit`, `pullEvents`): `entityOf` throws `ReservedEntityKey`. `user.equals(other)` compares entities of the same declaration by `id`. `isEntityClass` and `isEntity` tell entities apart from records. `entityBuilderOf({ identity, generateId, now })` makes an `entityOf` with your own identity fields and clock.
 
 Entities can queue domain events for an external consumer. `eventOf` accepts an entity class (including subclasses) and an optional async handler returning `Promise<void>`, called with the entity and `{ logger }` (the logger of the application whose command raised the event; see [Logging](logging.md)); `event.handle({ logger })` can give another. Definitions are immutable; incompatible entity instances are rejected when emitting. An event without a handler (`eventOf("created", Post)`) only carries the entity, for a policy such as [`publishEvents`](commands.md#event-policies); its `handle()` does nothing. `app.describe().entities.<Name>.events` gives the lifecycle events of an entity by cycle, each `{ name, handler }` (whether it has one).
@@ -97,3 +99,21 @@ for (const event of user.pullEvents()) {
 Each lifecycle option accepts a definition, a readonly list, or a function returning either. Functions are resolved only during their cycle, so definitions may follow the entity class but must exist before constructing instances. `onCreate` queues after base construction and validation only when **both** input `id` and `createdAt` are `undefined`. Supplying either identity field, as when loading persisted data, suppresses creation; parsing plain input follows the same rule. `onUpdate` queues after each valid `set` (including `change.<key>` and equal values) stores the value and `updatedAt`, before `onSetAll` and `onSet`. `onDelete` queues after `deletedAt` is stored, before `onDestroy`. Invalid operations and repeated deletion do not queue lifecycle events. If an existing hook throws after a mutation, its queued events remain.
 
 The consuming layer decides when to drain and execute events. `handle()` propagates handler failures and can be called more than once. There is no automatic execution, dispatcher, retry, or execution-once guarantee.
+
+## Versioned entities
+
+`entityOf(blueprint, { versioned: true })` adds a `version` identity key: a positive integer (`EntityVersion`), 1 when the entity is built without one, kept as given when it is loaded. Like the other identity keys it is read-only (no `change.version`, `set` throws `ImmutableEntityKey`) and the blueprint cannot declare it (`ReservedEntityKey`); only the repository moves it. On an entity that is not versioned, `version` is an ordinary key, and the instance type has `version: number` only when `versioned` is `true`.
+
+```ts
+class Doc extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{
+		change: ["title"],
+		versioned: true,
+	},
+) {}
+
+new Doc({ title: "Draft" }).version; // 1
+```
+
+The repository uses it for optimistic concurrency: `update` (and a soft `delete`, `restore` and `increment`) writes only when the stored version is the one the entity was read with, and bumps it; otherwise it throws `RepositoryConcurrencyConflict` (409). See [Repositories](repositories.md) (Concurrency). The standard use cases leave `version` out of their inputs, as any identity key, and `app.describe()` marks the entity `versioned: true`.

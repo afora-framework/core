@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Optimistic concurrency and atomic increment (#44, #34)
+
+- An entity takes `"versioned": true`, generated as `entityOf(..., { versioned: true })` and extracted back from `describe()`. Its identity has `version`, so a field `version` is `identity_key` and `change: ["version"]` is `change_identity`; on a record it is `unknown_key`, and a value that is not a boolean is `invalid_option`.
+- `increment` is a repository action, listed in `catalog().repositoryActions` and `afora.schema.json`; it needs a number key in the entity's `change` (`increment_needs_number`), and a `find` step cannot call it (`write_in_find`). The generated code needs the `@afora/core` that has it.
+
 ### Added
 
 - Entity events in the spec: `"events": { "onCreate"?, "onUpdate"?, "onDelete"? }` on an entity, each an event name or `{ name, handler: { import } }` (or a list), generated as `export const <Name>Events = { ... eventOf(...) }` with the lifecycle options of `entityOf`, and extracted back from `describe()` (`entities.<Name>.events.<event>` in `imports` for a handler). New issues `invalid_event` and `event_conflict`; `name_collision` when a declaration takes `<Name>Events`.

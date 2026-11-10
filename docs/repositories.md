@@ -1,6 +1,6 @@
 # Repositories
 
-`repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `restore` (with soft deletion), `count`, and the queries `findMany`, `exists`, `findPage` and `findCursor`. Every method is async.
+`repositoryOf` makes a repository of an entity with the methods you choose: `findBy<Key>` for a unique key (`id`, a key in `options.unique`, or one holding a `unique` property such as `Slug`), giving the entity or `undefined`; `findManyBy<Key>` for any key that is not unique, giving a list (a unique key has `findBy<Key>` instead, so `findManyByEmail` is rejected by type and at declaration); `create`, `update`, `delete`, `restore` (with soft deletion), `increment`, `count`, and the queries `findMany`, `exists`, `findPage` and `findCursor`. Every method is async.
 
 ```ts
 import {
@@ -90,6 +90,53 @@ A cursor is opaque text (base64url) that holds the values of the order keys of t
 
 The `restore` action brings a soft-deleted entity back: `await Posts.restore(post)` (or its id) reads the row with deleted ones included, clears `deletedAt`, stamps `updatedAt` and saves it through the provider's `update`, which must therefore clear a value that is left out. It gives a new entity, alive; the deleted instance stays as it is. An entity that is not deleted is given as it is stored, and an unknown id throws `RepositoryEntityNotFound`. Listing `restore` without `deletion: "soft"` throws `InvalidRepositoryDeclaration`.
 
+**Concurrency.** `update` reads nothing: it writes the value the entity holds, so when two use cases load the same entity, change it and save it, the second write silently replaces the first. An entity declared with `versioned: true` (see [Entities](entities.md#versioned-entities)) prevents that with optimistic concurrency: it has a `version`, 1 when created, and `update` writes only when the stored `version` is still the one the entity was read with, storing the next one and moving the entity's `version` to it. When someone else wrote the entity in between, `update` throws `RepositoryConcurrencyConflict` (Repository layer, `details: { id, expected, actual? }`), which an output answers with 409; read the entity again and retry, or report the conflict.
+
+```ts
+class Doc extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{
+		change: ["title"],
+		versioned: true,
+	},
+) {}
+const Docs = repositoryOf({ entity: Doc, actions: ["findById", "update"] });
+
+const a = await Docs.findById(id); // version 1
+const b = await Docs.findById(id); // version 1
+await Docs.update(a.change.title("A")); // stored as version 2; a.version is 2
+await Docs.update(b.change.title("B")); // throws RepositoryConcurrencyConflict
+```
+
+A soft `delete` and `restore` write through `update`, so they check and bump the version too, and so does `increment`. The provider must check versions, `capabilities.versioning` (`inMemoryProvider` and `@afora/drizzle` do): it gets `{ expectedVersion }` as the third argument of `update` and compares it in the same atomic step as the write. A versioned entity whose provider does not throws `InvalidRepositoryDeclaration` on its first write, not when declared, since the provider of an application may only be known once it starts. The check covers the time between the read and the write of one process; a version a client sends back (an HTTP `If-Match`) is up to the use case, which can compare it with the one it loads.
+
+**Increment.** `increment(idOrEntity, deltas, options?)` adds numbers to keys of the stored entity in one atomic write, so concurrent calls lose nothing (an `update` would read, add and write, and two calls would lose one increment). It takes only keys of the entity's `change` list that hold a number, checked by type and at runtime (`InvalidRepositoryIncrement`, with an issue for each key, answered with 400), stamps `updatedAt`, bumps the `version` of a versioned entity, queues `onUpdate` and gives the entity as stored.
+
+```ts
+class Counter extends entityOf(
+	blueprintOf((ctx) => ({
+		entry: ctx.string,
+		views: ctx.integer,
+		reads: ctx.integer,
+	})),
+	{ change: ["views", "reads"] },
+) {}
+const Counters = repositoryOf({
+	entity: Counter,
+	actions: ["increment", "findById"],
+});
+
+await Counters.increment(id, { views: 1, reads: 1 }); // Counter
+// creates the counter when the id holds none: { entry: "home", views: 1, reads: 0 }
+await Counters.increment(
+	id,
+	{ views: 1 },
+	{ create: { entry: "home", reads: 0 } },
+);
+```
+
+Without `create`, an id that holds no entity (or a soft-deleted one) throws `RepositoryEntityNotFound`. With `create`, the missing entity is built through the entity class from `create` and the given id, each delta added to its value (0 when left out), so it is validated, gets its identity (`version: 1`) and queues `onCreate`; the provider inserts it, and a concurrent call that inserted it first still gets its deltas added. A soft-deleted entity keeps its id, so `create` on one throws `RepositoryUniqueViolation`. The sum is validated when the entity is read back, not before it is stored: a property with a maximum is not a limit `increment` enforces. The provider needs `increment`, which `repositoryOf` checks when the action is declared, and advertises it with `capabilities.atomic`.
+
 **Providers.** A repository reads and writes through an `IRepositoryProvider` (v2), on plain unmasked values, each call getting a `context` with the `entity`, the repository `name`, its `unique` keys and `env`:
 
 ```ts
@@ -103,10 +150,21 @@ interface IRepositoryProvider<Environment = unknown> {
 		query?: RepositoryQuery,
 	): Promise<readonly RepositoryData[]>;
 	insert(context, data): Promise<void>;
-	update(context, data): Promise<void>;
+	update(
+		context,
+		data,
+		options?: { expectedVersion?: number }, // capabilities.versioning
+	): Promise<void>;
 	remove(context, id: string): Promise<void>;
 	count(context, query?: RepositoryQuery): Promise<number>; // ignores orderBy, limit and offset
-	capabilities?: ProviderCapabilities; // e.g. { transactions: true }
+	increment?(
+		// capabilities.atomic
+		context,
+		id: string,
+		deltas: Readonly<Record<string, number>>,
+		options?: { set?: RepositoryData; create?: RepositoryData },
+	): Promise<RepositoryData>; // the row as stored
+	capabilities?: ProviderCapabilities; // e.g. { transactions: true, keyset: true, versioning: true, atomic: true }
 	transaction?<Result>(
 		run: (provider: IRepositoryProvider<Environment>) => Promise<Result>,
 	): Promise<Result>;
@@ -115,6 +173,8 @@ interface IRepositoryProvider<Environment = unknown> {
 ```
 
 `context.name` is `<entity name>Repository`, and a provider that keeps one table or collection for each entity keys it by that name or by `recordNameOf(context.entity)`, not by `context.entity.name`: the name of a class changes when the code is minified, and the name declared with `entityOf(blueprint, { name: "User" })` does not (see [Records](records.md)).
+
+A provider that sets `capabilities.versioning` honors `options.expectedVersion` on `update`: it writes only when the stored `version` equals it, in the same atomic step, and throws `RepositoryConcurrencyConflict` otherwise (`RepositoryEntityNotFound` still for an unknown id). One that sets `capabilities.atomic` has `increment`: it adds each delta to its key (a missing value counts as 0) and stores `options.set` (the repository sends `updatedAt`) in one atomic write on a row that is not soft-deleted, and gives the row as stored; when the id holds none it inserts `options.create` as it is, or throws `RepositoryEntityNotFound` without it, and an insert that races with another one still adds the deltas. A versioned entity's `version` is one of the deltas, so an increment makes a later `update` with the old version conflict.
 
 A provider that sets `capabilities.keyset` also honors `after` on `findMany` (`ProviderQuery`): one value for each order of `orderBy`, those of the last row read, for which it gives only the rows strictly after that position in the same order (missing values first when ascending, last when descending). `count` ignores it. A provider without the capability is never given `after`. `providerContract` runs these cases when the capability is set.
 
@@ -205,4 +265,4 @@ import { myProvider } from "./my-provider";
 providerContract({ describe, it, expect }, () => myProvider());
 ```
 
-It checks `insert`, `findOne`, `findMany`, `update` (which also clears a value that is left out, as `restore` needs), `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; and, when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints.
+It checks `insert`, `findOne`, `findMany`, `update` (which also clears a value that is left out, as `restore` needs), `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; and, when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints. Likewise `capabilities.versioning` (`{ versioning: true }`) runs the cases of `expectedVersion` (a stale version conflicts, two updates with the same one give exactly one conflict, no `expectedVersion` changes nothing), and `capabilities.atomic` (`{ atomic: true }`) those of `increment` (concurrent increments sum up, a missing id with and without `create`, concurrent creates, soft-deleted rows, and an increment of `version` making an update with the old one conflict). The rows of these cases use the columns `version` and `visits` (numbers).
