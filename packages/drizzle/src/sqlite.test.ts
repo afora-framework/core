@@ -133,6 +133,31 @@ describe("repositoryOf", () => {
 		});
 	});
 
+	it("pages by cursor over the database", async () => {
+		const { provider, User } = world();
+		const Users = repositoryOf({
+			entity: User,
+			provider,
+			actions: ["create", "findCursor"],
+		});
+		const people = ["Caio", "Ana", "Érico", "Bia", "Davi"];
+		for (const [index, name] of people.entries()) {
+			await Users.create(new User({ name, email: `p${index}@example.com` }));
+		}
+		const names: string[][] = [];
+		let after: string | undefined;
+		do {
+			const page = await Users.findCursor({
+				orderBy: [{ key: "name", direction: "desc" }],
+				limit: 2,
+				after,
+			});
+			names.push(page.items.map((user) => user.name));
+			after = page.next;
+		} while (after !== undefined);
+		expect(names).toEqual([["Érico", "Davi"], ["Caio", "Bia"], ["Ana"]]);
+	});
+
 	it("creates, finds, updates, pages and removes", async () => {
 		const { provider, User } = world();
 		const Users = repositoryOf({
