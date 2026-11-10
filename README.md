@@ -307,6 +307,7 @@ Each concept has a page in [docs/](docs/README.md), in the order they build on o
 - [Records](docs/records.md): a class that holds the handled value, masks sensitive keys and generates `change.<key>`; plugins; experimental slicing.
 - [Entities](docs/entities.md): a record with identity, timestamps, `destroy()` and domain events.
 - [Repositories](docs/repositories.md): typed async methods for an entity, queries, soft deletion, providers, transactions and relations.
+- [Schema evolution](docs/schema-evolution.md): `fill`, `renamedFrom`, `schemaVersion` with `upgrade` steps and `previousNames`, so old rows are still read; `app.migrate` to rewrite them, and a schema lock checked in CI and on `start`.
 - [Use cases](docs/use-cases.md): the Command pattern with method injection, written as code or as steps.
 - [Commands](docs/commands.md): use cases under operation names, with a context, a transaction and an event policy.
 - [Outputs](docs/outputs.md): commands through stages into a sink, such as an HTTP API or an OpenAPI document.
