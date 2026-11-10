@@ -2,6 +2,7 @@ import {
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryQuery,
 	type IRepositoryProvider,
+	RepositoryConcurrencyConflict,
 	type RepositoryContext,
 	type RepositoryData,
 	RepositoryEntityNotFound,
@@ -389,8 +390,43 @@ function providerOver(
 	const notFound = (context: RepositoryContext, id: string) =>
 		new RepositoryEntityNotFound({ source: context.name, details: { id } });
 
+	/** The `version` column, which an expected version needs. */
+	const versionOf = (context: RepositoryContext, mapping: Mapping): Column =>
+		mapping.columns.version ??
+		invalid(
+			`The table of "${context.name}" has no "version" column, which a versioned entity needs.`,
+		);
+
+	/** What `increment` sets: each delta added to its column, and `set` as it is. */
+	const incrementOf = (
+		context: RepositoryContext,
+		mapping: Mapping,
+		deltas: Readonly<Record<string, number>>,
+		set: RepositoryData = {},
+	): Record<string, unknown> => {
+		const changes: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(set)) {
+			if (value === undefined) continue;
+			const column = mapping.columns[key];
+			if (!column) invalid(`"${key}" has no column in the table.`);
+			changes[key] = toColumn(column, value);
+		}
+		for (const [key, delta] of Object.entries(deltas)) {
+			const column = mapping.columns[key];
+			if (!column)
+				invalid(`"${key}" has no column in the table of "${context.name}".`);
+			changes[key] = sql`coalesce(${column}, 0) + ${delta}`;
+		}
+		return changes;
+	};
+
 	return {
-		capabilities: Object.freeze({ transactions: true, keyset: true }),
+		capabilities: Object.freeze({
+			transactions: true,
+			keyset: true,
+			versioning: true,
+			atomic: true,
+		}),
 		findOne: (context, query = {}) =>
 			hooks.guard(async () => (await select(context, query, true))[0]),
 		findMany: (context, query = {}) =>
@@ -413,11 +449,14 @@ function providerOver(
 					exec.insert(mapping.table).values(row),
 				);
 			}),
-		update: (context, data) =>
+		update: (context, data, options = {}) =>
 			hooks.guard(async () => {
 				const mapping = mappingOf(tables, context);
 				const row = dataOf(mapping, data);
 				const id = columnOf(mapping, "id");
+				const { expectedVersion: expected } = options;
+				const version =
+					expected === undefined ? undefined : versionOf(context, mapping);
 				const [existing] = await exec
 					.select({ id })
 					.from(mapping.table)
@@ -425,12 +464,76 @@ function providerOver(
 					.limit(1);
 				if (!existing) throw notFound(context, data.id as string);
 				await assertUnique(context, mapping, data, true);
-				await write(context, mapping, () =>
+				const updated = (await write(context, mapping, () =>
 					exec
 						.update(mapping.table)
 						.set(row)
-						.where(eq(id, data.id as string)),
-				);
+						.where(
+							and(
+								eq(id, data.id as string),
+								version === undefined ? undefined : eq(version, expected),
+							),
+						)
+						.returning({ id }),
+				)) as unknown[];
+				if (version === undefined || updated.length > 0) return;
+				// The version checked in the same statement: another write came first.
+				const [stored] = await exec
+					.select({ version })
+					.from(mapping.table)
+					.where(eq(id, data.id as string))
+					.limit(1);
+				if (!stored) throw notFound(context, data.id as string);
+				throw new RepositoryConcurrencyConflict({
+					source: context.name,
+					details: {
+						id: data.id as string,
+						expected: expected as number,
+						...(typeof stored.version === "number"
+							? { actual: stored.version }
+							: {}),
+					},
+				});
+			}),
+		increment: (context, id, deltas, options = {}) =>
+			hooks.guard(async () => {
+				const mapping = mappingOf(tables, context);
+				const idColumn = columnOf(mapping, "id");
+				const changes = incrementOf(context, mapping, deltas, options.set);
+				const deleted = mapping.columns.deletedAt;
+				const alive = deleted ? isNull(deleted) : undefined;
+				if (options.create === undefined) {
+					const [updated] = (await write(context, mapping, () =>
+						exec
+							.update(mapping.table)
+							.set(changes)
+							.where(and(eq(idColumn, id), alive))
+							.returning(),
+					)) as Record<string, unknown>[];
+					if (!updated) throw notFound(context, id);
+					return dataFromRow(updated);
+				}
+				// One statement: inserted, or incremented when a row holds the id.
+				const row = dataOf(mapping, { ...options.create, id });
+				const [stored] = (await write(context, mapping, () =>
+					exec
+						.insert(mapping.table)
+						.values(row)
+						.onConflictDoUpdate({
+							target: idColumn,
+							set: changes,
+							...(alive ? { setWhere: alive } : {}),
+						})
+						.returning(),
+				)) as Record<string, unknown>[];
+				// A soft-deleted row keeps its id, as an insert finds.
+				if (!stored) {
+					throw new RepositoryUniqueViolation({
+						source: context.name,
+						details: { key: "id" },
+					});
+				}
+				return dataFromRow(stored);
 			}),
 		remove: (context, id) =>
 			hooks.guard(async () => {

@@ -16,6 +16,8 @@ const accountTable = (name: string) =>
 		tags: jsonb("tags"),
 		group: integer("group"),
 		n: integer("n"),
+		visits: integer("visits"),
+		version: integer("version"),
 		deletedAt: text("deletedAt"),
 	});
 
@@ -35,7 +37,7 @@ async function freshDatabase() {
 	};
 	for (const table of Object.values(names)) {
 		await client.exec(
-			`CREATE TABLE ${table} (id text PRIMARY KEY, email text UNIQUE, name text, age integer, active boolean, address jsonb, tags jsonb, "group" integer, n integer, "deletedAt" text)`,
+			`CREATE TABLE ${table} (id text PRIMARY KEY, email text UNIQUE, name text, age integer, active boolean, address jsonb, tags jsonb, "group" integer, n integer, visits integer, version integer, "deletedAt" text)`,
 		);
 	}
 	return {
