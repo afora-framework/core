@@ -6,6 +6,7 @@
 
 - `CommandEventInfo` has `publisher(name)`, and a handler policy that throws a `CommandEventFailed` itself has it passed up as it is instead of wrapped.
 - An application with `publishers` rebinds its use cases and commands, as one with a `provider` or a `log` does, so `app.commands.X` is not the declared command.
+- `routeOptionsIssue` rejects a `route[id].path` with `:` or `*`, which used to pass and was ignored by the document; a parameter is written `{name}`.
 
 ### Added
 
@@ -17,6 +18,8 @@
 - `@afora/ws`, a new package: the `websocket` sink serves the operations of an output over JSON messages (`{ id?, op, input? }`), on any runtime, with topic subscriptions (`{ subscribe }`) that `publishEvents` fills through `wsHub()`. See `packages/ws/README.md`.
 - `coerceTextValues(blueprint, texts)`: text values as the scalar fields of a blueprint take them (numbers, booleans), for sinks that read text; `@afora/hono` and `@afora/mcp` now use it instead of their own copies.
 - `@afora/hono`: the `webhooks` option verifies the signatures of incoming webhooks (Stripe, GitHub, Standard Webhooks, plain HMAC-SHA256) and can strip undeclared keys. See `packages/hono/README.md#webhooks`.
+- `openapi` sink and `RouteOptions`: path parameters (`route[id].path: "/entries/{slug}"`, each `{name}` a whole segment naming a scalar input key, documented as a required `in: path` parameter and left out of the body or query), `route[id].status` (`200 | 201 | 202 | 204`; `204` without content), `responses: { [operationId]: { headers } }` (static headers of successes), `requestId: true | "<header>"` (documented on every response) and `security: { schemes, operations?, default? }` (`components.securitySchemes`, the document `security` and each operation's; `false` marks an operation public). `OperationRoute` gains `parameters`, `status` and `headers`; new exports `ROUTE_OPTION_KEYS`, `requestIdHeaderOf` and the types `RouteStatus`, `OpenAPISecurityScheme`, `SecurityRequirement`. See `docs/outputs.md`.
+- `@afora/hono`: serves the path parameters (the path wins over the body or query), the success `status` (`204` without a body), the `responses` headers and `requestId` (propagated or generated with `crypto.randomUUID`, on successes and problems), and takes context from middleware with `context.variables: { [contextKey]: variableName }` (`c.get`, not coerced). `security` reaches the document only. See `packages/hono/README.md`.
 
 ## 0.0.7 — unreleased (draft: dated when it is published)
 

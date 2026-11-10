@@ -998,7 +998,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface OpenAPIComponents<Name extends PropertyKey = string> { readonly schemas: { readonly [Key in Name]: OpenAPISchema; }; }",
   ],
   "OpenAPIDocument": [
-    "export interface OpenAPIDocument { readonly openapi: "3.1.0"; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; readonly paths: { readonly [path: string]: Record<string, unknown>; }; readonly components: { readonly schemas: { readonly [name: string]: OpenAPISchema; }; }; }",
+    "export interface OpenAPIDocument { readonly openapi: "3.1.0"; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; readonly security?: readonly { readonly [scheme: string]: string[]; }[]; readonly paths: { readonly [path: string]: Record<string, unknown>; }; readonly components: { readonly schemas: { readonly [name: string]: OpenAPISchema; }; readonly securitySchemes?: { readonly [name: string]: OpenAPISecurityScheme; }; }; }",
   ],
   "OpenAPIMethod": [
     "export type OpenAPIMethod = (typeof METHODS)[number];",
@@ -1009,8 +1009,11 @@ exports[`exports of the package and their declarations 1`] = `
   "OpenAPISchema": [
     "export interface OpenAPISchema { readonly type?: string | readonly string[]; readonly properties?: { readonly [key: string]: OpenAPISchema; }; readonly required?: readonly string[]; readonly additionalProperties?: boolean | OpenAPISchema; readonly items?: OpenAPISchema; readonly $ref?: string; readonly title?: string; readonly description?: string; readonly examples?: readonly unknown[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly [keyword: string]: unknown; }",
   ],
+  "OpenAPISecurityScheme": [
+    "export type OpenAPISecurityScheme = { readonly type: "http"; readonly scheme: string; readonly bearerFormat?: string; readonly description?: string; } | { readonly type: "apiKey"; readonly name: string; readonly in: "header" | "query" | "cookie"; readonly description?: string; } | { readonly type: "oauth2"; readonly flows: { readonly [flow: string]: unknown; }; readonly description?: string; } | { readonly type: "openIdConnect"; readonly openIdConnectUrl: string; readonly description?: string; } | { readonly type: "mutualTLS"; readonly description?: string; };",
+  ],
   "OpenAPISinkOptions": [
-    "export interface OpenAPISinkOptions { readonly info: { readonly title: string; readonly version: string; readonly description?: string; }; readonly servers?: readonly { readonly url: string; readonly description?: string; }[]; readonly basePath?: string; readonly route?: { readonly [operationId: string]: { readonly method?: OpenAPIMethod; readonly path?: string; }; }; }",
+    "export interface OpenAPISinkOptions extends RouteOptions { readonly info: { readonly title: string; readonly version: string; readonly description?: string; }; readonly servers?: readonly { readonly url: string; readonly description?: string; }[]; }",
   ],
   "OperationCallOptions": [
     "export interface OperationCallOptions { readonly context?: unknown; }",
@@ -1022,7 +1025,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface OperationPatch { readonly meta?: Readonly<Record<string, unknown>>; readonly tags?: readonly string[]; readonly description?: string | undefined; readonly deprecated?: boolean; readonly invoke?: OperationDescriptor["invoke"]; }",
   ],
   "OperationRoute": [
-    "export interface OperationRoute { readonly method: OpenAPIMethod; readonly path: string; }",
+    "export interface OperationRoute { readonly method: OpenAPIMethod; readonly path: string; readonly parameters: readonly string[]; readonly status: RouteStatus; readonly headers: { readonly [name: string]: string; }; }",
   ],
   "OptionalBlueprint": [
     "export type OptionalBlueprint<Blueprint extends AnyBlueprint> = Blueprint extends IBlueprint<infer Properties, boolean> ? IBlueprint<Properties, true> : never;",
@@ -1189,6 +1192,9 @@ exports[`exports of the package and their declarations 1`] = `
   "RESERVED_RECORD_KEYS": [
     "RESERVED_RECORD_KEYS: readonly string[]",
   ],
+  "ROUTE_OPTION_KEYS": [
+    "ROUTE_OPTION_KEYS: readonly [ "basePath", "route", "responses", "requestId", "security" ]",
+  ],
   "RecordBuilder": [
     "export type RecordBuilder<Context> = <Properties extends IBlueprintCollection, const Change extends readonly RecordKey<Properties>[] = [ ], const Unique extends readonly RecordKey<Properties>[] = [ ], const Plugins extends readonly AnyRecordPlugin[] = [ ], const Sensitive extends readonly RecordKey<Properties>[] = [ ]>(blueprint: IBlueprint<Properties, boolean>, options?: RecordOptions<NoInfer<Properties>, Change, Unique, Plugins, Context, Sensitive>) => RecordConstructor<WithPluginProperties<Properties, Plugins>, Change, Unique[number] | PluginUniqueKey<Plugins>, PluginMembers<Plugins>, never, Sensitive[number] | PluginSensitiveKey<Plugins>>;",
   ],
@@ -1341,7 +1347,10 @@ exports[`exports of the package and their declarations 1`] = `
     "export type RestoreMaker = <Repository extends AnyRepository, const Options extends StdUseCaseOptions & { readonly as?: string; } = None>(repository: Repository & UseCaseTarget<Repository, "restore">, options?: Options) => StepsUseCaseConstructor<ById<Repository>, EntityResponse<Repository, Options>, { readonly repository: Repository; }>;",
   ],
   "RouteOptions": [
-    "export interface RouteOptions { readonly basePath?: string; readonly route?: OpenAPISinkOptions["route"]; }",
+    "export interface RouteOptions { readonly basePath?: string; readonly route?: { readonly [operationId: string]: { readonly method?: OpenAPIMethod; readonly path?: string; readonly status?: RouteStatus; }; }; readonly responses?: { readonly [operationId: string]: { readonly headers?: { readonly [name: string]: string; }; }; }; readonly requestId?: true | string; readonly security?: { readonly schemes: { readonly [name: string]: OpenAPISecurityScheme; }; readonly operations?: { readonly [operationId: string]: SecurityRequirement | false; }; readonly default?: SecurityRequirement; }; }",
+  ],
+  "RouteStatus": [
+    "export type RouteStatus = 200 | 201 | 202 | 204;",
   ],
   "RuntimeServices": [
     "export interface RuntimeServices { hasher?: PasswordHasher; idGenerator?: IdGenerator; }",
@@ -1351,6 +1360,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "SchemaProperty": [
     "export declare class SchemaProperty extends SchemaProperty_base { private compiled?; static deserialize(json: string): SchemaProperty; serialize(): string; match(data: unknown): boolean; errors(data: unknown): string[]; private toSchema; }",
+  ],
+  "SecurityRequirement": [
+    "export interface SecurityRequirement { readonly scheme: string; readonly scopes?: readonly string[]; }",
   ],
   "SelectOptions": [
     "export interface SelectOptions { tags?: string[]; operations?: string[]; exclude?: string[]; }",
@@ -1842,6 +1854,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "repositoryOf": [
     "export declare function repositoryOf<Entity extends AnyRepositoryEntity, const Actions extends readonly RepositoryAction<Entity>[], const Environment extends EnvironmentDependencies | undefined = undefined>(settings: RepositorySettings<Entity, Actions, Environment>): RepositoryType<Entity, Actions, MergedEnvironment<Environment>>;",
+  ],
+  "requestIdHeaderOf": [
+    "export declare function requestIdHeaderOf(options: RouteOptions): string | undefined;",
   ],
   "resetApplication": [
     "export declare function resetApplication(): void;",

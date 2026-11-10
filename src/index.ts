@@ -245,13 +245,18 @@ export {
 export type {
 	OpenAPIDocument,
 	OpenAPIMethod,
+	OpenAPISecurityScheme,
 	OpenAPISinkOptions,
 	OperationRoute,
 	RouteOptions,
+	RouteStatus,
+	SecurityRequirement,
 } from "./core/output/openapi-sink";
 export {
 	openapi,
 	operationRoutes,
+	ROUTE_OPTION_KEYS,
+	requestIdHeaderOf,
 	routeOptionsIssue,
 } from "./core/output/openapi-sink";
 export { isOutput, operationOf, outputOf } from "./core/output/output";

@@ -28,4 +28,4 @@ const document = {
 
 What `Property.with` (or `ctx.<property>(options)`) gives, `description`, `examples`, bounds and the rest, is kept. Sensitive keys (`Password`, `options.sensitive`) are `writeOnly`, the identity of an entity (`id`, `createdAt`, `updatedAt`, `deletedAt`) is `readOnly`, optional keys are left out of `required`, and every object has `additionalProperties: false`, since blueprints reject undeclared keys. Records not named among the models are inline; `refPrefix` changes where a `$ref` points (`"#/components/schemas/"` by default). A model that is not a field throws `InvalidOpenAPIModel`.
 
-To document commands rather than models, the [`openapi` sink](outputs.md) of an output builds the whole document, paths included, reusing `toOpenAPI` for the schemas.
+To document commands rather than models, the [`openapi` sink](outputs.md) of an output builds the whole document, paths included, reusing `toOpenAPI` for the schemas: path parameters, success statuses, response headers and security schemes come from its routing options.
