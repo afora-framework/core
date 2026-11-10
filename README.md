@@ -305,7 +305,7 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 
 ## Example
 
-`examples/blog` is a blog (users with the `authenticatable` plugin, posts with soft deletion, use cases written as steps, a Hono API on Drizzle and SQLite) whose whole `src/domain` is generated from one `afora.json` by `@afora/codegen`. Only the database, the schema, the provider (made from a `Database` environment with `providerFrom` when the server calls `App.start()`, and named `database` in the `providers` of the spec), a password hashing function and the server are hand-written. Its tests check that the committed code is what the spec generates, drive the API end to end and extract the spec back from the application: `bun run test:blog`.
+`examples/blog` is a blog (users with the `authenticatable` plugin, posts with soft deletion, every use case a [standard one](docs/std-use-cases.md), a Hono API on Drizzle and SQLite) whose whole `src/domain` is generated from one `afora.json` by `@afora/codegen`. Only the database, the schema, the provider (made from a `Database` environment with `providerFrom` when the server calls `App.start()`, and named `database` in the `providers` of the spec) and the server are hand-written. Its tests check that the committed code is what the spec generates, drive the API end to end and extract the spec back from the application: `bun run test:blog`.
 
 ## Performance
 
