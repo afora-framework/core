@@ -3,6 +3,7 @@ import {
 	entityOf,
 	type IRepositoryProvider,
 	type ProviderQuery,
+	RepositoryConcurrencyConflict,
 	type RepositoryContext,
 	type RepositoryData,
 	RepositoryEntityNotFound,
@@ -30,7 +31,23 @@ export interface ProviderContractOptions {
 	 * to `provider.capabilities?.keyset`.
 	 */
 	readonly keyset?: boolean;
+	/**
+	 * Run the cases of declared indexes (`context.indexes`, `query.index`).
+	 * Defaults to `provider.capabilities?.indexes`.
+	 */
+	readonly indexes?: boolean;
+	/**
+	 * Run the cases of an expected `version` on `update`. Defaults to
+	 * `provider.capabilities?.versioning`.
+	 */
+	readonly versioning?: boolean;
+	/** Run the cases of `increment`. Defaults to `provider.capabilities?.atomic`. */
+	readonly atomic?: boolean;
+	/** Run the cases of expired records. Defaults to `provider.capabilities?.expiry`. */
+	readonly expiry?: boolean;
 }
+
+type GatedCapability = "versioning" | "atomic" | "expiry";
 
 type Row = Record<string, unknown>;
 
@@ -85,6 +102,17 @@ export function providerContract(
 		};
 		return { provider, context, seed };
 	}
+
+	/** An `it` that only runs when the provider has `capability`. */
+	const gated =
+		(capability: GatedCapability) =>
+		(name: string, body: () => Promise<void>) =>
+			it(name, async () => {
+				const enabled =
+					options[capability] ??
+					(await makeProvider()).capabilities?.[capability];
+				if (enabled === true) await body();
+			});
 
 	describe("provider contract", () => {
 		describe("writes and reads", () => {
@@ -669,6 +697,90 @@ export function providerContract(
 			);
 		});
 
+		describe("indexes", () => {
+			const indexed = (name: string, body: () => Promise<void>) =>
+				it(name, async () => {
+					const enabled =
+						options.indexes ?? (await makeProvider()).capabilities?.indexes;
+					if (enabled === true) await body();
+				});
+			const seeded = async () => {
+				const f = await fixture();
+				const context: RepositoryContext = {
+					...f.context,
+					indexes: {
+						byGroup: { where: ["group"], orderBy: "n" },
+						byName: { where: ["name"] },
+					},
+				};
+				const rows = [
+					row({ n: 3, group: 1, name: "Gil" }),
+					row({ group: 1, name: "Érico" }),
+					row({ n: 2, group: 2, name: "Ana" }),
+					row({ n: 2, group: 1, name: "Ana" }),
+					row({ n: 1, group: 1, name: "Bia" }),
+					row({ n: 4, group: 2, name: "Zoe" }),
+				];
+				for (const data of rows) await f.provider.insert(context, data);
+				await f.provider.update(context, {
+					...(rows[4] as Row),
+					deletedAt: "2024-01-01T00:00:00.000Z",
+				});
+				return { ...f, context };
+			};
+
+			indexed("an indexed query gives what the scan gives", async () => {
+				const { provider, context } = await seeded();
+				const queries: [string, ProviderQuery][] = [
+					["byGroup", { where: { group: 1 } }],
+					[
+						"byGroup",
+						{
+							where: { group: 1 },
+							orderBy: [{ key: "n" }, { key: "id" }],
+						},
+					],
+					[
+						"byGroup",
+						{
+							where: { group: 1, name: "Ana" },
+							orderBy: [{ key: "n", direction: "desc" }, { key: "id" }],
+							limit: 2,
+							offset: 1,
+						},
+					],
+					[
+						"byGroup",
+						{
+							where: { group: 1 },
+							orderBy: [{ key: "n" }, { key: "id" }],
+							withDeleted: true,
+						},
+					],
+					["byName", { where: { name: "Ana" }, orderBy: [{ key: "id" }] }],
+				];
+				for (const [index, query] of queries) {
+					expect(
+						ids(await provider.findMany(context, { ...query, index })),
+					).toEqual(ids(await provider.findMany(context, query)));
+					expect(
+						await provider.count(context, {
+							...query,
+							index,
+						} as RepositoryQuery),
+					).toBe(await provider.count(context, query));
+					expect(
+						(
+							await provider.findOne(context, {
+								...query,
+								index,
+							} as RepositoryQuery)
+						)?.id,
+					).toBe((await provider.findOne(context, query))?.id);
+				}
+			});
+		});
+
 		const withTransactions = async () => {
 			const enabled =
 				options.transactions ??
@@ -831,6 +943,446 @@ export function providerContract(
 					expect(await provider.count(context)).toBe(0);
 				},
 			);
+		});
+
+		describe("versioning", () => {
+			const versioned = gated("versioning");
+
+			versioned(
+				"update writes with the expected version, and throws RepositoryConcurrencyConflict with a stale one",
+				async () => {
+					const { provider, context, seed } = await fixture();
+					const data = row({ version: 1 });
+					await seed(data);
+					await provider.update(
+						context,
+						{ ...data, name: "Bia", version: 2 },
+						{ expectedVersion: 1 },
+					);
+					const stale = await failure(
+						provider.update(
+							context,
+							{ ...data, name: "Caio", version: 2 },
+							{ expectedVersion: 1 },
+						),
+					);
+					expect(stale instanceof RepositoryConcurrencyConflict).toBe(true);
+					const { details } = stale as {
+						details: { id: unknown; expected: unknown };
+					};
+					expect([details.id, details.expected]).toEqual([data.id, 1]);
+					expect(
+						await provider.findOne(context, { where: { id: data.id } }),
+					).toEqual({ ...data, name: "Bia", version: 2 });
+				},
+			);
+
+			versioned(
+				"two updates with the same expected version: exactly one succeeds",
+				async () => {
+					const { provider, context, seed } = await fixture();
+					const data = row({ version: 1 });
+					await seed(data);
+					const results = await Promise.allSettled(
+						["Bia", "Caio"].map((name) =>
+							provider.update(
+								context,
+								{ ...data, name, version: 2 },
+								{ expectedVersion: 1 },
+							),
+						),
+					);
+					const rejected = results.filter(
+						(result) => result.status === "rejected",
+					) as PromiseRejectedResult[];
+					expect(rejected.length).toBe(1);
+					expect(
+						rejected[0]?.reason instanceof RepositoryConcurrencyConflict,
+					).toBe(true);
+					const stored = await provider.findOne(context, {
+						where: { id: data.id },
+					});
+					expect(stored?.version).toBe(2);
+				},
+			);
+
+			versioned(
+				"update without an expected version ignores the stored one",
+				async () => {
+					const { provider, context, seed } = await fixture();
+					const data = row({ version: 3 });
+					await seed(data);
+					await provider.update(context, { ...data, name: "Bia", version: 1 });
+					expect(
+						await provider.findOne(context, { where: { id: data.id } }),
+					).toEqual({ ...data, name: "Bia", version: 1 });
+				},
+			);
+
+			versioned("an unknown id is still RepositoryEntityNotFound", async () => {
+				const { provider, context } = await fixture();
+				const error = await failure(
+					provider.update(context, row({ version: 2 }), {
+						expectedVersion: 1,
+					}),
+				);
+				expect(error instanceof RepositoryEntityNotFound).toBe(true);
+			});
+		});
+
+		describe("atomic", () => {
+			const atomic = gated("atomic");
+			const increment = (
+				provider: IRepositoryProvider,
+				...args: Parameters<NonNullable<IRepositoryProvider["increment"]>>
+			) =>
+				(provider.increment as NonNullable<typeof provider.increment>)(...args);
+
+			atomic(
+				"increment adds the deltas, stores set and gives the row",
+				async () => {
+					const { provider, context, seed } = await fixture();
+					const data = row({ visits: 2, age: 30 });
+					await seed(data);
+					const stored = await increment(
+						provider,
+						context,
+						data.id as string,
+						{ visits: 3, age: -1, n: 5 },
+						{ set: { name: "Bia" } },
+					);
+					const expected = { ...data, visits: 5, age: 29, n: 5, name: "Bia" };
+					expect(stored).toEqual(expected);
+					expect(
+						await provider.findOne(context, { where: { id: data.id } }),
+					).toEqual(expected);
+				},
+			);
+
+			atomic("N concurrent increments sum to N", async () => {
+				const { provider, context, seed } = await fixture();
+				const data = row({ visits: 0 });
+				await seed(data);
+				await Promise.all(
+					Array.from({ length: 25 }, () =>
+						increment(provider, context, data.id as string, { visits: 1 }),
+					),
+				);
+				const stored = await provider.findOne(context, {
+					where: { id: data.id },
+				});
+				expect(stored?.visits).toBe(25);
+			});
+
+			atomic(
+				"a missing id is RepositoryEntityNotFound without create, and inserted with it",
+				async () => {
+					const { provider, context } = await fixture();
+					const data = row({ visits: 1 });
+					const missing = await failure(
+						increment(provider, context, data.id as string, { visits: 1 }),
+					);
+					expect(missing instanceof RepositoryEntityNotFound).toBe(true);
+					expect(await provider.count(context)).toBe(0);
+					const created = await increment(
+						provider,
+						context,
+						data.id as string,
+						{ visits: 1 },
+						{ create: data, set: { name: "Bia" } },
+					);
+					expect(created).toEqual(data);
+					const again = await increment(
+						provider,
+						context,
+						data.id as string,
+						{ visits: 1 },
+						{ create: data },
+					);
+					expect(again.visits).toBe(2);
+					expect(await provider.count(context)).toBe(1);
+				},
+			);
+
+			atomic("concurrent increments with create lose nothing", async () => {
+				const { provider, context } = await fixture();
+				const data = row({ visits: 1 });
+				await Promise.all(
+					Array.from({ length: 10 }, () =>
+						increment(
+							provider,
+							context,
+							data.id as string,
+							{ visits: 1 },
+							{ create: data },
+						),
+					),
+				);
+				const stored = await provider.findOne(context, {
+					where: { id: data.id },
+				});
+				expect(stored?.visits).toBe(10);
+			});
+
+			atomic("soft-deleted rows are not incremented", async () => {
+				const { provider, context, seed } = await fixture();
+				const data = row({ visits: 1, deletedAt: "2024-01-01T00:00:00.000Z" });
+				await seed(data);
+				const error = await failure(
+					increment(provider, context, data.id as string, { visits: 1 }),
+				);
+				expect(error instanceof RepositoryEntityNotFound).toBe(true);
+				const stored = await provider.findOne(context, {
+					where: { id: data.id },
+					withDeleted: true,
+				});
+				expect(stored?.visits).toBe(1);
+			});
+
+			atomic(
+				"an increment of version makes an update with the old one conflict",
+				async () => {
+					const { provider, context, seed } = await fixture();
+					if (
+						(options.versioning ?? provider.capabilities?.versioning) !== true
+					)
+						return;
+					const data = row({ visits: 0, version: 1 });
+					await seed(data);
+					const stored = await increment(provider, context, data.id as string, {
+						visits: 1,
+						version: 1,
+					});
+					expect(stored.version).toBe(2);
+					const error = await failure(
+						provider.update(
+							context,
+							{ ...data, name: "Bia", version: 2 },
+							{ expectedVersion: 1 },
+						),
+					);
+					expect(error instanceof RepositoryConcurrencyConflict).toBe(true);
+					expect(
+						(await provider.findOne(context, { where: { id: data.id } }))
+							?.visits,
+					).toBe(1);
+				},
+			);
+
+			atomic(
+				"an expired row counts as absent: not found, or replaced by create",
+				async () => {
+					const provider = await makeProvider();
+					if ((options.expiry ?? provider.capabilities?.expiry) !== true)
+						return;
+					const now = "2026-06-01T12:00:00.000Z";
+					const context = {
+						...contextOf(),
+						expiry: { key: "expiresAt" },
+					} as RepositoryContext;
+					const window = row({
+						visits: 7,
+						expiresAt: "2026-06-01T11:00:00.000Z",
+					});
+					const live = row({
+						visits: 1,
+						expiresAt: "2026-06-01T13:00:00.000Z",
+					});
+					await provider.insert(context, window);
+					await provider.insert(context, live);
+					const missing = await failure(
+						increment(
+							provider,
+							context,
+							window.id as string,
+							{ visits: 1 },
+							{
+								now,
+							},
+						),
+					);
+					expect(missing instanceof RepositoryEntityNotFound).toBe(true);
+					const fresh = {
+						id: window.id,
+						email: window.email,
+						name: "fresh",
+						visits: 1,
+						expiresAt: "2026-06-01T13:00:00.000Z",
+					};
+					const created = await increment(
+						provider,
+						context,
+						window.id as string,
+						{ visits: 1 },
+						{ create: fresh, set: { name: "incremented" }, now },
+					);
+					expect(created).toEqual(fresh);
+					const again = await increment(
+						provider,
+						context,
+						window.id as string,
+						{ visits: 1 },
+						{ create: fresh, set: { name: "incremented" }, now },
+					);
+					expect([again.visits, again.name]).toEqual([2, "incremented"]);
+					const counted = await increment(
+						provider,
+						context,
+						live.id as string,
+						{ visits: 1 },
+						{ create: { ...live, visits: 100 }, now },
+					);
+					expect(counted.visits).toBe(2);
+				},
+			);
+		});
+
+		describe("expiry", () => {
+			const expiring = gated("expiry");
+			const NOW = "2026-06-01T12:00:00.000Z";
+			const seeded = async () => {
+				const provider = await makeProvider();
+				const context = {
+					...contextOf(),
+					expiry: { key: "expiresAt" },
+				} as RepositoryContext;
+				// By id: expired, expiring exactly now, never (no date), later.
+				const [past, edge, never, future] = [
+					row({ n: 1, expiresAt: "2026-05-01T00:00:00.000Z" }),
+					row({ n: 2, expiresAt: NOW }),
+					row({ n: 3 }),
+					row({ n: 4, expiresAt: "2026-07-01T00:00:00.000Z" }),
+				] as [Row, Row, Row, Row];
+				for (const data of [past, edge, never, future])
+					await provider.insert(context, data);
+				return { provider, context, past, edge, never, future };
+			};
+
+			expiring(
+				"reads leave out rows whose date is at or before now",
+				async () => {
+					const { provider, context, past, edge, never, future } =
+						await seeded();
+					const query = { now: NOW };
+					expect(ids(await provider.findMany(context, query))).toEqual([
+						never.id,
+						future.id,
+					]);
+					expect(await provider.count(context, query)).toBe(2);
+					expect(
+						await provider.findOne(context, {
+							...query,
+							where: { id: past.id },
+						}),
+					).toBe(undefined);
+					expect(
+						await provider.findOne(context, {
+							...query,
+							where: { id: edge.id },
+						}),
+					).toBe(undefined);
+					expect(
+						(
+							await provider.findOne(context, {
+								...query,
+								where: { id: future.id },
+							})
+						)?.id,
+					).toBe(future.id);
+					expect(
+						ids(
+							await provider.findMany(context, {
+								...query,
+								where: { id: { in: [past.id, never.id] } },
+							}),
+						),
+					).toEqual([never.id]);
+				},
+			);
+
+			expiring("a row without a date never expires", async () => {
+				const { provider, context, never } = await seeded();
+				const later = { now: "2999-01-01T00:00:00.000Z" };
+				expect(ids(await provider.findMany(context, later))).toEqual([
+					never.id,
+				]);
+				expect(await provider.count(context, later)).toBe(1);
+			});
+
+			expiring("withExpired gives the expired rows too", async () => {
+				const { provider, context, past, edge, never, future } = await seeded();
+				const query = { now: NOW, withExpired: true };
+				expect(ids(await provider.findMany(context, query))).toEqual([
+					past.id,
+					edge.id,
+					never.id,
+					future.id,
+				]);
+				expect(await provider.count(context, query)).toBe(4);
+				expect(
+					(
+						await provider.findOne(context, {
+							...query,
+							where: { id: past.id },
+						})
+					)?.id,
+				).toBe(past.id);
+			});
+
+			expiring(
+				"leaves expired rows out of a read after a position",
+				async () => {
+					const enabled =
+						options.keyset ?? (await makeProvider()).capabilities?.keyset;
+					if (enabled !== true) return;
+					const { provider, context, past, edge, never, future } =
+						await seeded();
+					const orderBy = [{ key: "n" }, { key: "id" }] as const;
+					expect(
+						ids(
+							await provider.findMany(context, {
+								now: NOW,
+								orderBy,
+								after: [0, ""],
+							}),
+						),
+					).toEqual([never.id, future.id]);
+					expect(
+						ids(
+							await provider.findMany(context, {
+								now: NOW,
+								orderBy,
+								after: [1, past.id],
+								withExpired: true,
+							}),
+						),
+					).toEqual([edge.id, never.id, future.id]);
+				},
+			);
+
+			expiring("unique keys still count expired rows", async () => {
+				const { provider, context, past } = await seeded();
+				const error = await failure(
+					provider.insert(context, row({ email: past.email })),
+				);
+				expect(error instanceof RepositoryUniqueViolation).toBe(true);
+				expect((error as { details: { key: string } }).details.key).toBe(
+					"email",
+				);
+				expect(
+					await provider.count(context, { now: NOW, withExpired: true }),
+				).toBe(4);
+			});
+
+			expiring("an entity that does not expire ignores now", async () => {
+				const { provider, context, seed } = await fixture();
+				const data = row({ expiresAt: "2000-01-01T00:00:00.000Z" });
+				await seed(data);
+				expect(ids(await provider.findMany(context, { now: NOW }))).toEqual([
+					data.id,
+				]);
+				expect(await provider.count(context, { now: NOW })).toBe(1);
+			});
 		});
 	});
 }

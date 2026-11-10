@@ -81,6 +81,7 @@ function slotOf(
 		};
 		for (const method of METHODS) slot[method] = unbound;
 		slot.transaction = unbound;
+		slot.increment = unbound;
 		Object.defineProperty(slot, "capabilities", {
 			get: () => undefined,
 			enumerable: true,
@@ -90,7 +91,7 @@ function slotOf(
 			string,
 			(...args: unknown[]) => unknown
 		>;
-		for (const method of [...METHODS, "transaction", "close"]) {
+		for (const method of [...METHODS, "increment", "transaction", "close"]) {
 			if (typeof target[method] === "function") {
 				slot[method] = (...args: unknown[]) => target[method]?.(...args);
 			}

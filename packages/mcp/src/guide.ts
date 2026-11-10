@@ -58,15 +58,19 @@ a file of your own.
 
 - Declaration names are PascalCase and unique across every kind; names exported by @afora/core are taken.
 - No circular references between declarations (store an id instead of the entity).
-- An entity cannot declare \`id\`, \`createdAt\`, \`updatedAt\`, \`deletedAt\` (it gets them). No record member names
+- An entity cannot declare \`id\`, \`createdAt\`, \`updatedAt\`, \`deletedAt\` (it gets them), nor \`version\` when it is
+  \`"versioned": true\`, which adds that identity key (optimistic concurrency: \`update\` throws \`RepositoryConcurrencyConflict\`,
+  a 409, when someone else wrote the entity since it was read). No record member names
   (\`toJSON\`, \`set\`, \`onSet\`...); see \`reservedRecordKeys\` in the catalog. \`blueprint\` and \`options\` are valid fields.
 - \`unique\`, \`sensitive\`, \`change\` must name fields (or keys of its plugins); \`change\` cannot name an identity key.
   \`password\` is always sensitive and \`slug\` always unique; \`id\` is always unique.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.
 - Repository actions: \`findById\`; \`findBy<Key>\` only for unique keys (id, \`unique\`, slug fields, unique plugin keys such as
-  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`restore\` (only with \`"deletion": "soft"\`), \`count\`, and the
+  \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`restore\` (only with \`"deletion": "soft"\`),
+  \`increment\` (atomic \`increment(id, { views: 1 }, { create? })\`, for the number keys of the entity's \`change\`; not a step), \`count\`, and the
   queries \`findMany\`, \`exists\`, \`findPage\` (no key needed; \`where\`, \`orderBy\`, \`limit\`, \`offset\` at runtime) and
-  \`findCursor\` (pages by position: \`after\` is the \`next\` of the page before, no \`offset\`).
+  \`findCursor\` (pages by position: \`after\` is the \`next\` of the page before, no \`offset\`), and \`forEachPage\`
+  (walks every page with a function, stops with \`until\` and resumes from \`next\`; called from TypeScript, never a step).
 - \`provider\` (top level for the application, and optionally on a repository, which then uses its own): \`"inMemory"\`,
   \`{ "use": "<name>", "options": {...} }\` with a name from the \`providers\` of \`afora_catalog\` (external ones are given
   to the server with \`--providers\`), or \`{ "import": "./db.ts#provider" }\` for one created by hand. Options are JSON or
@@ -79,6 +83,13 @@ a file of your own.
   \`"inMemory"\` is not a valid key. Keys of a spec extended directly can be named too. Each application makes its own
   instance of a provider made on start (an \`{ "import" }\` of a \`providerFrom\`), so independent applications do not share it.
 - Repository \`deletion\`: \`"hard"\` (default) physically removes rows; \`"soft"\` retains \`deletedAt\` and hides deleted rows from reads, counts and relations.
+- Repository \`indexes\`: \`{ "<name>": { "where": [keys], "orderBy"?: key } }\`, the access patterns a query reads through
+  (every \`where\` key by equality, the first order being \`orderBy\`); \`scans\`: \`"allow"\` (default), \`"warn"\` (logs
+  \`repository-scan\`) or \`"reject"\` (a query no index or unique key serves throws). \`explain\` gives the plan of a query.
+- Entity \`expires\` (records that expire, left out of every read unless \`withExpired: true\` at runtime): \`{ "after": { "days": 400 } }\`
+  (days, hours, minutes, seconds; positive) adds an \`expiresAt\` identity key, \`createdAt\` + the duration, so no field may be named
+  \`expiresAt\`; \`{ "at": "until" }\` names a \`dateTime\` or \`date\` field, and a record without a value never expires. Unique keys
+  still count expired records; relations still load them.
 - \`relations\` must list exactly one repository for each entity the repository's entity holds, at any depth (inside
   records, blueprints and nested objects), not through another entity.
 - Environments hold properties only (no lists, no objects).
@@ -131,9 +142,11 @@ a file of your own.
   Options: \`as\` (the response key, "item" by default), \`owner\` (\`{ "key"?, "context" }\`: the caller, whose id is in that context key,
   owns the entity), \`errors\` (\`{ "notFound" | "conflict" | "invalid" | "owner": an exception name }\`), and \`omit\`, \`values\`
   (create, register), \`set\` (publish, archive...), \`orderBy\` (list). \`description\`, \`tags\` and \`deprecated\` go beside \`generic\`.
-  Write steps only for what no standard use case does.
+  The ones that write (all but get, list, login) also take \`before\` and \`after\` (\`{ "import": "./file.ts#fn" }\`, run before and
+  after the write; \`before\` may give back the input to write), \`dependencies\` (key -> declared name, for them) and \`throws\`
+  (the exceptions they throw). Write steps only for what no standard use case does, nor its \`before\`/\`after\`.
 - \`afora_extract\` needs \`imports\` for \`useCases.<Name>\` (hand-written execute) and \`useCases.<Name>.run.<name>\` (run functions);
-  a standard use case needs none.
+  a standard use case needs none, but \`useCases.<Name>.before\` and \`.after\` for its hooks.
 
 ## Commands and outputs
 
@@ -162,10 +175,15 @@ a file of your own.
 
 - \`commands\`: \`useCases\` maps an operation name (an identifier) to a declared use case; \`context\` is a blueprint name or \`{ "fields": {...} }\`.
   \`transaction: true\` runs each call in a transaction of the repositories' provider: it is checked when the code runs, not by the validator
-  (the provider is unknown then). \`events\` is \`"after-commit"\` (default), \`"manual"\` or \`{ "import": "./events.ts#dispatch" }\` (a handler);
-  \`onEventError\` is an import and only with \`after-commit\`. Defaults (\`transaction: false\`, \`events: "after-commit"\`, no tags) are not written.
+  (the provider is unknown then). \`events\` is \`"after-commit"\` (default), \`"manual"\`, a policy of the catalog or \`{ "import": "./events.ts#dispatch" }\` (a handler);
+  \`onEventError\` is an import and only with \`after-commit\`. The built-in policy \`publishEvents\` publishes each event (the entity masked) to a publisher:
+  \`{ "policy": "publishEvents", "options": { "publisher": "realtime", "topic": "posts/{id}", "events"?: [names], "handle"?: true, "onPublishError"?: "log" | "throw" } }\`;
+  \`publisher\` is a key of the top-level \`"publishers": { "realtime": { "import": "./realtime.ts#hub" } }\` (own or of an extended spec), and the topic takes
+  \`{event}\`, \`{command}\`, \`{operation}\` and \`{id}\`. Other policies come from \`--policies\` (\`policies\` of \`afora_catalog\`).
+  The events come from the entities: \`"events": { "onCreate": "created", "onUpdate": ["changed", { "name": "audited", "handler": { "import": "./audit.ts#onAudited" } }] }\`
+  on an entity (not a record); a name alone is an event with no handler, raised to be published. They are generated as \`<Name>Events\`, so no declaration may take that name. Defaults (\`transaction: false\`, \`events: "after-commit"\`, no tags) are not written.
 - \`outputs\`: \`commands\` are declared commands; \`statuses\` maps an exception name (declared or exported by @afora/core) to a status from 400 to 599;
   \`pipe\` is transforms and, last, at most one sink, each \`{ "transform" | "sink": name, "options"?: {...JSON} }\` with a name from the \`stages\` of
   \`afora_catalog\` (\`select\`, \`openapi\`, plus the ones given to the server with \`--stages\`), or \`{ "import": "./stages.ts#auth" }\` for a stage written by hand.
-- \`afora_extract\` needs \`imports\` for \`commands.<Name>.events\`, \`commands.<Name>.onEventError\` and \`outputs.<Name>.pipe.<index>\` (hand-written ones).
+- \`afora_extract\` needs \`imports\` for \`publishers.<key>\`, \`commands.<Name>.events\` (a handler, not a policy), \`commands.<Name>.onEventError\` and \`outputs.<Name>.pipe.<index>\` (hand-written ones).
 `;

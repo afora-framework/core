@@ -1,0 +1,56 @@
+{
+	"name": "@afora/ws",
+	"version": "0.0.8",
+	"description": "A WebSocket sink for afora outputs: operations over a JSON protocol, problem+json errors, masked values and topic subscriptions fed by domain events.",
+	"keywords": [
+		"afora",
+		"websocket",
+		"realtime",
+		"events",
+		"pubsub"
+	],
+	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
+	"license": "MIT",
+	"homepage": "https://github.com/afora-framework/core/tree/main/packages/ws#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/afora-framework/core.git",
+		"directory": "packages/ws"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"bun": ">=1.4.4",
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"typecheck": "bun check",
+		"build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target node --format esm --packages external --tsconfig-override tsconfig.build.json && tsc -p tsconfig.build.json && bun ../../scripts/add-dts-extensions.ts dist",
+		"test": "bun test"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.4.4",
+		"typebox": "^1.4.3"
+	},
+	"peerDependencies": {
+		"@afora/core": ">=0.0.8",
+		"typebox": "^1"
+	}
+}

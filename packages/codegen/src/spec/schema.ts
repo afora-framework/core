@@ -4,6 +4,7 @@ const NAME = "^[A-Z][A-Za-z0-9]*$";
 const IMPORT = "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$";
 const KEY = "^[A-Za-z_$][A-Za-z0-9_$]*$";
 const PROVIDER_KEY = "^[a-z][A-Za-z0-9]*$";
+const PUBLISHER_KEY = "^[A-Za-z_$][A-Za-z0-9_$]*$";
 
 const Bounds = Type.Object(
 	{
@@ -205,6 +206,31 @@ const Providers = Type.Record(
 	},
 );
 
+const EventPolicy = Type.Object(
+	{
+		policy: Type.String({
+			description:
+				'The name of an event policy of the catalog: "publishEvents" is built in; others come from the policies given to codegen (--policies).',
+		}),
+		options: Type.Optional(
+			Type.Record(Type.String(), Type.Unknown(), {
+				description:
+					'JSON options of the policy. publishEvents: { "publisher": "<key of publishers>", "topic": "posts/{id}", "events"?: [names], "handle"?: true, "onPublishError"?: "log" | "throw" }.',
+			}),
+		),
+	},
+	{ additionalProperties: false },
+);
+
+const Publishers = Type.Record(
+	Type.String({ pattern: PUBLISHER_KEY }),
+	ImportRef,
+	{
+		description:
+			'Where event policies publish, by key (applicationOf({ publishers })): a publisher written by hand, { "import": "./realtime.ts#hub" }.',
+	},
+);
+
 const Log = Type.Union(
 	[
 		Type.Object(
@@ -245,6 +271,74 @@ const Log = Type.Union(
 const StringList = (description: string) =>
 	Type.Array(Type.String(), { description });
 
+const EntityEvent = Type.Union([
+	Type.String({ pattern: KEY, description: "An event without a handler." }),
+	Type.Object(
+		{
+			name: Type.String({ pattern: KEY }),
+			handler: Type.Optional(ImportRef),
+		},
+		{ additionalProperties: false },
+	),
+]);
+
+const EntityEventList = Type.Union([
+	EntityEvent,
+	Type.Array(EntityEvent, { minItems: 1 }),
+]);
+
+const EntityEvents = Type.Object(
+	{
+		onCreate: Type.Optional(EntityEventList),
+		onUpdate: Type.Optional(EntityEventList),
+		onDelete: Type.Optional(EntityEventList),
+	},
+	{
+		additionalProperties: false,
+		description:
+			'Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.',
+	},
+);
+
+const DurationAmount = Type.Optional(Type.Number({ exclusiveMinimum: 0 }));
+
+const EntityExpires = Type.Union(
+	[
+		Type.Object(
+			{
+				after: Type.Object(
+					{
+						days: DurationAmount,
+						hours: DurationAmount,
+						minutes: DurationAmount,
+						seconds: DurationAmount,
+					},
+					{
+						additionalProperties: false,
+						minProperties: 1,
+						description:
+							'A duration from createdAt, e.g. { "days": 400 }; the entity gets an expiresAt identity key.',
+					},
+				),
+			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{
+				at: Type.String({
+					description:
+						"A date field (dateTime or date, optional or not) holding when the record expires; without a value it never does.",
+				}),
+			},
+			{ additionalProperties: false },
+		),
+	],
+	{
+		description:
+			'Entities only: when their records expire, which reads then leave out (unless withExpired): { "after": { "days": 400 } } or { "at": "until" }. Unique keys still count expired records.',
+	},
+);
+
 const RecordDeclaration = Type.Object(
 	{
 		fields: Fields,
@@ -266,6 +360,14 @@ const RecordDeclaration = Type.Object(
 				"Std record plugins: publishable, archivable, taggable, ownable, authenticatable.",
 			),
 		),
+		events: Type.Optional(EntityEvents),
+		versioned: Type.Optional(
+			Type.Boolean({
+				description:
+					"Entities only: adds a version identity key that update checks (optimistic concurrency, RepositoryConcurrencyConflict on a stale write) and bumps.",
+			}),
+		),
+		expires: Type.Optional(EntityExpires),
 	},
 	{ additionalProperties: false },
 );
@@ -281,7 +383,7 @@ const RepositoryDeclaration = Type.Object(
 		),
 		actions: Type.Array(Type.String(), {
 			description:
-				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), count.",
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, explain (how a query would be read, without reading), forEachPage (walks the pages of a cursor query; not a step), create, update, delete, restore (soft deletion only), increment (number keys in change, atomic), count.",
 		}),
 		provider: Type.Optional(ProviderOrKey),
 		relations: Type.Optional(
@@ -290,6 +392,39 @@ const RepositoryDeclaration = Type.Object(
 			),
 		),
 		environments: Type.Optional(StringList("Environments it depends on.")),
+		indexes: Type.Optional(
+			Type.Record(
+				Type.String({ pattern: KEY }),
+				Type.Object(
+					{
+						where: Type.Array(Type.String(), {
+							minItems: 1,
+							description: "Keys the query matches by equality.",
+						}),
+						orderBy: Type.Optional(
+							Type.String({
+								description: "The scalar key it reads in order of.",
+							}),
+						),
+					},
+					{ additionalProperties: false },
+				),
+				{
+					description:
+						"Access patterns by name; a query that matches one reads through it, and the provider can build it (a GSI, an SQL index).",
+				},
+			),
+		),
+		scans: Type.Optional(
+			Type.Union(
+				[Type.Literal("allow"), Type.Literal("warn"), Type.Literal("reject")],
+				{
+					default: "allow",
+					description:
+						"A query only a scan serves: runs, logs repository-scan, or throws InvalidRepositoryQuery.",
+				},
+			),
+		),
 	},
 	{ additionalProperties: false },
 );
@@ -475,7 +610,7 @@ const GenericUseCaseDeclaration = Type.Object(
 		options: Type.Optional(
 			Type.Record(Type.String({ pattern: KEY }), Type.Unknown(), {
 				description:
-					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy".',
+					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy"; those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").',
 			}),
 		),
 		description: Type.Optional(Type.String()),
@@ -557,11 +692,16 @@ const CommandDeclaration = Type.Object(
 		),
 		events: Type.Optional(
 			Type.Union(
-				[Type.Literal("after-commit"), Type.Literal("manual"), ImportRef],
+				[
+					Type.Literal("after-commit"),
+					Type.Literal("manual"),
+					EventPolicy,
+					ImportRef,
+				],
 				{
 					default: "after-commit",
 					description:
-						'"after-commit" (default), "manual" or { "import": "./events.ts#dispatch" } (a handler written by hand).',
+						'"after-commit" (default), "manual", a policy of the catalog ({ "policy": "publishEvents", "options": { "publisher": "realtime", "topic": "posts/{id}" } }) or { "import": "./events.ts#dispatch" } (a handler written by hand).',
 				},
 			),
 		),
@@ -651,6 +791,7 @@ export const specSchema = Type.Object(
 		provider: Type.Optional(ProviderOrKey),
 		providers: Type.Optional(Providers),
 		log: Type.Optional(Log),
+		publishers: Type.Optional(Publishers),
 		properties: Type.Optional(
 			Names(Property, "Custom properties, by PascalCase name."),
 		),

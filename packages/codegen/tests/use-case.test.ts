@@ -536,6 +536,19 @@ describe("validation", () => {
 		});
 	}
 
+	test("forEachPage is not a step, with the reason", () => {
+		const issues = validateSpec(
+			edit((c) => (steps(c)[0].find = "users.forEachPage")),
+		);
+		const found = issues.find(
+			(issue) =>
+				issue.path.join(".") ===
+				"useCases.Register.implementation.steps.0.find",
+		);
+		expect(found?.code).toBe("unknown_action");
+		expect(found?.message).toContain("cannot be a step");
+	});
+
 	test("change key of a record built in an earlier step is checked", () => {
 		const ok = edit((c) =>
 			steps(c).splice(5, 0, { change: "$user", key: "name", value: "x" }),

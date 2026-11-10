@@ -10,10 +10,14 @@ import {
 	asOf,
 	checkOptions,
 	contextOf,
+	distinct,
 	entityUseCase,
 	errorOf,
 	fields,
+	HOOKS,
+	hooksOf,
 	idOf,
+	joinDependencies,
 	literal,
 	loadSteps,
 	metaOf,
@@ -41,14 +45,21 @@ function invoking(
 		}
 		return { change: "$item", key, value: literal(value) };
 	});
-	return entityUseCase(target, options, verb, ["set"], () => ({
-		steps: [
-			...changes,
-			{ invoke: "$item", method },
-			{ update: "repository", value: "$item", as: "saved" },
-		],
-		result: "$saved",
-	}));
+	return entityUseCase(
+		target,
+		options,
+		verb,
+		["set"],
+		() => ({
+			steps: [
+				...changes,
+				{ invoke: "$item", method },
+				{ update: "repository", value: "$item", as: "saved" },
+			],
+			result: "$saved",
+		}),
+		true,
+	);
 }
 
 const lifecycle = (plugin: string) => ({
@@ -102,8 +113,9 @@ function tagging(
 	verb: string,
 	method: string,
 ): UseCaseCompilation {
-	checkOptions(target, options, ["as", "owner"]);
+	checkOptions(target, options, ["as", "owner", ...HOOKS]);
 	const owner = ownerOf(target, options);
+	const hooks = hooksOf(target, options);
 	const notFound = errorOf(target, options, "notFound", UseCaseEntityNotFound);
 	const { item } = target.field("tags").field as unknown as {
 		readonly item: BlueprintField;
@@ -116,12 +128,18 @@ function tagging(
 		})),
 		response: fields(() => ({ [asOf(target, options)]: target.entity })),
 		...contextOf(owner),
-		dependencies: { repository: target.repository },
-		errors: [notFound],
+		dependencies: joinDependencies(
+			target,
+			{ repository: target.repository },
+			hooks,
+		),
+		errors: distinct(notFound, ...hooks.throws),
 		steps: [
 			...loadSteps(owner, notFound),
-			{ invoke: "$item", method, args: "$input.tags" },
+			...hooks.before("$item"),
+			{ invoke: "$item", method, args: `${hooks.input}.tags` },
 			{ update: "repository", value: "$item", as: "saved" },
+			...hooks.after("$saved"),
 			{ return: { [asOf(target, options)]: "$saved" } },
 		],
 	};

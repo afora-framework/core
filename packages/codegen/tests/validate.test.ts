@@ -278,6 +278,30 @@ describe("reserved keys", () => {
 			);
 		}
 	});
+	test("a versioned entity has version in its identity", () => {
+		expect(codes(entity({ versioned: true }))).toEqual([]);
+		expectIssue(
+			entity({ versioned: true }, { version: "integer" }),
+			"identity_key",
+			"entities.Thing.fields.version",
+		);
+		expectIssue(
+			entity({ versioned: true, change: ["version"] }),
+			"change_identity",
+			"entities.Thing.change.0",
+		);
+		expect(codes(entity({}, { version: "integer" }))).toEqual([]);
+		expectIssue(
+			entity({ versioned: "yes" }),
+			"invalid_option",
+			"entities.Thing.versioned",
+		);
+		expectIssue(
+			blog({ records: { R: { fields: { a: "text" }, versioned: true } } }),
+			"unknown_key",
+			"records.R.versioned",
+		);
+	});
 	test("a record may declare an identity-like key", () => {
 		expect(codes(blog({ records: { R: { fields: { id: "id" } } } }))).toEqual(
 			[],
@@ -542,7 +566,14 @@ describe("repositories", () => {
 		expect(
 			validateSpec(
 				repo({
-					actions: ["findMany", "exists", "findPage", "findCursor", "count"],
+					actions: [
+						"findMany",
+						"exists",
+						"findPage",
+						"findCursor",
+						"forEachPage",
+						"count",
+					],
 				}),
 			),
 		).toEqual([]);
@@ -556,6 +587,28 @@ describe("repositories", () => {
 		expect(
 			validateSpec(repo({ actions: ["restore"], deletion: "soft" })),
 		).toEqual([]);
+	});
+	test("increment needs a number key in change", () => {
+		const counted = (change: string[]) =>
+			blog({
+				entities: {
+					...blogSpec.entities,
+					Counter: {
+						fields: { name: "text", views: "integer" },
+						change,
+					},
+				},
+				repositories: {
+					...blogSpec.repositories,
+					Counters: { entity: "Counter", actions: ["increment"] },
+				},
+			});
+		expect(codes(counted(["views"]))).toEqual([]);
+		expectIssue(
+			counted(["name"]),
+			"increment_needs_number",
+			"repositories.Counters.actions.0",
+		);
 	});
 	test("findBy needs a unique key", () => {
 		expectIssue(

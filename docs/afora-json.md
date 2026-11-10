@@ -25,29 +25,122 @@ afora-codegen extract src/app.ts#App [--import key=./file.ts#name] > afora.json
 
 `extract` imports the file, so use Bun (or Node >= 23.6) for TypeScript files. The CLI runs on Node >= 22 or Bun. The same functions are available from code: `loadSpec`, `validateSpec`, `generate`, `writeGenerated`, `extractSpec`, `normalizeSpec`, `catalog`.
 
+## Versioned entities and increment
+
+An entity takes `"versioned": true`, generated as `entityOf(..., { versioned: true })` and extracted back from `describe()`: it gets a `version` identity key, so its fields cannot declare `version` (`identity_key`) nor its `change` name it (`change_identity`), and `update` throws `RepositoryConcurrencyConflict` (409) on a stale write (see [Repositories](repositories.md)). A record does not take it (`unknown_key`).
+
+A repository lists `"increment"` among its actions for atomic counters; the entity needs a number key (a Std `integer` or `number` property, not a list) in its `change` (`increment_needs_number` otherwise). It is called by code written by hand: a `find` step cannot call it (`write_in_find`), and there is no step for it.
+
+```json
+{
+	"entities": {
+		"PageViews": {
+			"fields": { "entry": "text", "views": "integer" },
+			"change": ["views"],
+			"versioned": true
+		}
+	},
+	"repositories": {
+		"Views": {
+			"entity": "PageViews",
+			"actions": ["findById", "update", "increment"]
+		}
+	}
+}
+```
+
 ## Round trip
 
 `extractSpec(app)` reads `app.describe()` and is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec, and `normalizeSpec` makes the shorthand and object forms of a field compare equal. This holds for code that was generated, and for code written by hand, as long as everything the core cannot describe is mapped to an export (next section). An unmapped piece makes extraction throw an `ExtractionError` naming the key, instead of guessing. `examples/blog` extracts its own spec back in its tests, and `bun run test:roundtrip` proves both directions on complete applications.
 
 ## Mapping what cannot be described
 
-Some things are code, not data: a provider made by hand, a `run` function, an `execute`, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
+Some things are code, not data: a provider made by hand, a `run` function, the `before` and `after` of a standard use case, an `execute`, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
 
-| Key                            | Maps                                                                       |
-| ------------------------------ | -------------------------------------------------------------------------- |
-| `provider`                     | the provider of the application, when created without `providerOf`         |
-| `log`                          | the `log` of the application, when made by `logFrom`                       |
-| `log.providers.<index>`        | a log provider other than `"console"` or `"json"`, by its position         |
-| `repositories.<Name>.provider` | the own provider of a repository, when created without `providerOf`        |
-| `providers.<key>`              | a provider of the top-level `providers`, when created without `providerOf` |
-| `useCases.<Name>`              | a use case with a hand-written `execute`                                   |
-| `useCases.<Name>.run.<name>`   | the `fn` of a `run` step of a steps use case                               |
-| `commands.<Name>.events`       | the event handler of a command                                             |
-| `commands.<Name>.onEventError` | the `onEventError` handler of a command                                    |
-| `outputs.<Name>.pipe.<index>`  | a stage written by hand, by its position in the `pipe`                     |
-| `<property name>`              | the module of a property that cannot be recreated (see the limitations)    |
+| Key                                | Maps                                                                       |
+| ---------------------------------- | -------------------------------------------------------------------------- |
+| `provider`                         | the provider of the application, when created without `providerOf`         |
+| `log`                              | the `log` of the application, when made by `logFrom`                       |
+| `log.providers.<index>`            | a log provider other than `"console"` or `"json"`, by its position         |
+| `repositories.<Name>.provider`     | the own provider of a repository, when created without `providerOf`        |
+| `providers.<key>`                  | a provider of the top-level `providers`, when created without `providerOf` |
+| `useCases.<Name>`                  | a use case with a hand-written `execute`                                   |
+| `useCases.<Name>.run.<name>`       | the `fn` of a `run` step of a steps use case                               |
+| `useCases.<Name>.before`, `.after` | the `before` and `after` of a standard use case                            |
+| `commands.<Name>.events`           | the event handler of a command, when it is not a policy                    |
+| `commands.<Name>.onEventError`     | the `onEventError` handler of a command                                    |
+| `publishers.<key>`                 | a publisher of the top-level `publishers`                                  |
+| `entities.<Name>.events.<event>`   | the handler of a lifecycle event of an entity                              |
+| `outputs.<Name>.pipe.<index>`      | a stage written by hand, by its position in the `pipe`                     |
+| `<property name>`                  | the module of a property that cannot be recreated (see the limitations)    |
 
 The value is always `"./file.ts#export"`.
+
+## Event policies and publishers
+
+A command's `events` can name an event policy of the catalog with JSON options, generated as the call of its factory and extracted back as written. `publishEvents` is built in (see [Commands](commands.md#event-policies)); its `publisher` is a key of the top-level `publishers`, each a publisher written by hand:
+
+```json
+{
+	"publishers": { "realtime": { "import": "../realtime.ts#hub" } },
+	"commands": {
+		"Posts": {
+			"useCases": { "create": "CreatePost" },
+			"events": {
+				"policy": "publishEvents",
+				"options": { "publisher": "realtime", "topic": "posts/{id}" }
+			}
+		}
+	}
+}
+```
+
+`realtime.ts` exports the publisher, any object with a `publish(topic, event)` method, such as `export const hub = wsHub();` of [`@afora/ws`](../packages/ws/README.md), whose `{ "sink": "websocket" }` serves the operations and the subscriptions (`--stages @afora/ws`). The generated application gets `publishers: { realtime: hub }`, and a spec that extends this one can name `realtime` too. The validator makes a built-in policy with its options, so what it would throw is an `invalid_event_policy_options` issue; a name outside the catalog is `unknown_event_policy`, a `publisher` that is not a key of `publishers` (own or inherited) `unknown_publisher`, and a publisher that is not an import `invalid_import`. Extraction needs `publishers.<key>` in `imports`.
+
+The events come from the lifecycle of the entities. An entity (not a record) declares them by cycle, each one event or a list:
+
+```json
+"Post": {
+	"fields": { "title": "text" },
+	"events": {
+		"onCreate": "created",
+		"onUpdate": ["changed", { "name": "audited", "handler": { "import": "../audit.ts#onAudited" } }]
+	}
+}
+```
+
+A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
+
+## Indexes and query cost
+
+A repository declares its [indexes](repositories.md#indexes) and what it does with a [scan](repositories.md#query-cost) as in TypeScript:
+
+```json
+"repositories": {
+	"Entries": {
+		"entity": "Entry",
+		"actions": ["create", "findMany", "findCursor", "explain"],
+		"indexes": {
+			"byTypeStatus": { "where": ["type", "status"], "orderBy": "publishedAt" },
+			"byOwner": { "where": ["ownerSub"] }
+		},
+		"scans": "reject"
+	}
+}
+```
+
+They are generated as `indexes` and `scans` of `repositoryOf`, given by `describe()` and extracted back; normalization leaves out no indexes and `"scans": "allow"`, the default. A key that is not a key of the entity is an `unknown_index_key` issue; a sensitive key, an `orderBy` that is not scalar, a key listed twice, an empty or malformed index and two indexes on the same keys and order are `invalid_index`.
+
+## Records that expire
+
+An entity (not a record) declares when its records expire with `expires`, generated as the [option of `entityOf`](entities.md#records-that-expire) and extracted back from `describe()`:
+
+```json
+"AuditEvent": { "fields": { "action": "text" }, "expires": { "after": { "days": 400 } } },
+"Window": { "fields": { "hits": "integer", "until": "dateTime?" }, "expires": { "at": "until" } }
+```
+
+`after` is a non-empty duration (`days`, `hours`, `minutes`, `seconds`, each a positive number) from `createdAt`, kept in an `expiresAt` identity key, so no field may be named `expiresAt` (`identity_key`). `at` names a `dateTime` or `date` field of the entity (optional or not); a record without a value never expires. Anything else is an `invalid_expires` issue. Repositories of the entity leave expired records out of every read unless `withExpired: true` (see [Repositories](repositories.md#records-that-expire)), and need a provider with `capabilities.expiry` (`"inMemory"` and `drizzle` have it).
 
 ## Standard use cases
 
@@ -73,11 +166,28 @@ A use case that a [standard use case](std-use-cases.md) covers is declared by na
 
 It generates `export const CreatePost = StdUseCases.context.create(Posts, { name: "CreatePost", ... })`, the same class a command would pick with `ctx.create(Posts, ...)`, and commands name it as any other use case. The options are those of the TypeScript form, with the exceptions of `errors` by name (declared, or exported by `@afora/core`); the name is the key of the declaration, and `description`, `tags` and `deprecated` go beside `generic`. `catalog().useCases` lists the standard use cases with the `actions` the repository needs, the `plugins` the entity needs and the `options` each takes.
 
-The validator checks that the use case exists (`unknown_generic`), that the repository is declared (`unknown_repository`) and has the actions (`generic_requires_action`), that the entity has the plugins (`generic_requires_plugin`), and the shape of the options and the keys they name (`invalid_generic_option`). What an option asks of the entity beyond its keys, such as omitting a required key, is checked by the use case itself when the generated code loads, which throws `UseCaseUnavailable`. `extractSpec` gives the declaration back as written, from `describe().useCases.<Name>.generic`, and needs no import mapped, a hashing function included.
+The use cases that write (all but `get`, `list` and `login`) take the [hooks](std-use-cases.md#before-and-after) too: `before` and `after` are imports, as the `fn` of a `run` step, `dependencies` name declared use cases, repositories, environments or `"Logger"`, as those of a use case written in the spec, and `throws` lists exceptions as `errors` does (a name, or `{ "core": "Name" }`):
 
-## Catalogs: providers and stages
+```json
+"CreateEntry": {
+	"generic": "create",
+	"repository": "Entries",
+	"options": {
+		"before": { "import": "../hooks#checkEntry" },
+		"after": { "import": "../hooks#recordEntry" },
+		"dependencies": { "contentTypes": "ContentTypes", "logger": "Logger" },
+		"throws": ["ContentTypeNotFound", "InvalidJsonData"]
+	}
+}
+```
 
-A provider or a stage that is not built in is not part of the spec. The spec names it (`"provider": { "use": "drizzle", "options": {...} }`, `{ "sink": "hono" }`) and a catalog, a codegen option, says which module and export make it.
+They generate `before: checkEntry, after: recordEntry, dependencies: { contentTypes: ContentTypes, logger: Logger }, throws: [ContentTypeNotFound, InvalidJsonData]`, with the functions imported from their module. Extraction needs `useCases.<Name>.before` and `useCases.<Name>.after` in `imports`. A field of any JSON value is `"json"` (`ctx.json`); a property made by `jsonOf({ schema })` is not written in the spec: extraction gives it as an opaque import.
+
+The validator checks that the use case exists (`unknown_generic`), that the repository is declared (`unknown_repository`) and has the actions (`generic_requires_action`), that the entity has the plugins (`generic_requires_plugin`), and the shape of the options and the keys they name (`invalid_generic_option`; `invalid_import` for `before` or `after`, and the issues of a use case's `dependencies` for theirs). What an option asks of the entity beyond its keys, such as omitting a required key, is checked by the use case itself when the generated code loads, which throws `UseCaseUnavailable`. `extractSpec` gives the declaration back as written, from `describe().useCases.<Name>.generic`, and needs no import mapped, a hashing function included, but for `before` and `after`.
+
+## Catalogs: providers, stages and event policies
+
+A provider, a stage or an event policy that is not built in is not part of the spec. The spec names it (`"provider": { "use": "drizzle", "options": {...} }`, `{ "sink": "hono" }`, `"events": { "policy": "audit" }`) and a catalog, a codegen option, says which module and export make it.
 
 ```ts
 export const providers = [
@@ -86,14 +196,17 @@ export const providers = [
 export const stages = [
 	{ name: "hono", module: "@afora/hono", export: "hono", kind: "sink" },
 ];
+export const policies = [
+	{ name: "audit", module: "../policies.ts", export: "audit" }, // made by eventPolicyOf
+];
 ```
 
-- In the CLI, `--providers <module>` and `--stages <module>` take a module that exports `providers` or `stages` (or has it as the default export), an array of those entries. `@afora/drizzle` and `@afora/hono` export their own entries, so `--providers @afora/drizzle --stages @afora/hono` is enough.
-- In code, they are the `providers` and `stages` options of `validateSpec(spec, extended, options)` and `generate(spec, extended, options)`.
-- `inMemory` is the only built-in provider, and `select` and `openapi` the built-in stages (`StdStages` of `@afora/core`); `catalog()` lists them.
+- In the CLI, `--providers <module>`, `--stages <module>` and `--policies <module>` take a module that exports `providers` or `stages` (or has it as the default export), an array of those entries. `@afora/drizzle` and `@afora/hono` export their own entries, so `--providers @afora/drizzle --stages @afora/hono` is enough.
+- In code, they are the `providers`, `stages` and `policies` options of `validateSpec(spec, extended, options)` and `generate(spec, extended, options)`.
+- `inMemory` is the only built-in provider, `select` and `openapi` the built-in stages (`StdStages` of `@afora/core`) and `publishEvents` the built-in event policy (`StdEventPolicies`); `catalog()` lists them.
 - `module` is a package or a path relative to the output directory, and `export` is the factory, called with the options object (omitted when there are none). `kind` on a stage entry is optional and checks `transform` or `sink`.
 - Provider options recurse over JSON values and `{ "import": "./x.ts#y" }` references, which become named imports. The validator never evaluates them.
-- A bad entry is an `invalid_provider_catalog` or `invalid_stage_catalog` issue; a name outside the catalog is `unknown_provider` or `unknown_stage`.
+- A bad entry is an `invalid_provider_catalog`, `invalid_stage_catalog` or `invalid_policy_catalog` issue; a name outside the catalog is `unknown_provider`, `unknown_stage` or `unknown_event_policy`. The options of an external policy are only checked to be JSON.
 
 ## Limitations
 

@@ -7,6 +7,20 @@ import {
 	StdRecordPlugins,
 } from "@afora/core";
 
+/** The key a versioned entity adds to its identity. */
+const VERSION_KEY = "version";
+
+/**
+ * The identity keys of an entity declaration: those of every entity, and
+ * `version` when it is `versioned`.
+ */
+export function identityKeysOf(spec: {
+	readonly versioned?: unknown;
+}): readonly string[] {
+	const keys = catalog().identityKeys;
+	return spec.versioned === true ? [...keys, VERSION_KEY] : keys;
+}
+
 /** The kind of JSON Schema a Std property validates; it tells which `with` options apply. */
 export type SchemaKind = "string" | "number" | "integer" | "boolean" | "other";
 
@@ -84,6 +98,11 @@ export interface Catalog {
 	readonly coreExceptions: readonly string[];
 	/** The built-in stages (`StdStages`) a pipe may name; others come from the `stages` option. */
 	readonly stages: readonly StageInfo[];
+	/** The built-in event policies (`StdEventPolicies`) a command may name; others come from the `policies` option. */
+	readonly policies: readonly {
+		readonly name: string;
+		readonly builtin: true;
+	}[];
 	/** Everything `@afora/core` exports; a declaration cannot take one of these names. */
 	readonly reservedDeclarationNames: readonly string[];
 	/** The standard use cases a use case declaration can name in `generic`. */
@@ -175,7 +194,9 @@ function build(): Catalog {
 			spec:
 				name === "enumOf"
 					? '{ "enum": ["draft", "published"] } (a field or a property declaration)'
-					: name,
+					: name === "jsonOf"
+						? '"json" for any JSON value; a property made by jsonOf({ schema }) is imported ({ "import": "./file.ts#Property" })'
+						: name,
 		})),
 		recordPlugins: StdRecordPlugins.list.map((plugin) => {
 			const { description, ...rest } = plugin.toJSON();
@@ -207,11 +228,18 @@ function build(): Catalog {
 				action: "create",
 				rule: "Takes an entity or the input that builds one.",
 			},
-			{ action: "update", rule: "Saves a changed entity." },
+			{
+				action: "update",
+				rule: 'Saves a changed entity. For a "versioned" entity, only when the stored version is still the one it read (else RepositoryConcurrencyConflict, 409), and the version goes up by one.',
+			},
 			{ action: "delete", rule: "Destroys an entity (soft delete)." },
 			{
 				action: "restore",
 				rule: 'Brings back a soft-deleted entity, by entity or id. Needs deletion "soft".',
+			},
+			{
+				action: "increment",
+				rule: 'Adds numbers to keys of the entity in one atomic write: increment(id, { views: 1 }, { create? }). Only number keys in its "change"; create gives the input of the entity to create when the id holds none. Bumps the version of a versioned entity. Needs a provider with atomic increment (inMemory and drizzle).',
 			},
 			{
 				action: "count",
@@ -233,6 +261,14 @@ function build(): Catalog {
 				action: "findCursor",
 				rule: "Gives { items, limit, next } for { where?, orderBy?, limit?, after? }: pages by position, `after` being the `next` of the page before. No offset and no total. Needs no key, and a provider that reads by cursor (inMemory and drizzle do).",
 			},
+			{
+				action: "explain",
+				rule: 'Gives how a query would be read, { access: "id" | "unique" | "index" | "scan", index? }, without reading. Needs no key.',
+			},
+			{
+				action: "forEachPage",
+				rule: "forEachPage(query, fn, { until? }) runs fn on each page of a findCursor query and gives { done, next?, pages, items }; until (a Date, epoch ms or a function) is checked between pages, and next is the after to resume from. Called from TypeScript, not a step. Needs no key, and a provider that reads by cursor.",
+			},
 		],
 		exceptionLayers: Object.values(core.ExceptionLayers),
 		coreExceptions: exportsOf
@@ -251,6 +287,9 @@ function build(): Catalog {
 				builtin: true as const,
 			}))
 			.sort((a, b) => (a.name < b.name ? -1 : 1)),
+		policies: Object.keys(core.StdEventPolicies.policies)
+			.sort()
+			.map((name) => ({ name, builtin: true as const })),
 		reservedDeclarationNames: [...Object.keys(core), "App", "Providers"].sort(),
 		useCases: core.StdUseCases.list.map((plugin) => {
 			const { name, version, description, requires } = plugin.toJSON();
@@ -267,23 +306,29 @@ function build(): Catalog {
 }
 
 /**
+ * The options of the standard use cases that write: functions run before and
+ * after the write (imports), the dependencies they get, the exceptions they throw.
+ */
+const GENERIC_HOOKS = ["before", "after", "dependencies", "throws"];
+
+/**
  * The options of each standard use case, which a plugin does not describe:
  * checked against the plugins themselves by the tests of the catalog.
  */
 const GENERIC_OPTIONS: Readonly<Record<string, readonly string[]>> = {
-	create: ["as", "owner", "omit", "values"],
+	create: ["as", "owner", "omit", "values", ...GENERIC_HOOKS],
 	get: ["as", "owner"],
 	list: ["owner", "orderBy"],
-	update: ["as", "owner"],
-	delete: ["as", "owner"],
-	restore: ["as"],
-	publish: ["as", "owner", "set"],
-	unpublish: ["as", "owner", "set"],
-	archive: ["as", "owner", "set"],
-	unarchive: ["as", "owner", "set"],
-	tag: ["as", "owner"],
-	untag: ["as", "owner"],
-	register: ["as", "owner", "omit", "values"],
+	update: ["as", "owner", ...GENERIC_HOOKS],
+	delete: ["as", "owner", ...GENERIC_HOOKS],
+	restore: ["as", ...GENERIC_HOOKS],
+	publish: ["as", "owner", "set", ...GENERIC_HOOKS],
+	unpublish: ["as", "owner", "set", ...GENERIC_HOOKS],
+	archive: ["as", "owner", "set", ...GENERIC_HOOKS],
+	unarchive: ["as", "owner", "set", ...GENERIC_HOOKS],
+	tag: ["as", "owner", ...GENERIC_HOOKS],
+	untag: ["as", "owner", ...GENERIC_HOOKS],
+	register: ["as", "owner", "omit", "values", ...GENERIC_HOOKS],
 	login: ["as"],
 };
 

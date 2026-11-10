@@ -28,10 +28,10 @@ export const register = useCasePluginOf<"register", RegisterMaker>("register", {
 			target,
 			options,
 			"Register",
-			[
+			(input) => [
 				{
 					find: "repository.findByEmail",
-					args: ["$input.email"],
+					args: [`${input}.email`],
 					as: "existing",
 				},
 				{ ensure: "absent", value: "$existing", error: conflict },

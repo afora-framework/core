@@ -36,6 +36,11 @@ export interface RepositoryQuery<Entity = unknown> {
 	readonly offset?: number;
 	/** Include destroyed rows; repository defaults depend on its deletion policy. */
 	readonly withDeleted?: boolean;
+	/**
+	 * Include expired rows, of an entity declared with `expires`; `false` by
+	 * default.
+	 */
+	readonly withExpired?: boolean;
 }
 
 /** A page and the unpaginated number of matching live (or explicitly included) rows. */
@@ -48,8 +53,8 @@ export interface RepositoryPage<Entity> {
 
 /**
  * The query of `findCursor`: as `RepositoryQuery`, with the `next` of the
- * previous page as `after` in place of `offset`. `where`, `orderBy` and
- * `withDeleted` must stay the same from one page to the next.
+ * previous page as `after` in place of `offset`. `where`, `orderBy`,
+ * `withDeleted` and `withExpired` must stay the same from one page to the next.
  */
 export interface RepositoryCursorQuery<Entity = unknown>
 	extends Omit<RepositoryQuery<Entity>, "offset" | "limit"> {
@@ -68,13 +73,62 @@ export interface RepositoryCursorPage<Entity> {
 }
 
 /**
- * What a provider gets from `findCursor` on `findMany`: `after` holds one
+ * What a provider gets. From `findCursor` on `findMany`, `after` holds one
  * value for each order of `orderBy`, those of the last row already read, and
- * the provider gives the rows strictly after it in that order. Only a
- * provider with `capabilities.keyset` is given it.
+ * the provider gives the rows strictly after it in that order; only a
+ * provider with `capabilities.keyset` is given it. For an entity that expires
+ * (`context.expiry`), `now` is the current date and time as an ISO 8601
+ * string, from the clock of the entity: unless `withExpired`, the provider
+ * leaves out the rows whose `context.expiry.key` is at or before it.
  */
 export interface ProviderQuery extends RepositoryQuery {
 	readonly after?: readonly unknown[];
+	/**
+	 * The name of the declared index (`context.indexes`) that serves the
+	 * query, when one does; a provider without `capabilities.indexes` can
+	 * ignore it, and the rows must be the same either way.
+	 */
+	readonly index?: string;
+	/** The current date and time (ISO 8601), given for entities that expire. */
+	readonly now?: string;
+}
+
+/**
+ * An access pattern a repository declares: queries whose `where` holds every
+ * key of `where` by equality, and whose first order (if any) is `orderBy`.
+ */
+export interface RepositoryIndex<Key extends string = string> {
+	/** The keys the query matches by equality, at least one. */
+	readonly where: readonly Key[];
+	/** The scalar key the rows are read in order of. */
+	readonly orderBy?: Key;
+}
+
+/**
+ * How a query reaches its rows: by `id`, by another unique key, through a
+ * declared index (named by `index`), or by reading every row (`scan`).
+ */
+export interface RepositoryPlan {
+	readonly access: "id" | "unique" | "index" | "scan";
+	/** The declared index that serves the query, when `access` is `"index"`. */
+	readonly index?: string;
+}
+
+/**
+ * What a repository does with a query that only a scan serves: run it
+ * (`"allow"`, the default), log `repository-scan` and run it (`"warn"`), or
+ * throw `InvalidRepositoryQuery` before the provider is called (`"reject"`).
+ */
+export type RepositoryScans = "allow" | "warn" | "reject";
+
+export interface RepositoryExplain<Entity> {
+	/**
+	 * How the query would be read (`{ access, index? }`), without reading
+	 * anything; takes the query of `findMany` or of `findCursor`.
+	 */
+	explain(
+		query?: RepositoryQuery<Entity> | RepositoryCursorQuery<Entity>,
+	): Promise<RepositoryPlan>;
 }
 
 export interface RepositoryFindCursor<Entity> {
@@ -86,6 +140,59 @@ export interface RepositoryFindCursor<Entity> {
 	findCursor(
 		query?: RepositoryCursorQuery<Entity>,
 	): Promise<RepositoryCursorPage<Entity>>;
+}
+
+/** Where `forEachPage` is in its walk, given with each page. */
+export interface RepositoryWalkPage {
+	/** The position of the page in this call, from 0. */
+	readonly index: number;
+	/**
+	 * The cursor after this page, `undefined` on the last: save it once the
+	 * page is done to resume from the next one.
+	 */
+	readonly next?: string;
+}
+
+/** When `forEachPage` stops before the end. */
+export interface RepositoryWalkOptions {
+	/**
+	 * A deadline (a `Date` or epoch milliseconds) or a function that says when
+	 * to stop; checked before each page, never while one runs.
+	 */
+	readonly until?: Date | number | (() => boolean);
+}
+
+/** What `forEachPage` did. */
+export interface RepositoryWalkResult {
+	/** Whether it walked to the last page; `false` when `until` stopped it. */
+	readonly done: boolean;
+	/**
+	 * When it stopped early, the `after` to resume from: the `next` of the
+	 * last page it ran, or the `after` it was given if it ran none.
+	 */
+	readonly next?: string;
+	/** The pages it ran `fn` on. */
+	readonly pages: number;
+	/** The items of those pages. */
+	readonly items: number;
+}
+
+export interface RepositoryForEachPage<Entity> {
+	/**
+	 * Reads the pages of `query` by cursor, as `findCursor` does, and runs
+	 * `fn` on each, one after the other, until the last or until `until`
+	 * says to stop (checked between pages). Rows added or removed between
+	 * pages, by `fn` too, are neither repeated nor skipped. An error of `fn`
+	 * stops the walk and rejects; resume from the last `next` saved.
+	 */
+	forEachPage(
+		query: RepositoryCursorQuery<Entity>,
+		fn: (
+			items: EntityInstanceOf<Entity>[],
+			page: RepositoryWalkPage,
+		) => unknown,
+		options?: RepositoryWalkOptions,
+	): Promise<RepositoryWalkResult>;
 }
 
 export interface RepositoryFindMany<Entity> {
@@ -128,6 +235,17 @@ export interface ProviderCapabilities {
 	readonly transactions?: boolean;
 	/** Whether `findMany` honors `after` (`ProviderQuery`), which `findCursor` needs. */
 	readonly keyset?: boolean;
+	/**
+	 * Whether the provider serves the indexes a repository declares
+	 * (`context.indexes`) from storage, reading `ProviderQuery.index`.
+	 */
+	readonly indexes?: boolean;
+	/** Whether `update` honors an expected `version` (versioned entities, #44). */
+	readonly versioning?: boolean;
+	/** Whether the provider has an atomic `increment` (#34). */
+	readonly atomic?: boolean;
+	/** Whether reads leave out expired records (entities with `expires`, #35). */
+	readonly expiry?: boolean;
 }
 
 /** Declaration input for a named provider, implemented by providerOf in T10. */

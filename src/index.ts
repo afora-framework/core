@@ -129,6 +129,7 @@ export type {
 export {
 	AbstractEntity,
 	ENTITY_IDENTITY_KEYS,
+	EntitySettings,
 	EntityUniqueKeys,
 	RESERVED_ENTITY_KEYS,
 } from "./core/entity/abstract-entity";
@@ -145,6 +146,7 @@ export { eventOf } from "./core/entity/event";
 export {
 	DeletedEntity,
 	ImmutableEntityKey,
+	InvalidEntityExpiry,
 	ReservedEntityKey,
 } from "./core/entity/exceptions";
 export type {
@@ -152,13 +154,22 @@ export type {
 	EntityBuilder,
 	EntityBuilderSettings,
 	EntityConstructor,
+	EntityDuration,
+	EntityExpires,
 	EntityIdentityKey,
 	EntityInput,
 	EntityOptions,
 	EntityProperties,
+	EntityStorageOptions,
+	EntityStorageSettings,
 	EntityUniqueKey,
+	ExpiresAtField,
+	ExpiringIdentity,
 	IEntityIdentity,
+	IEntityVersion,
+	VersionedIdentity,
 } from "./core/entity/types/entity.interface";
+export { EntityVersion } from "./core/entity/version";
 export type {
 	AnyEnvironment,
 	EnvironmentDependencies,
@@ -172,6 +183,26 @@ export {
 	InvalidEnvironment,
 	isEnvironment,
 } from "./core/environment/environment";
+export {
+	eventPolicyCatalogOf,
+	eventPolicyDescriptionOf,
+	eventPolicyOf,
+} from "./core/event-policy/event-policy";
+export {
+	InvalidEventPolicy,
+	PublisherNotBound,
+} from "./core/event-policy/exceptions";
+export { publishEvents } from "./core/event-policy/publish";
+export type {
+	EventPolicyDescription,
+	EventPolicyFactory,
+	EventPolicyOptions,
+	EventPolicySettings,
+	IEventPolicyCatalog,
+	IEventPublisher,
+	PublishEventsOptions,
+	PublishedEvent,
+} from "./core/event-policy/types/event-policy.interface";
 export { ExceptionLayers } from "./core/exception/enums/exception-layers";
 export type { DeclaredExceptionClass } from "./core/exception/exception";
 export {
@@ -217,6 +248,7 @@ export type {
 	OpenAPIOptions,
 	OpenAPISchema,
 } from "./core/openapi/types/openapi.interface";
+export { coerceTextValues } from "./core/output/coerce";
 export {
 	DuplicateOperation,
 	InvalidOutputStage,
@@ -224,13 +256,18 @@ export {
 export type {
 	OpenAPIDocument,
 	OpenAPIMethod,
+	OpenAPISecurityScheme,
 	OpenAPISinkOptions,
 	OperationRoute,
 	RouteOptions,
+	RouteStatus,
+	SecurityRequirement,
 } from "./core/output/openapi-sink";
 export {
 	openapi,
 	operationRoutes,
+	ROUTE_OPTION_KEYS,
+	requestIdHeaderOf,
 	routeOptionsIssue,
 } from "./core/output/openapi-sink";
 export { isOutput, operationOf, outputOf } from "./core/output/output";
@@ -275,6 +312,7 @@ export type {
 	TransformSettings,
 	TransformStage,
 } from "./core/output/types/output.interface";
+export { stripUndeclared } from "./core/parse/strip";
 export type {
 	Issue,
 	IssueCode,
@@ -372,11 +410,17 @@ export {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
+	InvalidRepositoryIncrement,
 	InvalidRepositoryQuery,
+	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
+	RepositoryUsedOutsideApplication,
 } from "./core/repository/exceptions";
-export { inMemoryProvider } from "./core/repository/in-memory";
+export {
+	type InMemoryProvider,
+	inMemoryProvider,
+} from "./core/repository/in-memory";
 export { providerDescriptionOf, providerOf } from "./core/repository/provider";
 export type { RepositorySettings } from "./core/repository/repository";
 export {
@@ -395,23 +439,35 @@ export type {
 	RepositoryCursorPage,
 	RepositoryCursorQuery,
 	RepositoryExists,
+	RepositoryExplain,
 	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
+	RepositoryForEachPage,
+	RepositoryIndex,
 	RepositoryOrder,
 	RepositoryPage,
+	RepositoryPlan,
 	RepositoryQuery,
+	RepositoryScans,
+	RepositoryWalkOptions,
+	RepositoryWalkPage,
+	RepositoryWalkResult,
 	RepositoryWhere,
 } from "./core/repository/types/query.interface";
 export type {
 	AnyRepository,
 	AnyRepositoryEntity,
+	EntityIncrementKeyOf,
 	EntityInstanceOf,
 	EntityKeyOf,
 	EntityNonUniqueKeyOf,
 	EntityUniqueKeyOf,
 	EntityValueOf,
 	IRepositoryProvider,
+	ProviderIncrementOptions,
+	ProviderKeyset,
+	ProviderUpdateOptions,
 	QueryValueOf,
 	RepositoryAction,
 	RepositoryContext,
@@ -422,6 +478,9 @@ export type {
 	RepositoryDelete,
 	RepositoryFindBy,
 	RepositoryFindManyBy,
+	RepositoryIncrement,
+	RepositoryIncrementDeltas,
+	RepositoryIncrementOptions,
 	RepositoryRestore,
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
@@ -519,11 +578,23 @@ export { blueprintOf } from "./std/blueprint";
 export { Std } from "./std/blueprint-plugin";
 export { commandOf } from "./std/command";
 export { entityOf } from "./std/entity";
+export { StdEventPolicies } from "./std/event-policies";
 export { Email, Ip, Phone, Url } from "./std/properties/contact";
 export type { EnumClass } from "./std/properties/enum";
 export { enumOf } from "./std/properties/enum";
+export {
+	InvalidJsonData,
+	InvalidJsonSchema,
+} from "./std/properties/exceptions";
 export { SchemaProperty } from "./std/properties/headless";
 export { Id, Slug } from "./std/properties/identity";
+export type { JsonClass, JsonValue } from "./std/properties/json";
+export {
+	checkJsonSchema,
+	JsonProperty,
+	jsonOf,
+	jsonSchemaIssues,
+} from "./std/properties/json";
 export {
 	isPasswordHash,
 	PASSWORD_MAX_LENGTH,
@@ -545,6 +616,7 @@ export {
 	DateProperty,
 	DateTime,
 	DeletedAt,
+	ExpiresAt,
 	UpdatedAt,
 } from "./std/properties/time";
 export { recordOf } from "./std/record";
@@ -581,8 +653,11 @@ export type {
 	RestoreMaker,
 	StdCreateOptions,
 	StdEntityOptions,
+	StdHookArgs,
+	StdHookOptions,
 	StdLifecycleOptions,
 	StdListOptions,
+	StdNoHookOptions,
 	StdOwnerOption,
 	StdUseCaseContext,
 	StdUseCaseErrors,

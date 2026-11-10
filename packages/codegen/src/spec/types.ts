@@ -75,6 +75,39 @@ export interface RecordSpec {
 	readonly change?: readonly string[];
 	/** Names of the Std record plugins (`authenticatable`...). */
 	readonly plugins?: readonly string[];
+	/** Entities only: the events each lifecycle cycle raises. */
+	readonly events?: EntityEventsSpec;
+	/** Entities only: a `version` identity key checked by `update`. */
+	readonly versioned?: boolean;
+	/** Entities only: when their records expire, which reads then leave out. */
+	readonly expires?: EntityExpiresSpec;
+}
+
+/**
+ * When the records of an entity expire: `after` a duration from `createdAt`
+ * (kept in an `expiresAt` identity key), or `at` the date of one of its fields.
+ */
+export type EntityExpiresSpec =
+	| {
+			readonly after: {
+				readonly days?: number;
+				readonly hours?: number;
+				readonly minutes?: number;
+				readonly seconds?: number;
+			};
+	  }
+	| { readonly at: string };
+
+/** An event of an entity: its name, with the handler written by hand when it has one. */
+export type EntityEventSpec =
+	| string
+	| { readonly name: string; readonly handler?: ImportRef };
+
+/** The lifecycle events of an entity, by cycle: one event or a list of them. */
+export interface EntityEventsSpec {
+	readonly onCreate?: EntityEventSpec | readonly EntityEventSpec[];
+	readonly onUpdate?: EntityEventSpec | readonly EntityEventSpec[];
+	readonly onDelete?: EntityEventSpec | readonly EntityEventSpec[];
 }
 
 export interface EnvironmentSpec {
@@ -151,12 +184,24 @@ export interface StageCatalogEntry {
 	readonly kind?: "transform" | "sink";
 }
 
+/** An event policy factory of the catalog supplied to codegen: where it comes from. */
+export interface EventPolicyCatalogEntry {
+	/** The name `{ "policy": name }` refers to. */
+	readonly name: string;
+	/** A package or a path relative to the output directory. */
+	readonly module: string;
+	/** The factory (made by `eventPolicyOf`), called with the options object. */
+	readonly export: string;
+}
+
 /** What codegen needs besides the spec. */
 export interface CodegenOptions {
 	/** External providers `use` may name; `inMemory` is built in. */
 	readonly providers?: readonly ProviderCatalogEntry[];
 	/** External stages a pipe may name; `StdStages` (`select`, `openapi`) are built in. */
 	readonly stages?: readonly StageCatalogEntry[];
+	/** External event policies a command may name; `StdEventPolicies` (`publishEvents`) are built in. */
+	readonly policies?: readonly EventPolicyCatalogEntry[];
 }
 
 export interface RepositorySpec {
@@ -170,6 +215,16 @@ export interface RepositorySpec {
 	readonly relations?: readonly string[];
 	/** The environments it depends on. */
 	readonly environments?: readonly string[];
+	/** Its access patterns by name, e.g. `{ "byOwner": { "where": ["owner"] } }`. */
+	readonly indexes?: Readonly<Record<string, RepositoryIndexSpec>>;
+	/** What a query only a scan serves does (default `"allow"`). */
+	readonly scans?: "allow" | "warn" | "reject";
+}
+
+/** An index of a repository: the keys matched by equality, and the order. */
+export interface RepositoryIndexSpec {
+	readonly where: readonly string[];
+	readonly orderBy?: string;
 }
 
 /** A declared exception (`exceptionOf`). */
@@ -303,6 +358,12 @@ export interface GenericUseCaseSpec {
 	readonly implementation?: undefined;
 }
 
+/** An event policy of the catalog with its JSON options: `{ "policy": "publishEvents", "options": {...} }`. */
+export interface EventPolicySpec {
+	readonly policy: string;
+	readonly options?: Readonly<Record<string, unknown>>;
+}
+
 /** A command (`commandOf`). */
 export interface CommandSpec {
 	readonly description?: string;
@@ -314,8 +375,8 @@ export interface CommandSpec {
 	readonly transaction?: boolean;
 	/** The environments it depends on, given to its use cases and event handlers. */
 	readonly environments?: readonly string[];
-	/** `"after-commit"` by default; a handler is written by hand. */
-	readonly events?: "after-commit" | "manual" | ImportRef;
+	/** `"after-commit"` by default; a policy of the catalog (`publishEvents`) or a handler written by hand. */
+	readonly events?: "after-commit" | "manual" | EventPolicySpec | ImportRef;
 	readonly onEventError?: ImportRef;
 }
 
@@ -354,6 +415,8 @@ export interface Spec {
 	readonly providers?: Readonly<Record<string, ProviderSpec>>;
 	/** How the application logs. */
 	readonly log?: LogSpec;
+	/** Where event policies publish (`applicationOf({ publishers })`), by camelCase key: a publisher written by hand. */
+	readonly publishers?: Readonly<Record<string, ImportRef>>;
 	readonly properties?: Readonly<Record<string, PropertySpec>>;
 	readonly blueprints?: Readonly<Record<string, BlueprintSpec>>;
 	readonly records?: Readonly<Record<string, RecordSpec>>;

@@ -1,6 +1,92 @@
 # Changelog
 
-## 0.0.7 — unreleased (draft: dated when it is published)
+## 0.0.8 — unreleased (draft: dated when it is published)
+
+### Changed
+
+- Every `@afora` package (`codegen`, `mcp`, `hono`, `drizzle`, `ws`) requires `@afora/core` 0.0.8 or later: they import exports added in this release, and specs with indexes, records that expire, versioned entities or use case hooks generate code that uses them.
+- `CommandEventInfo` has `publisher(name)`, and a handler policy that throws a `CommandEventFailed` itself has it passed up as it is instead of wrapped.
+- An application with `publishers` rebinds its use cases and commands, as one with a `provider` or a `log` does, so `app.commands.X` is not the declared command.
+- **Breaking.** A repository declared at module level throws the new `RepositoryUsedOutsideApplication` (layer `repository`) once an application with a provider binds it, instead of reading and writing its own store; the message points to `app.repositories.X`, `app.run` and `execute`. Repositories no application binds work as before. See Migration below and `docs/repositories.md`.
+- **Breaking (types).** `findCursor` is left out of the repository type when the declared `provider` cannot read by cursor (the type of its `capabilities` has a `keyset` that cannot be `true`; a provider with no `capabilities` keeps it in the type and is rejected at declaration); `inMemoryProvider()` (now typed `InMemoryProvider`), `providerOf` and `drizzleProvider` (`DrizzleProvider`) keep literal capabilities. Declaring `findCursor` with such a provider throws `InvalidRepositoryDeclaration`, and `app.start()` throws `InvalidApplicationDeclaration` when the provider it makes lacks `keyset` and a repository declares `findCursor`. `RepositoryOf` (type) takes a fourth parameter, `Keyset`, and `RepositorySettings` a fourth, `Provider`.
+- `app.describe().repositories.<Name>` has `indexes` and `scans`.
+- The function of a `run` step gets `{ context, dependencies }` after its args: the dependencies as the call resolved them, overrides included (it got `{ context }`).
+- `routeOptionsIssue` rejects a `route[id].path` with `:` or `*`, which used to pass and was ignored by the document; a parameter is written `{name}`.
+
+### Added
+
+- `stripUndeclared(shape, value)`: a copy of `value` with only the keys `shape` declares, at any depth (nested blueprints, list items, `optionalOf`, records and entities held as fields), for payloads that carry more than an operation reads, before parsing. It does not validate, never throws and does not change `value`. See `docs/standard-schema.md`.
+- Event policies: `eventPolicyOf({ name, validate?, handle, publishers? })` makes a factory of `events` handlers with JSON options, which an application describes as `{ kind: "policy", name, options }` instead of `{ kind: "opaque" }`; `eventPolicyDescriptionOf`, `eventPolicyCatalogOf` and `StdEventPolicies` go with it. The built-in `publishEvents({ publisher, topic, events?, handle?, onPublishError? })` runs each event's handler, then publishes `{ name, command, operation, entity }` (the entity masked by `toJSON`) to a publisher of the application, with topic placeholders `{event}`, `{command}`, `{operation}` and `{id}`; a failed publish is logged (`event-publish-failed`) or thrown. `applicationOf({ publishers })` declares publishers by key (inherited, checked against the policies of its commands, `describe().publishers`), and `CommandEventInfo.publisher(name)` resolves one for a handler. New exceptions `InvalidEventPolicy` and `PublisherNotBound`; new types `IEventPublisher`, `PublishedEvent`, `PublishEventsOptions`, `EventPolicySettings`, `EventPolicyFactory`, `EventPolicyDescription`, `EventPolicyOptions`, `IEventPolicyCatalog`. `memoryPublisher()` in `@afora/core/testing`. See `docs/commands.md#event-policies`.
+- `eventOf(name, Entity)` takes no handler: such an event only carries the entity, for a policy such as `publishEvents`. `describe()` gives the lifecycle events of an entity (`entities.<Name>.events`, by cycle, `{ name, handler }`).
+- `afora.json`: an entity declares its lifecycle events, `"events": { "onCreate": "created", "onUpdate": [{ "name": "audited", "handler": { "import": ... } }] }`, generated as `<Name>Events` with `eventOf` and the entity's `onCreate`/`onUpdate`/`onDelete`, extracted back (`entities.<Name>.events.<event>` in `imports` for a handler); new issues `invalid_event` and `event_conflict`.
+- `afora.json`: `"events": { "policy": "publishEvents", "options": {...} }` on a command and the top-level `"publishers": { key: { "import": ... } }`, validated (`unknown_event_policy`, `invalid_event_policy_options`, `unknown_publisher`, `invalid_publishers`), generated and extracted (`publishers.<key>` in `imports`); `--policies <module>` (codegen and `afora-mcp`) adds event policies of other catalogs.
+- `@afora/ws`, a new package: the `websocket` sink serves the operations of an output over JSON messages (`{ id?, op, input? }`), on any runtime, with topic subscriptions (`{ subscribe }`) that `publishEvents` fills through `wsHub()`. See `packages/ws/README.md`.
+- `coerceTextValues(blueprint, texts)`: text values as the scalar fields of a blueprint take them (numbers, booleans), for sinks that read text; `@afora/hono` and `@afora/mcp` now use it instead of their own copies.
+- `@afora/hono`: the `webhooks` option verifies the signatures of incoming webhooks (Stripe, GitHub, Standard Webhooks, plain HMAC-SHA256) and can strip undeclared keys. See `packages/hono/README.md#webhooks`.
+- Repositories declare indexes: `repositoryOf({ indexes: { byTypeStatus: { where: ["type", "status"], orderBy: "publishedAt" } } })`, typed by the entity keys and checked at declaration (unknown, sensitive or repeated keys, a non-scalar `orderBy`, duplicate indexes throw `InvalidRepositoryDeclaration`). The provider gets them as `context.indexes` and the one that serves a query as `ProviderQuery.index`; `ProviderCapabilities.indexes` says a provider serves them from storage. See `docs/repositories.md#indexes`.
+- Query cost: each read is planned as `id`, `unique`, `index` or `scan`; the new `explain(query)` action gives the plan without reading, and `scans: "allow" | "warn" | "reject"` runs a scan, logs `repository-scan` and runs it, or throws `InvalidRepositoryQuery` (`details.scan: true`) before the provider is called. New types `RepositoryIndex`, `RepositoryPlan`, `RepositoryScans`, `RepositoryExplain`, `ProviderKeyset`, `InMemoryProvider`. See `docs/repositories.md#query-cost`.
+- `providerContract` takes `{ indexes }` (default `capabilities.indexes`) and checks that a query given `index` answers as the scan does; `inMemoryProvider` and `@afora/drizzle` pass it.
+- `afora.json`: repositories take `indexes` and `scans` and the action `explain`, validated (new issues `unknown_index_key` and `invalid_index`), generated, normalized and extracted. See `docs/afora-json.md#indexes-and-query-cost`.
+- `@afora/drizzle`: accepts `ProviderQuery.index` with the same rows, and its README tells how to declare the matching SQL index.
+- Standard use cases that write (`create`, `update`, `delete`, `restore`, `publish`, `unpublish`, `archive`, `unarchive`, `tag`, `untag`, `register`) take `before`, `after`, `dependencies` and `throws`: `before({ input, entity?, dependencies, context })` runs before the write and may give back the input to go on with; `after({ entity, input, dependencies, context })` runs after it, within the transaction of the command; `dependencies` (repositories, use cases, environments, `Logger`) join those the use case makes; `throws` adds exception classes to its `errors`, so `describe()` and the statuses of outputs know them. Typed from the repository and the options; `get`, `list` and `login` reject them (a type error, and `UseCaseUnavailable`). `describe()` names the dependencies among the options of a standard use case by their registered names. New types `StdHookArgs`, `StdHookOptions` and `StdNoHookOptions`. See `docs/std-use-cases.md#before-and-after`.
+- JSON properties: `ctx.json` (`JsonProperty`) holds any JSON value (typed `JsonValue`), rejecting `undefined`, functions, `NaN`, class instances and cycles; `jsonOf({ schema })` (`ctx.jsonOf`) holds JSON checked by a JSON Schema known at declaration, typed by it; `checkJsonSchema(schema, value, { source })` checks data against a schema loaded at runtime with TypeBox `Value` (no compiling, so it runs on Workers) and throws the new `InvalidJsonData`, whose `details.issues` are afora issues (a 400), and `jsonSchemaIssues` gives those issues without throwing. A schema that is not a JSON Schema throws the new `InvalidJsonSchema`. Also exported: `JsonClass`. See `docs/properties.md#json`.
+- `afora.json`: the standard use cases that write take `before` and `after` (`{ "import": ... }`), `dependencies` and `throws` in their `options`, validated, generated and extracted (`useCases.<Name>.before` and `.after` in `imports`); `"json"` is a field type.
+- `openapi` sink and `RouteOptions`: path parameters (`route[id].path: "/entries/{slug}"`, each `{name}` a whole segment naming a scalar input key, documented as a required `in: path` parameter and left out of the body or query), `route[id].status` (`200 | 201 | 202 | 204`; `204` without content), `responses: { [operationId]: { headers } }` (static headers of successes), `requestId: true | "<header>"` (documented on every response) and `security: { schemes, operations?, default? }` (`components.securitySchemes`, the document `security` and each operation's; `false` marks an operation public). `OperationRoute` gains `parameters`, `status` and `headers`; new exports `ROUTE_OPTION_KEYS`, `requestIdHeaderOf` and the types `RouteStatus`, `OpenAPISecurityScheme`, `SecurityRequirement`. See `docs/outputs.md`.
+- `@afora/hono`: serves the path parameters (the path wins over the body or query), the success `status` (`204` without a body), the `responses` headers and `requestId` (propagated or generated with `crypto.randomUUID`, on successes and problems), and takes context from middleware with `context.variables: { [contextKey]: variableName }` (`c.get`, not coerced). `security` reaches the document only. See `packages/hono/README.md`.
+
+### Migration
+
+**Module-level repositories after binding.** Before, the module-level repository silently read another store once an application bound it:
+
+```ts
+const app = applicationOf({ name: "blog", repositories: { Users }, provider });
+await Users.findById(id); // read the in-memory store of the declaration, not `provider`
+```
+
+After, it throws `RepositoryUsedOutsideApplication`; go through the application:
+
+```ts
+await app.repositories.Users.findById(id);
+await app.run(Register, input); // or new app.useCases.Register(input).execute()
+await new Register(input).execute({ users: app.repositories.Users });
+```
+
+**`findCursor` and providers without keyset.** Before, the type offered `findCursor` on any provider, and the call threw at run time:
+
+```ts
+const Posts = repositoryOf({
+	entity: Post,
+	actions: ["findCursor"],
+	provider: kv,
+});
+await Posts.findCursor(); // InvalidRepositoryQuery: the provider does not read by cursor
+```
+
+After, `repositoryOf` throws `InvalidRepositoryDeclaration` and the type has no `findCursor`. Page with `findPage`, or give the provider `capabilities: { keyset: true }` and honor `after` in its `findMany`. A provider typed as the wide `IRepositoryProvider` keeps `findCursor` in the type; `const kv = { ..., capabilities: { keyset: true } } as const` (or `providerOf`) keeps the literal.
+
+### Page walker (#37)
+
+- The repository action `forEachPage(query, fn, { until? })` walks the pages of a `findCursor` query and awaits `fn(items, { index, next })` on each, for bulk work (deleting entries, rewriting rows, migrations), and gives `{ done, next?, pages, items }`. `until`, a deadline (`Date` or epoch milliseconds) or a function, is checked before each page; when it stops the walk, `done` is `false` and `next` is the `after` to resume from (the `after` given when no page ran). Rows added or removed between pages or calls, by `fn` too, are neither repeated nor skipped. An error of `fn` rejects through the repository; it needs `findMany` and a provider with `capabilities.keyset`. In a use case, the repository `fn` calls has the overrides of `execute`. New types `RepositoryForEachPage`, `RepositoryWalkOptions`, `RepositoryWalkPage` and `RepositoryWalkResult`. See `docs/repositories.md`.
+- `@afora/codegen` and `@afora/mcp` accept `forEachPage` in the `actions` of a repository; a `find` step that names it is rejected with a clear reason, in `afora.json` and in core steps, as it takes a function.
+
+### Records that expire (#35)
+
+- `entityOf(blueprint, { expires })`: `{ after: { days?, hours?, minutes?, seconds? } }` keeps `createdAt` plus the duration in a read-only `expiresAt` identity key (the new std property `ExpiresAt`), and `{ at: key }` expires on the date held by a key of the blueprint (typed as one of its keys); a record without a date never expires. An invalid option throws the new `InvalidEntityExpiry` when the entity is declared. `entityBuilderOf` takes an `expiresAt` field for it. New types `ExpiresAtField` and `ExpiringIdentity`; `EntityExpires`, `EntityStorageOptions` and `EntityOptions` take the key of `at` as a parameter. See `docs/entities.md#records-that-expire`.
+- Repositories leave expired records out of every read (`findOne`, `findMany`, `count`, `exists`, `findPage`, `findCursor`, `findBy<Key>`, `findManyBy<Key>`) unless the query has `withExpired: true`, a new option of `RepositoryQuery` and `RepositoryCursorQuery`. Unique keys still count expired records, relations still load them (`loadByIds` reads with `withExpired: true`), and `update` / `delete` of an expired entity you hold are unchanged. See `docs/repositories.md#records-that-expire`.
+- Providers: `RepositoryContext.expiry` (`{ key }`) for an entity that expires, `ProviderQuery.now` (ISO 8601, from the clock of the entity) and `withExpired`, given only for such an entity; `findOne` and `count` of `IRepositoryProvider` take a `ProviderQuery`. A provider leaves expired rows out when it sets `capabilities.expiry`, which an entity that expires needs (otherwise its reads throw `InvalidRepositoryQuery`). `inMemoryProvider()` and `@afora/drizzle` have it, and `providerContract` checks it in its `expiry` cases (the table needs an `expiresAt` column).
+- `describe()` gives `entities.<Name>.expires` as declared (an `expiresAt` of `after` is left out of `fields`, as the identity is), and `afora.json` takes `"expires"` on an entity: validated (`invalid_expires`, `identity_key` for a field named `expiresAt` with `after`), generated as the option of `entityOf` and extracted back. `@afora/mcp` teaches it in its guide.
+
+### Optimistic concurrency and atomic increment (#44, #34)
+
+- Versioned entities: `entityOf(blueprint, { versioned: true })` adds a `version` identity key (`EntityVersion`, a positive integer, 1 when built), read-only and present on the instance type only for a versioned entity (`VersionedIdentity`, `IEntityVersion`). The repository's `update` writes only when the stored version is still the one the entity was read with, and bumps it (also the entity's); otherwise it throws the new `RepositoryConcurrencyConflict` (Repository layer, `details: { id, expected, actual? }`), which `statusOf` maps to 409. A soft `delete` and `restore` check and bump it too. A provider without `capabilities.versioning` makes the first write of a versioned entity throw `InvalidRepositoryDeclaration`. The standard use cases leave `version` out of their inputs, `app.describe()` marks the entity `versioned: true`, and OpenAPI schemas give `version` as read-only. See `docs/entities.md#versioned-entities` and `docs/repositories.md`.
+- `IRepositoryProvider.update(context, data, options?: { expectedVersion? })` (`ProviderUpdateOptions`): with `expectedVersion`, a provider with `capabilities.versioning` compares the stored `version` in the same atomic step as the write. `inMemoryProvider()` advertises `versioning: true`.
+- The `increment` repository action: `increment(idOrEntity, deltas, { create? })` adds numbers to keys of the entity in one atomic write and gives the entity as stored; only number keys of its `change` list, checked by type (`EntityIncrementKeyOf`, `RepositoryIncrementDeltas`) and at runtime (the new `InvalidRepositoryIncrement`, with issues, a 400). It stamps `updatedAt`, bumps the version of a versioned entity and queues `onUpdate`; without `create` a missing id throws `RepositoryEntityNotFound`, with it the entity is built from `create` and the id (deltas added, validated, `onCreate`) and inserted, and a concurrent create loses nothing. Also exported: `RepositoryIncrement`, `RepositoryIncrementOptions`.
+- `IRepositoryProvider.increment?(context, id, deltas, { set?, create? })` (`ProviderIncrementOptions`), advertised with `capabilities.atomic`, and needed by the action. `inMemoryProvider()` implements it (`atomic: true`), as does a provider of `providersOf` or `providerFrom` that forwards to one.
+- `providerContract` runs the cases of `versioning` (a stale version, two updates with the same one, no expected version) and `atomic` (concurrent increments, a missing id with and without `create`, concurrent creates, soft-deleted rows, an increment then a stale update), gated by the capabilities or the options of the same names. Their rows use the `version` and `visits` columns.
+- Steps: a `find` step naming `increment` is `write_in_find`.
+- `increment` with `create` on an entity that expires treats an expired record as absent: it replaces it with a fresh one (new `createdAt` and `expiresAt`, `version: 1`, the deltas applied), the window of a rate limiter; without `create` it is `RepositoryEntityNotFound`. The provider gets `now` in `ProviderIncrementOptions`.
+
+## 0.0.7 — 2026-11-10
 
 ### Changed
 

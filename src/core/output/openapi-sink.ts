@@ -22,8 +22,97 @@ const METHODS = ["get", "post", "put", "patch", "delete"] as const;
 /** An HTTP method an operation can be routed to. */
 export type OpenAPIMethod = (typeof METHODS)[number];
 
+/** The status of a successful call of a route; `204` has no body. */
+export type RouteStatus = 200 | 201 | 202 | 204;
+const SUCCESS_STATUSES: readonly RouteStatus[] = [200, 201, 202, 204];
+
+/** The header `requestId: true` reads and sets. */
+const REQUEST_ID_HEADER = "x-request-id";
+
+/**
+ * A security scheme of the document (`components.securitySchemes`), as
+ * OpenAPI 3.1 writes it.
+ */
+export type OpenAPISecurityScheme =
+	| {
+			readonly type: "http";
+			/** `"bearer"`, `"basic"`... */
+			readonly scheme: string;
+			readonly bearerFormat?: string;
+			readonly description?: string;
+	  }
+	| {
+			readonly type: "apiKey";
+			readonly name: string;
+			readonly in: "header" | "query" | "cookie";
+			readonly description?: string;
+	  }
+	| {
+			readonly type: "oauth2";
+			readonly flows: { readonly [flow: string]: unknown };
+			readonly description?: string;
+	  }
+	| {
+			readonly type: "openIdConnect";
+			readonly openIdConnectUrl: string;
+			readonly description?: string;
+	  }
+	| { readonly type: "mutualTLS"; readonly description?: string };
+
+/** The scheme an operation needs, and its scopes (none by default). */
+export interface SecurityRequirement {
+	readonly scheme: string;
+	readonly scopes?: readonly string[];
+}
+
+/**
+ * The options that route operations: shared by the `openapi` sink and the
+ * sinks that serve HTTP, so the served routes and the document agree.
+ */
+export interface RouteOptions {
+	/** Prefix of every path, e.g. `"/api"`. Empty by default. */
+	readonly basePath?: string;
+	/**
+	 * Method, path and success status by operation id, e.g.
+	 * `{ "Entries.get": { method: "get", path: "/entries/{slug}" } }`. A
+	 * `{name}` segment of the path fills the scalar input key `name`.
+	 */
+	readonly route?: {
+		readonly [operationId: string]: {
+			readonly method?: OpenAPIMethod;
+			readonly path?: string;
+			/** `200` by default. */
+			readonly status?: RouteStatus;
+		};
+	};
+	/** Static headers of the successful responses, by operation id. */
+	readonly responses?: {
+		readonly [operationId: string]: {
+			readonly headers?: { readonly [name: string]: string };
+		};
+	};
+	/**
+	 * Every response carries a request id: the one the request sent in this
+	 * header, else a new UUID. `true` is `"x-request-id"`.
+	 */
+	readonly requestId?: true | string;
+	/**
+	 * Security schemes and the one each operation needs, for the document
+	 * (`components.securitySchemes` and `security`). `default` applies to
+	 * every operation not in `operations`; `false` there marks one public.
+	 * Sinks that serve HTTP do not enforce it.
+	 */
+	readonly security?: {
+		readonly schemes: { readonly [name: string]: OpenAPISecurityScheme };
+		readonly operations?: {
+			readonly [operationId: string]: SecurityRequirement | false;
+		};
+		readonly default?: SecurityRequirement;
+	};
+}
+
 /** The options of the `openapi` sink. */
-export interface OpenAPISinkOptions {
+export interface OpenAPISinkOptions extends RouteOptions {
 	readonly info: {
 		readonly title: string;
 		readonly version: string;
@@ -33,15 +122,6 @@ export interface OpenAPISinkOptions {
 		readonly url: string;
 		readonly description?: string;
 	}[];
-	/** Prefix of every path, e.g. `"/api"`. Empty by default. */
-	readonly basePath?: string;
-	/** Method and path by operation id, e.g. `{ "Users.login": { path: "/session" } }`. */
-	readonly route?: {
-		readonly [operationId: string]: {
-			readonly method?: OpenAPIMethod;
-			readonly path?: string;
-		};
-	};
 }
 
 /** An OpenAPI 3.1 document. */
@@ -49,9 +129,13 @@ export interface OpenAPIDocument {
 	readonly openapi: "3.1.0";
 	readonly info: OpenAPISinkOptions["info"];
 	readonly servers?: OpenAPISinkOptions["servers"];
+	readonly security?: readonly { readonly [scheme: string]: string[] }[];
 	readonly paths: { readonly [path: string]: Record<string, unknown> };
 	readonly components: {
 		readonly schemas: { readonly [name: string]: OpenAPISchema };
+		readonly securitySchemes?: {
+			readonly [name: string]: OpenAPISecurityScheme;
+		};
 	};
 }
 
@@ -68,47 +152,196 @@ function onlyKeys(value: Obj, allowed: readonly string[], where: string) {
 	return undefined;
 }
 
-function isPath(value: unknown): value is string {
+const PARAMETER = /^\{([A-Za-z_][A-Za-z0-9_]*)\}$/;
+const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
+const COMPONENT_NAME = /^[A-Za-z0-9._-]+$/;
+
+/** A path such as `/entries/{slug}`: `{name}` only as a whole segment, no `:`, `*`, query or spaces. */
+function isPath(value: unknown, parameters = true): value is string {
+	if (typeof value !== "string" || !value.startsWith("/")) return false;
+	return value
+		.split("/")
+		.every(
+			(segment) =>
+				(parameters && PARAMETER.test(segment)) || !/[{}?#\s:*]/.test(segment),
+		);
+}
+
+/** The names of the `{name}` segments of `path`, in order. */
+function parametersOfPath(path: string): string[] {
+	const names: string[] = [];
+	for (const segment of path.split("/")) {
+		const name = PARAMETER.exec(segment)?.[1];
+		if (name) names.push(name);
+	}
+	return names;
+}
+
+/** A header value: text without control characters other than tab. */
+function isHeaderValue(value: unknown): value is string {
+	if (typeof value !== "string") return false;
+	for (let i = 0; i < value.length; i++) {
+		const code = value.charCodeAt(i);
+		if ((code < 0x20 && code !== 0x09) || code === 0x7f) return false;
+	}
+	return true;
+}
+
+function isScopes(value: unknown): boolean {
 	return (
-		typeof value === "string" &&
-		value.startsWith("/") &&
-		!/[{}?#\s]/.test(value)
+		value === undefined ||
+		(Array.isArray(value) &&
+			value.every((scope) => typeof scope === "string" && scope !== ""))
 	);
 }
 
-/** The options that route operations: shared by the sinks that serve HTTP. */
-export interface RouteOptions {
-	readonly basePath?: string;
-	readonly route?: OpenAPISinkOptions["route"];
+const SCHEME_KEYS: Readonly<Record<string, readonly string[]>> = {
+	http: ["scheme", "bearerFormat"],
+	apiKey: ["name", "in"],
+	oauth2: ["flows"],
+	openIdConnect: ["openIdConnectUrl"],
+	mutualTLS: [],
+};
+
+function schemeIssue(scheme: unknown, where: string): string | undefined {
+	if (!isObject(scheme) || typeof scheme.type !== "string") {
+		return `Expected ${where} to be a security scheme with a "type".`;
+	}
+	const keys = Object.hasOwn(SCHEME_KEYS, scheme.type)
+		? SCHEME_KEYS[scheme.type]
+		: undefined;
+	if (!keys) {
+		return `Expected ${where}.type to be one of ${Object.keys(SCHEME_KEYS).join(", ")}.`;
+	}
+	const bad = onlyKeys(scheme, ["type", "description", ...keys], where);
+	if (bad) return bad;
+	if (
+		scheme.description !== undefined &&
+		typeof scheme.description !== "string"
+	) {
+		return `Expected ${where}.description to be a string.`;
+	}
+	switch (scheme.type) {
+		case "http":
+			if (typeof scheme.scheme !== "string" || !scheme.scheme) {
+				return `Expected ${where}.scheme to be a scheme such as "bearer".`;
+			}
+			if (
+				scheme.bearerFormat !== undefined &&
+				typeof scheme.bearerFormat !== "string"
+			) {
+				return `Expected ${where}.bearerFormat to be a string.`;
+			}
+			return undefined;
+		case "apiKey":
+			if (typeof scheme.name !== "string" || !scheme.name) {
+				return `Expected ${where}.name to be a non-empty string.`;
+			}
+			if (!["header", "query", "cookie"].includes(scheme.in as string)) {
+				return `Expected ${where}.in to be "header", "query" or "cookie".`;
+			}
+			return undefined;
+		case "oauth2":
+			return isObject(scheme.flows)
+				? undefined
+				: `Expected ${where}.flows to be an object.`;
+		case "openIdConnect":
+			return typeof scheme.openIdConnectUrl === "string" &&
+				scheme.openIdConnectUrl
+				? undefined
+				: `Expected ${where}.openIdConnectUrl to be a URL.`;
+		default:
+			return undefined;
+	}
 }
 
-/** Where an operation is served. */
-export interface OperationRoute {
-	readonly method: OpenAPIMethod;
-	/** `basePath` included. */
-	readonly path: string;
+function requirementIssue(
+	requirement: unknown,
+	schemes: Obj,
+	where: string,
+): string | undefined {
+	if (
+		!isObject(requirement) ||
+		onlyKeys(requirement, ["scheme", "scopes"], where) ||
+		typeof requirement.scheme !== "string" ||
+		!isScopes(requirement.scopes)
+	) {
+		return `Expected ${where} to be { scheme, scopes? }.`;
+	}
+	if (!Object.hasOwn(schemes, requirement.scheme)) {
+		return `${where}.scheme names the unknown security scheme "${requirement.scheme}".`;
+	}
+	return undefined;
 }
+
+function securityIssue(security: unknown, where: string): string | undefined {
+	if (!isObject(security)) return `Expected ${where} to be an object.`;
+	const bad = onlyKeys(security, ["schemes", "operations", "default"], where);
+	if (bad) return bad;
+	const { schemes, operations } = security;
+	if (!isObject(schemes)) return `Expected ${where}.schemes to be an object.`;
+	for (const [name, scheme] of Object.entries(schemes)) {
+		if (!COMPONENT_NAME.test(name)) {
+			return `Expected the security scheme "${name}" to be named with letters, digits, ".", "_" or "-".`;
+		}
+		const schemeBad = schemeIssue(scheme, `${where}.schemes["${name}"]`);
+		if (schemeBad) return schemeBad;
+	}
+	if (operations !== undefined) {
+		if (!isObject(operations)) {
+			return `Expected ${where}.operations to be an object.`;
+		}
+		for (const [id, requirement] of Object.entries(operations)) {
+			if (requirement === false) continue;
+			const requirementBad = requirementIssue(
+				requirement,
+				schemes,
+				`${where}.operations["${id}"]`,
+			);
+			if (requirementBad) return requirementBad;
+		}
+	}
+	if (security.default !== undefined) {
+		return requirementIssue(security.default, schemes, `${where}.default`);
+	}
+	return undefined;
+}
+
+/** The option names of {@link RouteOptions}, for sinks that list their options. */
+export const ROUTE_OPTION_KEYS = [
+	"basePath",
+	"route",
+	"responses",
+	"requestId",
+	"security",
+] as const;
 
 /**
- * Why `basePath` and `route` are not valid routing options, naming them
- * `where.basePath` and `where.route`; `undefined` when they are.
+ * Why the {@link RouteOptions} (`basePath`, `route`, `responses`,
+ * `requestId`, `security`) are not valid, naming them `where.<option>`;
+ * `undefined` when they are. Other keys of `options` are not looked at.
  */
 export function routeOptionsIssue(
 	options: RouteOptions,
 	where: string,
 ): string | undefined {
-	const { basePath, route } = options as unknown as Obj;
+	const { basePath, route, responses, requestId, security } =
+		options as unknown as Obj;
 	if (
 		basePath !== undefined &&
-		(typeof basePath !== "string" || (basePath !== "" && !isPath(basePath)))
+		(typeof basePath !== "string" ||
+			(basePath !== "" && !isPath(basePath, false)))
 	) {
 		return `Expected ${where}.basePath to be "" or a path such as "/api".`;
 	}
 	if (route !== undefined) {
 		if (!isObject(route)) return `Expected ${where}.route to be an object.`;
 		for (const [id, entry] of Object.entries(route)) {
-			if (!isObject(entry) || onlyKeys(entry, ["method", "path"], "route")) {
-				return `Expected ${where}.route["${id}"] to be { method?, path? }.`;
+			if (
+				!isObject(entry) ||
+				onlyKeys(entry, ["method", "path", "status"], "route")
+			) {
+				return `Expected ${where}.route["${id}"] to be { method?, path?, status? }.`;
 			}
 			if (
 				entry.method !== undefined &&
@@ -116,22 +349,80 @@ export function routeOptionsIssue(
 			) {
 				return `Expected ${where}.route["${id}"].method to be one of ${METHODS.join(", ")}.`;
 			}
-			if (entry.path !== undefined && !isPath(entry.path)) {
-				return `Expected ${where}.route["${id}"].path to start with "/" and have no parameters or query.`;
+			if (entry.path !== undefined) {
+				if (!isPath(entry.path)) {
+					return `Expected ${where}.route["${id}"].path to start with "/", with parameters only as whole "{name}" segments and no query.`;
+				}
+				const names = parametersOfPath(entry.path);
+				if (new Set(names).size !== names.length) {
+					return `Expected ${where}.route["${id}"].path to name each parameter once.`;
+				}
+			}
+			if (
+				entry.status !== undefined &&
+				!(SUCCESS_STATUSES as readonly unknown[]).includes(entry.status)
+			) {
+				return `Expected ${where}.route["${id}"].status to be one of ${SUCCESS_STATUSES.join(", ")}.`;
 			}
 		}
 	}
+	if (responses !== undefined) {
+		if (!isObject(responses)) {
+			return `Expected ${where}.responses to be an object.`;
+		}
+		for (const [id, entry] of Object.entries(responses)) {
+			const at = `${where}.responses["${id}"]`;
+			if (
+				!isObject(entry) ||
+				onlyKeys(entry, ["headers"], at) ||
+				(entry.headers !== undefined && !isObject(entry.headers))
+			) {
+				return `Expected ${at} to be { headers?: { name: value } }.`;
+			}
+			for (const [name, value] of Object.entries(entry.headers ?? {})) {
+				if (!HEADER_NAME.test(name)) {
+					return `Expected ${at}.headers to be named by header names, not "${name}".`;
+				}
+				if (name.toLowerCase() === "content-type") {
+					return `${at}.headers cannot set "content-type": the sink sets it.`;
+				}
+				if (!isHeaderValue(value)) {
+					return `Expected ${at}.headers["${name}"] to be text without line breaks.`;
+				}
+			}
+		}
+	}
+	if (
+		requestId !== undefined &&
+		requestId !== true &&
+		(typeof requestId !== "string" || !HEADER_NAME.test(requestId))
+	) {
+		return `Expected ${where}.requestId to be true or a header name.`;
+	}
+	if (security !== undefined) {
+		return securityIssue(security, `${where}.security`);
+	}
 	return undefined;
+}
+
+/**
+ * The header that carries the request id with these options (`"x-request-id"`
+ * for `requestId: true`), or `undefined` without `requestId`.
+ */
+export function requestIdHeaderOf(options: RouteOptions): string | undefined {
+	return options.requestId === true
+		? REQUEST_ID_HEADER
+		: (options.requestId ?? undefined);
 }
 
 function validate(options: OpenAPISinkOptions): string | undefined {
 	const bad = onlyKeys(
 		options as unknown as Obj,
-		["info", "servers", "basePath", "route"],
+		["info", "servers", ...ROUTE_OPTION_KEYS],
 		"openapi",
 	);
 	if (bad) return bad;
-	const { info, servers, basePath, route } = options as unknown as Obj;
+	const { info, servers } = options as unknown as Obj;
 	if (!isObject(info)) return "Expected openapi.info to be an object.";
 	const infoBad = onlyKeys(info, ["title", "version", "description"], "info");
 	if (infoBad) return infoBad;
@@ -159,7 +450,7 @@ function validate(options: OpenAPISinkOptions): string | undefined {
 			}
 		}
 	}
-	return routeOptionsIssue({ basePath, route } as RouteOptions, "openapi");
+	return routeOptionsIssue(options, "openapi");
 }
 
 function invalid(reason: string, source = "openapi"): never {
@@ -176,12 +467,38 @@ function kebab(text: string): string {
 		.replace(/^-+|-+$/g, "");
 }
 
+/** Where an operation is served, and how it answers. */
+export interface OperationRoute {
+	readonly method: OpenAPIMethod;
+	/** `basePath` included, parameters as `{name}`. */
+	readonly path: string;
+	/** The input keys the `{name}` segments of `path` fill, in order. */
+	readonly parameters: readonly string[];
+	/** The status of a success: `200` unless `route` says otherwise. */
+	readonly status: RouteStatus;
+	/** The static headers of a success, from `responses`. */
+	readonly headers: { readonly [name: string]: string };
+}
+
+function isScalarSchema(schema: OpenAPISchema): boolean {
+	const types = [schema.type ?? []].flat();
+	return !types.some((type) => type === "object" || type === "array");
+}
+
+/** Whether `name` is an input key that is a scalar property (no object, no list). */
+function isScalarKey(operation: OperationDescriptor, name: string): boolean {
+	if (!Object.hasOwn(operation.input.properties, name)) return false;
+	const field = operation.input.properties[name];
+	return isProperty(field) && isScalarSchema(toOpenAPI(field) as OpenAPISchema);
+}
+
 /**
- * The route of every operation, by id: `POST {basePath}/{kebab(command)}/{kebab(operation)}`,
- * changed per operation id with `route`. Throws `InvalidOutputStage` (with
- * `source`) when `route` names an unknown operation or two operations share a
- * method and path. The routing of the `openapi` sink and of the sinks that
- * serve HTTP.
+ * The route of every operation, by id: `POST {basePath}/{kebab(command)}/{kebab(operation)}`
+ * with `200`, changed per operation id with `route` and `responses`. Throws
+ * `InvalidOutputStage` (with `source`) when `route`, `responses` or
+ * `security.operations` name an unknown operation, a path parameter is not a
+ * scalar key of the input, or two operations share a method and path. The
+ * routing of the `openapi` sink and of the sinks that serve HTTP.
  */
 export function operationRoutes(
 	operations: readonly OperationDescriptor[],
@@ -190,10 +507,20 @@ export function operationRoutes(
 ): ReadonlyMap<string, OperationRoute> {
 	const base = options.basePath ?? "";
 	const route = options.route ?? {};
+	const responses = options.responses ?? {};
 	const ids = new Set(operations.map(({ id }) => id));
-	for (const id of Object.keys(route)) {
-		if (!ids.has(id)) {
-			invalid(`${source}.route names the unknown operation "${id}".`, source);
+	for (const [where, entries] of [
+		["route", route],
+		["responses", responses],
+		["security.operations", options.security?.operations ?? {}],
+	] as const) {
+		for (const id of Object.keys(entries)) {
+			if (!ids.has(id)) {
+				invalid(
+					`${source}.${where} names the unknown operation "${id}".`,
+					source,
+				);
+			}
 		}
 	}
 	const routes = new Map<string, OperationRoute>();
@@ -204,7 +531,17 @@ export function operationRoutes(
 		const path =
 			base +
 			(chosen.path ?? `/${kebab(operation.command)}/${kebab(operation.name)}`);
-		const key = `${method} ${path}`;
+		const parameters = parametersOfPath(path);
+		for (const name of parameters) {
+			if (!isScalarKey(operation, name)) {
+				invalid(
+					`${source}.route["${operation.id}"].path has the parameter "{${name}}", which is not a scalar key of the input of ${operation.id}.`,
+					source,
+				);
+			}
+		}
+		// `/a/{x}` and `/a/{y}` match the same requests.
+		const key = `${method} ${path.replace(/\{[^}]*\}/g, "{}")}`;
 		if (taken.has(key)) {
 			invalid(
 				`Two operations are routed to ${method.toUpperCase()} ${path}.`,
@@ -212,7 +549,13 @@ export function operationRoutes(
 			);
 		}
 		taken.add(key);
-		routes.set(operation.id, { method, path });
+		routes.set(operation.id, {
+			method,
+			path,
+			parameters,
+			status: chosen.status ?? 200,
+			headers: { ...(responses[operation.id]?.headers ?? {}) },
+		});
 	}
 	return routes;
 }
@@ -283,10 +626,19 @@ const STATUS_TEXT: Readonly<Record<number, string>> = {
 	500: "Internal error.",
 };
 
+const SUCCESS_TEXT: Readonly<Record<RouteStatus, string>> = {
+	200: "Success.",
+	201: "Created.",
+	202: "Accepted.",
+	204: "No content.",
+};
+
 function responsesOf(
 	operation: OperationDescriptor,
 	statuses: Readonly<Record<string, number>>,
 	response: OpenAPISchema,
+	route: OperationRoute,
+	requestIdHeader: string | undefined,
 ): Obj {
 	const names = new Map<number, string[]>([
 		[400, []],
@@ -304,10 +656,28 @@ function responsesOf(
 		if (!list.includes(Declared.name)) list.push(Declared.name);
 		names.set(status, list);
 	}
+	const idHeaders: Obj = requestIdHeader
+		? {
+				[requestIdHeader]: {
+					description:
+						"The id of the request: the one it sent in this header, else a new one.",
+					schema: { type: "string" },
+				},
+			}
+		: {};
+	const successHeaders: Obj = { ...idHeaders };
+	for (const [name, value] of Object.entries(route.headers)) {
+		successHeaders[name] = { schema: { type: "string", const: value } };
+	}
+	const withHeaders = (headers: Obj) =>
+		Object.keys(headers).length > 0 ? { headers } : {};
 	const responses: Obj = {
-		"200": {
-			description: "Success.",
-			content: { "application/json": { schema: response } },
+		[String(route.status)]: {
+			description: SUCCESS_TEXT[route.status],
+			...withHeaders(successHeaders),
+			...(route.status === 204
+				? {}
+				: { content: { "application/json": { schema: response } } }),
 		},
 	};
 	for (const status of [...names.keys()].sort((a, b) => a - b)) {
@@ -318,39 +688,69 @@ function responsesOf(
 				declared.length > 0
 					? `${text} Declared: ${declared.join(", ")}.`
 					: text,
+			...withHeaders(idHeaders),
 			content: problemContent,
 		};
 	}
 	return responses;
 }
 
-function parametersOf(
+/** The parameter of the input key `name` (its schema in `schema`), in the path or the query. */
+function parameterOf(
+	name: string,
+	property: OpenAPISchema,
+	where: "path" | "query",
+	required: boolean,
+): Obj {
+	const { description, ...rest } = property;
+	return {
+		name,
+		in: where,
+		required: where === "path" || required,
+		...(typeof description === "string" ? { description } : {}),
+		schema: rest,
+	};
+}
+
+function queryParametersOf(
 	operation: OperationDescriptor,
 	schema: OpenAPISchema,
 ): Obj[] {
 	const required = new Set(schema.required ?? []);
 	return Object.entries(schema.properties ?? {}).map(([name, property]) => {
-		const field = operation.input.properties[name];
-		const type = property.type;
 		if (
-			!isProperty(field) ||
-			type === "object" ||
-			type === "array" ||
-			(Array.isArray(type) && type.some((t) => t === "object" || t === "array"))
+			!isProperty(operation.input.properties[name]) ||
+			!isScalarSchema(property)
 		) {
 			invalid(
-				`${operation.id} uses a ${"get/delete"} route, whose input becomes query parameters, but "${name}" is not a scalar; route it with method "post".`,
+				`${operation.id} uses a get/delete route, whose input becomes query parameters, but "${name}" is not a scalar; route it with method "post".`,
 			);
 		}
-		const { description, ...rest } = property;
-		return {
-			name,
-			in: "query",
-			required: required.has(name),
-			...(typeof description === "string" ? { description } : {}),
-			schema: rest,
-		};
+		return parameterOf(name, property, "query", required.has(name));
 	});
+}
+
+/** `schema` without the keys in `keys` (the path parameters). */
+function withoutKeys(
+	schema: OpenAPISchema,
+	keys: readonly string[],
+): OpenAPISchema {
+	if (keys.length === 0) return schema;
+	const properties = { ...(schema.properties ?? {}) };
+	for (const key of keys) delete properties[key];
+	const required = (schema.required ?? []).filter((key) => !keys.includes(key));
+	const { required: _, ...rest } = schema;
+	return {
+		...rest,
+		properties,
+		...(required.length > 0 ? { required } : {}),
+	};
+}
+
+function requirementOf(requirement: SecurityRequirement): {
+	[scheme: string]: string[];
+} {
+	return { [requirement.scheme]: [...(requirement.scopes ?? [])] };
 }
 
 /**
@@ -358,23 +758,31 @@ function parametersOf(
  *
  * Routes: `POST {basePath}/{kebab(command)}/{kebab(operation)}`, changed per
  * operation id with `route`; two operations on one method and path throw
- * `InvalidOutputStage`. The `operationId` is the id with its dot as an
- * underscore (`Users.register` -> `Users_register`), unique or the build
- * throws. `get` and `delete` send the input as query parameters, which needs
- * every input field to be a scalar property. Responses: `200` with the
- * response schema, `400` and `500` always, and the status of each declared
- * error (`statusOf`: `statuses` of the output, else 422). Operations carry no
- * repository dependencies, so `404` and `409` appear only when an error that
- * maps to them is declared. Records and entities reachable from inputs and
- * responses are named by class name in `components.schemas`, beside `Problem`
- * (RFC 9457). The `context` of an operation is transport-specific and not
- * part of the document; sinks that serve HTTP map it (headers, middleware).
+ * `InvalidOutputStage`. A `{name}` segment of a path is a required path
+ * parameter, the input key `name` (a scalar), left out of the body or query.
+ * The `operationId` is the id with its dot as an underscore (`Users.register`
+ * -> `Users_register`), unique or the build throws. `get` and `delete` send
+ * the input as query parameters, which needs every input field to be a
+ * scalar property. Responses: the `route` status (`200` by default; `204`
+ * without content) with the response schema and the `responses` headers,
+ * `400` and `500` always, and the status of each declared error (`statusOf`:
+ * `statuses` of the output, else 422); `requestId` adds its header to all of
+ * them. Operations carry no repository dependencies, so `404` and `409`
+ * appear only when an error that maps to them is declared. Records and
+ * entities reachable from inputs and responses are named by class name in
+ * `components.schemas`, beside `Problem` (RFC 9457). `security` gives
+ * `components.securitySchemes`, the document `security` (`default`) and the
+ * `security` of each operation. The `context` of an operation is
+ * transport-specific and not part of the document; sinks that serve HTTP map
+ * it (headers, middleware).
  */
 export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 	name: "openapi",
 	validate,
 	build: (operations, options, { output }) => {
 		const routes = operationRoutes(operations, options);
+		const requestIdHeader = requestIdHeaderOf(options);
+		const security = options.security;
 
 		const records = new Set<AnyRecordClass>();
 		for (const operation of operations) {
@@ -385,7 +793,7 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 		const classes = new Map<string, AnyRecordClass>();
 		for (const record of records) {
 			const name = recordNameOf(record);
-			if (!/^[A-Za-z0-9._-]+$/.test(name) || name === "Problem") {
+			if (!COMPONENT_NAME.test(name) || name === "Problem") {
 				invalid(
 					`The record class "${name}" cannot be a component name; give the class a name that is not "Problem".`,
 				);
@@ -412,7 +820,8 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 		components.Problem = problemSchema();
 
 		for (const operation of operations) {
-			const { method, path } = routes.get(operation.id) as OperationRoute;
+			const route = routes.get(operation.id) as OperationRoute;
+			const { method, path } = route;
 			const operationId = operation.id.replaceAll(".", "_");
 			if (operationIds.has(operationId)) {
 				invalid(`The operationId "${operationId}" is produced twice.`);
@@ -421,10 +830,23 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 			const slot = paths[path] ?? {};
 			paths[path] = slot;
 
-			const input = schemas[`${operation.id}#input`] as OpenAPISchema;
+			const full = schemas[`${operation.id}#input`] as OpenAPISchema;
+			const input = withoutKeys(full, route.parameters);
 			const response = schemas[`${operation.id}#response`] as OpenAPISchema;
 			const hasBody = method !== "get" && method !== "delete";
 			const hasInput = Object.keys(input.properties ?? {}).length > 0;
+			const parameters = [
+				...route.parameters.map((name) =>
+					parameterOf(
+						name,
+						full.properties?.[name] as OpenAPISchema,
+						"path",
+						true,
+					),
+				),
+				...(hasBody ? [] : queryParametersOf(operation, input)),
+			];
+			const requirement = security?.operations?.[operation.id];
 			slot[method] = {
 				operationId,
 				summary: operation.id,
@@ -433,7 +855,7 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 					: {}),
 				...(operation.tags.length > 0 ? { tags: [...operation.tags] } : {}),
 				...(operation.deprecated ? { deprecated: true } : {}),
-				...(!hasBody ? { parameters: parametersOf(operation, input) } : {}),
+				...(!hasBody || parameters.length > 0 ? { parameters } : {}),
 				...(hasBody && hasInput
 					? {
 							requestBody: {
@@ -442,7 +864,18 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 							},
 						}
 					: {}),
-				responses: responsesOf(operation, output.statuses, response),
+				responses: responsesOf(
+					operation,
+					output.statuses,
+					response,
+					route,
+					requestIdHeader,
+				),
+				...(requirement === false
+					? { security: [] }
+					: requirement
+						? { security: [requirementOf(requirement)] }
+						: {}),
 			};
 		}
 
@@ -450,8 +883,14 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 			openapi: "3.1.0",
 			info: options.info,
 			...(options.servers ? { servers: options.servers } : {}),
+			...(security?.default
+				? { security: [requirementOf(security.default)] }
+				: {}),
 			paths,
-			components: { schemas: components },
+			components: {
+				schemas: components,
+				...(security ? { securitySchemes: security.schemes } : {}),
+			},
 		};
 	},
 });

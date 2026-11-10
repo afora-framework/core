@@ -57,7 +57,13 @@ const ENSURE_KINDS = new Set([
 ]);
 const READ_ACTION =
 	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|findCursor|count)$/;
-const WRITE_ACTIONS = new Set(["create", "update", "delete", "restore"]);
+const WRITE_ACTIONS = new Set([
+	"create",
+	"update",
+	"delete",
+	"restore",
+	"increment",
+]);
 
 /** What is known of a name bound by a step: the class `build` made, if known. */
 interface Bound {
@@ -266,6 +272,13 @@ export function validateSteps(
 				}
 				if (WRITE_ACTIONS.has(action as string)) {
 					fail(index, "write_in_find", `find cannot call "${action}".`);
+				}
+				if (action === "forEachPage") {
+					fail(
+						index,
+						"unknown_action",
+						'"forEachPage" runs a function on each page and cannot be a step; call it from a use case written in TypeScript.',
+					);
 				}
 				if (!READ_ACTION.test(action as string)) {
 					fail(index, "unknown_action", `"${action}" is not a read action.`);

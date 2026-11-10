@@ -310,7 +310,7 @@ describe("hono sink", () => {
 
 	test("catalogs", () => {
 		expect(stages).toEqual([
-			{ name: "hono", module: "@afora/hono", export: "hono" },
+			{ name: "hono", module: "@afora/hono", export: "hono", kind: "sink" },
 		]);
 		const stage = HonoStages.resolve("hono", { basePath: "/api" });
 		expect(stageDescriptionOf(stage)).toEqual({

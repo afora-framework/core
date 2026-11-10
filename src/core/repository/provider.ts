@@ -20,7 +20,7 @@ function invalid(reason: string): never {
 /** Creates a provider once and attaches an immutable, serializable declaration out of band. */
 export function providerOf<
 	Options extends ProviderOptions = ProviderOptions,
-	Provider extends IRepositoryProvider = IRepositoryProvider,
+	const Provider extends IRepositoryProvider = IRepositoryProvider,
 >(settings: ProviderSettings<Options, Provider>): Provider {
 	if (
 		!settings ||

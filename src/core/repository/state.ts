@@ -1,8 +1,16 @@
-import { EntityUniqueKeys } from "../entity/abstract-entity";
+import {
+	EntitySettings,
+	EntityUniqueKeys,
+	EXPIRES_AT,
+} from "../entity/abstract-entity";
+import type { EntityStorageSettings } from "../entity/types/entity.interface";
 import {
 	type EnvironmentDependencies,
 	loadEnvironments,
 } from "../environment/environment";
+import type { ILogger } from "../logger/logger";
+import { RepositoryUsedOutsideApplication } from "./exceptions";
+import type { RepositoryIndex, RepositoryScans } from "./types/query.interface";
 import type {
 	AnyRepositoryEntity,
 	IRepositoryProvider,
@@ -21,6 +29,12 @@ export interface RepositoryState {
 	readonly environment: EnvironmentDependencies | undefined;
 	/** The repository of each entity class its entities hold, at any depth. */
 	readonly relations: ReadonlyMap<object, RepositoryState>;
+	/** Its declared indexes, normalized and frozen. */
+	readonly indexes: Readonly<Record<string, RepositoryIndex>>;
+	/** What it does with a query only a scan serves. */
+	readonly scans: RepositoryScans;
+	/** The logger of the application that bound it, for `scans: "warn"`. */
+	readonly logger?: ILogger;
 	context?: RepositoryContext;
 }
 
@@ -47,12 +61,25 @@ export function stateOf(repository: object): RepositoryState {
 	return state;
 }
 
+/** The key holding the date at which the entities of `entity` expire, if they do. */
+function expiryKeyOf(entity: object): string | undefined {
+	const expires = (
+		entity as { readonly [EntitySettings]?: EntityStorageSettings }
+	)[EntitySettings]?.expires;
+	if (expires === undefined) return undefined;
+	return "at" in expires ? expires.at : EXPIRES_AT;
+}
+
 /** The context of the provider, with the environment read on first use. */
 export function contextOf(state: RepositoryState): RepositoryContext {
-	state.context ??= Object.freeze({
+	if (state.context) return state.context;
+	const key = expiryKeyOf(state.entity);
+	state.context = Object.freeze({
 		entity: state.entity,
 		name: state.name,
 		unique: state.entity[EntityUniqueKeys],
+		indexes: state.indexes,
+		...(key === undefined ? {} : { expiry: Object.freeze({ key }) }),
 		env: loadEnvironments(state.environment),
 	});
 	return state.context;
@@ -63,6 +90,8 @@ export interface RepositoryInspection {
 	readonly entity: AnyRepositoryEntity;
 	readonly actions: readonly string[];
 	readonly deletion: "hard" | "soft";
+	readonly indexes: Readonly<Record<string, RepositoryIndex>>;
+	readonly scans: RepositoryScans;
 	readonly explicitProvider: boolean;
 	/** The provider, only when the repository declared it. */
 	readonly provider: IRepositoryProvider | undefined;
@@ -84,6 +113,8 @@ export function inspectRepository(
 		entity: state.entity,
 		actions: state.actions,
 		deletion: state.deletion,
+		indexes: state.indexes,
+		scans: state.scans,
 		explicitProvider: state.explicitProvider,
 		provider: state.explicitProvider ? state.provider : undefined,
 		environments:
@@ -139,12 +170,14 @@ function bindState(
 	state: RepositoryState,
 	provider: IRepositoryProvider | undefined,
 	instances: ReadonlyMap<object, IRepositoryProvider> | undefined,
+	logger: ILogger | undefined,
 	bound = new Map<RepositoryState, RepositoryState>(),
 ): RepositoryState {
 	const done = bound.get(state);
 	if (done) return done;
 	const copy: RepositoryState = {
 		...state,
+		logger,
 		provider: state.explicitProvider
 			? (instances?.get(state.provider) ?? state.provider)
 			: (provider ?? state.provider),
@@ -152,7 +185,7 @@ function bindState(
 		relations: new Map(
 			[...state.relations].map(([target, related]) => [
 				target,
-				bindState(related, provider, instances, bound),
+				bindState(related, provider, instances, logger, bound),
 			]),
 		),
 	};
@@ -161,20 +194,66 @@ function bindState(
 	return copy;
 }
 
+/** Who bound each declaration: the application and its key for the repository. */
+const owners = new WeakMap<
+	RepositoryState,
+	{ readonly application: string; readonly repository: string }
+>();
+
+/**
+ * Throws `RepositoryUsedOutsideApplication` when `state` is a declaration an
+ * application bound to its provider: its calls would read another store.
+ */
+export function assertUnbound(state: RepositoryState): void {
+	const owner = owners.get(state);
+	if (owner) {
+		throw new RepositoryUsedOutsideApplication({
+			source: state.name,
+			details: owner,
+		});
+	}
+}
+
+/** Where the application binding a repository comes from. */
+export interface RepositoryBinding {
+	/** The name of the application. */
+	readonly application: string;
+	/** The key of the repository in the application. */
+	readonly key: string;
+	/** The logger of the application, for `scans: "warn"`. */
+	readonly logger?: ILogger;
+}
+
 /**
  * A repository sharing the declaration of `repository` that reads and writes
  * through `provider`, unless it declared a provider of its own; a declared
- * provider found in `instances` is replaced by its value.
+ * provider found in `instances` is replaced by its value. With `binding`,
+ * the declaration (made by `repositoryOf`) throws
+ * `RepositoryUsedOutsideApplication` from then on.
  */
 export function bindRepository<Repository extends object>(
 	repository: Repository,
 	provider: IRepositoryProvider | undefined,
 	instances?: ReadonlyMap<object, IRepositoryProvider>,
+	binding?: RepositoryBinding,
 ): Repository {
 	const state = stateOf(repository);
 	const Declared = repository.constructor as new () => object;
 	class Bound extends Declared {}
 	Object.defineProperty(Bound, "name", { value: Declared.name });
-	states.set(Bound, bindState(state, provider, instances));
+	states.set(Bound, bindState(state, provider, instances, binding?.logger));
+	if (binding) {
+		owners.set(declarationOf(state), {
+			application: binding.application,
+			repository: binding.key,
+		});
+	}
 	return Object.freeze(new Bound()) as Repository;
+}
+
+/** The provider `repository` reads and writes through. @internal */
+export function providerOfRepository(
+	repository: unknown,
+): IRepositoryProvider | undefined {
+	return findState(repository)?.provider;
 }

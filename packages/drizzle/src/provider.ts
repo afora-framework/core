@@ -2,6 +2,7 @@ import {
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryQuery,
 	type IRepositoryProvider,
+	RepositoryConcurrencyConflict,
 	type RepositoryContext,
 	type RepositoryData,
 	RepositoryEntityNotFound,
@@ -13,6 +14,7 @@ import {
 	type Column,
 	eq,
 	getTableColumns,
+	gt,
 	inArray,
 	isNotNull,
 	isNull,
@@ -66,8 +68,36 @@ function badQuery(reason: string): never {
 	throw new InvalidRepositoryQuery({ source: SOURCE, details: { reason } });
 }
 
-/** A query with the `after` of `findCursor`, on any version of `@afora/core`. */
-type KeysetQuery = RepositoryQuery & { readonly after?: readonly unknown[] };
+/**
+ * A query with the `after` of `findCursor`, the declared `index` that serves
+ * it, and the `now` and `withExpired` of an entity that expires, on any
+ * version of `@afora/core`. The index changes nothing: the database picks its
+ * own SQL index for the `WHERE` and `ORDER BY`.
+ */
+type KeysetQuery = RepositoryQuery & {
+	readonly after?: readonly unknown[];
+	readonly index?: string;
+	readonly now?: string;
+	readonly withExpired?: boolean;
+};
+
+/** The key holding the expiry of the entities of `context`, on any version of `@afora/core`. */
+const expiryKeyOf = (context: RepositoryContext): string | undefined =>
+	(context as { readonly expiry?: { readonly key: string } }).expiry?.key;
+
+/**
+ * The provider of `drizzleProvider`: it runs transactions, reads by cursor,
+ * honors expected versions, increments atomically and leaves expired records out.
+ */
+export type DrizzleProvider = IRepositoryProvider & {
+	readonly capabilities: {
+		readonly transactions: true;
+		readonly keyset: true;
+		readonly versioning: true;
+		readonly atomic: true;
+		readonly expiry: true;
+	};
+};
 
 interface Mapping {
 	readonly table: DrizzleTable;
@@ -188,13 +218,22 @@ function conditionOf(column: Column, condition: unknown): SQL {
 
 function whereOf(
 	mapping: Mapping,
-	query: RepositoryQuery = {},
+	context: RepositoryContext,
+	query: KeysetQuery = {},
 ): SQL | undefined {
 	const parts: (SQL | undefined)[] = [];
 	for (const [key, condition] of Object.entries(query.where ?? {}))
 		parts.push(conditionOf(columnOf(mapping, key), condition));
 	const deleted = mapping.columns.deletedAt;
 	if (deleted && query.withDeleted !== true) parts.push(isNull(deleted));
+	const expiry = expiryKeyOf(context);
+	if (expiry !== undefined && query.withExpired !== true) {
+		// Alive while the date is missing or later than now; an ISO 8601 text
+		// column compares as text, a timestamp column as a date.
+		const column = columnOf(mapping, expiry);
+		const now = query.now ?? new Date().toISOString();
+		parts.push(or(isNull(column), gt(column, toColumn(column, now))));
+	}
 	return and(...parts);
 }
 
@@ -333,7 +372,7 @@ function providerOver(
 		let builder = exec
 			.select()
 			.from(mapping.table)
-			.where(and(whereOf(mapping, query), keysetOf(mapping, query)))
+			.where(and(whereOf(mapping, context, query), keysetOf(mapping, query)))
 			.orderBy(...orderOf(mapping, query));
 		if (limit !== undefined || query.offset)
 			builder = builder.limit(limit ?? NO_LIMIT);
@@ -389,8 +428,44 @@ function providerOver(
 	const notFound = (context: RepositoryContext, id: string) =>
 		new RepositoryEntityNotFound({ source: context.name, details: { id } });
 
+	/** The `version` column, which an expected version needs. */
+	const versionOf = (context: RepositoryContext, mapping: Mapping): Column =>
+		mapping.columns.version ??
+		invalid(
+			`The table of "${context.name}" has no "version" column, which a versioned entity needs.`,
+		);
+
+	/** What `increment` sets: each delta added to its column, and `set` as it is. */
+	const incrementOf = (
+		context: RepositoryContext,
+		mapping: Mapping,
+		deltas: Readonly<Record<string, number>>,
+		set: RepositoryData = {},
+	): Record<string, unknown> => {
+		const changes: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(set)) {
+			if (value === undefined) continue;
+			const column = mapping.columns[key];
+			if (!column) invalid(`"${key}" has no column in the table.`);
+			changes[key] = toColumn(column, value);
+		}
+		for (const [key, delta] of Object.entries(deltas)) {
+			const column = mapping.columns[key];
+			if (!column)
+				invalid(`"${key}" has no column in the table of "${context.name}".`);
+			changes[key] = sql`coalesce(${column}, 0) + ${delta}`;
+		}
+		return changes;
+	};
+
 	return {
-		capabilities: Object.freeze({ transactions: true, keyset: true }),
+		capabilities: Object.freeze({
+			transactions: true,
+			keyset: true,
+			versioning: true,
+			atomic: true,
+			expiry: true,
+		}),
 		findOne: (context, query = {}) =>
 			hooks.guard(async () => (await select(context, query, true))[0]),
 		findMany: (context, query = {}) =>
@@ -401,7 +476,7 @@ function providerOver(
 				const [found] = await exec
 					.select({ total: sql<number>`count(*)` })
 					.from(mapping.table)
-					.where(whereOf(mapping, { ...query, limit: undefined }));
+					.where(whereOf(mapping, context, { ...query, limit: undefined }));
 				return Number(found?.total ?? 0);
 			}),
 		insert: (context, data) =>
@@ -413,11 +488,14 @@ function providerOver(
 					exec.insert(mapping.table).values(row),
 				);
 			}),
-		update: (context, data) =>
+		update: (context, data, options = {}) =>
 			hooks.guard(async () => {
 				const mapping = mappingOf(tables, context);
 				const row = dataOf(mapping, data);
 				const id = columnOf(mapping, "id");
+				const { expectedVersion: expected } = options;
+				const version =
+					expected === undefined ? undefined : versionOf(context, mapping);
 				const [existing] = await exec
 					.select({ id })
 					.from(mapping.table)
@@ -425,12 +503,96 @@ function providerOver(
 					.limit(1);
 				if (!existing) throw notFound(context, data.id as string);
 				await assertUnique(context, mapping, data, true);
-				await write(context, mapping, () =>
+				const updated = (await write(context, mapping, () =>
 					exec
 						.update(mapping.table)
 						.set(row)
-						.where(eq(id, data.id as string)),
-				);
+						.where(
+							and(
+								eq(id, data.id as string),
+								version === undefined ? undefined : eq(version, expected),
+							),
+						)
+						.returning({ id }),
+				)) as unknown[];
+				if (version === undefined || updated.length > 0) return;
+				// The version checked in the same statement: another write came first.
+				const [stored] = await exec
+					.select({ version })
+					.from(mapping.table)
+					.where(eq(id, data.id as string))
+					.limit(1);
+				if (!stored) throw notFound(context, data.id as string);
+				throw new RepositoryConcurrencyConflict({
+					source: context.name,
+					details: {
+						id: data.id as string,
+						expected: expected as number,
+						...(typeof stored.version === "number"
+							? { actual: stored.version }
+							: {}),
+					},
+				});
+			}),
+		increment: (context, id, deltas, options = {}) =>
+			hooks.guard(async () => {
+				const mapping = mappingOf(tables, context);
+				const idColumn = columnOf(mapping, "id");
+				const changes = incrementOf(context, mapping, deltas, options.set);
+				const deleted = mapping.columns.deletedAt;
+				const alive = deleted ? isNull(deleted) : undefined;
+				// For an entity that expires, an expired row counts as absent.
+				const expiry = expiryKeyOf(context);
+				const expiryColumn =
+					expiry === undefined ? undefined : columnOf(mapping, expiry);
+				const fresh =
+					expiryColumn === undefined
+						? undefined
+						: or(
+								isNull(expiryColumn),
+								gt(
+									expiryColumn,
+									toColumn(
+										expiryColumn,
+										options.now ?? new Date().toISOString(),
+									),
+								),
+							);
+				if (options.create === undefined) {
+					const [updated] = (await write(context, mapping, () =>
+						exec
+							.update(mapping.table)
+							.set(changes)
+							.where(and(eq(idColumn, id), alive, fresh))
+							.returning(),
+					)) as Record<string, unknown>[];
+					if (!updated) throw notFound(context, id);
+					return dataFromRow(updated);
+				}
+				// One statement: inserted, or incremented when a row holds the id.
+				const row = dataOf(mapping, { ...options.create, id });
+				const [stored] = (await write(context, mapping, () =>
+					exec
+						.insert(mapping.table)
+						.values(row)
+						.onConflictDoUpdate({
+							target: idColumn,
+							set:
+								fresh === undefined
+									? changes
+									: replacingExpired(mapping, changes, fresh),
+							...(alive ? { setWhere: alive } : {}),
+						})
+						.returning(),
+				)) as Record<string, unknown>[];
+				// A soft-deleted row keeps its id, as an insert finds.
+				if (!stored) {
+					throw new RepositoryUniqueViolation({
+						source: context.name,
+						details: { key: "id" },
+					});
+				}
+				return dataFromRow(stored);
 			}),
 		remove: (context, id) =>
 			hooks.guard(async () => {
@@ -444,6 +606,26 @@ function providerOver(
 			}),
 		transaction: hooks.transaction,
 	};
+}
+
+/**
+ * What the upsert of `increment` sets on a row that holds the id: `changes`
+ * while it is `fresh`, and every column of the row it was to insert once it
+ * expired, which so replaces it.
+ */
+function replacingExpired(
+	mapping: Mapping,
+	changes: Readonly<Record<string, unknown>>,
+	fresh: SQL,
+): Record<string, unknown> {
+	const set: Record<string, unknown> = {};
+	for (const [key, column] of Object.entries(mapping.columns)) {
+		if (key === "id") continue;
+		const kept = Object.hasOwn(changes, key) ? changes[key] : column;
+		set[key] =
+			sql`CASE WHEN ${fresh} THEN ${kept} ELSE excluded.${sql.identifier(column.name)} END`;
+	}
+	return set;
 }
 
 /** Wraps a provider so that it fails once `alive()` is false. */
@@ -567,7 +749,7 @@ function isSyncSqlite(db: Executor): boolean {
  */
 export function drizzleProvider(
 	options: DrizzleProviderOptions,
-): IRepositoryProvider {
+): DrizzleProvider {
 	if (
 		!options ||
 		typeof options !== "object" ||
@@ -578,9 +760,10 @@ export function drizzleProvider(
 		invalid("Expected { db, tables } with a Drizzle database and its tables.");
 	const { db, tables } = options;
 	const alwaysAlive = () => true;
-	if (isSyncSqlite(db)) return manualScope(tables, db, undefined, alwaysAlive);
+	if (isSyncSqlite(db))
+		return manualScope(tables, db, undefined, alwaysAlive) as DrizzleProvider;
 	return providerOver(tables, db, {
 		guard: (work) => work(),
 		transaction: nestedTransactions(tables, db),
-	});
+	}) as DrizzleProvider;
 }

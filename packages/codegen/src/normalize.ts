@@ -1,4 +1,6 @@
-import { catalog, recordPlugin } from "./catalog";
+import { catalog, identityKeysOf, recordPlugin } from "./catalog";
+import { cyclesOf } from "./entity-events";
+import { canonicalExpires } from "./entity-expires";
 import { flagOf } from "./graph";
 import { type Field, parseField } from "./model";
 import { type Scope, scopeOf } from "./scope";
@@ -63,6 +65,28 @@ function keep(list: unknown): string[] | undefined {
 	return unique.length > 0 ? unique : undefined;
 }
 
+/** The indexes of a repository, by name in order, each with its `where` and `orderBy`; none when empty. */
+function canonicalIndexes(indexes: unknown): { indexes?: unknown } {
+	if (typeof indexes !== "object" || indexes === null || Array.isArray(indexes))
+		return {};
+	const entries = Object.entries(indexes as Record<string, unknown>)
+		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+		.map(([name, index]) => {
+			const { where, orderBy } = (index ?? {}) as {
+				where?: unknown;
+				orderBy?: unknown;
+			};
+			return [
+				name,
+				{
+					where: Array.isArray(where) ? [...where] : where,
+					...(orderBy === undefined ? {} : { orderBy }),
+				},
+			];
+		});
+	return entries.length > 0 ? { indexes: Object.fromEntries(entries) } : {};
+}
+
 function canonicalRecord(
 	name: string,
 	value: Json,
@@ -74,7 +98,7 @@ function canonicalRecord(
 	const pluginKeys = new Set(
 		(plugins ?? []).flatMap((plugin) => recordPlugin(plugin)?.keys ?? []),
 	);
-	const identity = new Set<string>(entity ? catalog().identityKeys : []);
+	const identity = new Set<string>(entity ? identityKeysOf(value) : []);
 	const implied = (key: string, flag: "unique" | "sensitive") => {
 		const parsed = parse(fields[key]);
 		return parsed ? flagOf(parsed, flag, scope) : false;
@@ -96,12 +120,29 @@ function canonicalRecord(
 		option("change"),
 	];
 	void name;
+	const expires = entity ? canonicalExpires(value.expires) : undefined;
+	// Events: a list per cycle, each a name or { name, handler }.
+	const events = Object.fromEntries(
+		Object.entries(entity ? cyclesOf(value.events) : {})
+			.filter(([, list]) => list.length > 0)
+			.map(([cycle, list]) => [
+				cycle,
+				list.map((entry) =>
+					entry.handler === undefined
+						? entry.name
+						: { name: entry.name, handler: { import: entry.handler } },
+				),
+			]),
+	);
 	return {
 		fields: fieldsOf(value.fields),
 		...(sensitive ? { sensitive } : {}),
 		...(unique ? { unique } : {}),
 		...(change ? { change } : {}),
 		...(plugins ? { plugins } : {}),
+		...(Object.keys(events).length > 0 ? { events } : {}),
+		...(entity && value.versioned === true ? { versioned: true } : {}),
+		...(expires ? { expires: expires as Json } : {}),
 	};
 }
 
@@ -184,19 +225,21 @@ function canonicalStep(step: unknown): unknown {
 /** The options of a standard use case: core exceptions as `{ core }`, no `name`. */
 function canonicalGenericOptions(options: Json): Json {
 	const { name: _name, ...rest } = cloneJson(options) as Json;
+	const canonicalError = (error: unknown): unknown => {
+		const name = errorNameOf(error);
+		return name !== undefined && catalog().coreExceptions.includes(name)
+			? { core: name }
+			: error;
+	};
 	if (isObject(rest.errors)) {
 		rest.errors = Object.fromEntries(
-			Object.entries(rest.errors).map(([kind, error]) => {
-				const name = errorNameOf(error);
-				return [
-					kind,
-					name !== undefined && catalog().coreExceptions.includes(name)
-						? { core: name }
-						: error,
-				];
-			}),
+			Object.entries(rest.errors).map(([kind, error]) => [
+				kind,
+				canonicalError(error),
+			]),
 		);
 	}
+	if (Array.isArray(rest.throws)) rest.throws = rest.throws.map(canonicalError);
 	return rest;
 }
 
@@ -260,12 +303,25 @@ function canonicalCommand(value: Json): Json {
 			? { environments: [...value.environments] }
 			: {}),
 		...(value.events !== undefined && value.events !== "after-commit"
-			? { events: cloneJson(value.events) }
+			? { events: canonicalEvents(value.events) }
 			: {}),
 		...(value.onEventError === undefined
 			? {}
 			: { onEventError: cloneJson(value.onEventError) }),
 	};
+}
+
+/** The events policy: a policy without options loses its empty `options`. */
+function canonicalEvents(events: unknown): unknown {
+	if (
+		isObject(events) &&
+		Object.hasOwn(events, "policy") &&
+		isObject(events.options) &&
+		Object.keys(events.options).length === 0
+	) {
+		return { policy: events.policy };
+	}
+	return cloneJson(events);
 }
 
 function canonicalPipeEntry(entry: unknown): unknown {
@@ -338,6 +394,14 @@ export function normalizeSpec(
 						: [],
 				};
 	}
+	// Publishers by key in order.
+	if (isObject(spec.publishers) && Object.keys(spec.publishers).length > 0) {
+		out.publishers = Object.fromEntries(
+			Object.keys(spec.publishers)
+				.sort()
+				.map((key) => [key, cloneJson((spec.publishers as Json)[key])]),
+		);
+	}
 	for (const collection of COLLECTIONS) {
 		const declared = spec[collection];
 		if (!isObject(declared)) continue;
@@ -379,6 +443,10 @@ export function normalizeSpec(
 								...(value.deletion === "soft" ? { deletion: "soft" } : {}),
 								...(relations ? { relations } : {}),
 								...(environments ? { environments } : {}),
+								...canonicalIndexes(value.indexes),
+								...(value.scans === "warn" || value.scans === "reject"
+									? { scans: value.scans }
+									: {}),
 							},
 						];
 					}

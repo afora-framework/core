@@ -259,3 +259,265 @@ describe("openapi sink errors", () => {
 		]);
 	});
 });
+
+class GetEntry extends useCaseOf({
+	name: "GetEntry",
+	blueprint: blueprintOf((ctx) => ({
+		slug: ctx.text({ description: "The entry's slug." }),
+		draft: ctx.optional.boolean,
+	})),
+	response: blueprintOf((ctx) => ({ title: ctx.string })),
+}) {
+	override async execute() {
+		return {} as never;
+	}
+}
+class UpdateEntry extends useCaseOf({
+	name: "UpdateEntry",
+	blueprint: blueprintOf((ctx) => ({ slug: ctx.text, title: ctx.text })),
+	response: blueprintOf((ctx) => ({ title: ctx.string })),
+}) {
+	override async execute() {
+		return {} as never;
+	}
+}
+class RemoveEntry extends useCaseOf({
+	name: "RemoveEntry",
+	blueprint: blueprintOf((ctx) => ({ slug: ctx.text })),
+	response: blueprintOf(() => ({})),
+}) {
+	override async execute() {
+		return {} as never;
+	}
+}
+const Entries = commandOf({
+	name: "Entries",
+	useCases: { get: GetEntry, update: UpdateEntry, remove: RemoveEntry },
+});
+
+describe("openapi sink routes", () => {
+	const document = outputOf({
+		name: "Cms",
+		commands: [Entries, Users],
+		pipe: [
+			openapi({
+				info,
+				basePath: "/api",
+				route: {
+					"Entries.get": { method: "get", path: "/entries/{slug}" },
+					"Entries.update": { method: "patch", path: "/entries/{slug}" },
+					"Entries.remove": {
+						method: "delete",
+						path: "/entries/{slug}",
+						status: 204,
+					},
+					"Users.register": { path: "/users", status: 201 },
+				},
+				responses: {
+					"Entries.get": {
+						headers: { "cache-control": "public, max-age=60" },
+					},
+				},
+				requestId: true,
+				security: {
+					schemes: {
+						bearer: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+						apiKey: { type: "apiKey", name: "x-api-key", in: "header" },
+					},
+					default: { scheme: "bearer" },
+					operations: {
+						"Entries.update": { scheme: "bearer", scopes: ["write"] },
+						"Entries.get": false,
+						"Users.login": { scheme: "apiKey" },
+					},
+				},
+			}),
+		],
+	}).build();
+
+	type Op = {
+		parameters?: {
+			name: string;
+			in: string;
+			required: boolean;
+			description?: string;
+			schema?: unknown;
+		}[];
+		requestBody?: { content: { "application/json": { schema: object } } };
+		responses: Record<string, { headers?: object; content?: object }>;
+		security?: unknown;
+	};
+	const op = (path: string, method: string) =>
+		document.paths[path]?.[method] as Op;
+
+	test("is a valid OpenAPI 3.1 document", async () => {
+		await validated(document);
+	});
+
+	test("matches the snapshot", () => {
+		expect(document).toMatchSnapshot();
+	});
+
+	test("path parameters are required and leave the query and the body", () => {
+		const get = op("/api/entries/{slug}", "get");
+		expect(get.parameters).toEqual([
+			{
+				name: "slug",
+				in: "path",
+				required: true,
+				description: "The entry's slug.",
+				schema: expect.objectContaining({ type: "string" }),
+			},
+			{
+				name: "draft",
+				in: "query",
+				required: false,
+				schema: { type: "boolean" },
+			},
+		]);
+		const patch = op("/api/entries/{slug}", "patch");
+		expect(patch.parameters?.map((p) => [p.name, p.in])).toEqual([
+			["slug", "path"],
+		]);
+		const body = patch.requestBody?.content["application/json"].schema as {
+			properties: object;
+			required: string[];
+		};
+		expect(Object.keys(body.properties)).toEqual(["title"]);
+		expect(body.required).toEqual(["title"]);
+	});
+
+	test("uses the declared status; 204 has no content", () => {
+		expect(Object.keys(op("/api/users", "post").responses)).toEqual([
+			"201",
+			"400",
+			"422",
+			"500",
+		]);
+		const removed = op("/api/entries/{slug}", "delete").responses["204"];
+		expect(removed).toBeDefined();
+		expect(removed?.content).toBeUndefined();
+		expect(op("/api/entries/{slug}", "delete").requestBody).toBeUndefined();
+	});
+
+	test("documents static headers and the request id", () => {
+		const responses = op("/api/entries/{slug}", "get").responses;
+		expect(responses["200"]?.headers).toEqual({
+			"x-request-id": expect.objectContaining({ schema: { type: "string" } }),
+			"cache-control": {
+				schema: { type: "string", const: "public, max-age=60" },
+			},
+		});
+		expect(Object.keys(responses["400"]?.headers ?? {})).toEqual([
+			"x-request-id",
+		]);
+	});
+
+	test("documents security schemes and requirements", () => {
+		expect(document.components.securitySchemes).toEqual({
+			bearer: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+			apiKey: { type: "apiKey", name: "x-api-key", in: "header" },
+		});
+		expect(document.security).toEqual([{ bearer: [] }]);
+		expect(op("/api/entries/{slug}", "patch").security).toEqual([
+			{ bearer: ["write"] },
+		]);
+		expect(op("/api/entries/{slug}", "get").security).toEqual([]);
+		expect(op("/api/users/login", "post").security).toEqual([{ apiKey: [] }]);
+		expect(op("/api/entries/{slug}", "delete").security).toBeUndefined();
+	});
+});
+
+describe("openapi sink route errors", () => {
+	const make = (options: object, commands = [Entries, Posts]) =>
+		outputOf({
+			name: "Cms",
+			commands,
+			// biome-ignore lint/suspicious/noExplicitAny: invalid options on purpose
+			pipe: [openapi({ info, ...options } as any)],
+		});
+	const route = (path: string, extra: object = {}) => ({
+		route: { "Entries.get": { method: "get", path, ...extra } },
+	});
+
+	test("rejects malformed paths when the stage is made", () => {
+		for (const path of [
+			"/entries/:slug",
+			"/entries/*",
+			"/entries/{slug}.json",
+			"/entries/{}",
+			"/entries/{1slug}",
+			"/entries/{slug}/{slug}",
+			"/entries?x=1",
+		]) {
+			expect(() => openapi({ info, ...route(path) } as never)).toThrow(
+				InvalidOutputStage,
+			);
+		}
+		expect(() => openapi({ info, basePath: "/{tenant}" })).toThrow(
+			InvalidOutputStage,
+		);
+	});
+
+	test("rejects invalid status, headers, requestId and security", () => {
+		for (const options of [
+			route("/entries", { status: 203 }),
+			{ responses: { "Entries.get": { headers: { "a b": "x" } } } },
+			{ responses: { "Entries.get": { headers: { x: "a\r\nb" } } } },
+			{ responses: { "Entries.get": { headers: { "Content-Type": "x" } } } },
+			{ responses: { "Entries.get": { status: 201 } } },
+			{ requestId: false },
+			{ requestId: "x request" },
+			{ security: { schemes: { b: { type: "magic" } } } },
+			{ security: { schemes: { b: { type: "http" } } } },
+			{ security: { schemes: { b: { type: "apiKey", name: "k", in: "x" } } } },
+			{ security: { schemes: {}, default: { scheme: "nope" } } },
+			{
+				security: {
+					schemes: { b: { type: "http", scheme: "bearer" } },
+					operations: { "Entries.get": { scheme: "b", scopes: [1] } },
+				},
+			},
+		]) {
+			expect(() => openapi({ info, ...options } as never)).toThrow(
+				InvalidOutputStage,
+			);
+		}
+	});
+
+	test("a path parameter must be a scalar key of the input", () => {
+		expect(() => make(route("/entries/{nope}")).build()).toThrow(
+			InvalidOutputStage,
+		);
+		expect(() =>
+			make({
+				route: { "Posts.publish": { path: "/posts/{author}" } },
+			}).build(),
+		).toThrow(InvalidOutputStage);
+	});
+
+	test("parameters with other names still collide", () => {
+		expect(() =>
+			make({
+				route: {
+					"Entries.get": { method: "get", path: "/entries/{slug}" },
+					"Entries.remove": { method: "get", path: "/entries/{id}" },
+				},
+			}).build(),
+		).toThrow(InvalidOutputStage);
+	});
+
+	test("responses and security name known operations", () => {
+		expect(() =>
+			make({ responses: { "Entries.nope": { headers: {} } } }).build(),
+		).toThrow(InvalidOutputStage);
+		expect(() =>
+			make({
+				security: {
+					schemes: { b: { type: "http", scheme: "bearer" } },
+					operations: { "Entries.nope": false },
+				},
+			}).build(),
+		).toThrow(InvalidOutputStage);
+	});
+});

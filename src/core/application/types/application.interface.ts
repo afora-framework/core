@@ -4,10 +4,15 @@ import type {
 	IBlueprint,
 } from "../../blueprint/types/blueprint.interface";
 import type { AnyCommand } from "../../command/types/command.interface";
+import type { EntityExpires } from "../../entity/types/entity.interface";
 import type {
 	AnyEnvironment,
 	EnvironmentValue,
 } from "../../environment/environment";
+import type {
+	EventPolicyDescription,
+	IEventPublisher,
+} from "../../event-policy/types/event-policy.interface";
 import type { ExceptionLayers } from "../../exception/enums/exception-layers";
 import type { ILogger, LogLevel, LogSettings } from "../../logger/logger";
 import type {
@@ -15,7 +20,11 @@ import type {
 	StageDescription,
 } from "../../output/types/output.interface";
 import type { RecordPluginDescriptor } from "../../record/types/plugin.interface";
-import type { ProviderDescription } from "../../repository/types/query.interface";
+import type {
+	ProviderDescription,
+	RepositoryIndex,
+	RepositoryScans,
+} from "../../repository/types/query.interface";
 import type {
 	AnyRepository,
 	IRepositoryProvider,
@@ -129,6 +138,13 @@ export interface ApplicationSettings<
 	 * it, the one of the last extended application that has one; none by default.
 	 */
 	readonly log?: LogSettings | LogFactory;
+	/**
+	 * Where event policies such as `publishEvents` publish, by key: a
+	 * WebSocket hub, a queue, a broker. Commands of the application find them
+	 * by key, those of the extended applications included; a command whose
+	 * policy names a key that is not here throws `UnregisteredApplicationReference`.
+	 */
+	readonly publishers?: Readonly<Record<string, IEventPublisher>>;
 }
 
 /**
@@ -367,6 +383,26 @@ export interface RecordDescription {
 		readonly change: readonly string[];
 	};
 	readonly plugins: readonly RecordPluginDescriptor[];
+	/**
+	 * The lifecycle events of an entity, by cycle: each event's name and
+	 * whether `eventOf` was given a handler. Present only when it has some.
+	 */
+	readonly events?: Readonly<
+		Partial<
+			Record<
+				"onCreate" | "onUpdate" | "onDelete",
+				readonly { readonly name: string; readonly handler: boolean }[]
+			>
+		>
+	>;
+	/** Whether the entity is versioned (`entityOf(..., { versioned: true })`); present only when it is. */
+	readonly versioned?: true;
+	/**
+	 * When the records of an entity expire, as `entityOf` was given it:
+	 * `{ after: duration }` (kept in its `expiresAt` identity key, left out of
+	 * `fields`) or `{ at: key }`. Present only when it has one.
+	 */
+	readonly expires?: EntityExpires;
 }
 
 /** What a use case depends on, by the name it has in the application. */
@@ -440,7 +476,12 @@ export interface CommandDescription {
 	readonly transaction: boolean;
 	/** The names of its environments, when it declares any. */
 	readonly environments?: readonly string[];
-	readonly events: "after-commit" | "manual" | { readonly kind: "opaque" };
+	/** The policy: a name, a policy made by `eventPolicyOf` by name and options, else opaque. */
+	readonly events:
+		| "after-commit"
+		| "manual"
+		| EventPolicyDescription
+		| { readonly kind: "opaque" };
 	readonly onEventError?: { readonly kind: "opaque" };
 }
 
@@ -489,6 +530,8 @@ export interface ApplicationDescription {
 	>;
 	/** Its `log` (or the one of the last extended application), present only when configured. */
 	readonly log?: LogDescription | { readonly kind: "opaque" };
+	/** Its publishers (inherited ones included), by key, with the application that declared each; present only when it has some. */
+	readonly publishers?: Readonly<Record<string, { readonly from: string }>>;
 	readonly properties: Readonly<
 		Record<string, PropertyDescription & { readonly from: string }>
 	>;
@@ -514,6 +557,10 @@ export interface ApplicationDescription {
 				readonly entity: string;
 				readonly actions: readonly string[];
 				readonly deletion: "hard" | "soft";
+				/** Its declared indexes, by name. */
+				readonly indexes: Readonly<Record<string, RepositoryIndex>>;
+				/** What it does with a query only a scan serves. */
+				readonly scans: RepositoryScans;
 				/** The names of the repositories of the entities its entity holds. */
 				readonly relations: readonly string[];
 				/** The names of its `environmentDependencies`. */

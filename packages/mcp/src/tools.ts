@@ -132,7 +132,7 @@ export const tools: readonly ToolDefinition[] = [
 	{
 		name: "afora_catalog",
 		description:
-			"What an afora.json can use, read from @afora/core: the Std properties (type, flags sensitive/unique/optional, and the `with` options each accepts), factories (enum), the Std record plugins (keys they add, unique/sensitive/change keys, methods), reserved record/entity keys, identity keys and the repository action rules. The `providers` list is what `provider.use` may name; `exceptionLayers` and `coreExceptions` are what an exception's `layer` and a use case's `errors` may use; `stages` (select, openapi and the ones given to the server with --stages) are what an output's `pipe` may name with `transform` or `sink`. Call this first; do not guess property names.",
+			"What an afora.json can use, read from @afora/core: the Std properties (type, flags sensitive/unique/optional, and the `with` options each accepts), factories (enum), the Std record plugins (keys they add, unique/sensitive/change keys, methods), reserved record/entity keys, identity keys and the repository action rules. The `providers` list is what `provider.use` may name; `exceptionLayers` and `coreExceptions` are what an exception's `layer` and a use case's `errors` may use; `stages` (select, openapi and the ones given to the server with --stages) are what an output's `pipe` may name with `transform` or `sink`; `policies` (publishEvents and the ones given with --policies) are what a command's `events` may name with `policy`. Call this first; do not guess property names.",
 		inputSchema: {
 			type: "object",
 			properties: {},
@@ -153,6 +153,13 @@ export const tools: readonly ToolDefinition[] = [
 				...catalog().stages,
 				...(project.stages ?? []).map((stage) => ({
 					...stage,
+					builtin: false,
+				})),
+			],
+			policies: [
+				...catalog().policies,
+				...(project.policies ?? []).map((policy) => ({
+					...policy,
 					builtin: false,
 				})),
 			],
@@ -216,7 +223,7 @@ export const tools: readonly ToolDefinition[] = [
 					imports: Type.Optional(
 						Type.Record(Type.String(), Type.String(), {
 							description:
-								'Where what cannot be described is imported from: a property name -> module, and "./file.ts#export" (relative to output.dir) for a provider not created with providerOf ("provider", "repositories.<Name>.provider" or "providers.<key>" for one of the top-level providers), a use case with a hand-written execute ("useCases.<Name>") and a run function of a steps use case ("useCases.<Name>.run.<name>"), a command handler ("commands.<Name>.events", "commands.<Name>.onEventError") and a stage written by hand ("outputs.<Name>.pipe.<index>"). Without it extraction fails with an error naming the key.',
+								'Where what cannot be described is imported from: a property name -> module, and "./file.ts#export" (relative to output.dir) for a provider not created with providerOf ("provider", "repositories.<Name>.provider" or "providers.<key>" for one of the top-level providers), a use case with a hand-written execute ("useCases.<Name>") and a run function of a steps use case ("useCases.<Name>.run.<name>"), a command handler ("commands.<Name>.events", "commands.<Name>.onEventError"), a publisher ("publishers.<key>") and a stage written by hand ("outputs.<Name>.pipe.<index>"). Without it extraction fails with an error naming the key.',
 						}),
 					),
 				},
@@ -247,7 +254,7 @@ export const tools: readonly ToolDefinition[] = [
 	{
 		name: "afora_spec_validate",
 		description:
-			"Validates a spec without writing anything and returns the issues ({ path, code, message }). Pass `spec` to check a draft, or omit it to check the afora.json on disk. Rules covered (use cases: references, dependency kinds, errors registered or core, every step rule with the codes unknown_step, invalid_reference, unbound_reference, unknown_key, unknown_dependency, unknown_action, write_in_find, undeclared_error, missing_return, misplaced_return, invalid_step_name, invalid_class, invalid_change_key, invalid_value, invalid_import; commands: unknown_use_case, invalid_use_cases, invalid_operation, invalid_events, event_error_requires_after_commit; outputs: unknown_command, invalid_commands, invalid_pipe, invalid_stage, unknown_stage, stage_kind_mismatch, sink_not_last, invalid_stage_options, invalid_statuses, invalid_status, unknown_exception): unknown references, name collisions, cycles, reserved and identity keys, unique/sensitive/change naming missing keys, repository action rules (findBy only for unique keys, findManyBy only for non-unique; findMany, exists, findPage need no key), providers (unknown_provider, invalid_provider, invalid_import), relations covering the entities held, invalid `with` options.",
+			"Validates a spec without writing anything and returns the issues ({ path, code, message }). Pass `spec` to check a draft, or omit it to check the afora.json on disk. Rules covered (use cases: references, dependency kinds, errors registered or core, every step rule with the codes unknown_step, invalid_reference, unbound_reference, unknown_key, unknown_dependency, unknown_action, write_in_find, undeclared_error, missing_return, misplaced_return, invalid_step_name, invalid_class, invalid_change_key, invalid_value, invalid_import; commands: unknown_use_case, invalid_use_cases, invalid_operation, invalid_events, event_error_requires_after_commit, unknown_event_policy, invalid_event_policy_options, unknown_publisher; publishers: invalid_publishers, invalid_import; outputs: unknown_command, invalid_commands, invalid_pipe, invalid_stage, unknown_stage, stage_kind_mismatch, sink_not_last, invalid_stage_options, invalid_statuses, invalid_status, unknown_exception): unknown references, name collisions, cycles, reserved and identity keys, unique/sensitive/change naming missing keys, repository action rules (findBy only for unique keys, findManyBy only for non-unique; findMany, exists, findPage need no key), providers (unknown_provider, invalid_provider, invalid_import), relations covering the entities held, invalid `with` options.",
 		inputSchema: {
 			type: "object",
 			properties: {
@@ -288,7 +295,7 @@ export const tools: readonly ToolDefinition[] = [
 				},
 				declaration: {
 					description:
-						'The declaration. property: { base, with? } | { enum } | { opaque, import }. blueprint/environment: { fields }. record/entity: { fields, unique?, sensitive?, change?, plugins? }. repository: { entity, actions, provider?, deletion?: hard | soft, relations?, environments? }. exception: { layer, message? }. useCase: { description?, tags?, deprecated?, input, response, context?, dependencies?, errors?, implementation: { steps: [...] } | { import: "../handlers/x.ts#Name" } } (see the guide for steps). command: { description?, tags?, context?, useCases: { op: "UseCaseName" }, transaction?, events?: "after-commit" | "manual" | { import }, onEventError?: { import } }. output: { commands: [names], statuses?: { ExceptionName: 400-599 }, pipe: [{ transform, options? } | { sink, options? } | { import }] }. provider: "inMemory" | { use, options? } | { import: "./file.ts#name" } | "<key>" of the top-level `providers` (the application provider and the named `providers` are top-level keys of the spec: afora_spec_write). A use case dependency can also be "Logger"; the top-level `log` is { level?, providers: ["json" | "console" | { import }] }.',
+						'The declaration. property: { base, with? } | { enum } | { opaque, import }. blueprint/environment: { fields }. record/entity: { fields, unique?, sensitive?, change?, plugins? }; an entity also takes events?: { onCreate?, onUpdate?, onDelete? }, each "name" | { name, handler?: { import } } or a list of them. repository: { entity, actions, provider?, deletion?: hard | soft, relations?, environments? }. exception: { layer, message? }. useCase: { description?, tags?, deprecated?, input, response, context?, dependencies?, errors?, implementation: { steps: [...] } | { import: "../handlers/x.ts#Name" } } (see the guide for steps). command: { description?, tags?, context?, useCases: { op: "UseCaseName" }, transaction?, events?: "after-commit" | "manual" | { policy, options? } | { import }, onEventError?: { import } }. output: { commands: [names], statuses?: { ExceptionName: 400-599 }, pipe: [{ transform, options? } | { sink, options? } | { import }] }. provider: "inMemory" | { use, options? } | { import: "./file.ts#name" } | "<key>" of the top-level `providers` (the application provider and the named `providers` are top-level keys of the spec: afora_spec_write). A use case dependency can also be "Logger"; the top-level `log` is { level?, providers: ["json" | "console" | { import }] }; the top-level `publishers` is { key: { import } }, where event policies such as publishEvents publish.',
 					anyOf: Object.values(declarationSchemas).map((schema) =>
 						json(schema),
 					),

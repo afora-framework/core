@@ -39,6 +39,26 @@ export interface Scope {
 	readonly providerKeys: ReadonlyMap<string, ProviderKey>;
 	/** The extended specs, by reference, in order. */
 	readonly extended: ReadonlyMap<string, ResolvedSpec>;
+	/** The keys of `publishers`, its own and inherited ones (at any depth, as an application inherits them). */
+	readonly publisherKeys: ReadonlySet<string>;
+}
+
+/** Every key of `publishers` that `resolved` declares or inherits. */
+function publisherKeysOf(
+	resolved: ResolvedSpec,
+	seen: Set<ResolvedSpec>,
+	found: Set<string>,
+): void {
+	if (seen.has(resolved)) return;
+	seen.add(resolved);
+	for (const child of Object.values(resolved.extends ?? {})) {
+		publisherKeysOf(child, seen, found);
+	}
+	const publishers = (resolved.spec as unknown as Record<string, unknown>)
+		?.publishers;
+	if (isObject(publishers)) {
+		for (const key of Object.keys(publishers)) found.add(key);
+	}
 }
 
 export function issue(
@@ -273,7 +293,15 @@ export function scopeOf(
 			);
 		}
 	}
-	return { decls, providerKeys, extended: extendedRefs };
+	const publisherKeys = new Set<string>();
+	const publisherSeen = new Set<ResolvedSpec>();
+	for (const resolved of extendedRefs.values()) {
+		publisherKeysOf(resolved, publisherSeen, publisherKeys);
+	}
+	if (isObject(spec.publishers)) {
+		for (const key of Object.keys(spec.publishers)) publisherKeys.add(key);
+	}
+	return { decls, providerKeys, extended: extendedRefs, publisherKeys };
 }
 
 /**

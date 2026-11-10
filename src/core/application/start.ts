@@ -194,7 +194,7 @@ export function deferredProvider(
 		return provider;
 	};
 	const proxy: Record<string, unknown> = {};
-	for (const method of METHODS) {
+	for (const method of [...METHODS, "increment"]) {
 		proxy[method] = (...args: unknown[]) =>
 			(
 				real(method) as unknown as Record<
@@ -310,4 +310,25 @@ export function checkTransactions(
 			},
 		});
 	}
+}
+
+/**
+ * Throws `InvalidApplicationDeclaration` when `provider` does not read by
+ * cursor (`capabilities.keyset`) and some of `repositories` declare
+ * `findCursor`.
+ * @internal
+ */
+export function checkCapabilities(
+	source: string,
+	provider: IRepositoryProvider,
+	repositories: readonly string[],
+): void {
+	if (repositories.length === 0 || provider.capabilities?.keyset === true)
+		return;
+	throw new InvalidApplicationDeclaration({
+		source,
+		details: {
+			reason: `The provider made on start does not read by cursor (capabilities.keyset), which the findCursor of ${repositories.join(", ")} needs.`,
+		},
+	});
 }

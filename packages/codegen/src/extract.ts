@@ -25,9 +25,12 @@ export interface ExtractOptions {
 	 * described: it needs an entry `"./db.ts#provider"` under the key `provider`
 	 * (the application's), `repositories.<Name>.provider` or `providers.<key>`
 	 * (one of `providersOf`, e.g. made by `providerFrom`). A use case with a
-	 * hand-written `execute` needs `useCases.<Name>`, and a `run` function of a
-	 * steps use case `useCases.<Name>.run.<name>`, a command with a handler
-	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, and a stage
+	 * hand-written `execute` needs `useCases.<Name>`, a `run` function of a
+	 * steps use case `useCases.<Name>.run.<name>`, the `before` and `after` of
+	 * a standard use case `useCases.<Name>.before` and `.after`, a command with a handler
+	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, the handler of
+	 * an entity event `entities.<Name>.events.<event>`, a publisher
+	 * `publishers.<key>`, and a stage
 	 * written by hand `outputs.<Name>.pipe.<index>`, all `"./file.ts#export"`.
 	 */
 	readonly imports?: Readonly<Record<string, string>>;
@@ -394,10 +397,36 @@ export function extractSpec(
 		description.records,
 		(value) => record(["", value])[1],
 	);
-	const entities = entries(
-		description.entities,
-		(value) => record(["", value])[1],
-	);
+	const entities = entries(description.entities, (value, name) => ({
+		...(record(["", value])[1] as Record<string, unknown>),
+		...(value.versioned === true ? { versioned: true } : {}),
+		...(value.expires === undefined
+			? {}
+			: { expires: structuredClone(value.expires) as Json }),
+		...(value.events === undefined
+			? {}
+			: {
+					events: Object.fromEntries(
+						Object.entries(value.events).map(([cycle, list]) => [
+							cycle,
+							(list ?? []).map((event) =>
+								event.handler
+									? {
+											name: event.name,
+											handler: {
+												import: importFor(
+													options.imports,
+													`entities.${name}.events.${event.name}`,
+													`The handler of the event "${event.name}" of the entity "${name}"`,
+												),
+											},
+										}
+									: event.name,
+							),
+						]),
+					),
+				}),
+	}));
 	const environments = entries(description.environments, (value) => ({
 		fields: extraction.json(value.fields),
 	}));
@@ -417,6 +446,22 @@ export function extractSpec(
 		...(value.relations.length > 0 ? { relations: [...value.relations] } : {}),
 		...(value.environments.length > 0
 			? { environments: [...value.environments] }
+			: {}),
+		...(Object.keys(value.indexes ?? {}).length > 0
+			? {
+					indexes: Object.fromEntries(
+						Object.entries(value.indexes).map(([index, { where, orderBy }]) => [
+							index,
+							{
+								where: [...where],
+								...(orderBy === undefined ? {} : { orderBy }),
+							},
+						]),
+					),
+				}
+			: {}),
+		...(value.scans === "warn" || value.scans === "reject"
+			? { scans: value.scans }
 			: {}),
 	}));
 
@@ -440,14 +485,25 @@ export function extractSpec(
 				description: _description,
 				tags: _tags,
 				deprecated: _deprecated,
-				...options
+				...given
 			} = value.generic.options;
+			const generic = structuredClone(given) as Record<string, unknown>;
+			// The functions run before and after the write are imported as they are.
+			for (const hook of ["before", "after"]) {
+				if (generic[hook] !== undefined) {
+					generic[hook] = {
+						import: importFor(
+							options.imports,
+							`useCases.${name}.${hook}`,
+							`The function "${hook}" of the standard use case "${name}"`,
+						),
+					};
+				}
+			}
 			return {
 				generic: value.generic.name,
 				repository: value.generic.repository,
-				...(Object.keys(options).length > 0
-					? { options: structuredClone(options) }
-					: {}),
+				...(Object.keys(generic).length > 0 ? { options: generic } : {}),
 				...(value.description === undefined
 					? {}
 					: { description: value.description }),
@@ -548,13 +604,20 @@ export function extractSpec(
 					events:
 						value.events === "manual"
 							? "manual"
-							: {
-									import: importFor(
-										options.imports,
-										`commands.${name}.events`,
-										`The events handler of the command "${name}"`,
-									),
-								},
+							: value.events.kind === "policy"
+								? {
+										policy: value.events.name,
+										...(Object.keys(value.events.options).length > 0
+											? { options: structuredClone(value.events.options) }
+											: {}),
+									}
+								: {
+										import: importFor(
+											options.imports,
+											`commands.${name}.events`,
+											`The events handler of the command "${name}"`,
+										),
+									},
 				}),
 		...(value.onEventError === undefined
 			? {}
@@ -593,6 +656,21 @@ export function extractSpec(
 	}));
 
 	const allProperties = { ...extraction.generated, ...properties };
+	// Its own publishers: inherited ones belong to the spec it extends.
+	const publishers = Object.fromEntries(
+		Object.entries(description.publishers ?? {})
+			.filter(([, { from }]) => from === description.name)
+			.map(([key]) => [
+				key,
+				{
+					import: importFor(
+						options.imports,
+						`publishers.${key}`,
+						`The publisher "${key}"`,
+					),
+				},
+			]),
+	);
 	const spec: Json = {
 		version: 1,
 		name: description.name,
@@ -617,6 +695,7 @@ export function extractSpec(
 		...(description.log === undefined
 			? {}
 			: { log: logSpec(description.log, options.imports) }),
+		...(Object.keys(publishers).length > 0 ? { publishers } : {}),
 		...(Object.keys(allProperties).length > 0
 			? { properties: allProperties }
 			: {}),

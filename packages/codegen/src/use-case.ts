@@ -1,4 +1,9 @@
-import { catalog, genericUseCase, recordPlugin } from "./catalog";
+import {
+	catalog,
+	genericUseCase,
+	identityKeysOf,
+	recordPlugin,
+} from "./catalog";
 import { fieldsOfDecl } from "./graph";
 import type { Field } from "./model";
 import { checkImport, isImportObject } from "./provider";
@@ -42,8 +47,14 @@ const ENSURE_KINDS = [
 	"false",
 ];
 const READ_ACTION =
-	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|findCursor|count)$/;
-const WRITE_ACTIONS = new Set(["create", "update", "delete", "restore"]);
+	/^(?:findBy.+|findManyBy.+|findMany|exists|findPage|findCursor|explain|count)$/;
+const WRITE_ACTIONS = new Set([
+	"create",
+	"update",
+	"delete",
+	"restore",
+	"increment",
+]);
 /** The names a step cannot bind with `as`: they are roots or escapes of values. */
 const RESERVED_NAMES = ["input", "context", "env", "literal"];
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -250,7 +261,7 @@ const GENERIC_ERRORS = ["notFound", "conflict", "invalid", "owner"];
 function entityKeysOf(decl: Decl): string[] {
 	const plugins = Array.isArray(decl.spec.plugins) ? decl.spec.plugins : [];
 	return [
-		...catalog().identityKeys,
+		...identityKeysOf(decl.spec),
 		...Object.keys(fieldsOfDecl(decl) ?? {}),
 		...plugins.flatMap((name) =>
 			typeof name === "string" ? (recordPlugin(name)?.keys ?? []) : [],
@@ -433,6 +444,55 @@ function checkGenericUseCase(
 				);
 			}
 		}
+		if (key === "before" || key === "after") {
+			if (!isObject(value) || !isImportObject(value)) {
+				invalid(
+					key,
+					`"${key}" must be { "import": "./file.ts#function" }: a function run ${key} the write.`,
+				);
+			} else {
+				checkImport(value, [...path, "options", key], issues);
+			}
+		}
+		if (key === "dependencies") {
+			const given = checkDependencies(
+				decl,
+				value,
+				[...path, "options", key],
+				scope,
+				issues,
+			);
+			for (const name of given.keys()) {
+				// The use case names its own: the repository, and one per key that holds an entity.
+				const held = name.endsWith("Repository")
+					? name.slice(0, -"Repository".length)
+					: undefined;
+				if (
+					name === "repository" ||
+					(held !== undefined && keys?.includes(held))
+				) {
+					invalid(
+						key,
+						`"${name}" is a name the use case gives its own dependency.`,
+					);
+				}
+			}
+		}
+		if (key === "throws") {
+			const names = Array.isArray(value) ? value.map(errorNameOf) : undefined;
+			if (
+				names === undefined ||
+				names.some(
+					(name) => name === undefined || !isKnownException(name, scope),
+				) ||
+				new Set(names).size !== names.length
+			) {
+				invalid(
+					key,
+					'"throws" must be a list of distinct exceptions, each declared or a core one (a string, or { "core": "Name" }).',
+				);
+			}
+		}
 		if (key === "errors") {
 			if (!isObject(value)) {
 				invalid(key, '"errors" must be an object of exception names.');
@@ -454,6 +514,77 @@ function checkGenericUseCase(
 			}
 		}
 	}
+}
+
+/**
+ * The \`dependencies\` of a use case, \`key -> name\` of a declared use case,
+ * repository or environment, or \`"Logger"\`: gives the valid ones by key.
+ */
+function checkDependencies(
+	decl: Decl,
+	value: unknown,
+	path: Path,
+	scope: Scope,
+	issues: SpecIssue[],
+): Map<string, Decl> {
+	const dependencies = new Map<string, Decl>();
+	if (value === undefined) return dependencies;
+	if (!isObject(value)) {
+		issues.push(
+			issue(
+				path,
+				"invalid_dependencies",
+				'"dependencies" must be an object of key -> declaration name.',
+			),
+		);
+		return dependencies;
+	}
+	for (const [key, name] of Object.entries(value)) {
+		const here = [...path, key];
+		if (!isIdentifier(key)) {
+			issues.push(issue(here, "invalid_key", `"${key}" is not a valid key.`));
+			continue;
+		}
+		const target = typeof name === "string" ? scope.decls.get(name) : undefined;
+		// The core's `Logger`: nothing to declare, and no step reads it.
+		if (name === "Logger" && target === undefined) continue;
+		if (
+			target?.kind !== "useCase" &&
+			target?.kind !== "repository" &&
+			target?.kind !== "environment"
+		) {
+			issues.push(
+				issue(
+					here,
+					target ? "wrong_kind" : "unknown_dependency",
+					target
+						? `"${name}" is a ${target.kind}; a dependency is a use case, a repository, an environment or "Logger".`
+						: `"${String(name)}" is not a declared use case, repository or environment, nor "Logger".`,
+				),
+			);
+			continue;
+		}
+		if (target.kind === "useCase" && target.name === decl.name) {
+			issues.push(issue(here, "cycle", "A use case cannot depend on itself."));
+			continue;
+		}
+		if (
+			target.kind === "useCase" &&
+			target.via === undefined &&
+			isImported(target.spec)
+		) {
+			issues.push(
+				issue(
+					here,
+					"import_dependency",
+					`"${target.name}" is implemented by a hand-written class, which imports the generated file that would import it back. Make it a steps use case, or call it through a step of a use case that does not need it as a dependency.`,
+				),
+			);
+			continue;
+		}
+		dependencies.set(key, target);
+	}
+	return dependencies;
 }
 
 /** Checks the `description`, `tags` and `deprecated` of a use case. */
@@ -561,70 +692,13 @@ export function checkUseCase(
 	const inputKeys = keysOf(input);
 	const contextKeys = keysOf(context);
 
-	// dependencies
-	const dependencies = new Map<string, Decl>();
-	if (spec.dependencies !== undefined) {
-		if (!isObject(spec.dependencies)) {
-			issues.push(
-				issue(
-					[...path, "dependencies"],
-					"invalid_dependencies",
-					'"dependencies" must be an object of key -> declaration name.',
-				),
-			);
-		} else {
-			for (const [key, name] of Object.entries(spec.dependencies)) {
-				const here = [...path, "dependencies", key];
-				if (!isIdentifier(key)) {
-					issues.push(
-						issue(here, "invalid_key", `"${key}" is not a valid key.`),
-					);
-					continue;
-				}
-				const target =
-					typeof name === "string" ? scope.decls.get(name) : undefined;
-				// The core's `Logger`: nothing to declare, and no step reads it.
-				if (name === "Logger" && target === undefined) continue;
-				if (
-					target?.kind !== "useCase" &&
-					target?.kind !== "repository" &&
-					target?.kind !== "environment"
-				) {
-					issues.push(
-						issue(
-							here,
-							target ? "wrong_kind" : "unknown_dependency",
-							target
-								? `"${name}" is a ${target.kind}; a dependency is a use case, a repository, an environment or "Logger".`
-								: `"${String(name)}" is not a declared use case, repository or environment, nor "Logger".`,
-						),
-					);
-					continue;
-				}
-				if (target.kind === "useCase" && target.name === decl.name) {
-					issues.push(
-						issue(here, "cycle", "A use case cannot depend on itself."),
-					);
-					continue;
-				}
-				if (
-					target.kind === "useCase" &&
-					target.via === undefined &&
-					isImported(target.spec)
-				) {
-					issues.push(
-						issue(
-							here,
-							"import_dependency",
-							`"${target.name}" is implemented by a hand-written class, which imports the generated file that would import it back. Make it a steps use case, or call it through a step of a use case that does not need it as a dependency.`,
-						),
-					);
-					continue;
-				}
-				dependencies.set(key, target);
-			}
-		}
-	}
+	const dependencies = checkDependencies(
+		decl,
+		spec.dependencies,
+		[...path, "dependencies"],
+		scope,
+		issues,
+	);
 
 	// errors
 	const errors: string[] = [];
@@ -905,6 +979,12 @@ function checkSteps(steps: unknown, implPath: Path, ctx: StepsContext): void {
 					fail("invalid_step", 'find must be "<repository>.<action>".', "find");
 				} else if (WRITE_ACTIONS.has(action)) {
 					fail("write_in_find", `find cannot call "${action}".`, "find");
+				} else if (action === "forEachPage") {
+					fail(
+						"unknown_action",
+						'"forEachPage" runs a function on each page and cannot be a step; call it from a use case written in TypeScript.',
+						"find",
+					);
 				} else if (!READ_ACTION.test(action)) {
 					fail("unknown_action", `"${action}" is not a read action.`, "find");
 				} else repository(repo, action, "find");
