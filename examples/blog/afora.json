@@ -5,9 +5,12 @@
 	"output": {
 		"dir": "src/domain"
 	},
-	"provider": {
-		"import": "../provider.ts#provider"
+	"providers": {
+		"database": {
+			"import": "../provider.ts#database"
+		}
 	},
+	"provider": "database",
 	"environments": {
 		"Database": {
 			"fields": {

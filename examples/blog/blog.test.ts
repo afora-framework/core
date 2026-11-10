@@ -178,7 +178,7 @@ describe("round trip", () => {
 		const { spec } = await loadSpec("afora.json");
 		const extracted = extractSpec(App, {
 			imports: {
-				provider: "../provider.ts#provider",
+				"providers.database": "../provider.ts#database",
 				"useCases.Register.run.hashPassword":
 					"../handlers/password.ts#hashPassword",
 			},
@@ -187,7 +187,10 @@ describe("round trip", () => {
 		const actual = normalizeSpec(extracted);
 		// the provider of providerFrom is opaque (it is code): extraction needs
 		// it mapped to its import, and gives back the spec as written
-		expect(actual.provider).toEqual({ import: "../provider.ts#provider" });
+		expect(actual.providers).toEqual({
+			database: { import: "../provider.ts#database" },
+		});
+		expect(actual.provider).toBe("database");
 		expect(actual).toEqual(expected);
 	});
 });
