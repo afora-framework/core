@@ -1,5 +1,6 @@
 import { Type } from "typebox";
 import { InvalidPropertyValue } from "../../core/property/exceptions";
+import { type IPropertyInput, PropertyInput } from "../../core/property/input";
 import { propertyOf } from "../../core/property/property";
 import { currentHasher, verifySyncWithCurrent } from "../runtime";
 
@@ -40,10 +41,29 @@ export function passwordIssues(value: string): string[] {
 	return issues;
 }
 
+const escaped = PASSWORD_SPECIAL_CHARACTERS.replace(/[\\\]^-]/g, "\\$&");
+
+/**
+ * A password as a person types it, checked against the password rules
+ * (`passwordIssues`); sensitive. It is what an input takes for a `Password`,
+ * which stores the hash.
+ */
+export class PlainPassword extends propertyOf({
+	name: "plainPassword",
+	schema: Type.String({
+		minLength: PASSWORD_MIN_LENGTH,
+		maxLength: PASSWORD_MAX_LENGTH,
+		pattern: `^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[${escaped}])`,
+	}),
+	default: "Demo@123",
+	sensitive: true,
+}) {}
+
 /**
  * A password stored as an Argon2 hash. The constructor only accepts a hash,
  * e.g. one read from the database; `Password.hash` turns a plain password
- * into one.
+ * into one. Under `PropertyInput` it says so to what derives inputs: they
+ * take a `PlainPassword` and hash it.
  */
 export class Password extends propertyOf({
 	name: "password",
@@ -51,6 +71,11 @@ export class Password extends propertyOf({
 	default: DEMO_HASH,
 	sensitive: true,
 }) {
+	static readonly [PropertyInput]: IPropertyInput<string> = {
+		accepts: PlainPassword,
+		convert: async (plain) => (await Password.hash(plain)).value as string,
+	};
+
 	/** Validates `plain` against the password rules and hashes it with the configured hasher (argon2id by default). */
 	static async hash(plain: string): Promise<Password> {
 		const issues = passwordIssues(plain);

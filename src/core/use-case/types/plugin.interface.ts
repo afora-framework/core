@@ -39,9 +39,16 @@ export interface UseCaseFieldPlan {
 	readonly related: AnyRepositoryEntity | undefined;
 	/**
 	 * What an input takes for the key: `<key>Id` and the `id` field of the
-	 * entity it holds, for an entity; else the key and the field, as they are.
+	 * entity it holds, for an entity; the property a `PropertyInput`
+	 * accepts, for a property that declares one; else the key and the field.
 	 */
 	readonly input: { readonly key: string; readonly field: BlueprintField };
+	/**
+	 * Turns what the input gave into what the entity stores, for a property
+	 * that declares a `PropertyInput` (a plain password into its hash); gives
+	 * `undefined` for `undefined`.
+	 */
+	readonly convert: ((value: unknown) => unknown) | undefined;
 }
 
 /** What `compile` gets of the repository a use case is made for. */

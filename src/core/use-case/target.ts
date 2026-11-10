@@ -6,6 +6,7 @@ import { recordFieldOf } from "../blueprint/record-field";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
 import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
+import { propertyInputOf } from "../property/input";
 import { isProperty } from "../property/is-property";
 import { recordNameOf } from "../record/name";
 import { pluginsOf } from "../record/plugin";
@@ -63,6 +64,13 @@ function planOf(
 		const id = related.blueprint.properties.id as BlueprintField;
 		input = { key: `${key}Id`, field: optional ? optionalOf(id) : id };
 	}
+	const declared = kind === "property" ? propertyInputOf(field) : undefined;
+	if (declared) {
+		input = {
+			key,
+			field: optional ? optionalOf(declared.accepts) : declared.accepts,
+		};
+	}
 	return Object.freeze({
 		key,
 		field,
@@ -75,6 +83,10 @@ function planOf(
 		kind,
 		related,
 		input: Object.freeze(input),
+		convert: declared
+			? (value: unknown) =>
+					value === undefined ? undefined : declared.convert(value)
+			: undefined,
 	});
 }
 
