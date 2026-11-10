@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Records and entities are generated with their declared name, `recordOf(blueprint, { name: "User" })` and `entityOf(blueprint, { name: "User" })`, so the name a provider keys its storage by does not depend on the class name, which bundlers rename. The generated code needs `@afora/core` after 0.0.5.
+
 - TypeBox (`^1`) is a required peer dependency, shared with `@afora/core` and the generated application's own schemas.
 - Record and entity fields may now be named `blueprint` and `options`, following the core's move of instance metadata to `Meta`. Covered by generation, persistence and extraction round trips; the spec shape is unchanged.
 

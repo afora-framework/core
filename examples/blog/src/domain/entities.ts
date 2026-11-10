@@ -8,6 +8,7 @@ export class User extends entityOf(
 		name: ctx.text,
 	})),
 	{
+		name: "User",
 		plugins: (ctx) => [ctx.authenticatable],
 	},
 ) {}
@@ -20,6 +21,7 @@ export class Post extends entityOf(
 		author: User,
 	})),
 	{
+		name: "Post",
 		change: ["status"],
 		plugins: (ctx) => [ctx.taggable, ctx.publishable],
 	},

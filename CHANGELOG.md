@@ -4,6 +4,7 @@
 
 ### Changed
 
+- `@afora/codegen` generates each record and entity with its declared `name`, so the generated code requires this version of `@afora/core` or later.
 - `docs/applications.md` and `docs/use-cases.md` say how a use case runs through an application (`new app.useCases.Register(input).execute()`), and that use cases, commands and outputs are bound with a `provider`, `providers` or `log`, not only a `provider`.
 - `inMemoryProvider()` is a plain object since 0.0.3 (it was frozen in 0.0.2, which made a `Proxy` over it throw); only its `capabilities` are frozen.
 

@@ -29,6 +29,7 @@ export class User extends entityOf(
 		name: ctx.string,
 		age: ctx.integer,
 	})),
+	{ name: "User" },
 ) {}
 "
 ,
