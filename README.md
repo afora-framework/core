@@ -1,4 +1,24 @@
-# afora
+<h1 align="center">afora</h1>
+
+<p align="center"><strong>Model the domain. Keep the invariants.</strong><br>Domain modeling for TypeScript, built on TypeBox.</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@afora/core"><img alt="npm" src="https://img.shields.io/npm/v/@afora/core?color=cb3837&logo=npm"></a>
+  <a href="https://github.com/afora-framework/core/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/afora-framework/core/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://www.npmjs.com/package/@afora/core"><img alt="npm provenance" src="https://img.shields.io/badge/npm-provenance-2ea44f?logo=npm"></a>
+  <a href="https://standardschema.dev"><img alt="Standard Schema V1" src="https://img.shields.io/badge/Standard%20Schema-V1-3178c6"></a>
+  <img alt="Bun >= 1.4.4 and Node >= 22" src="https://img.shields.io/badge/runtime-Bun%20%E2%89%A5%201.4.4%20%7C%20Node%20%E2%89%A5%2022-555">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/afora-framework/core"></a>
+</p>
+
+<p align="center">
+  <a href="https://getafora.com">Website</a> ·
+  <a href="docs/README.md">Docs</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/afora-json.md">afora.json</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/afora-framework/core/discussions">Discussions</a>
+</p>
 
 Domain modeling on [TypeBox](https://github.com/sinclairzx81/typebox): entities with invariants, sensitive data masking and exceptions that know their layer, usable by any [Standard Schema](https://standardschema.dev) consumer.
 
@@ -301,7 +321,13 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 
 ## Packages
 
-`@afora/codegen` generates afora code from an `afora.json` (and extracts the `afora.json` of an `Application` back), and `@afora/mcp` is an MCP server that lets an agent build a domain with it: see [packages/codegen](packages/codegen/README.md) and [packages/mcp](packages/mcp/README.md). `@afora/hono` is a `hono` sink for outputs: it serves the operations as a Hono app, with problem+json errors, masked responses and an optional OpenAPI document ([packages/hono](packages/hono/README.md)). `@afora/drizzle` is a repository provider on Drizzle ORM (SQLite and Postgres) that passes the provider contract kit: see [packages/drizzle](packages/drizzle/README.md).
+| Package                                                    | What it does                                                                                                                                 |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@afora/core`](https://www.npmjs.com/package/@afora/core) | Properties, blueprints, records, entities, repositories, use cases, commands and outputs (this repository's root).                           |
+| [`@afora/codegen`](packages/codegen/README.md)             | Generates afora code from an `afora.json`, and extracts the `afora.json` of an `Application` back.                                           |
+| [`@afora/mcp`](packages/mcp/README.md)                     | An MCP server that lets an agent build a domain with `@afora/codegen`.                                                                       |
+| [`@afora/hono`](packages/hono/README.md)                   | A `hono` sink for outputs: serves the operations as a Hono app, with problem+json errors, masked responses and an optional OpenAPI document. |
+| [`@afora/drizzle`](packages/drizzle/README.md)             | A repository provider on Drizzle ORM (SQLite and Postgres) that passes the provider contract kit.                                            |
 
 ## Example
 
@@ -336,9 +362,9 @@ Where the others win: Zod and Valibot are faster, have far larger ecosystems and
 
 ## Contributing
 
-Issues open from a template: bug report, feature request, or feedback from building on afora. Questions go to [Discussions](https://github.com/afora-framework/core/discussions). Pull requests follow [the PR template](.github/PULL_REQUEST_TEMPLATE.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the checks and how releases work. Issues open from a template: bug report, feature request, or feedback from building on afora. Questions go to [Discussions](https://github.com/afora-framework/core/discussions); security issues go through [SECURITY.md](SECURITY.md), never a public issue.
 
-Commits follow [Conventional Commits](https://www.conventionalcommits.org) (`feat(repository): …`, `fix: …`), checked by commitlint in a Husky `commit-msg` hook; the `pre-commit` hook runs Biome and Knip. CI runs lint, Knip, type checks, unit and interop tests, the build and the Node smoke test on every push and pull request. Pushing a `v*` tag that matches `package.json` publishes to npm with provenance.
+Commits follow [Conventional Commits](https://www.conventionalcommits.org) (`feat(repository): …`, `fix: …`), checked by commitlint in a Husky `commit-msg` hook; the `pre-commit` hook runs Biome and Knip. CI runs lint, Knip, type checks, unit and interop tests, the build and the Node smoke test on every push and pull request. A pull request that bumps the version in `package.json`, once merged to `main`, publishes to npm with provenance and creates the tag and the GitHub release.
 
 Scripts:
 
