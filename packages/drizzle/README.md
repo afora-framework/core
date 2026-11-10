@@ -87,7 +87,7 @@ await Users.findPage({
 
 `findCursor` works too: the provider reads by cursor (`capabilities.keyset`), turning the position into a keyset condition (`WHERE (name, id) > (...)`, written out with the null order and collation of `orderBy`) instead of an `OFFSET`, so a deep page costs the same as the first when the order keys are indexed.
 
-`tables` maps a repository to its Drizzle table: by the name of the repository (`UserRepository`) and, failing that, by the name of the entity (`User`). Without more, both come from the name of the entity class, which a bundler that minifies (without `keepNames`) changes, so the table is no longer found. Declare the name to make it independent of the class: `class User extends entityOf(blueprint, { name: "User" }) {}` (`@afora/core` after 0.0.5; `@afora/codegen` generates it). Create the schema with `drizzle-kit` or your own migrations; the provider never changes it.
+`tables` maps a repository to its Drizzle table: by the name of the repository (`UserRepository`) and, failing that, by the name of the entity (`User`). Without more, both come from the name of the entity class, which a bundler that minifies (without `keepNames`) changes, so the table is no longer found. Declare the name to make it independent of the class: `class User extends entityOf(blueprint, { name: "User" }) {}` (`@afora/core` 0.0.6 or later; `@afora/codegen` generates it). Create the schema with `drizzle-kit` or your own migrations; the provider never changes it.
 
 ## Mapping rules
 

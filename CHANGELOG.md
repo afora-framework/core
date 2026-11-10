@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.0.6 — unreleased (draft: dated when it is published)
 
 ### Changed
 
 - Breaking (types only): `toJSON()` of a record or entity returns the exact value, `RecordJson<Properties, Sensitive>`, instead of `Readonly<Partial<BlueprintData<Properties>>>`. No key is optional unless the blueprint makes it so, which removes the `string | undefined` typed clients saw on every key (issue #16), and a sensitive value is typed as it is returned, `Masked`: each leaf a `string`, lists and objects keeping their shape. What needs changing: code that read a sensitive non-string key of `toJSON()` as its original type (it was already the mask at runtime), and a subclass that overrides `toJSON` with another return type. To carry the keys, `recordOf` and `entityOf` capture `options.sensitive` as a literal, `propertyOf` captures `sensitive` (`SensitiveMark`, as `UniqueMark`), and `AbstractRecord`, `AbstractEntity`, `IRecord`, `RecordOptions`, `EntityOptions`, `RecordConstructor`, `EntityConstructor`, `DeclaredRecordInstance` and `DeclaredEntityInstance` take the sensitive keys as a last, defaulted type parameter. Runtime behavior is unchanged. Also exported: `RecordJson`, `Masked` and `SensitiveMark`.
-- `@afora/codegen` generates each record and entity with its declared `name`, so the generated code requires this version of `@afora/core` or later.
+- `@afora/codegen` generates each record and entity with its declared `name`, so `@afora/codegen` requires `@afora/core` 0.0.6 or later (generated `findCursor` actions need it too).
 - `docs/applications.md` and `docs/use-cases.md` say how a use case runs through an application (`new app.useCases.Register(input).execute()`), and that use cases, commands and outputs are bound with a `provider`, `providers` or `log`, not only a `provider`.
 - `inMemoryProvider()` is a plain object since 0.0.3 (it was frozen in 0.0.2, which made a `Proxy` over it throw); only its `capabilities` are frozen.
 
@@ -21,7 +21,7 @@
 
 - An exception of a class declared with `exceptionOf` stays an instance of that class when it crosses a layer: `error instanceof RepositoryUniqueViolation` is now true for what a repository, use case or command rejects with, as `error.is(RepositoryUniqueViolation)` already was, and the `details` are kept and typed. `propagate` (which `guard` calls) keeps the class and the `details` when it is given neither another `name` nor new `details`; with either, the result is a plain `Exception` as before (so an invalid record value, which carries the record's own `details`, is matched with `is(InvalidPropertyValue)`). Two things follow: `exception.find(Class)` gives the outermost exception of the class, in the layer it reached (`exception.origin` is still the first one raised), and each frame of `trace` repeats the `details`. A hand-written `class X extends Exception` is unchanged.
 
-## 0.0.5 — unreleased (draft: dated when it is published)
+## 0.0.5 — 2026-11-10
 
 ### Changed
 

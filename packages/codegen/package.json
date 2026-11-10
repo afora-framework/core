@@ -1,6 +1,6 @@
 {
 	"name": "@afora/codegen",
-	"version": "0.0.5",
+	"version": "0.0.6",
 	"description": "Generates idiomatic @afora/core TypeScript from an afora.json spec, and extracts the spec back from an application.",
 	"keywords": [
 		"afora",
@@ -57,7 +57,7 @@
 		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.5",
+		"@afora/core": ">=0.0.6",
 		"typebox": "^1"
 	}
 }
