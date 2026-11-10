@@ -2,6 +2,7 @@ import {
 	EntitySettings,
 	EntityUniqueKeys,
 	EXPIRES_AT,
+	SCHEMA_VERSION_KEY,
 } from "../entity/abstract-entity";
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
 import {
@@ -70,8 +71,7 @@ function expiryKeyOf(entity: object): string | undefined {
 	return "at" in expires ? expires.at : EXPIRES_AT;
 }
 
-/** The key of each stored row holding its schema version. */
-export const SCHEMA_VERSION_KEY = "$v";
+export { SCHEMA_VERSION_KEY };
 
 /** `RepositoryContext.schema` of `entity`, when it declares `schemaVersion`. */
 function schemaOf(entity: object): RepositoryContext["schema"] {

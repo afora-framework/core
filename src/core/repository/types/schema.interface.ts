@@ -1,3 +1,5 @@
+import type { Issue } from "../../parse/types/parse.interface";
+
 /**
  * Schema evolution: the lock of the stored shapes, the changes between two of
  * them, and the plan a provider applies (`IRepositoryProvider.migrate`).
@@ -64,6 +66,12 @@ export interface SchemaLockEntity {
 	readonly previousNames: readonly string[];
 	readonly unique: readonly string[];
 	readonly fields: Readonly<Record<string, SchemaLockField>>;
+	/**
+	 * The versions its `upgrade` has a step to, ascending; absent when none.
+	 * `diffSchemas` reads it from the current side to tell whether a change
+	 * that needs a step has one.
+	 */
+	readonly upgrade?: readonly number[];
 }
 
 /** `afora.lock.json`: the stored shapes, by entity name, normalized. */
@@ -79,4 +87,61 @@ export interface SchemaPlan {
 	readonly changes: readonly SchemaChange[];
 	/** Whether destructive changes may be applied (`app.migrate({ destructive })`). */
 	readonly destructive: boolean;
+}
+
+/** What `app.migrate` takes. */
+export interface SchemaMigrationOptions {
+	/** The entities to walk, by name; every entity with a repository by default. */
+	readonly entities?: readonly string[];
+	/** `check` only reads and reports; `apply` rewrites the rows. */
+	readonly mode: "check" | "apply";
+	/**
+	 * Remove the keys the blueprints no longer declare from the stored rows,
+	 * and the rows under `previousNames` once moved. Default `false`.
+	 */
+	readonly destructive?: boolean;
+	/** Rows read per page. Default 100. */
+	readonly pageSize?: number;
+	/**
+	 * The committed lock (`afora.lock.json`): in `apply`, the changes of each
+	 * entity from it to the code are the plan given to
+	 * `IRepositoryProvider.migrate`. Without it the plan has no changes.
+	 */
+	readonly lock?: SchemaLock;
+}
+
+/** A row `app.migrate` cannot bring up to the current shape. */
+export interface SchemaMigrationInvalidRow {
+	readonly id: string;
+	/** Why: the issues of the parse, or one for an error of the upgrade. */
+	readonly issues: readonly Issue[];
+}
+
+/** What `app.migrate` found and did for one entity. */
+export interface EntityMigrationReport {
+	/** Rows read, under the current name and the previous ones. */
+	readonly scanned: number;
+	/** Rows that needed nothing. */
+	readonly upToDate: number;
+	/** Rows rewritten in the current shape (in `check`, that would be). */
+	readonly upgraded: number;
+	/**
+	 * Rows whose only pending change is removing keys, left as they are
+	 * without `destructive`.
+	 */
+	readonly removalPending: number;
+	/** Rows the entity rejects once brought up, left as they are. */
+	readonly invalid: readonly SchemaMigrationInvalidRow[];
+	/** Rows moved from a previous name (in `check`, that would be). */
+	readonly movedFromPreviousNames: number;
+	/** Paths of the stored keys the blueprint no longer declares, sorted. */
+	readonly removedKeys: readonly string[];
+}
+
+/** What `app.migrate` gives. */
+export interface SchemaMigrationReport {
+	readonly mode: "check" | "apply";
+	readonly destructive: boolean;
+	/** By entity name. */
+	readonly entities: Readonly<Record<string, EntityMigrationReport>>;
 }

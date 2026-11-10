@@ -71,6 +71,7 @@ import type {
 	RepositoryData,
 	RepositoryOf as RepositoryType,
 } from "./types/repository.interface";
+import { upcastRows, withSchemaVersion } from "./upcast";
 
 /** What `repositoryOf` takes. */
 export interface RepositorySettings<
@@ -193,7 +194,12 @@ export abstract class AbstractRepository<
 	): Promise<EntityInstanceOf<Entity>[]> {
 		const state = stateOf(this);
 		const scope = (this as { [ScopeKey]?: ExecutionScope })[ScopeKey];
-		const resolved = await resolveReferences(state, list, new Map(), scope);
+		const resolved = await resolveReferences(
+			state,
+			upcastRows(state, list),
+			new Map(),
+			scope,
+		);
 		return resolved.map((data) =>
 			parseEntity(state, data),
 		) as EntityInstanceOf<Entity>[];
@@ -204,7 +210,10 @@ export abstract class AbstractRepository<
 		if (!(entity instanceof stateOf(this).entity)) {
 			throw new InvalidRepositoryEntity({ source: stateOf(this).name });
 		}
-		return recordDataOf(entity as object, REFERENCES);
+		return withSchemaVersion(
+			stateOf(this).entity,
+			recordDataOf(entity as object, REFERENCES),
+		);
 	}
 }
 
@@ -820,8 +829,13 @@ const restore = action(async (self, target: unknown) => {
 		});
 	}
 	if (data.deletedAt === undefined) return self.hydrate(data);
-	const { deletedAt: _deletedAt, ...alive } = data;
-	const restored = { ...alive, updatedAt: nowOf(context) };
+	// Written back in the current shape, as any write is.
+	const [current] = upcastRows(stateOf(self), [data]) as [RepositoryData];
+	const { deletedAt: _deletedAt, ...alive } = current;
+	const restored = withSchemaVersion(context.entity, {
+		...alive,
+		updatedAt: nowOf(context),
+	});
 	return self.hydrate(await write(self, restored));
 });
 

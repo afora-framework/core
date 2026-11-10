@@ -6,7 +6,9 @@ export {
 	DuplicateApplicationDeclaration,
 	InvalidApplicationDeclaration,
 	InvalidApplicationEnvironment,
+	InvalidSchemaMigration,
 	ProviderNotBound,
+	SchemaLockMismatch,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
 	UnregisteredUseCaseDependency,
@@ -24,7 +26,11 @@ export {
 	resetApplication,
 	useApplication,
 } from "./core/application/registry";
-export { diffSchemas, schemaLockOf } from "./core/application/schema";
+export {
+	diffSchemas,
+	schemaLockOf,
+	schemaLockProblemsOf,
+} from "./core/application/schema";
 export {
 	isLogFactory,
 	isProviderFactory,
@@ -148,6 +154,7 @@ export {
 	DeletedEntity,
 	ImmutableEntityKey,
 	InvalidEntityExpiry,
+	InvalidEntitySchemaVersion,
 	ReservedEntityKey,
 } from "./core/entity/exceptions";
 export type {
@@ -415,6 +422,7 @@ export {
 	InvalidRepositoryEntity,
 	InvalidRepositoryIncrement,
 	InvalidRepositoryQuery,
+	InvalidStoredSchemaVersion,
 	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
@@ -490,12 +498,16 @@ export type {
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
 export type {
+	EntityMigrationReport,
 	SchemaChange,
 	SchemaChangeClass,
 	SchemaChangeKind,
 	SchemaLock,
 	SchemaLockEntity,
 	SchemaLockField,
+	SchemaMigrationInvalidRow,
+	SchemaMigrationOptions,
+	SchemaMigrationReport,
 	SchemaPlan,
 } from "./core/repository/types/schema.interface";
 export type { SchemaClass } from "./core/schema/schema";
