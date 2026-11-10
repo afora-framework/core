@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in an @afora package does not behave as documented
+labels: [bug]
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      options:
+        - "@afora/core"
+        - "@afora/codegen"
+        - "@afora/mcp"
+        - "@afora/hono"
+        - "@afora/drizzle"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      placeholder: "0.0.5"
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime and version
+      placeholder: Bun 1.4.4, Node 22.11, Cloudflare Workers…
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: The smallest code (or afora.json) that shows the bug.
+      render: ts
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: exception
+    attributes:
+      label: Exception
+      description: If an afora exception was thrown, its `name`, `layer` and `trace`.
+      render: json

@@ -1,0 +1,30 @@
+name: Feedback
+description: Report from building something on afora — what worked and the friction found
+body:
+  - type: textarea
+    id: project
+    attributes:
+      label: Context
+      description: What you built, on which runtime and with which @afora versions.
+    validations:
+      required: true
+  - type: textarea
+    id: worked
+    attributes:
+      label: What worked well
+  - type: textarea
+    id: friction
+    attributes:
+      label: Friction found
+      description: One point per section, with code that shows it.
+      placeholder: |
+        ## 1. …
+
+        ```ts
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: suggestions
+    attributes:
+      label: Suggestions

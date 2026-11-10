@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/afora-framework/core/discussions
+    about: Ask how to use afora or discuss an idea before opening an issue.
+  - name: Documentation
+    url: https://github.com/afora-framework/core/tree/main/docs
+    about: The spec of behavior, one file per concept.
