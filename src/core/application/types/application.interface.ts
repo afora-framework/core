@@ -378,6 +378,18 @@ export interface RecordDescription {
 		readonly change: readonly string[];
 	};
 	readonly plugins: readonly RecordPluginDescriptor[];
+	/**
+	 * The lifecycle events of an entity, by cycle: each event's name and
+	 * whether `eventOf` was given a handler. Present only when it has some.
+	 */
+	readonly events?: Readonly<
+		Partial<
+			Record<
+				"onCreate" | "onUpdate" | "onDelete",
+				readonly { readonly name: string; readonly handler: boolean }[]
+			>
+		>
+	>;
 }
 
 /** What a use case depends on, by the name it has in the application. */

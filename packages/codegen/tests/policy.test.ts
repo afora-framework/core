@@ -12,7 +12,7 @@ import {
 	specSchema,
 	validateSpec,
 } from "../src";
-import { makeProject, removeProject } from "./project";
+import { BIOME, makeProject, removeProject, run } from "./project";
 
 const projects: string[] = [];
 afterAll(async () => {
@@ -28,6 +28,11 @@ export const hub = {
 };
 
 export const queue = { publish() {} };
+
+export const audited: string[] = [];
+export const onAudited = async (post: { title: string }) => {
+	audited.push(post.title);
+};
 `;
 
 const POLICY_TS = `import { eventPolicyOf } from "@afora/core";
@@ -48,7 +53,17 @@ const live: Spec = {
 		realtime: { import: "../realtime#hub" },
 		queue: { import: "../realtime#queue" },
 	},
-	entities: { Post: { fields: { title: "text" } } },
+	entities: {
+		Post: {
+			fields: { title: "text" },
+			events: {
+				onCreate: [
+					"published",
+					{ name: "audited", handler: { import: "../realtime#onAudited" } },
+				],
+			},
+		},
+	},
 	repositories: {
 		PostStore: { entity: "Post", actions: ["findById", "create"] },
 	},
@@ -85,6 +100,7 @@ const live: Spec = {
 };
 
 const IMPORTS = {
+	"entities.Post.events.audited": "../realtime#onAudited",
 	"publishers.realtime": "../realtime#hub",
 	"publishers.queue": "../realtime#queue",
 };
@@ -140,6 +156,45 @@ describe("event policies: validation", () => {
 			"onEventError with a policy",
 			(c) => (c.commands.Posts.onEventError = { import: "../realtime#queue" }),
 			"event_error_requires_after_commit@commands.Posts.onEventError",
+		],
+		[
+			"entity events are an object of cycles",
+			(c) => (c.entities.Post.events = { onSave: "x" }),
+			"unknown_key@entities.Post.events.onSave",
+		],
+		[
+			"an event name is an identifier",
+			(c) => (c.entities.Post.events.onCreate = ["not ok"]),
+			"invalid_event@entities.Post.events.onCreate.0",
+		],
+		[
+			"a cycle lists at least one event",
+			(c) => (c.entities.Post.events.onCreate = []),
+			"invalid_events@entities.Post.events.onCreate",
+		],
+		[
+			"an event handler is an import",
+			(c) => (c.entities.Post.events.onCreate[1].handler = "x"),
+			"invalid_import@entities.Post.events.onCreate.1.handler",
+		],
+		[
+			"one name is one event",
+			(c) => (c.entities.Post.events.onUpdate = "audited"),
+			"event_conflict@entities.Post.events.onUpdate",
+		],
+		[
+			"records have no events",
+			(c) => {
+				c.records = {
+					Tag: { fields: { label: "text" }, events: { onCreate: "x" } },
+				};
+			},
+			"unknown_key@records.Tag.events",
+		],
+		[
+			"the events object takes a name",
+			(c) => (c.blueprints = { PostEvents: { fields: { a: "text" } } }),
+			"name_collision@entities.Post.events",
 		],
 		[
 			"publishers is an object",
@@ -199,6 +254,18 @@ describe("event policies: validation", () => {
 });
 
 describe("event policies: generation", () => {
+	test("emits the events of an entity and its lifecycle options", () => {
+		const files = generate(live);
+		const entities = files.find((f) => f.path.endsWith("entities.ts"))
+			?.contents as string;
+		expect(entities).toContain(
+			"onCreate: () => [PostEvents.published, PostEvents.audited]",
+		);
+		expect(entities).toContain("export const PostEvents: {");
+		expect(entities).toContain('published: eventOf("published", Post)');
+		expect(entities).toContain('audited: eventOf("audited", Post, onAudited)');
+	});
+
 	test("emits the policy call and the publishers of the application", () => {
 		const files = generate(live);
 		const commands = files.find((f) => f.path.endsWith("commands.ts"))
@@ -229,6 +296,36 @@ describe("event policies: generation", () => {
 	});
 });
 
+describe("event policies: generated code", () => {
+	test("clean for Biome and type-checks", async () => {
+		const dir = await makeProject(generate(live), {
+			"src/realtime.ts": REALTIME_TS,
+		});
+		projects.push(dir);
+		await Bun.write(
+			join(dir, "biome.json"),
+			JSON.stringify({
+				formatter: { indentStyle: "tab" },
+				javascript: { formatter: { quoteStyle: "double" } },
+				linter: { rules: { preset: "recommended" } },
+				assist: { actions: { source: { organizeImports: "on" } } },
+			}),
+		);
+		const biome = await run(
+			dir,
+			BIOME,
+			"check",
+			`--config-path=${dir}`,
+			join(dir, "src/domain"),
+		);
+		expect(biome.output).not.toContain("error");
+		expect(biome.code).toBe(0);
+		const tsc = await run(dir, "bunx", "tsc", "--noEmit", "-p", dir);
+		expect(tsc.output).toBe("");
+		expect(tsc.code).toBe(0);
+	}, 120_000);
+});
+
 describe("event policies: round trip", () => {
 	// biome-ignore lint/suspicious/noExplicitAny: the generated application is loaded dynamically
 	type Any = any;
@@ -246,7 +343,7 @@ describe("event policies: round trip", () => {
 	}
 
 	test("JSON -> generate -> run -> extract is equal", async () => {
-		const { domain } = await build(live);
+		const { domain, realtime } = await build(live);
 		const description = domain.App.describe();
 		expect(description.commands.Posts.events).toEqual({
 			kind: "policy",
@@ -255,15 +352,36 @@ describe("event policies: round trip", () => {
 		});
 		expect(Object.keys(description.publishers)).toEqual(["queue", "realtime"]);
 		const out = await domain.App.commands.Posts.run("write", { title: "Hi" });
-		expect(JSON.parse(JSON.stringify(out)).post.title).toBe("Hi");
+		const post = JSON.parse(JSON.stringify(out)).post;
+		expect(post.title).toBe("Hi");
+		expect(
+			realtime.published.map((entry: Any) => [entry.topic, entry.event.name]),
+		).toEqual([
+			[`posts/${post.id}`, "published"],
+			[`posts/${post.id}`, "audited"],
+		]);
+		expect(realtime.audited).toEqual(["Hi"]);
+		expect(description.entities.Post.events).toEqual({
+			onCreate: [
+				{ name: "published", handler: false },
+				{ name: "audited", handler: true },
+			],
+		});
 
 		const extracted = extractSpec(domain.App, { imports: IMPORTS });
 		expect(canonical(extracted)).toEqual(canonical(live));
 	});
 
-	test("a publisher needs an import mapping", async () => {
+	test("an event handler and a publisher need an import mapping", async () => {
 		const { domain } = await build(live);
 		expect(() => extractSpec(domain.App)).toThrow(ExtractionError);
-		expect(() => extractSpec(domain.App)).toThrow('The publisher "queue"');
+		expect(() => extractSpec(domain.App)).toThrow(
+			'"entities.Post.events.audited"',
+		);
+		expect(() =>
+			extractSpec(domain.App, {
+				imports: { "entities.Post.events.audited": "../realtime#onAudited" },
+			}),
+		).toThrow('The publisher "queue"');
 	});
 });

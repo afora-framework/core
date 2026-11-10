@@ -1,5 +1,6 @@
 import { catalog, recordPlugin } from "./catalog";
 import { checkCommand } from "./command";
+import { checkEntityEvents } from "./entity-events";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
@@ -553,9 +554,11 @@ function checkFieldsOf(
 	const path = [collection, decl.name];
 	const keys = Object.keys(decl.spec);
 	const allowed =
-		owner === "record" || owner === "entity"
-			? ["fields", "sensitive", "unique", "change", "plugins"]
-			: ["fields"];
+		owner === "entity"
+			? ["fields", "sensitive", "unique", "change", "plugins", "events"]
+			: owner === "record"
+				? ["fields", "sensitive", "unique", "change", "plugins"]
+				: ["fields"];
 	for (const key of keys) {
 		if (!allowed.includes(key)) {
 			issues.push(
@@ -586,6 +589,15 @@ function checkRecord(
 	const path = [collection, decl.name];
 	const fields = checkFieldsOf(decl, collection, owner, scope, issues);
 	const entries = catalog();
+	if (owner === "entity" && decl.spec.events !== undefined) {
+		checkEntityEvents(
+			decl.name,
+			decl.spec.events,
+			[...path, "events"],
+			scope,
+			issues,
+		);
+	}
 
 	const plugins = checkStringList(
 		decl.spec.plugins,
