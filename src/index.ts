@@ -17,13 +17,17 @@ export {
 	useApplication,
 } from "./core/application/registry";
 export {
+	isLogFactory,
 	isProviderFactory,
+	type LogFactory,
+	logFrom,
 	type ProviderFactory,
 	providerFrom,
 } from "./core/application/start";
 export type {
 	AnyApplication,
 	ApplicationCollections,
+	ApplicationContext,
 	ApplicationDescription,
 	ApplicationSettings,
 	ApplicationStartOptions,

@@ -71,7 +71,9 @@ import {
 	deferredEnvironments,
 	deferredProvider,
 	isDeferredProvider,
+	isLogFactory,
 	isProviderFactory,
+	type LogFactory,
 	startDeferred,
 	stopProvider,
 } from "./start";
@@ -79,6 +81,7 @@ import type {
 	AnyApplication,
 	ApplicationCollectionKey,
 	ApplicationCollections,
+	ApplicationContext,
 	ApplicationDescription,
 	ApplicationSettings,
 	FieldDescription,
@@ -120,7 +123,7 @@ type Registry = Record<ApplicationCollectionKey, Map<string, Entry>>;
 /** The resolved declarations of each application, and its bound repositories. */
 const internals = new WeakMap<object, Registry>();
 /** The `log` each application was declared with (or inherited), for `extends`. */
-const logSettings = new WeakMap<object, LogSettings>();
+const logSettings = new WeakMap<object, LogSettings | LogFactory>();
 
 const KIND_OF: Readonly<Record<ApplicationCollectionKey, string>> = {
 	properties: "property",
@@ -721,7 +724,7 @@ function describeRegistry(
 	extended: readonly AnyApplication[],
 	registry: Registry,
 	provider: IRepositoryProvider | undefined,
-	log: Required<LogSettings> | undefined,
+	log: Required<LogSettings> | "opaque" | undefined,
 ): ApplicationDescription {
 	const scope: Scope = {
 		properties: referencesOf(registry, "properties"),
@@ -785,17 +788,19 @@ function describeRegistry(
 			: { provider: providerDescriptionOf(provider) }),
 		...(log === undefined
 			? {}
-			: {
-					log: {
-						level: log.level,
-						providers: log.providers.map((logProvider) => {
-							const providerName = logProviderNameOf(logProvider);
-							return providerName === undefined
-								? { kind: "opaque" as const }
-								: { kind: "log-provider" as const, name: providerName };
-						}),
-					},
-				}),
+			: log === "opaque"
+				? { log: { kind: "opaque" as const } }
+				: {
+						log: {
+							level: log.level,
+							providers: log.providers.map((logProvider) => {
+								const providerName = logProviderNameOf(logProvider);
+								return providerName === undefined
+									? { kind: "opaque" as const }
+									: { kind: "log-provider" as const, name: providerName };
+							}),
+						},
+					}),
 		properties: each("properties", (entry) => ({
 			from: entry.from,
 			...propertyDescriptionOf(entry.value as BlueprintField, scope),
@@ -1086,14 +1091,17 @@ export function applicationOf<
 	}
 
 	// The log: its own, else the one of the last extended application with one.
-	const declaredLog: LogSettings | undefined =
+	const declaredLog: LogSettings | LogFactory | undefined =
 		settings.log ??
 		[...extended]
 			.reverse()
 			.map((other) => logSettings.get(other))
 			.find((log) => log !== undefined);
 	const log = declaredLog === undefined ? undefined : applicationLogger(name);
-	if (declaredLog !== undefined) log?.set(checkLogSettings(declaredLog));
+	// A `log` of `logFrom` is made on start; until then nothing is written.
+	if (declaredLog !== undefined && !isLogFactory(declaredLog)) {
+		log?.set(checkLogSettings(declaredLog));
+	}
 	const logger = log?.logger;
 	// Use cases, commands and outputs are rebound for a provider or a logger.
 	const rebinds = provider !== undefined || logger !== undefined;
@@ -1209,6 +1217,20 @@ export function applicationOf<
 	const registeredEnvironments = new Set<unknown>(
 		environmentEntries.map((entry) => entry.value),
 	);
+	const context: ApplicationContext = Object.freeze({
+		name,
+		env(environment: AnyEnvironment) {
+			if (!registeredEnvironments.has(environment)) {
+				throw new UnregisteredApplicationReference({
+					source: name,
+					details: { holder: "the context", reference: "an environment" },
+				});
+			}
+			return environment.load();
+		},
+		logger: logger ?? silentLogger,
+	}) as ApplicationContext;
+
 	let starting: Promise<unknown> | undefined;
 	let started = false;
 	const start = async () => {
@@ -1235,8 +1257,15 @@ export function applicationOf<
 				cause,
 			});
 		}
+		// The log first, so that whoever makes the provider can log.
+		if (isLogFactory(declaredLog)) {
+			log?.set(checkLogSettings(await declaredLog.create(context)));
+		}
 		if (provider !== undefined && isDeferredProvider(provider)) {
-			const made = (await startDeferred(provider)) as IRepositoryProvider;
+			const made = (await startDeferred(
+				provider,
+				context,
+			)) as IRepositoryProvider;
 			checkTransactions(
 				name,
 				made,
@@ -1258,6 +1287,7 @@ export function applicationOf<
 		extends: Object.freeze([...extended]),
 		provider,
 		logger: logger ?? silentLogger,
+		context,
 		...(logger ? { [ApplicationLoggerKey]: logger } : {}),
 		properties: collection("properties"),
 		blueprints: collection("blueprints"),
@@ -1302,7 +1332,13 @@ export function applicationOf<
 			} as never);
 		},
 		describe: () =>
-			describeRegistry(name, extended, registry, provider, log?.settings),
+			describeRegistry(
+				name,
+				extended,
+				registry,
+				provider,
+				isLogFactory(declaredLog) ? "opaque" : log?.settings,
+			),
 		get started() {
 			return started;
 		},
@@ -1330,6 +1366,7 @@ export function applicationOf<
 					if (provider !== undefined && isDeferredProvider(provider)) {
 						await stopProvider(provider);
 					}
+					if (isLogFactory(declaredLog)) log?.set(undefined);
 					throw error;
 				},
 			);
@@ -1344,6 +1381,7 @@ export function applicationOf<
 				setStartedApplication(undefined);
 			if (provider !== undefined) await stopProvider(provider);
 			await log?.flush();
+			if (isLogFactory(declaredLog)) log?.set(undefined);
 		},
 		get(declaration: unknown) {
 			if (isEnvironment(declaration)) {
