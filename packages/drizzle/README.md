@@ -90,7 +90,7 @@ await users.findPage({
 
 `findCursor` works too: the provider reads by cursor (`capabilities.keyset`), turning the position into a keyset condition (`WHERE (name, id) > (...)`, written out with the null order and collation of `orderBy`) instead of an `OFFSET`, so a deep page costs the same as the first when the order keys are indexed.
 
-`tables` maps a repository to its Drizzle table: by the name of the repository (`UserRepository`) and, failing that, by the name of the entity (`User`). Without more, both come from the name of the entity class, which a bundler that minifies (without `keepNames`) changes, so the table is no longer found. Declare the name to make it independent of the class: `class User extends entityOf(blueprint, { name: "User" }) {}` (`@afora/core` 0.0.6 or later; `@afora/codegen` generates it). Create the schema with `drizzle-kit` or your own migrations; the provider never changes it.
+`tables` maps a repository to its Drizzle table: by the name of the repository (`UserRepository`) and, failing that, by the name of the entity (`User`). Without more, both come from the name of the entity class, which a bundler that minifies (without `keepNames`) changes, so the table is no longer found. Declare the name to make it independent of the class: `class User extends entityOf(blueprint, { name: "User" }) {}` (`@afora/core` 0.0.6 or later; `@afora/codegen` generates it). Create the schema with `drizzle-kit` or your own migrations. The provider never changes it unless you opt in to `migrations` (see [Schema evolution](#schema-evolution)).
 
 ## Mapping rules
 
@@ -109,7 +109,7 @@ await users.findPage({
 
 ## Indexes
 
-A repository's `indexes` (see [Indexes](../../docs/repositories.md#indexes)) reach the provider as `context.indexes`, and the index that serves a query as `query.index`. The provider takes them and gives the same rows: the SQL is the same, and the database picks its own index for the `WHERE` and `ORDER BY`. It does not create indexes, as it never changes the schema, so declare the matching SQL index next to the table, with the `where` keys first and the `orderBy` key last:
+A repository's `indexes` (see [Indexes](../../docs/repositories.md#indexes)) reach the provider as `context.indexes`, and the index that serves a query as `query.index`. The provider takes them and gives the same rows: the SQL is the same, and the database picks its own index for the `WHERE` and `ORDER BY`. It does not create them, so declare the matching SQL index next to the table, with the `where` keys first and the `orderBy` key last:
 
 ```ts
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
@@ -140,6 +140,27 @@ With soft deletion, a partial index (``.where(sql`"deletedAt" IS NULL`)``) keeps
 ## Transactions
 
 `capabilities.transactions` is true. `provider.transaction(run)` uses `db.transaction`, and a nested one a savepoint. Synchronous SQLite drivers (`bun:sqlite`, `better-sqlite3`) cannot run an asynchronous `db.transaction` callback, so there the provider issues `BEGIN` / `SAVEPOINT` itself and makes the other operations wait for the transaction, since there is one connection. The scoped provider throws once its callback ends. Use it with `commandOf({ transaction: true })`.
+
+## Schema evolution
+
+`drizzleProvider({ db, tables, migrations })` opts in to `migrate(context, plan)`, which `app.migrate` of `@afora/core` calls with the structural changes of an entity (a `SchemaPlan`) before its backfill. Without `migrations` the provider has no `migrate` and never changes the schema.
+
+- `migrations: "apply"` runs the DDL on `db`, in one transaction per entity.
+- `migrations: { file: "drizzle/0007_afora.sql" }` writes it to that file instead, in the format of drizzle-kit (statements split by `--> statement-breakpoint`), and leaves the database alone. The first plan a provider migrates writes the file and the next ones (the other entities of one `app.migrate`) add to it. Make the file a migration drizzle-kit knows with `drizzle-kit generate --custom --name=afora`, then point `file` at it.
+
+The DDL comes from the Drizzle table, which already holds the new shape (update `schema.ts` first), compared with the columns the table has (`PRAGMA table_info` on SQLite, `information_schema.columns` in the current schema on Postgres):
+
+| Change of the plan                 | DDL                                                                                                                                                                                                                   |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `added-required`, `added-optional` | `ALTER TABLE ... ADD COLUMN` with the SQL type of its Drizzle column (which must exist). Nullable, unless the column is `notNull()` with a plain `default(...)`, which fills the stored rows: `NOT NULL DEFAULT ...`. |
+| `renamed` (`from`)                 | `ALTER TABLE ... RENAME COLUMN "<from>" TO "<column>"`: the old column is named as the old key.                                                                                                                       |
+| `removed`                          | `ALTER TABLE ... DROP COLUMN`, only when `plan.destructive` (`app.migrate({ destructive: true })`).                                                                                                                   |
+| `unique-added`, `unique-removed`   | `CREATE UNIQUE INDEX IF NOT EXISTS "<table>_<column>_unique"`, and `DROP INDEX IF EXISTS` of that name.                                                                                                               |
+| `context.schema` is set            | The schema version column (below), when the table lacks it.                                                                                                                                                           |
+
+What the table has already is skipped, so `migrate` can run again. Nested keys (`a.b`) live in JSON columns, and type changes, tightened constraints and entity renames are about the data: the upgrade on read and the backfill handle them, and a file lists them as comments. A missing table, or an added key without a Drizzle column, throws `InvalidRepositoryDeclaration`.
+
+**The schema version.** An entity declared with `schemaVersion` stores its version under `$v` (`context.schema.key`). The provider maps that key to a column named `schema_version` (by SQL name or table key; another one with `schemaVersionColumn`), so rows round-trip it: declare `schemaVersion: integer("schema_version")` in the table. Writing `$v` to a table without it throws `InvalidRepositoryDeclaration`, and a row with `NULL` is read without `$v` (version 1 for the core).
 
 ## Codegen and extraction
 

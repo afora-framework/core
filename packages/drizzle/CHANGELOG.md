@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Schema evolution (#28, phase 4)
+
+- `migrations?: "apply" | { file }`, opt-in: with it the provider has `migrate(context, plan)`, which turns the structural changes of a `SchemaPlan` into DDL for SQLite and Postgres from the Drizzle table (`ADD COLUMN` of an added key, nullable unless its column is `notNull` with a plain default; `RENAME COLUMN` of a renamed one; `DROP COLUMN` of a removed one only when `plan.destructive`; a unique index of a new unique key; the schema version column) against the columns the table has, so it can run again. `"apply"` runs it in a transaction; `{ file }` writes a drizzle-kit compatible SQL migration file instead. Without the option there is no `migrate`, as before.
+- The `$v` key of an entity with `schemaVersion` (`context.schema.key`) is mapped to a `schema_version` column (`schemaVersionColumn` to name another) when the table has one, so rows round-trip it.
+
 ### Optimistic concurrency and atomic increment (#44, #34)
 
 - `capabilities.versioning`: `update(context, data, { expectedVersion })` writes with `WHERE id = ? AND version = ?` and throws `RepositoryConcurrencyConflict` when no row matched while the id exists, so versioned entities of `@afora/core` work over it (a `version` column).

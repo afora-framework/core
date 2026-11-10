@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it } from "bun:test";
+import type { RepositoryContext, SchemaPlan } from "@afora/core";
 import { providerContract } from "@afora/core/testing";
 import { PGlite } from "@electric-sql/pglite";
 import { boolean, integer, jsonb, pgTable, text } from "drizzle-orm/pg-core";
@@ -142,5 +143,96 @@ describe("repositoryOf on Postgres", () => {
 		expect((await Sessions.findMany()).map((s) => s.name)).toEqual(["new"]);
 		expect(await Sessions.count()).toBe(1);
 		expect(await Sessions.count({ withExpired: true })).toBe(2);
+	});
+});
+
+describe("migrate on Postgres", () => {
+	it("applies the plan, maps the schema version and runs again as a no-op", async () => {
+		const { blueprintOf, entityOf } = await import("@afora/core");
+		await client.exec(
+			`CREATE TABLE articles (id text PRIMARY KEY, name text, legacy text); INSERT INTO articles VALUES ('a1', 'Old', 'x')`,
+		);
+		const articles = pgTable("articles", {
+			id: text("id").primaryKey(),
+			title: text("title"),
+			published: boolean("published").notNull().default(false),
+			meta: jsonb("meta"),
+			version: integer("schema_version"),
+		});
+		class Article extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string })),
+			{ name: "Article" },
+		) {}
+		const context = {
+			entity: Article,
+			name: "ArticleRepository",
+			unique: ["id"],
+			env: {},
+			schema: { version: 2, key: "$v", previousNames: [] },
+		} as unknown as RepositoryContext;
+		const base = {
+			entity: "Article",
+			class: "automatic",
+			satisfied: true,
+			destructive: false,
+		} as const;
+		const plan = (destructive: boolean): SchemaPlan => ({
+			entity: "Article",
+			destructive,
+			changes: [
+				{ ...base, key: "title", change: "renamed", from: "name" },
+				{ ...base, key: "published", change: "added-required" },
+				{ ...base, key: "meta", change: "added-optional" },
+				{ ...base, key: "legacy", change: "removed", destructive: true },
+			],
+		});
+		const provider = drizzleProvider({
+			db: drizzle(client),
+			tables: { Article: articles },
+			migrations: "apply",
+		});
+		const columns = async () =>
+			(
+				await client.query<{ column_name: string }>(
+					`SELECT column_name FROM information_schema.columns WHERE table_name = 'articles' ORDER BY ordinal_position`,
+				)
+			).rows.map((row) => row.column_name);
+
+		await provider.migrate?.(context, plan(false));
+		expect(await columns()).toEqual([
+			"id",
+			"title",
+			"legacy",
+			"published",
+			"meta",
+			"schema_version",
+		]);
+		await provider.migrate?.(context, plan(false));
+		await provider.migrate?.(context, plan(true));
+		expect(await columns()).toEqual([
+			"id",
+			"title",
+			"published",
+			"meta",
+			"schema_version",
+		]);
+
+		expect(await provider.findOne(context, { where: { id: "a1" } })).toEqual({
+			id: "a1",
+			title: "Old",
+			published: false,
+		});
+		const data = { id: "a2", title: "New", published: true, $v: 2 };
+		await provider.insert(context, data);
+		expect(await provider.findOne(context, { where: { id: "a2" } })).toEqual(
+			data,
+		);
+		expect(
+			(
+				await client.query<{ schema_version: number }>(
+					`SELECT schema_version FROM articles WHERE id = 'a2'`,
+				)
+			).rows,
+		).toEqual([{ schema_version: 2 }]);
 	});
 });

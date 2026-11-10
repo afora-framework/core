@@ -25,6 +25,7 @@ import {
 } from "drizzle-orm";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+import { migrateOf } from "./migrate";
 
 /** The Drizzle databases the provider supports: SQLite (any driver) and Postgres (any driver). */
 // biome-ignore-start lint/suspicious/noExplicitAny: the generics of Drizzle databases are driver specific
@@ -47,7 +48,36 @@ export interface DrizzleProviderOptions {
 	 * the name of the class otherwise, which a minifier changes.
 	 */
 	readonly tables: Readonly<Record<string, DrizzleTable>>;
+	/**
+	 * Opt in to `migrate(context, plan)`, which `app.migrate` calls with the
+	 * structural changes of an entity: `"apply"` runs the DDL on `db`,
+	 * `{ file }` writes it to a drizzle-kit compatible SQL migration file
+	 * instead. Without it the provider has no `migrate` and never changes the
+	 * schema.
+	 */
+	readonly migrations?: "apply" | { readonly file: string };
+	/**
+	 * The column holding the schema version of each row (the `$v` key of
+	 * `context.schema`), by its SQL name or its key in the Drizzle table.
+	 * Defaults to `schema_version`; used when the table has it.
+	 */
+	readonly schemaVersionColumn?: string;
 }
+
+/** What the scopes of one provider share. */
+export interface Settings {
+	readonly tables: DrizzleProviderOptions["tables"];
+	readonly schemaVersionColumn: string;
+	readonly mappings: WeakMap<object, Mapping>;
+}
+
+/** The default column of the schema version. */
+const SCHEMA_VERSION_COLUMN = "schema_version";
+
+/** The data key of the schema version, on any version of `@afora/core`. */
+const schemaKeyOf = (context: RepositoryContext): string =>
+	(context as { readonly schema?: { readonly key: string } }).schema?.key ??
+	"$v";
 
 /** The query builders shared by a database and its transactions. */
 // biome-ignore lint/suspicious/noExplicitAny: dialect specific builders
@@ -101,11 +131,14 @@ export type DrizzleProvider = IRepositoryProvider & {
 
 interface Mapping {
 	readonly table: DrizzleTable;
+	/** The columns by data key: the key of the Drizzle table, but the schema version column under the schema key (`$v`). */
 	readonly columns: Readonly<Record<string, Column>>;
+	/** The key of the Drizzle table of each data key. */
+	readonly property: Readonly<Record<string, string>>;
+	/** The data key of the schema version, mapped to its column when the table has one. */
+	readonly schemaKey: string;
 	readonly postgres: boolean;
 }
-
-const mappings = new WeakMap<object, Mapping>();
 
 /**
  * The declared name of an entity (`recordName`, from the `name` option of
@@ -120,31 +153,58 @@ function entityNameOf(entity: object): string {
 	return typeof recordName === "string" ? recordName : name;
 }
 
-function mappingOf(
-	tables: DrizzleProviderOptions["tables"],
+/** The Drizzle table of the repository of `context`. */
+export function tableOf(
+	settings: Settings,
 	context: RepositoryContext,
-): Mapping {
+): DrizzleTable {
 	const entity = entityNameOf(context.entity);
-	const table = tables[context.name] ?? tables[entity];
+	const table = settings.tables[context.name] ?? settings.tables[entity];
 	if (!table) {
 		return invalid(
 			`No Drizzle table for "${context.name}" (or the entity "${entity}"). Tables are found by name: declare it with entityOf(blueprint, { name }) when the code is minified.`,
 		);
 	}
-	let mapping = mappings.get(table);
-	if (!mapping) {
-		const columns = getTableColumns(table) as Record<string, Column>;
-		if (!columns.id)
-			invalid(`The table of "${context.name}" has no "id" column.`);
-		mapping = {
-			table,
-			columns,
-			postgres: Object.values(columns).some((column) =>
-				column.columnType.startsWith("Pg"),
-			),
-		};
-		mappings.set(table, mapping);
+	return table;
+}
+
+/** The key of the Drizzle table holding the schema version: by SQL name or key. */
+export function versionPropertyOf(
+	columns: Readonly<Record<string, Column>>,
+	name: string,
+): string | undefined {
+	if (columns[name]) return name;
+	return Object.entries(columns).find(
+		([, column]) => column.name === name,
+	)?.[0];
+}
+
+function mappingOf(settings: Settings, context: RepositoryContext): Mapping {
+	const table = tableOf(settings, context);
+	const schemaKey = schemaKeyOf(context);
+	const cached = settings.mappings.get(table);
+	if (cached && cached.schemaKey === schemaKey) return cached;
+	const declared = getTableColumns(table) as Record<string, Column>;
+	if (!declared.id)
+		invalid(`The table of "${context.name}" has no "id" column.`);
+	const version = versionPropertyOf(declared, settings.schemaVersionColumn);
+	const columns: Record<string, Column> = {};
+	const property: Record<string, string> = {};
+	for (const [key, column] of Object.entries(declared)) {
+		const dataKey = key === version ? schemaKey : key;
+		columns[dataKey] = column;
+		property[dataKey] = key;
 	}
+	const mapping: Mapping = {
+		table,
+		columns,
+		property,
+		schemaKey,
+		postgres: Object.values(declared).some((column) =>
+			column.columnType.startsWith("Pg"),
+		),
+	};
+	settings.mappings.set(table, mapping);
 	return mapping;
 }
 
@@ -175,12 +235,16 @@ function dataOf(
 	data: RepositoryData,
 ): Record<string, unknown> {
 	for (const key of Object.keys(data)) {
-		if (data[key] !== undefined && !(key in mapping.columns))
-			invalid(`"${key}" has no column in the table.`);
+		if (data[key] === undefined || key in mapping.columns) continue;
+		if (key === mapping.schemaKey)
+			invalid(
+				`"${key}", the schema version, has no column in the table: add one named "${SCHEMA_VERSION_COLUMN}" (or the schemaVersionColumn option).`,
+			);
+		invalid(`"${key}" has no column in the table.`);
 	}
 	const row: Record<string, unknown> = {};
 	for (const [key, column] of Object.entries(mapping.columns))
-		row[key] = toColumn(column, data[key]);
+		row[mapping.property[key] as string] = toColumn(column, data[key]);
 	return row;
 }
 
@@ -353,7 +417,7 @@ function violatedKey(error: unknown, mapping: Mapping): string | undefined {
 
 /** One executor (a database or a transaction) as an `IRepositoryProvider`. */
 function providerOver(
-	tables: DrizzleProviderOptions["tables"],
+	settings: Settings,
 	exec: Executor,
 	hooks: {
 		/** Runs every operation of a root provider once no transaction holds it. */
@@ -366,11 +430,11 @@ function providerOver(
 		query: KeysetQuery,
 		one: boolean,
 	): Promise<RepositoryData[]> => {
-		const mapping = mappingOf(tables, context);
+		const mapping = mappingOf(settings, context);
 		const limit = one ? Math.min(query.limit ?? 1, 1) : query.limit;
 		if (limit === 0) return [];
 		let builder = exec
-			.select()
+			.select(mapping.columns)
 			.from(mapping.table)
 			.where(and(whereOf(mapping, context, query), keysetOf(mapping, query)))
 			.orderBy(...orderOf(mapping, query));
@@ -447,13 +511,14 @@ function providerOver(
 			if (value === undefined) continue;
 			const column = mapping.columns[key];
 			if (!column) invalid(`"${key}" has no column in the table.`);
-			changes[key] = toColumn(column, value);
+			changes[mapping.property[key] as string] = toColumn(column, value);
 		}
 		for (const [key, delta] of Object.entries(deltas)) {
 			const column = mapping.columns[key];
 			if (!column)
 				invalid(`"${key}" has no column in the table of "${context.name}".`);
-			changes[key] = sql`coalesce(${column}, 0) + ${delta}`;
+			changes[mapping.property[key] as string] =
+				sql`coalesce(${column}, 0) + ${delta}`;
 		}
 		return changes;
 	};
@@ -472,7 +537,7 @@ function providerOver(
 			hooks.guard(() => select(context, query, false)),
 		count: (context, query = {}) =>
 			hooks.guard(async () => {
-				const mapping = mappingOf(tables, context);
+				const mapping = mappingOf(settings, context);
 				const [found] = await exec
 					.select({ total: sql<number>`count(*)` })
 					.from(mapping.table)
@@ -481,7 +546,7 @@ function providerOver(
 			}),
 		insert: (context, data) =>
 			hooks.guard(async () => {
-				const mapping = mappingOf(tables, context);
+				const mapping = mappingOf(settings, context);
 				const row = dataOf(mapping, data);
 				await assertUnique(context, mapping, data, false);
 				await write(context, mapping, () =>
@@ -490,7 +555,7 @@ function providerOver(
 			}),
 		update: (context, data, options = {}) =>
 			hooks.guard(async () => {
-				const mapping = mappingOf(tables, context);
+				const mapping = mappingOf(settings, context);
 				const row = dataOf(mapping, data);
 				const id = columnOf(mapping, "id");
 				const { expectedVersion: expected } = options;
@@ -536,7 +601,7 @@ function providerOver(
 			}),
 		increment: (context, id, deltas, options = {}) =>
 			hooks.guard(async () => {
-				const mapping = mappingOf(tables, context);
+				const mapping = mappingOf(settings, context);
 				const idColumn = columnOf(mapping, "id");
 				const changes = incrementOf(context, mapping, deltas, options.set);
 				const deleted = mapping.columns.deletedAt;
@@ -564,7 +629,7 @@ function providerOver(
 							.update(mapping.table)
 							.set(changes)
 							.where(and(eq(idColumn, id), alive, fresh))
-							.returning(),
+							.returning(mapping.columns),
 					)) as Record<string, unknown>[];
 					if (!updated) throw notFound(context, id);
 					return dataFromRow(updated);
@@ -583,7 +648,7 @@ function providerOver(
 									: replacingExpired(mapping, changes, fresh),
 							...(alive ? { setWhere: alive } : {}),
 						})
-						.returning(),
+						.returning(mapping.columns),
 				)) as Record<string, unknown>[];
 				// A soft-deleted row keeps its id, as an insert finds.
 				if (!stored) {
@@ -596,7 +661,7 @@ function providerOver(
 			}),
 		remove: (context, id) =>
 			hooks.guard(async () => {
-				const mapping = mappingOf(tables, context);
+				const mapping = mappingOf(settings, context);
 				const column = columnOf(mapping, "id");
 				const removed = await exec
 					.delete(mapping.table)
@@ -619,7 +684,8 @@ function replacingExpired(
 	fresh: SQL,
 ): Record<string, unknown> {
 	const set: Record<string, unknown> = {};
-	for (const [key, column] of Object.entries(mapping.columns)) {
+	for (const [dataKey, column] of Object.entries(mapping.columns)) {
+		const key = mapping.property[dataKey] as string;
 		if (key === "id") continue;
 		const kept = Object.hasOwn(changes, key) ? changes[key] : column;
 		set[key] =
@@ -641,14 +707,14 @@ let savepoints = 0;
 
 /** Transactions of a scope over a SQL executor, as `db.transaction` runs them. */
 function nestedTransactions(
-	tables: DrizzleProviderOptions["tables"],
+	settings: Settings,
 	exec: Executor,
 ): IRepositoryProvider["transaction"] {
 	return <Result>(run: (provider: IRepositoryProvider) => Promise<Result>) =>
 		exec.transaction(async (tx: Executor) => {
 			let alive = true;
 			try {
-				return await run(scoped(tables, tx, () => alive));
+				return await run(scoped(settings, tx, () => alive));
 			} finally {
 				alive = false;
 			}
@@ -656,13 +722,13 @@ function nestedTransactions(
 }
 
 function scoped(
-	tables: DrizzleProviderOptions["tables"],
+	settings: Settings,
 	tx: Executor,
 	alive: () => boolean,
 ): IRepositoryProvider {
-	return providerOver(tables, tx, {
+	return providerOver(settings, tx, {
 		guard: whileAlive(alive),
-		transaction: nestedTransactions(tables, tx),
+		transaction: nestedTransactions(settings, tx),
 	});
 }
 
@@ -673,7 +739,7 @@ function scoped(
  * the other operations wait for it, as the database has a single connection.
  */
 function manualScope(
-	tables: DrizzleProviderOptions["tables"],
+	settings: Settings,
 	db: Executor,
 	root: { held: Promise<void> | undefined } | undefined,
 	alive: () => boolean,
@@ -687,7 +753,7 @@ function manualScope(
 		if (root === undefined) while (state.held) await state.held;
 		return work();
 	};
-	return providerOver(tables, db, {
+	return providerOver(settings, db, {
 		guard,
 		async transaction<Result>(
 			run: (provider: IRepositoryProvider) => Promise<Result>,
@@ -708,7 +774,7 @@ function manualScope(
 			let open = true;
 			try {
 				const result = await run(
-					manualScope(tables, db, state, () => open && alive()),
+					manualScope(settings, db, state, () => open && alive()),
 				);
 				open = false;
 				await db.run(
@@ -758,12 +824,30 @@ export function drizzleProvider(
 		options.tables === null
 	)
 		invalid("Expected { db, tables } with a Drizzle database and its tables.");
-	const { db, tables } = options;
+	const { db, tables, migrations } = options;
+	if (
+		migrations !== undefined &&
+		migrations !== "apply" &&
+		(typeof migrations !== "object" ||
+			migrations === null ||
+			typeof migrations.file !== "string" ||
+			migrations.file.length === 0)
+	)
+		invalid('Expected migrations to be "apply" or { file } with a path.');
+	const settings: Settings = {
+		tables,
+		schemaVersionColumn: options.schemaVersionColumn ?? SCHEMA_VERSION_COLUMN,
+		mappings: new WeakMap(),
+	};
 	const alwaysAlive = () => true;
-	if (isSyncSqlite(db))
-		return manualScope(tables, db, undefined, alwaysAlive) as DrizzleProvider;
-	return providerOver(tables, db, {
-		guard: (work) => work(),
-		transaction: nestedTransactions(tables, db),
+	const provider = isSyncSqlite(db)
+		? manualScope(settings, db, undefined, alwaysAlive)
+		: providerOver(settings, db, {
+				guard: (work) => work(),
+				transaction: nestedTransactions(settings, db),
+			});
+	if (migrations === undefined) return provider as DrizzleProvider;
+	return Object.assign(provider, {
+		migrate: migrateOf(settings, db, migrations),
 	}) as DrizzleProvider;
 }
