@@ -13,6 +13,12 @@ import type { RecordSettings } from "./record.interface";
  */
 export declare const RecordUniqueKeys: unique symbol;
 
+/**
+ * Where the type of the keys a record class lists in `options.sensitive` is
+ * kept, for the type of `toJSON` of what its plugin is applied to. Type only.
+ */
+export declare const RecordSensitiveKeys: unique symbol;
+
 /** What `recordPluginOf` takes, after the record class. */
 export interface RecordPluginOptions {
 	/** A semantic version, e.g. `1.2.0`; `1.0.0` when left out. */
@@ -196,6 +202,16 @@ export type PluginUniqueKey<Plugins extends readonly AnyRecordPlugin[]> =
 	Plugins[number] extends infer Plugin
 		? Plugin extends {
 				readonly record: { readonly [RecordUniqueKeys]?: infer Key };
+			}
+			? Extract<Key, string>
+			: never
+		: never;
+
+/** The keys the record classes of the plugins list in `options.sensitive`. */
+export type PluginSensitiveKey<Plugins extends readonly AnyRecordPlugin[]> =
+	Plugins[number] extends infer Plugin
+		? Plugin extends {
+				readonly record: { readonly [RecordSensitiveKeys]?: infer Key };
 			}
 			? Extract<Key, string>
 			: never

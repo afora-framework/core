@@ -11,6 +11,7 @@ import { Exception } from "../exception/exception";
 import { toOpenAPI } from "../openapi/openapi";
 import type { OpenAPISchema } from "../openapi/types/openapi.interface";
 import { isProperty } from "../property/is-property";
+import { recordNameOf } from "../record/name";
 import { InvalidOutputStage } from "./exceptions";
 import { PROBLEM_MEDIA_TYPE } from "./problem";
 import { sinkOf } from "./stage";
@@ -383,7 +384,7 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 		const models: Record<string, BlueprintField> = {};
 		const classes = new Map<string, AnyRecordClass>();
 		for (const record of records) {
-			const name = record.name;
+			const name = recordNameOf(record);
 			if (!/^[A-Za-z0-9._-]+$/.test(name) || name === "Problem") {
 				invalid(
 					`The record class "${name}" cannot be a component name; give the class a name that is not "Problem".`,

@@ -335,6 +335,8 @@ Where the others win: Zod and Valibot are faster, have far larger ecosystems and
 
 ## Contributing
 
+Issues open from a template: bug report, feature request, or feedback from building on afora. Questions go to [Discussions](https://github.com/afora-framework/core/discussions). Pull requests follow [the PR template](.github/PULL_REQUEST_TEMPLATE.md).
+
 Commits follow [Conventional Commits](https://www.conventionalcommits.org) (`feat(repository): …`, `fix: …`), checked by commitlint in a Husky `commit-msg` hook; the `pre-commit` hook runs Biome and Knip. CI runs lint, Knip, type checks, unit and interop tests, the build and the Node smoke test on every push and pull request. Pushing a `v*` tag that matches `package.json` publishes to npm with provenance.
 
 Scripts:

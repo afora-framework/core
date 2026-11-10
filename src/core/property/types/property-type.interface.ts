@@ -29,6 +29,21 @@ export type UniqueMark<Unique extends boolean> = Unique extends true
 	? { readonly type: { readonly unique: true } }
 	: unknown;
 
+/**
+ * The type of a property declared `sensitive`, as `Password`, so that the
+ * type of `toJSON` masks the keys holding it.
+ */
+export type SensitiveMark<Sensitive extends boolean> = Sensitive extends true
+	? { readonly type: { readonly sensitive: true } }
+	: unknown;
+
+/** `{ sensitive: true }` when `Property` is declared `sensitive`, for its optional version. */
+export type SensitiveTypeOf<Property> = Property extends {
+	readonly type: { readonly sensitive: true };
+}
+	? { readonly sensitive: true }
+	: unknown;
+
 /** `{ unique: true }` when `Property` is declared `unique`, for its optional version. */
 export type UniqueTypeOf<Property> = Property extends {
 	readonly type: { readonly unique: true };

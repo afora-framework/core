@@ -52,6 +52,17 @@ const UserBlueprint = blueprintOf((ctx) => ({
 
 class User extends recordOf(UserBlueprint, { change: ["name", "tags"] }) {}
 
+// toJSON: every key, sensitive ones as the mask.
+class Salaried extends recordOf(
+	blueprintOf((ctx) => ({ name: ctx.string, salary: ctx.integer })),
+	{ sensitive: ["salary"] },
+) {}
+const salariedJson = new Salaried({ name: "Ana", salary: 1 }).toJSON();
+export const jsonIsExact: Equals<
+	typeof salariedJson,
+	{ readonly name: string; readonly salary: string }
+> = true;
+
 const MetadataFields = blueprintOf((ctx) => ({
 	blueprint: ctx.string,
 	options: ctx.integer,

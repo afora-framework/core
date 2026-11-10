@@ -97,6 +97,67 @@ function world() {
 }
 
 describe("repositoryOf", () => {
+	it("finds the table by the declared name of a renamed class", async () => {
+		const sqlite = new Database(":memory:");
+		for (const statement of DDL) sqlite.run(statement);
+		const provider = drizzleProvider({
+			db: drizzle(sqlite),
+			tables: { Post: posts },
+		});
+		const fields = blueprintOf((ctx) => ({
+			title: ctx.string,
+			author: ctx.string,
+		}));
+		// What a minifier does to the class: it gets another name.
+		const rename = <Class extends object>(Class: Class): Class =>
+			Object.defineProperty(Class, "name", { value: "a" });
+		const Post = rename(
+			class Post extends entityOf(fields, { name: "Post" }) {},
+		);
+		const Posts = repositoryOf({
+			entity: Post,
+			provider,
+			actions: ["create", "count"],
+		});
+		await Posts.create(new Post({ title: "Hello", author: "ana" }));
+		expect(await Posts.count()).toBe(1);
+
+		const Unnamed = rename(class Post extends entityOf(fields) {});
+		const Lost = repositoryOf({
+			entity: Unnamed,
+			provider,
+			actions: ["count"],
+		});
+		await expect(Lost.count()).rejects.toMatchObject({
+			name: "InvalidRepositoryDeclaration",
+		});
+	});
+
+	it("pages by cursor over the database", async () => {
+		const { provider, User } = world();
+		const Users = repositoryOf({
+			entity: User,
+			provider,
+			actions: ["create", "findCursor"],
+		});
+		const people = ["Caio", "Ana", "Érico", "Bia", "Davi"];
+		for (const [index, name] of people.entries()) {
+			await Users.create(new User({ name, email: `p${index}@example.com` }));
+		}
+		const names: string[][] = [];
+		let after: string | undefined;
+		do {
+			const page = await Users.findCursor({
+				orderBy: [{ key: "name", direction: "desc" }],
+				limit: 2,
+				after,
+			});
+			names.push(page.items.map((user) => user.name));
+			after = page.next;
+		} while (after !== undefined);
+		expect(names).toEqual([["Érico", "Davi"], ["Caio", "Bia"], ["Ana"]]);
+	});
+
 	it("creates, finds, updates, pages and removes", async () => {
 		const { provider, User } = world();
 		const Users = repositoryOf({
