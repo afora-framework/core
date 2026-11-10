@@ -15,6 +15,7 @@ import {
 	ENTITY_IDENTITY_KEYS,
 	ENTITY_MEMBERS,
 	EntityClock,
+	EntitySettings,
 	EntityUniqueKeys,
 	RESERVED_ENTITY_KEYS,
 } from "./abstract-entity";
@@ -70,7 +71,10 @@ export function entityBuilderOf<
 		const DeclaredEntity = declareRecord(
 			AbstractEntity,
 			identity.join(blueprint),
-			{ ...options, unique: ["id", ...(options.unique ?? [])] },
+			{
+				...withoutStorage(options),
+				unique: ["id", ...(options.unique ?? [])],
+			},
 			"entity",
 			ENTITY_MEMBERS,
 			context,
@@ -84,6 +88,13 @@ export function entityBuilderOf<
 					readonly options: { readonly unique: readonly string[] };
 				}
 			).options.unique,
+		});
+
+		Object.defineProperty(DeclaredEntity, EntitySettings, {
+			value: Object.freeze({
+				versioned: options.versioned === true,
+				expires: options.expires,
+			}),
 		});
 
 		Object.defineProperty(DeclaredEntity, EntityEventSettings, {
@@ -110,4 +121,12 @@ export function isEntity(
 	value: unknown,
 ): value is AbstractEntity<IBlueprintCollection> {
 	return value instanceof AbstractEntity;
+}
+
+/** The record options of `options`, without the storage ones of an entity. */
+function withoutStorage(
+	options: EntityOptions<IBlueprintCollection>,
+): EntityOptions<IBlueprintCollection> {
+	const { versioned: _versioned, expires: _expires, ...rest } = options;
+	return rest;
 }

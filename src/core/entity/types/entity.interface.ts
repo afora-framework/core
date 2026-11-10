@@ -90,7 +90,35 @@ export type EntityOptions<
 	Sensitive extends
 		readonly RecordKey<Properties>[] = readonly RecordKey<Properties>[],
 > = RecordOptions<Properties, Change, Unique, Plugins, Context, Sensitive> &
-	EntityEvents;
+	EntityEvents &
+	EntityStorageOptions;
+
+/** How an entity is stored: optimistic concurrency and expiry. */
+export interface EntityStorageOptions {
+	/** Adds a `version` identity key checked by `update` (#44). */
+	readonly versioned?: boolean;
+	/** When records of the entity expire (#35). */
+	readonly expires?: EntityExpires;
+}
+
+/** A duration, e.g. `{ days: 400 }`. */
+export interface EntityDuration {
+	readonly days?: number;
+	readonly hours?: number;
+	readonly minutes?: number;
+	readonly seconds?: number;
+}
+
+/** `after` a duration from `createdAt`, or `at` the date held by a key. */
+export type EntityExpires =
+	| { readonly after: EntityDuration }
+	| { readonly at: string };
+
+/** What `entityOf` stores under `EntitySettings`. */
+export interface EntityStorageSettings {
+	readonly versioned: boolean;
+	readonly expires?: EntityExpires;
+}
 
 /**
  * The unique keys of an entity: `id`, those listed in `options.unique`, and

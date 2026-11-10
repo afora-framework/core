@@ -128,6 +128,12 @@ export interface ProviderCapabilities {
 	readonly transactions?: boolean;
 	/** Whether `findMany` honors `after` (`ProviderQuery`), which `findCursor` needs. */
 	readonly keyset?: boolean;
+	/** Whether `update` honors an expected `version` (versioned entities, #44). */
+	readonly versioning?: boolean;
+	/** Whether the provider has an atomic `increment` (#34). */
+	readonly atomic?: boolean;
+	/** Whether reads leave out expired records (entities with `expires`, #35). */
+	readonly expiry?: boolean;
 }
 
 /** Declaration input for a named provider, implemented by providerOf in T10. */

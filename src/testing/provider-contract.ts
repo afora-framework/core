@@ -30,7 +30,18 @@ export interface ProviderContractOptions {
 	 * to `provider.capabilities?.keyset`.
 	 */
 	readonly keyset?: boolean;
+	/**
+	 * Run the cases of an expected `version` on `update`. Defaults to
+	 * `provider.capabilities?.versioning`.
+	 */
+	readonly versioning?: boolean;
+	/** Run the cases of `increment`. Defaults to `provider.capabilities?.atomic`. */
+	readonly atomic?: boolean;
+	/** Run the cases of expired records. Defaults to `provider.capabilities?.expiry`. */
+	readonly expiry?: boolean;
 }
+
+type GatedCapability = "versioning" | "atomic" | "expiry";
 
 type Row = Record<string, unknown>;
 
@@ -85,6 +96,17 @@ export function providerContract(
 		};
 		return { provider, context, seed };
 	}
+
+	/** An `it` that only runs when the provider has `capability`. */
+	const gated =
+		(capability: GatedCapability) =>
+		(name: string, body: () => Promise<void>) =>
+			it(name, async () => {
+				const enabled =
+					options[capability] ??
+					(await makeProvider()).capabilities?.[capability];
+				if (enabled === true) await body();
+			});
 
 	describe("provider contract", () => {
 		describe("writes and reads", () => {
@@ -831,6 +853,21 @@ export function providerContract(
 					expect(await provider.count(context)).toBe(0);
 				},
 			);
+		});
+
+		describe("versioning", () => {
+			const versioned = gated("versioning");
+			void versioned;
+		});
+
+		describe("atomic", () => {
+			const atomic = gated("atomic");
+			void atomic;
+		});
+
+		describe("expiry", () => {
+			const expiring = gated("expiry");
+			void expiring;
 		});
 	});
 }

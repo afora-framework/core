@@ -46,6 +46,8 @@ export const EntityClock = Symbol("entityClock");
 
 /** The unique keys of a class made by `entityOf`, as `options.unique` lists them. */
 export const EntityUniqueKeys = Symbol("entityUniqueKeys");
+/** The storage options of an entity class (`versioned`, `expires`). */
+export const EntitySettings = Symbol("entitySettings");
 
 /** What the statics of a class made by `entityOf` hold under `EntityClock`. */
 interface EntityClockSettings {

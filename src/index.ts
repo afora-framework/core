@@ -129,6 +129,7 @@ export type {
 export {
 	AbstractEntity,
 	ENTITY_IDENTITY_KEYS,
+	EntitySettings,
 	EntityUniqueKeys,
 	RESERVED_ENTITY_KEYS,
 } from "./core/entity/abstract-entity";
@@ -152,10 +153,14 @@ export type {
 	EntityBuilder,
 	EntityBuilderSettings,
 	EntityConstructor,
+	EntityDuration,
+	EntityExpires,
 	EntityIdentityKey,
 	EntityInput,
 	EntityOptions,
 	EntityProperties,
+	EntityStorageOptions,
+	EntityStorageSettings,
 	EntityUniqueKey,
 	IEntityIdentity,
 } from "./core/entity/types/entity.interface";

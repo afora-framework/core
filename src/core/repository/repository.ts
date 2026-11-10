@@ -389,6 +389,8 @@ const NEEDS: Readonly<Record<string, readonly (keyof IRepositoryProvider)[]>> =
 		exists: ["findOne"],
 		findPage: ["findMany", "count"],
 		findCursor: ["findMany"],
+		// #34: increment
+		// #37: forEachPage
 	};
 
 function capitalize(key: string): string {
@@ -483,6 +485,8 @@ export function repositoryOf<
 	methods.set("exists", ["exists", exists]);
 	methods.set("findPage", ["findPage", findPage]);
 	methods.set("findCursor", ["findCursor", findCursor]);
+	// #34: methods.set("increment", ...)
+	// #37: methods.set("forEachPage", ...)
 
 	class DeclaredRepository extends AbstractRepository<
 		Entity,
