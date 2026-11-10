@@ -17,7 +17,7 @@ import {
 	UndeclaredRecordProperty,
 } from "./exceptions";
 import { isMarked } from "./marks";
-import { isRecordName } from "./name";
+import { declareRecordName, isRecordName } from "./name";
 import { applyPlugins, RecordPlugins } from "./plugin";
 import type {
 	AnyRecordPlugin,
@@ -210,6 +210,9 @@ export function declareRecord(
 		static readonly [RecordPluginHooks] = applied.hooks;
 	}
 
+	if (declaredName !== undefined) {
+		declareRecordName(DeclaredRecord, declaredName);
+	}
 	// The declared `name`; without one, the name of the class it is read on,
 	// so a subclass answers with its own.
 	Object.defineProperty(DeclaredRecord, "recordName", {

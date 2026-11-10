@@ -18,3 +18,30 @@ export function recordNameOf(Class: object): string {
 	};
 	return typeof recordName === "string" ? recordName : String(name);
 }
+
+/** The classes `recordOf` and `entityOf` made with a `name`, and that name. */
+const declaredNames = new WeakMap<object, string>();
+
+/** Keeps the `name` option `Class` was declared with. */
+export function declareRecordName(Class: object, name: string): void {
+	declaredNames.set(Class, name);
+}
+
+/**
+ * The name `Class` declares: the `name` option of it or of a class it
+ * extends, or a `static recordName` of its own; `undefined` when the name of
+ * the record is only the name of its class.
+ */
+export function declaredRecordNameOf(Class: object): string | undefined {
+	for (
+		let current: unknown = Class;
+		typeof current === "function";
+		current = Object.getPrototypeOf(current)
+	) {
+		const own = Object.getOwnPropertyDescriptor(current, "recordName")?.value;
+		if (typeof own === "string") return own;
+		const declared = declaredNames.get(current);
+		if (declared !== undefined) return declared;
+	}
+	return undefined;
+}

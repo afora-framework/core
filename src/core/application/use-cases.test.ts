@@ -11,6 +11,7 @@ import {
 	inMemoryProvider,
 	PasswordHasherRequired,
 	RepositoryUniqueViolation,
+	recordOf,
 	repositoryOf,
 	UnregisteredApplicationReference,
 	UnregisteredUseCaseDependency,
@@ -105,6 +106,45 @@ describe("applicationOf useCases and exceptions", () => {
 		expect(Object.keys(app.useCases)).toEqual(["Child", "Register"]);
 		expect(app.exceptions.Taken).toBe(Taken);
 		expect(app.useCases.Register).toBe(Register);
+	});
+
+	test("a record or entity with a declared name is keyed by it", () => {
+		class Account extends entityOf(Input, { name: "Account" }) {}
+		class Owner extends Account {}
+		class Renamed extends Account {
+			static override readonly recordName = "Renamed";
+		}
+		class Tag extends recordOf(Input, { name: "Tag" }) {}
+
+		const app = applicationOf({
+			name: "app",
+			// A subclass keeps the declared name; one that gives its own uses it.
+			entities: { Account: Owner, Renamed },
+			records: { Tag },
+		});
+		expect(Object.keys(app.entities)).toEqual(["Account", "Renamed"]);
+
+		for (const settings of [
+			{ entities: { Member: Account } },
+			{ entities: { Account: Renamed } },
+			{ records: { Label: Tag } },
+		]) {
+			const error = (() => {
+				try {
+					applicationOf({ name: "app", ...settings } as never);
+				} catch (error) {
+					return error;
+				}
+			})();
+			expect(error).toBeInstanceOf(InvalidApplicationDeclaration);
+			expect((error as Error).message).toContain("must be keyed by its name");
+		}
+		// Without a declared name the key is free, as before.
+		expect(
+			Object.keys(
+				applicationOf({ name: "app", entities: { Member: User } }).entities,
+			),
+		).toEqual(["Member"]);
 	});
 
 	test("the key must equal the name", () => {

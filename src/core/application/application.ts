@@ -42,7 +42,7 @@ import { stageDescriptionOf } from "../output/stage";
 import type { AnyOutput } from "../output/types/output.interface";
 import { isProperty } from "../property/is-property";
 import { type PropertyLineage, propertyLineageOf } from "../property/lineage";
-import { recordNameOf } from "../record/name";
+import { declaredRecordNameOf, recordNameOf } from "../record/name";
 import { pluginsOf } from "../record/plugin";
 import { providerDescriptionOf } from "../repository/provider";
 import { isRepository } from "../repository/repository";
@@ -320,7 +320,10 @@ function resolve(
 							? (value as AnyOutput).outputName
 							: collection === "exceptions"
 								? (value as { name: string }).name
-								: name;
+								: collection === "records" || collection === "entities"
+									? // Only a name the class declares; the name of a class is free.
+										(declaredRecordNameOf(value as object) ?? name)
+									: name;
 			if (declaredName !== name) {
 				invalid(
 					source,
