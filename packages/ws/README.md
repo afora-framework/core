@@ -161,7 +161,7 @@ Invalid options throw `InvalidOutputStage` when the stage is made.
 
 ## Catalog
 
-`WsStages` is `stageCatalogOf(websocket)`, and `stages` are the entries codegen reads to resolve `{ "sink": "websocket" }` in an `afora.json` (`--stages @afora/ws`):
+`WsStages` is `stageCatalogOf(websocket)` (from `@afora/core/adapters`), and `stages` are the entries codegen reads to resolve `{ "sink": "websocket" }` in an `afora.json` (`--stages @afora/ws`):
 
 ```ts
 import { stages } from "@afora/ws";
