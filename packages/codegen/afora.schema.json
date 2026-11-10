@@ -109,6 +109,79 @@
 			],
 			"description": "\"inMemory\", { \"use\": \"<catalog name>\", \"options\": {...} } or { \"import\": \"./file.ts#provider\" }."
 		},
+		"log": {
+			"anyOf": [
+				{
+					"type": "object",
+					"required": ["providers"],
+					"properties": {
+						"level": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "debug"
+								},
+								{
+									"type": "string",
+									"const": "info"
+								},
+								{
+									"type": "string",
+									"const": "warn"
+								},
+								{
+									"type": "string",
+									"const": "error"
+								}
+							],
+							"description": "The lowest level kept; info by default."
+						},
+						"providers": {
+							"type": "array",
+							"items": {
+								"anyOf": [
+									{
+										"type": "string",
+										"const": "console"
+									},
+									{
+										"type": "string",
+										"const": "json"
+									},
+									{
+										"type": "object",
+										"required": ["import"],
+										"properties": {
+											"import": {
+												"type": "string",
+												"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+												"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+											}
+										},
+										"additionalProperties": false
+									}
+								]
+							},
+							"description": "Where the lines go: \"console\", \"json\" or { \"import\": \"./file.ts#provider\" }."
+						}
+					},
+					"additionalProperties": false
+				},
+				{
+					"type": "object",
+					"required": ["import"],
+					"properties": {
+						"import": {
+							"type": "string",
+							"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+							"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+						}
+					},
+					"additionalProperties": false
+				}
+			],
+			"description": "How the application logs: { \"level\", \"providers\" }, or { \"import\": \"./file.ts#log\" } for a log made by hand (logFrom)."
+		},
 		"properties": {
 			"type": "object",
 			"patternProperties": {

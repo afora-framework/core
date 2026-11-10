@@ -185,6 +185,43 @@ const Provider = Type.Union(
 	},
 );
 
+const Log = Type.Union(
+	[
+		Type.Object(
+			{
+				level: Type.Optional(
+					Type.Union(
+						[
+							Type.Literal("debug"),
+							Type.Literal("info"),
+							Type.Literal("warn"),
+							Type.Literal("error"),
+						],
+						{ description: "The lowest level kept; info by default." },
+					),
+				),
+				providers: Type.Array(
+					Type.Union([
+						Type.Literal("console"),
+						Type.Literal("json"),
+						ImportRef,
+					]),
+					{
+						description:
+							'Where the lines go: "console", "json" or { "import": "./file.ts#provider" }.',
+					},
+				),
+			},
+			{ additionalProperties: false },
+		),
+		ImportRef,
+	],
+	{
+		description:
+			'How the application logs: { "level", "providers" }, or { "import": "./file.ts#log" } for a log made by hand (logFrom).',
+	},
+);
+
 const StringList = (description: string) =>
 	Type.Array(Type.String(), { description });
 
@@ -535,6 +572,7 @@ export const specSchema = Type.Object(
 			),
 		),
 		provider: Type.Optional(Provider),
+		log: Type.Optional(Log),
 		properties: Type.Optional(
 			Names(Property, "Custom properties, by PascalCase name."),
 		),

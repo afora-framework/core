@@ -285,6 +285,17 @@ export function normalizeSpec(
 				: DEFAULT_OUTPUT_DIR,
 	};
 	Object.assign(out, providerOf(spec.provider));
+	// The level in full (info when omitted); an import stays as it is.
+	if (isObject(spec.log)) {
+		out.log = Object.hasOwn(spec.log, "import")
+			? { ...spec.log }
+			: {
+					level: typeof spec.log.level === "string" ? spec.log.level : "info",
+					providers: Array.isArray(spec.log.providers)
+						? [...spec.log.providers]
+						: [],
+				};
+	}
 	for (const collection of COLLECTIONS) {
 		const declared = spec[collection];
 		if (!isObject(declared)) continue;
@@ -377,6 +388,9 @@ export function compactSpec(normalized: Spec): Spec {
 	const spec = JSON.parse(JSON.stringify(normalized)) as Json;
 	if (spec.provider !== undefined) {
 		spec.provider = compactProvider(spec.provider);
+	}
+	if (isObject(spec.log) && spec.log.level === "info") {
+		delete spec.log.level;
 	}
 	if (isObject(spec.repositories)) {
 		for (const value of Object.values(spec.repositories)) {
