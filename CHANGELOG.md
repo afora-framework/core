@@ -2,7 +2,16 @@
 
 ## Unreleased
 
+### Changed
+
+- `commandOf` is `commandBuilderOf()`: its declared type is `CommandBuilder<Record<never, never>>` and `useCases` also accepts a function, which gets an empty context. Calls are unchanged.
+- `statusOf` gives 404 for `UseCaseEntityNotFound`, 409 for `UseCaseEntityConflict` and 401 for `UseCaseInvalidCredentials`.
+
 ### Added
+
+- Use case plugins: `useCasePluginOf(name, { requires, compile })` declares a use case that is made for a repository, its blueprints, dependencies and steps following the entity, the actions and the record plugins; `plugin.make(repository, options)` gives the class (a steps use case), one per repository and options, and throws the new `UseCaseUnavailable` when the repository lacks an action or the entity a record plugin. `UseCaseTarget` states that precondition in the type of the repository argument, with errors that name what is missing (`MissingRepositoryAction`, `MissingRecordPlugin`). `useCaseTargetOf(repository)` is what `compile` reads (a plan of each key, relations), `useCaseOriginOf(UseCase)` says which plugin made a class, and `useCaseCatalogOf(...plugins)` groups plugins by name. Also exported: `isUseCasePlugin`, `isUseCaseCatalog`, `InvalidUseCasePlugin`, `UnknownUseCasePlugin`, `IncompatibleUseCasePlugin`, the default errors `UseCaseEntityNotFound`, `UseCaseEntityConflict` and `UseCaseInvalidCredentials`, and the types `IUseCasePlugin`, `IUseCaseCatalog`, `UseCasePluginSettings`, `UseCaseCompilation`, `UseCaseTargetInfo`, `UseCaseFieldPlan`, `UseCaseOriginInfo` and `EntityOfRepository`. See `docs/use-cases.md#plugins`.
+- `commandBuilderOf(...catalogs)` gives a `commandOf` whose `useCases` may be a function of the use case plugins of the catalogs: `useCases: (ctx) => ({ create: ctx.create(Posts), custom: MyUseCase })`. Also exported: `CommandBuilder`, `CommandBuilderSettings` and `CommandUseCasesOption`.
+- Applications register the use cases a plugin made by the commands that hold them, under their `useCaseName`, and `describe()` gives them `generic: { name, version, repository, options }`.
 
 - Steps: a `change` step takes `ifPresent: true`, which skips it when its value resolves to `undefined` (a partial update), and the `args` of `find`, `invoke` and `run` may be one reference to a list, which is spread (`args: "$input.tags"`). Both are in `afora.json` too. Also exported: `StepArgs`.
 

@@ -99,7 +99,11 @@ export type {
 	IBlueprintFactories,
 	IBlueprintPlugin,
 } from "./core/blueprint/types/blueprint-plugin.interface";
-export { commandOf, isCommand } from "./core/command/command";
+export {
+	commandBuilderOf,
+	commandOf,
+	isCommand,
+} from "./core/command/command";
 export {
 	CommandEventFailed,
 	InvalidCommandContext,
@@ -109,6 +113,8 @@ export {
 } from "./core/command/exceptions";
 export type {
 	AnyCommand,
+	CommandBuilder,
+	CommandBuilderSettings,
 	CommandEnvOption,
 	CommandEventErrorHandler,
 	CommandEventHandler,
@@ -122,6 +128,7 @@ export type {
 	CommandResponse,
 	CommandSettings,
 	CommandUseCases,
+	CommandUseCasesOption,
 } from "./core/command/types/command.interface";
 export {
 	AbstractEntity,
@@ -430,7 +437,25 @@ export { Demo } from "./core/symbols/demo";
 export { Kind } from "./core/symbols/kind";
 export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
-export { InvalidUseCaseStep } from "./core/use-case/exceptions";
+export {
+	IncompatibleUseCasePlugin,
+	InvalidUseCasePlugin,
+	InvalidUseCaseStep,
+	UnknownUseCasePlugin,
+	UseCaseEntityConflict,
+	UseCaseEntityNotFound,
+	UseCaseInvalidCredentials,
+	UseCaseUnavailable,
+} from "./core/use-case/exceptions";
+export {
+	isUseCasePlugin,
+	useCaseOriginOf,
+	useCasePluginOf,
+} from "./core/use-case/plugin";
+export {
+	isUseCaseCatalog,
+	useCaseCatalogOf,
+} from "./core/use-case/plugin-catalog";
 export type {
 	StepArgs,
 	StepEnsureKind,
@@ -443,6 +468,27 @@ export type {
 	UseCaseStep,
 	UseCaseStepDescription,
 } from "./core/use-case/steps/types/steps.interface";
+export { useCaseTargetOf } from "./core/use-case/target";
+export type {
+	AnyUseCasePlugin,
+	EntityOfRepository,
+	IUseCaseCatalog,
+	IUseCasePlugin,
+	MissingRecordPlugin,
+	MissingRepositoryAction,
+	UseCaseCompilation,
+	UseCaseContextOf,
+	UseCaseFieldPlan,
+	UseCaseMaker,
+	UseCaseOriginInfo,
+	UseCasePluginContext,
+	UseCasePluginDescriptor,
+	UseCasePluginRequirements,
+	UseCasePluginSettings,
+	UseCasePluginsByName,
+	UseCaseTarget,
+	UseCaseTargetInfo,
+} from "./core/use-case/types/plugin.interface";
 export type {
 	AnyExceptionClass,
 	AnyUseCaseClass,

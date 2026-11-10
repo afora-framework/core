@@ -14,6 +14,11 @@ const CONFIGURATION = new Set(["InvalidCommandEnvironment"]);
 const NOT_FOUND = new Set([
 	"RepositoryEntityNotFound",
 	"UnknownCommandOperation",
+	"UseCaseEntityNotFound",
+]);
+const CONFLICT = new Set([
+	"RepositoryUniqueViolation",
+	"UseCaseEntityConflict",
 ]);
 
 /**
@@ -37,7 +42,8 @@ export function raisedOf(error: Exception): Exception {
  * The HTTP-style status of an error, in this order: `statuses` by exception
  * name; 400 for invalid input or context (and any exception whose
  * `details.issues` is a list, except `InvalidCommandEnvironment`, a 500); 404 for a missing entity or operation; 409 for
- * a unique violation; 422 for a class in `operation.errors`; 500 for the
+ * a unique violation or an entity that already exists; 401 for
+ * `UseCaseInvalidCredentials`; 422 for a class in `operation.errors`; 500 for the
  * rest, errors that are not exceptions included. Exceptions match by name,
  * or by class for `operation.errors`.
  */
@@ -60,7 +66,8 @@ export function statusOf(
 		return 400;
 	}
 	if (NOT_FOUND.has(name)) return 404;
-	if (name === "RepositoryUniqueViolation") return 409;
+	if (CONFLICT.has(name)) return 409;
+	if (name === "UseCaseInvalidCredentials") return 401;
 	if (
 		operation?.errors.some(
 			(Declared) => error.is(Declared) || Declared.name === name,

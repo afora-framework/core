@@ -139,3 +139,74 @@ There are no operators or interpolation: anything computed goes through `run`. T
 | `{ return: value }`                                    | the response, validated by the response blueprint; required, last, once                                                                                                            | none          |
 
 `useCaseOf` validates the steps at declaration and throws `InvalidUseCaseStep` (`UseCase` layer, `details: { index, reason, code }`) for an unknown or malformed step, a bad or repeated `as`, a reference to an unbound name, a `$context` without a declared context, a first-level `$input.<key>` or `$context.<key>` the blueprint lacks, an unknown repository, action, use case or environment, a `find` of a write action, a `build` that is not a record class, an `ensure.error` missing from `errors`, a `change.key` that is not a change key of the class `build` made, and a missing, repeated or misplaced `return`. A `change` or `invoke` on something that is not a record, or on a member it lacks, throws `InvalidUseCaseStep` with the `index` while the steps run. In an application, the classes of `build` and `ensure.error` must be registered (`UnregisteredApplicationReference`); `describe()` gives `implementation: { kind: "steps", steps }` with them by name (`"User"`, `"UserAlreadyExists"`, or `{ core: "RepositoryUniqueViolation" }` for an exported exception) and `run.fn` as `{ kind: "opaque" }`. A subclass that overrides `execute` is hand-written, so it is `{ kind: "opaque" }`.
+
+## Plugins
+
+A use case plugin is a use case that is made for a repository: its blueprints, dependencies and steps follow the entity, the actions the repository declares and the record plugins of the entity. The standard ones (`create`, `list`, `publish`...) are plugins; this is how to write another.
+
+```ts
+import {
+	type AnyRepository,
+	blueprintBuilderOf,
+	type EntityOfRepository,
+	type Id,
+	type StepsUseCaseConstructor,
+	UseCaseEntityNotFound,
+	type UseCaseTarget,
+	useCaseCatalogOf,
+	useCasePluginOf,
+} from "@afora/core";
+
+const fields = blueprintBuilderOf();
+
+type GetMaker = <Repository extends AnyRepository>(
+	repository: Repository & UseCaseTarget<Repository, "findById">,
+	options?: { readonly name?: string },
+) => StepsUseCaseConstructor<
+	{ readonly id: typeof Id },
+	{ readonly item: EntityOfRepository<Repository> },
+	{ readonly repository: Repository }
+>;
+
+const get = useCasePluginOf<"get", GetMaker>("get", {
+	description: "Finds an entity by id.", // optional
+	version: "1.0.0", // optional, the default
+	requires: { actions: ["findById"] }, // and plugins: ["publishable"]
+	compile: (target, options) => ({
+		name: (options.name as string | undefined) ?? `Get${target.entityName}`,
+		blueprint: fields(() => ({ id: target.field("id").field })),
+		response: fields(() => ({ item: target.entity })),
+		dependencies: { repository: target.repository },
+		errors: [UseCaseEntityNotFound],
+		steps: [
+			{ find: "repository.findById", args: ["$input.id"], as: "found" },
+			{ ensure: "exists", value: "$found", error: UseCaseEntityNotFound },
+			{ return: { item: "$found" } },
+		],
+	}),
+});
+
+const GetPost = get.make(Posts); // a class, as useCaseOf({ steps }) gives
+const Generics = useCaseCatalogOf(get); // for commandBuilderOf, see Commands
+```
+
+`compile` gives the settings of `useCaseOf` with `steps`, so what a plugin makes is an ordinary steps use case: validated at declaration, described by `describe()`, with scope, events and overrides as any other. Its two arguments are the target and the options of the call (a plain object, `{}` when none):
+
+| `target`                                          | Is                                                                                                                                                                                              |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repository`, `repositoryName`                    | the repository the use case is for, to list in `dependencies`                                                                                                                                   |
+| `entity`, `entityName`                            | its entity class and name (the declared `name`, else the name of the class)                                                                                                                     |
+| `actions`, `deletion`, `changeKeys`, `uniqueKeys` | what the repository and the entity declare                                                                                                                                                      |
+| `fields`, `field(key)`                            | a plan of each key: `field`, `kind` (`property`, `blueprint`, `list`, `record`, `entity`, `entity-list`), `identity`, `plugin`, `sensitive`, `unique`, `optional`, `change`, `related`, `input` |
+| `relation(key, actions?)`                         | the repository of the entity a key holds, taken from the `relations` of the target, to load it by id                                                                                            |
+| `unavailable(reason)`                             | throws `UseCaseUnavailable` for an option the entity cannot satisfy                                                                                                                             |
+
+The `input` of a plan is what an input blueprint takes for the key: the key and its field, or `<key>Id` and the `id` field of the related entity for a key that holds an entity. `useCaseTargetOf(repository)` gives the same target outside a plugin.
+
+`plugin.make(repository, options)` gives one class per repository and options: the same call anywhere gives the same class (options are compared by value, classes among them by identity), which is what lets a command, an application and a test name the same use case. It throws `UseCaseUnavailable` (`UseCase` layer, `details: { repository, reason, missing }`) when the repository lacks an action of `requires.actions` or the entity a record plugin of `requires.plugins`, `InvalidUseCasePlugin` for what is not a repository or options that are not a plain object, and whatever `useCaseOf` throws for the compiled steps. `useCaseOriginOf(UseCase)` gives `{ plugin, repository, options }` for a class a plugin made (and for a class extending it), `undefined` otherwise.
+
+The second type argument is the call signature of `make`. TypeScript cannot derive it from `compile`, which returns data, so a plugin that wants typed inputs and responses states it; without it any repository is accepted and the class is `AnyUseCaseClass`. `UseCaseTarget<Repository, Actions, Members, Plugin>` is the precondition, written as an intersection with the repository argument: it is nothing when the repository declares every action and its entities have the members of the record plugin, and otherwise a type that names what is missing, so the error reads `MissingRepositoryAction<"update">` or `MissingRecordPlugin<"publishable">`. The plugin check is structural (the entity has the members), so an entity that declares the same members by hand passes the type and fails at declaration.
+
+`useCaseCatalogOf(...plugins)` groups plugins by name (`InvalidUseCasePlugin` for two with one name): `catalog.plugins`, `catalog.list`, `catalog.context` (the `make` of each, by name) and `catalog.resolve("get")` or `("get@1.0.0")`, which throws `UnknownUseCasePlugin` or `IncompatibleUseCasePlugin` (same major version, not older; same minor below 1.0.0). `isUseCasePlugin` and `isUseCaseCatalog` identify them, and `plugin.toJSON()` gives `{ kind: "use-case-plugin", name, version, description?, requires }`.
+
+`UseCaseEntityNotFound`, `UseCaseEntityConflict` and `UseCaseInvalidCredentials` are exceptions for plugins to throw by default; `statusOf` gives them 404, 409 and 401. Being exported by the package, they need no registration in an application.

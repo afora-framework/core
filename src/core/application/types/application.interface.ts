@@ -413,6 +413,17 @@ export interface UseCaseDescription {
 				readonly steps: readonly UseCaseStepDescription[];
 		  }
 		| { readonly kind: "opaque" };
+	/**
+	 * The use case plugin that made it, the registered repository it was made
+	 * for and the options given, with classes by name as in the steps; absent
+	 * for a use case declared by hand.
+	 */
+	readonly generic?: {
+		readonly name: string;
+		readonly version: string;
+		readonly repository: string;
+		readonly options: Readonly<Record<string, unknown>>;
+	};
 }
 
 /** A command: its metadata, context, operations and policies. */

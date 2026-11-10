@@ -26,7 +26,13 @@ import {
 import { inMemoryProvider } from "./in-memory";
 import { prepareQuery } from "./query";
 import { parseEntity, relationsOf, resolveReferences } from "./references";
-import { contextOf, stateOf, states } from "./state";
+import {
+	contextOf,
+	declareRepository,
+	type RepositoryState,
+	stateOf,
+	states,
+} from "./state";
 import type { RepositoryQuery } from "./types/query.interface";
 import type {
 	AnyRepository,
@@ -478,7 +484,7 @@ export function repositoryOf<
 		});
 	}
 	Object.defineProperty(DeclaredRepository, "name", { value: name });
-	states.set(DeclaredRepository, {
+	const state: RepositoryState = {
 		name,
 		entity,
 		actions: Object.freeze([...new Set(actions as readonly string[])]),
@@ -487,9 +493,12 @@ export function repositoryOf<
 		explicitProvider: settings.provider !== undefined,
 		environment: environmentDependencies,
 		relations,
-	});
+	};
+	states.set(DeclaredRepository, state);
+	const repository = Object.freeze(new DeclaredRepository());
+	declareRepository(state, repository);
 
-	return Object.freeze(new DeclaredRepository()) as unknown as RepositoryType<
+	return repository as unknown as RepositoryType<
 		Entity,
 		Actions,
 		MergedEnvironment<Environment>
