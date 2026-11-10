@@ -293,10 +293,13 @@ exports[`exports of the package and their declarations 1`] = `
     "type RepositoryKeys<Dependencies> = { [Key in keyof Dependencies & string]: Dependencies[Key] extends AnyRepository ? Key : never; }[keyof Dependencies & string];",
   ],
   "(internal) RepositoryMethods": [
-    "export type RepositoryMethods<Entity, Actions extends string = string> = RepositoryFindBy<Entity, Actions> & RepositoryFindManyBy<Entity, Actions> & ("create" extends Actions ? RepositoryCreate<Entity> : unknown) & ("update" extends Actions ? RepositoryUpdate<Entity> : unknown) & ("delete" extends Actions ? RepositoryDelete<Entity> : unknown) & ("restore" extends Actions ? RepositoryRestore<Entity> : unknown) & ("count" extends Actions ? RepositoryCount<Entity> : unknown) & ("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) & ("exists" extends Actions ? RepositoryExists<Entity> : unknown) & ("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown) & ("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown);",
+    "export type RepositoryMethods<Entity, Actions extends string = string> = RepositoryFindBy<Entity, Actions> & RepositoryFindManyBy<Entity, Actions> & ("create" extends Actions ? RepositoryCreate<Entity> : unknown) & ("update" extends Actions ? RepositoryUpdate<Entity> : unknown) & ("delete" extends Actions ? RepositoryDelete<Entity> : unknown) & ("restore" extends Actions ? RepositoryRestore<Entity> : unknown) & ("count" extends Actions ? RepositoryCount<Entity> : unknown) & ("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) & ("exists" extends Actions ? RepositoryExists<Entity> : unknown) & ("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown) & ("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown) & ("explain" extends Actions ? RepositoryExplain<Entity> : unknown);",
   ],
   "(internal) RepositoryOf": [
-    "export type RepositoryOf<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment = Readonly<Record<never, never>>> = AbstractRepository<Entity, Actions, Environment> & RepositoryMethods<Entity, Actions[number]>;",
+    "export type RepositoryOf<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment = Readonly<Record<never, never>>, Keyset extends boolean = true> = AbstractRepository<Entity, Actions, Environment> & RepositoryMethods<Entity, Keyset extends true ? Actions[number] : Exclude<Actions[number], "findCursor">>;",
+  ],
+  "(internal) RepositoryOfProvider": [
+    "type RepositoryOfProvider<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment, Keyset extends boolean> = Keyset extends true ? RepositoryType<Entity, Actions, Environment> : RepositoryType<Entity, Actions, Environment, false>;",
   ],
   "(internal) RequiredKeys": [
     "type RequiredKeys<Schemas> = keyof Omit<Schemas, ReadonlyOptionalKeys<Schemas> | ReadonlyKeys<Schemas> | OptionalKeys<Schemas>>;",
@@ -443,7 +446,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface ApplicationContext { readonly name: string; env<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; readonly logger: ILogger; }",
   ],
   "ApplicationDescription": [
-    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; readonly providers?: Readonly<Record<string, ProviderDescription & { readonly from: string; }>>; readonly log?: LogDescription | { readonly kind: "opaque"; }; readonly publishers?: Readonly<Record<string, { readonly from: string; }>>; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly commands: Readonly<Record<string, CommandDescription>>; readonly outputs: Readonly<Record<string, OutputDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
+    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; readonly providers?: Readonly<Record<string, ProviderDescription & { readonly from: string; }>>; readonly log?: LogDescription | { readonly kind: "opaque"; }; readonly publishers?: Readonly<Record<string, { readonly from: string; }>>; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly indexes: Readonly<Record<string, RepositoryIndex>>; readonly scans: RepositoryScans; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly commands: Readonly<Record<string, CommandDescription>>; readonly outputs: Readonly<Record<string, OutputDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
   ],
   "ApplicationNotStarted": [
     "ApplicationNotStarted: import("../../index.js").DeclaredExceptionClass<{ readonly application?: string; }>",
@@ -841,6 +844,9 @@ exports[`exports of the package and their declarations 1`] = `
   "ImmutableEntityKey": [
     "ImmutableEntityKey: import("../../index.js").DeclaredExceptionClass<{ readonly key: string; }>",
   ],
+  "InMemoryProvider": [
+    "export type InMemoryProvider = IRepositoryProvider & { readonly capabilities: { readonly transactions: true; readonly keyset: true; }; };",
+  ],
   "IncompatibleRecordPlugin": [
     "IncompatibleRecordPlugin: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
   ],
@@ -1133,13 +1139,16 @@ exports[`exports of the package and their declarations 1`] = `
     "export type PropertyValue<SchemaType extends TSchema, Value = Static<SchemaType>> = SchemaType extends TOptional<TSchema> ? Value | undefined : Value;",
   ],
   "ProviderCapabilities": [
-    "export interface ProviderCapabilities { readonly operators?: readonly string[]; readonly transactions?: boolean; readonly keyset?: boolean; }",
+    "export interface ProviderCapabilities { readonly operators?: readonly string[]; readonly transactions?: boolean; readonly keyset?: boolean; readonly indexes?: boolean; }",
   ],
   "ProviderDescription": [
     "export type ProviderDescription = { readonly kind: "provider"; readonly name: string; readonly options: ProviderOptions; } | { readonly kind: "opaque"; };",
   ],
   "ProviderFactory": [
     "export interface ProviderFactory<Environment extends EnvironmentDependencies = EnvironmentDependencies> { readonly [Kind]: "provider-factory"; readonly environments: readonly AnyEnvironment[]; readonly create: (env: MergedEnvironment<Environment>) => IRepositoryProvider | Promise<IRepositoryProvider>; readonly withContext: boolean; }",
+  ],
+  "ProviderKeyset": [
+    "export type ProviderKeyset<Provider> = undefined extends Provider ? true : Provider extends { readonly capabilities?: infer Capabilities; } ? [ NonNullable<Capabilities> ] extends [ { readonly keyset?: infer Keyset; } ] ? true extends Keyset ? true : false : false : false;",
   ],
   "ProviderNotBound": [
     "ProviderNotBound: import("../../index.js").DeclaredExceptionClass<{ readonly provider: string; }>",
@@ -1151,7 +1160,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type ProviderOptions = Readonly<Record<string, ProviderOption>>;",
   ],
   "ProviderQuery": [
-    "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; }",
+    "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; readonly index?: string; }",
   ],
   "ProviderReference": [
     "export interface ProviderReference { readonly kind: "ref"; readonly key: string; }",
@@ -1253,10 +1262,10 @@ exports[`exports of the package and their declarations 1`] = `
     "export type RegisteredApplication = Register extends { readonly application: infer Application extends AnyApplication; } ? Application : AnyApplication;",
   ],
   "RepositoryAction": [
-    "export type RepositoryAction<Entity> = keyof RepositoryFindBy<Entity> | keyof RepositoryFindManyBy<Entity> | "create" | "update" | "delete" | "restore" | "count" | "findMany" | "exists" | "findPage" | "findCursor";",
+    "export type RepositoryAction<Entity> = keyof RepositoryFindBy<Entity> | keyof RepositoryFindManyBy<Entity> | "create" | "update" | "delete" | "restore" | "count" | "findMany" | "exists" | "findPage" | "findCursor" | "explain";",
   ],
   "RepositoryContext": [
-    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly env: Environment; }",
+    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly env: Environment; }",
   ],
   "RepositoryCount": [
     "export interface RepositoryCount<Entity = unknown> { count(query?: RepositoryQuery<Entity>): Promise<number>; }",
@@ -1285,6 +1294,9 @@ exports[`exports of the package and their declarations 1`] = `
   "RepositoryExists": [
     "export interface RepositoryExists<Entity> { exists(query?: RepositoryQuery<Entity>): Promise<boolean>; }",
   ],
+  "RepositoryExplain": [
+    "export interface RepositoryExplain<Entity> { explain(query?: RepositoryQuery<Entity> | RepositoryCursorQuery<Entity>): Promise<RepositoryPlan>; }",
+  ],
   "RepositoryFindBy": [
     "export type RepositoryFindBy<Entity, Actions extends string = string> = { readonly [Key in EntityUniqueKeyOf<Entity> as \`findBy\${Capitalize<Key>}\` extends Actions ? \`findBy\${Capitalize<Key>}\` : never]: (value: QueryValueOf<NonNullable<ValueAt<Entity, Key>>>) => Promise<EntityInstanceOf<Entity> | undefined>; };",
   ],
@@ -1300,9 +1312,12 @@ exports[`exports of the package and their declarations 1`] = `
   "RepositoryFindPage": [
     "export interface RepositoryFindPage<Entity> { findPage(query?: RepositoryQuery<Entity>): Promise<RepositoryPage<Entity>>; }",
   ],
+  "RepositoryIndex": [
+    "export interface RepositoryIndex<Key extends string = string> { readonly where: readonly Key[]; readonly orderBy?: Key; }",
+  ],
   "RepositoryOf": [
     "export declare function RepositoryOf<Repository extends AnyRepository>(repository: Repository): new () => Repository;",
-    "export type RepositoryOf<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment = Readonly<Record<never, never>>> = RepositoryType<Entity, Actions, Environment>;",
+    "export type RepositoryOf<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment = Readonly<Record<never, never>>, Keyset extends boolean = true> = RepositoryType<Entity, Actions, Environment, Keyset>;",
   ],
   "RepositoryOrder": [
     "export interface RepositoryOrder<Key extends string = string> { readonly key: Key; readonly direction?: "asc" | "desc"; }",
@@ -1310,20 +1325,29 @@ exports[`exports of the package and their declarations 1`] = `
   "RepositoryPage": [
     "export interface RepositoryPage<Entity> { readonly items: readonly EntityInstanceOf<Entity>[]; readonly total: number; readonly limit: number; readonly offset: number; }",
   ],
+  "RepositoryPlan": [
+    "export interface RepositoryPlan { readonly access: "id" | "unique" | "index" | "scan"; readonly index?: string; }",
+  ],
   "RepositoryQuery": [
     "export interface RepositoryQuery<Entity = unknown> { readonly where?: RepositoryWhere<Entity>; readonly orderBy?: readonly RepositoryOrder<QueryKey<Entity>>[]; readonly limit?: number; readonly offset?: number; readonly withDeleted?: boolean; }",
   ],
   "RepositoryRestore": [
     "export interface RepositoryRestore<Entity> { restore(entity: EntityInstanceOf<Entity> | string): Promise<EntityInstanceOf<Entity>>; }",
   ],
+  "RepositoryScans": [
+    "export type RepositoryScans = "allow" | "warn" | "reject";",
+  ],
   "RepositorySettings": [
-    "export interface RepositorySettings<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment extends EnvironmentDependencies | undefined> { readonly entity: Entity; readonly actions: Actions; readonly deletion?: "hard" | "soft"; readonly provider?: IRepositoryProvider<MergedEnvironment<Environment>>; readonly environmentDependencies?: Environment; readonly relations?: readonly AnyRepository[]; }",
+    "export interface RepositorySettings<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment extends EnvironmentDependencies | undefined, Provider extends IRepositoryProvider<MergedEnvironment<Environment>> | undefined = IRepositoryProvider<MergedEnvironment<Environment>>> { readonly entity: Entity; readonly actions: Actions; readonly deletion?: "hard" | "soft"; readonly provider?: Provider; readonly environmentDependencies?: Environment; readonly relations?: readonly AnyRepository[]; readonly indexes?: Readonly<Record<string, RepositoryIndex<EntityKeyOf<Entity>>>>; readonly scans?: RepositoryScans; }",
   ],
   "RepositoryUniqueViolation": [
     "RepositoryUniqueViolation: import("../../index.js").DeclaredExceptionClass<{ readonly key: string; }>",
   ],
   "RepositoryUpdate": [
     "export interface RepositoryUpdate<Entity> { update(entity: EntityInstanceOf<Entity>): Promise<EntityInstanceOf<Entity>>; }",
+  ],
+  "RepositoryUsedOutsideApplication": [
+    "RepositoryUsedOutsideApplication: import("../../index.js").DeclaredExceptionClass<{ readonly application: string; readonly repository: string; }>",
   ],
   "RepositoryWhere": [
     "export type RepositoryWhere<Entity = unknown> = { readonly [Key in QueryKey<Entity>]?: QueryValue<Entity, Key> | { readonly in: readonly QueryValue<Entity, Key>[]; }; };",
@@ -1683,7 +1707,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function hasPlugin<Plugin extends AnyRecordPlugin>(value: unknown, plugin: Plugin): value is InstanceType<Plugin["record"]>;",
   ],
   "inMemoryProvider": [
-    "export declare function inMemoryProvider(): IRepositoryProvider;",
+    "export declare function inMemoryProvider(): InMemoryProvider;",
   ],
   "isApplication": [
     "export declare function isApplication(value: unknown): value is AnyApplication;",
@@ -1814,7 +1838,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function providerFrom<const Environment extends EnvironmentDependencies>(environmentDependencies: Environment, create: (env: MergedEnvironment<Environment>) => IRepositoryProvider | Promise<IRepositoryProvider>): ProviderFactory<Environment>;",
   ],
   "providerOf": [
-    "export declare function providerOf<Options extends ProviderOptions = ProviderOptions, Provider extends IRepositoryProvider = IRepositoryProvider>(settings: ProviderSettings<Options, Provider>): Provider;",
+    "export declare function providerOf<Options extends ProviderOptions = ProviderOptions, const Provider extends IRepositoryProvider = IRepositoryProvider>(settings: ProviderSettings<Options, Provider>): Provider;",
   ],
   "providersOf": [
     "export declare function providersOf<const Entries extends Readonly<Record<string, IRepositoryProvider | ProviderFactory>>>(entries: Entries): ProviderStorage<keyof Entries & string>;",
@@ -1841,7 +1865,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function recordPluginOf<Record extends AnyRecordClass, const Name extends string>(name: Name, Record: Record, { version, description }?: RecordPluginOptions): IRecordPlugin<Record, Name>;",
   ],
   "repositoryOf": [
-    "export declare function repositoryOf<Entity extends AnyRepositoryEntity, const Actions extends readonly RepositoryAction<Entity>[], const Environment extends EnvironmentDependencies | undefined = undefined>(settings: RepositorySettings<Entity, Actions, Environment>): RepositoryType<Entity, Actions, MergedEnvironment<Environment>>;",
+    "export declare function repositoryOf<Entity extends AnyRepositoryEntity, const Actions extends readonly RepositoryAction<Entity>[], const Environment extends EnvironmentDependencies | undefined = undefined, Provider extends IRepositoryProvider<MergedEnvironment<Environment>> | undefined = undefined>(settings: RepositorySettings<Entity, Actions, Environment, Provider>): RepositoryOfProvider<Entity, Actions, MergedEnvironment<Environment>, ProviderKeyset<Provider>>;",
   ],
   "resetApplication": [
     "export declare function resetApplication(): void;",
@@ -2516,10 +2540,10 @@ exports[`testing entry (contract) 1`] = `
     "interface Props<Input = unknown, Output = Input> { readonly version: 1; readonly vendor: string; readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>; readonly types?: Types<Input, Output> | undefined; }",
   ],
   "(internal) ProviderCapabilities": [
-    "export interface ProviderCapabilities { readonly operators?: readonly string[]; readonly transactions?: boolean; readonly keyset?: boolean; }",
+    "export interface ProviderCapabilities { readonly operators?: readonly string[]; readonly transactions?: boolean; readonly keyset?: boolean; readonly indexes?: boolean; }",
   ],
   "(internal) ProviderQuery": [
-    "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; }",
+    "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; readonly index?: string; }",
   ],
   "(internal) PublishedEvent": [
     "export interface PublishedEvent { readonly name: string; readonly command: string; readonly operation: string; readonly entity: JsonValue; }",
@@ -2576,10 +2600,13 @@ exports[`testing entry (contract) 1`] = `
     "type RecordValueOf<Record extends AnyRecordClass, Mode extends FieldMode> = Mode extends "value" ? InstanceType<Record> : Mode extends "input" ? InstanceType<Record> | RecordInput<Record> | AcceptedBy<Record> : Record["blueprint"] extends IBlueprint<infer Properties, boolean> ? CollectionValue<Properties, "data"> : never;",
   ],
   "(internal) RepositoryContext": [
-    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly env: Environment; }",
+    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly env: Environment; }",
   ],
   "(internal) RepositoryData": [
     "export type RepositoryData = Readonly<Record<string, unknown>>;",
+  ],
+  "(internal) RepositoryIndex": [
+    "export interface RepositoryIndex<Key extends string = string> { readonly where: readonly Key[]; readonly orderBy?: Key; }",
   ],
   "(internal) RepositoryOrder": [
     "export interface RepositoryOrder<Key extends string = string> { readonly key: Key; readonly direction?: "asc" | "desc"; }",
@@ -2618,7 +2645,7 @@ exports[`testing entry (contract) 1`] = `
     "export interface MemoryPublisher extends IEventPublisher { readonly published: readonly { readonly topic: string; readonly event: PublishedEvent; }[]; clear(): void; }",
   ],
   "ProviderContractOptions": [
-    "export interface ProviderContractOptions { readonly transactions?: boolean; readonly keyset?: boolean; }",
+    "export interface ProviderContractOptions { readonly transactions?: boolean; readonly keyset?: boolean; readonly indexes?: boolean; }",
   ],
   "memoryPublisher": [
     "export declare function memoryPublisher(): MemoryPublisher;",
@@ -4131,7 +4158,7 @@ exports[`afora.json schema 1`] = `
           "additionalProperties": false,
           "properties": {
             "actions": {
-              "description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), count.",
+              "description": "findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, explain, create, update, delete, restore (soft deletion only), count.",
               "items": {
                 "type": "string",
               },
@@ -4161,6 +4188,33 @@ exports[`afora.json schema 1`] = `
                 "type": "string",
               },
               "type": "array",
+            },
+            "indexes": {
+              "description": "Access patterns by name; a query that matches one reads through it, and the provider can build it (a GSI, an SQL index).",
+              "patternProperties": {
+                "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "orderBy": {
+                      "description": "The scalar key it reads in order of.",
+                      "type": "string",
+                    },
+                    "where": {
+                      "description": "Keys the query matches by equality.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "where",
+                  ],
+                  "type": "object",
+                },
+              },
+              "type": "object",
             },
             "provider": {
               "anyOf": [
@@ -4256,6 +4310,24 @@ exports[`afora.json schema 1`] = `
                 "type": "string",
               },
               "type": "array",
+            },
+            "scans": {
+              "anyOf": [
+                {
+                  "const": "allow",
+                  "type": "string",
+                },
+                {
+                  "const": "warn",
+                  "type": "string",
+                },
+                {
+                  "const": "reject",
+                  "type": "string",
+                },
+              ],
+              "default": "allow",
+              "description": "A query only a scan serves: runs, logs repository-scan, or throws InvalidRepositoryQuery.",
             },
           },
           "required": [

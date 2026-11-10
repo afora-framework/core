@@ -104,6 +104,19 @@ export interface RepositorySettings<
 	readonly scans?: RepositoryScans;
 }
 
+/**
+ * The repository `repositoryOf` gives: without `findCursor` when its provider
+ * cannot read by cursor (`Keyset` is `false`).
+ */
+type RepositoryOfProvider<
+	Entity extends AnyRepositoryEntity,
+	Actions extends readonly RepositoryAction<Entity>[],
+	Environment,
+	Keyset extends boolean,
+> = Keyset extends true
+	? RepositoryType<Entity, Actions, Environment>
+	: RepositoryType<Entity, Actions, Environment, false>;
+
 /** Stores each entity a record holds as its id. */
 const REFERENCES: RecordDataOptions = {
 	reference: (record) =>
@@ -658,7 +671,7 @@ export function repositoryOf<
 		| undefined = undefined,
 >(
 	settings: RepositorySettings<Entity, Actions, Environment, Provider>,
-): RepositoryType<
+): RepositoryOfProvider<
 	Entity,
 	Actions,
 	MergedEnvironment<Environment>,
@@ -777,7 +790,7 @@ export function repositoryOf<
 	const repository = Object.freeze(new DeclaredRepository());
 	declareRepository(state, repository);
 
-	return repository as unknown as RepositoryType<
+	return repository as unknown as RepositoryOfProvider<
 		Entity,
 		Actions,
 		MergedEnvironment<Environment>,
