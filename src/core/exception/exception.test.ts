@@ -190,3 +190,79 @@ test("blueprint exceptions name the plugin that raised them", () => {
 	expect(exception.layer).toBe(ExceptionLayers.Blueprint);
 	expect(exception.source).toBe("broken");
 });
+
+test("a declared exception keeps its class and details across layers", () => {
+	const property = raise(() => new Name("a"));
+	const scope = { layer: ExceptionLayers.UseCase, source: "CreateUser" };
+	const passed = raise(() =>
+		guard(scope, () =>
+			guard({ layer: ExceptionLayers.Entity, source: "User" }, () => {
+				throw property;
+			}),
+		),
+	);
+
+	expect(passed).not.toBe(property);
+	expect(passed).toBeInstanceOf(InvalidPropertyValue);
+	expect(passed.cause).toBeInstanceOf(InvalidPropertyValue);
+	expect(passed.layer).toBe(ExceptionLayers.UseCase);
+	expect(passed.source).toBe("CreateUser");
+	expect(passed.message).toBe(property.message);
+	expect(passed.details).toBe(property.details);
+	expect(passed.origin).toBe(property);
+	expect(passed.find(InvalidPropertyValue)).toBe(passed as never);
+	expect(passed.trace).toHaveLength(3);
+	expect(InvalidPropertyValue.layer).toBe(ExceptionLayers.Property);
+
+	// As in a `catch`: narrowing from `unknown` types the details.
+	const caught: unknown = passed;
+	if (caught instanceof InvalidPropertyValue) {
+		expectTypeOf(caught.details).toEqualTypeOf<{
+			readonly errors: readonly string[];
+		}>();
+	}
+	const typed = new InvalidPropertyValue({
+		source: "x",
+		details: { errors: ["bad"] },
+	}).propagate(scope);
+	expectTypeOf(typed.details).toEqualTypeOf<{
+		readonly errors: readonly string[];
+	}>();
+});
+
+test("propagate with another name or new details gives a plain exception", () => {
+	const property = raise(() => new Name("a"));
+	const scope = { layer: ExceptionLayers.Record, source: "User" };
+
+	const renamed = property.propagate({ ...scope, name: "InvalidUser" });
+	expect(renamed).not.toBeInstanceOf(InvalidPropertyValue);
+	expect(renamed.details).toBeUndefined();
+	expect(renamed.is(InvalidPropertyValue)).toBe(true);
+
+	const detailed = property.propagate({ ...scope, details: { key: "name" } });
+	expect(detailed).not.toBeInstanceOf(InvalidPropertyValue);
+	expect(detailed.name).toBe("InvalidPropertyValue");
+	expect(detailed.details).toEqual({ key: "name" });
+	expectTypeOf(detailed.details).toEqualTypeOf<{ key: string }>();
+});
+
+test("propagate keeps a subclass of a declared class, not a hand-written one", () => {
+	const scope = { layer: ExceptionLayers.Output, source: "http" };
+
+	class EmailTaken extends UserNotCreated {}
+	const taken = new EmailTaken({ source: "CreateUser" }).propagate(scope);
+	expect(taken).toBeInstanceOf(EmailTaken);
+	expect(taken).toBeInstanceOf(UserNotCreated);
+
+	class Custom extends Exception {
+		readonly built = true;
+	}
+	const custom = new Custom({
+		layer: ExceptionLayers.UseCase,
+		name: "Custom",
+		source: "CreateUser",
+		message: "custom",
+	}).propagate(scope);
+	expect(custom).not.toBeInstanceOf(Custom);
+	expect(custom.is(Custom)).toBe(true);
+});

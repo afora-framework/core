@@ -94,22 +94,43 @@ export class Exception<Details = unknown> extends Error {
 	/**
 	 * Passes the exception to an upper layer: a new exception in `scope`, with
 	 * this one as its cause, keeping its name and message unless given others.
+	 * With the same name and no new `details`, an exception of a class declared
+	 * with `exceptionOf` (or of a subclass of one) stays an instance of that
+	 * class and keeps its `details`, so `instanceof` holds across layers; the
+	 * constructor of the class does not run again.
 	 */
-	propagate<Next = undefined>({
+	propagate(
+		scope: ExceptionScope & {
+			readonly name?: undefined;
+			readonly message?: string;
+			readonly details?: undefined;
+		},
+	): Exception<Details>;
+	propagate<Next = undefined>(
+		scope: ExceptionPropagation<Next>,
+	): Exception<Next>;
+	propagate({
 		layer,
 		source,
 		name = this.name,
 		message = this.message,
 		details,
-	}: ExceptionPropagation<Next>): Exception<Next> {
-		return new Exception({
+	}: ExceptionPropagation): Exception {
+		const keepsClass =
+			name === this.name && details === undefined && isDeclaredInstance(this);
+		const init: ExceptionInit = {
 			layer,
 			source,
 			name,
 			message,
-			details,
+			details: keepsClass ? this.details : details,
 			cause: this,
-		});
+		};
+
+		// Only the constructor of `Exception` runs, with the prototype of the class.
+		return keepsClass
+			? Reflect.construct(Exception, [init], this.constructor)
+			: new Exception(init);
 	}
 
 	toJSON(): ExceptionFrame<Details> & { trace: readonly ExceptionFrame[] } {
@@ -148,6 +169,18 @@ export interface DeclaredExceptionClass<Details = undefined> {
 }
 
 const declarations = new WeakMap<object, { readonly message: unknown }>();
+
+/** Whether the class of `exception` is, or extends, one made by `exceptionOf`. */
+function isDeclaredInstance(exception: Exception): boolean {
+	for (
+		let current: unknown = exception.constructor;
+		typeof current === "function";
+		current = Object.getPrototypeOf(current)
+	) {
+		if (declarations.has(current)) return true;
+	}
+	return false;
+}
 
 /** Whether `value` is a class made by `exceptionOf`. */
 export function isDeclaredException(

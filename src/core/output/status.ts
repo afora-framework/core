@@ -18,8 +18,8 @@ const NOT_FOUND = new Set([
 
 /**
  * The exception that raised `error` under its name: a use case or a command
- * passes an exception up as a copy with the same name, no details and the
- * original as its cause, so the original is the deepest one with that name.
+ * passes an exception up as a copy with the same name and the original as
+ * its cause, so the original is the deepest one with that name.
  */
 export function raisedOf(error: Exception): Exception {
 	let raised = error;

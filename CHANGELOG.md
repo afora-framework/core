@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- An exception of a class declared with `exceptionOf` stays an instance of that class when it crosses a layer: `error instanceof RepositoryUniqueViolation` is now true for what a repository, use case or command rejects with, as `error.is(RepositoryUniqueViolation)` already was, and the `details` are kept and typed. `propagate` (which `guard` calls) keeps the class and the `details` when it is given neither another `name` nor new `details`; with either, the result is a plain `Exception` as before (so an invalid record value, which carries the record's own `details`, is matched with `is(InvalidPropertyValue)`). Two things follow: `exception.find(Class)` gives the outermost exception of the class, in the layer it reached (`exception.origin` is still the first one raised), and each frame of `trace` repeats the `details`. A hand-written `class X extends Exception` is unchanged.
+
 ## 0.0.5 — unreleased (draft: dated when it is published)
 
 ### Changed
