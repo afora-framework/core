@@ -1451,6 +1451,22 @@ export function applicationOf<
 			}
 			return boundUseCaseOf.get(useCase);
 		},
+		async run(
+			useCase: unknown,
+			input: unknown = {},
+			options?: { readonly context?: unknown; readonly dependencies?: unknown },
+		) {
+			if (!boundUseCaseOf.has(useCase)) {
+				invalid(name, "Expected a use case registered in the application.");
+			}
+			const Bound = boundUseCaseOf.get(useCase) as AnyUseCaseClass;
+			const instance = (
+				options?.context === undefined
+					? new Bound(input)
+					: new Bound(input, { context: options.context })
+			) as { execute(dependencies?: unknown): Promise<unknown> };
+			return instance.execute(options?.dependencies);
+		},
 		command(command: unknown) {
 			if (!boundCommandOf.has(command)) {
 				invalid(name, "Expected a command registered in the application.");

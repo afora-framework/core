@@ -37,6 +37,8 @@ export type {
 	ApplicationCollections,
 	ApplicationContext,
 	ApplicationDescription,
+	ApplicationRunArgs,
+	ApplicationRunOptions,
 	ApplicationSettings,
 	ApplicationStartOptions,
 	CommandDescription,
