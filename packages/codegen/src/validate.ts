@@ -1,4 +1,4 @@
-import { catalog, recordPlugin } from "./catalog";
+import { catalog, identityKeysOf, recordPlugin } from "./catalog";
 import { checkCommand } from "./command";
 import { checkEntityEvents } from "./entity-events";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
@@ -290,6 +290,7 @@ function checkKeys(
 	path: Path,
 	owner: OwnerKind,
 	issues: SpecIssue[],
+	identity: readonly string[] = catalog().identityKeys,
 ): void {
 	const entries = catalog();
 	for (const key of Object.keys(fields)) {
@@ -304,12 +305,12 @@ function checkKeys(
 			);
 			continue;
 		}
-		if (owner === "entity" && entries.identityKeys.includes(key)) {
+		if (owner === "entity" && identity.includes(key)) {
 			issues.push(
 				issue(
 					here,
 					"identity_key",
-					`"${key}" is part of every entity's identity (${entries.identityKeys.join(", ")}) and is added by entityOf; remove it from the fields.`,
+					`"${key}" is part of every entity's identity (${identity.join(", ")}) and is added by entityOf; remove it from the fields.`,
 				),
 			);
 			continue;
@@ -344,13 +345,29 @@ function pluginKeysOf(spec: Record<string, unknown>): string[] {
 function keysOf(decl: Decl): string[] {
 	const fields = fieldsOfDecl(decl) ?? {};
 	return [
-		...(decl.kind === "entity" ? catalog().identityKeys : []),
+		...(decl.kind === "entity" ? identityKeysOf(decl.spec) : []),
 		...Object.keys(fields),
 		...pluginKeysOf(decl.spec),
 	];
 }
 
 /** The unique keys of an entity: `id`, `unique`, unique properties and unique keys of plugins. */
+/** The keys of the `change` list of `decl` that hold a number (not a list), which `increment` takes. */
+function numericChangeKeysOf(decl: Decl, scope: Scope): string[] {
+	const fields = fieldsOfDecl(decl) ?? {};
+	const change = Array.isArray(decl.spec.change) ? decl.spec.change : [];
+	return change.filter((key): key is string => {
+		if (typeof key !== "string") return false;
+		const field = fields[key];
+		if (field?.kind !== "type" || field.list) return false;
+		const root = rootOf(field.type, scope);
+		return (
+			root?.kind === "std" &&
+			(root.info.schemaType === "number" || root.info.schemaType === "integer")
+		);
+	});
+}
+
 function uniqueKeysOf(decl: Decl, scope: Scope): Set<string> {
 	const unique = new Set<string>(["id"]);
 	if (Array.isArray(decl.spec.unique)) {
@@ -555,7 +572,15 @@ function checkFieldsOf(
 	const keys = Object.keys(decl.spec);
 	const allowed =
 		owner === "entity"
-			? ["fields", "sensitive", "unique", "change", "plugins", "events"]
+			? [
+					"fields",
+					"sensitive",
+					"unique",
+					"change",
+					"plugins",
+					"events",
+					"versioned",
+				]
 			: owner === "record"
 				? ["fields", "sensitive", "unique", "change", "plugins"]
 				: ["fields"];
@@ -572,7 +597,13 @@ function checkFieldsOf(
 	}
 	const fields = parseFields(decl.spec.fields, [...path, "fields"], issues);
 	if (!fields) return undefined;
-	checkKeys(fields, [...path, "fields"], owner, issues);
+	checkKeys(
+		fields,
+		[...path, "fields"],
+		owner,
+		issues,
+		owner === "entity" ? identityKeysOf(decl.spec) : undefined,
+	);
 	for (const [key, field] of Object.entries(fields)) {
 		checkField(field, [...path, "fields", key], scope, owner, issues);
 	}
@@ -589,6 +620,19 @@ function checkRecord(
 	const path = [collection, decl.name];
 	const fields = checkFieldsOf(decl, collection, owner, scope, issues);
 	const entries = catalog();
+	if (
+		decl.spec.versioned !== undefined &&
+		typeof decl.spec.versioned !== "boolean"
+	) {
+		issues.push(
+			issue(
+				[...path, "versioned"],
+				"invalid_option",
+				"Expected true or false.",
+			),
+		);
+	}
+	const identityKeys = owner === "entity" ? identityKeysOf(decl.spec) : [];
 	if (owner === "entity" && decl.spec.events !== undefined) {
 		checkEntityEvents(
 			decl.name,
@@ -607,7 +651,7 @@ function checkRecord(
 	const pluginKeys = new Set<string>();
 	const taken = new Set<string>([
 		...Object.keys(fields ?? {}),
-		...(owner === "entity" ? entries.identityKeys : []),
+		...identityKeys,
 	]);
 	const seenPlugins = new Set<string>();
 	for (const [index, name] of (plugins ?? []).entries()) {
@@ -646,7 +690,7 @@ function checkRecord(
 	}
 
 	const known = new Set<string>([...Object.keys(fields ?? {}), ...pluginKeys]);
-	const identity = new Set<string>(entries.identityKeys);
+	const identity = new Set<string>(identityKeys);
 	for (const option of ["unique", "sensitive", "change"] as const) {
 		const keys = checkStringList(decl.spec[option], [...path, option], issues);
 		for (const [index, key] of (keys ?? []).entries()) {
@@ -788,13 +832,25 @@ function checkRepository(
 				].includes(action)
 			)
 				continue;
+			if (action === "increment") {
+				if (numericChangeKeysOf(target, scope).length === 0) {
+					issues.push(
+						issue(
+							here,
+							"increment_needs_number",
+							`"increment" needs a number key in the change list of ${target.name}.`,
+						),
+					);
+				}
+				continue;
+			}
 			const match = /^(findBy|findManyBy)(.+)$/.exec(action);
 			if (!match) {
 				issues.push(
 					issue(
 						here,
 						"unknown_action",
-						`"${action}" is not an action. Use create, update, delete, restore, count, findMany, exists, findPage, findCursor, findBy<Key> or findManyBy<Key>.`,
+						`"${action}" is not an action. Use create, update, delete, restore, increment, count, findMany, exists, findPage, findCursor, findBy<Key> or findManyBy<Key>.`,
 					),
 				);
 				continue;

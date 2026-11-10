@@ -1,4 +1,4 @@
-import { catalog, recordPlugin } from "./catalog";
+import { catalog, identityKeysOf, recordPlugin } from "./catalog";
 import { cyclesOf } from "./entity-events";
 import { flagOf } from "./graph";
 import { type Field, parseField } from "./model";
@@ -75,7 +75,7 @@ function canonicalRecord(
 	const pluginKeys = new Set(
 		(plugins ?? []).flatMap((plugin) => recordPlugin(plugin)?.keys ?? []),
 	);
-	const identity = new Set<string>(entity ? catalog().identityKeys : []);
+	const identity = new Set<string>(entity ? identityKeysOf(value) : []);
 	const implied = (key: string, flag: "unique" | "sensitive") => {
 		const parsed = parse(fields[key]);
 		return parsed ? flagOf(parsed, flag, scope) : false;
@@ -117,6 +117,7 @@ function canonicalRecord(
 		...(change ? { change } : {}),
 		...(plugins ? { plugins } : {}),
 		...(Object.keys(events).length > 0 ? { events } : {}),
+		...(entity && value.versioned === true ? { versioned: true } : {}),
 	};
 }
 

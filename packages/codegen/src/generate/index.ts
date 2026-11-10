@@ -409,6 +409,9 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 			],
 		]);
 	}
+	if (entity && decl.spec.versioned === true) {
+		options.push(["versioned", "true"]);
+	}
 	for (const cycle of CYCLES) {
 		const list = cycles[cycle];
 		if (!list || list.length === 0) continue;

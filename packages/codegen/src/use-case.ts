@@ -1,4 +1,9 @@
-import { catalog, genericUseCase, recordPlugin } from "./catalog";
+import {
+	catalog,
+	genericUseCase,
+	identityKeysOf,
+	recordPlugin,
+} from "./catalog";
 import { fieldsOfDecl } from "./graph";
 import type { Field } from "./model";
 import { checkImport, isImportObject } from "./provider";
@@ -256,7 +261,7 @@ const GENERIC_ERRORS = ["notFound", "conflict", "invalid", "owner"];
 function entityKeysOf(decl: Decl): string[] {
 	const plugins = Array.isArray(decl.spec.plugins) ? decl.spec.plugins : [];
 	return [
-		...catalog().identityKeys,
+		...identityKeysOf(decl.spec),
 		...Object.keys(fieldsOfDecl(decl) ?? {}),
 		...plugins.flatMap((name) =>
 			typeof name === "string" ? (recordPlugin(name)?.keys ?? []) : [],

@@ -322,6 +322,12 @@ const RecordDeclaration = Type.Object(
 			),
 		),
 		events: Type.Optional(EntityEvents),
+		versioned: Type.Optional(
+			Type.Boolean({
+				description:
+					"Entities only: adds a version identity key that update checks (optimistic concurrency, RepositoryConcurrencyConflict on a stale write) and bumps.",
+			}),
+		),
 	},
 	{ additionalProperties: false },
 );
@@ -337,7 +343,7 @@ const RepositoryDeclaration = Type.Object(
 		),
 		actions: Type.Array(Type.String(), {
 			description:
-				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), count.",
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, restore (soft deletion only), increment (number keys in change, atomic), count.",
 		}),
 		provider: Type.Optional(ProviderOrKey),
 		relations: Type.Optional(
