@@ -1,3 +1,4 @@
+import { type ILogger, resolveLogger, silentLogger } from "../logger/logger";
 import { isEntityClass } from "./entity";
 
 /** A class made by `entityOf`, including subclasses. */
@@ -14,11 +15,21 @@ export interface EventDefinition {
 	readonly [EventBrand]: true;
 }
 
+/** What the handler of an event gets next to the entity. */
+export interface EventHandlerContext {
+	/**
+	 * The logger of the application whose command raised the event; else the
+	 * started application's; a logger that writes nothing without either.
+	 */
+	readonly logger: ILogger;
+}
+
 /** One queued occurrence, referencing the original entity rather than a snapshot. */
 export interface EntityEvent<Entity = object> {
 	readonly name: string;
 	readonly entity: Entity;
-	handle(): Promise<void>;
+	/** Runs the handler; `logger` replaces the one it would get. */
+	handle(context?: Partial<EventHandlerContext>): Promise<void>;
 }
 
 export type EntityEventReference =
@@ -44,7 +55,10 @@ const queues = new WeakMap<object, EntityEvent<object>[]>();
 export function eventOf<Class extends AnyEntityClass>(
 	name: string,
 	entityClass: Class,
-	handler: (entity: InstanceType<Class>) => Promise<void>,
+	handler: (
+		entity: InstanceType<Class>,
+		context: EventHandlerContext,
+	) => Promise<void>,
 ): EventDefinition {
 	if (!isEntityClass(entityClass)) {
 		throw new TypeError("An event requires an entity class");
@@ -60,8 +74,13 @@ export function eventOf<Class extends AnyEntityClass>(
 		return Object.freeze({
 			name,
 			entity,
-			async handle(): Promise<void> {
-				await handler(entity as InstanceType<Class>);
+			async handle(context?: Partial<EventHandlerContext>): Promise<void> {
+				await handler(entity as InstanceType<Class>, {
+					logger:
+						context?.logger ??
+						resolveLogger(undefined, undefined) ??
+						silentLogger,
+				});
 			},
 		});
 	});

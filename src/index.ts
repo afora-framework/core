@@ -121,6 +121,7 @@ export type {
 	EntityEventReference,
 	EntityEvents,
 	EventDefinition,
+	EventHandlerContext,
 } from "./core/entity/event";
 export { eventOf } from "./core/entity/event";
 export {

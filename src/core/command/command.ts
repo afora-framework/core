@@ -12,8 +12,10 @@ import { guard } from "../exception/guard";
 import {
 	clock,
 	elapsed,
+	type ILogger,
 	logFailure,
 	resolveLogger,
+	silentLogger,
 	writeLog,
 } from "../logger/logger";
 import { isRepository } from "../repository/repository";
@@ -348,6 +350,7 @@ export function commandOf<
 		events: EntityEvent[];
 		context: unknown;
 		env: () => Readonly<Record<string, unknown>>;
+		logger: ILogger;
 	}> => {
 		if (typeof op !== "string" || !Object.hasOwn(frozenUseCases, op)) {
 			throw new UnknownCommandOperation({
@@ -426,6 +429,7 @@ export function commandOf<
 			...outcome,
 			context: callContext,
 			env: () => overrides?.merged ?? loadEnvironments(environments),
+			logger: logger ?? silentLogger,
 		};
 	};
 
@@ -462,6 +466,7 @@ export function commandOf<
 				events: raised,
 				context: callContext,
 				env,
+				logger,
 			} = await perform(op, input, options);
 			await applyPolicy(
 				command as unknown as AnyCommand,
@@ -472,6 +477,7 @@ export function commandOf<
 					raised,
 					context: callContext,
 					env,
+					logger,
 				},
 			);
 			return value;
@@ -492,6 +498,7 @@ async function applyPolicy(
 		readonly raised: readonly EntityEvent[];
 		readonly context: unknown;
 		readonly env: () => Readonly<Record<string, unknown>>;
+		readonly logger: ILogger;
 	},
 ): Promise<void> {
 	const { operation, raised } = call;
@@ -505,6 +512,7 @@ async function applyPolicy(
 		get env() {
 			return call.env();
 		},
+		logger: call.logger,
 	};
 	if (typeof policy === "function") {
 		try {
@@ -520,7 +528,7 @@ async function applyPolicy(
 	}
 	for (const [index, event] of raised.entries()) {
 		try {
-			await event.handle();
+			await event.handle({ logger: call.logger });
 		} catch (cause) {
 			if (!onEventError) {
 				throw new CommandEventFailed({

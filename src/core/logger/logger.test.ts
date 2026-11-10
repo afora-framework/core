@@ -3,8 +3,10 @@ import {
 	applicationOf,
 	blueprintOf,
 	commandOf,
+	type EventDefinition,
 	ExceptionLayers,
 	entityOf,
+	eventOf,
 	exceptionOf,
 	type ILogger,
 	type ILogProvider,
@@ -292,5 +294,79 @@ describe("the Logger dependency", () => {
 		expect(app.describe().useCases.Import?.dependencies).toEqual({
 			logger: { kind: "logger", ref: "Logger" },
 		});
+	});
+});
+
+describe("the logger in events", () => {
+	class Post extends entityOf(Name, { onCreate: () => Published }) {}
+	const Published: EventDefinition = eventOf(
+		"published",
+		Post,
+		async (post, { logger }) => {
+			logger.info("notify", { name: post.name });
+		},
+	);
+	const Posts = repositoryOf({ entity: Post, actions: ["create"] });
+	class Publish extends useCaseOf({
+		name: "Publish",
+		blueprint: Name,
+		response: blueprintOf(() => ({ post: Post })),
+		dependencies: { posts: Posts },
+	}) {
+		override async execute({ posts = this.dependencies.posts } = {}) {
+			return { post: await posts.create(this.input) };
+		}
+	}
+	const blogOf = (events?: Parameters<typeof commandOf>[0]["events"]) => {
+		const memory = memoryLogProvider();
+		const Blog = commandOf({
+			name: "Blog",
+			useCases: { publish: Publish },
+			...(events ? { events } : {}),
+		});
+		const app = applicationOf({
+			name: "blog",
+			entities: { Post },
+			repositories: { Posts },
+			useCases: { Publish },
+			commands: { Blog },
+			provider: inMemoryProvider(),
+			log: { level: "info", providers: [memory] },
+		});
+		return { app, memory };
+	};
+
+	test("a handler gets the logger of the application whose command raised it", async () => {
+		const { app, memory } = blogOf();
+		await app.commands.Blog.run("publish", { name: "hello" });
+		expect(memory.entries).toMatchObject([
+			{ application: "blog", event: "notify", fields: { name: "hello" } },
+		]);
+	});
+
+	test("a handler policy gets it in its info", async () => {
+		const seen: string[] = [];
+		const { app, memory } = blogOf(async (raised, { logger }) => {
+			logger.info("batch", { events: raised.length });
+			seen.push("ran");
+		});
+		await app.commands.Blog.run("publish", { name: "hello" });
+		expect(seen).toEqual(["ran"]);
+		expect(memory.entries.map(({ event }) => event)).toEqual(["batch"]);
+	});
+
+	test("an event handled by hand gets the started application's, or the one given", async () => {
+		const { app, memory } = blogOf("manual");
+		await app.start();
+		const { events } = await app.commands.Blog.execute("publish", {
+			name: "hello",
+		});
+		await events[0]?.handle();
+		const lines: string[] = [];
+		await events[0]?.handle({
+			logger: { ...app.logger, info: (event) => lines.push(event) },
+		});
+		expect(memory.entries.map(({ event }) => event)).toEqual(["notify"]);
+		expect(lines).toEqual(["notify"]);
 	});
 });
