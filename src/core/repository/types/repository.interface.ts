@@ -17,6 +17,7 @@ import type {
 	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
+	RepositoryForEachPage,
 	RepositoryQuery,
 } from "./query.interface";
 
@@ -163,7 +164,8 @@ export type RepositoryMethods<
 	("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) &
 	("exists" extends Actions ? RepositoryExists<Entity> : unknown) &
 	("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown) &
-	("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown);
+	("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown) &
+	("forEachPage" extends Actions ? RepositoryForEachPage<Entity> : unknown);
 
 /** A method a repository of `Entity` can have, e.g. `"findByEmail"`. */
 export type RepositoryAction<Entity> =
@@ -177,7 +179,8 @@ export type RepositoryAction<Entity> =
 	| "findMany"
 	| "exists"
 	| "findPage"
-	| "findCursor";
+	| "findCursor"
+	| "forEachPage";
 
 /**
  * A repository of `Entity` with the methods of `Actions`, whose provider gets

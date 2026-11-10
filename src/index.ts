@@ -425,9 +425,13 @@ export type {
 	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
+	RepositoryForEachPage,
 	RepositoryOrder,
 	RepositoryPage,
 	RepositoryQuery,
+	RepositoryWalkOptions,
+	RepositoryWalkPage,
+	RepositoryWalkResult,
 	RepositoryWhere,
 } from "./core/repository/types/query.interface";
 export type {

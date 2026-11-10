@@ -18,6 +18,11 @@
 - `coerceTextValues(blueprint, texts)`: text values as the scalar fields of a blueprint take them (numbers, booleans), for sinks that read text; `@afora/hono` and `@afora/mcp` now use it instead of their own copies.
 - `@afora/hono`: the `webhooks` option verifies the signatures of incoming webhooks (Stripe, GitHub, Standard Webhooks, plain HMAC-SHA256) and can strip undeclared keys. See `packages/hono/README.md#webhooks`.
 
+### Page walker (#37)
+
+- The repository action `forEachPage(query, fn, { until? })` walks the pages of a `findCursor` query and awaits `fn(items, { index, next })` on each, for bulk work (deleting entries, rewriting rows, migrations), and gives `{ done, next?, pages, items }`. `until`, a deadline (`Date` or epoch milliseconds) or a function, is checked before each page; when it stops the walk, `done` is `false` and `next` is the `after` to resume from (the `after` given when no page ran). Rows added or removed between pages or calls, by `fn` too, are neither repeated nor skipped. An error of `fn` rejects through the repository; it needs `findMany` and a provider with `capabilities.keyset`. In a use case, the repository `fn` calls has the overrides of `execute`. New types `RepositoryForEachPage`, `RepositoryWalkOptions`, `RepositoryWalkPage` and `RepositoryWalkResult`. See `docs/repositories.md`.
+- `@afora/codegen` and `@afora/mcp` accept `forEachPage` in the `actions` of a repository; a `find` step that names it is rejected with a clear reason, in `afora.json` and in core steps, as it takes a function.
+
 ## 0.0.7 — unreleased (draft: dated when it is published)
 
 ### Changed
