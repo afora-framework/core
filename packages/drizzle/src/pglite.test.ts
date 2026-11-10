@@ -54,7 +54,8 @@ async function freshDatabase() {
 providerContract(
 	{ describe, it, expect },
 	async () => drizzleProvider(await freshDatabase()),
-	{ indexes: true },
+	// The contract tables have no column for the schema version key.
+	{ indexes: true, schemaVersionKey: false },
 );
 
 describe("repositoryOf on Postgres", () => {

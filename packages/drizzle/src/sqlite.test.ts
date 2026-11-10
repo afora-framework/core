@@ -49,7 +49,8 @@ function contractDatabase() {
 providerContract(
 	{ describe, it, expect },
 	() => drizzleProvider(contractDatabase()),
-	{ indexes: true },
+	// The contract tables have no column for the schema version key.
+	{ indexes: true, schemaVersionKey: false },
 );
 
 describe("catalog", () => {
