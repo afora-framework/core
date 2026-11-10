@@ -14,6 +14,7 @@ import {
 	AbstractEntity,
 	ENTITY_IDENTITY_KEYS,
 	ENTITY_MEMBERS,
+	ENTITY_VERSION_KEY,
 	EntityClock,
 	EntitySettings,
 	EntityUniqueKeys,
@@ -31,6 +32,7 @@ import type {
 	EntityOptions,
 	IEntityIdentity,
 } from "./types/entity.interface";
+import { VersionIdentity } from "./version";
 
 /**
  * An `entityOf` that gives every entity the `identity` fields, its ids made
@@ -57,20 +59,29 @@ export function entityBuilderOf<
 		blueprint: AnyBlueprint,
 		options: EntityOptions<IBlueprintCollection> = {},
 	) => {
+		const versioned = options.versioned === true;
+		const identityKeys: readonly string[] = versioned
+			? [...ENTITY_IDENTITY_KEYS, ENTITY_VERSION_KEY]
+			: ENTITY_IDENTITY_KEYS;
 		for (const key of Object.keys(blueprint.properties)) {
-			if (RESERVED_ENTITY_KEYS.includes(key)) {
+			if (
+				RESERVED_ENTITY_KEYS.includes(key) ||
+				(versioned && key === ENTITY_VERSION_KEY)
+			) {
 				throw new ReservedEntityKey({ source: "entity", details: { key } });
 			}
 		}
 		for (const key of options.change ?? []) {
-			if ((ENTITY_IDENTITY_KEYS as readonly string[]).includes(key)) {
+			if (identityKeys.includes(key)) {
 				throw new ImmutableEntityKey({ source: "entity", details: { key } });
 			}
 		}
 
 		const DeclaredEntity = declareRecord(
 			AbstractEntity,
-			identity.join(blueprint),
+			versioned
+				? identity.join(VersionIdentity, blueprint)
+				: identity.join(blueprint),
 			{
 				...withoutStorage(options),
 				unique: ["id", ...(options.unique ?? [])],
@@ -92,7 +103,7 @@ export function entityBuilderOf<
 
 		Object.defineProperty(DeclaredEntity, EntitySettings, {
 			value: Object.freeze({
-				versioned: options.versioned === true,
+				versioned,
 				expires: options.expires,
 			}),
 		});

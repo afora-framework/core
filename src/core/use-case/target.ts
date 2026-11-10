@@ -4,7 +4,7 @@ import { isBlueprintList } from "../blueprint/list";
 import { optionalOf } from "../blueprint/optional";
 import { recordFieldOf } from "../blueprint/record-field";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
-import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
+import { identityKeysOf } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
 import { propertyInputOf } from "../property/input";
 import { isProperty } from "../property/is-property";
@@ -20,8 +20,6 @@ import type {
 	UseCaseFieldPlan,
 	UseCaseTargetInfo,
 } from "./types/plugin.interface";
-
-const IDENTITY: readonly string[] = ENTITY_IDENTITY_KEYS;
 
 /** Whether a field accepts `undefined`. */
 function isOptionalField(field: BlueprintField): boolean {
@@ -74,7 +72,7 @@ function planOf(
 	return Object.freeze({
 		key,
 		field,
-		identity: IDENTITY.includes(key),
+		identity: identityKeysOf(entity).includes(key),
 		plugin: owners.get(key),
 		sensitive: entity.options.sensitive.includes(key),
 		unique: entity.options.unique.includes(key),

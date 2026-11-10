@@ -1,5 +1,6 @@
 import {
 	InvalidRepositoryDeclaration,
+	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
 } from "./exceptions";
@@ -74,7 +75,12 @@ function scopeOf(initial: Tables, root: boolean) {
 	};
 
 	const provider: IRepositoryProvider = {
-		capabilities: Object.freeze({ transactions: true, keyset: true }),
+		capabilities: Object.freeze({
+			transactions: true,
+			keyset: true,
+			versioning: true,
+			atomic: true,
+		}),
 		findOne: (context, query = {}) =>
 			whenIdle(() => {
 				const [first] = selectRows(tableOf(context).values(), {
@@ -97,17 +103,62 @@ function scopeOf(initial: Tables, root: boolean) {
 				assertUnique(context, data);
 				table.set(idOf(data), copy(data));
 			}),
-		update: (context, data) =>
+		update: (context, data, options = {}) =>
 			whenIdle(() => {
 				const table = tableOf(context);
-				if (!table.has(idOf(data))) {
+				const stored = table.get(idOf(data));
+				if (!stored) {
 					throw new RepositoryEntityNotFound({
 						source: context.name,
 						details: { id: idOf(data) },
 					});
 				}
+				const { expectedVersion: expected } = options;
+				if (expected !== undefined && stored.version !== expected) {
+					throw new RepositoryConcurrencyConflict({
+						source: context.name,
+						details: {
+							id: idOf(data),
+							expected,
+							...(typeof stored.version === "number"
+								? { actual: stored.version }
+								: {}),
+						},
+					});
+				}
 				assertUnique(context, data);
 				table.set(idOf(data), copy(data));
+			}),
+		increment: (context, id, deltas, options = {}) =>
+			whenIdle(() => {
+				const table = tableOf(context);
+				const stored = table.get(id);
+				if (!stored || stored.deletedAt != null) {
+					if (!options.create) {
+						throw new RepositoryEntityNotFound({
+							source: context.name,
+							details: { id },
+						});
+					}
+					// A soft-deleted row keeps its id, as an insert finds.
+					if (stored) {
+						throw new RepositoryUniqueViolation({
+							source: context.name,
+							details: { key: "id" },
+						});
+					}
+					const created = { ...options.create, id };
+					assertUnique(context, created);
+					table.set(id, copy(created));
+					return copy(created);
+				}
+				const next: Record<string, unknown> = { ...stored, ...options.set };
+				for (const [key, delta] of Object.entries(deltas)) {
+					const value = stored[key];
+					next[key] = (typeof value === "number" ? value : 0) + delta;
+				}
+				table.set(id, copy(next));
+				return copy(next);
 			}),
 		remove: (context, id) =>
 			whenIdle(() => {

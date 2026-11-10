@@ -93,6 +93,55 @@ export interface RepositoryUpdate<Entity> {
 	update(entity: EntityInstanceOf<Entity>): Promise<EntityInstanceOf<Entity>>;
 }
 
+type ChangeKeyOf<Entity> =
+	EntityInstanceOf<Entity> extends {
+		readonly change: infer Change;
+	}
+		? keyof Change & string
+		: never;
+
+/**
+ * The keys `increment` takes for `Entity`: those of its `change` list that
+ * hold a number.
+ */
+export type EntityIncrementKeyOf<Entity> = {
+	[Key in ChangeKeyOf<Entity>]: NonNullable<ValueAt<Entity, Key>> extends number
+		? Key
+		: never;
+}[ChangeKeyOf<Entity>];
+
+/** What `increment` adds to each key, e.g. `{ views: 1 }`. */
+export type RepositoryIncrementDeltas<Entity> = {
+	readonly [Key in EntityIncrementKeyOf<Entity>]?: number;
+};
+
+/** The options of `increment`. */
+export interface RepositoryIncrementOptions<Entity> {
+	/**
+	 * The input of the entity to create when the id holds none, without its
+	 * `id` (the one given) and with the keys of the deltas optional (0 when
+	 * left out); the deltas are added to it.
+	 */
+	readonly create?: Omit<
+		Entity extends new (value: infer Input) => unknown ? Input : never,
+		"id" | EntityIncrementKeyOf<Entity>
+	> & {
+		readonly [Key in EntityIncrementKeyOf<Entity>]?: number;
+	};
+}
+
+/**
+ * `increment`: adds the deltas to the numeric keys of the entity of the id
+ * (or the one given) in one atomic write, and gives the entity as stored.
+ */
+export interface RepositoryIncrement<Entity> {
+	increment(
+		entity: EntityInstanceOf<Entity> | string,
+		deltas: RepositoryIncrementDeltas<Entity>,
+		options?: RepositoryIncrementOptions<Entity>,
+	): Promise<EntityInstanceOf<Entity>>;
+}
+
 /** `delete`: destroys the entity (or the one of the id), removes it and gives it. */
 export interface RepositoryDelete<Entity> {
 	delete(
@@ -159,6 +208,7 @@ export type RepositoryMethods<
 	("update" extends Actions ? RepositoryUpdate<Entity> : unknown) &
 	("delete" extends Actions ? RepositoryDelete<Entity> : unknown) &
 	("restore" extends Actions ? RepositoryRestore<Entity> : unknown) &
+	("increment" extends Actions ? RepositoryIncrement<Entity> : unknown) &
 	("count" extends Actions ? RepositoryCount<Entity> : unknown) &
 	("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) &
 	("exists" extends Actions ? RepositoryExists<Entity> : unknown) &
@@ -173,6 +223,7 @@ export type RepositoryAction<Entity> =
 	| "update"
 	| "delete"
 	| "restore"
+	| "increment"
 	| "count"
 	| "findMany"
 	| "exists"
@@ -197,6 +248,20 @@ export type AnyRepository = AbstractRepository<any, any, any>;
 
 /** A value of an entity as a provider stores it: plain, unmasked. */
 export type RepositoryData = Readonly<Record<string, unknown>>;
+
+/** What `update` of a provider gets after the data. */
+export interface ProviderUpdateOptions {
+	/** The `version` the stored row must hold for the write to happen. */
+	readonly expectedVersion?: number;
+}
+
+/** What `increment` of a provider gets after the deltas. */
+export interface ProviderIncrementOptions {
+	/** Values stored as they are by the same write, e.g. `updatedAt`. */
+	readonly set?: RepositoryData;
+	/** The row to insert when the id holds none. */
+	readonly create?: RepositoryData;
+}
 
 /** What a provider gets with every call: whose entities, and the environment. */
 export interface RepositoryContext<Environment = unknown> {
@@ -233,11 +298,31 @@ export interface IRepositoryProvider<Environment = unknown> {
 		context: RepositoryContext<Environment>,
 		data: RepositoryData,
 	): Promise<void>;
+	/**
+	 * With `options.expectedVersion`, writes only when the stored `version` is
+	 * that one, and throws `RepositoryConcurrencyConflict` otherwise; only a
+	 * provider with `capabilities.versioning` is given it.
+	 */
 	update(
 		context: RepositoryContext<Environment>,
 		data: RepositoryData,
+		options?: ProviderUpdateOptions,
 	): Promise<void>;
 	remove(context: RepositoryContext<Environment>, id: string): Promise<void>;
+	/**
+	 * Adds each of `deltas` to the stored number of its key (a missing one
+	 * counts as 0) and stores `options.set` in the same atomic write, then
+	 * gives the row as stored. Only rows that are not soft-deleted match. When
+	 * the id holds none, inserts `options.create` as it is and gives it, or
+	 * throws `RepositoryEntityNotFound` without it; a concurrent insert of the
+	 * same id still gets the deltas added. Advertised by `capabilities.atomic`.
+	 */
+	increment?(
+		context: RepositoryContext<Environment>,
+		id: string,
+		deltas: Readonly<Record<string, number>>,
+		options?: ProviderIncrementOptions,
+	): Promise<RepositoryData>;
 	count(
 		context: RepositoryContext<Environment>,
 		query?: RepositoryQuery,

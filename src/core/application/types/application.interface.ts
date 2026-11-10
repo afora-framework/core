@@ -390,6 +390,8 @@ export interface RecordDescription {
 			>
 		>
 	>;
+	/** Whether the entity is versioned (`entityOf(..., { versioned: true })`); present only when it is. */
+	readonly versioned?: true;
 }
 
 /** What a use case depends on, by the name it has in the application. */

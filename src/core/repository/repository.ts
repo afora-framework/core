@@ -1,6 +1,14 @@
+import { fieldOf } from "../blueprint/callable";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
-import { EntityClock, EntityUniqueKeys } from "../entity/abstract-entity";
+import {
+	EntityClock,
+	EntityUniqueKeys,
+	identityKeysOf,
+	isVersionedEntityClass,
+	storeEntityVersion,
+} from "../entity/abstract-entity";
 import { isEntity, isEntityClass } from "../entity/entity";
+import { enqueueLifecycle } from "../entity/event";
 import {
 	type EnvironmentDependencies,
 	isEnvironment,
@@ -8,6 +16,8 @@ import {
 } from "../environment/environment";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { guard } from "../exception/guard";
+import type { Issue } from "../parse/types/parse.interface";
+import { isProperty } from "../property/is-property";
 import {
 	type RecordDataOptions,
 	recordDataOf,
@@ -20,6 +30,7 @@ import { decodeCursor, encodeCursor } from "./cursor";
 import {
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
+	InvalidRepositoryIncrement,
 	InvalidRepositoryQuery,
 	RepositoryEntityNotFound,
 } from "./exceptions";
@@ -308,10 +319,187 @@ const create = action(async (self, input: unknown) => {
 	return entity;
 });
 
+/** The current date and time, by the clock of the entity class of `context`. */
+function nowOf(context: RepositoryContext): string {
+	return (
+		context.entity as unknown as {
+			readonly [EntityClock]: { now(): string };
+		}
+	)[EntityClock].now();
+}
+
+/**
+ * Throws `InvalidRepositoryDeclaration` when the entity is versioned and the
+ * provider does not check versions. Checked on each write, not when declared,
+ * as a provider may only be known once an application starts.
+ */
+function assertVersioning(self: Internal): void {
+	if (self.provider.capabilities?.versioning === true) return;
+	invalid(
+		self.context.name,
+		`${recordNameOf(self.context.entity)} is versioned, and the provider does not check versions (capabilities.versioning).`,
+	);
+}
+
+/**
+ * Stores `data`, the new value of a stored entity. For a versioned entity,
+ * only when the stored `version` is still the one of `data`, writing the
+ * next one. Gives what it stored.
+ */
+async function write(
+	self: Internal,
+	data: RepositoryData,
+): Promise<RepositoryData> {
+	if (!isVersionedEntityClass(self.context.entity)) {
+		await self.provider.update(self.context, data);
+		return data;
+	}
+	assertVersioning(self);
+	const expected = data.version as number;
+	const next = { ...data, version: expected + 1 };
+	await self.provider.update(self.context, next, {
+		expectedVersion: expected,
+	});
+	return next;
+}
+
+/** `entity` stored as `data` says; its version moves to the one written. */
+async function writeEntity(self: Internal, entity: unknown): Promise<void> {
+	const written = await write(self, self.dataOf(entity));
+	if (written.version !== undefined && isEntity(entity)) {
+		storeEntityVersion(entity, written.version as number);
+	}
+}
+
 const update = action(async (self, entity: unknown) => {
-	await self.provider.update(self.context, self.dataOf(entity));
+	await writeEntity(self, entity);
 	return entity;
 });
+
+function isPlainObject(
+	value: unknown,
+): value is Readonly<Record<string, unknown>> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Whether `field` is a property holding a number. */
+function isNumericField(field: BlueprintField | undefined): boolean {
+	if (field === undefined) return false;
+	const property = fieldOf(field);
+	if (!isProperty(property)) return false;
+	const { type } = property.type.schema.type.Type() as { type?: unknown };
+	return type === "number" || type === "integer";
+}
+
+/**
+ * `deltas`, checked: each key is a number in the `change` list of the
+ * entity, each value a finite number. Throws `InvalidRepositoryIncrement`
+ * with an issue for each that is not.
+ */
+function deltasOf(
+	context: RepositoryContext,
+	deltas: unknown,
+): Readonly<Record<string, number>> {
+	const { name: source } = context;
+	const fail = (reason: string, issues: readonly Issue[]): never => {
+		throw new InvalidRepositoryIncrement({
+			source,
+			details: { reason, issues },
+		});
+	};
+	if (!isPlainObject(deltas) || Object.keys(deltas).length === 0) {
+		const message = "Expected an object of the numbers to add, by key.";
+		fail(message, [{ code: "invalid_type", path: [], message, source }]);
+	}
+	const { change } = context.entity.options as {
+		readonly change: readonly string[];
+	};
+	const properties = context.entity.blueprint.properties as Readonly<
+		Record<string, BlueprintField | undefined>
+	>;
+	const issues: Issue[] = [];
+	for (const [key, value] of Object.entries(deltas as object)) {
+		if (!change.includes(key) || !isNumericField(properties[key])) {
+			issues.push({
+				code: "undeclared_key",
+				path: [key],
+				message: `"${key}" is not a number in the change list of ${recordNameOf(context.entity)}.`,
+				source,
+			});
+		} else if (typeof value !== "number" || !Number.isFinite(value)) {
+			issues.push({
+				code: "invalid_value",
+				path: [key],
+				message: "Expected a finite number.",
+				source,
+			});
+		}
+	}
+	if (issues.length > 0) {
+		fail(
+			`"${source}" cannot increment ${issues.map((issue) => `"${issue.path[0]}"`).join(", ")}.`,
+			issues,
+		);
+	}
+	return deltas as Readonly<Record<string, number>>;
+}
+
+/**
+ * The entity `increment` creates for `id` when it holds none: `input`
+ * without identity keys, with each delta added to its value (0 when left
+ * out), built and validated by the entity, with its `onCreate` events.
+ */
+function createdOf(
+	context: RepositoryContext,
+	id: string,
+	input: unknown,
+	deltas: Readonly<Record<string, number>>,
+): object {
+	const identity = identityKeysOf(context.entity);
+	const value: Record<string, unknown> = isPlainObject(input)
+		? Object.fromEntries(
+				Object.entries(input).filter(([key]) => !identity.includes(key)),
+			)
+		: {};
+	for (const [key, delta] of Object.entries(deltas)) {
+		const base = value[key];
+		value[key] = (typeof base === "number" ? base : 0) + delta;
+	}
+	const Entity = context.entity as unknown as new (value: unknown) => object;
+	const entity = new Entity({ ...value, id });
+	enqueueLifecycle(entity, "onCreate");
+	return entity;
+}
+
+const increment = action(
+	async (self, target: unknown, deltas: unknown, options: unknown) => {
+		const { context } = self;
+		const id =
+			typeof target === "string" ? target : (self.dataOf(target).id as string);
+		const checked = deltasOf(context, deltas);
+		if (options !== undefined && !isPlainObject(options)) {
+			invalid(context.name, "Expected the options of increment as an object.");
+		}
+		const versioned = isVersionedEntityClass(context.entity);
+		if (versioned) assertVersioning(self);
+		const { create } = (options ?? {}) as { readonly create?: unknown };
+		const created =
+			create === undefined
+				? undefined
+				: createdOf(context, id, create, checked);
+		const stored = await (
+			self.provider.increment as NonNullable<IRepositoryProvider["increment"]>
+		)(context, id, versioned ? { ...checked, version: 1 } : checked, {
+			set: { updatedAt: nowOf(context) },
+			...(created === undefined ? {} : { create: self.dataOf(created) }),
+		});
+		// An increment always sets `updatedAt`: a row without it is the one created.
+		if (created !== undefined && stored.updatedAt === undefined) return created;
+		const entity = await self.hydrate(stored);
+		enqueueLifecycle(entity, "onUpdate");
+		return entity;
+	},
+);
 
 const remove = action(async (self, target: unknown) => {
 	const { context } = self;
@@ -336,7 +524,7 @@ const remove = action(async (self, target: unknown) => {
 	};
 	if (!destroyable.isDeleted) destroyable.destroy();
 	if (stateOf(self).deletion === "soft") {
-		await self.provider.update(context, self.dataOf(entity));
+		await writeEntity(self, entity);
 	} else {
 		await self.provider.remove(context, data.id as string);
 	}
@@ -359,16 +547,8 @@ const restore = action(async (self, target: unknown) => {
 	}
 	if (data.deletedAt === undefined) return self.hydrate(data);
 	const { deletedAt: _deletedAt, ...alive } = data;
-	const restored = {
-		...alive,
-		updatedAt: (
-			context.entity as unknown as {
-				readonly [EntityClock]: { now(): string };
-			}
-		)[EntityClock].now(),
-	};
-	await self.provider.update(context, restored);
-	return self.hydrate(restored);
+	const restored = { ...alive, updatedAt: nowOf(context) };
+	return self.hydrate(await write(self, restored));
 });
 
 const count = action(async (self, query: unknown) =>
@@ -389,7 +569,7 @@ const NEEDS: Readonly<Record<string, readonly (keyof IRepositoryProvider)[]>> =
 		exists: ["findOne"],
 		findPage: ["findMany", "count"],
 		findCursor: ["findMany"],
-		// #34: increment
+		increment: ["increment"],
 		// #37: forEachPage
 	};
 
@@ -427,7 +607,7 @@ function invalid(source: string, reason: string): never {
  * A repository of `entity` with the methods of `actions`: `findBy<Key>` for a
  * unique key (`id`, `options.unique`, a `unique` property), giving the entity
  * or `undefined`; `findManyBy<Key>` for any other key, giving a list;
- * `create`, `update`, `delete`, `restore` (soft deletion only), `count`, and the queries `findMany`,
+ * `create`, `update`, `delete`, `restore` (soft deletion only), `increment`, `count`, and the queries `findMany`,
  * `exists`, `findPage` and `findCursor`. Every method is async and reads and writes through `provider`
  * (a new `inMemoryProvider()` by default), which gets the variables of
  * `environmentDependencies` as `context.env`. The repository can be a
@@ -485,7 +665,7 @@ export function repositoryOf<
 	methods.set("exists", ["exists", exists]);
 	methods.set("findPage", ["findPage", findPage]);
 	methods.set("findCursor", ["findCursor", findCursor]);
-	// #34: methods.set("increment", ...)
+	methods.set("increment", ["increment", increment]);
 	// #37: methods.set("forEachPage", ...)
 
 	class DeclaredRepository extends AbstractRepository<

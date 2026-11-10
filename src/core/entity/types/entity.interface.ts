@@ -25,8 +25,8 @@ import type {
 import type { StandardSchemaV1 } from "../../standard/standard-schema";
 import type { Kind } from "../../symbols/kind";
 import type { AbstractEntity, EntityUniqueKeys } from "../abstract-entity";
-
 import type { EntityClassBrand, EntityEvents } from "../event";
+import type { EntityVersion } from "../version";
 
 /** The keys every entity has, which its blueprint cannot declare. */
 export type EntityIdentityKey = "id" | "createdAt" | "updatedAt" | "deletedAt";
@@ -38,6 +38,15 @@ export type EntityIdentityKey = "id" | "createdAt" | "updatedAt" | "deletedAt";
 export type IEntityIdentity = {
 	readonly [Key in EntityIdentityKey]: BlueprintField;
 };
+
+/** The identity key a versioned entity adds: `version`, a positive integer. */
+export type IEntityVersion = { readonly version: typeof EntityVersion };
+
+/** `Identity`, with `version` when `Versioned` is `true`. */
+export type VersionedIdentity<
+	Identity extends IEntityIdentity,
+	Versioned extends boolean,
+> = Versioned extends true ? Identity & IEntityVersion : Identity;
 
 /** What an entity builder needs: the identity fields, and how to make an id and a timestamp. */
 export interface EntityBuilderSettings<
@@ -95,7 +104,11 @@ export type EntityOptions<
 
 /** How an entity is stored: optimistic concurrency and expiry. */
 export interface EntityStorageOptions {
-	/** Adds a `version` identity key checked by `update` (#44). */
+	/**
+	 * Adds a `version` identity key (1 when created) that the `update` of its
+	 * repository checks and increments, throwing `RepositoryConcurrencyConflict`
+	 * when the stored one differs: optimistic concurrency.
+	 */
 	readonly versioned?: boolean;
 	/** When records of the entity expire (#35). */
 	readonly expires?: EntityExpires;
@@ -208,6 +221,7 @@ export type EntityBuilder<
 	const Unique extends readonly RecordKey<Properties>[] = [],
 	const Plugins extends readonly AnyRecordPlugin[] = [],
 	const Sensitive extends readonly RecordKey<Properties>[] = [],
+	const Versioned extends boolean = false,
 >(
 	blueprint: IBlueprint<Properties, boolean>,
 	options?: EntityOptions<
@@ -217,9 +231,9 @@ export type EntityBuilder<
 		Plugins,
 		Context,
 		Sensitive
-	>,
+	> & { readonly versioned?: Versioned },
 ) => EntityConstructor<
-	Identity,
+	VersionedIdentity<Identity, Versioned>,
 	WithPluginProperties<Properties, Plugins>,
 	Change,
 	readonly (Unique[number] | PluginUniqueKey<Plugins>)[],

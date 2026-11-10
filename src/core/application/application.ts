@@ -14,7 +14,10 @@ import {
 	verifyCommand,
 } from "../command/command";
 import type { AnyCommand } from "../command/types/command.interface";
-import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
+import {
+	identityKeysOf,
+	isVersionedEntityClass,
+} from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
 import { eventHasHandler, lifecycleEventsOf } from "../entity/event";
 import {
@@ -823,7 +826,7 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 	const plugins = pluginsOf(Record).map((plugin) => plugin.toJSON());
 	const skip = new Set<string>(plugins.flatMap((plugin) => plugin.keys));
 	if (entry.collection === "entities") {
-		for (const key of ENTITY_IDENTITY_KEYS) skip.add(key);
+		for (const key of identityKeysOf(Record)) skip.add(key);
 	}
 	// Keys the options list on their own: not those a property or a plugin implies.
 	const own = (keys: readonly string[], flag?: "sensitive" | "unique") =>
@@ -853,6 +856,9 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 		},
 		plugins,
 		...(Object.keys(events).length > 0 ? { events } : {}),
+		...(entry.collection === "entities" && isVersionedEntityClass(Record)
+			? { versioned: true }
+			: {}),
 	};
 }
 

@@ -18,7 +18,10 @@ import {
 	pullEntityEvents,
 } from "./event";
 import { DeletedEntity, ImmutableEntityKey } from "./exceptions";
-import type { EntityIdentityKey } from "./types/entity.interface";
+import type {
+	EntityIdentityKey,
+	EntityStorageSettings,
+} from "./types/entity.interface";
 
 /** The keys every entity has, which only the entity itself changes. */
 export const ENTITY_IDENTITY_KEYS: readonly EntityIdentityKey[] = Object.freeze(
@@ -48,6 +51,51 @@ export const EntityClock = Symbol("entityClock");
 export const EntityUniqueKeys = Symbol("entityUniqueKeys");
 /** The storage options of an entity class (`versioned`, `expires`). */
 export const EntitySettings = Symbol("entitySettings");
+
+/** The key a versioned entity adds to its identity. */
+export const ENTITY_VERSION_KEY = "version";
+
+/** The storage settings of an entity class; `undefined` for any other value. */
+function entitySettingsOf(
+	entityClass: unknown,
+): EntityStorageSettings | undefined {
+	if (typeof entityClass !== "function") return undefined;
+	return (entityClass as { readonly [EntitySettings]?: EntityStorageSettings })[
+		EntitySettings
+	];
+}
+
+/** Whether `entityClass` was declared with `versioned: true`. */
+export function isVersionedEntityClass(entityClass: unknown): boolean {
+	return entitySettingsOf(entityClass)?.versioned === true;
+}
+
+/**
+ * The identity keys of `entityClass`: `ENTITY_IDENTITY_KEYS`, and `version`
+ * when it is versioned.
+ */
+export function identityKeysOf(entityClass: unknown): readonly string[] {
+	return isVersionedEntityClass(entityClass)
+		? VERSIONED_IDENTITY_KEYS
+		: ENTITY_IDENTITY_KEYS;
+}
+
+const VERSIONED_IDENTITY_KEYS: readonly string[] = Object.freeze([
+	...ENTITY_IDENTITY_KEYS,
+	ENTITY_VERSION_KEY,
+]);
+
+/**
+ * Stores `version` as the version of `entity`, as its repository does once
+ * a write succeeded. @internal
+ */
+export function storeEntityVersion(entity: object, version: number): void {
+	storeRecordValue(
+		entity as AbstractEntity<IBlueprintCollection>,
+		ENTITY_VERSION_KEY,
+		version,
+	);
+}
 
 /** What the statics of a class made by `entityOf` hold under `EntityClock`. */
 interface EntityClockSettings {
@@ -84,23 +132,36 @@ function assertAlive(entity: { readonly isDeleted: boolean }): void {
  * `value` with an `id` and a `createdAt` made by `clock` when it has none; any
  * other value as is, for the record to reject.
  */
-function withIdentity(value: unknown, clock: EntityClockSettings): unknown {
+function withIdentity(
+	value: unknown,
+	clock: EntityClockSettings,
+	versioned: boolean,
+): unknown {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		return value;
 	}
-	const { id, createdAt } = value as { id?: unknown; createdAt?: unknown };
-	if (id !== undefined && createdAt !== undefined) return value;
+	const { id, createdAt, version } = value as {
+		id?: unknown;
+		createdAt?: unknown;
+		version?: unknown;
+	};
+	const missingVersion = versioned && version === undefined;
+	if (id !== undefined && createdAt !== undefined && !missingVersion) {
+		return value;
+	}
 	return {
 		...value,
 		id: id === undefined ? clock.generateId() : id,
 		createdAt: createdAt === undefined ? clock.now() : createdAt,
+		...(missingVersion ? { version: 1 } : {}),
 	};
 }
 
 /**
  * A record with identity: an `id` and a `createdAt`, made when it is built
  * and never changed after, an `updatedAt` set by each change, and a
- * `deletedAt` set by `destroy`, after which it no longer changes.
+ * `deletedAt` set by `destroy`, after which it no longer changes. A versioned
+ * entity also has a `version`, 1 when built, which only its repository changes.
  */
 export abstract class AbstractEntity<
 	Properties extends IBlueprintCollection,
@@ -111,6 +172,7 @@ export abstract class AbstractEntity<
 			withIdentity(
 				value,
 				(new.target as unknown as Clocked)[EntityClock],
+				isVersionedEntityClass(new.target),
 			) as BlueprintInput<Properties>,
 		);
 		const input = value as { id?: unknown; createdAt?: unknown };
@@ -166,7 +228,7 @@ export abstract class AbstractEntity<
 		value: BlueprintValue<Properties>[Key],
 	): this {
 		const name = String(key);
-		if ((ENTITY_IDENTITY_KEYS as readonly string[]).includes(name)) {
+		if (identityKeysOf(this.constructor).includes(name)) {
 			throw new ImmutableEntityKey({
 				source: recordNameOf(this.constructor),
 				details: { key: name },
