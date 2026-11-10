@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Event policies in the spec: a command's `events` may be `{ "policy": name, "options"?: {...} }`, generated as the call of the factory (`publishEvents({...})` from `@afora/core`, or the export of a policy of the `policies` option) and extracted back from `describe()`. The top-level `publishers` (`{ key: { "import": "./realtime.ts#hub" } }`) becomes `applicationOf({ publishers })`, and extraction needs `publishers.<key>` in `imports`. New issues `unknown_event_policy`, `invalid_event_policy_options`, `unknown_publisher`, `invalid_publishers` and `invalid_policy_catalog`; `catalog().policies`; the `policies` option and the `--policies <module>` flag; the types `EventPolicySpec` and `EventPolicyCatalogEntry`. Generated code with a policy needs the `@afora/core` that has event policies.
+
 ## 0.0.1 — unreleased (draft: dated when it is published)
 
 ### Changed

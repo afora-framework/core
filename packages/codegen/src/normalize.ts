@@ -260,12 +260,25 @@ function canonicalCommand(value: Json): Json {
 			? { environments: [...value.environments] }
 			: {}),
 		...(value.events !== undefined && value.events !== "after-commit"
-			? { events: cloneJson(value.events) }
+			? { events: canonicalEvents(value.events) }
 			: {}),
 		...(value.onEventError === undefined
 			? {}
 			: { onEventError: cloneJson(value.onEventError) }),
 	};
+}
+
+/** The events policy: a policy without options loses its empty `options`. */
+function canonicalEvents(events: unknown): unknown {
+	if (
+		isObject(events) &&
+		Object.hasOwn(events, "policy") &&
+		isObject(events.options) &&
+		Object.keys(events.options).length === 0
+	) {
+		return { policy: events.policy };
+	}
+	return cloneJson(events);
 }
 
 function canonicalPipeEntry(entry: unknown): unknown {
@@ -337,6 +350,14 @@ export function normalizeSpec(
 						? [...spec.log.providers]
 						: [],
 				};
+	}
+	// Publishers by key in order.
+	if (isObject(spec.publishers) && Object.keys(spec.publishers).length > 0) {
+		out.publishers = Object.fromEntries(
+			Object.keys(spec.publishers)
+				.sort()
+				.map((key) => [key, cloneJson((spec.publishers as Json)[key])]),
+		);
 	}
 	for (const collection of COLLECTIONS) {
 		const declared = spec[collection];

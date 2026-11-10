@@ -5,6 +5,7 @@ import {
 	COLLECTION_KEYS,
 	type CodegenOptions,
 	confinePath,
+	type EventPolicyCatalogEntry,
 	type ProviderCatalogEntry,
 	type ResolvedSpec,
 	resolveExtended,
@@ -27,6 +28,8 @@ export interface Project {
 	readonly providers?: readonly ProviderCatalogEntry[];
 	/** External stages an output's `pipe` may name (`select` and `openapi` are built in). */
 	readonly stages?: readonly StageCatalogEntry[];
+	/** External event policies a command may name (`publishEvents` is built in). */
+	readonly policies?: readonly EventPolicyCatalogEntry[];
 }
 
 /** What codegen needs from the project besides the spec. */
@@ -34,6 +37,7 @@ export function codegenOptionsOf(project: Project): CodegenOptions {
 	return {
 		...(project.providers ? { providers: project.providers } : {}),
 		...(project.stages ? { stages: project.stages } : {}),
+		...(project.policies ? { policies: project.policies } : {}),
 	};
 }
 
@@ -43,6 +47,7 @@ export async function openProject(
 	app?: string,
 	providers?: readonly ProviderCatalogEntry[],
 	stages?: readonly StageCatalogEntry[],
+	policies?: readonly EventPolicyCatalogEntry[],
 ): Promise<Project> {
 	let root: string;
 	try {
@@ -55,6 +60,7 @@ export async function openProject(
 		...(app ? { app } : {}),
 		...(providers ? { providers } : {}),
 		...(stages ? { stages } : {}),
+		...(policies ? { policies } : {}),
 	};
 }
 

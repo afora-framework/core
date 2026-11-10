@@ -2,9 +2,16 @@
 
 ## Unreleased
 
+### Changed
+
+- `CommandEventInfo` has `publisher(name)`, and a handler policy that throws a `CommandEventFailed` itself has it passed up as it is instead of wrapped.
+- An application with `publishers` rebinds its use cases and commands, as one with a `provider` or a `log` does, so `app.commands.X` is not the declared command.
+
 ### Added
 
 - `stripUndeclared(shape, value)`: a copy of `value` with only the keys `shape` declares, at any depth (nested blueprints, list items, `optionalOf`, records and entities held as fields), for payloads that carry more than an operation reads, before parsing. It does not validate, never throws and does not change `value`. See `docs/standard-schema.md`.
+- Event policies: `eventPolicyOf({ name, validate?, handle, publishers? })` makes a factory of `events` handlers with JSON options, which an application describes as `{ kind: "policy", name, options }` instead of `{ kind: "opaque" }`; `eventPolicyDescriptionOf`, `eventPolicyCatalogOf` and `StdEventPolicies` go with it. The built-in `publishEvents({ publisher, topic, events?, handle?, onPublishError? })` runs each event's handler, then publishes `{ name, command, operation, entity }` (the entity masked by `toJSON`) to a publisher of the application, with topic placeholders `{event}`, `{command}`, `{operation}` and `{id}`; a failed publish is logged (`event-publish-failed`) or thrown. `applicationOf({ publishers })` declares publishers by key (inherited, checked against the policies of its commands, `describe().publishers`), and `CommandEventInfo.publisher(name)` resolves one for a handler. New exceptions `InvalidEventPolicy` and `PublisherNotBound`; new types `IEventPublisher`, `PublishedEvent`, `PublishEventsOptions`, `EventPolicySettings`, `EventPolicyFactory`, `EventPolicyDescription`, `EventPolicyOptions`, `IEventPolicyCatalog`. `memoryPublisher()` in `@afora/core/testing`. See `docs/commands.md#event-policies`.
+- `afora.json`: `"events": { "policy": "publishEvents", "options": {...} }` on a command and the top-level `"publishers": { key: { "import": ... } }`, validated (`unknown_event_policy`, `invalid_event_policy_options`, `unknown_publisher`, `invalid_publishers`), generated and extracted (`publishers.<key>` in `imports`); `--policies <module>` (codegen and `afora-mcp`) adds event policies of other catalogs.
 - `@afora/hono`: the `webhooks` option verifies the signatures of incoming webhooks (Stripe, GitHub, Standard Webhooks, plain HMAC-SHA256) and can strip undeclared keys. See `packages/hono/README.md#webhooks`.
 
 ## 0.0.7 — unreleased (draft: dated when it is published)

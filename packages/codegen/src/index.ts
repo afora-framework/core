@@ -32,6 +32,8 @@ export type {
 	EnumField,
 	EnumValue,
 	EnvironmentSpec,
+	EventPolicyCatalogEntry,
+	EventPolicySpec,
 	ExceptionSpec,
 	FieldSpec,
 	FieldsSpec,

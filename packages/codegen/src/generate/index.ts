@@ -11,6 +11,7 @@ import { isIdentifier, isObject } from "../spec/field";
 import {
 	type CodegenOptions,
 	DEFAULT_OUTPUT_DIR,
+	type EventPolicyCatalogEntry,
 	type ProviderCatalogEntry,
 	type ResolvedSpec,
 	type Spec,
@@ -445,6 +446,8 @@ interface Providers {
 	readonly catalog: ReadonlyMap<string, ProviderCatalogEntry>;
 	/** The stage factories supplied to codegen, by name. */
 	readonly stages: ReadonlyMap<string, StageCatalogEntry>;
+	/** The event policy factories supplied to codegen, by name. */
+	readonly policies: ReadonlyMap<string, EventPolicyCatalogEntry>;
 	readonly taken: ReadonlySet<string>;
 	/** The keys of `providers` in scope, and where an inherited one is imported from. */
 	readonly keys: ReadonlyMap<string, { readonly from?: string }>;
@@ -838,7 +841,9 @@ function commandDoc(
 			"events",
 			spec.events === "manual"
 				? literal("manual")
-				: importedDoc(spec.events, e, providers),
+				: isObject(spec.events) && Object.hasOwn(spec.events, "policy")
+					? policyDoc(spec.events, e, providers)
+					: importedDoc(spec.events, e, providers),
 		]);
 	}
 	if (spec.onEventError !== undefined) {
@@ -851,6 +856,23 @@ function commandDoc(
 		callWithObject(e.use("commandOf"), objectDoc(props, true)),
 		";",
 	];
+}
+
+/** `publishEvents({ ... })`, or the factory of a policy supplied to codegen. */
+function policyDoc(
+	entry: Record<string, unknown>,
+	e: Emitter,
+	providers: Providers,
+): Doc {
+	const name = entry.policy as string;
+	const supplied = providers.policies.get(name);
+	const factory = supplied
+		? e.bind(supplied.module, supplied.export, providers.taken)
+		: e.use(name);
+	const options = entry.options as Record<string, unknown> | undefined;
+	return options && Object.keys(options).length > 0
+		? callWithObject(factory, literal(options))
+		: `${factory}()`;
 }
 
 /** `select({ tags: ["public"] })`, `openapi({ ... })` or the imported stage. */
@@ -1069,6 +1091,9 @@ export function generate(
 			(options.providers ?? []).map((entry) => [entry.name, entry]),
 		),
 		stages: new Map((options.stages ?? []).map((entry) => [entry.name, entry])),
+		policies: new Map(
+			(options.policies ?? []).map((entry) => [entry.name, entry]),
+		),
 		taken: new Set([
 			...catalog().reservedDeclarationNames,
 			...takenNames,
@@ -1238,6 +1263,21 @@ export function generate(
 	}
 	if (spec.log !== undefined) {
 		props.push(["log", logDoc(spec.log, app, providers)]);
+	}
+	const publishers = (spec as { publishers?: Record<string, unknown> })
+		.publishers;
+	if (publishers && Object.keys(publishers).length > 0) {
+		props.push([
+			"publishers",
+			objectDoc(
+				Object.entries(publishers).map(
+					([key, publisher]) =>
+						[key, importedDoc(publisher, app, providers)] as const,
+				),
+				false,
+				true,
+			),
+		]);
 	}
 	for (const [key, kind] of [
 		["properties", "property"],

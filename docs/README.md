@@ -10,7 +10,7 @@ The [README](../README.md) has the install, a quick start and an overview. These
 | [Entities](entities.md)                | Identity, timestamps, `destroy()`, domain events.                                                         |
 | [Repositories](repositories.md)        | Actions, queries, deletion, providers, transactions, relations, extending, testing a provider.            |
 | [Use cases](use-cases.md)              | Method injection, context and metadata, the steps DSL and its tables, use case plugins.                   |
-| [Commands](commands.md)                | Operations, use case plugins by catalog, transactions and the event policy.                               |
+| [Commands](commands.md)                | Operations, use case plugins by catalog, transactions, event policies and `publishEvents`.                |
 | [Standard use cases](std-use-cases.md) | `ctx.create(Posts)` and the others: what each needs, takes and does, their options, ownership.            |
 | [Outputs](outputs.md)                  | Stages, the `select` and `openapi` ones, `statusOf` and `problemOf`, catalogs of stages.                  |
 | [Applications](applications.md)        | The manifest of declarations, composition, bound providers, `describe()`.                                 |

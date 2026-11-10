@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- The guide and the tool descriptions teach event policies (`"events": { "policy": "publishEvents", "options": {...} }`) and the top-level `publishers`; `afora_catalog` lists the policies under `policies`, and `--policies <module>` adds those of another catalog.
+
 ## 0.0.1 — unreleased (draft: dated when it is published)
 
 ### Added

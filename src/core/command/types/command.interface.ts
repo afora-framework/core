@@ -9,6 +9,7 @@ import type {
 	EnvironmentDependencies,
 	MergedEnvironment,
 } from "../../environment/environment";
+import type { IEventPublisher } from "../../event-policy/types/event-policy.interface";
 import type { ILogger } from "../../logger/logger";
 import type { Kind } from "../../symbols/kind";
 import type {
@@ -34,6 +35,12 @@ export interface CommandEventInfo {
 	 * application's; a logger that writes nothing without either.
 	 */
 	readonly logger: ILogger;
+	/**
+	 * The publisher declared under `name` in `applicationOf({ publishers })`:
+	 * of the application that bound the command, else of the started
+	 * application. Throws `PublisherNotBound` when neither declares it.
+	 */
+	publisher(name: string): IEventPublisher;
 }
 
 /** Handles all the events of a call, once it succeeded. */

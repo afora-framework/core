@@ -84,6 +84,11 @@ export interface Catalog {
 	readonly coreExceptions: readonly string[];
 	/** The built-in stages (`StdStages`) a pipe may name; others come from the `stages` option. */
 	readonly stages: readonly StageInfo[];
+	/** The built-in event policies (`StdEventPolicies`) a command may name; others come from the `policies` option. */
+	readonly policies: readonly {
+		readonly name: string;
+		readonly builtin: true;
+	}[];
 	/** Everything `@afora/core` exports; a declaration cannot take one of these names. */
 	readonly reservedDeclarationNames: readonly string[];
 	/** The standard use cases a use case declaration can name in `generic`. */
@@ -251,6 +256,9 @@ function build(): Catalog {
 				builtin: true as const,
 			}))
 			.sort((a, b) => (a.name < b.name ? -1 : 1)),
+		policies: Object.keys(core.StdEventPolicies.policies)
+			.sort()
+			.map((name) => ({ name, builtin: true as const })),
 		reservedDeclarationNames: [...Object.keys(core), "App", "Providers"].sort(),
 		useCases: core.StdUseCases.list.map((plugin) => {
 			const { name, version, description, requires } = plugin.toJSON();

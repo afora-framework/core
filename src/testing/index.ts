@@ -1,3 +1,5 @@
+export type { MemoryPublisher } from "./memory-publisher";
+export { memoryPublisher } from "./memory-publisher";
 export type {
 	ContractRunner,
 	ProviderContractOptions,
