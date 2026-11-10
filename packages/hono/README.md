@@ -83,8 +83,14 @@ hono({
 			secret: { env: "STRIPE_WEBHOOK_SECRET" },
 			unknownKeys: "strip",
 		},
-		"Repos.pushed": { scheme: "github", secret: { env: "GITHUB_WEBHOOK_SECRET" } },
-		"Mail.delivered": { scheme: "standard-webhooks", secret: { env: ["MAIL_SECRET", "MAIL_SECRET_OLD"] } },
+		"Repos.pushed": {
+			scheme: "github",
+			secret: { env: "GITHUB_WEBHOOK_SECRET" },
+		},
+		"Mail.delivered": {
+			scheme: "standard-webhooks",
+			secret: { env: ["MAIL_SECRET", "MAIL_SECRET_OLD"] },
+		},
 		"Partner.notified": {
 			scheme: "hmac-sha256",
 			secret: { env: "PARTNER_SECRET" },
@@ -95,15 +101,15 @@ hono({
 });
 ```
 
-| Field         | Meaning                                                                                                                                                                                                                    |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Field         | Meaning                                                                                                                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `scheme`      | `"stripe"` (`Stripe-Signature`), `"github"` (`X-Hub-Signature-256`), `"standard-webhooks"` (`webhook-id`, `webhook-timestamp`, `webhook-signature`; used by Svix, Resend, Clerk...) or `"hmac-sha256"` (a header you name). |
 | `secret`      | `{ env: "NAME" }`: the variable holding the secret. A list allows rotation: a request passes when any secret that is set verifies it.                                                                                       |
-| `header`      | `"hmac-sha256"` only, and required there: the header with the signature.                                                                                                                                                  |
-| `encoding`    | `"hmac-sha256"` only: `"hex"` (default) or `"base64"`.                                                                                                                                                                     |
-| `prefix`      | `"hmac-sha256"` only: text before the signature, such as `"sha256="`.                                                                                                                                                      |
-| `tolerance`   | `"stripe"` and `"standard-webhooks"` only: how many seconds the signed timestamp may be away from now, against replays. `300` by default; `0` turns the check off.                                                         |
-| `unknownKeys` | `"reject"` (default): a key the input does not declare is a 400, as on any route. `"strip"`: those keys are dropped first, with `stripUndeclared` from `@afora/core`, so the input declares only what the operation reads. |
+| `header`      | `"hmac-sha256"` only, and required there: the header with the signature.                                                                                                                                                    |
+| `encoding`    | `"hmac-sha256"` only: `"hex"` (default) or `"base64"`.                                                                                                                                                                      |
+| `prefix`      | `"hmac-sha256"` only: text before the signature, such as `"sha256="`.                                                                                                                                                       |
+| `tolerance`   | `"stripe"` and `"standard-webhooks"` only: how many seconds the signed timestamp may be away from now, against replays. `300` by default; `0` turns the check off.                                                          |
+| `unknownKeys` | `"reject"` (default): a key the input does not declare is a 400, as on any route. `"strip"`: those keys are dropped first, with `stripUndeclared` from `@afora/core`, so the input declares only what the operation reads.  |
 
 - **Secrets.** The variable is read on each request: first from the bindings of the request (`c.env`: Cloudflare Workers, or the third argument of `app.request` in tests), then from `process.env` (Bun, Node). A webhook with none of its variables set is a `500` problem `WebhookSecretMissing`, whose detail is masked. Secrets and variable names never reach the OpenAPI document.
 - **Signatures** are HMAC-SHA256 checked with Web Crypto (`crypto.subtle.verify`, which compares in constant time), so it runs on Bun, Node and Workers. Stripe's and standard-webhooks' headers may carry several signatures; any one that matches passes.

@@ -57,7 +57,9 @@ if (result.issues) {
 **Payloads with more than you read.** A key the shape does not declare is rejected at any depth (`undeclared_key`), never trimmed, and that stays the rule. For a payload from another service that carries much more than the operation reads (a webhook from Stripe or GitHub), `stripUndeclared(shape, value)` gives a copy with only the declared keys, in nested blueprints, list items, `optionalOf` and records or entities held as fields, before parsing. `shape` is a blueprint, a record or entity class, or any field. It does not validate, never throws and does not change `value`: values of the wrong type, a property's value and record instances come back as they are, for parsing to judge.
 
 ```ts
-const result = Customer.safeParse(stripUndeclared(Customer, stripeEvent.data.object));
+const result = Customer.safeParse(
+	stripUndeclared(Customer, stripeEvent.data.object),
+);
 ```
 
 The `webhooks` option of [`@afora/hono`](../packages/hono/README.md#webhooks) does this with `unknownKeys: "strip"`.
