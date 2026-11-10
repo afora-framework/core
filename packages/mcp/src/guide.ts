@@ -66,7 +66,8 @@ a file of your own.
 - Repository actions: \`findById\`; \`findBy<Key>\` only for unique keys (id, \`unique\`, slug fields, unique plugin keys such as
   \`email\` of authenticatable); \`findManyBy<Key>\` only for keys that are not unique; \`create\`, \`update\`, \`delete\`, \`restore\` (only with \`"deletion": "soft"\`), \`count\`, and the
   queries \`findMany\`, \`exists\`, \`findPage\` (no key needed; \`where\`, \`orderBy\`, \`limit\`, \`offset\` at runtime) and
-  \`findCursor\` (pages by position: \`after\` is the \`next\` of the page before, no \`offset\`).
+  \`findCursor\` (pages by position: \`after\` is the \`next\` of the page before, no \`offset\`), and \`forEachPage\`
+  (walks every page with a function, stops with \`until\` and resumes from \`next\`; called from TypeScript, never a step).
 - \`provider\` (top level for the application, and optionally on a repository, which then uses its own): \`"inMemory"\`,
   \`{ "use": "<name>", "options": {...} }\` with a name from the \`providers\` of \`afora_catalog\` (external ones are given
   to the server with \`--providers\`), or \`{ "import": "./db.ts#provider" }\` for one created by hand. Options are JSON or
