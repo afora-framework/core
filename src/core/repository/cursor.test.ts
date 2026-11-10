@@ -1,9 +1,11 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import {
+	applicationOf,
 	blueprintOf,
 	Exception,
 	entityOf,
 	InvalidRepositoryCursor,
+	InvalidRepositoryDeclaration,
 	InvalidRepositoryQuery,
 	type IRepositoryProvider,
 	inMemoryProvider,
@@ -222,16 +224,38 @@ describe("findCursor", () => {
 
 	test("needs a provider that reads by cursor", async () => {
 		const { capabilities: _capabilities, ...memory } = inMemoryProvider();
-		const provider: IRepositoryProvider = {
-			...memory,
-			capabilities: { transactions: true },
-		};
-		const People = repositoryOf({
+		const provider = { ...memory, capabilities: { transactions: true } };
+		// Declared with it: rejected, and the type has no findCursor.
+		expect(() =>
+			repositoryOf({ entity: Person, actions: ["findCursor"], provider }),
+		).toThrow(InvalidRepositoryDeclaration);
+		const Kept = repositoryOf({
 			entity: Person,
-			actions: ["findCursor"],
-			provider,
+			actions: ["findMany", "findCursor"],
 		});
-		const error = await rejected(People.findCursor());
+		expectTypeOf(Kept).toHaveProperty("findCursor");
+		const Without = (() => {
+			try {
+				return repositoryOf({
+					entity: Person,
+					actions: ["findMany", "findCursor"],
+					provider,
+				});
+			} catch {
+				return undefined;
+			}
+		})();
+		expectTypeOf<NonNullable<typeof Without>>().not.toHaveProperty(
+			"findCursor",
+		);
+		// Bound to it by an application: the call still throws.
+		const app = applicationOf({
+			name: "cursors",
+			entities: { Person },
+			repositories: { Kept },
+			provider: provider as IRepositoryProvider,
+		});
+		const error = await rejected(app.repositories.Kept.findCursor());
 		expect(error).toBeInstanceOf(InvalidRepositoryQuery);
 		expect(error.message).toBe(
 			"The provider does not read by cursor (capabilities.keyset).",

@@ -397,8 +397,12 @@ export {
 	InvalidRepositoryQuery,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
+	RepositoryUsedOutsideApplication,
 } from "./core/repository/exceptions";
-export { inMemoryProvider } from "./core/repository/in-memory";
+export {
+	type InMemoryProvider,
+	inMemoryProvider,
+} from "./core/repository/in-memory";
 export { providerDescriptionOf, providerOf } from "./core/repository/provider";
 export type { RepositorySettings } from "./core/repository/repository";
 export {
@@ -417,12 +421,16 @@ export type {
 	RepositoryCursorPage,
 	RepositoryCursorQuery,
 	RepositoryExists,
+	RepositoryExplain,
 	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
+	RepositoryIndex,
 	RepositoryOrder,
 	RepositoryPage,
+	RepositoryPlan,
 	RepositoryQuery,
+	RepositoryScans,
 	RepositoryWhere,
 } from "./core/repository/types/query.interface";
 export type {
@@ -434,6 +442,7 @@ export type {
 	EntityUniqueKeyOf,
 	EntityValueOf,
 	IRepositoryProvider,
+	ProviderKeyset,
 	QueryValueOf,
 	RepositoryAction,
 	RepositoryContext,

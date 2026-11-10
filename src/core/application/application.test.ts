@@ -17,6 +17,7 @@ import {
 	optionalOf,
 	propertyLineageOf,
 	propertyOf,
+	RepositoryUsedOutsideApplication,
 	recordOf,
 	repositoryOf,
 	UnregisteredApplicationReference,
@@ -181,6 +182,8 @@ describe("applicationOf", () => {
 				entity: "User",
 				actions: ["findById", "findByEmail", "create", "update"],
 				deletion: "hard",
+				indexes: {},
+				scans: "allow",
 				relations: [],
 				environments: ["Database"],
 			},
@@ -189,6 +192,8 @@ describe("applicationOf", () => {
 				entity: "Post",
 				actions: ["findById", "create"],
 				deletion: "hard",
+				indexes: {},
+				scans: "allow",
 				relations: ["Users"],
 				environments: [],
 			},
@@ -475,7 +480,10 @@ describe("applicationOf", () => {
 			const ana = await one.repositories.Users.create(input);
 			expect(await one.repositories.Users.findById(ana.id)).toBeDefined();
 			expect(await two.repositories.Users.findById(ana.id)).toBeUndefined();
-			expect(await Users.findById(ana.id)).toBeUndefined();
+			// The declaration would read another store: it throws instead.
+			await expect(Users.findById(ana.id)).rejects.toThrow(
+				RepositoryUsedOutsideApplication,
+			);
 
 			const post = await one.repositories.Posts.create({
 				title: "Hello",
@@ -521,7 +529,10 @@ describe("applicationOf", () => {
 				"provider",
 			);
 			const ana = await app.repositories.Pinned.create(input);
-			expect(await Pinned.findById(ana.id)).toBeDefined();
+			await expect(Pinned.findById(ana.id)).rejects.toThrow(
+				RepositoryUsedOutsideApplication,
+			);
+			expect(await app.repositories.Pinned.findById(ana.id)).toBeDefined();
 		});
 
 		test("inherited repositories use the provider of the final app", async () => {
@@ -534,7 +545,12 @@ describe("applicationOf", () => {
 			const provider = inMemoryProvider();
 			const App = applicationOf({ name: "app", extends: [Auth], provider });
 			const ana = await App.repositories.Users.create(input);
-			expect(await Auth.repositories.Users.findById(ana.id)).toBeUndefined();
+			// Auth has no provider: its repositories are the declarations,
+			// which App bound, so they throw.
+			await expect(Auth.repositories.Users.findById(ana.id)).rejects.toThrow(
+				RepositoryUsedOutsideApplication,
+			);
+			expect(await App.repositories.Users.findById(ana.id)).toBeDefined();
 			expect(App.extend(Auth).provider).toBe(provider);
 		});
 

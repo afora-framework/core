@@ -19,7 +19,11 @@ import type {
 	StageDescription,
 } from "../../output/types/output.interface";
 import type { RecordPluginDescriptor } from "../../record/types/plugin.interface";
-import type { ProviderDescription } from "../../repository/types/query.interface";
+import type {
+	ProviderDescription,
+	RepositoryIndex,
+	RepositoryScans,
+} from "../../repository/types/query.interface";
 import type {
 	AnyRepository,
 	IRepositoryProvider,
@@ -544,6 +548,10 @@ export interface ApplicationDescription {
 				readonly entity: string;
 				readonly actions: readonly string[];
 				readonly deletion: "hard" | "soft";
+				/** Its declared indexes, by name. */
+				readonly indexes: Readonly<Record<string, RepositoryIndex>>;
+				/** What it does with a query only a scan serves. */
+				readonly scans: RepositoryScans;
 				/** The names of the repositories of the entities its entity holds. */
 				readonly relations: readonly string[];
 				/** The names of its `environmentDependencies`. */

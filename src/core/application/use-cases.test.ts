@@ -11,6 +11,7 @@ import {
 	inMemoryProvider,
 	PasswordHasherRequired,
 	RepositoryUniqueViolation,
+	RepositoryUsedOutsideApplication,
 	recordOf,
 	repositoryOf,
 	UnregisteredApplicationReference,
@@ -329,10 +330,10 @@ describe("applicationOf useCases and exceptions", () => {
 				{ where: {}, withDeleted: true } as never,
 			);
 			expect(stored).toHaveLength(1);
-			// The declared repository uses its own default provider.
-			expect(
-				await Users.findById("00000000-0000-7000-8000-000000000000"),
-			).toBeUndefined();
+			// The declaration, bound by the application, no longer reads.
+			await expect(
+				Users.findById("00000000-0000-7000-8000-000000000000"),
+			).rejects.toThrow(RepositoryUsedOutsideApplication);
 		});
 	});
 
@@ -437,8 +438,10 @@ describe("app.run", () => {
 
 		expect(user).toBeInstanceOf(User);
 		expect(await app.repositories.Users.findById(user.id)).toBeDefined();
-		// The declared repository keeps its own store.
-		expect(await Users.findById(user.id)).toBeUndefined();
+		// The declaration, bound by the application, no longer reads.
+		await expect(Users.findById(user.id)).rejects.toThrow(
+			RepositoryUsedOutsideApplication,
+		);
 		// Like `app.useCase`, it takes the declared class, not the bound one.
 		await app.run(app.useCases.Save, { name: "Bia" }).then(
 			() => {

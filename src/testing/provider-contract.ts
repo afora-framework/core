@@ -30,6 +30,11 @@ export interface ProviderContractOptions {
 	 * to `provider.capabilities?.keyset`.
 	 */
 	readonly keyset?: boolean;
+	/**
+	 * Run the cases of declared indexes (`context.indexes`, `query.index`).
+	 * Defaults to `provider.capabilities?.indexes`.
+	 */
+	readonly indexes?: boolean;
 }
 
 type Row = Record<string, unknown>;
@@ -667,6 +672,90 @@ export function providerContract(
 					).toBe(5);
 				},
 			);
+		});
+
+		describe("indexes", () => {
+			const indexed = (name: string, body: () => Promise<void>) =>
+				it(name, async () => {
+					const enabled =
+						options.indexes ?? (await makeProvider()).capabilities?.indexes;
+					if (enabled === true) await body();
+				});
+			const seeded = async () => {
+				const f = await fixture();
+				const context: RepositoryContext = {
+					...f.context,
+					indexes: {
+						byGroup: { where: ["group"], orderBy: "n" },
+						byName: { where: ["name"] },
+					},
+				};
+				const rows = [
+					row({ n: 3, group: 1, name: "Gil" }),
+					row({ group: 1, name: "Érico" }),
+					row({ n: 2, group: 2, name: "Ana" }),
+					row({ n: 2, group: 1, name: "Ana" }),
+					row({ n: 1, group: 1, name: "Bia" }),
+					row({ n: 4, group: 2, name: "Zoe" }),
+				];
+				for (const data of rows) await f.provider.insert(context, data);
+				await f.provider.update(context, {
+					...(rows[4] as Row),
+					deletedAt: "2024-01-01T00:00:00.000Z",
+				});
+				return { ...f, context };
+			};
+
+			indexed("an indexed query gives what the scan gives", async () => {
+				const { provider, context } = await seeded();
+				const queries: [string, ProviderQuery][] = [
+					["byGroup", { where: { group: 1 } }],
+					[
+						"byGroup",
+						{
+							where: { group: 1 },
+							orderBy: [{ key: "n" }, { key: "id" }],
+						},
+					],
+					[
+						"byGroup",
+						{
+							where: { group: 1, name: "Ana" },
+							orderBy: [{ key: "n", direction: "desc" }, { key: "id" }],
+							limit: 2,
+							offset: 1,
+						},
+					],
+					[
+						"byGroup",
+						{
+							where: { group: 1 },
+							orderBy: [{ key: "n" }, { key: "id" }],
+							withDeleted: true,
+						},
+					],
+					["byName", { where: { name: "Ana" }, orderBy: [{ key: "id" }] }],
+				];
+				for (const [index, query] of queries) {
+					expect(
+						ids(await provider.findMany(context, { ...query, index })),
+					).toEqual(ids(await provider.findMany(context, query)));
+					expect(
+						await provider.count(context, {
+							...query,
+							index,
+						} as RepositoryQuery),
+					).toBe(await provider.count(context, query));
+					expect(
+						(
+							await provider.findOne(context, {
+								...query,
+								index,
+							} as RepositoryQuery)
+						)?.id,
+					).toBe((await provider.findOne(context, query))?.id);
+				}
+			});
 		});
 
 		const withTransactions = async () => {

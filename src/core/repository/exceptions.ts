@@ -56,6 +56,25 @@ export const RepositoryUniqueViolation = exceptionOf({
 		`"${source}" already holds an entity with this "${key}".`,
 });
 
+/**
+ * A repository declared at module level was called after an application
+ * bound it to its provider: the calls of the application go through
+ * `app.repositories.<key>`, its use cases (`app.run`, `app.useCase`) or a
+ * repository given to `execute`; `source` is the repository name.
+ */
+export const RepositoryUsedOutsideApplication = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "RepositoryUsedOutsideApplication",
+	message: (
+		{
+			application,
+			repository,
+		}: { readonly application: string; readonly repository: string },
+		source,
+	) =>
+		`"${source}" is bound to the application "${application}", and its declaration no longer reads or writes: use app.repositories.${repository}, run its use cases with app.run, or give the repository of the application to execute.`,
+});
+
 /** No entity of the id was found; `source` is the repository name. */
 export const RepositoryEntityNotFound = exceptionOf({
 	layer: ExceptionLayers.Repository,
