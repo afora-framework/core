@@ -16,7 +16,10 @@ const STEP_SHAPES = {
 		optional: ["other", "details"],
 	},
 	build: { required: ["build", "values", "as"], optional: [] },
-	change: { required: ["change", "key", "value"], optional: ["as"] },
+	change: {
+		required: ["change", "key", "value"],
+		optional: ["ifPresent", "as"],
+	},
 	invoke: { required: ["invoke", "method"], optional: ["args", "as"] },
 	create: { required: ["create", "value"], optional: ["as"] },
 	update: { required: ["update", "value"], optional: ["as"] },
@@ -574,8 +577,16 @@ function checkSteps(steps: unknown, implPath: Path, ctx: StepsContext): void {
 			);
 		const checkArgs = (args: unknown): void => {
 			if (args === undefined) return;
+			if (typeof args === "string" && args.startsWith("$")) {
+				checkReference(args, "args");
+				return;
+			}
 			if (!Array.isArray(args)) {
-				fail("invalid_step", "args must be a list of values.", "args");
+				fail(
+					"invalid_step",
+					"args must be a list of values or a reference to one.",
+					"args",
+				);
 				return;
 			}
 			checkValue(args, "args");
@@ -738,6 +749,16 @@ function checkSteps(steps: unknown, implPath: Path, ctx: StepsContext): void {
 				checkTarget(step.change, "change");
 				if (typeof step.key !== "string" || step.key === "") {
 					fail("invalid_step", "change.key must be a string.", "key");
+				}
+				if (
+					step.ifPresent !== undefined &&
+					typeof step.ifPresent !== "boolean"
+				) {
+					fail(
+						"invalid_step",
+						"change.ifPresent must be a boolean.",
+						"ifPresent",
+					);
 				}
 				const reference =
 					typeof step.change === "string"

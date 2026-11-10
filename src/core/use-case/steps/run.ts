@@ -61,8 +61,6 @@ export async function executeSteps(
 		return followPath(named.get(root), path);
 	};
 	const value = (raw: unknown): unknown => resolveValue(raw, lookup);
-	const list = (raw: unknown): unknown[] =>
-		raw === undefined ? [] : (value(raw) as unknown[]);
 
 	for (const [index, step] of steps.entries()) {
 		const invalid = (reason: string): never => {
@@ -70,6 +68,12 @@ export async function executeSteps(
 				source: useCaseName,
 				details: { index, reason, code: "invalid_target" },
 			});
+		};
+		const list = (raw: unknown): unknown[] => {
+			if (raw === undefined) return [];
+			const resolved = value(raw);
+			if (!Array.isArray(resolved)) invalid("args must resolve to a list.");
+			return resolved as unknown[];
 		};
 		const bind = (result: unknown): void => {
 			if (typeof step.as === "string") named.set(step.as, result);
@@ -127,7 +131,10 @@ export async function executeSteps(
 			) {
 				invalid(`"${key}" is not a change key of the record.`);
 			}
-			await (namespace as Record<string, Method>)[key]?.(value(step.value));
+			const changed = value(step.value);
+			if (step.ifPresent !== true || changed !== undefined) {
+				await (namespace as Record<string, Method>)[key]?.(changed);
+			}
 			bind(record);
 		} else if (Object.hasOwn(step, "invoke")) {
 			const record = target("invoke");

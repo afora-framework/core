@@ -325,7 +325,12 @@ const StepValue = Type.Unknown({
 	description:
 		'A value: a "$reference" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ "literal": "$5" } escapes a string that starts with $) or a mapping of values. No expressions.',
 });
-const StepArgs = Type.Optional(Type.Array(StepValue));
+const StepArgs = Type.Optional(
+	Type.Union([Type.Array(StepValue), Type.String({ pattern: "^\\$" })], {
+		description:
+			'The arguments: a list of values, or one "$reference" to a list, which is spread.',
+	}),
+);
 const StepAs = Type.Optional(Type.String({ description: "Binds the result." }));
 const StepErrorRef = Type.Union([
 	Type.String(),
@@ -378,6 +383,12 @@ const Step = Type.Union(
 				change: Type.String({ description: "A $reference to a record." }),
 				key: Type.String(),
 				value: StepValue,
+				ifPresent: Type.Optional(
+					Type.Boolean({
+						description:
+							"Skips the step when the value is absent: a partial update.",
+					}),
+				),
 				as: StepAs,
 			},
 			{ additionalProperties: false },

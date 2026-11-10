@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { blueprintOf } from "../../../index";
 import {
 	invalidStep,
 	sample,
@@ -68,6 +69,51 @@ describe("change", () => {
 		const error = await new Case(sample).execute().catch((e) => e);
 		expect(error.name).toBe("InvalidUseCaseStep");
 		expect(error.layer).toBe("use-case");
+	});
+
+	test("ifPresent skips the change of a value that is absent", async () => {
+		const Input = blueprintOf((ctx) => ({
+			name: ctx.string,
+			email: ctx.email,
+			plainPassword: ctx.string,
+			nickname: ctx.optional.string,
+		}));
+		const Case = stepsCase({
+			blueprint: Input,
+			response: UserResponse,
+			steps: [
+				build,
+				{
+					change: "$user",
+					key: "name",
+					value: "$input.nickname",
+					ifPresent: true,
+					as: "renamed",
+				},
+				{ return: { user: "$renamed" } },
+			],
+		});
+		const kept = (await new Case(sample).execute()) as { user: User };
+		expect(kept.user.name).toBe("Ana");
+		const changed = (await new Case({
+			...sample,
+			nickname: "Bia",
+		}).execute()) as { user: User };
+		expect(changed.user.name).toBe("Bia");
+	});
+
+	test("ifPresent must be a boolean", () => {
+		expect(
+			invalidStep(() =>
+				stepsCase({
+					steps: [
+						build,
+						{ change: "$user", key: "name", value: "x", ifPresent: "yes" },
+						{ return: {} },
+					],
+				}),
+			).code,
+		).toBe("invalid_step");
 	});
 
 	test("the target must be a reference", () => {

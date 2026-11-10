@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Steps: a `change` step takes `ifPresent: true`, which skips it when its value resolves to `undefined` (a partial update), and the `args` of `find`, `invoke` and `run` may be one reference to a list, which is spread (`args: "$input.tags"`). Both are in `afora.json` too. Also exported: `StepArgs`.
+
 ## 0.0.6 — unreleased (draft: dated when it is published)
 
 ### Changed

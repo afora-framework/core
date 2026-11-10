@@ -30,7 +30,10 @@ const SHAPES = {
 		optional: ["other", "details"],
 	},
 	build: { required: ["build", "values", "as"], optional: [] },
-	change: { required: ["change", "key", "value"], optional: ["as"] },
+	change: {
+		required: ["change", "key", "value"],
+		optional: ["ifPresent", "as"],
+	},
 	invoke: { required: ["invoke", "method"], optional: ["args", "as"] },
 	create: { required: ["create", "value"], optional: ["as"] },
 	update: { required: ["update", "value"], optional: ["as"] },
@@ -165,8 +168,16 @@ export function validateSteps(
 
 	const checkArgs = (index: number, args: unknown): void => {
 		if (args === undefined) return;
+		if (typeof args === "string" && args.startsWith("$")) {
+			checkReference(index, args);
+			return;
+		}
 		if (!Array.isArray(args)) {
-			fail(index, "invalid_step", "args must be a list of values.");
+			fail(
+				index,
+				"invalid_step",
+				"args must be a list of values or a reference to one.",
+			);
 		}
 		checkValue(index, args, "args");
 	};
@@ -327,6 +338,12 @@ export function validateSteps(
 				checkTarget(index, record.change, "change");
 				if (typeof record.key !== "string" || record.key === "") {
 					fail(index, "invalid_step", "change.key must be a string.");
+				}
+				if (
+					record.ifPresent !== undefined &&
+					typeof record.ifPresent !== "boolean"
+				) {
+					fail(index, "invalid_step", "change.ifPresent must be a boolean.");
 				}
 				const reference = parseReference(record.change as string);
 				const known =

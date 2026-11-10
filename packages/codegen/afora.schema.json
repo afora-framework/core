@@ -806,10 +806,19 @@
 																"description": "\"<repository>.<read action>\", e.g. \"users.findByEmail\"."
 															},
 															"args": {
-																"type": "array",
-																"items": {
-																	"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
-																}
+																"anyOf": [
+																	{
+																		"type": "array",
+																		"items": {
+																			"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+																		}
+																	},
+																	{
+																		"type": "string",
+																		"pattern": "^\\$"
+																	}
+																],
+																"description": "The arguments: a list of values, or one \"$reference\" to a list, which is spread."
 															},
 															"as": {
 																"type": "string",
@@ -911,6 +920,10 @@
 															"value": {
 																"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
 															},
+															"ifPresent": {
+																"type": "boolean",
+																"description": "Skips the step when the value is absent: a partial update."
+															},
 															"as": {
 																"type": "string",
 																"description": "Binds the result."
@@ -930,10 +943,19 @@
 																"type": "string"
 															},
 															"args": {
-																"type": "array",
-																"items": {
-																	"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
-																}
+																"anyOf": [
+																	{
+																		"type": "array",
+																		"items": {
+																			"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+																		}
+																	},
+																	{
+																		"type": "string",
+																		"pattern": "^\\$"
+																	}
+																],
+																"description": "The arguments: a list of values, or one \"$reference\" to a list, which is spread."
 															},
 															"as": {
 																"type": "string",
@@ -1035,10 +1057,19 @@
 																"additionalProperties": false
 															},
 															"args": {
-																"type": "array",
-																"items": {
-																	"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
-																}
+																"anyOf": [
+																	{
+																		"type": "array",
+																		"items": {
+																			"description": "A value: a \"$reference\" ($input.key, $context.key, $env.dep.VAR, $name.path), a JSON literal ({ \"literal\": \"$5\" } escapes a string that starts with $) or a mapping of values. No expressions."
+																		}
+																	},
+																	{
+																		"type": "string",
+																		"pattern": "^\\$"
+																	}
+																],
+																"description": "The arguments: a list of values, or one \"$reference\" to a list, which is spread."
 															},
 															"as": {
 																"type": "string",

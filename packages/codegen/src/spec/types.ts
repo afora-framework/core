@@ -195,7 +195,7 @@ export interface CoreExceptionRef {
 export type StepSpec =
 	| {
 			readonly find: string;
-			readonly args?: readonly StepValueSpec[];
+			readonly args?: readonly StepValueSpec[] | string;
 			readonly as?: string;
 	  }
 	| {
@@ -214,12 +214,13 @@ export type StepSpec =
 			readonly change: string;
 			readonly key: string;
 			readonly value: StepValueSpec;
+			readonly ifPresent?: boolean;
 			readonly as?: string;
 	  }
 	| {
 			readonly invoke: string;
 			readonly method: string;
-			readonly args?: readonly StepValueSpec[];
+			readonly args?: readonly StepValueSpec[] | string;
 			readonly as?: string;
 	  }
 	| {
@@ -246,7 +247,7 @@ export type StepSpec =
 			readonly run: string;
 			/** The function, imported as it is. */
 			readonly fn: ImportRef;
-			readonly args?: readonly StepValueSpec[];
+			readonly args?: readonly StepValueSpec[] | string;
 			readonly as?: string;
 	  }
 	| { readonly return: StepValueSpec };

@@ -122,6 +122,8 @@ A _value_ is a reference, a literal or a mapping:
 | `"text"`, `1`, `true`, `null`     | a JSON literal; write `{ literal: "$5" }` for a string that starts with `$`                                              |
 | `{ user: "$saved" }`, `["$a", 2]` | a mapping, resolved recursively                                                                                          |
 
+The `args` of `find`, `invoke` and `run` are a list of values or one reference to a list, which is spread (`args: "$input.tags"` calls `tag(...tags)`); a reference that does not resolve to a list throws `InvalidUseCaseStep` while the steps run.
+
 There are no operators or interpolation: anything computed goes through `run`. The names `input`, `context`, `env` and `literal` are reserved.
 
 | Step                                                   | Does                                                                                                                                                                               | Result (`as`) |
@@ -129,7 +131,7 @@ There are no operators or interpolation: anything computed goes through `run`. T
 | `{ find: "<repo>.<action>", args?, as? }`              | a read action: `findBy*`, `findManyBy*`, `findMany`, `exists`, `findPage`, `findCursor`, `count`                                                                                   | its result    |
 | `{ ensure, value, other?, error, details? }`           | `ensure` is `exists`, `absent`, `equals`, `notEquals` (`other` required, structural equality as in queries), `true` or `false`; on failure throws `new error({ source, details })` | none          |
 | `{ build: Class, values, as }`                         | `new Class(values)`, a record or entity                                                                                                                                            | the instance  |
-| `{ change: "$ref", key, value, as? }`                  | `record.change[key](value)`; `key` must be a change key                                                                                                                            | the record    |
+| `{ change: "$ref", key, value, ifPresent?, as? }`      | `record.change[key](value)`; `key` must be a change key; with `ifPresent: true` the step is skipped when `value` is `undefined` (a partial update)                                 | the record    |
 | `{ invoke: "$ref", method, args?, as? }`               | a public method of a record or entity (`publish`, `verifyPassword`...), awaited                                                                                                    | its result    |
 | `{ create \| update \| delete: "<repo>", value, as? }` | the repository action of that name                                                                                                                                                 | its result    |
 | `{ call: "<useCase>", input, as? }`                    | the use case dependency: validated child, inherited context, events moved up                                                                                                       | its response  |

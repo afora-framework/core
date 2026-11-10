@@ -432,6 +432,7 @@ export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
 export { InvalidUseCaseStep } from "./core/use-case/exceptions";
 export type {
+	StepArgs,
 	StepEnsureKind,
 	StepErrorDescription,
 	StepFindTarget,
