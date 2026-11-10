@@ -66,8 +66,23 @@ function badQuery(reason: string): never {
 	throw new InvalidRepositoryQuery({ source: SOURCE, details: { reason } });
 }
 
-/** A query with the `after` of `findCursor`, on any version of `@afora/core`. */
-type KeysetQuery = RepositoryQuery & { readonly after?: readonly unknown[] };
+/**
+ * A query with the `after` of `findCursor` and the declared `index` that
+ * serves it, on any version of `@afora/core`. The index changes nothing: the
+ * database picks its own SQL index for the `WHERE` and `ORDER BY`.
+ */
+type KeysetQuery = RepositoryQuery & {
+	readonly after?: readonly unknown[];
+	readonly index?: string;
+};
+
+/** The provider of `drizzleProvider`: it runs transactions and reads by cursor. */
+export type DrizzleProvider = IRepositoryProvider & {
+	readonly capabilities: {
+		readonly transactions: true;
+		readonly keyset: true;
+	};
+};
 
 interface Mapping {
 	readonly table: DrizzleTable;
@@ -567,7 +582,7 @@ function isSyncSqlite(db: Executor): boolean {
  */
 export function drizzleProvider(
 	options: DrizzleProviderOptions,
-): IRepositoryProvider {
+): DrizzleProvider {
 	if (
 		!options ||
 		typeof options !== "object" ||
@@ -578,9 +593,10 @@ export function drizzleProvider(
 		invalid("Expected { db, tables } with a Drizzle database and its tables.");
 	const { db, tables } = options;
 	const alwaysAlive = () => true;
-	if (isSyncSqlite(db)) return manualScope(tables, db, undefined, alwaysAlive);
+	if (isSyncSqlite(db))
+		return manualScope(tables, db, undefined, alwaysAlive) as DrizzleProvider;
 	return providerOver(tables, db, {
 		guard: (work) => work(),
 		transaction: nestedTransactions(tables, db),
-	});
+	}) as DrizzleProvider;
 }
