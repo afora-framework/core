@@ -3,6 +3,7 @@ import { Email, Ip, Phone, Url } from "./properties/contact";
 import { enumOf } from "./properties/enum";
 import { SchemaProperty } from "./properties/headless";
 import { Id, Slug } from "./properties/identity";
+import { JsonProperty, jsonOf } from "./properties/json";
 import { Password } from "./properties/password";
 import {
 	BooleanProperty,
@@ -20,8 +21,8 @@ import {
 } from "./properties/time";
 
 /**
- * The standard properties, for blueprints to pick from, and `enumOf`, as
- * `ctx.enumOf(["draft", "published"])`.
+ * The standard properties, for blueprints to pick from, and the factories
+ * `enumOf` and `jsonOf`, as `ctx.enumOf(["draft", "published"])`.
  */
 export const Std = blueprintPluginOf(
 	"std",
@@ -44,6 +45,7 @@ export const Std = blueprintPluginOf(
 		updatedAt: UpdatedAt,
 		deletedAt: DeletedAt,
 		schema: SchemaProperty,
+		json: JsonProperty,
 	},
-	{ enumOf },
+	{ enumOf, jsonOf },
 );
