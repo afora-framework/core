@@ -4,6 +4,7 @@ import type {
 	EnvironmentValue,
 } from "../../environment/environment";
 import type { ExceptionLayers } from "../../exception/enums/exception-layers";
+import type { ILogger, LogLevel, LogSettings } from "../../logger/logger";
 import type {
 	AnyOutput,
 	StageDescription,
@@ -75,6 +76,13 @@ export interface ApplicationSettings<
 	 * environments, and calls before that throw `ApplicationNotStarted`.
 	 */
 	readonly provider?: IRepositoryProvider | ProviderFactory;
+	/**
+	 * How it logs: the providers its lines go to and the lowest level kept.
+	 * Use cases, commands and repository calls of the application are logged
+	 * through it, and a use case gets it as its `Logger` dependency. Without
+	 * it, the one of the last extended application that has one; none by default.
+	 */
+	readonly log?: LogSettings;
 }
 
 type UnionToIntersection<Union> = (
@@ -108,6 +116,8 @@ export interface IApplication<
 	readonly extends: readonly AnyApplication[];
 	/** The default provider of its repositories, if any. */
 	readonly provider: IRepositoryProvider | undefined;
+	/** Logs through the providers of its `log`; writes nothing without one. */
+	readonly logger: ILogger;
 	readonly properties: Collections["properties"];
 	readonly blueprints: Collections["blueprints"];
 	readonly records: Collections["records"];
@@ -279,7 +289,8 @@ export interface RecordDescription {
 
 /** What a use case depends on, by the name it has in the application. */
 export interface UseCaseDependencyDescription {
-	readonly kind: "use-case" | "repository" | "environment";
+	/** `logger` is the core's `Logger`, whose `ref` is always `"Logger"`. */
+	readonly kind: "use-case" | "repository" | "environment" | "logger";
 	readonly ref: string;
 }
 
@@ -356,6 +367,16 @@ export interface ExceptionDescription {
 	readonly message?: string;
 }
 
+/** How `describe` gives the `log` of an application. */
+export interface LogDescription {
+	readonly level: LogLevel;
+	/** The name of each provider made by `logProviderOf` with one; `opaque` otherwise. */
+	readonly providers: readonly (
+		| { readonly kind: "log-provider"; readonly name: string }
+		| { readonly kind: "opaque" }
+	)[];
+}
+
 /** The graph `describe` gives: every declaration by name, with its origin in `from`. */
 export interface ApplicationDescription {
 	readonly name: string;
@@ -363,6 +384,8 @@ export interface ApplicationDescription {
 	readonly extends: readonly string[];
 	/** The provider of the application (or of the last extended one), present only when configured. */
 	readonly provider?: ProviderDescription;
+	/** Its `log` (or the one of the last extended application), present only when configured. */
+	readonly log?: LogDescription;
 	readonly properties: Readonly<
 		Record<string, PropertyDescription & { readonly from: string }>
 	>;

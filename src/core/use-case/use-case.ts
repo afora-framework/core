@@ -24,6 +24,18 @@ import {
 	isDeclaredException,
 } from "../exception/exception";
 import { guard } from "../exception/guard";
+import {
+	clock,
+	elapsed,
+	type ILogger,
+	isLogger,
+	isLoggerDeclaration,
+	type LoggerDeclaration,
+	logFailure,
+	resolveLogger,
+	silentLogger,
+	writeLog,
+} from "../logger/logger";
 import type { Issue } from "../parse/types/parse.interface";
 import { AbstractRepository, isRepository } from "../repository/repository";
 import type { AnyRepository } from "../repository/types/repository.interface";
@@ -63,12 +75,13 @@ export type AnyExceptionClass = DeclaredExceptionClass<any>;
 
 /**
  * What a use case can depend on: another use case, a repository made by
- * `repositoryOf`, or an environment made by `environmentOf`.
+ * `repositoryOf`, an environment made by `environmentOf`, or `Logger`.
  */
 export type UseCaseDependency =
 	| AnyUseCaseClass
 	| AnyRepository
-	| AnyEnvironment;
+	| AnyEnvironment
+	| LoggerDeclaration;
 
 export type UseCaseCollection = Readonly<Record<string, UseCaseDependency>>;
 
@@ -110,13 +123,15 @@ type OptionsArgs<Context extends IBlueprintCollection | undefined> =
 
 /**
  * What a use case gets for a dependency: a function for a use case, the
- * repository itself, or the variables of an environment.
+ * repository itself, the variables of an environment, or an `ILogger`.
  */
 export type DependencyOf<Dependency> = Dependency extends AnyUseCaseClass
 	? (input: UseCaseInput<Dependency>) => Promise<UseCaseResponse<Dependency>>
 	: Dependency extends AnyEnvironment
 		? EnvironmentValue<Dependency>
-		: Dependency;
+		: Dependency extends LoggerDeclaration
+			? ILogger
+			: Dependency;
 
 export type DependencyFunctions<Dependencies extends UseCaseCollection> = {
 	readonly [Key in keyof Dependencies]: DependencyOf<Dependencies[Key]>;
@@ -194,6 +209,13 @@ interface ExecutionState {
 	readonly events: EntityEvent[];
 	readonly dependencies: Record<string, unknown>;
 	resolved?: Record<string, unknown>;
+	/** The class the use case was made from (bound by an application, maybe). */
+	readonly owner: object;
+}
+
+/** The logger a call writes to, if any (see `resolveLogger`). */
+function loggerOfCall(state: ExecutionState): ILogger | undefined {
+	return resolveLogger(state.scope?.logger, state.owner);
 }
 const states = new WeakMap<object, ExecutionState>();
 
@@ -296,6 +318,7 @@ function bindRepository(
 	source: string,
 ): object {
 	const Entity = repository.entity;
+	const repositoryName = Entity.name;
 	const bound: Record<string, unknown> = Object.create(null);
 	// What the methods of the repository get as `this`: the bound methods, and the
 	// repository for the rest, as the receiver, so that its getters see the view.
@@ -322,7 +345,14 @@ function bindRepository(
 		] as (...args: unknown[]) => unknown;
 		bound[name] = async (...args: unknown[]) => {
 			if (!state.active) throw new InvalidUseCaseDependencies({ source });
+			const started = clock();
 			const result = await method.apply(receiver, args);
+			writeLog(loggerOfCall(state), "debug", "repository", {
+				repository: repositoryName,
+				method: name,
+				useCase: source,
+				ms: elapsed(started),
+			});
 			for (const arg of args) pullEntities(arg, Entity, state.events);
 			pullEntities(result, Entity, state.events);
 			return result;
@@ -364,6 +394,7 @@ function narrowedContext(
 
 /** Whether `value` can replace `dependency` in `execute`. */
 function isOverrideOf(dependency: UseCaseDependency, value: unknown): boolean {
+	if (isLoggerDeclaration(dependency)) return isLogger(value);
 	if (isRepository(dependency) || isEnvironment(dependency)) {
 		return typeof value === "object" && value !== null && !Array.isArray(value);
 	}
@@ -418,6 +449,7 @@ export abstract class AbstractUseCase<
 			active: false,
 			events: [],
 			dependencies: Object.create(null),
+			owner: this.constructor,
 		};
 		states.set(this, state);
 		for (const [key, dependency] of Object.entries(declaration.dependencies)) {
@@ -428,6 +460,15 @@ export abstract class AbstractUseCase<
 					state,
 					source,
 				);
+				continue;
+			}
+			if (isLoggerDeclaration(dependency)) {
+				// The logger of the call, resolved on use: a started application
+				// can give one after the use case was built.
+				Object.defineProperty(state.dependencies, key, {
+					get: () => loggerOfCall(state) ?? silentLogger,
+					enumerable: true,
+				});
 				continue;
 			}
 			if (isEnvironment(dependency)) {
@@ -494,6 +535,10 @@ export abstract class AbstractUseCase<
 						);
 						continue;
 					}
+					if (isLoggerDeclaration(dependency)) {
+						dependencies[key] = substitute;
+						continue;
+					}
 					if (isEnvironment(dependency)) {
 						const parsed = dependency.blueprint.safeParse(substitute);
 						if (parsed.issues) throw new InvalidUseCaseDependencies({ source });
@@ -520,6 +565,7 @@ export abstract class AbstractUseCase<
 				}
 				state.resolved = Object.freeze(dependencies);
 				state.active = true;
+				const started = clock();
 				try {
 					const result = await guard(
 						{ layer: ExceptionLayers.UseCase, source },
@@ -532,7 +578,20 @@ export abstract class AbstractUseCase<
 					const parsed = declaration.response.safeParse(result);
 					if (parsed.issues) invalidValue(parsed.issues, source, "response");
 					collectEvents(declaration.response, parsed.value, state.events);
+					writeLog(loggerOfCall(state), "debug", "use-case", {
+						useCase: source,
+						outcome: "ok",
+						ms: elapsed(started),
+					});
 					return parsed.value;
+				} catch (error) {
+					logFailure(
+						loggerOfCall(state),
+						"use-case-failed",
+						{ useCase: source, ms: elapsed(started) },
+						error,
+					);
+					throw error;
 				} finally {
 					state.active = false;
 					state.resolved = undefined;
@@ -681,7 +740,7 @@ export function useCaseOf(
 			source: typeof name === "string" ? name : "useCaseOf",
 			details: {
 				reason:
-					"Expected a name, input and response blueprints, and UseCase classes, repositories or environments as dependencies.",
+					"Expected a name, input and response blueprints, and UseCase classes, repositories, environments or Logger as dependencies.",
 			},
 		});
 	}
@@ -757,7 +816,12 @@ export function useCaseOf(
 
 /** Whether `value` can be a dependency of a use case. */
 function isDependency(value: unknown): value is UseCaseDependency {
-	return isUseCaseClass(value) || isRepository(value) || isEnvironment(value);
+	return (
+		isUseCaseClass(value) ||
+		isRepository(value) ||
+		isEnvironment(value) ||
+		isLoggerDeclaration(value)
+	);
 }
 
 export function isUseCaseClass(value: unknown): value is AnyUseCaseClass {

@@ -1,3 +1,4 @@
+import type { ILogger } from "../logger/logger";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 
 /**
@@ -15,6 +16,8 @@ export interface ExecutionScope {
 		object,
 		Readonly<Record<string, unknown>>
 	>;
+	/** The logger of the application running the call, given by its command. */
+	readonly logger?: ILogger;
 }
 
 /**
