@@ -1,0 +1,505 @@
+<!doctype html>
+<html><head><meta name="viewport" content="width=1280"><!-- Static snapshot of a Strata Matéria board. Generated; do not edit. --><meta charset="utf-8"><style>@font-face{font-family:"Recursive";src:url(../shared/fonts/recursive.woff2) format("woff2");font-weight:300 1000;font-style:oblique 0deg 15deg}</style>
+
+
+<style>
+/* afora — "Strata" redesign tokens (shared by site and CMS) */
+.st { --bg: #F1EFE8; --surface: #FAF9F5; --raised: #FFFFFF; --sunken: #E7E4DB; --line: #D6D2C6; --line-strong: #7E817A; --ink: #131512; --muted: #5A5E57; --accent: #E4572E; --accent-ink: #B0401A; --accent-tint: #F6DFD4; --moss: #2F5A41; --moss-tint: #DDE6DC; --moss-soft: #7A9277; --on-ink: #F1EFE8; --s-kw: #2F5A41; --s-str: #B0401A; --s-type: #275E70; --s-num: #8A5A0F; --s-com: #62665E; --shadow: 0 1px 0 rgba(19,21,18,.04), 0 12px 32px -12px rgba(19,21,18,.18); color-scheme: light;
+  --mono: "Recursive", ui-monospace, monospace; --sans: "Recursive", ui-sans-serif, system-ui, sans-serif;
+  background: var(--bg); color: var(--ink); font-family: var(--sans); font-variation-settings: "MONO" 0, "CASL" 0; font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+.st[data-theme="dark"] { --bg: #0E100F; --surface: #151817; --raised: #1B1F1D; --sunken: #0A0B0A; --line: #262B28; --line-strong: #646B65; --ink: #ECEAE3; --muted: #9EA39B; --accent: #FF6B3D; --accent-ink: #FF8A62; --accent-tint: #2A1710; --moss: #8FCBA3; --moss-tint: #16231B; --moss-soft: #5E7F68; --on-ink: #0E100F; --s-kw: #8FCBA3; --s-str: #FF9B76; --s-type: #7CC4D6; --s-num: #E6B865; --s-com: #8E948C; --shadow: 0 1px 0 rgba(0,0,0,.4), 0 16px 40px -16px rgba(0,0,0,.7); color-scheme: dark; }
+.st *, .st *::before, .st *::after { box-sizing: border-box; }
+.st h1, .st h2, .st h3, .st p, .st ul, .st ol, .st dl, .st dd, .st figure { margin: 0; }
+.st ul, .st ol { padding: 0; list-style: none; }
+.st a { color: inherit; text-decoration: none; }
+.st button, .st input, .st select { font: inherit; color: inherit; }
+.st button { cursor: pointer; background: none; border: 0; padding: 0; }
+.st :focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; border-radius: 6px; }
+.st svg { flex: none; }
+.st .mono, .st code, .st pre, .st kbd { font-family: var(--mono); font-variation-settings: "MONO" 1, "CASL" 0; }
+.st .casual { font-variation-settings: "MONO" 0, "CASL" 1, "slnt" -12; font-style: oblique 12deg; }
+.st .label { font-family: var(--mono); font-variation-settings: "MONO" 1, "CASL" 0; font-size: 11px; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.st .caret { display: inline-block; width: .9em; height: .16em; border-radius: 99px; background: var(--accent); vertical-align: .08em; }
+.st .blink { animation: st-blink 1.1s steps(1) infinite; }
+@keyframes st-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .st .blink { animation: none; } }
+/* dimension line: a hairline with end ticks and a centered label */
+.st .dim { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.st .dim i { flex: 1 1 0; height: 9px; border-inline: 1px solid var(--line-strong); background: linear-gradient(var(--line-strong), var(--line-strong)) center / 100% 1px no-repeat; }
+.st .dim span { font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+/* buttons */
+.st .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 44px; padding: 0 18px; border-radius: 999px; font-size: 14px; font-weight: 600; white-space: nowrap; border: 1px solid transparent; transition: transform .16s cubic-bezier(.22,1,.36,1), background-color .16s; }
+.st .btn:active { transform: translateY(1px) scale(.98); }
+.st .btn-ink { background: var(--ink); color: var(--on-ink); }
+.st .btn-ink:hover { background: var(--moss); }
+.st .btn-line { border-color: var(--line-strong); }
+.st .btn-line:hover { background: var(--surface); }
+.st .btn-sm { height: 34px; padding: 0 14px; font-size: 13px; }
+.st .btn[disabled] { opacity: .45; cursor: not-allowed; }
+.st .icon-btn { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 999px; color: var(--muted); }
+.st .icon-btn:hover { color: var(--ink); background: var(--sunken); }
+/* segmented control with cursor underline */
+.st .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--sunken); }
+.st .seg button { position: relative; height: 28px; padding: 0 12px; border-radius: 999px; font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 12px; font-weight: 600; color: var(--muted); }
+.st .seg button[aria-pressed="true"] { background: var(--raised); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.st .seg button[aria-pressed="true"]::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 10px; height: 2px; margin-left: -5px; border-radius: 99px; background: var(--accent); }
+.st .seg button:hover { color: var(--ink); }
+/* code */
+.st .code { font-family: var(--mono); font-variation-settings: "MONO" 1, "CASL" 0; font-size: 13px; line-height: 1.85; white-space: pre; }
+.st .k { color: var(--s-kw); } .st .s { color: var(--s-str); } .st .ty { color: var(--s-type); } .st .n { color: var(--s-num); } .st .c { color: var(--s-com); font-variation-settings: "MONO" 1, "CASL" 1; }
+.st .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 10px 18px; border-radius: 999px; background: var(--ink); color: var(--on-ink); font-size: 13px; font-weight: 600; box-shadow: var(--shadow); z-index: 30; }
+
+/* ============================================================
+   afora — "Strata · Matéria" (v3)
+   Texture, mineral colour, sediment gradients, a 3D layer stack.
+   Loaded after every board's own CSS.
+   ============================================================ */
+.st {
+  /* one mineral per layer, oldest (Property) to newest (UseCase), plus Environment */
+  --m1: #E9B04A; --m2: #EE8B4E; --m3: #E4572E; --m4: #A9361E; --m5: #4E7C5B; --m6: #21504F; --m7: #16201E;
+  --m1-hi: #F6D07E; --m2-hi: #F7AE77; --m3-hi: #F27C52; --m4-hi: #C0442A; --m5-hi: #74A27F; --m6-hi: #3A7673;
+  --bg-2: #E8E3D6;
+  --surface-hi: rgba(255,255,255,.75);
+  --glow-1: rgba(238,139,78,.55); --glow-2: rgba(233,176,74,.55); --glow-3: rgba(78,124,91,.38); --glow-4: rgba(228,87,46,.38);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='.33 .33 .33 0 -.27 .33 .33 .33 0 -.27 .33 .33 .33 0 -.27 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain-op: .42;
+  --lift: 0 1px 0 var(--surface-hi) inset, 0 1px 2px rgba(19,21,18,.06), 0 24px 48px -24px rgba(83,44,20,.35);
+  position: relative; isolation: isolate;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 60%, var(--bg-2) 100%);
+}
+.st[data-theme="dark"] {
+  --m1: #F0B85A; --m2: #F5965F; --m3: #FF6B3D; --m4: #C64B2B; --m5: #5F9471; --m6: #2E6A69; --m7: #0B1312;
+  --m1-hi: #FFD68A; --m2-hi: #FFB585; --m3-hi: #FF9268; --m4-hi: #C0442A; --m5-hi: #86BC95; --m6-hi: #357573;
+  --bg-2: #0A0C0B;
+  --surface-hi: rgba(255,255,255,.07);
+  --glow-1: rgba(255,107,61,.34); --glow-2: rgba(240,184,90,.24); --glow-3: rgba(95,148,113,.30); --glow-4: rgba(198,75,43,.38);
+  --grain-op: .55;
+  --lift: 0 1px 0 var(--surface-hi) inset, 0 1px 2px rgba(0,0,0,.5), 0 28px 56px -24px rgba(0,0,0,.85);
+}
+/* film grain over everything */
+.st::after { content: ""; position: absolute; inset: 0; z-index: 60; pointer-events: none; background-image: var(--grain); background-size: 220px 220px; mix-blend-mode: overlay; opacity: var(--grain-op); }
+/* grain inside a single surface: put this class on anything with a gradient */
+.st .grain { background-blend-mode: overlay, normal; }
+
+/* ---------- materials ---------- */
+.st .btn-ink, .st .term { background: linear-gradient(180deg, color-mix(in oklab, var(--ink) 82%, var(--m4)) 0%, var(--ink) 100%); box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, 0 10px 24px -12px rgba(19,21,18,.6); }
+.st[data-theme="dark"] .btn-ink, .st[data-theme="dark"] .term { background: linear-gradient(180deg, #FFFFFF 0%, var(--ink) 100%); box-shadow: 0 10px 28px -12px var(--glow-1); }
+.st .btn-ink:hover { background: linear-gradient(180deg, var(--m3-hi), var(--m4)); color: #fff; }
+.st .btn-line { background: var(--surface-hi); backdrop-filter: none; }
+.st .index { background: color-mix(in oklab, var(--surface) 80%, transparent); box-shadow: var(--lift); }
+
+/* ---------- hero: sediment light, no dot grid ---------- */
+.st .hero { position: relative; overflow: hidden; background: none; padding-bottom: 72px; }
+.st .hero > .wrap { position: relative; z-index: 1; }
+/* fluid field: two slow layers of blurred mineral colour */
+.st .hero::before, .st .hero::after { content: ""; position: absolute; z-index: 0; pointer-events: none; border-radius: 50%; filter: blur(48px); }
+.st .hero::before { right: -12%; top: -18%; width: 78%; height: 92%;
+  background: radial-gradient(40% 46% at 62% 36%, var(--glow-2), transparent 70%), radial-gradient(36% 40% at 40% 58%, var(--glow-1), transparent 72%), radial-gradient(30% 34% at 78% 70%, var(--glow-4), transparent 72%);
+  animation: st-flow-a 22s ease-in-out infinite alternate; }
+.st .hero::after { right: -20%; bottom: -30%; width: 70%; height: 80%;
+  background: radial-gradient(40% 44% at 40% 40%, var(--glow-3), transparent 72%), radial-gradient(30% 34% at 70% 60%, color-mix(in oklab, var(--m6) 40%, transparent), transparent 72%);
+  animation: st-flow-b 26s ease-in-out infinite alternate; }
+@keyframes st-flow-a { 0% { transform: translate(0, 0) rotate(0deg) scale(1); } 50% { transform: translate(-6%, 5%) rotate(14deg) scale(1.08); } 100% { transform: translate(4%, -3%) rotate(-10deg) scale(.96); } }
+@keyframes st-flow-b { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-10%, -8%) rotate(24deg) scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .st .hero::before, .st .hero::after { animation: none; } }
+.st .hero-top { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 0; align-items: center; }
+.st .hero-top .stack3d { margin-right: -48px; margin-left: -80px; }
+.st .hero-copy .h-display { font-size: 86px; }
+.st .hero-copy .h-display .caret { display: none; }
+.st .hero-copy .hero-lead { margin-top: 36px; max-width: 560px; border-top: 0; padding-top: 0; }
+.st .h-display em { background: linear-gradient(100deg, var(--m5) 0%, var(--m6) 55%, var(--m4) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .06em; }
+.st[data-theme="dark"] .h-display em { background-image: linear-gradient(100deg, var(--m5-hi) 0%, var(--m1) 60%, var(--m3) 100%); }
+
+/* ---------- the 3D stack ---------- */
+.st .stack3d { position: relative; height: 560px; margin: 0; perspective: 1600px; perspective-origin: 50% 30%; }
+.st .stack3d .rig { position: absolute; left: 50%; top: 60%; width: 0; height: 0; transform-style: preserve-3d; transform: rotateX(56deg) rotateZ(-34deg); animation: st-drift 9s ease-in-out infinite alternate; }
+@keyframes st-drift { from { transform: rotateX(57deg) rotateZ(-37deg); } to { transform: rotateX(53deg) rotateZ(-29deg); } }
+.st .slab { --gap: 54px; --z: calc(var(--i) * var(--gap)); position: absolute; left: calc(var(--w) * -1.7px); top: -46px; width: calc(var(--w) * 3.4px); height: 92px; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; border-radius: 999px;
+  transform-style: preserve-3d; transform: translateZ(var(--z)); transition: transform .55s cubic-bezier(.22,1,.36,1), filter .3s;
+  background-image: var(--grain), linear-gradient(120deg, var(--hi) 0%, var(--lo) 72%); background-size: 220px 220px, 100% 100%; background-blend-mode: overlay, normal;
+  box-shadow: 0 1px 0 rgba(255,255,255,.45) inset; color: var(--txt, #fff); font-weight: 650; font-size: 17px; text-align: left; }
+.st .slab::before, .st .slab::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--lo); pointer-events: none; }
+.st .slab::before { transform: translateZ(-7px); filter: brightness(.72); }
+.st .slab::after { transform: translateZ(-14px); filter: brightness(.5); box-shadow: 0 30px 40px -10px rgba(40,20,10,.45); }
+.st .slab b { font-weight: 680; letter-spacing: -.01em; }
+.st .slab span { font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 12px; opacity: .7; }
+.st .slab:hover { filter: brightness(1.06) saturate(1.05); }
+.st .slab.m1 { --hi: var(--m1-hi); --lo: var(--m1); --txt: #2A1A06; }
+.st .slab.m2 { --hi: var(--m2-hi); --lo: var(--m2); --txt: #2B1406; }
+.st .slab.m3 { --hi: var(--m3-hi); --lo: var(--m3); --txt: #1E0D05; }
+.st .slab.m4 { --hi: var(--m4-hi); --lo: var(--m4); }
+.st .slab.m5 { --hi: var(--m5-hi); --lo: var(--m5); --txt: #0F2418; }
+.st .slab.m6 { --hi: var(--m6-hi); --lo: var(--m6); }
+.st .slab.up { transform: translateZ(calc(var(--z) + 70px)); }
+.st .slab.on { transform: translateZ(calc(var(--z) + 26px)); box-shadow: 0 1px 0 rgba(255,255,255,.55) inset, 0 0 0 3px var(--ink), 0 0 60px 10px var(--glow-1); }
+.st .slab.on::after { box-shadow: 0 50px 60px -10px rgba(40,20,10,.55); }
+.st .env-plate { position: absolute; left: -230px; top: -150px; width: 460px; height: 300px; border-radius: 80px; transform: translateZ(-40px); border: 2px dashed color-mix(in oklab, var(--ink) 40%, transparent);
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--m1) 22%, transparent), transparent); transition: background .4s, border-color .4s; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 18px; }
+.st .env-plate span { font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.st .env-plate.on { border-color: var(--m3); background: radial-gradient(closest-side, color-mix(in oklab, var(--m3) 38%, transparent), transparent); }
+.st .env-plate.on span { color: var(--accent-ink); }
+.st .slab.lit { box-shadow: 0 1px 0 rgba(255,255,255,.45) inset, 0 0 0 1px color-mix(in oklab, var(--m3) 70%, transparent); }
+.st .stack-cap { position: absolute; right: 0; bottom: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.st .stack-hint { font-size: 13px; color: var(--muted); font-variation-settings: "CASL" 1; font-style: oblique 10deg; }
+@media (prefers-reduced-motion: reduce) { .st .stack3d .rig { animation: none; } .st .slab { transition: none; } }
+
+/* ---------- twin, now a wide two-pane instrument ---------- */
+.st .twin { margin-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "sh rh" "sb rb" "sb tr" "sm sm"; grid-template-rows: auto auto 1fr auto; border: 0; border-radius: 28px;
+  background-image: var(--grain), linear-gradient(160deg, var(--surface) 0%, color-mix(in oklab, var(--surface) 88%, var(--m2)) 100%); background-size: 220px 220px, 100% 100%; background-blend-mode: overlay, normal; box-shadow: var(--lift); }
+.st .twin > .twin-head:not(.out) { grid-area: sh; }
+.st .twin > .twin-body:not(.out) { grid-area: sb; }
+.st .twin > .twin-head.out { grid-area: rh; border-left: 1px solid var(--line); }
+.st .twin > .twin-body.out { grid-area: rb; border-left: 1px solid var(--line); }
+.st .twin > .try { grid-area: tr; align-self: end; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin: 0 20px 20px; padding: 16px; border: 0; border-radius: 20px; border-left: 1px solid var(--line); }
+.st .twin > .try .try-tag { grid-column: 1 / -1; justify-self: start; }
+.st .twin > .twin-body.out { border-bottom: 0; }
+.st .twin > .try { box-shadow: 0 0 0 1px var(--line) inset; }
+.st .twin > .seam { grid-area: sm; border-bottom: 0; background: transparent; border-top: 1px solid var(--line); }
+.st .out { background: linear-gradient(180deg, color-mix(in oklab, var(--m5) 9%, transparent), color-mix(in oklab, var(--m5) 4%, transparent)); }
+.st .try { background: color-mix(in oklab, var(--sunken) 70%, transparent); }
+.st .try input { background: var(--raised); box-shadow: 0 1px 0 var(--surface-hi) inset; }
+.st .try .try-tag { background: linear-gradient(120deg, var(--m3-hi), var(--m4)); color: #fff; }
+
+/* ---------- sediment band ---------- */
+.st .sed-band { position: relative; height: 150px; overflow: hidden; background: linear-gradient(to bottom, transparent 75%, var(--m7) 75%); }
+.st .sed-band .sed { position: absolute; inset: -14px 0 0 0; width: 100%; height: calc(100% + 14px); }
+.st .sed-band::after { content: ""; position: absolute; inset: 0; background-image: var(--grain); background-size: 220px; mix-blend-mode: overlay; opacity: .9; pointer-events: none; }
+.st .foot-band { height: 120px; margin-top: 40px; }
+.st .spec { border-top: 0; background: var(--m7); color: #ECEAE3; border-bottom: 0; }
+.st .spec .label, .st .spec small { color: rgba(236,234,227,.62); }
+.st .spec .wrap > * { border-left-color: rgba(236,234,227,.12); }
+
+/* ---------- seed (layer selector) in minerals ---------- */
+.st .layer { background-image: var(--grain), linear-gradient(110deg, var(--hi, var(--ink)), var(--lo, var(--ink))); background-size: 220px, 100%; background-blend-mode: overlay, normal; color: var(--txt, #fff); box-shadow: 0 1px 0 rgba(255,255,255,.3) inset, 0 10px 22px -14px rgba(60,30,10,.6); }
+.st .bar-row:nth-child(1) .layer { --hi: var(--m1-hi); --lo: var(--m1); --txt: #2A1A06; }
+.st .bar-row:nth-child(2) .layer { --hi: var(--m2-hi); --lo: var(--m2); --txt: #2B1406; }
+.st .bar-row:nth-child(3) .layer { --hi: var(--m3-hi); --lo: var(--m3); --txt: #1E0D05; }
+.st .bar-row:nth-child(4) .layer { --hi: var(--m4-hi); --lo: var(--m4); }
+.st .bar-row:nth-child(5) .layer { --hi: var(--m5-hi); --lo: var(--m5); --txt: #0F2418; }
+.st .bar-row:nth-child(6) .layer { --hi: var(--m6-hi); --lo: var(--m6); }
+.st .layer.soft { opacity: .28; box-shadow: none; }
+.st .layer[aria-pressed="true"] { color: var(--txt, #fff); box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 0 0 3px var(--bg), 0 0 0 5px var(--ink), 0 18px 36px -12px var(--glow-1); transform: translateX(10px); }
+.st .layer[aria-pressed="true"] span { opacity: .85; }
+.st .layer.env { background: transparent; color: var(--ink); border: 1.5px dashed var(--line-strong); box-shadow: none; }
+.st .layer.env[aria-pressed="true"] { background-image: var(--grain), linear-gradient(110deg, var(--m3-hi), var(--m4)); border-color: transparent; color: #fff; }
+.st .detail { --lc: var(--m4); border: 0; background-image: var(--grain), radial-gradient(120% 90% at 0% 0%, color-mix(in oklab, var(--lc) 30%, transparent), transparent 60%), linear-gradient(var(--surface), var(--surface)); background-size: 220px, 100%, 100%; background-blend-mode: overlay, normal, normal; box-shadow: var(--lift); }
+.st .seed .detail { --lc: inherit; }
+.st .detail .code { background: color-mix(in oklab, var(--bg) 85%, transparent); border-color: color-mix(in oklab, var(--lc) 25%, var(--line)); }
+.st .chain span.on { border-color: transparent; background: color-mix(in oklab, var(--lc) 18%, transparent); color: var(--ink); }
+
+/* ---------- rules report ---------- */
+.st .report { border: 0; background-image: var(--grain), linear-gradient(180deg, var(--surface), color-mix(in oklab, var(--surface) 92%, var(--m5))); background-size: 220px, 100%; background-blend-mode: overlay, normal; box-shadow: var(--lift); }
+.st .report-head { background-image: linear-gradient(90deg, color-mix(in oklab, var(--m5) 22%, var(--sunken)), var(--sunken) 60%); border-bottom: 0; }
+.st .rule { border-left-color: color-mix(in oklab, var(--line) 70%, transparent); }
+.st .io > div { border: 0; background: color-mix(in oklab, var(--bg) 80%, transparent); box-shadow: 0 0 0 1px var(--line) inset; }
+.st .pass i { background: linear-gradient(140deg, var(--m5-hi), var(--m6)); color: #fff; }
+.st .pass.fail i { background: linear-gradient(140deg, var(--m3-hi), var(--m4)); }
+
+/* ---------- circuit ---------- */
+.st .core { position: relative; overflow: hidden; color: #ECEAE3; min-height: 280px;
+  background-image: var(--grain), radial-gradient(70% 90% at 100% 0%, color-mix(in oklab, var(--m3) 70%, transparent), transparent 62%), radial-gradient(80% 90% at 0% 100%, color-mix(in oklab, var(--m5) 80%, transparent), transparent 60%), linear-gradient(160deg, var(--m6), var(--m7));
+  background-size: 220px, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal; box-shadow: var(--lift); overflow: visible; }
+.st .core code { font-size: 26px; }
+.st .core::after { border-top: 2px solid var(--m3); }
+.st .pkgs::before { border-left: 2px solid var(--m3); }
+.st .pkg::before { border-top: 2px solid var(--m3); }
+.st .pkg::after { background: var(--m1); box-shadow: 0 0 0 4px color-mix(in oklab, var(--m1) 30%, transparent); animation: st-signal 2.4s ease-in-out infinite; }
+.st .pkg:nth-child(2)::after { animation-delay: .3s; } .st .pkg:nth-child(3)::after { animation-delay: .6s; } .st .pkg:nth-child(4)::after { animation-delay: .9s; }
+@keyframes st-signal { 50% { box-shadow: 0 0 0 8px color-mix(in oklab, var(--m1) 0%, transparent); } }
+.st .pkg { border: 0; background: var(--surface); box-shadow: var(--lift); }
+.st .pkg:hover { box-shadow: var(--lift), 0 0 0 2px var(--m3); }
+@media (prefers-reduced-motion: reduce) { .st .pkg::after { animation: none; } }
+
+/* ---------- journal ---------- */
+.st .jcard { border: 0; background-size: 220px, 100%; background-blend-mode: overlay, normal; box-shadow: var(--lift); transition: transform .3s cubic-bezier(.22,1,.36,1); }
+.st .jcard:nth-child(1) { background-image: var(--grain), linear-gradient(150deg, color-mix(in oklab, var(--m1) 34%, var(--surface)) 0%, var(--surface) 70%); }
+.st .jcard:nth-child(2) { background-image: var(--grain), linear-gradient(150deg, color-mix(in oklab, var(--m5) 30%, var(--surface)) 0%, var(--surface) 70%); }
+.st .jcard:hover { transform: translateY(-4px); }
+
+/* ---------- footer ---------- */
+.st .foot { border-top: 0; background: var(--m7); color: #ECEAE3; }
+.st .foot .foot-row { color: rgba(236,234,227,.62); }
+.st .foot .foot-row a:hover { color: #fff; }
+.st .giant { background-image: var(--grain), linear-gradient(180deg, var(--m1) 10%, var(--m2) 30%, var(--m3) 48%, var(--m4) 64%, var(--m5) 82%, var(--m6) 100%); background-size: 220px, 100%; background-blend-mode: overlay, normal; -webkit-background-clip: text; background-clip: text; color: transparent; }
+.st .foot-band { margin-top: 64px; }
+
+/* ---------- mobile ---------- */
+@media (max-width: 800px) {
+  .st .hero-top { grid-template-columns: 1fr; gap: 0; }
+  .st .hero-copy .h-display { font-size: 52px; }
+  .st .hero-copy .hero-lead { margin-top: 24px; }
+  .st .stack3d { height: 400px; margin: 40px -20px 0; }
+  .st .stack3d .rig { transform: scale(.62) rotateX(56deg) rotateZ(-34deg); animation: none; top: 64%; }
+  .st .stack-cap { right: 20px; }
+  .st .twin { grid-template-columns: minmax(0, 1fr); grid-template-areas: "sh" "sb" "tr" "sm" "rh" "rb"; }
+  .st .twin::before { margin: 0 20px; }
+  .st .twin > .twin-head.out, .st .twin > .twin-body.out { border-left: 0; }
+  .st .twin > .try { grid-template-columns: 1fr; margin: 0; border-radius: 0; box-shadow: none; }
+  .st .hero-top .stack3d { margin: 40px -20px 0; }
+  .st .circuit { grid-template-columns: 1fr; gap: 12px; }
+  .st .core { padding: 28px; }
+  .st .hero::before { width: 140%; right: -50%; }
+  .st .hero::after { width: 140%; }
+  .st .twin > .seam { background: color-mix(in oklab, var(--sunken) 70%, transparent); }
+  .st .sed-band { height: 90px; }
+  .st .foot-band { height: 72px; }
+  .st .layer[aria-pressed="true"] { transform: none; }
+  .st .core { min-height: 0; }
+}
+.st .bar-row .layer.soft { background-image: var(--grain), linear-gradient(110deg, var(--hi), var(--lo)); background-size: 220px, 100%; background-blend-mode: overlay, normal; opacity: .32; box-shadow: none; }
+.st .bars .layer[aria-pressed="true"]:not(.env) { background-image: var(--grain), linear-gradient(110deg, var(--hi), var(--lo)); background-size: 220px, 100%; background-blend-mode: overlay, normal; }
+
+/* ============================================================
+   CMS
+   ============================================================ */
+.st { --rail: #0F1716; --rail-2: rgba(255,255,255,.07); --rail-line: rgba(255,255,255,.09); }
+.st[data-theme="dark"] { --rail: #070B0A; --rail-2: rgba(255,255,255,.06); --rail-line: rgba(255,255,255,.07); }
+.st .rail { position: relative; overflow: hidden; background-image: var(--grain), radial-gradient(90% 40% at 0% 100%, color-mix(in oklab, var(--m5) 55%, transparent), transparent 70%), radial-gradient(80% 30% at 100% 0%, color-mix(in oklab, var(--m3) 32%, transparent), transparent 70%), linear-gradient(180deg, var(--m7), var(--rail));
+  background-size: 220px, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal; }
+.st .ritem[aria-current="page"] { color: #fff; background-image: linear-gradient(100deg, rgba(255,255,255,.14), rgba(255,255,255,.04)); box-shadow: 0 1px 0 rgba(255,255,255,.12) inset; }
+.st .ritem[aria-current="page"]::before { left: 0; width: 4px; height: 20px; margin-top: -10px; background: linear-gradient(180deg, var(--m1), var(--m3)); }
+.st .jump { background: rgba(255,255,255,.06); box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; }
+.st .top { border-bottom: 0; background: color-mix(in oklab, var(--bg) 70%, transparent); }
+.st .main { position: relative; }
+.st .main::before { content: ""; position: absolute; z-index: 0; right: -10%; top: -6%; width: 70%; height: 520px; pointer-events: none; filter: blur(50px); border-radius: 50%;
+  background: radial-gradient(40% 50% at 70% 40%, var(--glow-2), transparent 70%), radial-gradient(36% 44% at 40% 60%, var(--glow-1), transparent 72%), radial-gradient(30% 40% at 90% 80%, var(--glow-3), transparent 72%);
+  animation: st-flow-a 24s ease-in-out infinite alternate; opacity: .8; }
+.st .main > * { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .st .main::before { animation: none; } }
+
+/* overview cover */
+.st .ov-cover { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 340px; align-items: center; gap: 24px; min-height: 280px; padding: 36px 40px; border-radius: 32px; overflow: hidden; color: #F4F1EA;
+  background-image: var(--grain), radial-gradient(60% 90% at 100% 0%, color-mix(in oklab, var(--m2) 85%, transparent), transparent 62%), radial-gradient(50% 80% at 70% 100%, color-mix(in oklab, var(--m3) 80%, transparent), transparent 64%), radial-gradient(70% 100% at 0% 100%, color-mix(in oklab, var(--m5) 90%, transparent), transparent 70%), linear-gradient(140deg, var(--m6), var(--m7));
+  background-size: 220px, 100%, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal, normal; box-shadow: var(--lift); }
+.st .ov-cover .label { color: rgba(244,241,234,.7); }
+.st .ov-cover .sentence em { color: var(--m1-hi); }
+.st .ov-cover p { color: rgba(244,241,234,.78) !important; }
+.st .stack3d.mini { height: 240px; perspective: 1000px; }
+.st .stack3d.mini .rig { top: 58%; transform: scale(.62) rotateX(56deg) rotateZ(-34deg); animation: st-drift-mini 10s ease-in-out infinite alternate; }
+@keyframes st-drift-mini { from { transform: scale(.62) rotateX(57deg) rotateZ(-38deg); } to { transform: scale(.62) rotateX(52deg) rotateZ(-28deg); } }
+.st .stack3d.mini .slab { box-shadow: 0 1px 0 rgba(255,255,255,.45) inset; }
+.st .stack3d.mini .slab::after { box-shadow: 0 30px 40px -10px rgba(0,0,0,.45); }
+
+/* rulers become mineral cards */
+.st .rulers { gap: 12px; border-block: 0; }
+.st .ruler, .st .ruler:first-child { position: relative; padding: 20px 22px; border: 0; border-radius: 22px; background: var(--surface); box-shadow: var(--lift); overflow: hidden; }
+.st .ruler::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: linear-gradient(90deg, var(--rc-1), var(--rc-2)); }
+.st .ruler:nth-child(1) { --rc-1: var(--m1); --rc-2: var(--m2); }
+.st .ruler:nth-child(2) { --rc-1: var(--m5-hi); --rc-2: var(--m5); }
+.st .ruler:nth-child(3) { --rc-1: var(--m2); --rc-2: var(--m3); }
+.st .ruler:nth-child(4) { --rc-1: var(--m6-hi); --rc-2: var(--m6); }
+.st .ruler b { background: linear-gradient(180deg, var(--ink) 40%, color-mix(in oklab, var(--ink) 55%, var(--rc-2))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* panels */
+.st .panel, .st .vital { border: 0; background-image: var(--grain), linear-gradient(170deg, var(--surface), color-mix(in oklab, var(--surface) 94%, var(--m2))); background-size: 220px, 100%; background-blend-mode: overlay, normal; box-shadow: var(--lift); }
+.st .panel-head { border-bottom-color: color-mix(in oklab, var(--line) 70%, transparent); }
+.st .heat i { background: color-mix(in oklab, var(--sunken) 80%, transparent); }
+.st .heat i.l1 { background: color-mix(in oklab, var(--m1) 55%, var(--surface)); opacity: 1; }
+.st .heat i.l2 { background: linear-gradient(160deg, var(--m2), var(--m3)); opacity: 1; }
+.st .heat i.l3 { background: linear-gradient(160deg, var(--m3), var(--m4)); opacity: 1; }
+.st .heat i.today { box-shadow: 0 0 0 2px var(--ink); }
+.st .step.done i { background: linear-gradient(140deg, var(--m5-hi), var(--m6)); color: #fff; }
+.st .tag { background: color-mix(in oklab, var(--m5) 16%, transparent); }
+.st .tag.warm { background: color-mix(in oklab, var(--m3) 16%, transparent); }
+.st .vital b.has { background: linear-gradient(180deg, var(--ink) 40%, var(--m4)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.st .spark { background: repeating-linear-gradient(90deg, color-mix(in oklab, var(--m2) 40%, var(--sunken)) 0 6px, transparent 6px 9px); }
+
+/* entries */
+.st .erow[aria-current="true"] { color: #F4F1EA; background-image: var(--grain), linear-gradient(110deg, var(--m6), var(--m7)); background-size: 220px, 100%; background-blend-mode: overlay, normal; }
+.st .inv li i { background: linear-gradient(140deg, var(--m5-hi), var(--m6)); color: #fff; }
+.st .inv li.bad i { background: linear-gradient(140deg, var(--m3-hi), var(--m4)); color: #fff; }
+.st .inv li.warn i { background: linear-gradient(140deg, var(--m1-hi), var(--m1)); color: #2A1A06; }
+.st .ogcard { border: 0; color: #F4F1EA; background-image: var(--grain), radial-gradient(70% 100% at 100% 0%, var(--m2), transparent 62%), radial-gradient(60% 90% at 0% 100%, var(--m5), transparent 66%), linear-gradient(140deg, var(--m6), var(--m7)); background-size: 220px, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal; }
+.st .ogcard small { color: rgba(244,241,234,.7); }
+.st .ogcard .og-bar { background: linear-gradient(90deg, var(--m1), var(--m3)); }
+.st .palette-k { border: 0; box-shadow: var(--lift), 0 0 0 1px var(--line); }
+
+/* ============================================================
+   Docs + playground
+   ============================================================ */
+.st .dside { border-right: 0; background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 70%, transparent), transparent); }
+.st .dlink[aria-current="page"] { background: var(--surface); box-shadow: var(--lift); }
+.st .dlink[aria-current="page"] .pill { background: linear-gradient(90deg, var(--m1), var(--m3)); }
+.st .dmain article { position: relative; }
+.st .dmain article::before { content: ""; position: absolute; z-index: -1; right: -40px; top: -60px; width: 560px; height: 340px; border-radius: 50%; filter: blur(50px); pointer-events: none;
+  background: radial-gradient(45% 50% at 60% 40%, var(--glow-2), transparent 70%), radial-gradient(40% 46% at 35% 60%, var(--glow-1), transparent 72%), radial-gradient(30% 40% at 85% 75%, var(--glow-3), transparent 72%);
+  animation: st-flow-a 22s ease-in-out infinite alternate; }
+.st .minimap i:nth-child(6n+1) { --mc: var(--m1); } .st .minimap i:nth-child(6n+2) { --mc: var(--m2); } .st .minimap i:nth-child(6n+3) { --mc: var(--m3); }
+.st .minimap i:nth-child(6n+4) { --mc: var(--m4); } .st .minimap i:nth-child(6n+5) { --mc: var(--m5); } .st .minimap i:nth-child(6n) { --mc: var(--m6); }
+.st .minimap i { background: color-mix(in oklab, var(--mc) 28%, var(--line)); }
+.st .minimap i.on { background: linear-gradient(90deg, var(--mc), color-mix(in oklab, var(--mc) 60%, var(--m4))); }
+.st .codeblock { border: 0; box-shadow: var(--lift); background-image: var(--grain), linear-gradient(170deg, var(--surface), color-mix(in oklab, var(--surface) 92%, var(--m2))); background-size: 220px, 100%; background-blend-mode: overlay, normal; }
+.st .callout { background-image: linear-gradient(110deg, color-mix(in oklab, var(--m5) 22%, var(--surface)), color-mix(in oklab, var(--m5) 6%, var(--surface))); }
+.st .callout i { background: linear-gradient(140deg, var(--m5-hi), var(--m6)); color: #fff; }
+.st .callout.warm { background-image: linear-gradient(110deg, color-mix(in oklab, var(--m2) 26%, var(--surface)), color-mix(in oklab, var(--m1) 8%, var(--surface))); }
+.st .callout.warm i { background: linear-gradient(140deg, var(--m3-hi), var(--m4)); color: #fff; }
+.st .pager button { border: 0; background: var(--surface); box-shadow: var(--lift); }
+.st .pager button:hover { box-shadow: var(--lift), 0 0 0 2px var(--m3); }
+.st .toc a[aria-current="true"]::before { background: linear-gradient(90deg, var(--m1), var(--m3)); }
+.st .run { background: linear-gradient(120deg, var(--m1-hi), var(--m3)); box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 12px 28px -12px var(--glow-1); }
+.st .pg-bar { position: relative; overflow: hidden; border-bottom: 0; }
+.st .pg-bar::before { content: ""; position: absolute; inset: -80px -10% auto 30%; height: 220px; z-index: -1; filter: blur(50px); border-radius: 50%; background: radial-gradient(40% 50% at 40% 50%, var(--glow-1), transparent 70%), radial-gradient(40% 50% at 80% 50%, var(--glow-3), transparent 70%); animation: st-flow-b 20s ease-in-out infinite alternate; }
+.st .exbtn[aria-current="true"] { color: #F4F1EA; background-image: var(--grain), linear-gradient(110deg, var(--m6), var(--m7)); background-size: 220px, 100%; background-blend-mode: overlay, normal; box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; }
+.st .exbtn[aria-current="true"] i { background: linear-gradient(140deg, var(--m1-hi), var(--m3)); }
+.st .editor-pane { background-image: var(--grain), linear-gradient(170deg, var(--surface), color-mix(in oklab, var(--surface) 90%, var(--m6))); background-size: 220px, 100%; background-blend-mode: overlay, normal; }
+.st .out-pane { background: linear-gradient(180deg, color-mix(in oklab, var(--m5) 8%, transparent), transparent 60%); }
+.st .layer-badge { background: linear-gradient(110deg, color-mix(in oklab, var(--m3) 30%, transparent), color-mix(in oklab, var(--m1) 18%, transparent)); }
+.st .cl.hl { background: linear-gradient(90deg, color-mix(in oklab, var(--m3) 22%, transparent), transparent 80%); box-shadow: inset 3px 0 var(--m3); }
+.st .spinner { border-top-color: var(--m3); }
+@media (prefers-reduced-motion: reduce) { .st .dmain article::before, .st .pg-bar::before, .st .stack3d.mini .rig { animation: none; } }
+.st .main { overflow: clip; }
+.st .stack3d.mini .rig { top: 74%; }
+.st .heat i.l1 { background: linear-gradient(160deg, var(--m1), var(--m2)); opacity: .42; }
+.st .heat i.l2 { background: linear-gradient(160deg, var(--m2), var(--m3)); opacity: .78; }
+.st .heat i.l3 { background: linear-gradient(160deg, var(--m3-hi), var(--m4)); opacity: 1; }
+.st .minimap i { background: color-mix(in oklab, var(--mc) 50%, var(--line)); }
+.st .dlink:nth-of-type(7n+1) .pill { --mc: var(--m1); } .st .dlink:nth-of-type(7n+2) .pill { --mc: var(--m2); } .st .dlink:nth-of-type(7n+3) .pill { --mc: var(--m3); }
+.st .dlink:nth-of-type(7n+4) .pill { --mc: var(--m4); } .st .dlink:nth-of-type(7n+5) .pill { --mc: var(--m5); } .st .dlink:nth-of-type(7n+6) .pill { --mc: var(--m6); }
+.st .dlink .pill { background: color-mix(in oklab, var(--mc, var(--line-strong)) 70%, transparent); }
+.st .dlink[aria-current="page"] .pill { background: linear-gradient(90deg, var(--mc, var(--m1)), var(--m3)); }
+
+
+/* ============================================================
+   v3.1 — critique pass: section rhythm, consistency, a11y
+   ============================================================ */
+/* 02 rules: a moss-lagoon tinted band with its own fluid field */
+.st #rules { position: relative; overflow: hidden; padding-top: 112px !important; background: linear-gradient(180deg, transparent 0%, color-mix(in oklab, var(--m5) 9%, var(--bg)) 22%, color-mix(in oklab, var(--m6) 8%, var(--bg)) 78%, transparent 100%); }
+.st #rules::before { content: ""; position: absolute; z-index: 0; left: -14%; top: 8%; width: 62%; height: 70%; border-radius: 50%; filter: blur(60px); pointer-events: none;
+  background: radial-gradient(40% 50% at 40% 40%, var(--glow-3), transparent 72%), radial-gradient(34% 40% at 70% 70%, color-mix(in oklab, var(--m6) 30%, transparent), transparent 72%); animation: st-flow-b 24s ease-in-out infinite alternate; }
+.st #rules > .wrap { position: relative; z-index: 1; }
+/* 03 connect: a basalt band — the infrastructure lives in the dark */
+.st #connect { --ink: #ECEAE3; --muted: #A6ABA3; --line: rgba(236,234,227,.12); --line-strong: #6E756F; --surface: #18211F; --raised: #1F2927; --sunken: #0F1615; --accent-ink: #FF8A62; --s-kw: #8FCBA3; --s-type: #7CC4D6; --s-com: #8E948C;
+  --surface-hi: rgba(255,255,255,.06); --lift: 0 1px 0 rgba(255,255,255,.06) inset, 0 28px 56px -24px rgba(0,0,0,.85);
+  position: relative; overflow: hidden; padding-top: 112px !important; color: var(--ink);
+  background-image: var(--grain), radial-gradient(50% 60% at 90% 10%, color-mix(in oklab, var(--m3) 28%, transparent), transparent 70%), radial-gradient(60% 70% at 0% 100%, color-mix(in oklab, var(--m5) 34%, transparent), transparent 70%), linear-gradient(180deg, var(--m7), #0C1312);
+  background-size: 220px, 100%, 100%, 100%; background-blend-mode: overlay, normal, normal, normal; }
+.st #connect .pkg { background: var(--surface); }
+.st #connect .pkg code { color: var(--m5-hi); }
+.st #connect .core { box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, 0 40px 80px -30px rgba(0,0,0,.9), 0 0 120px -20px color-mix(in oklab, var(--m3) 50%, transparent); }
+.st #journal { padding-top: 112px !important; }
+/* docs: tables share the surface material */
+.st .opt-table { border: 0; box-shadow: var(--lift); background: var(--surface); }
+.st .opt-table th { background: linear-gradient(90deg, color-mix(in oklab, var(--m2) 14%, var(--sunken)), var(--sunken) 70%); }
+.st .opt-table td { border-top-color: color-mix(in oklab, var(--line) 70%, transparent); }
+/* playground idle: the model waits, as a stack */
+.st .idle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.st .idle .stack3d.mini { width: 260px; height: 220px; }
+.st .idle .stack3d.mini .rig { top: 62%; transform: scale(.5) rotateX(56deg) rotateZ(-34deg); animation: st-drift-idle 8s ease-in-out infinite alternate; }
+@keyframes st-drift-idle { from { transform: scale(.5) rotateX(57deg) rotateZ(-38deg); } to { transform: scale(.5) rotateX(52deg) rotateZ(-28deg); } }
+/* the 3D stack responds to the pointer: hover lifts a slab a little */
+.st .slab:not(.on):hover { transform: translateZ(calc(var(--z) + 10px)); }
+.st .slab.up:not(.on):hover { transform: translateZ(calc(var(--z) + 80px)); }
+.st .slab:focus-visible { outline: 3px solid var(--ink); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) { .st #rules::before, .st .idle .stack3d.mini .rig { animation: none; } }
+@media (max-width: 800px) { .st #rules, .st #connect, .st #journal { padding-top: 64px !important; } }
+
+/* v3.2 — hero panel follows the chosen layer */
+.st .twin { --lc: var(--m4); }
+.st .twin::before { content: ""; grid-column: 1 / -1; grid-row: 1; align-self: start; height: 4px; margin: 0 28px; border-radius: 0 0 99px 99px; background: linear-gradient(90deg, var(--lc), color-mix(in oklab, var(--lc) 40%, transparent)); z-index: 1; pointer-events: none; }
+.st .layer-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: color-mix(in oklab, var(--lc) 16%, transparent); color: var(--ink); letter-spacing: .06em; }
+.st .layer-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--lc); }
+.st .twin .code { animation: st-rise .35s cubic-bezier(.22,1,.36,1) both; }
+.st .twin-body .code { overflow-x: auto; }
+.st .try-hint { grid-column: 1 / -1; color: var(--muted); font-size: 12px; font-variation-settings: "CASL" 1; font-style: oblique 8deg; }
+.st .try label:first-of-type:last-of-type { grid-column: 1 / -1; }
+.st .pass.idle { color: var(--muted); }
+.st .pass.idle i { background: var(--sunken); color: var(--muted); }
+.st .errbox { white-space: pre-wrap; }
+@media (prefers-reduced-motion: reduce) { .st .twin .code { animation: none; } }
+
+/* v3.4 — top nav like the other boards, sections as a reading path */
+.st .tabs-nav { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in oklab, var(--surface) 80%, transparent); box-shadow: var(--lift); }
+.st .tabs-nav a { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 550; color: var(--muted); }
+.st .tabs-nav a[aria-current="page"] { background: var(--ink); color: var(--on-ink); }
+.st .tabs-nav a:hover:not([aria-current="page"]) { background: var(--sunken); color: var(--ink); }
+.st #model, .st #journal { position: relative; }
+.st .station { position: absolute; z-index: 2; left: 32px; top: 0; bottom: 0; width: 40px; pointer-events: none; }
+.st .station::before { content: ""; position: absolute; left: 19px; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: linear-gradient(180deg, var(--sc) 0%, var(--sc2) 100%); opacity: .75; }
+.st #model .station::before { top: 112px; }
+.st #journal .station::before { bottom: 72px; background: linear-gradient(180deg, var(--sc), transparent); }
+.st .station b { position: absolute; top: 112px; left: 0; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; pointer-events: auto;
+  background-image: var(--grain), linear-gradient(140deg, color-mix(in oklab, var(--sc) 70%, #fff), var(--sc)); background-size: 220px, 100%; background-blend-mode: overlay, normal;
+  box-shadow: 0 0 0 5px var(--bg), 0 10px 24px -10px var(--sc); color: #131512; font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 12px; font-weight: 700; transition: transform .25s cubic-bezier(.22,1,.36,1); }
+.st #connect .station b { box-shadow: 0 0 0 5px var(--m7), 0 10px 24px -10px var(--sc); }
+.st #rules .station b, .st #journal .station b { color: #fff; }
+.st .station span { position: absolute; top: 166px; left: 28px; writing-mode: vertical-rl; pointer-events: auto; font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.st .station:hover b { transform: scale(1.12); }
+.st .station:hover span { color: var(--ink); }
+@media (max-width: 800px) { .st .tabs-nav, .st .station { display: none; } }
+
+
+body { margin: 0; }
+.st.cover { position: relative; overflow: hidden; box-sizing: border-box; font-family: var(--sans); color: var(--ink); background: var(--bg); }
+.st.cover::before, .st.cover .glow2 { content: ""; position: absolute; z-index: 0; pointer-events: none; border-radius: 50%; filter: blur(56px); }
+.st.cover::before { right: -14%; top: -30%; width: 74%; height: 120%;
+  background: radial-gradient(40% 46% at 58% 38%, var(--glow-2), transparent 70%), radial-gradient(36% 42% at 38% 62%, var(--glow-1), transparent 72%), radial-gradient(30% 36% at 80% 74%, var(--glow-4), transparent 72%); }
+.st.cover .glow2 { left: -18%; bottom: -50%; width: 60%; height: 100%; background: radial-gradient(40% 44% at 50% 40%, var(--glow-3), transparent 72%); }
+.st.cover > .cv { position: relative; z-index: 1; height: 100%; box-sizing: border-box; }
+.st .lock { display: flex; align-items: center; gap: 2px; }
+.st .lock img { display: block; }
+.st .lock b { font-family: var(--mono); font-variation-settings: "MONO" 1, "CASL" 1; font-weight: 650; letter-spacing: -.03em; line-height: 1; }
+.st .cv-eyebrow { font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 15px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.st .cv-h1 { margin: 0; font-weight: 660; letter-spacing: -.045em; line-height: .98; }
+.st .cv-h1 em { font-style: oblique 12deg; font-variation-settings: "CASL" 1, "slnt" -12; font-weight: 600; background: linear-gradient(100deg, var(--m5) 0%, var(--m6) 55%, var(--m4) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .08em; }
+.st[data-theme="dark"] .cv-h1 em { background-image: linear-gradient(100deg, var(--m5-hi) 0%, var(--m1) 60%, var(--m3) 100%); }
+.st .cv-lead { margin: 0; color: var(--muted); }
+.st .cv-pill { white-space: nowrap; display: inline-flex; align-items: center; gap: 12px; height: 46px; padding: 0 20px; border-radius: 999px; font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 17px; font-weight: 600; color: var(--on-ink);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--ink) 82%, var(--m4)) 0%, var(--ink) 100%); box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, 0 14px 30px -14px rgba(19,21,18,.6); }
+.st[data-theme="dark"] .cv-pill { background: linear-gradient(180deg, #FFFFFF 0%, var(--ink) 100%); color: #131512; box-shadow: 0 14px 30px -14px var(--glow-1); }
+.st .cv-pill i { font-style: normal; opacity: .55; }
+.st .cv-meta { white-space: nowrap; display: flex; align-items: center; gap: 14px; font-family: var(--mono); font-variation-settings: "MONO" 1; font-size: 14px; color: var(--muted); }
+.st .cv-meta .dotsep { width: 5px; height: 5px; border-radius: 50%; background: var(--m3); }
+.st .cover-stack { position: absolute; margin: 0; perspective: 1600px; }
+.st .cover-stack .rig { animation: none; }
+.st .cover-stack .slab { --gap: 58px; }
+.st .cover-stack .env-plate { opacity: .7; }
+.st .cover-stack .slab.on { transform: translateZ(calc(var(--z) + 14px)); }
+.st .sed-foot { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; }
+.st .sed-foot .sed { position: absolute; inset: -12px 0 0 0; width: 100%; height: calc(100% + 12px); }
+.st .sed-foot::after { content: ""; position: absolute; inset: 0; background-image: var(--grain); background-size: 220px; mix-blend-mode: overlay; opacity: .9; }
+
+/* GitHub social preview 1280x640 */
+.st.social { width: 1280px; height: 640px; }
+.st.social > .cv { display: flex; flex-direction: column; justify-content: space-between; padding: 64px 0 118px 80px; width: 720px; }
+.st.social .lock img { width: 84px; height: 84px; margin-left: -14px; }
+.st.social .lock b { font-size: 56px; }
+.st.social .cv-h1 { font-size: 66px; margin-top: 26px; white-space: nowrap; }
+.st.social .cv-lead { font-size: 22px; line-height: 1.45; max-width: 30em; margin-top: 20px; }
+.st.social .cv-bottom { display: flex; align-items: center; gap: 20px; }
+.st.social .cover-stack { right: 30px; top: 70px; width: 520px; height: 480px; }
+.st.social .cover-stack .rig { left: 50%; top: 64%; transform: scale(.92) rotateX(56deg) rotateZ(-34deg); }
+.st.social .sed-foot { height: 70px; }
+
+/* README banner 1280x320 */
+.st.banner { width: 1280px; height: 320px; }
+.st.banner > .cv { display: flex; flex-direction: column; justify-content: center; gap: 18px; padding: 0 0 26px 72px; width: 760px; }
+.st.banner .lock img { width: 76px; height: 76px; margin-left: -12px; }
+.st.banner .lock b { font-size: 54px; }
+.st.banner .cv-h1 { font-size: 36px; letter-spacing: -.035em; white-space: nowrap; }
+.st.banner .cv-meta { font-size: 13px; }
+.st.banner .cover-stack { right: 20px; top: 0; width: 460px; height: 320px; }
+.st.banner .cover-stack .rig { left: 50%; top: 70%; transform: scale(.5) rotateX(56deg) rotateZ(-34deg); }
+.st.banner .sed-foot { height: 26px; }
+
+/* OpenGraph 1200x630 */
+.st.og-cover { width: 1200px; height: 630px; }
+.st.og-cover > .cv { display: flex; flex-direction: column; justify-content: space-between; padding: 60px 0 112px 72px; width: 690px; }
+.st.og-cover .lock img { width: 72px; height: 72px; margin-left: -12px; }
+.st.og-cover .lock b { font-size: 46px; }
+.st.og-cover .cv-eyebrow { margin-top: 34px; }
+.st.og-cover .cv-h1 { font-size: 62px; margin-top: 14px; white-space: nowrap; }
+.st.og-cover .cv-lead { font-size: 21px; line-height: 1.45; margin-top: 18px; max-width: 28em; }
+.st.og-cover .cover-stack { right: 10px; top: 70px; width: 500px; height: 460px; }
+.st.og-cover .cover-stack .rig { left: 50%; top: 63%; transform: scale(.9) rotateX(56deg) rotateZ(-34deg); }
+.st.og-cover .sed-foot { height: 64px; }
+
+</style>
+</head><body><div id="out">
+
+<div class="st cover social" data-theme="dark" lang="en"><span class="glow2"></span>
+<div class="cv"><div><div class="lock"><img src="../shared/afora-symbol-fluid-dark.svg" alt=""><b>afora</b></div><h1 class="cv-h1">Model the domain.<br>Keep the <em>invariants</em>.</h1><p class="cv-lead">Properties, records, entities and use cases in one TypeScript model. Validated at every layer.</p></div>
+  <div class="cv-bottom"><span class="cv-pill"><i>$</i>bun add @afora/core typebox</span><span class="cv-meta">Open source · MIT</span></div></div>
+  <div class="stack3d cover-stack" aria-hidden="true"><div class="rig"><div class="env-plate"><span>Environment · ENV</span></div><div class="slab m1" style="--i: 0; --w: 40"><b>Property</b><span>01</span></div><div class="slab m2" style="--i: 1; --w: 52"><b>Blueprint</b><span>02</span></div><div class="slab m3" style="--i: 2; --w: 60"><b>Record</b><span>03</span></div><div class="slab m4 on" style="--i: 3; --w: 100"><b>Entity</b><span>04</span></div><div class="slab m5" style="--i: 4; --w: 56"><b>Repository</b><span>05</span></div><div class="slab m6" style="--i: 5; --w: 48"><b>UseCase</b><span>06</span></div></div></div><div class="sed-foot"><svg class="sed" viewBox="0 0 1280 70" preserveAspectRatio="none" aria-hidden="true"><defs><filter id="sds" x="-5%" y="-20%" width="110%" height="140%"><feTurbulence type="fractalNoise" baseFrequency=".003 .035" numOctaves="2" seed="5"></feTurbulence><feDisplacementMap in="SourceGraphic" scale="12"></feDisplacementMap></filter></defs><g filter="url(#sds)"><path d="M-48,100 L-48,23.4 L-24,22.6 L0,23.0 L24,23.8 L48,23.8 L72,22.6 L96,20.9 L120,19.6 L144,19.9 L168,21.7 L192,23.9 L216,25.2 L240,24.5 L264,21.9 L288,18.3 L312,15.2 L336,13.6 L360,13.4 L384,13.8 L408,13.8 L432,12.7 L456,11.1 L480,10.1 L504,10.8 L528,13.4 L552,17.0 L576,20.1 L600,21.6 L624,21.1 L648,19.4 L672,17.8 L696,17.4 L720,18.4 L744,19.9 L768,20.9 L792,20.7 L816,19.6 L840,18.8 L864,19.4 L888,21.9 L912,25.7 L936,29.2 L960,31.2 L984,31.0 L1008,29.2 L1032,27.1 L1056,25.8 L1080,25.7 L1104,25.9 L1128,25.6 L1152,23.9 L1176,21.1 L1200,18.3 L1224,16.8 L1248,17.3 L1272,19.4 L1296,21.8 L1320,23.2 L1328,100 Z" style="fill: var(--m1)"></path><path d="M-48,100 L-48,22.0 L-24,24.4 L0,26.6 L24,27.6 L48,26.9 L72,25.1 L96,23.5 L120,22.9 L144,23.4 L168,24.2 L192,24.0 L216,22.5 L240,19.9 L264,17.6 L288,16.9 L312,18.4 L336,21.7 L360,25.4 L384,28.1 L408,29.2 L432,29.2 L456,29.1 L480,29.9 L504,31.7 L528,33.6 L552,34.6 L576,33.9 L600,31.6 L624,29.0 L648,27.4 L672,27.9 L696,30.1 L720,32.9 L744,34.9 L768,35.3 L792,34.5 L816,33.4 L840,33.0 L864,33.7 L888,34.7 L912,34.8 L936,33.1 L960,29.6 L984,25.5 L1008,22.1 L1032,20.7 L1056,21.2 L1080,22.8 L1104,24.1 L1128,24.2 L1152,23.3 L1176,22.3 L1200,22.1 L1224,23.4 L1248,25.3 L1272,26.7 L1296,26.6 L1320,24.6 L1328,100 Z" style="fill: var(--m2)"></path><path d="M-48,100 L-48,33.9 L-24,35.6 L0,35.3 L24,33.3 L48,30.6 L72,28.7 L96,28.7 L120,30.4 L144,32.9 L168,34.8 L192,35.7 L216,35.7 L240,36.0 L264,37.4 L288,40.2 L312,43.5 L336,45.9 L360,46.3 L384,44.6 L408,41.6 L432,38.9 L456,37.5 L480,37.6 L504,38.5 L528,39.0 L552,38.3 L576,36.7 L600,35.2 L624,35.0 L648,36.2 L672,38.5 L696,40.2 L720,40.2 L744,38.2 L768,34.7 L792,31.2 L816,28.9 L840,28.3 L864,28.6 L888,28.8 L912,28.1 L936,26.6 L960,25.3 L984,25.3 L1008,27.2 L1032,30.5 L1056,33.9 L1080,36.0 L1104,36.1 L1128,34.6 L1152,32.7 L1176,31.8 L1200,32.3 L1224,33.8 L1248,35.1 L1272,35.3 L1296,34.6 L1320,33.6 L1328,100 Z" style="fill: var(--m3)"></path><path d="M-48,100 L-48,45.8 L-24,45.2 L0,43.8 L24,42.5 L48,42.7 L72,44.7 L96,48.1 L120,51.4 L144,53.2 L168,52.9 L192,51.1 L216,49.0 L240,47.6 L264,47.3 L288,47.4 L312,46.8 L336,44.8 L360,41.6 L384,38.4 L408,36.5 L432,36.8 L456,38.8 L480,41.2 L504,42.8 L528,42.6 L552,41.0 L576,39.0 L600,37.9 L624,38.0 L648,38.7 L672,38.9 L696,37.9 L720,35.5 L744,32.9 L768,31.6 L792,32.3 L816,35.1 L840,38.8 L864,42.0 L888,43.7 L912,43.9 L936,43.7 L960,44.0 L984,45.4 L1008,47.4 L1032,48.9 L1056,48.8 L1080,47.0 L1104,44.4 L1128,42.4 L1152,42.2 L1176,44.0 L1200,46.8 L1224,49.3 L1248,50.4 L1272,50.0 L1296,48.9 L1320,48.2 L1328,100 Z" style="fill: var(--m4)"></path><path d="M-48,100 L-48,55.9 L-24,54.8 L0,53.6 L24,53.3 L48,54.0 L72,55.1 L96,55.3 L120,53.7 L144,50.3 L168,46.2 L192,42.7 L216,41.2 L240,41.6 L264,43.1 L288,44.4 L312,44.6 L336,43.9 L360,43.2 L384,43.6 L408,45.3 L432,47.8 L456,49.8 L480,50.2 L504,48.6 L528,45.9 L552,43.6 L576,42.9 L600,44.1 L624,46.5 L648,48.8 L672,50.1 L696,50.4 L720,50.5 L744,51.5 L768,53.8 L792,57.1 L816,59.9 L840,61.1 L864,60.1 L888,57.4 L912,54.4 L936,52.5 L960,52.3 L984,53.1 L1008,53.9 L1032,53.8 L1056,52.5 L1080,51.0 L1104,50.2 L1128,51.0 L1152,53.0 L1176,55.0 L1200,55.7 L1224,54.3 L1248,51.1 L1272,47.4 L1296,44.5 L1320,43.3 L1328,100 Z" style="fill: var(--m5)"></path><path d="M-48,100 L-48,55.5 L-24,52.4 L0,50.4 L24,50.0 L48,50.5 L72,50.8 L96,50.2 L120,48.8 L144,47.5 L168,47.6 L192,49.7 L216,53.4 L240,57.2 L264,59.7 L288,60.2 L312,59.1 L336,57.6 L360,56.9 L384,57.5 L408,59.0 L432,60.1 L456,60.1 L480,58.9 L504,57.5 L528,57.1 L552,58.6 L576,61.8 L600,65.3 L624,67.8 L648,68.3 L672,66.9 L696,64.7 L720,63.0 L744,62.3 L768,62.4 L792,62.1 L816,60.7 L840,57.9 L864,54.6 L888,52.2 L912,51.7 L936,53.2 L960,55.7 L984,57.7 L1008,58.1 L1032,56.8 L1056,54.8 L1080,53.2 L1104,52.7 L1128,53.2 L1152,53.7 L1176,53.1 L1200,51.1 L1224,48.5 L1248,46.5 L1272,46.5 L1296,48.6 L1320,52.2 L1328,100 Z" style="fill: var(--m6)"></path><path d="M-48,100 L-48,55.5 L-24,56.2 L0,58.9 L24,62.6 L48,65.8 L72,67.6 L96,68.0 L120,67.9 L144,68.4 L168,69.9 L192,72.0 L216,73.5 L240,73.3 L264,71.2 L288,68.3 L312,65.8 L336,65.0 L360,66.2 L384,68.5 L408,70.5 L432,71.2 L456,70.6 L480,69.3 L504,68.5 L528,68.8 L552,69.9 L576,70.5 L600,69.6 L624,66.8 L648,62.7 L672,58.8 L696,56.6 L720,56.4 L744,57.7 L768,59.2 L792,59.8 L816,59.4 L840,58.5 L864,58.3 L888,59.4 L912,61.7 L936,63.9 L960,64.9 L984,63.9 L1008,61.4 L1032,58.8 L1056,57.3 L1080,57.9 L1104,60.0 L1128,62.6 L1152,64.3 L1176,65.0 L1200,65.1 L1224,65.6 L1248,67.5 L1272,70.6 L1296,73.7 L1320,75.6 L1328,100 Z" style="fill: var(--m7)"></path></g></svg></div>
+</div>
+</div>
+</body></html>
