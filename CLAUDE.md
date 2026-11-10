@@ -27,7 +27,7 @@ bun run smoke                            # build, then run scripts/smoke.mjs on 
 bun run bench                            # bench/ vs TypeBox, Zod, Valibot, ArkType; results in bench/RESULTS.md
 ```
 
-`packages/*` (`codegen`, `mcp`, `hono`, `ws`, `drizzle`) are workspaces with their own build and tests (`bun run build:packages`). `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
+`packages/*` (`codegen`, `mcp`, `hono`, `ws`, `drizzle`) are workspaces with their own build and tests (`bun run build:packages`). Releases are published by `.github/workflows/release.yml` through npm trusted publishing (OIDC) when a version bump is merged to `main`; a new package under `packages/` must be added to `DIRS` in `scripts/release-setup.sh` and the script run once by hand (`bash scripts/release-setup.sh`), since npm cannot create a package through OIDC. `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
 
 ## Runtime constraint
 
