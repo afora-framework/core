@@ -166,7 +166,9 @@ a file of your own.
   \`onEventError\` is an import and only with \`after-commit\`. The built-in policy \`publishEvents\` publishes each event (the entity masked) to a publisher:
   \`{ "policy": "publishEvents", "options": { "publisher": "realtime", "topic": "posts/{id}", "events"?: [names], "handle"?: true, "onPublishError"?: "log" | "throw" } }\`;
   \`publisher\` is a key of the top-level \`"publishers": { "realtime": { "import": "./realtime.ts#hub" } }\` (own or of an extended spec), and the topic takes
-  \`{event}\`, \`{command}\`, \`{operation}\` and \`{id}\`. Other policies come from \`--policies\` (\`policies\` of \`afora_catalog\`). Defaults (\`transaction: false\`, \`events: "after-commit"\`, no tags) are not written.
+  \`{event}\`, \`{command}\`, \`{operation}\` and \`{id}\`. Other policies come from \`--policies\` (\`policies\` of \`afora_catalog\`).
+  The events come from the entities: \`"events": { "onCreate": "created", "onUpdate": ["changed", { "name": "audited", "handler": { "import": "./audit.ts#onAudited" } }] }\`
+  on an entity (not a record); a name alone is an event with no handler, raised to be published. They are generated as \`<Name>Events\`, so no declaration may take that name. Defaults (\`transaction: false\`, \`events: "after-commit"\`, no tags) are not written.
 - \`outputs\`: \`commands\` are declared commands; \`statuses\` maps an exception name (declared or exported by @afora/core) to a status from 400 to 599;
   \`pipe\` is transforms and, last, at most one sink, each \`{ "transform" | "sink": name, "options"?: {...JSON} }\` with a name from the \`stages\` of
   \`afora_catalog\` (\`select\`, \`openapi\`, plus the ones given to the server with \`--stages\`), or \`{ "import": "./stages.ts#auth" }\` for a stage written by hand.

@@ -27,7 +27,8 @@ export interface ExtractOptions {
 	 * (one of `providersOf`, e.g. made by `providerFrom`). A use case with a
 	 * hand-written `execute` needs `useCases.<Name>`, and a `run` function of a
 	 * steps use case `useCases.<Name>.run.<name>`, a command with a handler
-	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, a publisher
+	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, the handler of
+	 * an entity event `entities.<Name>.events.<event>`, a publisher
 	 * `publishers.<key>`, and a stage
 	 * written by hand `outputs.<Name>.pipe.<index>`, all `"./file.ts#export"`.
 	 */
@@ -395,10 +396,32 @@ export function extractSpec(
 		description.records,
 		(value) => record(["", value])[1],
 	);
-	const entities = entries(
-		description.entities,
-		(value) => record(["", value])[1],
-	);
+	const entities = entries(description.entities, (value, name) => ({
+		...(record(["", value])[1] as Record<string, unknown>),
+		...(value.events === undefined
+			? {}
+			: {
+					events: Object.fromEntries(
+						Object.entries(value.events).map(([cycle, list]) => [
+							cycle,
+							(list ?? []).map((event) =>
+								event.handler
+									? {
+											name: event.name,
+											handler: {
+												import: importFor(
+													options.imports,
+													`entities.${name}.events.${event.name}`,
+													`The handler of the event "${event.name}" of the entity "${name}"`,
+												),
+											},
+										}
+									: event.name,
+							),
+						]),
+					),
+				}),
+	}));
 	const environments = entries(description.environments, (value) => ({
 		fields: extraction.json(value.fields),
 	}));

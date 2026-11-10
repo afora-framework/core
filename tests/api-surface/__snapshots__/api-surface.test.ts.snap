@@ -1202,7 +1202,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type RecordConstructor<Properties extends IBlueprintCollection, Change extends readonly string[], Unique extends string = never, Members = unknown, Accepts = never, Sensitive extends string = never> = { new (value: BlueprintInput<Properties>): DeclaredRecordInstance<Properties, Change, Members, Sensitive>; readonly "~standard": StandardSchemaV1.Props<BlueprintInput<Properties>, DeclaredRecordInstance<Properties, Change, Members, Sensitive>>; safeParse<Self extends new (value: never) => object>(this: Self, value: unknown): ParseResult<InstanceType<Self>>; readonly [Kind]: "record"; readonly recordName: string; readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; readonly plugins: readonly AnyRecordPlugin[]; readonly [RecordUniqueKeys]?: Unique; readonly [RecordSensitiveKeys]?: Sensitive; readonly [RecordAccepts]?: Accepts; };",
   ],
   "RecordDescription": [
-    "export interface RecordDescription { readonly from: string; readonly fields: FieldsDescription; readonly options: { readonly sensitive: readonly string[]; readonly unique: readonly string[]; readonly change: readonly string[]; }; readonly plugins: readonly RecordPluginDescriptor[]; }",
+    "export interface RecordDescription { readonly from: string; readonly fields: FieldsDescription; readonly options: { readonly sensitive: readonly string[]; readonly unique: readonly string[]; readonly change: readonly string[]; }; readonly plugins: readonly RecordPluginDescriptor[]; readonly events?: Readonly<Partial<Record<"onCreate" | "onUpdate" | "onDelete", readonly { readonly name: string; readonly handler: boolean; }[]>>>; }",
   ],
   "RecordEffect": [
     "export type RecordEffect<Value> = (value: Value, previous: Value) => void;",
@@ -1633,6 +1633,9 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function blueprintPluginOf<Properties extends IBlueprintCollection, Factories extends Record<keyof Factories, BlueprintFactory>>(name: string, properties: Properties, factories: Factories): IBlueprintPlugin<Properties, Factories> & { readonly factories: Factories; };",
     "export declare function blueprintPluginOf<Properties extends IBlueprintCollection>(name: string, properties: Properties): IBlueprintPlugin<Properties, Record<never, never>> & { readonly factories: Record<never, never>; };",
   ],
+  "coerceTextValues": [
+    "export declare function coerceTextValues(blueprint: AnyBlueprint, texts: Readonly<Record<string, string | undefined>>): Record<string, unknown>;",
+  ],
   "commandBuilderOf": [
     "export declare function commandBuilderOf<const Catalogs extends readonly IUseCaseCatalog[] = [ ]>(...catalogs: Catalogs): CommandBuilder<UseCasePluginContext<Catalogs>>;",
   ],
@@ -1658,7 +1661,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function environmentOf<Properties extends IBlueprintCollection>(blueprint: IBlueprint<Properties, boolean>, { source }?: EnvironmentOptions): IEnvironment<Properties>;",
   ],
   "eventOf": [
-    "export declare function eventOf<Class extends AnyEntityClass>(name: string, entityClass: Class, handler: (entity: InstanceType<Class>, context: EventHandlerContext) => Promise<void>): EventDefinition;",
+    "export declare function eventOf<Class extends AnyEntityClass>(name: string, entityClass: Class, handler?: (entity: InstanceType<Class>, context: EventHandlerContext) => Promise<void>): EventDefinition;",
   ],
   "eventPolicyCatalogOf": [
     "export declare function eventPolicyCatalogOf(...policies: readonly EventPolicyFactory<never>[]): IEventPolicyCatalog;",
@@ -2984,6 +2987,253 @@ exports[`afora.json schema 1`] = `
               },
               "type": "array",
             },
+            "events": {
+              "additionalProperties": false,
+              "description": "Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.",
+              "properties": {
+                "onCreate": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+                "onDelete": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+                "onUpdate": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+              },
+              "type": "object",
+            },
             "fields": {
               "additionalProperties": false,
               "description": "Fields by key.",
@@ -3585,6 +3835,253 @@ exports[`afora.json schema 1`] = `
                 "type": "string",
               },
               "type": "array",
+            },
+            "events": {
+              "additionalProperties": false,
+              "description": "Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.",
+              "properties": {
+                "onCreate": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+                "onDelete": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+                "onUpdate": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+              },
+              "type": "object",
             },
             "fields": {
               "additionalProperties": false,

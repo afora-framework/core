@@ -75,6 +75,20 @@ export interface RecordSpec {
 	readonly change?: readonly string[];
 	/** Names of the Std record plugins (`authenticatable`...). */
 	readonly plugins?: readonly string[];
+	/** Entities only: the events each lifecycle cycle raises. */
+	readonly events?: EntityEventsSpec;
+}
+
+/** An event of an entity: its name, with the handler written by hand when it has one. */
+export type EntityEventSpec =
+	| string
+	| { readonly name: string; readonly handler?: ImportRef };
+
+/** The lifecycle events of an entity, by cycle: one event or a list of them. */
+export interface EntityEventsSpec {
+	readonly onCreate?: EntityEventSpec | readonly EntityEventSpec[];
+	readonly onUpdate?: EntityEventSpec | readonly EntityEventSpec[];
+	readonly onDelete?: EntityEventSpec | readonly EntityEventSpec[];
 }
 
 export interface EnvironmentSpec {

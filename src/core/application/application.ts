@@ -16,6 +16,7 @@ import {
 import type { AnyCommand } from "../command/types/command.interface";
 import { ENTITY_IDENTITY_KEYS } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
+import { eventHasHandler, lifecycleEventsOf } from "../entity/event";
 import {
 	type AnyEnvironment,
 	InvalidEnvironment,
@@ -831,6 +832,17 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 			const field = Record.blueprint.properties[key];
 			return !(flag && isProperty(field) && field.type[flag] === true);
 		});
+	const lifecycle =
+		entry.collection === "entities" ? lifecycleEventsOf(Record) : {};
+	const events = Object.fromEntries(
+		Object.entries(lifecycle).map(([cycle, list]) => [
+			cycle,
+			list.map((event) => ({
+				name: event.name,
+				handler: eventHasHandler(event),
+			})),
+		]),
+	);
 	return {
 		from: entry.from,
 		fields: fieldsDescriptionOf(Record.blueprint.properties, scope, skip),
@@ -840,6 +852,7 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 			change: own(Record.options.change),
 		},
 		plugins,
+		...(Object.keys(events).length > 0 ? { events } : {}),
 	};
 }
 

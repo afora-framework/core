@@ -33,20 +33,21 @@ afora-codegen extract src/app.ts#App [--import key=./file.ts#name] > afora.json
 
 Some things are code, not data: a provider made by hand, a `run` function, an `execute`, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
 
-| Key                            | Maps                                                                       |
-| ------------------------------ | -------------------------------------------------------------------------- |
-| `provider`                     | the provider of the application, when created without `providerOf`         |
-| `log`                          | the `log` of the application, when made by `logFrom`                       |
-| `log.providers.<index>`        | a log provider other than `"console"` or `"json"`, by its position         |
-| `repositories.<Name>.provider` | the own provider of a repository, when created without `providerOf`        |
-| `providers.<key>`              | a provider of the top-level `providers`, when created without `providerOf` |
-| `useCases.<Name>`              | a use case with a hand-written `execute`                                   |
-| `useCases.<Name>.run.<name>`   | the `fn` of a `run` step of a steps use case                               |
-| `commands.<Name>.events`       | the event handler of a command, when it is not a policy                    |
-| `commands.<Name>.onEventError` | the `onEventError` handler of a command                                    |
-| `publishers.<key>`             | a publisher of the top-level `publishers`                                  |
-| `outputs.<Name>.pipe.<index>`  | a stage written by hand, by its position in the `pipe`                     |
-| `<property name>`              | the module of a property that cannot be recreated (see the limitations)    |
+| Key                              | Maps                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| `provider`                       | the provider of the application, when created without `providerOf`         |
+| `log`                            | the `log` of the application, when made by `logFrom`                       |
+| `log.providers.<index>`          | a log provider other than `"console"` or `"json"`, by its position         |
+| `repositories.<Name>.provider`   | the own provider of a repository, when created without `providerOf`        |
+| `providers.<key>`                | a provider of the top-level `providers`, when created without `providerOf` |
+| `useCases.<Name>`                | a use case with a hand-written `execute`                                   |
+| `useCases.<Name>.run.<name>`     | the `fn` of a `run` step of a steps use case                               |
+| `commands.<Name>.events`         | the event handler of a command, when it is not a policy                    |
+| `commands.<Name>.onEventError`   | the `onEventError` handler of a command                                    |
+| `publishers.<key>`               | a publisher of the top-level `publishers`                                  |
+| `entities.<Name>.events.<event>` | the handler of a lifecycle event of an entity                              |
+| `outputs.<Name>.pipe.<index>`    | a stage written by hand, by its position in the `pipe`                     |
+| `<property name>`                | the module of a property that cannot be recreated (see the limitations)    |
 
 The value is always `"./file.ts#export"`.
 
@@ -69,7 +70,21 @@ A command's `events` can name an event policy of the catalog with JSON options, 
 }
 ```
 
-`realtime.ts` exports the publisher, any object with a `publish(topic, event)` method. The generated application gets `publishers: { realtime: hub }`, and a spec that extends this one can name `realtime` too. The validator makes a built-in policy with its options, so what it would throw is an `invalid_event_policy_options` issue; a name outside the catalog is `unknown_event_policy`, a `publisher` that is not a key of `publishers` (own or inherited) `unknown_publisher`, and a publisher that is not an import `invalid_import`. Extraction needs `publishers.<key>` in `imports`. The spec cannot declare entity events yet (`eventOf`, `onCreate`), so a policy publishes the events of entities written by hand.
+`realtime.ts` exports the publisher, any object with a `publish(topic, event)` method, such as `export const hub = wsHub();` of [`@afora/ws`](../packages/ws/README.md), whose `{ "sink": "websocket" }` serves the operations and the subscriptions (`--stages @afora/ws`). The generated application gets `publishers: { realtime: hub }`, and a spec that extends this one can name `realtime` too. The validator makes a built-in policy with its options, so what it would throw is an `invalid_event_policy_options` issue; a name outside the catalog is `unknown_event_policy`, a `publisher` that is not a key of `publishers` (own or inherited) `unknown_publisher`, and a publisher that is not an import `invalid_import`. Extraction needs `publishers.<key>` in `imports`.
+
+The events come from the lifecycle of the entities. An entity (not a record) declares them by cycle, each one event or a list:
+
+```json
+"Post": {
+	"fields": { "title": "text" },
+	"events": {
+		"onCreate": "created",
+		"onUpdate": ["changed", { "name": "audited", "handler": { "import": "../audit.ts#onAudited" } }]
+	}
+}
+```
+
+A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
 
 ## Standard use cases
 

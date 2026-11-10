@@ -1,4 +1,5 @@
 import { catalog, recordPlugin } from "./catalog";
+import { cyclesOf } from "./entity-events";
 import { flagOf } from "./graph";
 import { type Field, parseField } from "./model";
 import { type Scope, scopeOf } from "./scope";
@@ -96,12 +97,26 @@ function canonicalRecord(
 		option("change"),
 	];
 	void name;
+	// Events: a list per cycle, each a name or { name, handler }.
+	const events = Object.fromEntries(
+		Object.entries(entity ? cyclesOf(value.events) : {})
+			.filter(([, list]) => list.length > 0)
+			.map(([cycle, list]) => [
+				cycle,
+				list.map((entry) =>
+					entry.handler === undefined
+						? entry.name
+						: { name: entry.name, handler: { import: entry.handler } },
+				),
+			]),
+	);
 	return {
 		fields: fieldsOf(value.fields),
 		...(sensitive ? { sensitive } : {}),
 		...(unique ? { unique } : {}),
 		...(change ? { change } : {}),
 		...(plugins ? { plugins } : {}),
+		...(Object.keys(events).length > 0 ? { events } : {}),
 	};
 }
 

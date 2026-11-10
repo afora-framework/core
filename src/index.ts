@@ -237,6 +237,7 @@ export type {
 	OpenAPIOptions,
 	OpenAPISchema,
 } from "./core/openapi/types/openapi.interface";
+export { coerceTextValues } from "./core/output/coerce";
 export {
 	DuplicateOperation,
 	InvalidOutputStage,

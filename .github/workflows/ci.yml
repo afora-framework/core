@@ -30,6 +30,7 @@ jobs:
       - run: bun run --cwd packages/codegen typecheck
       - run: bun run --cwd packages/mcp typecheck
       - run: bun run --cwd packages/hono typecheck
+      - run: bun run --cwd packages/ws typecheck
       - run: bun run --cwd packages/drizzle typecheck
 
   commitlint:
@@ -72,7 +73,7 @@ jobs:
       - run: bun run test:api
 
   packages:
-    name: Packages (codegen, mcp, hono, drizzle)
+    name: Packages (codegen, mcp, hono, ws, drizzle)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -86,10 +87,12 @@ jobs:
       - run: bun run test:roundtrip
       - run: bun run test:mcp
       - run: bun run test:hono
+      - run: bun run test:ws
       - run: bun run test:drizzle
       - run: bun run --cwd packages/codegen build
       - run: bun run --cwd packages/mcp build
       - run: bun run --cwd packages/hono build
+      - run: bun run --cwd packages/ws build
       - run: bun run --cwd packages/drizzle build
 
   build:
