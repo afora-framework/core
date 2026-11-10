@@ -4,6 +4,7 @@ const NAME = "^[A-Z][A-Za-z0-9]*$";
 const IMPORT = "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$";
 const KEY = "^[A-Za-z_$][A-Za-z0-9_$]*$";
 const PROVIDER_KEY = "^[a-z][A-Za-z0-9]*$";
+const PUBLISHER_KEY = "^[A-Za-z_$][A-Za-z0-9_$]*$";
 
 const Bounds = Type.Object(
 	{
@@ -205,6 +206,31 @@ const Providers = Type.Record(
 	},
 );
 
+const EventPolicy = Type.Object(
+	{
+		policy: Type.String({
+			description:
+				'The name of an event policy of the catalog: "publishEvents" is built in; others come from the policies given to codegen (--policies).',
+		}),
+		options: Type.Optional(
+			Type.Record(Type.String(), Type.Unknown(), {
+				description:
+					'JSON options of the policy. publishEvents: { "publisher": "<key of publishers>", "topic": "posts/{id}", "events"?: [names], "handle"?: true, "onPublishError"?: "log" | "throw" }.',
+			}),
+		),
+	},
+	{ additionalProperties: false },
+);
+
+const Publishers = Type.Record(
+	Type.String({ pattern: PUBLISHER_KEY }),
+	ImportRef,
+	{
+		description:
+			'Where event policies publish, by key (applicationOf({ publishers })): a publisher written by hand, { "import": "./realtime.ts#hub" }.',
+	},
+);
+
 const Log = Type.Union(
 	[
 		Type.Object(
@@ -245,6 +271,35 @@ const Log = Type.Union(
 const StringList = (description: string) =>
 	Type.Array(Type.String(), { description });
 
+const EntityEvent = Type.Union([
+	Type.String({ pattern: KEY, description: "An event without a handler." }),
+	Type.Object(
+		{
+			name: Type.String({ pattern: KEY }),
+			handler: Type.Optional(ImportRef),
+		},
+		{ additionalProperties: false },
+	),
+]);
+
+const EntityEventList = Type.Union([
+	EntityEvent,
+	Type.Array(EntityEvent, { minItems: 1 }),
+]);
+
+const EntityEvents = Type.Object(
+	{
+		onCreate: Type.Optional(EntityEventList),
+		onUpdate: Type.Optional(EntityEventList),
+		onDelete: Type.Optional(EntityEventList),
+	},
+	{
+		additionalProperties: false,
+		description:
+			'Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.',
+	},
+);
+
 const RecordDeclaration = Type.Object(
 	{
 		fields: Fields,
@@ -266,6 +321,7 @@ const RecordDeclaration = Type.Object(
 				"Std record plugins: publishable, archivable, taggable, ownable, authenticatable.",
 			),
 		),
+		events: Type.Optional(EntityEvents),
 	},
 	{ additionalProperties: false },
 );
@@ -557,11 +613,16 @@ const CommandDeclaration = Type.Object(
 		),
 		events: Type.Optional(
 			Type.Union(
-				[Type.Literal("after-commit"), Type.Literal("manual"), ImportRef],
+				[
+					Type.Literal("after-commit"),
+					Type.Literal("manual"),
+					EventPolicy,
+					ImportRef,
+				],
 				{
 					default: "after-commit",
 					description:
-						'"after-commit" (default), "manual" or { "import": "./events.ts#dispatch" } (a handler written by hand).',
+						'"after-commit" (default), "manual", a policy of the catalog ({ "policy": "publishEvents", "options": { "publisher": "realtime", "topic": "posts/{id}" } }) or { "import": "./events.ts#dispatch" } (a handler written by hand).',
 				},
 			),
 		),
@@ -651,6 +712,7 @@ export const specSchema = Type.Object(
 		provider: Type.Optional(ProviderOrKey),
 		providers: Type.Optional(Providers),
 		log: Type.Optional(Log),
+		publishers: Type.Optional(Publishers),
 		properties: Type.Optional(
 			Names(Property, "Custom properties, by PascalCase name."),
 		),

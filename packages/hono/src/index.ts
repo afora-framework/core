@@ -1,4 +1,5 @@
 import {
+	coerceTextValues,
 	InvalidOutputStage,
 	type OpenAPISinkOptions,
 	type OperationDescriptor,
@@ -12,7 +13,6 @@ import {
 	stageCatalogOf,
 	statusOf,
 	stripUndeclared,
-	toOpenAPI,
 } from "@afora/core";
 import { type Context, Hono } from "hono";
 import { InvalidWebhookSignature, WebhookSecretMissing } from "./exceptions";
@@ -274,52 +274,6 @@ function withWebhooks(
 	return copy;
 }
 
-/** What a scalar field of `blueprint` takes, by key (from its OpenAPI type). */
-function scalarTypesOf(
-	blueprint: OperationDescriptor["input"],
-): Readonly<Record<string, readonly string[]>> {
-	const schema = toOpenAPI(blueprint) as {
-		properties?: Record<string, { type?: string | string[] }>;
-	};
-	const types: Record<string, readonly string[]> = {};
-	for (const [key, property] of Object.entries(schema.properties ?? {})) {
-		types[key] = [property.type ?? []].flat();
-	}
-	return types;
-}
-
-/**
- * `text` as the field takes it: a number or boolean when the field is one
- * (and not a string), else as is; invalid text is kept for the blueprint to
- * reject, like environment variables.
- */
-function coerce(text: string, types: readonly string[] | undefined): unknown {
-	if (!types || types.includes("string")) return text;
-	const trimmed = text.trim();
-	if (
-		types.includes("boolean") &&
-		(trimmed === "true" || trimmed === "false")
-	) {
-		return trimmed === "true";
-	}
-	if (types.includes("integer") || types.includes("number")) {
-		const number = trimmed === "" ? Number.NaN : Number(trimmed);
-		if (Number.isFinite(number)) return number;
-	}
-	return text;
-}
-
-function coerceAll(
-	values: Readonly<Record<string, string | undefined>>,
-	types: Readonly<Record<string, readonly string[]>>,
-): Obj {
-	const out: Obj = {};
-	for (const [key, value] of Object.entries(values)) {
-		if (value !== undefined) out[key] = coerce(value, types[key]);
-	}
-	return out;
-}
-
 function problemResponse(body: unknown, status: number): Response {
 	return new Response(JSON.stringify(body), {
 		status,
@@ -403,15 +357,11 @@ export const hono = sinkOf<Hono, HonoOptions>({
 				path: string;
 			};
 			const hasBody = method !== "get" && method !== "delete";
-			const inputTypes = hasBody ? {} : scalarTypesOf(operation.input);
 			const contextKeys = operation.context
 				? Object.keys(operation.context.properties).filter((key) =>
 						Object.hasOwn(headers, key),
 					)
 				: [];
-			const contextTypes = operation.context
-				? scalarTypesOf(operation.context)
-				: {};
 
 			const webhook = Object.hasOwn(webhooks, operation.id)
 				? webhooks[operation.id]
@@ -466,7 +416,7 @@ export const hono = sinkOf<Hono, HonoOptions>({
 						);
 					}
 				} else {
-					input = coerceAll(c.req.query(), inputTypes);
+					input = coerceTextValues(operation.input, c.req.query());
 				}
 
 				const call: { context?: unknown } = {};
@@ -475,7 +425,7 @@ export const hono = sinkOf<Hono, HonoOptions>({
 					for (const key of contextKeys) {
 						raw[key] = c.req.header(headers[key] as string) ?? undefined;
 					}
-					call.context = coerceAll(raw, contextTypes);
+					call.context = coerceTextValues(operation.context, raw);
 				}
 
 				try {

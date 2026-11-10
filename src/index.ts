@@ -172,6 +172,26 @@ export {
 	InvalidEnvironment,
 	isEnvironment,
 } from "./core/environment/environment";
+export {
+	eventPolicyCatalogOf,
+	eventPolicyDescriptionOf,
+	eventPolicyOf,
+} from "./core/event-policy/event-policy";
+export {
+	InvalidEventPolicy,
+	PublisherNotBound,
+} from "./core/event-policy/exceptions";
+export { publishEvents } from "./core/event-policy/publish";
+export type {
+	EventPolicyDescription,
+	EventPolicyFactory,
+	EventPolicyOptions,
+	EventPolicySettings,
+	IEventPolicyCatalog,
+	IEventPublisher,
+	PublishEventsOptions,
+	PublishedEvent,
+} from "./core/event-policy/types/event-policy.interface";
 export { ExceptionLayers } from "./core/exception/enums/exception-layers";
 export type { DeclaredExceptionClass } from "./core/exception/exception";
 export {
@@ -217,6 +237,7 @@ export type {
 	OpenAPIOptions,
 	OpenAPISchema,
 } from "./core/openapi/types/openapi.interface";
+export { coerceTextValues } from "./core/output/coerce";
 export {
 	DuplicateOperation,
 	InvalidOutputStage,
@@ -520,6 +541,7 @@ export { blueprintOf } from "./std/blueprint";
 export { Std } from "./std/blueprint-plugin";
 export { commandOf } from "./std/command";
 export { entityOf } from "./std/entity";
+export { StdEventPolicies } from "./std/event-policies";
 export { Email, Ip, Phone, Url } from "./std/properties/contact";
 export type { EnumClass } from "./std/properties/enum";
 export { enumOf } from "./std/properties/enum";

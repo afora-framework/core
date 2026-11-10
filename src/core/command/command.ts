@@ -7,7 +7,9 @@ import {
 	isEnvironment,
 	loadEnvironments,
 } from "../environment/environment";
+import { resolvePublisher } from "../event-policy/publishers";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
+import { Exception } from "../exception/exception";
 import { guard } from "../exception/guard";
 import {
 	clock,
@@ -572,11 +574,16 @@ async function applyPolicy(
 			return call.env();
 		},
 		logger: call.logger,
+		publisher: (name) => resolvePublisher(command, name, source),
 	};
 	if (typeof policy === "function") {
 		try {
 			await policy(raised, info);
 		} catch (cause) {
+			// A policy that says which event failed (such as `publishEvents`) is passed up as it is.
+			if (cause instanceof Exception && cause.name === "CommandEventFailed") {
+				throw cause;
+			}
 			throw new CommandEventFailed({
 				source,
 				cause,

@@ -443,7 +443,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface ApplicationContext { readonly name: string; env<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; readonly logger: ILogger; }",
   ],
   "ApplicationDescription": [
-    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; readonly providers?: Readonly<Record<string, ProviderDescription & { readonly from: string; }>>; readonly log?: LogDescription | { readonly kind: "opaque"; }; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly commands: Readonly<Record<string, CommandDescription>>; readonly outputs: Readonly<Record<string, OutputDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
+    "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; readonly providers?: Readonly<Record<string, ProviderDescription & { readonly from: string; }>>; readonly log?: LogDescription | { readonly kind: "opaque"; }; readonly publishers?: Readonly<Record<string, { readonly from: string; }>>; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly commands: Readonly<Record<string, CommandDescription>>; readonly outputs: Readonly<Record<string, OutputDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
   ],
   "ApplicationNotStarted": [
     "ApplicationNotStarted: import("../../index.js").DeclaredExceptionClass<{ readonly application?: string; }>",
@@ -455,7 +455,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type ApplicationRunOptions<UseCase extends AnyUseCaseClass> = (UseCase["context"] extends IBlueprint<infer Properties> ? { readonly context: BlueprintInput<Properties>; } : { readonly context?: undefined; }) & { readonly dependencies?: Parameters<InstanceType<UseCase>["execute"]>[0]; };",
   ],
   "ApplicationSettings": [
-    "export interface ApplicationSettings<Name extends string, Extended extends readonly AnyApplication[], Collections extends ApplicationCollections> { readonly name: Name; readonly extends?: Extended; readonly properties?: Collections["properties"]; readonly blueprints?: Collections["blueprints"]; readonly records?: Collections["records"]; readonly entities?: Collections["entities"]; readonly environments?: Collections["environments"]; readonly repositories?: Collections["repositories"]; readonly useCases?: Collections["useCases"]; readonly commands?: Collections["commands"]; readonly outputs?: Collections["outputs"]; readonly exceptions?: Collections["exceptions"]; readonly provider?: IRepositoryProvider | ProviderFactory; readonly providers?: ProviderStorage; readonly log?: LogSettings | LogFactory; }",
+    "export interface ApplicationSettings<Name extends string, Extended extends readonly AnyApplication[], Collections extends ApplicationCollections> { readonly name: Name; readonly extends?: Extended; readonly properties?: Collections["properties"]; readonly blueprints?: Collections["blueprints"]; readonly records?: Collections["records"]; readonly entities?: Collections["entities"]; readonly environments?: Collections["environments"]; readonly repositories?: Collections["repositories"]; readonly useCases?: Collections["useCases"]; readonly commands?: Collections["commands"]; readonly outputs?: Collections["outputs"]; readonly exceptions?: Collections["exceptions"]; readonly provider?: IRepositoryProvider | ProviderFactory; readonly providers?: ProviderStorage; readonly log?: LogSettings | LogFactory; readonly publishers?: Readonly<Record<string, IEventPublisher>>; }",
   ],
   "ApplicationStartOptions": [
     "export interface ApplicationStartOptions { readonly register?: boolean; readonly replace?: boolean; }",
@@ -521,7 +521,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface CommandBuilderSettings<UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined, Environment extends EnvironmentDependencies | undefined, Generics> extends Omit<CommandSettings<UseCases, Context, Environment>, "useCases"> { readonly useCases: CommandUseCasesOption<UseCases, Generics>; }",
   ],
   "CommandDescription": [
-    "export interface CommandDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly context?: FieldsDescription; readonly refs?: { readonly context?: string; }; readonly operations: Readonly<Record<string, { readonly ref: string; }>>; readonly transaction: boolean; readonly environments?: readonly string[]; readonly events: "after-commit" | "manual" | { readonly kind: "opaque"; }; readonly onEventError?: { readonly kind: "opaque"; }; }",
+    "export interface CommandDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly context?: FieldsDescription; readonly refs?: { readonly context?: string; }; readonly operations: Readonly<Record<string, { readonly ref: string; }>>; readonly transaction: boolean; readonly environments?: readonly string[]; readonly events: "after-commit" | "manual" | EventPolicyDescription | { readonly kind: "opaque"; }; readonly onEventError?: { readonly kind: "opaque"; }; }",
   ],
   "CommandEnvOption": [
     "export type CommandEnvOption<Environment extends EnvironmentDependencies | undefined> = Environment extends undefined ? { readonly env?: undefined; } : { readonly env?: Partial<MergedEnvironment<Environment>>; };",
@@ -536,7 +536,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type CommandEventHandler = (events: readonly EntityEvent[], info: CommandEventInfo) => void | Promise<void>;",
   ],
   "CommandEventInfo": [
-    "export interface CommandEventInfo { readonly command: AnyCommand; readonly operation: string; readonly context: unknown; readonly env: Readonly<Record<string, unknown>>; readonly logger: ILogger; }",
+    "export interface CommandEventInfo { readonly command: AnyCommand; readonly operation: string; readonly context: unknown; readonly env: Readonly<Record<string, unknown>>; readonly logger: ILogger; publisher(name: string): IEventPublisher; }",
   ],
   "CommandEvents": [
     "export type CommandEvents = "after-commit" | "manual" | CommandEventHandler;",
@@ -700,6 +700,18 @@ exports[`exports of the package and their declarations 1`] = `
   "EventHandlerContext": [
     "export interface EventHandlerContext { readonly logger: ILogger; }",
   ],
+  "EventPolicyDescription": [
+    "export interface EventPolicyDescription { readonly kind: "policy"; readonly name: string; readonly options: EventPolicyOptions; }",
+  ],
+  "EventPolicyFactory": [
+    "export type EventPolicyFactory<Options extends object = EventPolicyOptions> = (options?: Options) => CommandEventHandler;",
+  ],
+  "EventPolicyOptions": [
+    "export type EventPolicyOptions = { readonly [key: string]: JsonValue; };",
+  ],
+  "EventPolicySettings": [
+    "export interface EventPolicySettings<Options extends object = EventPolicyOptions> { readonly name: string; readonly validate?: (options: Options) => string | undefined; readonly handle: (events: Parameters<CommandEventHandler>[0], info: CommandEventInfo, options: Options) => void | Promise<void>; readonly publishers?: (options: Options) => readonly string[]; }",
+  ],
   "Exception": [
     "export declare class Exception<Details = unknown> extends Error { readonly name: string; readonly layer: ExceptionLayers; readonly source: string; readonly details: Details; readonly cause?: unknown; constructor({ layer, name, source, message, details, cause, }: ExceptionInit<Details>); static from(error: unknown, scope: ExceptionScope): Exception; get frame(): ExceptionFrame<Details>; get trace(): readonly ExceptionFrame[]; get origin(): Exception; find<Instance extends Exception>(target: ExceptionClass<Instance> | string): Instance | undefined; is(target: ExceptionClass | string): boolean; passedThrough(layer: ExceptionLayers): boolean; propagate(scope: ExceptionScope & { readonly name?: undefined; readonly message?: string; readonly details?: undefined; }): Exception<Details>; propagate<Next = undefined>(scope: ExceptionPropagation<Next>): Exception<Next>; toJSON(): ExceptionFrame<Details> & { trace: readonly ExceptionFrame[]; }; toString(): string; private chain; }",
   ],
@@ -768,6 +780,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "IEnvironment": [
     "export interface IEnvironment<Properties extends IBlueprintCollection> { readonly [Kind]: "environment"; readonly blueprint: IBlueprint<Properties>; load(): Readonly<BlueprintValue<Properties>>; }",
+  ],
+  "IEventPolicyCatalog": [
+    "export interface IEventPolicyCatalog { readonly [Kind]: "event-policy-catalog"; readonly policies: Readonly<Record<string, EventPolicyFactory<never>>>; resolve(name: string, options?: EventPolicyOptions): CommandEventHandler; }",
+  ],
+  "IEventPublisher": [
+    "export interface IEventPublisher { publish(topic: string, event: PublishedEvent): void | Promise<void>; }",
   ],
   "ILogProvider": [
     "export interface ILogProvider { write(entry: LogEntry): void | Promise<void>; flush?(): Promise<void>; }",
@@ -849,6 +867,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "InvalidEnvironment": [
     "InvalidEnvironment: import("../../index.js").DeclaredExceptionClass<{ readonly keys: readonly string[]; }>",
+  ],
+  "InvalidEventPolicy": [
+    "InvalidEventPolicy: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
   ],
   "InvalidLogDeclaration": [
     "InvalidLogDeclaration: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
@@ -1144,11 +1165,20 @@ exports[`exports of the package and their declarations 1`] = `
   "ProviderStorage": [
     "export type ProviderStorage<Keys extends string = string> = { readonly [Key in Keys]: ProviderSlot<Key>; } & { readonly [Kind]: "provider-storage"; };",
   ],
+  "PublishEventsOptions": [
+    "export interface PublishEventsOptions { readonly publisher: string; readonly topic: string; readonly events?: readonly string[]; readonly handle?: boolean; readonly onPublishError?: "log" | "throw"; }",
+  ],
   "PublishMaker": [
     "export type PublishMaker = <Repository extends AnyRepository, const Options extends StdLifecycleOptions<Repository> = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", { publish(at?: string): unknown; unpublish(): unknown; }, "publishable">, options?: Options) => EntityUseCase<Repository, Options, ById<Repository>>;",
   ],
   "Publishable": [
     "Publishable: import("../index.js").IRecordPlugin<typeof PublishableRecord, "publishable">",
+  ],
+  "PublishedEvent": [
+    "export interface PublishedEvent { readonly name: string; readonly command: string; readonly operation: string; readonly entity: JsonValue; }",
+  ],
+  "PublisherNotBound": [
+    "PublisherNotBound: import("../../index.js").DeclaredExceptionClass<{ readonly publisher: string; }>",
   ],
   "QueryValueOf": [
     "export type QueryValueOf<Value> = Value extends readonly (infer Item)[] ? Item extends AbstractEntity<any> ? readonly (Item | string)[] : Value : Value extends AbstractEntity<any> ? Value | string : Value;",
@@ -1172,7 +1202,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type RecordConstructor<Properties extends IBlueprintCollection, Change extends readonly string[], Unique extends string = never, Members = unknown, Accepts = never, Sensitive extends string = never> = { new (value: BlueprintInput<Properties>): DeclaredRecordInstance<Properties, Change, Members, Sensitive>; readonly "~standard": StandardSchemaV1.Props<BlueprintInput<Properties>, DeclaredRecordInstance<Properties, Change, Members, Sensitive>>; safeParse<Self extends new (value: never) => object>(this: Self, value: unknown): ParseResult<InstanceType<Self>>; readonly [Kind]: "record"; readonly recordName: string; readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; readonly plugins: readonly AnyRecordPlugin[]; readonly [RecordUniqueKeys]?: Unique; readonly [RecordSensitiveKeys]?: Sensitive; readonly [RecordAccepts]?: Accepts; };",
   ],
   "RecordDescription": [
-    "export interface RecordDescription { readonly from: string; readonly fields: FieldsDescription; readonly options: { readonly sensitive: readonly string[]; readonly unique: readonly string[]; readonly change: readonly string[]; }; readonly plugins: readonly RecordPluginDescriptor[]; }",
+    "export interface RecordDescription { readonly from: string; readonly fields: FieldsDescription; readonly options: { readonly sensitive: readonly string[]; readonly unique: readonly string[]; readonly change: readonly string[]; }; readonly plugins: readonly RecordPluginDescriptor[]; readonly events?: Readonly<Partial<Record<"onCreate" | "onUpdate" | "onDelete", readonly { readonly name: string; readonly handler: boolean; }[]>>>; }",
   ],
   "RecordEffect": [
     "export type RecordEffect<Value> = (value: Value, previous: Value) => void;",
@@ -1370,6 +1400,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "StdEntityOptions": [
     "export interface StdEntityOptions<Repository> extends StdUseCaseOptions, StdOwnerOption<Repository> { readonly as?: string; }",
+  ],
+  "StdEventPolicies": [
+    "StdEventPolicies: import("../index.js").IEventPolicyCatalog",
   ],
   "StdLifecycleOptions": [
     "export interface StdLifecycleOptions<Repository> extends StdEntityOptions<Repository> { readonly set?: { readonly [Key in KeyOf<Repository>]?: unknown; }; }",
@@ -1600,6 +1633,9 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function blueprintPluginOf<Properties extends IBlueprintCollection, Factories extends Record<keyof Factories, BlueprintFactory>>(name: string, properties: Properties, factories: Factories): IBlueprintPlugin<Properties, Factories> & { readonly factories: Factories; };",
     "export declare function blueprintPluginOf<Properties extends IBlueprintCollection>(name: string, properties: Properties): IBlueprintPlugin<Properties, Record<never, never>> & { readonly factories: Record<never, never>; };",
   ],
+  "coerceTextValues": [
+    "export declare function coerceTextValues(blueprint: AnyBlueprint, texts: Readonly<Record<string, string | undefined>>): Record<string, unknown>;",
+  ],
   "commandBuilderOf": [
     "export declare function commandBuilderOf<const Catalogs extends readonly IUseCaseCatalog[] = [ ]>(...catalogs: Catalogs): CommandBuilder<UseCasePluginContext<Catalogs>>;",
   ],
@@ -1625,7 +1661,16 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function environmentOf<Properties extends IBlueprintCollection>(blueprint: IBlueprint<Properties, boolean>, { source }?: EnvironmentOptions): IEnvironment<Properties>;",
   ],
   "eventOf": [
-    "export declare function eventOf<Class extends AnyEntityClass>(name: string, entityClass: Class, handler: (entity: InstanceType<Class>, context: EventHandlerContext) => Promise<void>): EventDefinition;",
+    "export declare function eventOf<Class extends AnyEntityClass>(name: string, entityClass: Class, handler?: (entity: InstanceType<Class>, context: EventHandlerContext) => Promise<void>): EventDefinition;",
+  ],
+  "eventPolicyCatalogOf": [
+    "export declare function eventPolicyCatalogOf(...policies: readonly EventPolicyFactory<never>[]): IEventPolicyCatalog;",
+  ],
+  "eventPolicyDescriptionOf": [
+    "export declare function eventPolicyDescriptionOf(handler: unknown): EventPolicyDescription | undefined;",
+  ],
+  "eventPolicyOf": [
+    "export declare function eventPolicyOf<Options extends object = EventPolicyOptions>(settings: EventPolicySettings<Options>): EventPolicyFactory<Options>;",
   ],
   "exceptionOf": [
     "export declare function exceptionOf<Details = undefined>({ layer, name, message, }: ExceptionDeclaration<Details>): DeclaredExceptionClass<Details>;",
@@ -1773,6 +1818,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "providersOf": [
     "export declare function providersOf<const Entries extends Readonly<Record<string, IRepositoryProvider | ProviderFactory>>>(entries: Entries): ProviderStorage<keyof Entries & string>;",
+  ],
+  "publishEvents": [
+    "publishEvents: import("./types/event-policy.interface.js").EventPolicyFactory<PublishEventsOptions>",
   ],
   "recordBuilderOf": [
     "export declare function recordBuilderOf<const Catalogs extends readonly IRecordPluginCatalog[]>(...catalogs: Catalogs): RecordBuilder<RecordPluginContext<Catalogs>>;",
@@ -2369,6 +2417,9 @@ exports[`testing entry (contract) 1`] = `
   "(internal) IDefineProperty": [
     "export interface IDefineProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { [State]: PropertyStates; get type(): IPropertyType<SchemaType, Value>; make(value: Value): Value; parse(value: unknown): ParseResult<Value>; }",
   ],
+  "(internal) IEventPublisher": [
+    "export interface IEventPublisher { publish(topic: string, event: PublishedEvent): void | Promise<void>; }",
+  ],
   "(internal) ILogger": [
     "export interface ILogger { debug(event: string, fields?: LogFields): void; info(event: string, fields?: LogFields): void; warn(event: string, fields?: LogFields): void; error(event: string, fields?: LogFields): void; }",
   ],
@@ -2413,6 +2464,7 @@ exports[`testing entry (contract) 1`] = `
     "type JsonOfRecord<Class extends AnyRecordClass, Data> = InstanceType<Class> extends { toJSON(): infer Json; } ? Data extends object ? Json : Data : Data;",
   ],
   "(internal) JsonValue": [
+    "export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };",
     "type JsonValue<Properties extends IBlueprintCollection, Sensitive, Result = 0 extends 1 & Properties ? Readonly<Record<string, unknown>> : string extends keyof Properties ? Readonly<Record<string, unknown>> : JsonKeys<Properties, BlueprintData<Properties>, Sensitive>> = Result;",
   ],
   "(internal) Kind": [
@@ -2468,6 +2520,9 @@ exports[`testing entry (contract) 1`] = `
   ],
   "(internal) ProviderQuery": [
     "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; }",
+  ],
+  "(internal) PublishedEvent": [
+    "export interface PublishedEvent { readonly name: string; readonly command: string; readonly operation: string; readonly entity: JsonValue; }",
   ],
   "(internal) QueryKey": [
     "type QueryKey<Entity> = unknown extends Entity ? string : EntityKeyOf<Entity>;",
@@ -2559,8 +2614,14 @@ exports[`testing entry (contract) 1`] = `
   "ContractRunner": [
     "export interface ContractRunner { describe(name: string, body: () => void): void; it(name: string, body: () => unknown): void; expect(value: unknown): { toBe(expected: unknown): unknown; toEqual(expected: unknown): unknown; }; }",
   ],
+  "MemoryPublisher": [
+    "export interface MemoryPublisher extends IEventPublisher { readonly published: readonly { readonly topic: string; readonly event: PublishedEvent; }[]; clear(): void; }",
+  ],
   "ProviderContractOptions": [
     "export interface ProviderContractOptions { readonly transactions?: boolean; readonly keyset?: boolean; }",
+  ],
+  "memoryPublisher": [
+    "export declare function memoryPublisher(): MemoryPublisher;",
   ],
   "providerContract": [
     "export declare function providerContract(runner: ContractRunner, makeProvider: () => IRepositoryProvider | Promise<IRepositoryProvider>, options?: ProviderContractOptions): void;",
@@ -2832,6 +2893,26 @@ exports[`afora.json schema 1`] = `
                 {
                   "additionalProperties": false,
                   "properties": {
+                    "options": {
+                      "description": "JSON options of the policy. publishEvents: { "publisher": "<key of publishers>", "topic": "posts/{id}", "events"?: [names], "handle"?: true, "onPublishError"?: "log" | "throw" }.",
+                      "patternProperties": {
+                        "^.*$": {},
+                      },
+                      "type": "object",
+                    },
+                    "policy": {
+                      "description": "The name of an event policy of the catalog: "publishEvents" is built in; others come from the policies given to codegen (--policies).",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "policy",
+                  ],
+                  "type": "object",
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
                     "import": {
                       "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
                       "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
@@ -2845,7 +2926,7 @@ exports[`afora.json schema 1`] = `
                 },
               ],
               "default": "after-commit",
-              "description": ""after-commit" (default), "manual" or { "import": "./events.ts#dispatch" } (a handler written by hand).",
+              "description": ""after-commit" (default), "manual", a policy of the catalog ({ "policy": "publishEvents", "options": { "publisher": "realtime", "topic": "posts/{id}" } }) or { "import": "./events.ts#dispatch" } (a handler written by hand).",
             },
             "onEventError": {
               "additionalProperties": false,
@@ -2905,6 +2986,253 @@ exports[`afora.json schema 1`] = `
                 "type": "string",
               },
               "type": "array",
+            },
+            "events": {
+              "additionalProperties": false,
+              "description": "Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.",
+              "properties": {
+                "onCreate": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+                "onDelete": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+                "onUpdate": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+              },
+              "type": "object",
             },
             "fields": {
               "additionalProperties": false,
@@ -3474,6 +3802,26 @@ exports[`afora.json schema 1`] = `
       },
       "type": "object",
     },
+    "publishers": {
+      "description": "Where event policies publish, by key (applicationOf({ publishers })): a publisher written by hand, { "import": "./realtime.ts#hub" }.",
+      "patternProperties": {
+        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+          "additionalProperties": false,
+          "properties": {
+            "import": {
+              "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+              "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string",
+            },
+          },
+          "required": [
+            "import",
+          ],
+          "type": "object",
+        },
+      },
+      "type": "object",
+    },
     "records": {
       "additionalProperties": false,
       "description": "Value objects (records), by name.",
@@ -3487,6 +3835,253 @@ exports[`afora.json schema 1`] = `
                 "type": "string",
               },
               "type": "array",
+            },
+            "events": {
+              "additionalProperties": false,
+              "description": "Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.",
+              "properties": {
+                "onCreate": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+                "onDelete": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+                "onUpdate": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "description": "An event without a handler.",
+                          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "handler": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "import": {
+                                  "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                  "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "import",
+                              ],
+                              "type": "object",
+                            },
+                            "name": {
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "description": "An event without a handler.",
+                            "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                            "type": "string",
+                          },
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "handler": {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "import": {
+                                    "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                                    "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "import",
+                                ],
+                                "type": "object",
+                              },
+                              "name": {
+                                "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "name",
+                            ],
+                            "type": "object",
+                          },
+                        ],
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  ],
+                },
+              },
+              "type": "object",
             },
             "fields": {
               "additionalProperties": false,

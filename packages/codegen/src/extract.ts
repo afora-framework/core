@@ -27,7 +27,9 @@ export interface ExtractOptions {
 	 * (one of `providersOf`, e.g. made by `providerFrom`). A use case with a
 	 * hand-written `execute` needs `useCases.<Name>`, and a `run` function of a
 	 * steps use case `useCases.<Name>.run.<name>`, a command with a handler
-	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, and a stage
+	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, the handler of
+	 * an entity event `entities.<Name>.events.<event>`, a publisher
+	 * `publishers.<key>`, and a stage
 	 * written by hand `outputs.<Name>.pipe.<index>`, all `"./file.ts#export"`.
 	 */
 	readonly imports?: Readonly<Record<string, string>>;
@@ -394,10 +396,32 @@ export function extractSpec(
 		description.records,
 		(value) => record(["", value])[1],
 	);
-	const entities = entries(
-		description.entities,
-		(value) => record(["", value])[1],
-	);
+	const entities = entries(description.entities, (value, name) => ({
+		...(record(["", value])[1] as Record<string, unknown>),
+		...(value.events === undefined
+			? {}
+			: {
+					events: Object.fromEntries(
+						Object.entries(value.events).map(([cycle, list]) => [
+							cycle,
+							(list ?? []).map((event) =>
+								event.handler
+									? {
+											name: event.name,
+											handler: {
+												import: importFor(
+													options.imports,
+													`entities.${name}.events.${event.name}`,
+													`The handler of the event "${event.name}" of the entity "${name}"`,
+												),
+											},
+										}
+									: event.name,
+							),
+						]),
+					),
+				}),
+	}));
 	const environments = entries(description.environments, (value) => ({
 		fields: extraction.json(value.fields),
 	}));
@@ -548,13 +572,20 @@ export function extractSpec(
 					events:
 						value.events === "manual"
 							? "manual"
-							: {
-									import: importFor(
-										options.imports,
-										`commands.${name}.events`,
-										`The events handler of the command "${name}"`,
-									),
-								},
+							: value.events.kind === "policy"
+								? {
+										policy: value.events.name,
+										...(Object.keys(value.events.options).length > 0
+											? { options: structuredClone(value.events.options) }
+											: {}),
+									}
+								: {
+										import: importFor(
+											options.imports,
+											`commands.${name}.events`,
+											`The events handler of the command "${name}"`,
+										),
+									},
 				}),
 		...(value.onEventError === undefined
 			? {}
@@ -593,6 +624,21 @@ export function extractSpec(
 	}));
 
 	const allProperties = { ...extraction.generated, ...properties };
+	// Its own publishers: inherited ones belong to the spec it extends.
+	const publishers = Object.fromEntries(
+		Object.entries(description.publishers ?? {})
+			.filter(([, { from }]) => from === description.name)
+			.map(([key]) => [
+				key,
+				{
+					import: importFor(
+						options.imports,
+						`publishers.${key}`,
+						`The publisher "${key}"`,
+					),
+				},
+			]),
+	);
 	const spec: Json = {
 		version: 1,
 		name: description.name,
@@ -617,6 +663,7 @@ export function extractSpec(
 		...(description.log === undefined
 			? {}
 			: { log: logSpec(description.log, options.imports) }),
+		...(Object.keys(publishers).length > 0 ? { publishers } : {}),
 		...(Object.keys(allProperties).length > 0
 			? { properties: allProperties }
 			: {}),

@@ -1,3 +1,4 @@
+import { checkEventPolicy, type PolicyEntry } from "./policy";
 import { checkImport, isImportObject } from "./provider";
 import { checkEnvironmentNames, type Decl, issue, type Scope } from "./scope";
 import { isIdentifier, isObject } from "./spec/field";
@@ -20,10 +21,13 @@ const COMMAND_KEYS = [
 /** The `events` policy of a command spec, with its default. */
 function eventsOf(
 	spec: Record<string, unknown>,
-): "after-commit" | "manual" | "handler" {
+): "after-commit" | "manual" | "policy" | "handler" {
 	const { events } = spec;
 	if (events === undefined || events === "after-commit") return "after-commit";
-	return events === "manual" ? "manual" : "handler";
+	if (events === "manual") return "manual";
+	return isObject(events) && Object.hasOwn(events, "policy")
+		? "policy"
+		: "handler";
 }
 
 /**
@@ -36,6 +40,7 @@ export function checkCommand(
 	scope: Scope,
 	inline: InlineChecker,
 	issues: SpecIssue[],
+	policies: ReadonlyMap<string, PolicyEntry> = new Map(),
 ): void {
 	const path: Path = ["commands", decl.name];
 	const { spec } = decl;
@@ -143,14 +148,22 @@ export function checkCommand(
 		events !== "after-commit" &&
 		events !== "manual"
 	) {
-		if (isImportObject(events)) {
+		if (eventsOf(spec) === "policy") {
+			checkEventPolicy(
+				events as Record<string, unknown>,
+				[...path, "events"],
+				policies,
+				scope.publisherKeys,
+				issues,
+			);
+		} else if (isImportObject(events)) {
 			checkImport(events, [...path, "events"], issues);
 		} else {
 			issues.push(
 				issue(
 					[...path, "events"],
 					"invalid_events",
-					'"events" is "after-commit" (default), "manual" or { "import": "./events.ts#dispatch" }.',
+					'"events" is "after-commit" (default), "manual", a policy ({ "policy": "publishEvents", "options": {...} }) or { "import": "./events.ts#dispatch" }.',
 				),
 			);
 		}
