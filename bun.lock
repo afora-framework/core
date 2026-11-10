@@ -29,7 +29,7 @@
     },
     "packages/codegen": {
       "name": "@afora/codegen",
-      "version": "0.0.7",
+      "version": "0.0.8",
       "bin": {
         "afora-codegen": "dist/cli.js",
       },
@@ -38,13 +38,13 @@
         "typebox": "^1.4.3",
       },
       "peerDependencies": {
-        "@afora/core": ">=0.0.7",
+        "@afora/core": ">=0.0.8",
         "typebox": "^1",
       },
     },
     "packages/drizzle": {
       "name": "@afora/drizzle",
-      "version": "0.0.7",
+      "version": "0.0.8",
       "devDependencies": {
         "@electric-sql/pglite": "0.4.6",
         "@types/bun": "^1.4.4",
@@ -52,13 +52,13 @@
         "typebox": "^1.4.3",
       },
       "peerDependencies": {
-        "@afora/core": ">=0.0.1",
+        "@afora/core": ">=0.0.8",
         "drizzle-orm": "^0.45.4",
       },
     },
     "packages/hono": {
       "name": "@afora/hono",
-      "version": "0.0.7",
+      "version": "0.0.8",
       "devDependencies": {
         "@seriousme/openapi-schema-validator": "2.11.0",
         "@types/bun": "^1.4.4",
@@ -66,14 +66,14 @@
         "typebox": "^1.4.3",
       },
       "peerDependencies": {
-        "@afora/core": ">=0.0.1",
+        "@afora/core": ">=0.0.8",
         "hono": "^4.13.14",
         "typebox": "^1",
       },
     },
     "packages/mcp": {
       "name": "@afora/mcp",
-      "version": "0.0.7",
+      "version": "0.0.8",
       "bin": {
         "afora-mcp": "dist/bin.js",
       },
@@ -86,19 +86,19 @@
         "typebox": "^1.4.3",
       },
       "peerDependencies": {
-        "@afora/core": ">=0.0.1",
+        "@afora/core": ">=0.0.8",
         "typebox": "^1",
       },
     },
     "packages/ws": {
       "name": "@afora/ws",
-      "version": "0.0.7",
+      "version": "0.0.8",
       "devDependencies": {
         "@types/bun": "^1.4.4",
         "typebox": "^1.4.3",
       },
       "peerDependencies": {
-        "@afora/core": ">=0.0.1",
+        "@afora/core": ">=0.0.8",
         "typebox": "^1",
       },
     },

@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.0.8 — unreleased (draft: dated when it is published)
 
 ### Changed
 
+- Every `@afora` package (`codegen`, `mcp`, `hono`, `drizzle`, `ws`) requires `@afora/core` 0.0.8 or later: they import exports added in this release, and specs with indexes, records that expire, versioned entities or use case hooks generate code that uses them.
 - `CommandEventInfo` has `publisher(name)`, and a handler policy that throws a `CommandEventFailed` itself has it passed up as it is instead of wrapped.
 - An application with `publishers` rebinds its use cases and commands, as one with a `provider` or a `log` does, so `app.commands.X` is not the declared command.
 - **Breaking.** A repository declared at module level throws the new `RepositoryUsedOutsideApplication` (layer `repository`) once an application with a provider binds it, instead of reading and writing its own store; the message points to `app.repositories.X`, `app.run` and `execute`. Repositories no application binds work as before. See Migration below and `docs/repositories.md`.
@@ -85,7 +86,7 @@ After, `repositoryOf` throws `InvalidRepositoryDeclaration` and the type has no 
 - Steps: a `find` step naming `increment` is `write_in_find`.
 - `increment` with `create` on an entity that expires treats an expired record as absent: it replaces it with a fresh one (new `createdAt` and `expiresAt`, `version: 1`, the deltas applied), the window of a rate limiter; without `create` it is `RepositoryEntityNotFound`. The provider gets `now` in `ProviderIncrementOptions`.
 
-## 0.0.7 — unreleased (draft: dated when it is published)
+## 0.0.7 — 2026-11-10
 
 ### Changed
 
