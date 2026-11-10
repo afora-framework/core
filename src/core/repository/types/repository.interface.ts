@@ -12,7 +12,9 @@ import type { RecordSettings } from "../../record/types/record.interface";
 import type { AbstractRepository } from "../repository";
 import type {
 	ProviderCapabilities,
+	ProviderQuery,
 	RepositoryExists,
+	RepositoryFindCursor,
 	RepositoryFindMany,
 	RepositoryFindPage,
 	RepositoryQuery,
@@ -149,7 +151,8 @@ export type RepositoryMethods<
 	("count" extends Actions ? RepositoryCount<Entity> : unknown) &
 	("findMany" extends Actions ? RepositoryFindMany<Entity> : unknown) &
 	("exists" extends Actions ? RepositoryExists<Entity> : unknown) &
-	("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown);
+	("findPage" extends Actions ? RepositoryFindPage<Entity> : unknown) &
+	("findCursor" extends Actions ? RepositoryFindCursor<Entity> : unknown);
 
 /** A method a repository of `Entity` can have, e.g. `"findByEmail"`. */
 export type RepositoryAction<Entity> =
@@ -161,7 +164,8 @@ export type RepositoryAction<Entity> =
 	| "count"
 	| "findMany"
 	| "exists"
-	| "findPage";
+	| "findPage"
+	| "findCursor";
 
 /**
  * A repository of `Entity` with the methods of `Actions`, whose provider gets
@@ -208,9 +212,10 @@ export interface IRepositoryProvider<Environment = unknown> {
 		context: RepositoryContext<Environment>,
 		query?: RepositoryQuery,
 	): Promise<RepositoryData | undefined>;
+	/** `query.after` is only given to a provider with `capabilities.keyset`. */
 	findMany(
 		context: RepositoryContext<Environment>,
-		query?: RepositoryQuery,
+		query?: ProviderQuery,
 	): Promise<readonly RepositoryData[]>;
 	insert(
 		context: RepositoryContext<Environment>,

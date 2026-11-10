@@ -16,9 +16,11 @@ import {
 import { recordNameOf } from "../record/name";
 import { Kind } from "../symbols/kind";
 import { type ExecutionScope, ScopeKey } from "../use-case/scope";
+import { decodeCursor, encodeCursor } from "./cursor";
 import {
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
+	InvalidRepositoryQuery,
 	RepositoryEntityNotFound,
 } from "./exceptions";
 import { inMemoryProvider } from "./in-memory";
@@ -235,6 +237,61 @@ const findPage = action(async (self, query: unknown) => {
 	return { items: await self.hydrateMany(rows), total, limit, offset };
 });
 
+/** The options of the query of `findCursor`. */
+const CURSOR_OPTIONS = ["where", "orderBy", "limit", "withDeleted", "after"];
+
+const findCursor = action(async (self, query: unknown = {}) => {
+	const { context } = self;
+	const fail = (reason: string): never => {
+		throw new InvalidRepositoryQuery({
+			source: context.name,
+			details: { reason },
+		});
+	};
+	const prepared = prepareQuery(
+		context,
+		query,
+		(key, value) => queryValueOf(context, key, value),
+		CURSOR_OPTIONS,
+	);
+	const { after } = query as { readonly after?: unknown };
+	const { where, limit = 20 } = prepared;
+	if (limit < 1) fail("Expected a positive integer for limit.");
+	const withDeleted = prepared.withDeleted ?? stateOf(self).deletion === "hard";
+	// The id breaks ties, so every row has one position in the order.
+	const declared = prepared.orderBy ?? [];
+	const orderBy = declared.some(({ key }) => key === "id")
+		? declared
+		: [...declared, { key: "id", direction: "asc" as const }];
+	for (const { key } of orderBy) {
+		// A cursor carries the values of its order keys, readable by whoever has it.
+		if (context.entity.options.sensitive.includes(key))
+			fail(`"${key}" is sensitive and cannot order a cursor.`);
+	}
+	if (self.provider.capabilities?.keyset !== true)
+		fail("The provider does not read by cursor (capabilities.keyset).");
+
+	const rows = await self.provider.findMany(context, {
+		where,
+		orderBy,
+		withDeleted,
+		limit: limit + 1,
+		...(after === undefined
+			? {}
+			: { after: decodeCursor(context.name, orderBy, after) }),
+	});
+	const page = rows.slice(0, limit);
+	const last = page.at(-1);
+	return {
+		items: await self.hydrateMany(page),
+		limit,
+		next:
+			rows.length > limit && last !== undefined
+				? encodeCursor(orderBy, last)
+				: undefined,
+	};
+});
+
 const create = action(async (self, input: unknown) => {
 	const { entity: Entity } = self.context;
 	const entity =
@@ -296,6 +353,7 @@ const NEEDS: Readonly<Record<string, readonly (keyof IRepositoryProvider)[]>> =
 		findMany: ["findMany"],
 		exists: ["findOne"],
 		findPage: ["findMany", "count"],
+		findCursor: ["findMany"],
 	};
 
 function capitalize(key: string): string {
@@ -333,7 +391,7 @@ function invalid(source: string, reason: string): never {
  * unique key (`id`, `options.unique`, a `unique` property), giving the entity
  * or `undefined`; `findManyBy<Key>` for any other key, giving a list;
  * `create`, `update`, `delete`, `count`, and the queries `findMany`,
- * `exists` and `findPage`. Every method is async and reads and writes through `provider`
+ * `exists`, `findPage` and `findCursor`. Every method is async and reads and writes through `provider`
  * (a new `inMemoryProvider()` by default), which gets the variables of
  * `environmentDependencies` as `context.env`. The repository can be a
  * dependency of a use case, and `RepositoryOf` extends it with a class.
@@ -388,6 +446,7 @@ export function repositoryOf<
 	methods.set("findMany", ["findMany", findMany]);
 	methods.set("exists", ["exists", exists]);
 	methods.set("findPage", ["findPage", findPage]);
+	methods.set("findCursor", ["findCursor", findCursor]);
 
 	class DeclaredRepository extends AbstractRepository<
 		Entity,

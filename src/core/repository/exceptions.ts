@@ -1,11 +1,28 @@
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { exceptionOf } from "../exception/exception";
+import type { Issue } from "../parse/types/parse.interface";
 
 /** A query contains unsupported keys, ordering or pagination. */
 export const InvalidRepositoryQuery = exceptionOf({
 	layer: ExceptionLayers.Repository,
 	name: "InvalidRepositoryQuery",
 	message: ({ reason }: { readonly reason: string }) => reason,
+});
+
+/**
+ * `findCursor` got an `after` that is not a cursor it gave, or one made for
+ * another `orderBy`; `source` is the repository name. Its `issues` name the
+ * `after` of the query, so an output answers it as invalid input.
+ */
+export const InvalidRepositoryCursor = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "InvalidRepositoryCursor",
+	message: ({
+		reason,
+	}: {
+		readonly reason: string;
+		readonly issues: readonly Issue[];
+	}) => reason,
 });
 
 /** `repositoryOf` got something other than an entity, actions and a provider. */

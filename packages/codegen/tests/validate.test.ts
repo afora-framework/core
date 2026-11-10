@@ -538,6 +538,14 @@ describe("repositories", () => {
 			"repositories.Things.actions.0",
 		);
 		expectIssue(repo({ actions: ["create", "create"] }), "duplicate_action");
+		// Every query action needs no key.
+		expect(
+			validateSpec(
+				repo({
+					actions: ["findMany", "exists", "findPage", "findCursor", "count"],
+				}),
+			),
+		).toEqual([]);
 	});
 	test("findBy needs a unique key", () => {
 		expectIssue(
