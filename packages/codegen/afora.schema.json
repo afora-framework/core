@@ -1616,7 +1616,7 @@
 									"patternProperties": {
 										"^[A-Za-z_$][A-Za-z0-9_$]*$": {}
 									},
-									"description": "Its options: \"as\" (the response key), \"owner\" ({ \"key\"?, \"context\" }), \"errors\" ({ \"notFound\" | \"conflict\" | \"invalid\" | \"owner\": an exception name }), and per use case \"omit\", \"values\", \"set\", \"orderBy\"."
+									"description": "Its options: \"as\" (the response key), \"owner\" ({ \"key\"?, \"context\" }), \"errors\" ({ \"notFound\" | \"conflict\" | \"invalid\" | \"owner\": an exception name }), and per use case \"omit\", \"values\", \"set\", \"orderBy\"; those that write also take \"before\" and \"after\" ({ \"import\": \"./file.ts#function\" }, run before and after the write), \"dependencies\" (key -> name of a use case, repository or environment, for them) and \"throws\" (the exceptions they throw, as in \"errors\")."
 								},
 								"description": {
 									"type": "string"
