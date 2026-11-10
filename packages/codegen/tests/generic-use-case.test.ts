@@ -128,7 +128,15 @@ describe("catalog", () => {
 			description: "Publishes the publishable entity of an id and stores it.",
 			actions: ["findById", "update"],
 			plugins: ["publishable"],
-			options: ["as", "owner", "set"],
+			options: [
+				"as",
+				"owner",
+				"set",
+				"before",
+				"after",
+				"dependencies",
+				"throws",
+			],
 		});
 	});
 
@@ -411,4 +419,132 @@ describe("JSON -> generate -> run -> extract", () => {
 		});
 		expect(normalizeSpec(extractSpec(domain.App))).toEqual(normalizeSpec(blog));
 	});
+});
+
+describe("before, after, dependencies and throws", () => {
+	/** The blog, with an edit that checks its title and records it after. */
+	const hooked = draft((c) => {
+		c.exceptions.TitleTaken = { layer: "use-case" };
+		c.useCases.EditPost.options = {
+			before: { import: "../hooks#checkTitle" },
+			after: { import: "../hooks#recordEdit" },
+			dependencies: { users: "Users", logger: "Logger" },
+			throws: ["TitleTaken", "UseCaseEntityConflict"],
+		};
+	}) as Spec;
+	const HOOKS = `
+import { TitleTaken } from "./domain/exceptions";
+
+export const edits: string[] = [];
+
+export async function checkTitle({
+	input,
+	entity,
+	dependencies,
+}: {
+	input: { readonly id: string; readonly title?: string };
+	entity: { readonly title: string; readonly author: { readonly id: string } };
+	dependencies: { users: { findById(id: string): Promise<unknown> } };
+}) {
+	if (input.title === "taken") throw new TitleTaken({ source: entity.title });
+	if (!(await dependencies.users.findById(entity.author.id))) {
+		throw new Error("no author");
+	}
+	return { ...input, title: input.title?.trim() };
+}
+
+export function recordEdit({ entity }: { entity: { readonly title: string } }) {
+	edits.push(entity.title);
+}
+`;
+	const IMPORTS = {
+		"useCases.EditPost.before": "../hooks#checkTitle",
+		"useCases.EditPost.after": "../hooks#recordEdit",
+	};
+
+	test("are options of the use cases that write, and checked", () => {
+		expect(validateSpec(hooked)).toEqual([]);
+		expect(Value.Check(specSchema, hooked)).toBe(true);
+		const edit = (options: object) =>
+			codes(
+				draft((c) => {
+					c.useCases.EditPost.options = options;
+				}),
+			);
+		expect(edit({ before: "../hooks#checkTitle" })).toContain(
+			"invalid_generic_option@useCases.EditPost.options.before",
+		);
+		expect(edit({ after: { import: "nope" } })).toContain(
+			"invalid_import@useCases.EditPost.options.after",
+		);
+		expect(edit({ dependencies: { users: "Nope" } })).toContain(
+			"unknown_dependency@useCases.EditPost.options.dependencies.users",
+		);
+		expect(edit({ dependencies: { repository: "Users" } })).toContain(
+			"invalid_generic_option@useCases.EditPost.options.dependencies",
+		);
+		expect(edit({ throws: ["Nope"] })).toContain(
+			"invalid_generic_option@useCases.EditPost.options.throws",
+		);
+		expect(
+			codes(
+				draft((c) => {
+					c.useCases.ListPosts.options = { before: { import: "../h#f" } };
+				}),
+			),
+		).toContain("invalid_generic_option@useCases.ListPosts.options.before");
+	});
+
+	test("normalization gives a core exception in throws as { core }", () => {
+		expect(normalizeSpec(hooked).useCases?.EditPost).toMatchObject({
+			options: { throws: ["TitleTaken", { core: "UseCaseEntityConflict" }] },
+		});
+	});
+
+	test("generate -> run -> extract", async () => {
+		const files = generate(hooked);
+		const useCases = files.find(
+			(file) => file.path === "src/domain/use-cases.ts",
+		)?.contents as string;
+		expect(useCases).toContain(
+			'import { checkTitle, recordEdit } from "../hooks";',
+		);
+		expect(useCases).toContain("before: checkTitle,");
+		expect(useCases).toContain(
+			"dependencies: { users: Users, logger: Logger },",
+		);
+		expect(useCases).toContain("throws: [TitleTaken, UseCaseEntityConflict],");
+
+		const dir = await makeProject(files, { "src/hooks.ts": HOOKS });
+		projects.push(dir);
+		const domain = await import(join(dir, "src/domain/index.ts"));
+		const { edits } = await import(join(dir, "src/hooks.ts"));
+		const { Blog } = domain.App.commands;
+		const { user } = await Blog.run("register", {
+			name: "Ana",
+			email: "ana@example.com",
+			password: "Demo@123",
+		});
+		const context = { userId: user.id };
+		const { post } = await Blog.run("create", { title: "Hi" }, { context });
+		const edited = await Blog.run("edit", { id: post.id, title: "  Hey " });
+		expect(edited.item.title).toBe("Hey");
+		expect(edits).toEqual(["Hey"]);
+		const taken = await Blog.run("edit", {
+			id: post.id,
+			title: "taken",
+		}).catch((error: unknown) => error);
+		expect((taken as Error).name).toBe("TitleTaken");
+		expect(
+			domain.App.useCases.EditPost.errors.map((e: Error) => e.name),
+		).toEqual(["UseCaseEntityNotFound", "TitleTaken", "UseCaseEntityConflict"]);
+
+		const tsc = await run(dir, "bunx", "tsc", "--noEmit", "-p", dir);
+		expect(tsc.output).toBe("");
+
+		expect(() => extractSpec(domain.App)).toThrow(/useCases\.EditPost\.before/);
+		expect(
+			normalizeSpec(extractSpec(domain.App, { imports: IMPORTS })),
+		).toEqual(normalizeSpec(hooked));
+	}, 120_000);
 });

@@ -3,6 +3,7 @@ import type {
 	AnyBlueprintList,
 	AnyRecordClass,
 	BlueprintField,
+	BlueprintValue,
 	IBlueprint,
 	IBlueprintCollection,
 	IBlueprintList,
@@ -24,7 +25,9 @@ import type {
 } from "../../core/use-case/types/plugin.interface";
 import type {
 	AnyExceptionClass,
+	DependencyFunctions,
 	StepsUseCaseConstructor,
+	UseCaseCollection,
 } from "../../core/use-case/use-case";
 import type { Integer, StringProperty } from "../properties/primitives";
 
@@ -148,6 +151,132 @@ export interface StdListOptions<Repository>
 
 type None = Record<never, never>;
 
+/** What `before` and `after` get of the call. */
+export interface StdHookArgs<Input, Dependencies, Context> {
+	/** The input of the call, parsed; for `after`, the one `before` gave back. */
+	readonly input: Input;
+	/**
+	 * The dependencies of the call, as `execute` resolved them (overrides
+	 * included): `repository`, those the use case makes to load what the
+	 * input names, and those of the option `dependencies`.
+	 */
+	readonly dependencies: Dependencies;
+	/** The context of the call: the id of the caller with `owner`, else `undefined`. */
+	readonly context: Context;
+}
+
+/**
+ * The options of a standard use case that writes: `before` runs before the
+ * write and may give back the input to write in place of the one given;
+ * `after` runs after it, within the transaction of the command; both get the
+ * dependencies of the use case and those of `dependencies`, and `throws` adds
+ * the exceptions they may throw to its errors (for `describe()` and statuses).
+ */
+export interface StdHookOptions<
+	Input,
+	Entity,
+	Dependencies extends UseCaseCollection,
+	Bound,
+	Context,
+	Loaded extends boolean,
+> {
+	/** Repositories, use cases or environments the hooks use, by name, beside those the use case makes. */
+	readonly dependencies?: Dependencies;
+	/**
+	 * Runs before the write (after the entity is loaded and its owner
+	 * checked, for a use case over one entity, which gets it as `entity`);
+	 * what it gives back, if anything, is the input the use case goes on with.
+	 */
+	readonly before?: (
+		args: StdHookArgs<Input, Bound, Context> &
+			(Loaded extends true ? { readonly entity: Entity } : unknown),
+		// biome-ignore lint/suspicious/noConfusingVoidType: a function that gives nothing back keeps the input
+	) => Input | void | Promise<Input | void>;
+	/** Runs after the write, with the entity written, before the response is given. */
+	readonly after?: (
+		args: StdHookArgs<Input, Bound, Context> & { readonly entity: Entity },
+	) => unknown;
+	/** Exceptions (made by `exceptionOf`) `before` or `after` may throw: added to the errors of the use case. */
+	readonly throws?: readonly AnyExceptionClass[];
+}
+
+/** What `get`, `list` and `login` take in place of the hooks: none. */
+export interface StdNoHookOptions {
+	readonly before?: never;
+	readonly after?: never;
+	readonly dependencies?: never;
+	readonly throws?: never;
+}
+
+type ContextValue<Repository, Options> =
+	OwnerContext<Repository, Options> extends infer Context extends
+		IBlueprintCollection
+		? Readonly<BlueprintValue<Context>>
+		: undefined;
+
+/** `Options` as `Hookable` infers them. */
+type Shape<Omitted, Values, Owner> = {
+	readonly omit: readonly Omitted[];
+	readonly values: Values;
+} & ([Owner] extends [undefined] ? unknown : { readonly owner: Owner });
+
+/** `StdHookOptions` for a use case over `Repository` that takes `Input`. */
+type HookOptionsOf<
+	Repository extends AnyRepository,
+	Options,
+	Input extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection,
+	Loaded extends boolean,
+> = StdHookOptions<
+	BlueprintValue<Input>,
+	EntityInstanceOf<EntityOf<Repository>>,
+	Dependencies,
+	DependencyFunctions<{ readonly repository: Repository } & Dependencies>,
+	ContextValue<Repository, Options>,
+	Loaded
+>;
+
+/**
+ * The options of a use case that writes, as its maker reads them: those that
+ * type its input and context, inferred one by one (`Options` is inferred from
+ * the whole object only once the hooks are typed), and the hooks, typed by
+ * them and not inferred from. The types of `before` and `after` are only
+ * worked out for a call that gives them.
+ */
+interface Hookable<
+	Repository extends AnyRepository,
+	Input extends IBlueprintCollection,
+	Omitted,
+	Values,
+	Owner,
+	Dependencies extends UseCaseCollection,
+	Loaded extends boolean,
+> {
+	readonly omit?: readonly Omitted[];
+	readonly values?: Values;
+	readonly owner?: Owner;
+	readonly dependencies?: Dependencies;
+	readonly throws?: readonly AnyExceptionClass[];
+	readonly before?: NoInfer<
+		HookOptionsOf<
+			Repository,
+			Shape<Omitted, Values, Owner>,
+			Input,
+			Dependencies,
+			Loaded
+		>["before"]
+	>;
+	readonly after?: NoInfer<
+		HookOptionsOf<
+			Repository,
+			Shape<Omitted, Values, Owner>,
+			Input,
+			Dependencies,
+			Loaded
+		>["after"]
+	>;
+}
+
 type AsOf<Options> = Options extends {
 	readonly as: infer Key extends string;
 }
@@ -211,10 +340,11 @@ type EntityUseCase<
 	Repository extends AnyRepository,
 	Options,
 	Input extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection = None,
 > = StepsUseCaseConstructor<
 	Input,
 	EntityResponse<Repository, Options>,
-	{ readonly repository: Repository },
+	{ readonly repository: Repository } & Dependencies,
 	OwnerContext<Repository, Options>
 >;
 
@@ -224,15 +354,33 @@ type ById<Repository> = { readonly id: IdField<Repository> };
 export type CreateMaker = <
 	Repository extends AnyRepository,
 	const Options extends StdCreateOptions<Repository> = None,
+	const Omitted extends KeyOf<Repository> = never,
+	const Values = None,
+	const Owner = undefined,
+	const Dependencies extends UseCaseCollection = None,
 >(
 	repository: Repository & UseCaseTarget<Repository, "create">,
-	options?: Options,
-) => EntityUseCase<Repository, Options, CreateInput<Repository, Options>>;
+	options?: Options &
+		Hookable<
+			Repository,
+			CreateInput<Repository, Shape<Omitted, Values, Owner>>,
+			Omitted,
+			Values,
+			Owner,
+			Dependencies,
+			false
+		>,
+) => EntityUseCase<
+	Repository,
+	Options,
+	CreateInput<Repository, Options>,
+	Dependencies
+>;
 
 /** `get`: for a repository with `findById`. */
 export type GetMaker = <
 	Repository extends AnyRepository,
-	const Options extends StdEntityOptions<Repository> = None,
+	const Options extends StdEntityOptions<Repository> & StdNoHookOptions = None,
 >(
 	repository: Repository & UseCaseTarget<Repository, "findById">,
 	options?: Options,
@@ -241,7 +389,7 @@ export type GetMaker = <
 /** `list`: for a repository with `findPage`. */
 export type ListMaker = <
 	Repository extends AnyRepository,
-	const Options extends StdListOptions<Repository> = None,
+	const Options extends StdListOptions<Repository> & StdNoHookOptions = None,
 >(
 	repository: Repository & UseCaseTarget<Repository, "findPage">,
 	options?: Options,
@@ -264,37 +412,73 @@ export type ListMaker = <
 export type UpdateMaker = <
 	Repository extends AnyRepository,
 	const Options extends StdEntityOptions<Repository> = None,
+	const Owner = undefined,
+	const Dependencies extends UseCaseCollection = None,
 >(
 	repository: Repository & UseCaseTarget<Repository, "findById" | "update">,
-	options?: Options,
-) => EntityUseCase<Repository, Options, UpdateInput<Repository>>;
+	options?: Options &
+		Hookable<
+			Repository,
+			UpdateInput<Repository>,
+			never,
+			None,
+			Owner,
+			Dependencies,
+			true
+		>,
+) => EntityUseCase<Repository, Options, UpdateInput<Repository>, Dependencies>;
 
 /** `delete`: for a repository with `findById` and `delete`. */
 export type DeleteMaker = <
 	Repository extends AnyRepository,
 	const Options extends StdEntityOptions<Repository> = None,
+	const Owner = undefined,
+	const Dependencies extends UseCaseCollection = None,
 >(
 	repository: Repository & UseCaseTarget<Repository, "findById" | "delete">,
-	options?: Options,
-) => EntityUseCase<Repository, Options, ById<Repository>>;
+	options?: Options &
+		Hookable<
+			Repository,
+			ById<Repository>,
+			never,
+			None,
+			Owner,
+			Dependencies,
+			true
+		>,
+) => EntityUseCase<Repository, Options, ById<Repository>, Dependencies>;
 
 /** `restore`: for a repository with soft deletion and the `restore` action. */
 export type RestoreMaker = <
 	Repository extends AnyRepository,
-	const Options extends StdUseCaseOptions & { readonly as?: string } = None,
+	const Options extends StdUseCaseOptions & {
+		readonly as?: string;
+	} = None,
+	const Dependencies extends UseCaseCollection = None,
 >(
 	repository: Repository & UseCaseTarget<Repository, "restore">,
-	options?: Options,
+	options?: Options &
+		Hookable<
+			Repository,
+			ById<Repository>,
+			never,
+			None,
+			undefined,
+			Dependencies,
+			false
+		>,
 ) => StepsUseCaseConstructor<
 	ById<Repository>,
 	EntityResponse<Repository, Options>,
-	{ readonly repository: Repository }
+	{ readonly repository: Repository } & Dependencies
 >;
 
 /** `publish` and `unpublish`: for a publishable entity. */
 export type PublishMaker = <
 	Repository extends AnyRepository,
 	const Options extends StdLifecycleOptions<Repository> = None,
+	const Owner = undefined,
+	const Dependencies extends UseCaseCollection = None,
 >(
 	repository: Repository &
 		UseCaseTarget<
@@ -303,13 +487,24 @@ export type PublishMaker = <
 			{ publish(at?: string): unknown; unpublish(): unknown },
 			"publishable"
 		>,
-	options?: Options,
-) => EntityUseCase<Repository, Options, ById<Repository>>;
+	options?: Options &
+		Hookable<
+			Repository,
+			ById<Repository>,
+			never,
+			None,
+			Owner,
+			Dependencies,
+			true
+		>,
+) => EntityUseCase<Repository, Options, ById<Repository>, Dependencies>;
 
 /** `archive` and `unarchive`: for an archivable entity. */
 export type ArchiveMaker = <
 	Repository extends AnyRepository,
 	const Options extends StdLifecycleOptions<Repository> = None,
+	const Owner = undefined,
+	const Dependencies extends UseCaseCollection = None,
 >(
 	repository: Repository &
 		UseCaseTarget<
@@ -318,13 +513,24 @@ export type ArchiveMaker = <
 			{ archive(at?: string): unknown; readonly isArchived: boolean },
 			"archivable"
 		>,
-	options?: Options,
-) => EntityUseCase<Repository, Options, ById<Repository>>;
+	options?: Options &
+		Hookable<
+			Repository,
+			ById<Repository>,
+			never,
+			None,
+			Owner,
+			Dependencies,
+			true
+		>,
+) => EntityUseCase<Repository, Options, ById<Repository>, Dependencies>;
 
 /** `tag` and `untag`: for a taggable entity. */
 export type TagMaker = <
 	Repository extends AnyRepository,
 	const Options extends StdEntityOptions<Repository> = None,
+	const Owner = undefined,
+	const Dependencies extends UseCaseCollection = None,
 >(
 	repository: Repository &
 		UseCaseTarget<
@@ -333,14 +539,21 @@ export type TagMaker = <
 			{ tag(...tags: string[]): unknown; untag(...tags: string[]): unknown },
 			"taggable"
 		>,
-	options?: Options,
-) => EntityUseCase<
-	Repository,
-	Options,
-	ById<Repository> & {
-		readonly tags: IBlueprintList<typeof StringProperty>;
-	}
->;
+	options?: Options &
+		Hookable<
+			Repository,
+			TagInput<Repository>,
+			never,
+			None,
+			Owner,
+			Dependencies,
+			true
+		>,
+) => EntityUseCase<Repository, Options, TagInput<Repository>, Dependencies>;
+
+type TagInput<Repository> = ById<Repository> & {
+	readonly tags: IBlueprintList<typeof StringProperty>;
+};
 
 type Authenticatable = { verifyPassword(plain: string): Promise<boolean> };
 
@@ -348,6 +561,10 @@ type Authenticatable = { verifyPassword(plain: string): Promise<boolean> };
 export type RegisterMaker = <
 	Repository extends AnyRepository,
 	const Options extends StdCreateOptions<Repository> = None,
+	const Omitted extends KeyOf<Repository> = never,
+	const Values = None,
+	const Owner = undefined,
+	const Dependencies extends UseCaseCollection = None,
 >(
 	repository: Repository &
 		UseCaseTarget<
@@ -356,13 +573,29 @@ export type RegisterMaker = <
 			Authenticatable,
 			"authenticatable"
 		>,
-	options?: Options,
-) => EntityUseCase<Repository, Options, CreateInput<Repository, Options>>;
+	options?: Options &
+		Hookable<
+			Repository,
+			CreateInput<Repository, Shape<Omitted, Values, Owner>>,
+			Omitted,
+			Values,
+			Owner,
+			Dependencies,
+			false
+		>,
+) => EntityUseCase<
+	Repository,
+	Options,
+	CreateInput<Repository, Options>,
+	Dependencies
+>;
 
 /** `login`: for an authenticatable entity, with `findByEmail`. */
 export type LoginMaker = <
 	Repository extends AnyRepository,
-	const Options extends StdUseCaseOptions & { readonly as?: string } = None,
+	const Options extends StdUseCaseOptions & {
+		readonly as?: string;
+	} & StdNoHookOptions = None,
 >(
 	repository: Repository &
 		UseCaseTarget<

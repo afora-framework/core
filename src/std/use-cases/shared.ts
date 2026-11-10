@@ -8,7 +8,10 @@ import type {
 	UseCaseFieldPlan,
 	UseCaseTargetInfo,
 } from "../../core/use-case/types/plugin.interface";
-import type { AnyExceptionClass } from "../../core/use-case/use-case";
+import type {
+	AnyExceptionClass,
+	UseCaseDependency,
+} from "../../core/use-case/use-case";
 
 /** A blueprint of the fields given, with no context of properties. */
 export const fields = blueprintBuilderOf();
@@ -52,6 +55,9 @@ export function checkOptions(
 }
 
 const COMMON = ["name", "description", "tags", "deprecated", "errors"];
+
+/** The options of the use cases that write: `before`, `after`, `dependencies`, `throws`. */
+export const HOOKS = ["before", "after", "dependencies", "throws"] as const;
 
 /** The name, description, tags and `deprecated` of the use case. */
 export function metaOf(
@@ -227,6 +233,127 @@ export function loadSteps(
 	];
 }
 
+type Hook = (args: Readonly<Record<string, unknown>>) => unknown;
+
+/** What `run` gives a function after its args. */
+interface RunOptions {
+	readonly context: unknown;
+	readonly dependencies: Readonly<Record<string, unknown>>;
+}
+
+/** What the options `before`, `after`, `dependencies` and `throws` add to a use case. */
+export interface Hooks {
+	/** The root of the input the steps read: `$input`, or `$prepared` after `before`. */
+	readonly input: string;
+	/** The dependencies the options give, joined to those the use case makes. */
+	readonly dependencies: Readonly<Record<string, UseCaseDependency>>;
+	readonly throws: readonly AnyExceptionClass[];
+	/** The step of `before`, if any: it binds `prepared`, the input it gives back or the one it got. */
+	before(entity?: string): Step[];
+	/** The step of `after`, if any, over the entity written. */
+	after(entity: string): Step[];
+}
+
+/**
+ * The options `before`, `after`, `dependencies` and `throws`, checked: each
+ * hook becomes a `run` step, whose function gets `{ input, entity?,
+ * dependencies, context }` (the bound dependencies of the call, overrides
+ * included).
+ */
+export function hooksOf(target: UseCaseTargetInfo, options: Options): Hooks {
+	const { before, after, dependencies = {}, throws = [] } = options;
+	for (const [key, hook] of [
+		["before", before],
+		["after", after],
+	] as const) {
+		if (hook !== undefined && typeof hook !== "function") {
+			target.unavailable(`the option ${key} must be a function`);
+		}
+	}
+	if (
+		!isPlain(dependencies) ||
+		Object.keys(dependencies).some((key) => !IDENTIFIER.test(key))
+	) {
+		target.unavailable(
+			"the option dependencies must be an object of repositories, use cases or environments by name",
+		);
+	}
+	if (
+		!Array.isArray(throws) ||
+		throws.some((error) => !isDeclaredException(error))
+	) {
+		target.unavailable(
+			"the option throws must be a list of classes made by exceptionOf",
+		);
+	}
+	const input = before === undefined ? "$input" : "$prepared";
+	return {
+		input,
+		dependencies: dependencies as Readonly<Record<string, UseCaseDependency>>,
+		throws: throws as readonly AnyExceptionClass[],
+		before: (entity) =>
+			before === undefined
+				? []
+				: [
+						{
+							run: "before",
+							fn: async (given: unknown, ...rest: unknown[]) => {
+								const { context, dependencies } = rest.at(-1) as RunOptions;
+								const replaced = await (before as Hook)({
+									input: given,
+									...(entity === undefined ? {} : { entity: rest[0] }),
+									dependencies,
+									context,
+								});
+								return replaced === undefined ? given : replaced;
+							},
+							args: entity === undefined ? ["$input"] : ["$input", entity],
+							as: "prepared",
+						},
+					],
+		after: (entity) =>
+			after === undefined
+				? []
+				: [
+						{
+							run: "after",
+							fn: async (
+								written: unknown,
+								given: unknown,
+								{ context, dependencies }: RunOptions,
+							) => {
+								await (after as Hook)({
+									entity: written,
+									input: given,
+									dependencies,
+									context,
+								});
+							},
+							args: [entity, input],
+						},
+					],
+	};
+}
+
+/**
+ * The dependencies a use case makes, joined to those of the option
+ * `dependencies`; a name taken by both is unavailable.
+ */
+export function joinDependencies(
+	target: UseCaseTargetInfo,
+	made: Readonly<Record<string, UseCaseDependency>>,
+	hooks: Hooks,
+): Readonly<Record<string, UseCaseDependency>> {
+	for (const key of Object.keys(hooks.dependencies)) {
+		if (Object.hasOwn(made, key)) {
+			target.unavailable(
+				`dependencies.${key} is a name the use case gives its own dependency`,
+			);
+		}
+	}
+	return { ...made, ...hooks.dependencies };
+}
+
 /** The id field of the entity of `target`. */
 export const idOf = (target: UseCaseTargetInfo): BlueprintField =>
 	target.field("id").field;
@@ -238,33 +365,50 @@ export const distinct = (
 
 /**
  * A use case over one entity found by id: `{ id }` in, `{ [as]: entity }`
- * out; loads it, checks the owner, runs `steps` (which leave the entity to
- * give under `result`) and gives it.
+ * out; loads it, checks the owner, runs `before` (with `hooks`), `steps`
+ * (which leave the entity to give under `result`) and `after`, and gives it.
+ * `steps` read the input under `input`: `$input`, or what `before` gave.
  */
 export function entityUseCase(
 	target: UseCaseTargetInfo,
 	options: Options,
 	verb: string,
 	allowed: readonly string[],
-	steps: (context: { readonly owner: Owner | undefined }) => {
+	steps: (context: {
+		readonly owner: Owner | undefined;
+		readonly input: string;
+	}) => {
 		readonly steps: readonly Step[];
 		readonly result: string;
 	},
+	hooks = false,
 ): UseCaseCompilation {
-	checkOptions(target, options, ["as", "owner", ...allowed]);
+	checkOptions(target, options, [
+		"as",
+		"owner",
+		...allowed,
+		...(hooks ? HOOKS : []),
+	]);
 	const owner = ownerOf(target, options);
 	const notFound = errorOf(target, options, "notFound", UseCaseEntityNotFound);
-	const body = steps({ owner });
+	const hooked = hooksOf(target, options);
+	const body = steps({ owner, input: hooked.input });
 	return {
 		...metaOf(target, options, verb),
 		blueprint: fields(() => ({ id: idOf(target) })),
 		response: fields(() => ({ [asOf(target, options)]: target.entity })),
 		...contextOf(owner),
-		dependencies: { repository: target.repository },
-		errors: [notFound],
+		dependencies: joinDependencies(
+			target,
+			{ repository: target.repository },
+			hooked,
+		),
+		errors: distinct(notFound, ...hooked.throws),
 		steps: [
 			...loadSteps(owner, notFound),
+			...hooked.before("$item"),
 			...body.steps,
+			...hooked.after(body.result),
 			{ return: { [asOf(target, options)]: body.result } },
 		],
 	};

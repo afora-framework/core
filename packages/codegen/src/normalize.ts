@@ -221,19 +221,21 @@ function canonicalStep(step: unknown): unknown {
 /** The options of a standard use case: core exceptions as `{ core }`, no `name`. */
 function canonicalGenericOptions(options: Json): Json {
 	const { name: _name, ...rest } = cloneJson(options) as Json;
+	const canonicalError = (error: unknown): unknown => {
+		const name = errorNameOf(error);
+		return name !== undefined && catalog().coreExceptions.includes(name)
+			? { core: name }
+			: error;
+	};
 	if (isObject(rest.errors)) {
 		rest.errors = Object.fromEntries(
-			Object.entries(rest.errors).map(([kind, error]) => {
-				const name = errorNameOf(error);
-				return [
-					kind,
-					name !== undefined && catalog().coreExceptions.includes(name)
-						? { core: name }
-						: error,
-				];
-			}),
+			Object.entries(rest.errors).map(([kind, error]) => [
+				kind,
+				canonicalError(error),
+			]),
 		);
 	}
+	if (Array.isArray(rest.throws)) rest.throws = rest.throws.map(canonicalError);
 	return rest;
 }
 

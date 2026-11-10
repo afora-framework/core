@@ -711,27 +711,56 @@ function stepDoc(
 }
 
 /** A standard use case: the plugin of `StdUseCases` called with its repository and options. */
-function genericUseCaseDoc(decl: Decl, e: Emitter, scope: Scope): Doc {
+function genericUseCaseDoc(
+	decl: Decl,
+	e: Emitter,
+	scope: Scope,
+	providers: Providers,
+): Doc {
 	const { spec } = decl;
 	const options = (spec.options as Record<string, Json> | undefined) ?? {};
+	const exception = (error: unknown): Doc => {
+		const name = errorNameOf(error) as string;
+		return scope.decls.get(name)?.kind === "exception"
+			? e.ref(name)
+			: e.use(name);
+	};
 	// The name is given always: the default one follows the entity, not the key.
 	const props: [string, Doc][] = [["name", literal(decl.name)]];
 	for (const [key, value] of Object.entries(options)) {
 		if (key === "name") continue;
+		if (key === "before" || key === "after") {
+			props.push([key, importedDoc(value, e, providers)]);
+			continue;
+		}
+		if (key === "throws") {
+			props.push([key, listDoc((value as unknown[]).map(exception))]);
+			continue;
+		}
+		if (key === "dependencies") {
+			props.push([
+				key,
+				objectDoc(
+					Object.entries(value as Record<string, string>).map(
+						([name, ref]) =>
+							[
+								name,
+								// `Logger` is the core's, unless the spec declares its own.
+								ref === "Logger" && !scope.decls.has(ref)
+									? e.use("Logger")
+									: e.ref(ref),
+							] as const,
+					),
+				),
+			]);
+			continue;
+		}
 		if (key === "errors") {
 			props.push([
 				key,
 				objectDoc(
 					Object.entries(value as Record<string, unknown>).map(
-						([kind, error]) => {
-							const name = errorNameOf(error) as string;
-							return [
-								kind,
-								scope.decls.get(name)?.kind === "exception"
-									? e.ref(name)
-									: e.use(name),
-							] as const;
-						},
+						([kind, error]) => [kind, exception(error)] as const,
 					),
 				),
 			]);
@@ -767,7 +796,7 @@ function useCaseDoc(
 	providers: Providers,
 ): Doc {
 	const { spec } = decl;
-	if (isGeneric(spec)) return genericUseCaseDoc(decl, e, scope);
+	if (isGeneric(spec)) return genericUseCaseDoc(decl, e, scope, providers);
 	const props: [string, Doc][] = [
 		["name", literal(decl.name)],
 		["blueprint", blueprintRefDoc(spec.input, e)],

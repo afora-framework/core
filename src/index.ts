@@ -554,8 +554,19 @@ export { StdEventPolicies } from "./std/event-policies";
 export { Email, Ip, Phone, Url } from "./std/properties/contact";
 export type { EnumClass } from "./std/properties/enum";
 export { enumOf } from "./std/properties/enum";
+export {
+	InvalidJsonData,
+	InvalidJsonSchema,
+} from "./std/properties/exceptions";
 export { SchemaProperty } from "./std/properties/headless";
 export { Id, Slug } from "./std/properties/identity";
+export type { JsonClass, JsonValue } from "./std/properties/json";
+export {
+	checkJsonSchema,
+	JsonProperty,
+	jsonOf,
+	jsonSchemaIssues,
+} from "./std/properties/json";
 export {
 	isPasswordHash,
 	PASSWORD_MAX_LENGTH,
@@ -613,8 +624,11 @@ export type {
 	RestoreMaker,
 	StdCreateOptions,
 	StdEntityOptions,
+	StdHookArgs,
+	StdHookOptions,
 	StdLifecycleOptions,
 	StdListOptions,
+	StdNoHookOptions,
 	StdOwnerOption,
 	StdUseCaseContext,
 	StdUseCaseErrors,

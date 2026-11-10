@@ -1,9 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { blueprintOf } from "../../../index";
-import { invalidStep, sample, stepsCase } from "./steps.fixtures";
+import {
+	invalidStep,
+	sample,
+	seedUser,
+	stepsCase,
+	usersRepository,
+} from "./steps.fixtures";
 
 describe("run", () => {
-	test("awaits fn with the resolved args and the context last", async () => {
+	test("awaits fn with the resolved args, then the context and dependencies", async () => {
 		const seen: unknown[][] = [];
 		const Case = stepsCase({
 			context: blueprintOf((ctx) => ({ tenant: ctx.string })),
@@ -24,7 +30,36 @@ describe("run", () => {
 		expect(
 			await new Case(sample, { context: { tenant: "acme" } }).execute(),
 		).toEqual({ out: "ANA" });
-		expect(seen).toEqual([["Ana", { n: 1 }, { context: { tenant: "acme" } }]]);
+		expect(seen).toEqual([
+			["Ana", { n: 1 }, { context: { tenant: "acme" }, dependencies: {} }],
+		]);
+	});
+
+	test("fn gets the dependencies of the call, overrides included", async () => {
+		const Users = usersRepository();
+		await seedUser(Users);
+		const Case = stepsCase({
+			dependencies: { users: Users },
+			response: blueprintOf((ctx) => ({ taken: ctx.boolean })),
+			steps: [
+				{
+					run: "check",
+					fn: async (
+						email: string,
+						{ dependencies }: { dependencies: { users: typeof Users } },
+					) => (await dependencies.users.findByEmail(email)) !== undefined,
+					args: ["$input.email"],
+					as: "taken",
+				},
+				{ return: { taken: "$taken" } },
+			],
+		});
+		expect(await new Case(sample).execute()).toEqual({ taken: true });
+		expect(
+			await new Case(sample).execute({
+				users: { findByEmail: async () => undefined },
+			}),
+		).toEqual({ taken: false });
 	});
 
 	test("without a context fn gets an undefined one", async () => {

@@ -137,9 +137,11 @@ exports[`source mode experience standard use cases 1`] = `
 hover L15:15 create: ctx.‸create(Posts, {
   (property) StdUseCaseContext.create: <AbstractRepository<typeof Post, readonly ["findById", "findPage", "create", "update", "delete"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Post, "create" | "update" | "delete" | "findPage" | "findById"> & RepositoryFindManyBy<typeof Post, "create" | "update" | "delete" | "findPage" | "findById"> & RepositoryCreate<typeof Post> & RepositoryUpdate<typeof Post> & RepositoryDelete<typeof Post> & RepositoryFindPage<...>, {
       ...;
-  }>(repository: AbstractRepository<...> & ... 5 more ... & RepositoryFindPage<...>, options?: {
+  }, "publishedAt", {
       ...;
-  } | undefined) => EntityUseCase<...>
+  }, undefined, Readonly<...>>(repository: AbstractRepository<...> & ... 5 more ... & RepositoryFindPage<...>, options?: ({
+      ...;
+  } & Hookable<...>) | undefined) => EntityUseCase<...>
 hover L26:9 const { ‸post } = await Blog.run("create", { title: "Hi" });
   const post: Post
 signature L26:43 const { post } = await Blog.run("create", ‸{ title: "Hi" });
@@ -178,6 +180,8 @@ exports[`source mode experience completions: blueprint context 1`] = `
   id (property)
   integer (property)
   ip (property)
+  json (property)
+  jsonOf (property)
   list (property)
   listOf (property)
   number (property)
@@ -202,6 +206,7 @@ complete L3:41 blueprintOf((ctx) => ({ a: ctx.optional.‸ }));
   id (property)
   integer (property)
   ip (property)
+  json (property)
   number (property)
   password (property)
   phone (property)
@@ -221,6 +226,7 @@ complete L4:37 blueprintOf((ctx) => ({ a: ctx.list.‸ }));
   id (property)
   integer (property)
   ip (property)
+  json (property)
   number (property)
   optional (property)
   password (property)
@@ -245,8 +251,8 @@ hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
       string: PropertyClass<TString, string>;
       text: PropertyClass<TString, string>;
       number: PropertyClass<TNumber, number>;
-      ... 7 more ...;
-      schema: typeof SchemaProperty;
+      ... 8 more ...;
+      json: PropertyClass<...>;
   }, {
       ...;
   }> & {
@@ -344,7 +350,7 @@ exports[`source mode experience errors 1`] = `
   TS2820 L13:40 repositoryOf({ entity: User, actions: [‸"findManyByEmail"] });
     Type '"findManyByEmail"' is not assignable to type 'RepositoryAction<typeof User>'. Did you mean '"findByEmail"'?
   TS2339 L14:32 blueprintOf((ctx) => ({ a: ctx.‸nope }));
-    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 12 more ...; schema: typeof SchemaProperty; }, { ...; }> & { ...; }]>'.
+    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 13 more ...; json: PropertyClass<...>; }, { ...; }> & { ...; }]>'.
   TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
     Type '"missing"' is not assignable to type '"n"'."
 `;
@@ -486,9 +492,11 @@ exports[`package mode experience standard use cases 1`] = `
 hover L15:15 create: ctx.‸create(Posts, {
   (property) StdUseCaseContext.create: <AbstractRepository<typeof Post, readonly ["findById", "findPage", "create", "update", "delete"], Readonly<Record<never, never>>> & RepositoryFindBy<typeof Post, "create" | "update" | "delete" | "findPage" | "findById"> & RepositoryFindManyBy<typeof Post, "create" | "update" | "delete" | "findPage" | "findById"> & RepositoryCreate<typeof Post> & RepositoryUpdate<typeof Post> & RepositoryDelete<typeof Post> & RepositoryFindPage<...>, {
       ...;
-  }>(repository: AbstractRepository<...> & ... 5 more ... & RepositoryFindPage<...>, options?: {
+  }, "publishedAt", {
       ...;
-  } | undefined) => EntityUseCase<...>
+  }, undefined, Readonly<...>>(repository: AbstractRepository<...> & ... 5 more ... & RepositoryFindPage<...>, options?: ({
+      ...;
+  } & Hookable<...>) | undefined) => EntityUseCase<...>
 hover L26:9 const { ‸post } = await Blog.run("create", { title: "Hi" });
   const post: Post
 signature L26:43 const { post } = await Blog.run("create", ‸{ title: "Hi" });
@@ -527,6 +535,8 @@ exports[`package mode experience completions: blueprint context 1`] = `
   id (property)
   integer (property)
   ip (property)
+  json (property)
+  jsonOf (property)
   list (property)
   listOf (property)
   number (property)
@@ -551,6 +561,7 @@ complete L3:41 blueprintOf((ctx) => ({ a: ctx.optional.‸ }));
   id (property)
   integer (property)
   ip (property)
+  json (property)
   number (property)
   password (property)
   phone (property)
@@ -570,6 +581,7 @@ complete L4:37 blueprintOf((ctx) => ({ a: ctx.list.‸ }));
   id (property)
   integer (property)
   ip (property)
+  json (property)
   number (property)
   optional (property)
   password (property)
@@ -590,8 +602,8 @@ hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
       phone: import("<root>/dist/index").PropertyClass<TString, string>;
       url: import("<root>/dist/index").PropertyClass<TString, string>;
       ip: import("<root>/dist/index").PropertyClass<TUnion<[TString, TString]>, string>;
-      ... 11 more ...;
-      schema: typeof import("<root>/dist/index").SchemaProperty;
+      ... 12 more ...;
+      json: import("<root>/dist/index").PropertyClass<TUnsafe<...>, import("<root>/dist/index").JsonValue>;
   }, {
       ...;
   }> & {
@@ -689,7 +701,7 @@ exports[`package mode experience errors 1`] = `
   TS2820 L13:40 repositoryOf({ entity: User, actions: [‸"findManyByEmail"] });
     Type '"findManyByEmail"' is not assignable to type 'RepositoryAction<typeof User>'. Did you mean '"findByEmail"'?
   TS2339 L14:32 blueprintOf((ctx) => ({ a: ctx.‸nope }));
-    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 12 more ...; schema: typeof SchemaProperty; }, { ...; }> & { ...; }]>'.
+    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 13 more ...; json: PropertyClass<...>; }, { ...; }> & { ...; }]>'.
   TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
     Type '"missing"' is not assignable to type '"n"'."
 `;

@@ -564,7 +564,7 @@ const GenericUseCaseDeclaration = Type.Object(
 		options: Type.Optional(
 			Type.Record(Type.String({ pattern: KEY }), Type.Unknown(), {
 				description:
-					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy".',
+					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy"; those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").',
 			}),
 		),
 		description: Type.Optional(Type.String()),
