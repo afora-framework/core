@@ -154,25 +154,29 @@ export interface IApplication<
 	readonly entities: Collections["entities"];
 	readonly environments: Collections["environments"];
 	/**
-	 * Its repositories, inherited ones included. With a `provider` they are
-	 * bound to it: they share the declaration of the original but read and
-	 * write through that provider (unless they declared their own).
+	 * Its repositories, inherited ones included. With a `provider` (or
+	 * `providers`) they are bound to it: they share the declaration of the
+	 * original but read and write through that provider (unless they declared
+	 * their own).
 	 */
 	readonly repositories: Collections["repositories"];
 	/**
-	 * Its use cases. With a `provider` they are subclasses whose repositories
-	 * are the bound ones, through child use cases too; the same subclass every
-	 * time. Without one they are the declared classes.
+	 * Its use cases. With a `provider`, `providers` or `log` they are
+	 * subclasses whose repositories are the bound ones, through child use
+	 * cases too; the same subclass every time. Without any of them they are
+	 * the declared classes.
 	 */
 	readonly useCases: Collections["useCases"];
 	/**
-	 * Its commands. With a `provider` they are rebuilt over the bound use
-	 * cases (same settings), memoized; without one, the declared commands.
+	 * Its commands. With a `provider`, `providers` or `log` they are rebuilt
+	 * over the bound use cases (same settings), memoized; without any of them,
+	 * the declared commands.
 	 */
 	readonly commands: Collections["commands"];
 	/**
-	 * Its outputs. With a `provider` they are rebuilt over the bound commands
-	 * (same name, statuses and stages), memoized; without one, the declared outputs.
+	 * Its outputs. With a `provider`, `providers` or `log` they are rebuilt
+	 * over the bound commands (same name, statuses and stages), memoized;
+	 * without any of them, the declared outputs.
 	 */
 	readonly outputs: Collections["outputs"];
 	/** Its exceptions. */

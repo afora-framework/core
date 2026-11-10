@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- `docs/applications.md` and `docs/use-cases.md` say how a use case runs through an application (`new app.useCases.Register(input).execute()`), and that use cases, commands and outputs are bound with a `provider`, `providers` or `log`, not only a `provider`.
+- `inMemoryProvider()` is a plain object since 0.0.3 (it was frozen in 0.0.2, which made a `Proxy` over it throw); only its `capabilities` are frozen.
+
 ### Fixed
 
 - An exception of a class declared with `exceptionOf` stays an instance of that class when it crosses a layer: `error instanceof RepositoryUniqueViolation` is now true for what a repository, use case or command rejects with, as `error.is(RepositoryUniqueViolation)` already was, and the `details` are kept and typed. `propagate` (which `guard` calls) keeps the class and the `details` when it is given neither another `name` nor new `details`; with either, the result is a plain `Exception` as before (so an invalid record value, which carries the record's own `details`, is matched with `is(InvalidPropertyValue)`). Two things follow: `exception.find(Class)` gives the outermost exception of the class, in the layer it reached (`exception.origin` is still the first one raised), and each frame of `trace` repeats the `details`. A hand-written `class X extends Exception` is unchanged.
