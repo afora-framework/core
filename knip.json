@@ -35,6 +35,10 @@
 			"entry": ["src/index.ts", "src/**/*.test.ts"],
 			"project": ["src/**/*.ts"]
 		},
+		"packages/dynamodb": {
+			"entry": ["src/index.ts", "src/**/*.test.ts"],
+			"project": ["src/**/*.ts"]
+		},
 		"packages/mcp": {
 			"entry": [
 				"src/index.ts",

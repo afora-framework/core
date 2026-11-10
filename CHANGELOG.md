@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `@afora/dynamodb`, a new package (#33): `dynamoDbProvider({ table, client })`, a repository provider on one DynamoDB table (`pk` / `sk`; entities at `E#<repository name>`, unique keys enforced by marker items written in the same transaction), with `keyset`, `versioning`, `atomic` and `expiry`, verified by `providerContract` on DynamoDB Local in CI. `migrate` is a no-op: the schema version key and any other key stay in the item data. See `packages/dynamodb/README.md`.
+
 ## 0.0.8 — unreleased (draft: dated when it is published)
 
 ### Changed

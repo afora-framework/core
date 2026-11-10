@@ -33,7 +33,7 @@ afora is not a general-purpose validator. It is for code that models a domain, a
 - **Commands and outputs.** `commandOf` groups use cases behind one execution boundary (context, transactions, event policies); `outputOf` turns commands into operations and pipes them to a sink: an HTTP API with `@afora/hono`, WebSocket messages with `@afora/ws`, an OpenAPI 3.1 document, or MCP tools, with problem+json errors and masked responses.
 - **Standard use cases.** `commandOf({ useCases: (ctx) => ({ create: ctx.create(Posts), publish: ctx.publish(Posts) }) })` picks ready-made use cases that follow the repository and its entity: the actions it declares, its record plugins and the properties of its keys ([docs](docs/std-use-cases.md)).
 - **The whole application in JSON.** An `afora.json` generates the code (`@afora/codegen`), use cases included, as data (steps), and `extractSpec(app)` gives back the `afora.json` of an application written by hand.
-- **Repositories on any store.** A provider contract with typed queries, soft deletion and transactions, a runner-agnostic kit to test one (`@afora/core/testing`), in memory by default and on Drizzle ORM with `@afora/drizzle`.
+- **Repositories on any store.** A provider contract with typed queries, soft deletion and transactions, a runner-agnostic kit to test one (`@afora/core/testing`), in memory by default, on Drizzle ORM with `@afora/drizzle` and on DynamoDB with `@afora/dynamodb`.
 
 ## Install
 
@@ -329,6 +329,7 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 | [`@afora/hono`](packages/hono/README.md)                   | A `hono` sink for outputs: serves the operations as a Hono app, with problem+json errors, masked responses, signed webhooks and an optional OpenAPI document. |
 | [`@afora/ws`](packages/ws/README.md)                       | A `websocket` sink: operations over JSON messages on any runtime, with topic subscriptions that `publishEvents` feeds with domain events.                     |
 | [`@afora/drizzle`](packages/drizzle/README.md)             | A repository provider on Drizzle ORM (SQLite and Postgres) that passes the provider contract kit.                                                             |
+| [`@afora/dynamodb`](packages/dynamodb/README.md)           | A repository provider on one DynamoDB table (single-table layout, unique keys as marker items) that passes the provider contract kit on DynamoDB Local.       |
 
 ## Example
 
@@ -389,7 +390,8 @@ bun run test:mcp      # tests of packages/mcp
 bun run test:hono     # tests of packages/hono
 bun run test:ws       # tests of packages/ws
 bun run test:drizzle  # tests of packages/drizzle (SQLite and PGlite)
-bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/ws and packages/drizzle
+bun run test:dynamodb # tests of packages/dynamodb (DynamoDB Local, with DYNAMODB_ENDPOINT)
+bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/ws, packages/drizzle and packages/dynamodb
 ```
 
 ## Versioning
