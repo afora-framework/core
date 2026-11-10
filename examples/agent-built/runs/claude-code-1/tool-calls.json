@@ -1,0 +1,483 @@
+[
+	{
+		"resource": "afora://spec/guide"
+	},
+	{
+		"tool": "afora_catalog",
+		"arguments": {},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_write",
+		"arguments": {
+			"spec": {
+				"$schema": "../../packages/codegen/afora.schema.json",
+				"version": 1,
+				"name": "ticketing",
+				"output": {
+					"dir": "src/domain"
+				},
+				"provider": "inMemory"
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "property",
+			"name": "Capacity",
+			"declaration": {
+				"base": "integer",
+				"with": {
+					"min": 1,
+					"description": "The number of seats of an event."
+				}
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "entity",
+			"name": "Organizer",
+			"declaration": {
+				"fields": {
+					"name": "text"
+				},
+				"plugins": [
+					"authenticatable"
+				]
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "entity",
+			"name": "Event",
+			"declaration": {
+				"fields": {
+					"organizer": "Organizer",
+					"title": "text",
+					"slug": "slug",
+					"capacity": "Capacity"
+				}
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "entity",
+			"name": "Ticket",
+			"declaration": {
+				"fields": {
+					"event": "Event",
+					"buyerEmail": "email"
+				}
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "repository",
+			"name": "Organizers",
+			"declaration": {
+				"entity": "Organizer",
+				"actions": [
+					"findById",
+					"findByEmail",
+					"create"
+				]
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "repository",
+			"name": "Events",
+			"declaration": {
+				"entity": "Event",
+				"actions": [
+					"findById",
+					"create"
+				],
+				"relations": [
+					"Organizers"
+				]
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "repository",
+			"name": "Tickets",
+			"declaration": {
+				"entity": "Ticket",
+				"actions": [
+					"create",
+					"exists"
+				],
+				"relations": [
+					"Events"
+				]
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "exception",
+			"name": "EmailTaken",
+			"declaration": {
+				"layer": "use-case",
+				"message": "An organizer with this email already exists."
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "exception",
+			"name": "InvalidCredentials",
+			"declaration": {
+				"layer": "use-case",
+				"message": "Wrong email or password."
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "exception",
+			"name": "OrganizerNotFound",
+			"declaration": {
+				"layer": "use-case",
+				"message": "No such organizer."
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "exception",
+			"name": "EventNotFound",
+			"declaration": {
+				"layer": "use-case",
+				"message": "No such event."
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "exception",
+			"name": "SoldOut",
+			"declaration": {
+				"layer": "use-case",
+				"message": "Every seat of this event is taken."
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "useCase",
+			"name": "RegisterOrganizer",
+			"declaration": {
+				"generic": "register",
+				"repository": "Organizers",
+				"description": "Signs an organizer up.",
+				"options": {
+					"as": "organizer",
+					"errors": {
+						"conflict": "EmailTaken"
+					}
+				}
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "useCase",
+			"name": "LoginOrganizer",
+			"declaration": {
+				"generic": "login",
+				"repository": "Organizers",
+				"description": "Checks the email and password of an organizer.",
+				"options": {
+					"as": "organizer",
+					"errors": {
+						"invalid": "InvalidCredentials"
+					}
+				}
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "useCase",
+			"name": "CreateEvent",
+			"declaration": {
+				"generic": "create",
+				"repository": "Events",
+				"description": "Creates an event of an organizer.",
+				"options": {
+					"as": "event",
+					"errors": {
+						"notFound": "OrganizerNotFound"
+					}
+				}
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "useCase",
+			"name": "GetEvent",
+			"declaration": {
+				"generic": "get",
+				"repository": "Events",
+				"description": "Gives an event.",
+				"options": {
+					"as": "event",
+					"errors": {
+						"notFound": "EventNotFound"
+					}
+				}
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "useCase",
+			"name": "BuyTicket",
+			"declaration": {
+				"description": "Sells one seat of an event. The ticket is stored first and the command runs in a transaction, so a ticket past the capacity is rolled back with SoldOut.",
+				"input": {
+					"fields": {
+						"eventId": "id",
+						"buyerEmail": "email"
+					}
+				},
+				"response": {
+					"fields": {
+						"ticket": "Ticket"
+					}
+				},
+				"dependencies": {
+					"events": "Events",
+					"tickets": "Tickets"
+				},
+				"errors": [
+					"EventNotFound",
+					"SoldOut"
+				],
+				"implementation": {
+					"steps": [
+						{
+							"find": "events.findById",
+							"args": [
+								"$input.eventId"
+							],
+							"as": "event"
+						},
+						{
+							"ensure": "exists",
+							"value": "$event",
+							"error": "EventNotFound"
+						},
+						{
+							"build": "Ticket",
+							"values": {
+								"event": "$event",
+								"buyerEmail": "$input.buyerEmail"
+							},
+							"as": "ticket"
+						},
+						{
+							"create": "tickets",
+							"value": "$ticket",
+							"as": "saved"
+						},
+						{
+							"find": "tickets.exists",
+							"args": [
+								{
+									"where": {
+										"event": "$event"
+									},
+									"offset": "$event.capacity"
+								}
+							],
+							"as": "overbooked"
+						},
+						{
+							"ensure": "false",
+							"value": "$overbooked",
+							"error": "SoldOut"
+						},
+						{
+							"return": {
+								"ticket": "$saved"
+							}
+						}
+					]
+				}
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "command",
+			"name": "Accounts",
+			"declaration": {
+				"description": "Organizer accounts.",
+				"useCases": {
+					"register": "RegisterOrganizer",
+					"login": "LoginOrganizer"
+				},
+				"transaction": true
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "command",
+			"name": "Box",
+			"declaration": {
+				"description": "Events and their tickets.",
+				"useCases": {
+					"createEvent": "CreateEvent",
+					"getEvent": "GetEvent",
+					"buyTicket": "BuyTicket"
+				},
+				"transaction": true
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_remove",
+		"arguments": {
+			"kind": "command",
+			"name": "Box"
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "command",
+			"name": "BoxOffice",
+			"declaration": {
+				"description": "Events and their tickets.",
+				"useCases": {
+					"createEvent": "CreateEvent",
+					"getEvent": "GetEvent",
+					"buyTicket": "BuyTicket"
+				},
+				"transaction": true
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_upsert",
+		"arguments": {
+			"kind": "output",
+			"name": "Api",
+			"declaration": {
+				"commands": [
+					"Accounts",
+					"BoxOffice"
+				],
+				"statuses": {
+					"EmailTaken": 409,
+					"InvalidCredentials": 401,
+					"OrganizerNotFound": 404,
+					"EventNotFound": 404
+				},
+				"pipe": [
+					{
+						"sink": "hono",
+						"options": {
+							"basePath": "/api",
+							"route": {
+								"Accounts.register": {
+									"method": "post",
+									"path": "/organizers",
+									"status": 201
+								},
+								"Accounts.login": {
+									"method": "post",
+									"path": "/sessions"
+								},
+								"BoxOffice.createEvent": {
+									"method": "post",
+									"path": "/events",
+									"status": 201
+								},
+								"BoxOffice.getEvent": {
+									"method": "get",
+									"path": "/events/{id}"
+								},
+								"BoxOffice.buyTicket": {
+									"method": "post",
+									"path": "/events/{eventId}/tickets",
+									"status": 201
+								}
+							},
+							"docs": {
+								"path": "/openapi.json",
+								"info": {
+									"title": "Ticketing",
+									"version": "1.0.0"
+								}
+							}
+						}
+					}
+				]
+			}
+		},
+		"isError": false
+	},
+	{
+		"tool": "afora_spec_validate",
+		"arguments": {},
+		"isError": false
+	},
+	{
+		"tool": "afora_generate",
+		"arguments": {},
+		"isError": false
+	}
+]

@@ -1,6 +1,6 @@
 /**
  * Checks that every relative markdown link, and every `#anchor`, in the
- * README, the docs and the package READMEs resolves. Run: `bun scripts/check-doc-links.ts`.
+ * README, the docs, the package READMEs and the example READMEs resolves. Run: `bun scripts/check-doc-links.ts`.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -10,6 +10,7 @@ const files = [
 	...new Bun.Glob("README.md").scanSync(root),
 	...new Bun.Glob("docs/*.md").scanSync(root),
 	...new Bun.Glob("packages/*/README.md").scanSync(root),
+	...new Bun.Glob("examples/*/README.md").scanSync(root),
 ];
 
 /** The anchor GitHub gives a heading. */
