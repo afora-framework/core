@@ -19,13 +19,13 @@ const SHOP_STAGES: StageCatalogEntry[] = [
 export const SHOP_OPTIONS = { providers: SHOP_PROVIDERS, stages: SHOP_STAGES };
 
 export const SHOP_IMPORTS = {
-	"repositories.Audit.provider": "../support/anonymous-provider#anonymous",
+	"providers.audit": "../support/anonymous-provider#anonymous",
 	"outputs.Manual.pipe.0": "../support/stages#keepAll",
 };
 
 /**
  * Providers (the application's from the catalog, a repository's own, an
- * imported one) and outputs: `select`, a catalog stage, `openapi`, statuses and
+ * imported one named in `providers`) and outputs: `select`, a catalog stage, `openapi`, statuses and
  * a stage written by hand.
  */
 export const shopSpec: Spec = {
@@ -33,6 +33,9 @@ export const shopSpec: Spec = {
 	name: "shop",
 	output: { dir: "src/shop" },
 	provider: { use: "memory", options: { label: "main" } },
+	providers: {
+		audit: { import: "../support/anonymous-provider#anonymous" },
+	},
 	entities: {
 		Product: {
 			fields: { name: "text", sku: "slug", price: "number" },
@@ -57,7 +60,7 @@ export const shopSpec: Spec = {
 		Audit: {
 			entity: "Entry",
 			actions: ["create", "findMany"],
-			provider: { import: "../support/anonymous-provider#anonymous" },
+			provider: "audit",
 		},
 	},
 	exceptions: {

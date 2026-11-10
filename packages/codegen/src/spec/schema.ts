@@ -3,6 +3,7 @@ import { type TSchema, Type } from "typebox";
 const NAME = "^[A-Z][A-Za-z0-9]*$";
 const IMPORT = "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$";
 const KEY = "^[A-Za-z_$][A-Za-z0-9_$]*$";
+const PROVIDER_KEY = "^[a-z][A-Za-z0-9]*$";
 
 const Bounds = Type.Object(
 	{
@@ -160,28 +161,47 @@ const OptionValue = Type.Union(
 	},
 );
 
-const Provider = Type.Union(
-	[
-		Type.Literal("inMemory"),
-		Type.Object(
-			{
-				use: Type.String({
-					description:
-						"A provider of the catalog given to codegen (inMemory is built in).",
+const ProviderForms = [
+	Type.Literal("inMemory"),
+	Type.Object(
+		{
+			use: Type.String({
+				description:
+					"A provider of the catalog given to codegen (inMemory is built in).",
+			}),
+			options: Type.Optional(
+				Type.Record(Type.String(), OptionValue, {
+					description: "Options passed to the provider factory.",
 				}),
-				options: Type.Optional(
-					Type.Record(Type.String(), OptionValue, {
-						description: "Options passed to the provider factory.",
-					}),
-				),
-			},
-			{ additionalProperties: false },
-		),
-		ImportRef,
-	],
+			),
+		},
+		{ additionalProperties: false },
+	),
+	ImportRef,
+] as const;
+
+const Provider = Type.Union([...ProviderForms], {
+	description:
+		'"inMemory", { "use": "<catalog name>", "options": {...} } or { "import": "./file.ts#provider" }.',
+});
+
+const ProviderKey = Type.String({
+	pattern: PROVIDER_KEY,
+	description:
+		'A key of the top-level "providers" (camelCase; "inMemory" is the built-in provider).',
+});
+
+const ProviderOrKey = Type.Union([...ProviderForms, ProviderKey], {
+	description:
+		'"inMemory", { "use": ... }, { "import": ... }, or a key of the top-level "providers", e.g. "audit".',
+});
+
+const Providers = Type.Record(
+	Type.String({ pattern: PROVIDER_KEY }),
+	Provider,
 	{
 		description:
-			'"inMemory", { "use": "<catalog name>", "options": {...} } or { "import": "./file.ts#provider" }.',
+			'Named providers, by camelCase key (generated as `Providers` with providersOf): a repository or the application names one with "provider": "<key>".',
 	},
 );
 
@@ -263,7 +283,7 @@ const RepositoryDeclaration = Type.Object(
 			description:
 				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, create, update, delete, count.",
 		}),
-		provider: Type.Optional(Provider),
+		provider: Type.Optional(ProviderOrKey),
 		relations: Type.Optional(
 			StringList(
 				"Repositories of every entity the entity holds, at any depth.",
@@ -571,7 +591,8 @@ export const specSchema = Type.Object(
 				{ additionalProperties: false },
 			),
 		),
-		provider: Type.Optional(Provider),
+		provider: Type.Optional(ProviderOrKey),
+		providers: Type.Optional(Providers),
 		log: Type.Optional(Log),
 		properties: Type.Optional(
 			Names(Property, "Custom properties, by PascalCase name."),

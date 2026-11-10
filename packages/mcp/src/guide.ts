@@ -71,7 +71,12 @@ a file of your own.
   to the server with \`--providers\`), or \`{ "import": "./db.ts#provider" }\` for one created by hand. Options are JSON or
   \`{ "import": "./db.ts#db" }\` references (any depth); imports are relative to \`output.dir\` and never run by the validator.
   Omitting \`provider\` is not the same as \`"inMemory"\`: a repository without one uses the application's. For a provider
-  not created with \`providerOf\`, \`afora_extract\` needs \`imports\` (\`provider\` / \`repositories.<Name>.provider\`).
+  not created with \`providerOf\`, \`afora_extract\` needs \`imports\` (\`provider\` / \`repositories.<Name>.provider\` /
+  \`providers.<key>\`).
+- Named providers: the top-level \`providers\` is \`{ "<camelCaseKey>": <provider> }\` (generated as \`Providers\`, made by
+  \`providersOf\`); a repository or the top-level \`provider\` names one with \`"provider": "<key>"\`, e.g. \`"audit"\`.
+  \`"inMemory"\` is not a valid key. Keys of a spec extended directly can be named too. Each application makes its own
+  instance of a provider made on start (an \`{ "import" }\` of a \`providerFrom\`), so independent applications do not share it.
 - Repository \`deletion\`: \`"hard"\` (default) physically removes rows; \`"soft"\` retains \`deletedAt\` and hides deleted rows from reads, counts and relations.
 - \`relations\` must list exactly one repository for each entity the repository's entity holds, at any depth (inside
   records, blueprints and nested objects), not through another entity.

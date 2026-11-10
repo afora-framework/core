@@ -5,6 +5,7 @@ import {
 	type PropertyDescription,
 	type PropertyReference,
 	type ProviderDescription,
+	type ProviderReference,
 	Std,
 } from "@afora/core";
 import { stdProperty } from "./catalog";
@@ -22,7 +23,8 @@ export interface ExtractOptions {
 	 * Where a property that cannot be recreated is imported from, by its name
 	 * (`./opaque` by default). A provider created without `providerOf` cannot be
 	 * described: it needs an entry `"./db.ts#provider"` under the key `provider`
-	 * (the application's) or `repositories.<Name>.provider`. A use case with a
+	 * (the application's), `repositories.<Name>.provider` or `providers.<key>`
+	 * (one of `providersOf`, e.g. made by `providerFrom`). A use case with a
 	 * hand-written `execute` needs `useCases.<Name>`, and a `run` function of a
 	 * steps use case `useCases.<Name>.run.<name>`, a command with a handler
 	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, and a stage
@@ -51,10 +53,12 @@ const pascalOf = (text: string): string =>
  * cannot be recovered, so the options are those values.
  */
 function providerSpec(
-	description: ProviderDescription,
+	description: ProviderDescription | ProviderReference,
 	key: string,
 	imports: Readonly<Record<string, string>> | undefined,
 ): unknown {
+	// A provider of `providersOf`: its key.
+	if (description.kind === "ref") return description.key;
 	if (description.kind === "provider") {
 		return description.name === "inMemory" &&
 			Object.keys(description.options).length === 0
@@ -69,10 +73,33 @@ function providerSpec(
 	const reference = imports?.[key];
 	if (reference === undefined) {
 		throw new ExtractionError(
-			`The provider of ${key === "provider" ? "the application" : `"${key.slice("repositories.".length, -".provider".length)}"`} was not created with providerOf, so it cannot be described. Create it with providerOf({ name, options, create }), or pass imports: { "${key}": "./path/to/file.ts#exportName" } to import it as it is.`,
+			`The provider of ${key === "provider" ? "the application" : key.startsWith("providers.") ? `the key "${key.slice("providers.".length)}" of providers` : `"${key.slice("repositories.".length, -".provider".length)}"`} was not created with providerOf, so it cannot be described. Create it with providerOf({ name, options, create }), or pass imports: { "${key}": "./path/to/file.ts#exportName" } to import it as it is.`,
 		);
 	}
 	return { import: reference };
+}
+
+/**
+ * The providers of `providersOf` the application registers itself (not
+ * inherited ones), by key; one made by `providerFrom` needs an import in
+ * `imports` (`"providers.<key>"`).
+ */
+function providersSpec(
+	description: ApplicationDescription,
+	imports: Readonly<Record<string, string>> | undefined,
+): { providers?: Record<string, unknown> } {
+	const own = Object.entries(description.providers ?? {}).filter(
+		([, value]) => value.from === description.name,
+	);
+	if (own.length === 0) return {};
+	return {
+		providers: Object.fromEntries(
+			own.map(([key, { from: _, ...value }]) => [
+				key,
+				providerSpec(value, `providers.${key}`, imports),
+			]),
+		),
+	};
 }
 
 /**
@@ -559,6 +586,7 @@ export function extractSpec(
 						options.imports,
 					),
 				}),
+		...providersSpec(description, options.imports),
 		...(description.log === undefined
 			? {}
 			: { log: logSpec(description.log, options.imports) }),

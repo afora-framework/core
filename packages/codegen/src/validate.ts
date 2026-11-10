@@ -3,13 +3,19 @@ import { checkCommand } from "./command";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
-import { checkCatalog, checkLog, checkProvider } from "./provider";
+import {
+	checkCatalog,
+	checkLog,
+	checkProvider,
+	checkProviders,
+} from "./provider";
 import {
 	checkEnvironmentNames,
 	type Decl,
 	issue,
 	type Scope,
 	scopeOf,
+	usableProviderKeys,
 } from "./scope";
 import { isIdentifier, isObject } from "./spec/field";
 import {
@@ -30,6 +36,7 @@ const TOP_LEVEL_KEYS = [
 	"extends",
 	"output",
 	"provider",
+	"providers",
 	"log",
 	...COLLECTIONS,
 ];
@@ -682,7 +689,13 @@ function checkRepository(
 		}
 	}
 	if (spec.provider !== undefined) {
-		checkProvider(spec.provider, [...path, "provider"], providers, issues);
+		checkProvider(
+			spec.provider,
+			[...path, "provider"],
+			providers,
+			issues,
+			usableProviderKeys(scope),
+		);
 	}
 	if (
 		spec.deletion !== undefined &&
@@ -895,9 +908,7 @@ function check(
 	checkCatalog(providers, issues);
 	checkStageCatalog(stages, issues);
 	const stageMap = stageEntries(stages);
-	if (input.provider !== undefined) {
-		checkProvider(input.provider, ["provider"], providers, issues);
-	}
+	checkProviders(input.providers, providers, issues);
 	if (input.log !== undefined) checkLog(input.log, ["log"], issues);
 	for (const key of Object.keys(input)) {
 		if (!TOP_LEVEL_KEYS.includes(key)) {
@@ -965,6 +976,15 @@ function check(
 	}
 
 	const scope = scopeOf(input, extended, issues);
+	if (input.provider !== undefined) {
+		checkProvider(
+			input.provider,
+			["provider"],
+			providers,
+			issues,
+			usableProviderKeys(scope),
+		);
+	}
 	const own = [...scope.decls.values()].filter(
 		(decl) => decl.via === undefined,
 	);

@@ -47,6 +47,28 @@ Repository `actions` also accept the queries `findMany`, `exists` and `findPage`
 
 A provider is `"inMemory"` (`inMemoryProvider()` of `@afora/core`, built in), `{ "use": "<catalog name>", "options": {...} }` (generated as `drizzleProvider({ db })`) or `{ "import": "./db.ts#provider" }` (a provider created by hand, generated as a named import). Options recurse over JSON values and `{ "import": "./x.ts#y" }` references, which become named imports; imports are relative to the output directory (or a package), and the validator never evaluates them. Issues: `unknown_provider` (a name outside the catalog), `invalid_provider` (wrong shape or a non-JSON option), `invalid_import` (not `module#exportName`) and `invalid_provider_catalog` (a bad catalog entry).
 
+**Named providers.** The top-level `providers` declares providers by camelCase key, and a repository (or the top-level `provider`) names one with a string:
+
+```json
+{
+	"version": 1,
+	"providers": {
+		"main": "inMemory",
+		"audit": { "import": "./audit.ts#audit" }
+	},
+	"provider": "main",
+	"repositories": {
+		"AuditLogs": {
+			"entity": "AuditLog",
+			"actions": ["create"],
+			"provider": "audit"
+		}
+	}
+}
+```
+
+It is generated as `providers.ts` (`export const Providers = providersOf({ ... })`), with `provider: Providers.audit` in `repositories.ts` and `providers: Providers, provider: Providers.main` in `application.ts`. Each value is a provider as above, never a key. A key is camelCase and not `"inMemory"` (`invalid_provider_key`); a string that is neither `"inMemory"` nor a key is `unknown_provider`, and the message lists the keys; one key declared by this spec and a spec it extends is `provider_conflict`. Keys of a spec extended directly can be named. Extraction gives the keys back, and a provider of `providers` created without `providerOf` needs the import key `providers.<key>`.
+
 External providers are not part of `afora.json`: the catalog is a codegen option, `{ providers: [{ name: "drizzle", module: "@acme/drizzle", export: "drizzleProvider" }] }`, passed to `validateSpec(spec, extended, options)` and `generate(spec, extended, options)`. The CLI reads it from a module with `--providers <module>` (exporting `providers`, or as the default export, an array of such entries). `module` is a package or a path relative to the output directory and `export` is the factory, called with the options object (omitted when there are none). Normalization treats `"inMemory"` as `{ "use": "inMemory", "options": {} }`, and never treats an omitted provider as a shared one: a repository without `provider` uses the application's.
 
 Extraction reads `app.describe()`. A provider created with `providerOf({ name, options, create })` comes back as `"inMemory"` or `{ use, options }`; the options are the JSON ones given to `providerOf` (a value that was an import reference when generating is not recovered). A provider created without `providerOf` is opaque and needs `extractSpec(app, { imports: { provider: "./db.ts#provider" } })` (the application's) or `{ "repositories.Users.provider": ... }`, in the CLI `--import key=./file.ts#name`; without it extraction throws an `ExtractionError` naming the key instead of defaulting to memory.

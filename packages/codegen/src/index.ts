@@ -44,6 +44,7 @@ export type {
 	PipeEntrySpec,
 	PropertySpec,
 	ProviderCatalogEntry,
+	ProviderKeySpec,
 	ProviderOptionSpec,
 	ProviderSpec,
 	RecordSpec,

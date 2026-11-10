@@ -97,6 +97,8 @@ const TOP_ORDER = [
 	"extends",
 	"output",
 	"provider",
+	"providers",
+	"log",
 	...COLLECTION_KEYS,
 ];
 

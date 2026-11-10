@@ -105,9 +105,97 @@
 						}
 					},
 					"additionalProperties": false
+				},
+				{
+					"type": "string",
+					"pattern": "^[a-z][A-Za-z0-9]*$",
+					"description": "A key of the top-level \"providers\" (camelCase; \"inMemory\" is the built-in provider)."
 				}
 			],
-			"description": "\"inMemory\", { \"use\": \"<catalog name>\", \"options\": {...} } or { \"import\": \"./file.ts#provider\" }."
+			"description": "\"inMemory\", { \"use\": ... }, { \"import\": ... }, or a key of the top-level \"providers\", e.g. \"audit\"."
+		},
+		"providers": {
+			"type": "object",
+			"patternProperties": {
+				"^[a-z][A-Za-z0-9]*$": {
+					"anyOf": [
+						{
+							"type": "string",
+							"const": "inMemory"
+						},
+						{
+							"type": "object",
+							"required": ["use"],
+							"properties": {
+								"use": {
+									"type": "string",
+									"description": "A provider of the catalog given to codegen (inMemory is built in)."
+								},
+								"options": {
+									"type": "object",
+									"patternProperties": {
+										"^.*$": {
+											"anyOf": [
+												{
+													"type": "string"
+												},
+												{
+													"type": "number"
+												},
+												{
+													"type": "boolean"
+												},
+												{
+													"type": "null"
+												},
+												{
+													"type": "object",
+													"required": ["import"],
+													"properties": {
+														"import": {
+															"type": "string",
+															"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+															"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+														}
+													},
+													"additionalProperties": false
+												},
+												{
+													"type": "array",
+													"items": {}
+												},
+												{
+													"type": "object",
+													"patternProperties": {
+														"^.*$": {}
+													}
+												}
+											],
+											"description": "A JSON value, or { \"import\": \"./file.ts#name\" } for a value created by hand (nested at any depth)."
+										}
+									},
+									"description": "Options passed to the provider factory."
+								}
+							},
+							"additionalProperties": false
+						},
+						{
+							"type": "object",
+							"required": ["import"],
+							"properties": {
+								"import": {
+									"type": "string",
+									"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+									"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+								}
+							},
+							"additionalProperties": false
+						}
+					],
+					"description": "\"inMemory\", { \"use\": \"<catalog name>\", \"options\": {...} } or { \"import\": \"./file.ts#provider\" }."
+				}
+			},
+			"description": "Named providers, by camelCase key (generated as `Providers` with providersOf): a repository or the application names one with \"provider\": \"<key>\"."
 		},
 		"log": {
 			"anyOf": [
@@ -529,9 +617,14 @@
 										}
 									},
 									"additionalProperties": false
+								},
+								{
+									"type": "string",
+									"pattern": "^[a-z][A-Za-z0-9]*$",
+									"description": "A key of the top-level \"providers\" (camelCase; \"inMemory\" is the built-in provider)."
 								}
 							],
-							"description": "\"inMemory\", { \"use\": \"<catalog name>\", \"options\": {...} } or { \"import\": \"./file.ts#provider\" }."
+							"description": "\"inMemory\", { \"use\": ... }, { \"import\": ... }, or a key of the top-level \"providers\", e.g. \"audit\"."
 						},
 						"relations": {
 							"type": "array",

@@ -77,21 +77,31 @@ function checkOption(value: unknown, path: Path, issues: SpecIssue[]): void {
 	);
 }
 
-/** Checks one `provider` of the spec (never evaluating its imports). */
+/** The keys of the top-level `providers`: camelCase, and never "inMemory". */
+const PROVIDER_KEY = /^[a-z][A-Za-z0-9]*$/;
+
+/**
+ * Checks one `provider` of the spec (never evaluating its imports); a bare
+ * string other than "inMemory" must be one of `keys`, the keys of the
+ * top-level `providers` (none where a key is not allowed).
+ */
 export function checkProvider(
 	value: unknown,
 	path: Path,
 	catalog: readonly ProviderCatalogEntry[],
 	issues: SpecIssue[],
+	keys: readonly string[] = [],
 ): void {
 	const names = [BUILTIN_PROVIDER, ...catalog.map((entry) => entry.name)];
 	if (typeof value === "string") {
-		if (value !== BUILTIN_PROVIDER) {
+		if (value !== BUILTIN_PROVIDER && !keys.includes(value)) {
 			issues.push(
 				issue(
 					path,
 					"unknown_provider",
-					`"${value}" is not a provider. A bare string is only "${BUILTIN_PROVIDER}"; for a catalog provider use { "use": "${value}" }. Available: ${names.join(", ")}.`,
+					keys.length > 0
+						? `"${value}" is not a provider. A bare string is "${BUILTIN_PROVIDER}" or a key of "providers": ${keys.join(", ")}.`
+						: `"${value}" is not a provider. A bare string is only "${BUILTIN_PROVIDER}" or a key of the top-level "providers"; for a catalog provider use { "use": "${value}" }. Available: ${names.join(", ")}.`,
 				),
 			);
 		}
@@ -165,6 +175,39 @@ export function checkProvider(
 	}
 	for (const [key, item] of Object.entries(options)) {
 		checkOption(item, [...path, "options", key], issues);
+	}
+}
+
+/** Checks the top-level `providers`: camelCase keys, each a provider (not a key). */
+export function checkProviders(
+	value: unknown,
+	catalog: readonly ProviderCatalogEntry[],
+	issues: SpecIssue[],
+): void {
+	if (value === undefined) return;
+	if (!isObject(value) || Array.isArray(value)) {
+		issues.push(
+			issue(
+				["providers"],
+				"invalid_provider",
+				'"providers" is an object of providers by camelCase key, e.g. { "audit": { "import": "./audit.ts#provider" } }.',
+			),
+		);
+		return;
+	}
+	for (const [key, provider] of Object.entries(value)) {
+		if (!PROVIDER_KEY.test(key) || key === BUILTIN_PROVIDER) {
+			issues.push(
+				issue(
+					["providers", key],
+					"invalid_provider_key",
+					key === BUILTIN_PROVIDER
+						? `"${BUILTIN_PROVIDER}" is the built-in provider; choose another key.`
+						: `"${key}" is not a provider key: use camelCase, e.g. "audit" or "mainDb".`,
+				),
+			);
+		}
+		checkProvider(provider, ["providers", key], catalog, issues);
 	}
 }
 
