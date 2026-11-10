@@ -119,11 +119,21 @@ a file of your own.
 - Steps run in order and \`return\` is last, exactly once: \`find\` ("<repo>.<read action>"), \`ensure\` (exists | absent | equals | notEquals | true | false;
   \`other\` for the comparisons, \`error\` a declared exception name or a core one, listed in \`errors\`; optional \`details\`), \`build\` (a record or
   entity name, \`values\`, \`as\`), \`change\` ($ref, \`key\` in the class's change keys, \`value\`), \`invoke\` ($ref, \`method\`, \`args\`),
-  \`create\` / \`update\` / \`delete\` (repository key, \`value\`), \`call\` (use case key, \`input\`) and \`run\` (a unique name, \`fn\` is
+  \`create\` / \`update\` / \`delete\` / \`restore\` (repository key, \`value\`), \`call\` (use case key, \`input\`) and \`run\` (a unique name, \`fn\` is
   \`{ "import": "../x.ts#fn" }\`, \`args\`; the function gets (...args, { context })). \`as\` binds the result.
 - Values: \`"$input.key"\`, \`"$context.key"\`, \`"$env.<dependency>.VAR"\`, \`"$name.path.0"\` (a bound result); a literal; \`{ "literal": "$5" }\` for a string that
   starts with $; or an object/array of values. No expressions: compute with \`run\`.
-- \`afora_extract\` needs \`imports\` for \`useCases.<Name>\` (hand-written execute) and \`useCases.<Name>.run.<name>\` (run functions).
+- A standard use case needs none of that: \`{ "generic": "create", "repository": "Posts", "options": {...} }\` is a use case made for a
+  declared repository, its input, response and steps following the entity. Prefer it for create, get, list, update, delete, restore
+  (soft deletion), publish/unpublish, archive/unarchive, tag/untag (entities with those plugins), register and login (authenticatable):
+  \`useCases\` of \`afora_catalog\` lists each with the \`actions\` the repository needs, the \`plugins\` the entity needs and its \`options\`.
+  Inputs take \`id\` (not \`postId\`), the keys of the entity (an entity it holds as \`<key>Id\`) and a plain \`password\` for a password key.
+  Options: \`as\` (the response key, "item" by default), \`owner\` (\`{ "key"?, "context" }\`: the caller, whose id is in that context key,
+  owns the entity), \`errors\` (\`{ "notFound" | "conflict" | "invalid" | "owner": an exception name }\`), and \`omit\`, \`values\`
+  (create, register), \`set\` (publish, archive...), \`orderBy\` (list). \`description\`, \`tags\` and \`deprecated\` go beside \`generic\`.
+  Write steps only for what no standard use case does.
+- \`afora_extract\` needs \`imports\` for \`useCases.<Name>\` (hand-written execute) and \`useCases.<Name>.run.<name>\` (run functions);
+  a standard use case needs none.
 
 ## Commands and outputs
 
