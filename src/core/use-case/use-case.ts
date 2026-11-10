@@ -44,6 +44,7 @@ import { Kind } from "../symbols/kind";
 import { type ExecutionScope, ScopeKey } from "./scope";
 import { freezeData } from "./steps/references";
 import { executeSteps } from "./steps/run";
+import type { CheckedSteps } from "./steps/types/check.interface";
 import type { UseCaseStep } from "./steps/types/steps.interface";
 import { validateSteps } from "./steps/validate";
 
@@ -179,6 +180,45 @@ export interface UseCaseStepsSettings<
 	 * interpreted by its `execute`, and described by `describe()`.
 	 */
 	readonly steps: readonly UseCaseStep<NoInfer<Dependencies>>[];
+	/** Checks the references and values of the steps at compile time (see `CheckedSteps`). */
+	readonly strictSteps?: boolean;
+}
+
+/**
+ * What `useCaseOf` takes: `UseCaseSettings`, and the `steps` that make the
+ * class concrete, if any.
+ */
+export interface UseCaseDeclaration<
+	Input extends IBlueprintCollection,
+	Output extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined = undefined,
+	Steps extends readonly UseCaseStep<Dependencies>[] | undefined = undefined,
+	Strict extends boolean = false,
+> extends UseCaseSettings<Input, Output, Dependencies, Context> {
+	/**
+	 * What the use case does, as data (see `UseCaseStep`), which makes the
+	 * class concrete: validated here, interpreted by its `execute`, and
+	 * described by `describe()`. TypeScript checks the kinds of the steps and
+	 * the names of dependencies and actions; with `strictSteps`, also their
+	 * references and values (see `CheckedSteps`).
+	 */
+	readonly steps?: [Strict] extends [true]
+		? CheckedSteps<
+				Steps,
+				NoInfer<Input>,
+				NoInfer<Context>,
+				NoInfer<Dependencies>
+			>
+		: Steps;
+	/**
+	 * `true` checks the steps, written inline, at compile time: each reference
+	 * must name a value in scope (the input, the context, an environment or the
+	 * result of an earlier step, at any depth), and the `args`, `values`,
+	 * `value` and `input` of a step must fit what it calls or builds. It costs
+	 * the editor more than the default checks. Without effect at run time.
+	 */
+	readonly strictSteps?: Strict;
 }
 
 export const InvalidUseCaseDeclaration = exceptionOf({
@@ -692,24 +732,29 @@ export function useCaseOf<
 	Output extends IBlueprintCollection,
 	const Dependencies extends UseCaseCollection = Record<never, never>,
 	Context extends IBlueprintCollection | undefined = undefined,
+	const Steps extends
+		| readonly UseCaseStep<NoInfer<Dependencies>>[]
+		| undefined = undefined,
+	Strict extends boolean = false,
 >(
-	settings: UseCaseStepsSettings<Input, Output, Dependencies, Context>,
-): StepsUseCaseConstructor<Input, Output, Dependencies, Context>;
-export function useCaseOf<
-	Input extends IBlueprintCollection,
-	Output extends IBlueprintCollection,
-	const Dependencies extends UseCaseCollection = Record<never, never>,
-	Context extends IBlueprintCollection | undefined = undefined,
->(
-	settings: UseCaseSettings<Input, Output, Dependencies, Context>,
-): UseCaseConstructor<Input, Output, Dependencies, Context>;
+	settings: UseCaseDeclaration<
+		Input,
+		Output,
+		Dependencies,
+		Context,
+		Steps,
+		Strict
+	>,
+): [Steps] extends [undefined]
+	? UseCaseConstructor<Input, Output, Dependencies, Context>
+	: StepsUseCaseConstructor<Input, Output, Dependencies, Context>;
 export function useCaseOf(
 	settings: UseCaseSettings<
 		IBlueprintCollection,
 		IBlueprintCollection,
 		UseCaseCollection,
 		IBlueprintCollection | undefined
-	> & { readonly steps?: unknown },
+	> & { readonly steps?: unknown; readonly strictSteps?: unknown },
 ): unknown {
 	type Input = IBlueprintCollection;
 	type Output = IBlueprintCollection;
@@ -756,6 +801,12 @@ export function useCaseOf(
 	}
 	if (typeof deprecated !== "boolean") {
 		invalidSetting("Expected deprecated to be a boolean.");
+	}
+	if (
+		settings.strictSteps !== undefined &&
+		typeof settings.strictSteps !== "boolean"
+	) {
+		invalidSetting("Expected strictSteps to be a boolean.");
 	}
 	if (
 		!Array.isArray(tags) ||

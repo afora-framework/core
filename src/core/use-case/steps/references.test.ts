@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { blueprintOf, environmentOf } from "../../../index";
+import { blueprintOf, environmentOf, recordOf } from "../../../index";
 import { followPath, parseReference, resolveValue } from "./references";
 import { invalidStep, stepsCase } from "./steps.fixtures";
 
@@ -140,10 +140,50 @@ describe("references in a use case", () => {
 		expect(declare({ a: new Date() }).code).toBe("invalid_value");
 	});
 
-	test("deeper paths of input are not checked", () => {
-		expect(() =>
-			stepsCase({ steps: [{ return: "$input.name.deeper.still" }] }),
-		).not.toThrow();
+	test("paths of input and context are checked at any depth", () => {
+		class Author extends recordOf(
+			blueprintOf((ctx) => ({ name: ctx.string })),
+		) {
+			get initial(): string {
+				return this.name.charAt(0);
+			}
+		}
+		const Address = blueprintOf((ctx) => ({ zip: ctx.string }));
+		const Deep = blueprintOf((ctx) => ({
+			name: ctx.string,
+			address: Address,
+			tags: ctx.list.string,
+			author: Author,
+			out: ctx.schema,
+		}));
+		const declare =
+			(value: string, extra: object = {}) =>
+			() =>
+				stepsCase({ blueprint: Deep, ...extra, steps: [{ return: value }] });
+		for (const valid of [
+			"$input.address.zip",
+			"$input.tags.0",
+			"$input.author.name",
+			"$input.author.initial.anything",
+			"$input.out.anything",
+		]) {
+			expect(declare(valid)).not.toThrow();
+		}
+		for (const [invalid, segment] of [
+			["$input.name.deeper", "deeper"],
+			["$input.address.zipp", "zipp"],
+			["$input.tags.first", "first"],
+			["$input.tags.0.x", "x"],
+			["$input.author.nope", "nope"],
+		] as const) {
+			expect(invalidStep(declare(invalid))).toMatchObject({
+				code: "unknown_key",
+				reason: `"${invalid}" names "${segment}", which the input does not declare.`,
+			});
+		}
+		expect(
+			invalidStep(declare("$context.address.zipp", { context: Deep })).code,
+		).toBe("unknown_key");
 	});
 
 	test("as must be an identifier, not reserved and not repeated", () => {

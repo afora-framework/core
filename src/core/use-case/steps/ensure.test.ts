@@ -14,7 +14,7 @@ const Code = exceptionOf({
 	message: ({ code }: { code: number }) => `code ${code}`,
 });
 
-/** A use case that ensures `kind` of `value` (and `other`) and returns. */
+/** A use case that ensures `kind` of `value` (and `other`) and returns; `$nothing` is `undefined`. */
 function ensuring(
 	kind: string,
 	value: unknown,
@@ -24,6 +24,7 @@ function ensuring(
 	return stepsCase({
 		errors: [InvalidCredentials, Code],
 		steps: [
+			{ run: "nothing", fn: () => undefined, as: "nothing" },
 			{
 				ensure: kind,
 				value,
@@ -45,9 +46,9 @@ const passes = async (Case: ReturnType<typeof ensuring>) =>
 describe("ensure", () => {
 	test("exists and absent treat undefined and null alike", async () => {
 		expect(await passes(ensuring("exists", "$input.name"))).toBe(true);
-		expect(await passes(ensuring("exists", "$input.name.x"))).toBe(false);
+		expect(await passes(ensuring("exists", "$nothing"))).toBe(false);
 		expect(await passes(ensuring("exists", { literal: null }))).toBe(false);
-		expect(await passes(ensuring("absent", "$input.name.x"))).toBe(true);
+		expect(await passes(ensuring("absent", "$nothing"))).toBe(true);
 		expect(await passes(ensuring("absent", "$input.name"))).toBe(false);
 	});
 
