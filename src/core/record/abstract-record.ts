@@ -1,7 +1,6 @@
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import type {
-	BlueprintData,
 	BlueprintField,
 	BlueprintInput,
 	BlueprintValue,
@@ -21,10 +20,12 @@ import {
 	UndeclaredRecordProperty,
 } from "./exceptions";
 import { maskCollection } from "./mask";
+import { recordNameOf } from "./name";
 import type {
 	IRecord,
 	RecordChange,
 	RecordEffects,
+	RecordJson,
 	RecordSettings,
 } from "./types/record.interface";
 
@@ -101,7 +102,10 @@ function checkMembers(record: object, keys: readonly string[]): void {
 			keys.includes(name),
 		);
 		if (key !== undefined) {
-			throw new ReservedRecordKey({ source: Class.name, details: { key } });
+			throw new ReservedRecordKey({
+				source: recordNameOf(Class),
+				details: { key },
+			});
 		}
 	}
 	checked.add(Class);
@@ -184,13 +188,14 @@ function parseRecord(
 	try {
 		return { value: new Class(value as never) };
 	} catch (error) {
-		return { issues: issuesOfError(error, Class.name) };
+		return { issues: issuesOfError(error, recordNameOf(Class)) };
 	}
 }
 
 /** The value of `record`. */
 function recordValue<Properties extends IBlueprintCollection>(
-	record: AbstractRecord<Properties>,
+	// biome-ignore lint/suspicious/noExplicitAny: whatever its sensitive keys
+	record: AbstractRecord<Properties, any>,
 ): Readonly<BlueprintValue<Properties>> {
 	return values.get(record) as BlueprintValue<Properties>;
 }
@@ -277,7 +282,7 @@ export function storeRecordValue(
 	key: string,
 	value: unknown,
 ): { readonly next: unknown; readonly previous: unknown } {
-	const source = record.constructor.name;
+	const source = recordNameOf(record.constructor);
 	const { properties } = record[Meta].blueprint;
 	if (!Object.hasOwn(properties, key)) {
 		throw exceptionOfIssues(
@@ -353,8 +358,10 @@ export function runRecordEffects<Self extends object>(
 	return record;
 }
 
-export abstract class AbstractRecord<Properties extends IBlueprintCollection>
-	implements IRecord<Properties>
+export abstract class AbstractRecord<
+	Properties extends IBlueprintCollection,
+	Sensitive extends string = never,
+> implements IRecord<Properties, Sensitive>
 {
 	get [Meta](): RecordDeclaration<Properties> {
 		const Class = this.constructor;
@@ -371,7 +378,7 @@ export abstract class AbstractRecord<Properties extends IBlueprintCollection>
 	constructor(value: BlueprintInput<Properties>) {
 		checkMembers(this, Object.keys(this[Meta].blueprint.properties));
 
-		const source = this.constructor.name;
+		const source = recordNameOf(this.constructor);
 		const result = parseCollection(
 			this[Meta].blueprint.properties,
 			value,
@@ -408,12 +415,12 @@ export abstract class AbstractRecord<Properties extends IBlueprintCollection>
 	 * The value with the sensitive keys, and every property declared
 	 * `sensitive` (as `Password`), masked.
 	 */
-	toJSON(): Readonly<Partial<BlueprintData<Properties>>> {
+	toJSON(): RecordJson<Properties, Sensitive> {
 		return maskCollection(
 			this[Meta].blueprint.properties,
 			recordValue(this),
 			this[Meta].options.sensitive,
-		) as Partial<BlueprintData<Properties>>;
+		) as RecordJson<Properties, Sensitive>;
 	}
 
 	/**

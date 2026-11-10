@@ -46,6 +46,48 @@ export interface RepositoryPage<Entity> {
 	readonly offset: number;
 }
 
+/**
+ * The query of `findCursor`: as `RepositoryQuery`, with the `next` of the
+ * previous page as `after` in place of `offset`. `where`, `orderBy` and
+ * `withDeleted` must stay the same from one page to the next.
+ */
+export interface RepositoryCursorQuery<Entity = unknown>
+	extends Omit<RepositoryQuery<Entity>, "offset" | "limit"> {
+	/** Positive integer; 20 when left out. */
+	readonly limit?: number;
+	/** The `next` of the page before; the first page when left out. */
+	readonly after?: string;
+}
+
+/** A page read by position: its items and, when there are more, the cursor of the next. */
+export interface RepositoryCursorPage<Entity> {
+	readonly items: readonly EntityInstanceOf<Entity>[];
+	readonly limit: number;
+	/** What to give as `after` for the next page; `undefined` on the last one. */
+	readonly next: string | undefined;
+}
+
+/**
+ * What a provider gets from `findCursor` on `findMany`: `after` holds one
+ * value for each order of `orderBy`, those of the last row already read, and
+ * the provider gives the rows strictly after it in that order. Only a
+ * provider with `capabilities.keyset` is given it.
+ */
+export interface ProviderQuery extends RepositoryQuery {
+	readonly after?: readonly unknown[];
+}
+
+export interface RepositoryFindCursor<Entity> {
+	/**
+	 * A page of `limit` items (20 by default) after the cursor `after`. Unlike
+	 * `findPage` it reads one page with one query, does not count, and stays
+	 * correct when rows are added or removed between pages.
+	 */
+	findCursor(
+		query?: RepositoryCursorQuery<Entity>,
+	): Promise<RepositoryCursorPage<Entity>>;
+}
+
 export interface RepositoryFindMany<Entity> {
 	findMany(
 		query?: RepositoryQuery<Entity>,
@@ -84,6 +126,8 @@ export type ProviderDescription =
 export interface ProviderCapabilities {
 	readonly operators?: readonly string[];
 	readonly transactions?: boolean;
+	/** Whether `findMany` honors `after` (`ProviderQuery`), which `findCursor` needs. */
+	readonly keyset?: boolean;
 }
 
 /** Declaration input for a named provider, implemented by providerOf in T10. */

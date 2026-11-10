@@ -12,6 +12,7 @@ import {
 	isUseCase,
 	isUseCaseClass,
 	RepositoryOf,
+	RepositoryUniqueViolation,
 	recordOf,
 	repositoryOf,
 	UseCaseAlreadyExecuted,
@@ -820,4 +821,31 @@ describe("extended repositories in use cases", () => {
 		expect(await items.count()).toBe(1);
 		expect(names(item.pullEvents())).toEqual(["item.created"]);
 	});
+});
+
+test("a repository exception is caught by instanceof after crossing the use case", async () => {
+	const Account = blueprintOf((ctx) => ({ email: ctx.string }));
+	class Member extends entityOf(Account, { unique: ["email"] }) {}
+	const Members = repositoryOf({ entity: Member, actions: ["create"] });
+	class Join extends useCaseOf({
+		name: "Join",
+		blueprint: Account,
+		response: Empty,
+		dependencies: { members: Members },
+	}) {
+		override async execute({ members = this.dependencies.members } = {}) {
+			await members.create(new Member(this.input));
+			return {};
+		}
+	}
+
+	await new Join({ email: "ana@example.com" }).execute();
+	const error: unknown = await new Join({ email: "ana@example.com" })
+		.execute()
+		.catch((error: unknown) => error);
+
+	expect(error).toBeInstanceOf(RepositoryUniqueViolation);
+	if (!(error instanceof RepositoryUniqueViolation)) throw error;
+	expect(error.layer).toBe(ExceptionLayers.UseCase);
+	expect(error.details).toMatchObject({ key: "email" });
 });

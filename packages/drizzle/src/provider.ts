@@ -14,6 +14,7 @@ import {
 	eq,
 	getTableColumns,
 	inArray,
+	isNotNull,
 	isNull,
 	ne,
 	or,
@@ -39,8 +40,9 @@ export interface DrizzleProviderOptions {
 	readonly db: DrizzleDatabase;
 	/**
 	 * The table of each repository: keyed by the name of the repository
-	 * (`repositoryOf({ name })`, which defaults to the entity class name) or,
-	 * failing that, by the name of the entity class.
+	 * (`UserRepository`) or, failing that, by the name of the entity (`User`).
+	 * Both come from the `name` option of `entityOf` when it has one, and from
+	 * the name of the class otherwise, which a minifier changes.
 	 */
 	readonly tables: Readonly<Record<string, DrizzleTable>>;
 }
@@ -64,6 +66,9 @@ function badQuery(reason: string): never {
 	throw new InvalidRepositoryQuery({ source: SOURCE, details: { reason } });
 }
 
+/** A query with the `after` of `findCursor`, on any version of `@afora/core`. */
+type KeysetQuery = RepositoryQuery & { readonly after?: readonly unknown[] };
+
 interface Mapping {
 	readonly table: DrizzleTable;
 	readonly columns: Readonly<Record<string, Column>>;
@@ -72,14 +77,28 @@ interface Mapping {
 
 const mappings = new WeakMap<object, Mapping>();
 
+/**
+ * The declared name of an entity (`recordName`, from the `name` option of
+ * `entityOf`), which a bundler does not rename; the name of the class on a
+ * version of `@afora/core` without it.
+ */
+function entityNameOf(entity: object): string {
+	const { recordName, name } = entity as {
+		readonly recordName?: unknown;
+		readonly name: string;
+	};
+	return typeof recordName === "string" ? recordName : name;
+}
+
 function mappingOf(
 	tables: DrizzleProviderOptions["tables"],
 	context: RepositoryContext,
 ): Mapping {
-	const table = tables[context.name] ?? tables[context.entity.name];
+	const entity = entityNameOf(context.entity);
+	const table = tables[context.name] ?? tables[entity];
 	if (!table) {
 		return invalid(
-			`No Drizzle table for "${context.name}" (or the entity "${context.entity.name}").`,
+			`No Drizzle table for "${context.name}" (or the entity "${entity}"). Tables are found by name: declare it with entityOf(blueprint, { name }) when the code is minified.`,
 		);
 	}
 	let mapping = mappings.get(table);
@@ -209,6 +228,52 @@ function orderOf(mapping: Mapping, query: RepositoryQuery): SQL[] {
 	return order;
 }
 
+/** `column` compared with a value by `operator`, strings by code point as in `orderOf`. */
+function compare(
+	mapping: Mapping,
+	column: Column,
+	operator: ">" | "<",
+	value: unknown,
+): SQL {
+	const bound = sql.param(toColumn(column, value), column);
+	return operator === ">"
+		? sql`${collate(mapping, column)} > ${bound}`
+		: sql`${collate(mapping, column)} < ${bound}`;
+}
+
+/**
+ * The rows strictly after the position `query.after` in `query.orderBy`, one
+ * value for each order: a row is after it when, for some order, it equals the
+ * position on every order before and comes later on that one. A missing value
+ * is first when ascending and last when descending, as `orderOf` sorts it.
+ */
+function keysetOf(mapping: Mapping, query: KeysetQuery): SQL | undefined {
+	const { after, orderBy = [] } = query;
+	if (after === undefined) return undefined;
+	if (after.length !== orderBy.length)
+		badQuery("Expected one value of after for each order.");
+	const branches: (SQL | undefined)[] = [];
+	const equal: SQL[] = [];
+	orderBy.forEach(({ key, direction = "asc" }, index) => {
+		const column = columnOf(mapping, key);
+		const value = after[index];
+		let later: SQL | undefined;
+		if (direction === "desc") {
+			// Missing values are last: nothing comes after one of them.
+			later = isMissing(value)
+				? undefined
+				: or(compare(mapping, column, "<", value), isNull(column));
+		} else {
+			later = isMissing(value)
+				? isNotNull(column)
+				: compare(mapping, column, ">", value);
+		}
+		if (later) branches.push(and(...equal, later));
+		equal.push(equality(column, value));
+	});
+	return or(...branches) ?? sql`1 = 0`;
+}
+
 /** Walks the `cause` chain of a driver error for its message and Postgres detail. */
 function causesOf(
 	error: unknown,
@@ -259,7 +324,7 @@ function providerOver(
 ): IRepositoryProvider {
 	const select = async (
 		context: RepositoryContext,
-		query: RepositoryQuery,
+		query: KeysetQuery,
 		one: boolean,
 	): Promise<RepositoryData[]> => {
 		const mapping = mappingOf(tables, context);
@@ -268,7 +333,7 @@ function providerOver(
 		let builder = exec
 			.select()
 			.from(mapping.table)
-			.where(whereOf(mapping, query))
+			.where(and(whereOf(mapping, query), keysetOf(mapping, query)))
 			.orderBy(...orderOf(mapping, query));
 		if (limit !== undefined || query.offset)
 			builder = builder.limit(limit ?? NO_LIMIT);
@@ -325,7 +390,7 @@ function providerOver(
 		new RepositoryEntityNotFound({ source: context.name, details: { id } });
 
 	return {
-		capabilities: Object.freeze({ transactions: true }),
+		capabilities: Object.freeze({ transactions: true, keyset: true }),
 		findOne: (context, query = {}) =>
 			hooks.guard(async () => (await select(context, query, true))[0]),
 		findMany: (context, query = {}) =>

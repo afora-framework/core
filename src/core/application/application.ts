@@ -42,6 +42,7 @@ import { stageDescriptionOf } from "../output/stage";
 import type { AnyOutput } from "../output/types/output.interface";
 import { isProperty } from "../property/is-property";
 import { type PropertyLineage, propertyLineageOf } from "../property/lineage";
+import { declaredRecordNameOf, recordNameOf } from "../record/name";
 import { pluginsOf } from "../record/plugin";
 import { providerDescriptionOf } from "../repository/provider";
 import { isRepository } from "../repository/repository";
@@ -319,7 +320,10 @@ function resolve(
 							? (value as AnyOutput).outputName
 							: collection === "exceptions"
 								? (value as { name: string }).name
-								: name;
+								: collection === "records" || collection === "entities"
+									? // Only a name the class declares; the name of a class is free.
+										(declaredRecordNameOf(value as object) ?? name)
+									: name;
 			if (declaredName !== name) {
 				invalid(
 					source,
@@ -379,7 +383,7 @@ function validate(source: string, registry: Registry): void {
 					source,
 					details: {
 						holder: `${KIND_OF[collection]} "${entry.name}"`,
-						reference: `${isEntityClass(record) ? "entity" : "record"} "${(record as { name: string }).name}"`,
+						reference: `${isEntityClass(record) ? "entity" : "record"} "${recordNameOf(record as object)}"`,
 					},
 				});
 			}
@@ -407,7 +411,7 @@ function validate(source: string, registry: Registry): void {
 			if (!repositories.has(relation)) {
 				unregistered(
 					entry.name,
-					`the repository of "${(relation as { entity: { name: string } }).entity.name}"`,
+					`the repository of "${recordNameOf((relation as { entity: object }).entity)}"`,
 				);
 			}
 		}
@@ -527,7 +531,7 @@ function validateUseCases(source: string, registry: Registry): void {
 					source,
 					details: {
 						holder: `the ${part} of use case "${entry.name}"`,
-						reference: `${isEntityClass(record) ? "entity" : "record"} "${(record as { name: string }).name}"`,
+						reference: `${isEntityClass(record) ? "entity" : "record"} "${recordNameOf(record as object)}"`,
 					},
 				});
 			}
@@ -549,7 +553,7 @@ function validateUseCases(source: string, registry: Registry): void {
 					source,
 					details: {
 						holder,
-						reference: `${isEntityClass(step.build) ? "entity" : "record"} "${(step.build as { name: string }).name}"`,
+						reference: `${isEntityClass(step.build) ? "entity" : "record"} "${recordNameOf(step.build as object)}"`,
 					},
 				});
 			}
@@ -689,7 +693,7 @@ function fieldDescriptionOf(field: unknown, scope: Scope): FieldDescription {
 		const ref = entity ?? scope.records.get(record.record);
 		return {
 			kind: entity === undefined ? "record" : "entity",
-			ref: ref ?? record.record.name,
+			ref: ref ?? recordNameOf(record.record),
 			optional: record.optional,
 		};
 	}
@@ -1450,6 +1454,22 @@ export function applicationOf<
 				invalid(name, "Expected a use case registered in the application.");
 			}
 			return boundUseCaseOf.get(useCase);
+		},
+		async run(
+			useCase: unknown,
+			input: unknown = {},
+			options?: { readonly context?: unknown; readonly dependencies?: unknown },
+		) {
+			if (!boundUseCaseOf.has(useCase)) {
+				invalid(name, "Expected a use case registered in the application.");
+			}
+			const Bound = boundUseCaseOf.get(useCase) as AnyUseCaseClass;
+			const instance = (
+				options?.context === undefined
+					? new Bound(input)
+					: new Bound(input, { context: options.context })
+			) as { execute(dependencies?: unknown): Promise<unknown> };
+			return instance.execute(options?.dependencies);
 		},
 		command(command: unknown) {
 			if (!boundCommandOf.has(command)) {

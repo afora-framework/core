@@ -37,6 +37,7 @@ import {
 	writeLog,
 } from "../logger/logger";
 import type { Issue } from "../parse/types/parse.interface";
+import { recordNameOf } from "../record/name";
 import { AbstractRepository, isRepository } from "../repository/repository";
 import type { AnyRepository } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
@@ -318,7 +319,7 @@ function bindRepository(
 	source: string,
 ): object {
 	const Entity = repository.entity;
-	const repositoryName = Entity.name;
+	const repositoryName = recordNameOf(Entity);
 	const bound: Record<string, unknown> = Object.create(null);
 	// What the methods of the repository get as `this`: the bound methods, and the
 	// repository for the rest, as the receiver, so that its getters see the view.

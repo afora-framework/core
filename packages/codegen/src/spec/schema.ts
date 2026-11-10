@@ -281,7 +281,7 @@ const RepositoryDeclaration = Type.Object(
 		),
 		actions: Type.Array(Type.String(), {
 			description:
-				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, create, update, delete, count.",
+				"findById, findBy<Key> (unique keys), findManyBy<Key> (other keys), findMany, exists, findPage, findCursor, create, update, delete, count.",
 		}),
 		provider: Type.Optional(ProviderOrKey),
 		relations: Type.Optional(

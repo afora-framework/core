@@ -1,6 +1,6 @@
 # Entities
 
-An entity is a record with identity, ready to persist. `entityOf` takes a blueprint and the options of `recordOf`, and adds four keys to it, from `std`:
+An entity is a record with identity, ready to persist. `entityOf` takes a blueprint and the options of `recordOf` (`name` included, which keeps the name of the entity [stable when the code is minified](records.md)), and adds four keys to it, from `std`:
 
 - `id`: an `Id` (UUID v7), generated when the value has none and always listed in `options.unique`.
 - `createdAt`: generated as now when the value has none.

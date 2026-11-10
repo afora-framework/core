@@ -11,6 +11,7 @@ import type {
 	AnyRecordPlugin,
 	IRecordPluginCatalog,
 	PluginMembers,
+	PluginSensitiveKey,
 	PluginUniqueKey,
 	WithPluginProperties,
 } from "../../record/types/plugin.interface";
@@ -86,7 +87,10 @@ export type EntityOptions<
 		readonly RecordKey<Properties>[] = readonly RecordKey<Properties>[],
 	Plugins extends readonly AnyRecordPlugin[] = readonly AnyRecordPlugin[],
 	Context = unknown,
-> = RecordOptions<Properties, Change, Unique, Plugins, Context> & EntityEvents;
+	Sensitive extends
+		readonly RecordKey<Properties>[] = readonly RecordKey<Properties>[],
+> = RecordOptions<Properties, Change, Unique, Plugins, Context, Sensitive> &
+	EntityEvents;
 
 /**
  * The unique keys of an entity: `id`, those listed in `options.unique`, and
@@ -107,7 +111,8 @@ export type DeclaredEntityInstance<
 	Properties extends IBlueprintCollection,
 	Change extends readonly string[],
 	Members = unknown,
-> = AbstractEntity<EntityProperties<Identity, Properties>> &
+	Sensitive extends string = never,
+> = AbstractEntity<EntityProperties<Identity, Properties>, Sensitive> &
 	Readonly<BlueprintValue<EntityProperties<Identity, Properties>>> &
 	RecordChanges<Properties, Change> &
 	Members;
@@ -119,6 +124,7 @@ export type EntityConstructor<
 	Change extends readonly string[],
 	Unique extends readonly string[] = [],
 	Members = unknown,
+	Sensitive extends string = never,
 > = {
 	readonly [EntityClassBrand]: true;
 	/** The keys no two entities may share, as `options.unique` lists them. */
@@ -129,7 +135,7 @@ export type EntityConstructor<
 	>[];
 	new (
 		value: EntityInput<Identity, Properties>,
-	): DeclaredEntityInstance<Identity, Properties, Change, Members>;
+	): DeclaredEntityInstance<Identity, Properties, Change, Members, Sensitive>;
 	/**
 	 * The Standard Schema of the class: `validate` gives an instance of it, or
 	 * the issues that reject the value. Typed with the instance of the class
@@ -137,7 +143,7 @@ export type EntityConstructor<
 	 */
 	readonly "~standard": StandardSchemaV1.Props<
 		EntityInput<Identity, Properties>,
-		DeclaredEntityInstance<Identity, Properties, Change, Members>
+		DeclaredEntityInstance<Identity, Properties, Change, Members, Sensitive>
 	>;
 	/**
 	 * An instance of the class (a subclass included) for `value`, or every
@@ -148,6 +154,12 @@ export type EntityConstructor<
 		value: unknown,
 	): ParseResult<InstanceType<Self>>;
 	readonly [Kind]: "record";
+	/**
+	 * The name of the class as declared: the `name` option, which a bundler
+	 * does not rename, or the name of the class without one. A subclass may
+	 * give its own with `static override readonly recordName = "..."`.
+	 */
+	readonly recordName: string;
 	readonly blueprint: IBlueprint<EntityProperties<Identity, Properties>>;
 	readonly options: RecordSettings<EntityProperties<Identity, Properties>>;
 	/** Its plugins, those they require included, each once. */
@@ -167,6 +179,7 @@ export type EntityBuilder<
 	const Change extends readonly RecordKey<Properties>[] = [],
 	const Unique extends readonly RecordKey<Properties>[] = [],
 	const Plugins extends readonly AnyRecordPlugin[] = [],
+	const Sensitive extends readonly RecordKey<Properties>[] = [],
 >(
 	blueprint: IBlueprint<Properties, boolean>,
 	options?: EntityOptions<
@@ -174,12 +187,14 @@ export type EntityBuilder<
 		Change,
 		Unique,
 		Plugins,
-		Context
+		Context,
+		Sensitive
 	>,
 ) => EntityConstructor<
 	Identity,
 	WithPluginProperties<Properties, Plugins>,
 	Change,
 	readonly (Unique[number] | PluginUniqueKey<Plugins>)[],
-	PluginMembers<Plugins>
+	PluginMembers<Plugins>,
+	Sensitive[number] | PluginSensitiveKey<Plugins>
 >;

@@ -1,3 +1,8 @@
+import type {
+	AnyBlueprint,
+	BlueprintInput,
+	IBlueprint,
+} from "../../blueprint/types/blueprint.interface";
 import type { AnyCommand } from "../../command/types/command.interface";
 import type {
 	AnyEnvironment,
@@ -20,11 +25,42 @@ import type { UseCaseStepDescription } from "../../use-case/steps/types/steps.in
 import type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
+	UseCaseInput,
+	UseCaseResponse,
 } from "../../use-case/use-case";
 import type { ProviderSlot, ProviderStorage } from "../providers";
 import type { LogFactory, ProviderFactory } from "../start";
 
 type Named<Value> = Readonly<Record<string, Value>>;
+
+/**
+ * The options of `app.run`: the `context` of the use case, required when it
+ * declares one, and `dependencies`, what its `execute` takes to replace them.
+ */
+export type ApplicationRunOptions<UseCase extends AnyUseCaseClass> =
+	(UseCase["context"] extends IBlueprint<infer Properties>
+		? { readonly context: BlueprintInput<Properties> }
+		: { readonly context?: undefined }) & {
+		readonly dependencies?: Parameters<InstanceType<UseCase>["execute"]>[0];
+	};
+
+/**
+ * What `app.run` takes after the use case: its input, optional when no key
+ * of it is required, and the options, required when it declares a context.
+ */
+export type ApplicationRunArgs<UseCase extends AnyUseCaseClass> =
+	UseCase["context"] extends AnyBlueprint
+		? [input: UseCaseInput<UseCase>, options: ApplicationRunOptions<UseCase>]
+		: // biome-ignore lint/complexity/noBannedTypes: whether every key is optional
+			{} extends UseCaseInput<UseCase>
+			? [
+					input?: UseCaseInput<UseCase>,
+					options?: ApplicationRunOptions<UseCase>,
+				]
+			: [
+					input: UseCaseInput<UseCase>,
+					options?: ApplicationRunOptions<UseCase>,
+				];
 
 /** The declarations of an application, by name, one collection for each kind. */
 export interface ApplicationCollections {
@@ -154,25 +190,29 @@ export interface IApplication<
 	readonly entities: Collections["entities"];
 	readonly environments: Collections["environments"];
 	/**
-	 * Its repositories, inherited ones included. With a `provider` they are
-	 * bound to it: they share the declaration of the original but read and
-	 * write through that provider (unless they declared their own).
+	 * Its repositories, inherited ones included. With a `provider` (or
+	 * `providers`) they are bound to it: they share the declaration of the
+	 * original but read and write through that provider (unless they declared
+	 * their own).
 	 */
 	readonly repositories: Collections["repositories"];
 	/**
-	 * Its use cases. With a `provider` they are subclasses whose repositories
-	 * are the bound ones, through child use cases too; the same subclass every
-	 * time. Without one they are the declared classes.
+	 * Its use cases. With a `provider`, `providers` or `log` they are
+	 * subclasses whose repositories are the bound ones, through child use
+	 * cases too; the same subclass every time. Without any of them they are
+	 * the declared classes.
 	 */
 	readonly useCases: Collections["useCases"];
 	/**
-	 * Its commands. With a `provider` they are rebuilt over the bound use
-	 * cases (same settings), memoized; without one, the declared commands.
+	 * Its commands. With a `provider`, `providers` or `log` they are rebuilt
+	 * over the bound use cases (same settings), memoized; without any of them,
+	 * the declared commands.
 	 */
 	readonly commands: Collections["commands"];
 	/**
-	 * Its outputs. With a `provider` they are rebuilt over the bound commands
-	 * (same name, statuses and stages), memoized; without one, the declared outputs.
+	 * Its outputs. With a `provider`, `providers` or `log` they are rebuilt
+	 * over the bound commands (same name, statuses and stages), memoized;
+	 * without any of them, the declared outputs.
 	 */
 	readonly outputs: Collections["outputs"];
 	/** Its exceptions. */
@@ -183,6 +223,16 @@ export interface IApplication<
 	): Repository;
 	/** The bound version of a use case registered in the application. */
 	useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase;
+	/**
+	 * Runs a use case registered in the application over its bound
+	 * repositories: `new (app.useCase(UseCase))(input, { context }).execute(dependencies)`.
+	 * It rejects with what the constructor or `execute` throw. The events the
+	 * use case collected are not handled; a command is what dispatches them.
+	 */
+	run<UseCase extends AnyUseCaseClass>(
+		useCase: UseCase,
+		...args: ApplicationRunArgs<UseCase>
+	): Promise<UseCaseResponse<UseCase>>;
 	/** The bound version of a command registered in the application. */
 	command<Command extends AnyCommand>(command: Command): Command;
 	/** The bound version of an output registered in the application. */

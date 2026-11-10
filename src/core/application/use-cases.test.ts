@@ -11,6 +11,7 @@ import {
 	inMemoryProvider,
 	PasswordHasherRequired,
 	RepositoryUniqueViolation,
+	recordOf,
 	repositoryOf,
 	UnregisteredApplicationReference,
 	UnregisteredUseCaseDependency,
@@ -105,6 +106,45 @@ describe("applicationOf useCases and exceptions", () => {
 		expect(Object.keys(app.useCases)).toEqual(["Child", "Register"]);
 		expect(app.exceptions.Taken).toBe(Taken);
 		expect(app.useCases.Register).toBe(Register);
+	});
+
+	test("a record or entity with a declared name is keyed by it", () => {
+		class Account extends entityOf(Input, { name: "Account" }) {}
+		class Owner extends Account {}
+		class Renamed extends Account {
+			static override readonly recordName = "Renamed";
+		}
+		class Tag extends recordOf(Input, { name: "Tag" }) {}
+
+		const app = applicationOf({
+			name: "app",
+			// A subclass keeps the declared name; one that gives its own uses it.
+			entities: { Account: Owner, Renamed },
+			records: { Tag },
+		});
+		expect(Object.keys(app.entities)).toEqual(["Account", "Renamed"]);
+
+		for (const settings of [
+			{ entities: { Member: Account } },
+			{ entities: { Account: Renamed } },
+			{ records: { Label: Tag } },
+		]) {
+			const error = (() => {
+				try {
+					applicationOf({ name: "app", ...settings } as never);
+				} catch (error) {
+					return error;
+				}
+			})();
+			expect(error).toBeInstanceOf(InvalidApplicationDeclaration);
+			expect((error as Error).message).toContain("must be keyed by its name");
+		}
+		// Without a declared name the key is free, as before.
+		expect(
+			Object.keys(
+				applicationOf({ name: "app", entities: { Member: User } }).entities,
+			),
+		).toEqual(["Member"]);
 	});
 
 	test("the key must equal the name", () => {
@@ -347,5 +387,135 @@ describe("applicationOf useCases and exceptions", () => {
 			from: "x",
 			layer: ExceptionLayers.Repository,
 		});
+	});
+});
+
+describe("app.run", () => {
+	const Saved = blueprintOf(() => ({ user: User }));
+	class Save extends useCaseOf({
+		name: "Save",
+		blueprint: Input,
+		response: Saved,
+		dependencies: { users: Users },
+	}) {
+		override async execute({ users = this.dependencies.users } = {}) {
+			return { user: await users.create(new User(this.input)) };
+		}
+	}
+	class Ping extends useCaseOf({
+		name: "Ping",
+		blueprint: Empty,
+		response: Empty,
+	}) {
+		override async execute() {
+			return {};
+		}
+	}
+	class Whoami extends useCaseOf({
+		name: "Whoami",
+		blueprint: Empty,
+		response: blueprintOf((ctx) => ({ userId: ctx.id })),
+		context: Context,
+	}) {
+		override async execute() {
+			return { userId: this.context.userId };
+		}
+	}
+	const id = "00000000-0000-7000-8000-000000000000";
+	const appOf = () =>
+		applicationOf({
+			name: "app",
+			entities: { User },
+			repositories: { Users },
+			useCases: { Save, Ping, Whoami },
+			provider: inMemoryProvider(),
+		});
+
+	test("runs a use case over the repositories of the application", async () => {
+		const app = appOf();
+		const { user } = await app.run(Save, { name: "Ana" });
+
+		expect(user).toBeInstanceOf(User);
+		expect(await app.repositories.Users.findById(user.id)).toBeDefined();
+		// The declared repository keeps its own store.
+		expect(await Users.findById(user.id)).toBeUndefined();
+		// Like `app.useCase`, it takes the declared class, not the bound one.
+		await app.run(app.useCases.Save, { name: "Bia" }).then(
+			() => {
+				throw new Error("expected a rejection");
+			},
+			(error) => expect(error).toBeInstanceOf(InvalidApplicationDeclaration),
+		);
+	});
+
+	test("the input is optional when nothing in it is required", async () => {
+		const app = appOf();
+		expect(await app.run(Ping)).toEqual({});
+		expect(await app.run(Ping, {})).toEqual({});
+		() => {
+			// @ts-expect-error the input of Save is required
+			app.run(Save);
+			// @ts-expect-error name must be a string
+			app.run(Save, { name: 1 });
+		};
+	});
+
+	test("a declared context is required and given in the options", async () => {
+		const app = appOf();
+		expect(await app.run(Whoami, {}, { context: { userId: id } })).toEqual({
+			userId: id,
+		});
+		() => {
+			// @ts-expect-error Whoami declares a context
+			app.run(Whoami, {});
+			// @ts-expect-error Ping declares none
+			app.run(Ping, {}, { context: { userId: id } });
+		};
+	});
+
+	test("dependencies replace those of the execution", async () => {
+		const app = appOf();
+		const created: string[] = [];
+		const { user } = await app.run(
+			Save,
+			{ name: "Ana" },
+			{
+				dependencies: {
+					users: {
+						create: async (user: User) => {
+							created.push(user.name);
+							return user;
+						},
+					} as never,
+				},
+			},
+		);
+		expect(created).toEqual(["Ana"]);
+		expect(await app.repositories.Users.findById(user.id)).toBeUndefined();
+	});
+
+	test("rejects, never throws: unregistered use case and invalid input", async () => {
+		const app = appOf();
+		class Other extends useCaseOf({
+			name: "Other",
+			blueprint: Empty,
+			response: Empty,
+		}) {
+			override async execute() {
+				return {};
+			}
+		}
+		await expect(app.run(Other)).rejects.toBeInstanceOf(
+			InvalidApplicationDeclaration,
+		);
+		await expect(app.run(Save, { name: 1 } as never)).rejects.toBeInstanceOf(
+			Public.Exception,
+		);
+	});
+
+	test("works on an application that extends another", async () => {
+		const app = applicationOf({ name: "top", extends: [appOf()] });
+		const { user } = await app.run(Save, { name: "Ana" });
+		expect(await app.repositories.Users.findById(user.id)).toBeDefined();
 	});
 });

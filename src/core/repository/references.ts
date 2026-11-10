@@ -6,6 +6,7 @@ import type {
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
 import { isEntityClass } from "../entity/entity";
+import { recordNameOf } from "../record/name";
 import { type ExecutionScope, scopedProvider } from "../use-case/scope";
 import {
 	InvalidRepositoryData,
@@ -129,7 +130,7 @@ export function relationsOf(
 		const state = findState(relation);
 		if (!state) return invalid("Expected relations made by repositoryOf.");
 		if (related.some((other) => other.entity === state.entity)) {
-			return invalid(`Relation "${state.entity.name}" is duplicated.`);
+			return invalid(`Relation "${recordNameOf(state.entity)}" is duplicated.`);
 		}
 		if (typeof state.provider.findMany !== "function") {
 			return invalid(
@@ -148,11 +149,13 @@ export function relationsOf(
 		);
 		const exact = matches.find((state) => state.entity === target);
 		if (!exact && matches.length === 0) {
-			return invalid(`Missing relation: no repository of "${target.name}".`);
+			return invalid(
+				`Missing relation: no repository of "${recordNameOf(target)}".`,
+			);
 		}
 		if (!exact && matches.length > 1) {
 			return invalid(
-				`Relation "${target.name}" matches more than one repository.`,
+				`Relation "${recordNameOf(target)}" matches more than one repository.`,
 			);
 		}
 		const state = (exact ?? matches[0]) as RepositoryState;
@@ -162,7 +165,7 @@ export function relationsOf(
 	for (const state of related) {
 		if (!used.has(state)) {
 			return invalid(
-				`Relation "${state.entity.name}" is not held by ${entity.name}.`,
+				`Relation "${recordNameOf(state.entity)}" is not held by ${recordNameOf(entity)}.`,
 			);
 		}
 	}

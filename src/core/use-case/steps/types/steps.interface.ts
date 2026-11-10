@@ -29,6 +29,7 @@ export type StepReadAction =
 	| "findMany"
 	| "exists"
 	| "findPage"
+	| "findCursor"
 	| "count";
 
 type RepositoryKeys<Dependencies> = {

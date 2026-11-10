@@ -6,6 +6,7 @@ import type {
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
 import { isProperty } from "../property/is-property";
+import { recordNameOf } from "../record/name";
 import { movedIssue } from "./issue";
 import type { Issue, IssueCode, ParseResult } from "./types/parse.interface";
 
@@ -231,7 +232,7 @@ function fieldAt(
 		if (!isPlainObject(value)) {
 			return rejection(
 				"not_record",
-				`must be an instance of record "${record.record.name}"`,
+				`must be an instance of record "${recordNameOf(record.record)}"`,
 				pathAt(parent, key),
 				source,
 			);

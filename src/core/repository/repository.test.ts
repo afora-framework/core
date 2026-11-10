@@ -72,6 +72,8 @@ async function rejected(
 	);
 	expect(error).toBeInstanceOf(Exception);
 	expect((error as Exception).is(target)).toBe(true);
+	// A declared class is kept across the layers the exception goes through.
+	if (typeof target !== "string") expect(error).toBeInstanceOf(target);
 	expect((error as Exception).passedThrough(layer)).toBe(true);
 	return error as Exception;
 }

@@ -1,4 +1,7 @@
-import type { RecordUniqueKeys } from "../../record/types/plugin.interface";
+import type {
+	RecordSensitiveKeys,
+	RecordUniqueKeys,
+} from "../../record/types/plugin.interface";
 import type { RecordConstructor } from "../../record/types/record.interface";
 import type { Meta } from "../../symbols/meta";
 import type {
@@ -117,7 +120,8 @@ type SlicedRecord<Original extends AnyRecordClass, Mask> =
 				KeptChange<InstanceType<Original>, keyof Properties>[],
 				KeptUnique<Original, keyof Properties>,
 				unknown,
-				{ readonly [Meta]: { readonly blueprint: Original["blueprint"] } }
+				{ readonly [Meta]: { readonly blueprint: Original["blueprint"] } },
+				KeptSensitive<Original, keyof Properties>
 			>
 		: never;
 
@@ -131,6 +135,12 @@ type KeptUnique<Original, Keys> = Original extends {
 	readonly [RecordUniqueKeys]?: infer Unique;
 }
 	? Extract<Unique, Keys & string>
+	: never;
+
+type KeptSensitive<Original, Keys> = Original extends {
+	readonly [RecordSensitiveKeys]?: infer Sensitive;
+}
+	? Extract<Sensitive, Keys & string>
 	: never;
 
 /** The properties of `Blueprint`, read lazily so generic uses stay shallow. */

@@ -74,7 +74,7 @@ function scopeOf(initial: Tables, root: boolean) {
 	};
 
 	const provider: IRepositoryProvider = {
-		capabilities: Object.freeze({ transactions: true }),
+		capabilities: Object.freeze({ transactions: true, keyset: true }),
 		findOne: (context, query = {}) =>
 			whenIdle(() => {
 				const [first] = selectRows(tableOf(context).values(), {

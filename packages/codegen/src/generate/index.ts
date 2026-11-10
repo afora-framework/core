@@ -370,7 +370,8 @@ function propertyDoc(decl: Decl, e: Emitter): Doc {
 function recordDoc(decl: Decl, e: Emitter): Doc {
 	const entity = decl.kind === "entity";
 	const fields = fieldsOfDecl(decl) as Record<string, Field>;
-	const options: [string, Doc][] = [];
+	// The declared name, so the class can be renamed by a bundler.
+	const options: [string, Doc][] = [["name", literal(decl.name)]];
 	for (const key of ["unique", "change", "sensitive"] as const) {
 		const list = decl.spec[key];
 		if (Array.isArray(list) && list.length > 0) {
@@ -399,8 +400,11 @@ function recordDoc(decl: Decl, e: Emitter): Doc {
 			],
 		]);
 	}
-	const args: Doc[] = [blueprintDoc(fields, e, false)];
-	if (options.length > 0) args.push(objectDoc(options, true));
+	const args: Doc[] = [
+		blueprintDoc(fields, e, false),
+		// Alone, the name stays on one line.
+		objectDoc(options, options.length > 1),
+	];
 	const maker = e.use(entity ? "entityOf" : "recordOf");
 	return [
 		"export class ",

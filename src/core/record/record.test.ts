@@ -227,6 +227,8 @@ test("the keys are members of the prototype; toJSON gives the plain value", () =
 test("an invalid value names the key of the record", () => {
 	const property = raise(() => new User({ ...user, name: "   " }));
 	expect(property.is(InvalidPropertyValue)).toBe(true);
+	// The record gives its own details, so it is not an instance of the class.
+	expect(property).not.toBeInstanceOf(InvalidPropertyValue);
 	expect(property.layer).toBe(ExceptionLayers.Record);
 	expect(property.source).toBe("User");
 	expect(property.details).toEqual({ key: "name" });

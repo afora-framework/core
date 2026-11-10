@@ -24,6 +24,14 @@ export const InvalidRecordValue = exceptionOf({
 		`Invalid value for ${key ? `"${key}" of ` : ""}record "${source}": ${errors.join("; ")}`,
 });
 
+/** `recordOf` or `entityOf` got an option it cannot use, as a `name` that is not an identifier. */
+export const InvalidRecordDeclaration = exceptionOf({
+	layer: ExceptionLayers.Record,
+	name: "InvalidRecordDeclaration",
+	message: (reason: string, source) =>
+		`Invalid declaration of record "${source}": ${reason}`,
+});
+
 /**
  * A record is given a key its blueprint does not declare, in its value or by
  * `set`; `key` is its path, e.g. `address.extra`, and `source` the record name.
