@@ -853,6 +853,8 @@ function useCaseDoc(
 		const docs = steps.map((step) => stepDoc(step, e, scope, providers));
 		const forced =
 			steps.length > 1 && steps.every((step) => Object.keys(step).length > 1);
+		// TypeScript checks the references and values of the generated steps too.
+		props.push(["strictSteps", "true"]);
 		props.push([
 			"steps",
 			group(
