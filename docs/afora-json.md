@@ -31,23 +31,24 @@ afora-codegen extract src/app.ts#App [--import key=./file.ts#name] > afora.json
 
 ## Mapping what cannot be described
 
-Some things are code, not data: a provider made by hand, a `run` function, an `execute`, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
+Some things are code, not data: a provider made by hand, a `run` function, the `before` and `after` of a standard use case, an `execute`, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
 
-| Key                              | Maps                                                                       |
-| -------------------------------- | -------------------------------------------------------------------------- |
-| `provider`                       | the provider of the application, when created without `providerOf`         |
-| `log`                            | the `log` of the application, when made by `logFrom`                       |
-| `log.providers.<index>`          | a log provider other than `"console"` or `"json"`, by its position         |
-| `repositories.<Name>.provider`   | the own provider of a repository, when created without `providerOf`        |
-| `providers.<key>`                | a provider of the top-level `providers`, when created without `providerOf` |
-| `useCases.<Name>`                | a use case with a hand-written `execute`                                   |
-| `useCases.<Name>.run.<name>`     | the `fn` of a `run` step of a steps use case                               |
-| `commands.<Name>.events`         | the event handler of a command, when it is not a policy                    |
-| `commands.<Name>.onEventError`   | the `onEventError` handler of a command                                    |
-| `publishers.<key>`               | a publisher of the top-level `publishers`                                  |
-| `entities.<Name>.events.<event>` | the handler of a lifecycle event of an entity                              |
-| `outputs.<Name>.pipe.<index>`    | a stage written by hand, by its position in the `pipe`                     |
-| `<property name>`                | the module of a property that cannot be recreated (see the limitations)    |
+| Key                                | Maps                                                                       |
+| ---------------------------------- | -------------------------------------------------------------------------- |
+| `provider`                         | the provider of the application, when created without `providerOf`         |
+| `log`                              | the `log` of the application, when made by `logFrom`                       |
+| `log.providers.<index>`            | a log provider other than `"console"` or `"json"`, by its position         |
+| `repositories.<Name>.provider`     | the own provider of a repository, when created without `providerOf`        |
+| `providers.<key>`                  | a provider of the top-level `providers`, when created without `providerOf` |
+| `useCases.<Name>`                  | a use case with a hand-written `execute`                                   |
+| `useCases.<Name>.run.<name>`       | the `fn` of a `run` step of a steps use case                               |
+| `useCases.<Name>.before`, `.after` | the `before` and `after` of a standard use case                            |
+| `commands.<Name>.events`           | the event handler of a command, when it is not a policy                    |
+| `commands.<Name>.onEventError`     | the `onEventError` handler of a command                                    |
+| `publishers.<key>`                 | a publisher of the top-level `publishers`                                  |
+| `entities.<Name>.events.<event>`   | the handler of a lifecycle event of an entity                              |
+| `outputs.<Name>.pipe.<index>`      | a stage written by hand, by its position in the `pipe`                     |
+| `<property name>`                  | the module of a property that cannot be recreated (see the limitations)    |
 
 The value is always `"./file.ts#export"`.
 
@@ -110,7 +111,24 @@ A use case that a [standard use case](std-use-cases.md) covers is declared by na
 
 It generates `export const CreatePost = StdUseCases.context.create(Posts, { name: "CreatePost", ... })`, the same class a command would pick with `ctx.create(Posts, ...)`, and commands name it as any other use case. The options are those of the TypeScript form, with the exceptions of `errors` by name (declared, or exported by `@afora/core`); the name is the key of the declaration, and `description`, `tags` and `deprecated` go beside `generic`. `catalog().useCases` lists the standard use cases with the `actions` the repository needs, the `plugins` the entity needs and the `options` each takes.
 
-The validator checks that the use case exists (`unknown_generic`), that the repository is declared (`unknown_repository`) and has the actions (`generic_requires_action`), that the entity has the plugins (`generic_requires_plugin`), and the shape of the options and the keys they name (`invalid_generic_option`). What an option asks of the entity beyond its keys, such as omitting a required key, is checked by the use case itself when the generated code loads, which throws `UseCaseUnavailable`. `extractSpec` gives the declaration back as written, from `describe().useCases.<Name>.generic`, and needs no import mapped, a hashing function included.
+The use cases that write (all but `get`, `list` and `login`) take the [hooks](std-use-cases.md#before-and-after) too: `before` and `after` are imports, as the `fn` of a `run` step, `dependencies` name declared use cases, repositories, environments or `"Logger"`, as those of a use case written in the spec, and `throws` lists exceptions as `errors` does (a name, or `{ "core": "Name" }`):
+
+```json
+"CreateEntry": {
+	"generic": "create",
+	"repository": "Entries",
+	"options": {
+		"before": { "import": "../hooks#checkEntry" },
+		"after": { "import": "../hooks#recordEntry" },
+		"dependencies": { "contentTypes": "ContentTypes", "logger": "Logger" },
+		"throws": ["ContentTypeNotFound", "InvalidJsonData"]
+	}
+}
+```
+
+They generate `before: checkEntry, after: recordEntry, dependencies: { contentTypes: ContentTypes, logger: Logger }, throws: [ContentTypeNotFound, InvalidJsonData]`, with the functions imported from their module. Extraction needs `useCases.<Name>.before` and `useCases.<Name>.after` in `imports`. A field of any JSON value is `"json"` (`ctx.json`); a property made by `jsonOf({ schema })` is not written in the spec: extraction gives it as an opaque import.
+
+The validator checks that the use case exists (`unknown_generic`), that the repository is declared (`unknown_repository`) and has the actions (`generic_requires_action`), that the entity has the plugins (`generic_requires_plugin`), and the shape of the options and the keys they name (`invalid_generic_option`; `invalid_import` for `before` or `after`, and the issues of a use case's `dependencies` for theirs). What an option asks of the entity beyond its keys, such as omitting a required key, is checked by the use case itself when the generated code loads, which throws `UseCaseUnavailable`. `extractSpec` gives the declaration back as written, from `describe().useCases.<Name>.generic`, and needs no import mapped, a hashing function included, but for `before` and `after`.
 
 ## Catalogs: providers, stages and event policies
 

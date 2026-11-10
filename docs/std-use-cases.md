@@ -74,19 +74,23 @@ A use case whose repository lacks an action, or whose entity lacks a record plug
 
 ## Options
 
-| Option                                           | Of                                             | Does                                                                                                                                                                                        |
-| ------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                                           | all                                            | the `useCaseName`; by default the verb and the entity name, as `CreatePost`, `ListPost`, `RegisterUser`                                                                                     |
-| `description`, `tags`, `deprecated`              | all                                            | the metadata of the use case                                                                                                                                                                |
-| `errors: { notFound, conflict, invalid, owner }` | all                                            | exception classes thrown in place of `UseCaseEntityNotFound` (404), `UseCaseEntityConflict` (409, `register`), `UseCaseInvalidCredentials` (401, `login`); `owner` is `notFound` by default |
-| `as`                                             | all but `list`                                 | the response key that holds the entity, typed: `{ as: "post" }` gives `{ post }`                                                                                                            |
-| `owner: { key?, context }`                       | all but `restore`, `register`, `login`         | the caller owns the entity, see below                                                                                                                                                       |
-| `omit: [...]`                                    | `create`, `register`                           | optional keys the input does not take                                                                                                                                                       |
-| `values: { ... }`                                | `create`, `register`                           | values the entity is built with, in place of taking them from the input                                                                                                                     |
-| `set: { ... }`                                   | `publish`, `unpublish`, `archive`, `unarchive` | change keys set before the entity is stored, e.g. `{ status: "published" }`                                                                                                                 |
-| `orderBy: [{ key, direction? }]`                 | `list`                                         | the order of the page; newest first (`createdAt` descending) by default                                                                                                                     |
+| Option                                                          | Of                                                        | Does                                                                                                                                                                                        |
+| --------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                                                          | all                                                       | the `useCaseName`; by default the verb and the entity name, as `CreatePost`, `ListPost`, `RegisterUser`                                                                                     |
+| `description`, `tags`, `deprecated`                             | all                                                       | the metadata of the use case                                                                                                                                                                |
+| `errors: { notFound, conflict, invalid, owner }`                | all                                                       | exception classes thrown in place of `UseCaseEntityNotFound` (404), `UseCaseEntityConflict` (409, `register`), `UseCaseInvalidCredentials` (401, `login`); `owner` is `notFound` by default |
+| `as`                                                            | all but `list`                                            | the response key that holds the entity, typed: `{ as: "post" }` gives `{ post }`                                                                                                            |
+| `owner: { key?, context }`                                      | all but `restore`, `register`, `login`                    | the caller owns the entity, see below                                                                                                                                                       |
+| `omit: [...]`                                                   | `create`, `register`                                      | optional keys the input does not take                                                                                                                                                       |
+| `values: { ... }`                                               | `create`, `register`                                      | values the entity is built with, in place of taking them from the input                                                                                                                     |
+| `set: { ... }`                                                  | `publish`, `unpublish`, `archive`, `unarchive`            | change keys set before the entity is stored, e.g. `{ status: "published" }`                                                                                                                 |
+| `orderBy: [{ key, direction? }]`                                | `list`                                                    | the order of the page; newest first (`createdAt` descending) by default                                                                                                                     |
+| `before: ({ input, entity?, dependencies, context }) => input?` | the use cases that write (all but `get`, `list`, `login`) | runs before the write and may give back the input to go on with, see [Before and after](#before-and-after)                                                                                  |
+| `after: ({ entity, input, dependencies, context }) => void`     | the use cases that write                                  | runs after the write, within the transaction of the command                                                                                                                                 |
+| `dependencies: { ... }`                                         | the use cases that write                                  | repositories, use cases, environments or `Logger` by name, joined to those the use case makes, for `before` and `after`                                                                     |
+| `throws: [...]`                                                 | the use cases that write                                  | exception classes `before` and `after` throw: added to the errors of the use case                                                                                                           |
 
-Options are JSON and exception classes, so each use case can be written in `afora.json` too.
+Options are JSON, exception classes and, for the hooks, functions and dependencies, so each use case can be written in `afora.json` too (`before` and `after` as imports).
 
 **`owner`** says that `key` holds who owns the entity, as an id (`ownerId` by default, the key of the `ownable` plugin) or as an entity, and that the key `context` of the context holds the id of the caller. The use case then declares that context (`{ userId: id }`), and:
 
@@ -107,6 +111,87 @@ await Blog.run("create", { title: "Mine" }, { context: { userId } });
 ```
 
 `restore` takes no `owner`: a deleted entity cannot be read to check who owns it before it is back.
+
+## Before and after
+
+A write often needs a check the entity cannot make alone: a lookup in another repository, data checked against a schema loaded at runtime, a key renamed before it is stored. `before` and `after` put it around the write of a standard use case, without writing the use case by hand:
+
+- `before({ input, entity?, dependencies, context })` runs before the write: first thing in `create`, `register` and `restore`; after the entity is loaded and its owner checked in `update`, `delete` and the plugin use cases, which give it as `entity`. What it gives back, if anything, is the input the use case goes on with (the keys it builds, changes or looks up, `register`'s email check included); `undefined` keeps the input given. The entity still validates what it is built or changed with.
+- `after({ entity, input, dependencies, context })` runs after the write, with the entity written and the input `before` gave, before the response is given. In a command with `transaction: true` it runs inside the transaction, so what it throws rolls the write back.
+- `dependencies` are repositories, use cases, environments or `Logger`, by name, joined to those the use case makes (`repository`, and `<key>Repository` for each key that holds an entity; a name taken by both is `UseCaseUnavailable`). Both hooks get all of them as the call resolved them, overrides of `execute` included.
+- `throws` lists the exceptions the hooks throw: they go to `static errors`, so `describe()` reports them and an output gives them 422 (or what its `statuses` say). An exception with `details.issues`, such as `InvalidJsonData`, is a 400 anyway.
+
+The types follow the repository and the options: `input` is the parsed input of the use case (`omit`, `values` and `owner` taken into account), `entity` an instance of the entity, `dependencies` typed by name and `context` the context `owner` declares (`undefined` without one). `get`, `list` and `login` do not write, so they take no hooks: a type error, and `UseCaseUnavailable` at declaration.
+
+A CMS whose entries hold `data` checked against the JSON Schema of their content type, stored in another repository:
+
+```ts
+import {
+	blueprintOf,
+	checkJsonSchema,
+	commandOf,
+	entityOf,
+	ExceptionLayers,
+	exceptionOf,
+	InvalidJsonData,
+	repositoryOf,
+} from "@afora/core";
+
+const ContentTypeNotFound = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "ContentTypeNotFound",
+	message: "No such content type.",
+});
+
+class ContentType extends entityOf(
+	blueprintOf((ctx) => ({ slug: ctx.slug, schema: ctx.json })),
+	{ unique: ["slug"] },
+) {}
+class Entry extends entityOf(
+	blueprintOf((ctx) => ({ type: ctx.slug, data: ctx.json })),
+	{ change: ["data"] },
+) {}
+const ContentTypes = repositoryOf({
+	entity: ContentType,
+	actions: ["findBySlug"],
+});
+const Entries = repositoryOf({
+	entity: Entry,
+	actions: ["findById", "create", "update"],
+});
+
+const Cms = commandOf({
+	name: "Cms",
+	transaction: true,
+	useCases: (ctx) => ({
+		create: ctx.create(Entries, {
+			dependencies: { contentTypes: ContentTypes },
+			throws: [ContentTypeNotFound, InvalidJsonData],
+			before: async ({ input, dependencies }) => {
+				const type = await dependencies.contentTypes.findBySlug(input.type);
+				if (!type) throw new ContentTypeNotFound({ source: input.type });
+				checkJsonSchema(type.schema, input.data, { source: input.type }); // InvalidJsonData, a 400 with its issues
+				return { ...input, data: renamed(type, input.data) }; // what is stored (renamed: the app's own)
+			},
+			after: async ({ entity, dependencies }) => {
+				/* history, notifications: within the transaction */
+			},
+		}),
+		update: ctx.update(Entries, {
+			dependencies: { contentTypes: ContentTypes },
+			throws: [ContentTypeNotFound, InvalidJsonData],
+			before: async ({ input, entity, dependencies }) => {
+				if (input.data === undefined) return; // nothing to check
+				const type = await dependencies.contentTypes.findBySlug(entity.type);
+				if (!type) throw new ContentTypeNotFound({ source: entity.type });
+				checkJsonSchema(type.schema, input.data, { source: entity.type });
+			},
+		}),
+	}),
+});
+```
+
+The hooks are `run` steps of the use case (see [Steps](use-cases.md#steps)): `describe()` gives them as `{ run: "before", fn: { kind: "opaque" }, as: "prepared" }` and `{ run: "after" }`, with the steps after `before` reading `$prepared` in place of `$input`, and the options as `before: { kind: "opaque" }`, the dependencies by registered name and `throws` by exception name.
 
 ## In an application
 

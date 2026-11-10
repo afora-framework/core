@@ -6,6 +6,7 @@
 
 - `CommandEventInfo` has `publisher(name)`, and a handler policy that throws a `CommandEventFailed` itself has it passed up as it is instead of wrapped.
 - An application with `publishers` rebinds its use cases and commands, as one with a `provider` or a `log` does, so `app.commands.X` is not the declared command.
+- The function of a `run` step gets `{ context, dependencies }` after its args: the dependencies as the call resolved them, overrides included (it got `{ context }`).
 
 ### Added
 
@@ -17,6 +18,9 @@
 - `@afora/ws`, a new package: the `websocket` sink serves the operations of an output over JSON messages (`{ id?, op, input? }`), on any runtime, with topic subscriptions (`{ subscribe }`) that `publishEvents` fills through `wsHub()`. See `packages/ws/README.md`.
 - `coerceTextValues(blueprint, texts)`: text values as the scalar fields of a blueprint take them (numbers, booleans), for sinks that read text; `@afora/hono` and `@afora/mcp` now use it instead of their own copies.
 - `@afora/hono`: the `webhooks` option verifies the signatures of incoming webhooks (Stripe, GitHub, Standard Webhooks, plain HMAC-SHA256) and can strip undeclared keys. See `packages/hono/README.md#webhooks`.
+- Standard use cases that write (`create`, `update`, `delete`, `restore`, `publish`, `unpublish`, `archive`, `unarchive`, `tag`, `untag`, `register`) take `before`, `after`, `dependencies` and `throws`: `before({ input, entity?, dependencies, context })` runs before the write and may give back the input to go on with; `after({ entity, input, dependencies, context })` runs after it, within the transaction of the command; `dependencies` (repositories, use cases, environments, `Logger`) join those the use case makes; `throws` adds exception classes to its `errors`, so `describe()` and the statuses of outputs know them. Typed from the repository and the options; `get`, `list` and `login` reject them (a type error, and `UseCaseUnavailable`). `describe()` names the dependencies among the options of a standard use case by their registered names. New types `StdHookArgs`, `StdHookOptions`, `StdHookable` and `StdNoHookOptions`. See `docs/std-use-cases.md#before-and-after`.
+- JSON properties: `ctx.json` (`JsonProperty`) holds any JSON value (typed `JsonValue`), rejecting `undefined`, functions, `NaN`, class instances and cycles; `jsonOf({ schema })` (`ctx.jsonOf`) holds JSON checked by a JSON Schema known at declaration, typed by it; `checkJsonSchema(schema, value, { source })` checks data against a schema loaded at runtime with TypeBox `Value` (no compiling, so it runs on Workers) and throws the new `InvalidJsonData`, whose `details.issues` are afora issues (a 400), and `jsonSchemaIssues` gives those issues without throwing. A schema that is not a JSON Schema throws the new `InvalidJsonSchema`. Also exported: `JsonClass`. See `docs/properties.md#json`.
+- `afora.json`: the standard use cases that write take `before` and `after` (`{ "import": ... }`), `dependencies` and `throws` in their `options`, validated, generated and extracted (`useCases.<Name>.before` and `.after` in `imports`); `"json"` is a field type.
 
 ## 0.0.7 — unreleased (draft: dated when it is published)
 
