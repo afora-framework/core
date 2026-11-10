@@ -1,10 +1,15 @@
-import { EntitySettings, SCHEMA_VERSION_KEY } from "../entity/abstract-entity";
+import {
+	EntitySettings,
+	isVersionedEntityClass,
+	SCHEMA_VERSION_KEY,
+} from "../entity/abstract-entity";
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
 import { Exception } from "../exception/exception";
 import type { Issue } from "../parse/types/parse.interface";
 import {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
+	RepositoryConcurrencyConflict,
 } from "./exceptions";
 import { resolveReferences } from "./references";
 import { contextOf, type RepositoryState } from "./state";
@@ -248,6 +253,10 @@ export async function migrateRepository(
 	const { provider } = state;
 	const context = contextOf(state);
 	const plan = fullUpcastPlanOf(state.entity);
+	// Rewrites of an entity with optimistic concurrency expect the version read.
+	const versioned =
+		isVersionedEntityClass(state.entity) &&
+		provider.capabilities?.versioning === true;
 	const previousNames =
 		(state.entity as { readonly [EntitySettings]?: EntityStorageSettings })[
 			EntitySettings
@@ -294,10 +303,26 @@ export async function migrateRepository(
 			if (pending || (removal && destructive)) {
 				tally.upgraded += 1;
 				if (apply) {
-					await provider.update(
-						context,
-						writtenOf(state, plan, item, destructive),
-					);
+					// A versioned row written in between is already current: kept.
+					const expected = item.row.version;
+					try {
+						await provider.update(
+							context,
+							writtenOf(state, plan, item, destructive),
+							versioned && typeof expected === "number"
+								? { expectedVersion: expected }
+								: undefined,
+						);
+					} catch (error) {
+						if (
+							!(error instanceof Exception) ||
+							!error.is(RepositoryConcurrencyConflict)
+						) {
+							throw error;
+						}
+						tally.upgraded -= 1;
+						tally.upToDate += 1;
+					}
 				}
 			} else if (removal) {
 				tally.removalPending += 1;

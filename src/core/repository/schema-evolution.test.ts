@@ -541,6 +541,33 @@ describe("app.migrate", () => {
 		});
 	});
 
+	test("rewrites a versioned entity at the version it read, which it keeps", async () => {
+		const provider = inMemoryProvider();
+		class Doc extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.text.with({ fill: "untitled" }) })),
+			{ name: "Doc", versioned: true, schemaVersion: 2 },
+		) {}
+		const raw = contextOf(Doc, "Doc");
+		const id = idOf();
+		await provider.insert(raw, { id, createdAt, version: 4 });
+		const app = applicationOf({
+			name: "docs",
+			entities: { Doc },
+			repositories: {
+				Docs: repositoryOf({ entity: Doc, actions: ["findMany"] }),
+			},
+			provider,
+		});
+		const report = await app.migrate({ mode: "apply" });
+		expect(report.entities.Doc?.upgraded).toBe(1);
+		const [stored] = await provider.findMany(raw, { where: { id } });
+		expect(stored).toMatchObject({
+			title: "untitled",
+			version: 4,
+			[SCHEMA_VERSION_KEY]: 2,
+		});
+	});
+
 	test("rejects invalid options", async () => {
 		const app = applicationOf({
 			name: "cms",
@@ -556,6 +583,107 @@ describe("app.migrate", () => {
 			expect(app.migrate(options as never)).rejects.toThrow();
 		}
 	});
+});
+
+test("the scenario of #28, end to end", async () => {
+	const provider = inMemoryProvider();
+	const appOf = (entity: object, previous?: boolean) =>
+		applicationOf({
+			name: "cms",
+			entities: { [previous ? "Article" : "Entry"]: entity },
+			repositories: {
+				Entries: repositoryOf({
+					entity: entity as typeof EntryV1,
+					actions: ["findMany", "create"],
+				}),
+			},
+			provider,
+		} as never) as unknown as {
+			describe(): never;
+			start(options: object): Promise<unknown>;
+			stop(): Promise<void>;
+			migrate(options: object): Promise<{
+				entities: Record<string, Record<string, unknown>>;
+			}>;
+			repositories: {
+				Entries: {
+					findMany(): Promise<{ toJSON(): Record<string, unknown> }[]>;
+					create(input: object): Promise<unknown>;
+				};
+			};
+		};
+
+	// v1, with rows written by its repository, and its lock committed.
+	const v1 = appOf(EntryV1);
+	await v1.repositories.Entries.create({ title: "Olá" });
+	await v1.repositories.Entries.create({ title: "Hello" });
+	const lock = schemaLockOf(v1.describe());
+
+	// v2: a required locale with a fill, and a slug from an upgrade step.
+	class EntryV2 extends entityOf(
+		blueprintOf((ctx) => ({
+			title: ctx.text,
+			slug: ctx.slug,
+			locale: ctx.enumOf(["pt", "en"]).with({ fill: "pt" }),
+		})),
+		{
+			name: "Entry",
+			schemaVersion: 2,
+			upgrade: {
+				2: (data) => ({
+					...data,
+					slug: String(data.title)
+						.toLowerCase()
+						.replace(/[^a-z]/g, "x"),
+				}),
+			},
+		},
+	) {}
+	const v2 = appOf(EntryV2);
+	await v2.start({ register: false, lock });
+	const read = await v2.repositories.Entries.findMany();
+	expect(read.map((entry) => entry.toJSON().locale)).toEqual(["pt", "pt"]);
+	expect(read.map((entry) => entry.toJSON().slug)).toEqual(["olx", "hello"]);
+	const changes = diffSchemas(lock, schemaLockOf(v2.describe()));
+	expect(changes.every((change) => change.satisfied)).toBe(true);
+	expect((await v2.migrate({ mode: "check" })).entities.Entry?.upgraded).toBe(
+		2,
+	);
+	await v2.migrate({ mode: "apply", lock });
+	expect((await v2.migrate({ mode: "check" })).entities.Entry?.upToDate).toBe(
+		2,
+	);
+	await v2.stop();
+	const lock2 = schemaLockOf(v2.describe());
+
+	// v3: renamed to Article; without previousNames start fails.
+	class Lost extends entityOf(
+		blueprintOf((ctx) => ({
+			title: ctx.text,
+			slug: ctx.slug,
+			locale: ctx.enumOf(["pt", "en"]),
+		})),
+		{ name: "Article", schemaVersion: 2 },
+	) {}
+	expect(
+		appOf(Lost, true).start({ register: false, lock: lock2 }),
+	).rejects.toBeInstanceOf(SchemaLockMismatch);
+	class Article extends entityOf(
+		blueprintOf((ctx) => ({
+			title: ctx.text,
+			slug: ctx.slug,
+			locale: ctx.enumOf(["pt", "en"]),
+		})),
+		{ name: "Article", schemaVersion: 2, previousNames: ["Entry"] },
+	) {}
+	const v3 = appOf(Article, true);
+	await v3.start({ register: false, lock: lock2 });
+	const moved = await v3.migrate({ mode: "apply", destructive: true });
+	expect(moved.entities.Article?.movedFromPreviousNames).toBe(2);
+	expect(
+		(await v3.repositories.Entries.findMany()).map((a) => a.toJSON().title),
+	).toEqual(["Olá", "Hello"]);
+	await v3.stop();
 });
 
 describe("app.start({ lock })", () => {
