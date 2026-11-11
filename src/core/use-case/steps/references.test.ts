@@ -163,6 +163,7 @@ describe("references in a use case", () => {
 		for (const valid of [
 			"$input.address.zip",
 			"$input.tags.0",
+			"$input.tags.length",
 			"$input.author.name",
 			"$input.author.initial.anything",
 			"$input.out.anything",
@@ -174,6 +175,8 @@ describe("references in a use case", () => {
 			["$input.address.zipp", "zipp"],
 			["$input.tags.first", "first"],
 			["$input.tags.0.x", "x"],
+			["$input.tags.length.x", "x"],
+			["$input.name.length", "length"],
 			["$input.author.nope", "nope"],
 		] as const) {
 			expect(invalidStep(declare(invalid))).toMatchObject({

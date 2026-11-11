@@ -115,6 +115,24 @@ describe("strictSteps", () => {
 		expect(result.from).toBe("no-reply");
 	});
 
+	test("the length of a list is a number, at run time and in the types", async () => {
+		class Count extends useCaseOf({
+			name: "Count",
+			blueprint: blueprintOf((ctx) => ({ tags: ctx.list.string })),
+			response: blueprintOf((ctx) => ({ total: ctx.integer })),
+			strictSteps: true,
+			steps: [{ return: { total: "$input.tags.length" } }],
+		}) {}
+		expect(await new Count({ tags: ["a", "b"] }).execute()).toEqual({
+			total: 2,
+		});
+		type Scope = { readonly input: { readonly tags: string[] } };
+		const total: StepReferenceType<Scope, "$input.tags.length"> = 2;
+		// @ts-expect-error: the length is a number
+		const text: StepReferenceType<Scope, "$input.tags.length"> = "2";
+		expect([total, text as unknown]).toEqual([2, "2"]);
+	});
+
 	test("strictSteps must be a boolean", () => {
 		expect(() =>
 			useCaseOf({

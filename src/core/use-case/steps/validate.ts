@@ -68,6 +68,8 @@ const WRITE_ACTIONS = new Set([
 ]);
 
 const INDEX = /^(?:0|[1-9][0-9]*)$/;
+/** What `missingSegment` reaches through the `length` of a list, which `followPath` reads. */
+const LENGTH = Symbol("length");
 const PRIMITIVE_SCHEMA_TYPES = new Set([
 	"string",
 	"number",
@@ -101,12 +103,18 @@ function missingSegment(
 ): string | undefined {
 	let current = field;
 	for (const segment of path) {
+		// The length of a list is a number, which has no keys to follow.
+		if (current === LENGTH) return segment;
 		if (isBlueprint(current)) {
 			if (!Object.hasOwn(current.properties, segment)) return segment;
 			current = current.properties[segment];
 			continue;
 		}
 		if (isBlueprintList(current)) {
+			if (segment === "length") {
+				current = LENGTH;
+				continue;
+			}
 			if (!INDEX.test(segment)) return segment;
 			current = current.item;
 			continue;

@@ -9,6 +9,7 @@ import {
 	InvalidStoredSchemaVersion,
 	inMemoryProvider,
 	listOf,
+	providersOf,
 	type RepositoryContext,
 	type RepositoryData,
 	ReservedEntityKey,
@@ -392,6 +393,7 @@ describe("app.migrate", () => {
 					invalid: [],
 					movedFromPreviousNames: 0,
 					removedKeys: ["draft"],
+					deferred: false,
 				},
 			},
 		});
@@ -472,7 +474,7 @@ describe("app.migrate", () => {
 			},
 			provider,
 		});
-		const old = contextOf(Article, "Entry");
+		const old = contextOf(EntryV1, "Entry");
 		const current = contextOf(Article, "Article");
 		const check = await app.migrate({ mode: "check" });
 		expect(check.entities.Article?.movedFromPreviousNames).toBe(3);
@@ -493,6 +495,82 @@ describe("app.migrate", () => {
 		await app.migrate({ mode: "apply", destructive: true, pageSize: 1 });
 		expect(await provider.count(old)).toBe(0);
 		expect(await provider.count(current)).toBe(3);
+	});
+
+	test("finds the rows already moved with one query per page", async () => {
+		const { provider, ids } = await seeded();
+		class Article extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.text })),
+			{ name: "Article", previousNames: ["Entry"] },
+		) {}
+		const calls: string[] = [];
+		const counting = {
+			...provider,
+			capabilities: provider.capabilities,
+			findOne(...args: Parameters<typeof provider.findOne>) {
+				calls.push(`findOne ${args[0].name}`);
+				return provider.findOne(...args);
+			},
+			findMany(...args: Parameters<typeof provider.findMany>) {
+				calls.push(`findMany ${args[0].name}`);
+				return provider.findMany(...args);
+			},
+		};
+		const app = applicationOf({
+			name: "cms",
+			entities: { Article },
+			repositories: {
+				Articles: repositoryOf({ entity: Article, actions: ["findMany"] }),
+			},
+			provider: counting,
+		});
+		// One row is already there: it is not moved again.
+		await provider.insert(contextOf(Article, "Article"), {
+			id: ids[0] as string,
+			createdAt,
+			title: "moved",
+		});
+		const report = await app.migrate({ mode: "apply", pageSize: 2 });
+		expect(report.entities.Article?.movedFromPreviousNames).toBe(2);
+		expect(calls.filter((call) => call.startsWith("findOne"))).toEqual([]);
+		// Two pages of the previous name, each checked with one query.
+		expect(
+			calls.filter((call) => call === "findMany ArticleRepository"),
+		).toHaveLength(1 + 2);
+	});
+
+	test("a previous name equal to the record name of the class is rejected, and its rows survive", async () => {
+		const provider = inMemoryProvider();
+		// No `name`: the record name is the name of the class, "Post".
+		class Post extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.text })),
+			{
+				previousNames: ["Post"],
+			},
+		) {}
+		const raw = contextOf(Post, "Post");
+		for (const title of ["a", "b"]) {
+			await provider.insert(raw, { id: idOf(), createdAt, title });
+		}
+		let error: unknown;
+		try {
+			const app = applicationOf({
+				name: "cms",
+				entities: { Post },
+				repositories: {
+					Posts: repositoryOf({
+						entity: Post,
+						actions: ["findMany"],
+						provider,
+					}),
+				},
+			});
+			await app.migrate({ mode: "apply", destructive: true });
+		} catch (caught) {
+			error = caught;
+		}
+		expect(error instanceof InvalidEntitySchemaVersion).toBe(true);
+		expect(await provider.count(raw)).toBe(2);
 	});
 
 	test("in apply, gives each provider the plan of its entity", async () => {
@@ -539,6 +617,40 @@ describe("app.migrate", () => {
 			destructive: false,
 			changes: [],
 		});
+	});
+
+	test("skips the backfill of an entity whose provider deferred its migration", async () => {
+		const { provider, raw, ids } = await seeded();
+		const deferring = {
+			...provider,
+			capabilities: provider.capabilities,
+			async update(): Promise<void> {
+				throw new Error("no such column: $v");
+			},
+			async migrate() {
+				return { deferred: true } as const;
+			},
+		};
+		const Providers = providersOf({ main: deferring });
+		const app = applicationOf({
+			name: "cms",
+			entities: { Entry },
+			repositories: { Entries },
+			providers: Providers,
+			provider: Providers.main,
+		});
+		const report = await app.migrate({ mode: "apply" });
+		expect(report.entities.Entry).toMatchObject({
+			deferred: true,
+			scanned: 0,
+			upgraded: 0,
+		});
+		const [first] = await provider.findMany(raw, { where: { id: ids[0] } });
+		expect(first).not.toHaveProperty(SCHEMA_VERSION_KEY);
+		// check never calls migrate, so it is never deferred.
+		const check = await app.migrate({ mode: "check" });
+		expect(check.entities.Entry?.deferred).toBe(false);
+		expect(check.entities.Entry?.upgraded).toBe(3);
 	});
 
 	test("rewrites a versioned entity at the version it read, which it keeps", async () => {
@@ -746,6 +858,39 @@ describe("app.start({ lock })", () => {
 			'The schemaVersion of "Entry" (2) is lower than the lock\'s (3).',
 		]);
 	});
+});
+
+describe("increment of a renamed key", () => {
+	for (const versioned of [false, true]) {
+		test(`adds to the value stored under the old key${versioned ? " (versioned)" : ""}`, async () => {
+			const provider = inMemoryProvider();
+			class Page extends entityOf(
+				blueprintOf((ctx) => ({
+					hits: ctx.integer.with({ renamedFrom: "views" }),
+				})),
+				{ name: "Page", change: ["hits"], versioned },
+			) {}
+			const Pages = repositoryOf({
+				entity: Page,
+				actions: ["increment", "findById"],
+				provider,
+			});
+			const raw = contextOf(Page, "Page");
+			const id = idOf();
+			await provider.insert(raw, {
+				id,
+				createdAt,
+				views: 40,
+				...(versioned ? { version: 1 } : {}),
+			});
+			const page = await Pages.increment(id, { hits: 1 });
+			expect(page.hits).toBe(41);
+			expect((await Pages.findById(id))?.hits).toBe(41);
+			const [stored] = await provider.findMany(raw, { where: { id } });
+			expect(stored).not.toHaveProperty("views");
+			expect(stored?.hits).toBe(41);
+		});
+	}
 });
 
 // Keeps the helper types honest.

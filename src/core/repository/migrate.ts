@@ -6,6 +6,7 @@ import {
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
 import { Exception } from "../exception/exception";
 import type { Issue } from "../parse/types/parse.interface";
+import { recordNameOf } from "../record/name";
 import {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
@@ -257,13 +258,18 @@ export async function migrateRepository(
 	const versioned =
 		isVersionedEntityClass(state.entity) &&
 		provider.capabilities?.versioning === true;
-	const previousNames =
+	// A previous name that is the entity's own is its own table: moving its
+	// rows to itself, then removing them, would delete them all.
+	const own = recordNameOf(state.entity);
+	const previousNames = (
 		(state.entity as { readonly [EntitySettings]?: EntityStorageSettings })[
 			EntitySettings
-		]?.previousNames ?? [];
+		]?.previousNames ?? []
+	).filter(
+		(previous) => previous !== own && `${previous}Repository` !== context.name,
+	);
 	const needs: (keyof IRepositoryProvider)[] = ["findMany"];
 	if (apply) needs.push("update");
-	if (previousNames.length > 0) needs.push("findOne");
 	if (apply && previousNames.length > 0) needs.push("insert");
 	if (apply && destructive && previousNames.length > 0) needs.push("remove");
 	for (const need of needs) {
@@ -284,7 +290,18 @@ export async function migrateRepository(
 		invalid: [],
 		removedKeys: new Set(),
 	};
-	if (apply) await provider.migrate?.(context, options.plan);
+	if (apply) {
+		const migrated = await provider.migrate?.(context, options.plan);
+		// The plan was written for later: the store does not have the new
+		// shape (a column, the version key), so no row can be written in it.
+		if (
+			typeof migrated === "object" &&
+			migrated !== null &&
+			migrated.deferred === true
+		) {
+			return { ...reportOf(tally), deferred: true };
+		}
+	}
 
 	await walk(provider, context, pageSize, async (rows) => {
 		for (const item of await upcastPage(state, plan, rows)) {
@@ -337,6 +354,16 @@ export async function migrateRepository(
 		const old = previousContextOf(context, previous);
 		await walk(provider, old, pageSize, async (rows) => {
 			let removed = 0;
+			// The rows of the page already moved, found in one query.
+			const moved = new Set(
+				(
+					await provider.findMany(context, {
+						where: { id: { in: rows.map((row) => row.id) } },
+						withDeleted: true,
+						...(context.expiry === undefined ? {} : { withExpired: true }),
+					})
+				).map((row) => String(row.id)),
+			);
 			for (const item of await upcastPage(state, plan, rows)) {
 				tally.scanned += 1;
 				if ("invalid" in item) {
@@ -348,13 +375,7 @@ export async function migrateRepository(
 				}
 				for (const key of item.report.removed) tally.removedKeys.add(key);
 				const id = String(item.row.id);
-				const moved =
-					(await provider.findOne(context, {
-						where: { id },
-						withDeleted: true,
-						...(context.expiry === undefined ? {} : { withExpired: true }),
-					})) !== undefined;
-				if (!moved) {
+				if (!moved.has(id)) {
 					tally.movedFromPreviousNames += 1;
 					if (apply) {
 						await provider.insert(
@@ -372,6 +393,11 @@ export async function migrateRepository(
 		});
 	}
 
+	return { ...reportOf(tally), deferred: false };
+}
+
+/** The counts of `tally`. */
+function reportOf(tally: Tally): Omit<EntityMigrationReport, "deferred"> {
 	return {
 		scanned: tally.scanned,
 		upToDate: tally.upToDate,

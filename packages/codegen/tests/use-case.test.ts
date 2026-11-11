@@ -574,6 +574,7 @@ describe("validation", () => {
 		for (const valid of [
 			"$input.address.zip",
 			"$input.tags.0",
+			"$input.tags.length",
 			"$input.owner.name",
 			"$input.owner.id",
 		]) {
@@ -583,6 +584,7 @@ describe("validation", () => {
 			"$input.email.domain",
 			"$input.address.zipp",
 			"$input.tags.first",
+			"$input.tags.length.x",
 			"$input.owner.nope",
 		]) {
 			expect(reference(invalid)).toEqual([
