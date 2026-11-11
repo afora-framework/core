@@ -285,6 +285,19 @@ function loggerOfCall(state: ExecutionState): ILogger | undefined {
 }
 const states = new WeakMap<object, ExecutionState>();
 
+/**
+ * `: "user.email" must match format "email" (and 2 more).` for the first of
+ * `issues`, or `.` when there are none: the end of the message of an
+ * invalid input, context or response.
+ */
+function issuesSummaryOf(issues: readonly Issue[]): string {
+	const [first] = issues;
+	if (first === undefined) return ".";
+	const path = first.path.join(".");
+	const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : "";
+	return `: ${path === "" ? "" : `"${path}" `}${first.message}${more}.`;
+}
+
 function invalidValue(
 	issues: readonly Issue[],
 	source: string,
@@ -299,7 +312,7 @@ function invalidValue(
 					? "InvalidUseCaseContext"
 					: "InvalidUseCaseResponse",
 		source,
-		message: `Invalid UseCase ${phase}.`,
+		message: `Invalid UseCase ${phase}${issuesSummaryOf(issues)}`,
 		details: { issues },
 		cause: issues.find((issue) => issue.cause)?.cause,
 	});
