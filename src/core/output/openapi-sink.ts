@@ -80,7 +80,11 @@ export interface SecurityRequirement {
  * sinks that serve HTTP, so the served routes and the document agree.
  */
 export interface RouteOptions {
-	/** Prefix of every path, e.g. `"/api"`. Empty by default. */
+	/**
+	 * Prefix of every path, e.g. `"/api"`.
+	 *
+	 * @default ""
+	 */
 	readonly basePath?: string;
 	/**
 	 * Method, path and success status by operation id, e.g.
@@ -91,7 +95,11 @@ export interface RouteOptions {
 		readonly [operationId: string]: {
 			readonly method?: OpenAPIMethod;
 			readonly path?: string;
-			/** `200` by default. */
+			/**
+			 * The status of a successful response.
+			 *
+			 * @default 200
+			 */
 			readonly status?: RouteStatus;
 		};
 	};

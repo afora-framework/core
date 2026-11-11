@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Imported use cases as dependencies (#64)
+
+- **Breaking.** A use case implemented by `{ "import" }` can be a dependency of another use case, and a steps use case can `call` it; the `import_dependency` issue is gone. Each use case that hand-written code needs (the `<Name>Base` of every `import` use case, and every steps use case such a class depends on) is generated in its own `<kebab-name>.use-case.ts` in `output.dir`, which never imports `use-cases.ts`; `use-cases.ts` re-exports it. A handler imports its base from that file (`import { RegisterBase } from "../domain/register.use-case"`); importing it from `use-cases.ts` keeps working only as long as no other use case (steps or `import`) depends on that handler: the dependent's `<kebab-name>.use-case.ts` imports the handler, the handler imports `use-cases.ts`, and `use-cases.ts` re-exports the dependent's file, a loop of imports that can reach the handler before its class is defined. The validator does not read handler code, so it cannot report this.
+- New issues: `import_cycle`, a hand-written module that would import itself back through the generated files, and `file_collision`, two use cases that would get the same file name (file names are lowercase kebab-case, so `GetURL` and `GetUrl` collide), and `generated_file`, an `{ "import" }` (or the `import` of an opaque property) whose module, resolved from `output.dir`, is a file the generator writes there (one of `GENERATED_FILES` or an emitted `*.use-case.ts`). `writeGenerated` removes stale `*.use-case.ts` files that carry the generated banner, and refuses a file without the banner whatever its name, with a reason that names it and says to rename it. `import_cycle` treats `../handlers/all`, `../handlers/all.js` and `../handlers/all/index.ts` as one module.
+
+### Tracing (#65)
+
+- `"trace": { "import": "./trace.ts#tracer" }` at the top level of a spec is the tracer of the application (`otelTracer()` of `@afora/otel`, say), generated as `applicationOf({ trace })`. Anything but an import is `invalid_trace`. `extractSpec` needs `imports.trace` for an application with a tracer, which `describe()` gives as opaque. `afora.schema.json` describes it.
+
+### `params` on a `run` step
+
+- A `run` step of `afora.json` may declare `"params"`, a blueprint by name or `{ "fields": {...} }` whose fields match its `args` by position, so the args are checked before the function runs (see `docs/use-cases.md#steps` of `@afora/core`). `validateSpec` and `afora-codegen check` resolve it like the `input` of a use case and report `invalid_args` when a list of args has another length; `generate` emits it as a blueprint; `extractSpec` gives it back by its fields, and `normalizeSpec` compacts them. `afora.schema.json` has it. Needs the `@afora/core` that reads `params`.
+
 ### Project boundary (#69)
 
 - `projectBoundaryIssues(spec, root)`: the places where a spec reaches outside a project directory, as issues `outside_project`: an `{ "import": "<module>#<name>" }` whose module is a file outside it (resolved from `output.dir`), an absolute path or a URL, and an `extends` outside it. For tools that take a spec from someone they do not trust; `validateSpec` does not run it, since a spec has no directory of its own. `@afora/mcp` runs it on every spec.

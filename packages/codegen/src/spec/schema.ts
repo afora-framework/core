@@ -664,6 +664,7 @@ const Step = Type.Union(
 				run: Type.String({ description: "A name, unique in the use case." }),
 				fn: ImportRef,
 				args: StepArgs,
+				params: Type.Optional(BlueprintRef),
 				as: StepAs,
 			},
 			{ additionalProperties: false },
@@ -1015,6 +1016,16 @@ export const specSchema = Type.Object(
 		provider: Type.Optional(ProviderOrKey),
 		providers: Type.Optional(Providers),
 		log: Type.Optional(Log),
+		trace: Type.Optional(
+			Type.Object(
+				{ import: ImportRef.properties.import },
+				{
+					additionalProperties: false,
+					description:
+						'What traces the application (applicationOf({ trace })): a tracer written by hand, { "import": "./trace.ts#tracer" }, e.g. otelTracer() of @afora/otel.',
+				},
+			),
+		),
 		publishers: Type.Optional(Publishers),
 		properties: Type.Optional(
 			Names(Property, "Custom properties, by PascalCase name."),

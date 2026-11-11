@@ -1,3 +1,4 @@
+import type { FieldsDescription } from "../../application/types/application.interface";
 import { isPlain } from "./references";
 import type {
 	StepErrorDescription,
@@ -10,6 +11,8 @@ export interface StepNames {
 	readonly record: (Class: unknown) => string;
 	/** The registered name of an exception, or `{ core }` for one the package exports. */
 	readonly error: (Class: unknown) => StepErrorDescription;
+	/** The fields of the `params` blueprint of a `run`. */
+	readonly params: (blueprint: unknown) => FieldsDescription;
 }
 
 /** A copy of JSON data, so that nothing in the descriptor is shared with the declaration. */
@@ -25,7 +28,8 @@ function cloneData<Value>(value: Value): Value {
 
 /**
  * The steps as `describe()` gives them: the same data, with the classes of
- * `build` and `ensure.error` by name and the function of `run` as `opaque`.
+ * `build` and `ensure.error` by name, the function of `run` as `opaque` and
+ * its `params` by their fields.
  */
 export function describeSteps(
 	steps: readonly Readonly<Record<string, unknown>>[],
@@ -35,7 +39,10 @@ export function describeSteps(
 		const copy = cloneData({ ...step }) as Record<string, unknown>;
 		if (Object.hasOwn(step, "build")) copy.build = names.record(step.build);
 		if (Object.hasOwn(step, "ensure")) copy.error = names.error(step.error);
-		if (Object.hasOwn(step, "run")) copy.fn = { kind: "opaque" };
+		if (Object.hasOwn(step, "run")) {
+			copy.fn = { kind: "opaque" };
+			if (step.params !== undefined) copy.params = names.params(step.params);
+		}
 		return copy as unknown as UseCaseStepDescription;
 	});
 }

@@ -114,7 +114,7 @@ a file of your own.
       "implementation": { "steps": [
         { "find": "users.findByEmail", "args": ["$input.email"], "as": "existing" },
         { "ensure": "absent", "value": "$existing", "error": "UserAlreadyExists" },
-        { "run": "hashPassword", "fn": { "import": "../hash#hashPassword" }, "args": ["$input.plainPassword"], "as": "hash" },
+        { "run": "hashPassword", "fn": { "import": "../hash#hashPassword" }, "args": ["$input.plainPassword"], "params": { "fields": { "plain": "string" } }, "as": "hash" },
         { "build": "User", "values": { "name": "$input.name", "email": "$input.email", "password": "$hash" }, "as": "user" },
         { "create": "users", "value": "$user", "as": "saved" },
         { "return": { "user": "$saved" } }
@@ -128,8 +128,10 @@ a file of your own.
 - \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`. \`dependencies\` map a key to a use case, repository
   or environment, or to \`"Logger"\` for the logger of the application (an \`ILogger\`; no step reads it). \`errors\` are declared exceptions or exceptions exported by @afora/core (\`coreExceptions\` of \`afora_catalog\`).
 - \`implementation\` is \`{ "steps": [...] }\` (generated complete, no hand-written file) or \`{ "import": "../handlers/x.ts#Name" }\`:
-  the generated file has \`abstract class <Name>Base\`; write \`class Name extends <Name>Base\` with \`execute\` at that path.
-  A use case cannot list an imported (hand-written) use case as a dependency.
+  \`afora_generate\` writes \`abstract class <Name>Base\` in \`<kebab-name>.use-case.ts\` of output.dir (\`RegisterUser\` -> \`register-user.use-case.ts\`);
+  write \`class Name extends <Name>Base\` with \`execute\` at that path, importing the base from that file. Any use case can list an imported one
+  as a dependency; two hand-written classes in one module that depend on each other are an \`import_cycle\` (give each a module), and an import of
+  a file the generator writes in output.dir (\`./greet.use-case\`, \`./use-cases\`) is a \`generated_file\` (keep handlers outside, e.g. ../handlers).
 - Steps run in order and \`return\` is last, exactly once: \`find\` ("<repo>.<read action>"), \`ensure\` (exists | absent | equals | notEquals | true | false;
   \`other\` for the comparisons, \`error\` a declared exception name or a core one, listed in \`errors\`; optional \`details\`), \`build\` (a record or
   entity name, \`values\`, \`as\`), \`change\` ($ref, \`key\` in the class's change keys, \`value\`), \`invoke\` ($ref, \`method\`, \`args\`),
@@ -229,16 +231,19 @@ reference, and the rule round-trips as data. Use steps when the rule reads as "f
 
 - One value computed from others (a hash, a total, a slug): keep the steps and add a \`run\` step with an imported function,
   \`{ "run": "total", "fn": { "import": "./pricing.ts#total" }, "args": ["$cart.items"], "as": "total" }\`. The function is code; the flow stays data.
+  Declare \`"params"\` (fields matching the args by position) whenever the function relies on what it gets: the args are then checked before it
+  runs, and a wrong one is an \`InvalidUseCaseStep\` naming the field, instead of the function running on a value of the wrong type.
 - A rule that **branches** (if the stock is short, back-order, else reserve), **loops** over a list with effects, needs several \`run\` steps
   in a row, or reads better as five lines of code than as fifteen steps: write it in code,
   \`"implementation": { "import": "../handlers/reserve#Reserve" }\`. The spec still declares its input, response, context, dependencies,
   errors, route and access; only \`execute\` is hand-written.
 
 Do not bend a rule into steps with flags and \`ensure\` tricks to avoid code: an \`import\` use case is the supported way out, not a failure.
-With \`import\`, \`afora_generate\` writes \`export abstract class <Name>Base extends useCaseOf({...})\` and you write the class once, in the file named:
+With \`import\`, \`afora_generate\` writes \`export abstract class <Name>Base extends useCaseOf({...})\` in \`<kebab-name>.use-case.ts\`
+and you write the class once, in the file named:
 
 \`\`\`ts
-import { ReserveBase } from "../domain/use-cases";
+import { ReserveBase } from "../domain/reserve.use-case";
 
 export class Reserve extends ReserveBase {
   override async execute() {
@@ -252,7 +257,8 @@ export class Reserve extends ReserveBase {
 \`\`\`
 
 \`this.input\`, \`this.context\` and \`this.dependencies\` are typed from the spec. A dependency that is another use case is a function:
-\`await this.dependencies.charge(input)\`. Throw only exceptions the spec lists in \`errors\`.
+\`await this.dependencies.charge(input)\`. Throw only exceptions the spec lists in \`errors\`. A steps use case may depend on an \`import\` one
+and \`call\` it, so moving one use case to code does not move the ones that use it.
 
 ## A project written in code
 

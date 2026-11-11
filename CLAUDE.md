@@ -17,7 +17,7 @@ bun test -t "masks sensitive"            # tests matching a name
 bun check                                # type check (reads tsconfig.json)
 bun run lint                             # biome lint
 bun run fmt                              # biome format + fix (tabs, double quotes, organized imports)
-bun run build                            # dist/: bun build (ESM, node target, deps external) + tsc declarations, then scripts/add-dts-extensions.ts
+bun run build                            # dist/: scripts/build.ts (one transpiled ESM module per src module, imports given .js) + tsc declarations, then scripts/add-dts-extensions.ts
 bun run test:api                         # tests/api-surface: snapshot of every export of dist/ with its declaration, and of packages/codegen/afora.schema.json (the public contract); update with -u on purpose
 bun run test:interop                     # examples/interop: real Hono, tRPC, TanStack Form tests, incl. the README quick start (TypeScript and afora.json)
 bun run docs:links                       # every relative link and #anchor in README.md, docs/ and the package READMEs resolves

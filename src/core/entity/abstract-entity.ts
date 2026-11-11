@@ -3,6 +3,7 @@ import type {
 	BlueprintValue,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import type { Complete } from "../parse/parse";
 import {
 	AbstractRecord,
 	runRecordEffects,
@@ -131,6 +132,49 @@ interface EntityClockSettings {
 const ID_MADE: readonly string[] = Object.freeze(["id"]);
 const CREATED_AT_MADE: readonly string[] = Object.freeze(["createdAt"]);
 const BOTH_MADE: readonly string[] = Object.freeze(["id", "createdAt"]);
+const CREATED_AT_EXPIRES: readonly string[] = Object.freeze([
+	"createdAt",
+	EXPIRES_AT,
+]);
+const BOTH_EXPIRES: readonly string[] = Object.freeze([
+	"id",
+	"createdAt",
+	EXPIRES_AT,
+]);
+
+/**
+ * Under this key, a class made by `entityOf` holds what makes its id, its
+ * `createdAt` and its `expiresAt` once its value is known to be valid.
+ *
+ * @internal
+ */
+export const EntityComplete = Symbol("entityComplete");
+
+/**
+ * What an entity class does with the values its builder vouched for and left
+ * out, after the rest of its value is known to be valid: `createdAt` first,
+ * then `id`, as they were made before; and, for a class that expires, an
+ * `expiresAt` `lifetime` milliseconds after `createdAt`, which is still
+ * checked.
+ */
+export function completeOf(
+	clock: { readonly generateId: () => string; readonly now: () => string },
+	lifetime: number | undefined,
+): Complete {
+	return (handled) => {
+		if (handled.createdAt === undefined) handled.createdAt = clock.now();
+		if (handled.id === undefined) handled.id = clock.generateId();
+		if (lifetime !== undefined && handled[EXPIRES_AT] === undefined) {
+			const created = handled.createdAt;
+			const start = typeof created === "string" ? Date.parse(created) : NaN;
+			if (!Number.isNaN(start)) {
+				handled[EXPIRES_AT] = new Date(start + lifetime).toISOString();
+				return [EXPIRES_AT];
+			}
+		}
+		return undefined;
+	};
+}
 
 /** The identity of `entity`, as its members expose it. */
 function identityOf(entity: object): {
@@ -161,13 +205,16 @@ function assertAlive(entity: { readonly isDeleted: boolean }): void {
  * `value` with an `id` and a `createdAt` made by `clock` when it has none,
  * and, when the class expires `lifetime` milliseconds after `createdAt`, an
  * `expiresAt` when it has none; any other value as is, for the record to
- * reject.
+ * reject. What `clock` vouches for is not made here but by `complete`, once
+ * the record finds the rest of the value valid: invalid input pays for none
+ * of it.
  */
 function withIdentity(
 	value: unknown,
 	clock: EntityClockSettings,
 	lifetime: number | undefined,
 	versioned: boolean,
+	complete: Complete,
 ): unknown {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		return value;
@@ -182,7 +229,38 @@ function withIdentity(
 	const unversioned = versioned && version === undefined;
 	if (id !== undefined && createdAt !== undefined && !expiring && !unversioned)
 		return value;
-	const created = createdAt === undefined ? clock.now() : createdAt;
+	// What this entity makes with makers known to make it valid is not checked
+	// by its record, and made only after the rest of the value is.
+	const { makesValid } = clock;
+	const idLater = id === undefined && makesValid?.id() === true;
+	const createdAtLater =
+		createdAt === undefined && makesValid?.createdAt() === true;
+	// The expiry follows `createdAt`: with that one left for later, so is it.
+	const expiresLater = expiring && createdAtLater;
+	const vouched =
+		idLater && createdAtLater
+			? expiresLater
+				? BOTH_EXPIRES
+				: BOTH_MADE
+			: createdAtLater
+				? expiresLater
+					? CREATED_AT_EXPIRES
+					: CREATED_AT_MADE
+				: idLater
+					? ID_MADE
+					: undefined;
+
+	if (
+		!unversioned &&
+		!(expiring && !expiresLater) &&
+		(id !== undefined || idLater) &&
+		(createdAt !== undefined || createdAtLater)
+	) {
+		if (vouched !== undefined) vouchFor(vouched, complete);
+		return value;
+	}
+	const created =
+		createdAt === undefined && !createdAtLater ? clock.now() : createdAt;
 	// `id` and `createdAt` come first, as in the blueprint of an entity, whose
 	// keys the record then finds in their places; the spread may bring either
 	// one as `undefined`, so both are set after it.
@@ -191,25 +269,18 @@ function withIdentity(
 		createdAt: undefined,
 		...value,
 	};
-	identity.id = id === undefined ? clock.generateId() : id;
+	identity.id = id === undefined && !idLater ? clock.generateId() : id;
 	identity.createdAt = created;
-	// What this entity has just made with makers known to make it valid is not
-	// checked again by its record; what the value brought always is.
-	const { makesValid } = clock;
-	if (makesValid !== undefined) {
-		const idMade = id === undefined && makesValid.id();
-		const createdAtMade = createdAt === undefined && makesValid.createdAt();
-		if (idMade && createdAtMade) vouchFor(BOTH_MADE);
-		else if (idMade) vouchFor(ID_MADE);
-		else if (createdAtMade) vouchFor(CREATED_AT_MADE);
-	}
 	if (unversioned) identity[ENTITY_VERSION_KEY] = 1;
-	if (expiring) {
+	if (expiring && !expiresLater) {
 		const start = typeof created === "string" ? Date.parse(created) : NaN;
 		if (!Number.isNaN(start)) {
 			identity[EXPIRES_AT] = new Date(start + lifetime).toISOString();
 		}
 	}
+	// Vouched for last, once nothing above can throw: a maker or a date that
+	// throws must not leave the vouch to the next record built.
+	if (vouched !== undefined) vouchFor(vouched, complete);
 	return identity;
 }
 
@@ -232,6 +303,9 @@ export abstract class AbstractEntity<
 					EntityLifetime
 				],
 				isVersionedEntityClass(new.target),
+				(new.target as unknown as { readonly [EntityComplete]: Complete })[
+					EntityComplete
+				],
 			) as BlueprintInput<Properties>,
 		);
 		const input = value as { id?: unknown; createdAt?: unknown };

@@ -238,6 +238,16 @@ test("an invalid value names the key of the record", () => {
 	);
 	expect(nested.is(PropertyRequired)).toBe(true);
 	expect(nested.details).toEqual({ key: "address.zip" });
+	expect(nested.message).toBe(
+		'Property "address.zip" of record "User" is required.',
+	);
+	expect(property.message).toStartWith(
+		'Invalid value for "name" of record "User": ',
+	);
+	// The exception of the property keeps the name of the property.
+	expect(property.find(InvalidPropertyValue)?.message).toStartWith(
+		'Invalid value for property "',
+	);
 
 	expect(() => new User({ ...user, tags: ["a", "b", "c"] })).toThrow(
 		'Invalid value for "tags" of record "User": must have at most 2 items',

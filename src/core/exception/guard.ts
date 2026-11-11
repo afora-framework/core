@@ -2,9 +2,28 @@ import { Exception } from "./exception";
 import type { ExceptionScope } from "./types/exception.interface";
 
 /**
- * Handles what `run` throws, or rejects with, in `scope`. Without `resolve`,
+ * Handles what `run` throws, or rejects with, in `scope` (see {@link ExceptionScope}). Without `resolve`,
  * or when it calls `pass`, the exception goes up to the next layer with its
  * trace; otherwise `resolve` returns the value to use instead.
+ *
+ * @throws {@link Exception} what `run` throws or rejects with, in `scope` and with its trace, unless `resolve` gives a value instead.
+ *
+ * @example
+ * ```ts
+ * import { ExceptionLayers, guard } from "@afora/core";
+ *
+ * const scope = { layer: ExceptionLayers.UseCase, source: "LoadConfig" };
+ *
+ * // Without `resolve`, what `run` throws goes up to the next layer with its trace
+ * guard(scope, () => JSON.parse('{"port":3000}'));
+ *
+ * // With `resolve`, it can give a value instead, or call `pass` to go up
+ * const config = guard(
+ * 	scope,
+ * 	() => JSON.parse("{") as { port: number },
+ * 	() => ({ port: 8080 }),
+ * );
+ * ```
  */
 export function guard<Result>(
 	scope: ExceptionScope,

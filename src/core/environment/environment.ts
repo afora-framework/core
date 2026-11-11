@@ -18,7 +18,11 @@ export type EnvironmentSource = () => Readonly<
 
 /** What `environmentOf` takes, after the blueprint. */
 export interface EnvironmentOptions {
-	/** The variables to read, e.g. `() => Bun.env`; `process.env` by default. */
+	/**
+	 * The variables to read, e.g. `() => Bun.env`.
+	 *
+	 * @default `() => process.env`
+	 */
 	readonly source?: EnvironmentSource;
 }
 
@@ -30,7 +34,11 @@ export interface EnvironmentOptions {
 export interface IEnvironment<Properties extends IBlueprintCollection> {
 	readonly [Kind]: "environment";
 	readonly blueprint: IBlueprint<Properties>;
-	/** The validated variables; throws `InvalidEnvironment` when any is rejected. */
+	/**
+	 * The validated variables, read on the first call and the same after.
+	 *
+	 * @throws {@link InvalidEnvironment} when a variable is missing or rejected.
+	 */
 	load(): Readonly<BlueprintValue<Properties>>;
 }
 
@@ -87,8 +95,23 @@ const processEnv: EnvironmentSource = () =>
  * boolean (`"true"`, `"false"`) or a number when its property takes one
  * instead of a string, validates them once and
  * gives the same value after. As a dependency of a repository it reaches the
- * provider as `context.env`; of a use case, the use case gets its value, e.g.
+ * provider as `context.env`; of a use case ({@link useCaseOf}), the use case gets its value, e.g.
  * `environmentOf(blueprintOf((ctx) => ({ DATABASE_URL: ctx.url })))`.
+ *
+ * @throws {TypeError} when `blueprint` is not a blueprint, or is an optional one.
+ *
+ * @example
+ * ```ts
+ * import { blueprintOf, environmentOf } from "@afora/core";
+ *
+ * const Env = environmentOf(
+ * 	blueprintOf((ctx) => ({ DATABASE_URL: ctx.url, PORT: ctx.integer })),
+ * 	{ source: () => ({ DATABASE_URL: "https://db.example.com", PORT: "3000" }) },
+ * );
+ *
+ * Env.load().PORT; // 3000, converted from the string
+ * // Env.load() throws InvalidEnvironment when a variable is missing or invalid
+ * ```
  */
 export function environmentOf<Properties extends IBlueprintCollection>(
 	blueprint: IBlueprint<Properties, boolean>,

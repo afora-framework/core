@@ -78,12 +78,18 @@ export interface PublishEventsOptions {
 	readonly topic: string;
 	/** The names of the events to publish; all of them by default. */
 	readonly events?: readonly string[];
-	/** Whether each event runs its own handler first, as `"after-commit"` does. `true` by default. */
+	/**
+	 * Whether each event runs its own handler first, as `"after-commit"` does.
+	 *
+	 * @default true
+	 */
 	readonly handle?: boolean;
 	/**
-	 * What a failed publish does: `"log"` (default) writes an error to the
+	 * What a failed publish does: `"log"` writes an error to the
 	 * logger and goes on, since the call already committed; `"throw"` makes
 	 * the call fail with `CommandEventFailed`.
+	 *
+	 * @default "log"
 	 */
 	readonly onPublishError?: "log" | "throw";
 }

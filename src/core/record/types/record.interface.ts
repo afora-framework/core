@@ -257,6 +257,11 @@ export type RecordJson<
 	Sensitive extends string = never,
 > = JsonValue<Properties, Sensitive>;
 
+/**
+ * What every record class made by {@link recordOf} carries: the declaration
+ * metadata of its blueprint and options, and `toJSON`, which gives the value
+ * with the sensitive keys masked.
+ */
 export interface IRecord<
 	Properties extends IBlueprintCollection,
 	Sensitive extends string = never,

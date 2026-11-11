@@ -35,6 +35,7 @@ import type {
 	SchemaMigrationReport,
 } from "../../repository/types/schema.interface";
 import type { Kind } from "../../symbols/kind";
+import type { ITracer } from "../../tracing/tracing";
 import type { UseCaseStepDescription } from "../../use-case/steps/types/steps.interface";
 import type { AccessDeclaration } from "../../use-case/types/access.interface";
 import type { RouteDeclaration } from "../../use-case/types/route.interface";
@@ -145,6 +146,14 @@ export interface ApplicationSettings<
 	 * it, the one of the last extended application that has one; none by default.
 	 */
 	readonly log?: LogSettings | LogFactory;
+	/**
+	 * What traces it: a span per command operation, use case and repository
+	 * call made through a use case, nested as the calls are, with names and
+	 * outcomes and never a value (see `docs/tracing.md`). `otelTracer()` of
+	 * `@afora/otel` gives one for OpenTelemetry. Without it, the one of the
+	 * last extended application that has one; none by default.
+	 */
+	readonly trace?: ITracer;
 	/**
 	 * Where event policies such as `publishEvents` publish, by key: a
 	 * WebSocket hub, a queue, a broker. Commands of the application find them
@@ -314,11 +323,17 @@ export interface IApplication<
 export interface ApplicationStartOptions {
 	/**
 	 * Become the started application of the process (what `useApplication()`
-	 * gives). Default `true`; another one already started throws
-	 * `ApplicationAlreadyStarted`.
+	 * gives). Another one already started throws `ApplicationAlreadyStarted`.
+	 *
+	 * @default true
 	 */
 	readonly register?: boolean;
-	/** Stop the started application of the process and take its place, e.g. on hot reload. Default `false`. */
+	/**
+	 * Stop the started application of the process and take its place, e.g. on hot
+	 * reload.
+	 *
+	 * @default false
+	 */
 	readonly replace?: boolean;
 	/**
 	 * The committed schema lock (`afora.lock.json`): start throws
@@ -403,6 +418,7 @@ export type FieldDescription =
 			readonly variants: Readonly<Record<string, FieldDescription>>;
 	  };
 
+/** The fields of a blueprint, record or entity in a description, by name. */
 export type FieldsDescription = Readonly<Record<string, FieldDescription>>;
 
 /** A record or an entity: its fields (an entity's identity and its plugins' keys left out), options and plugins. */
@@ -572,6 +588,8 @@ export interface ApplicationDescription {
 	>;
 	/** Its `log` (or the one of the last extended application), present only when configured. */
 	readonly log?: LogDescription | { readonly kind: "opaque" };
+	/** Present, and opaque, only when it has a `trace` (its own or inherited). */
+	readonly trace?: { readonly kind: "opaque" };
 	/** Its publishers (inherited ones included), by key, with the application that declared each; present only when it has some. */
 	readonly publishers?: Readonly<Record<string, { readonly from: string }>>;
 	readonly properties: Readonly<

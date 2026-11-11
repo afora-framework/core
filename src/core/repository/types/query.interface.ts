@@ -121,6 +121,7 @@ export interface RepositoryPlan {
  */
 export type RepositoryScans = "allow" | "warn" | "reject";
 
+/** The `explain` method of a repository, for the actions that list it. */
 export interface RepositoryExplain<Entity> {
 	/**
 	 * How the query would be read (`{ access, index? }`), without reading
@@ -131,6 +132,7 @@ export interface RepositoryExplain<Entity> {
 	): Promise<RepositoryPlan>;
 }
 
+/** The `findCursor` method of a repository, for the actions that list it. */
 export interface RepositoryFindCursor<Entity> {
 	/**
 	 * A page of `limit` items (20 by default) after the cursor `after`. Unlike
@@ -177,6 +179,7 @@ export interface RepositoryWalkResult {
 	readonly items: number;
 }
 
+/** The `forEachPage` method of a repository, for the actions that list it. */
 export interface RepositoryForEachPage<Entity> {
 	/**
 	 * Reads the pages of `query` by cursor, as `findCursor` does, and runs
@@ -195,16 +198,25 @@ export interface RepositoryForEachPage<Entity> {
 	): Promise<RepositoryWalkResult>;
 }
 
+/**
+ * The `findMany` method of a repository: the entities that match a query, all
+ * of them without one.
+ */
 export interface RepositoryFindMany<Entity> {
 	findMany(
 		query?: RepositoryQuery<Entity>,
 	): Promise<EntityInstanceOf<Entity>[]>;
 }
 
+/** The `exists` method of a repository: whether any entity matches a query. */
 export interface RepositoryExists<Entity> {
 	exists(query?: RepositoryQuery<Entity>): Promise<boolean>;
 }
 
+/**
+ * The `findPage` method of a repository: one page of the entities that match a
+ * query, with its total.
+ */
 export interface RepositoryFindPage<Entity> {
 	/** Defaults to limit 20 and offset 0. */
 	findPage(query?: RepositoryQuery<Entity>): Promise<RepositoryPage<Entity>>;
@@ -218,6 +230,7 @@ export type ProviderOption =
 	| string
 	| readonly ProviderOption[]
 	| { readonly [key: string]: ProviderOption };
+/** The JSON options of a named provider, as its description keeps them. */
 export type ProviderOptions = Readonly<Record<string, ProviderOption>>;
 
 /** A named provider can be reconstructed; opaque providers require an import mapping. */

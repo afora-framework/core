@@ -20,9 +20,9 @@ The library ships to Bun **and** Node >= 22 and must load in browsers and Worker
 
 - `src/core/`: the generic machinery (builders, records, entities, repositories, use cases, exceptions, parsing). It never imports from `src/std/`, which `src/core/layers.test.ts` enforces.
 - `src/std/`: concrete properties (`Id`, `Email`, `Password`…), `blueprintOf`, `entityOf` and the standard use cases.
-- `src/index.ts`: the single public entry. Anything exported goes through it.
+- `src/index.ts`, `src/adapters.ts`, `src/experimental.ts` and `src/testing/index.ts`: the four public entry points (`@afora/core`, `/adapters`, `/experimental`, `/testing`; see [docs/api-tiers.md](docs/api-tiers.md)). Anything exported goes through one of them.
 - `docs/`: the spec of behavior, one file per concept ([index](docs/README.md)).
-- `packages/*`: `@afora/codegen`, `@afora/mcp`, `@afora/hono`, `@afora/fastify`, `@afora/express`, `@afora/elysia`, `@afora/ws`, `@afora/drizzle` and `@afora/dynamodb`, each with its own build and tests.
+- `packages/*`: `@afora/codegen`, `@afora/mcp`, `@afora/hono`, `@afora/fastify`, `@afora/express`, `@afora/elysia`, `@afora/ws`, `@afora/drizzle`, `@afora/dynamodb` and `@afora/otel`, each with its own build and tests.
 - `examples/`, `tests/types-compat`, `tests/type-perf`, `bench/`: interop, type compatibility, editor performance and benchmarks, each with its own scripts.
 
 ## Making a change
@@ -33,6 +33,18 @@ The library ships to Bun **and** Node >= 22 and must load in browsers and Worker
 4. Fill in the [pull request template](.github/PULL_REQUEST_TEMPLATE.md).
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org) with an optional scope (`feat(repository): …`, `fix(use-case): …`, `docs: …`), checked by commitlint in the `commit-msg` hook. The `pre-commit` hook runs Biome and Knip.
+
+## JSDoc
+
+The JSDoc of an export is what a user reads in the editor, so it is part of the public contract.
+
+- **Every export of the four entry points has JSDoc.** `tests/api-surface/jsdoc.test.ts` fails when one does not, so a new export is documented in the same pull request.
+- **Prose first.** Open with a noun phrase that says what the thing is ("A record of `blueprint`: ..."), then how it behaves, in one short paragraph; inline code for names. Read the implementation and the matching `docs/*.md` before writing, and never describe behavior the code does not have. See `recordOf` and `repositoryOf` for the tone.
+- **`@example` on the main builders and entry points** (`propertyOf`, `blueprintOf`, `recordOf`, `entityOf`, `eventOf`, `repositoryOf`, `useCaseOf`, `environmentOf`, `exceptionOf`, `guard`, `applicationOf`). An example is a short (about 15 lines), self-contained TypeScript module in a `ts` fence that imports from `"@afora/core"` (or `"@afora/core/adapters"`...), and it agrees with `docs/` and the README. Examples are type-checked against `dist/` by the tests, so a stale one fails the build; a types-only export does not need one.
+- **`@throws {@link ExceptionName} when ...`** on a function or constructor that throws on declaration or use (`ReservedRecordKey`, `ReservedBlueprintKey`, `UseCaseAlreadyExecuted`...), one tag per exception, naming the condition. Verify it in the code.
+- **`@default value`** on an optional setting that has a default, with the value as the code uses it, instead of "by default" in the prose.
+- **`{@link Name}`** where a doc mentions another export, so the editor links to it.
+- A change to a doc shows in the hovers, so `bun run test:type-perf` reports it: update its snapshot with `-u` only when the diff is the documentation you wrote.
 
 ## Checks
 

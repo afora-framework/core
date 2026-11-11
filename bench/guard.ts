@@ -5,12 +5,18 @@
 import { do_not_optimize } from "mitata";
 import {
 	type Contender,
+	ENTITY,
 	GUARDED,
 	REFERENCE,
 	type Scenario,
 	WATCHED,
 } from "./contenders.ts";
-import { GUARD_DEFAULT, GUARD_LIMITS } from "./guard.limits.ts";
+import {
+	ENTITY_DEFAULT,
+	ENTITY_LIMITS,
+	GUARD_DEFAULT,
+	GUARD_LIMITS,
+} from "./guard.limits.ts";
 import { inputOf, KINDS, type Kind, warmUp } from "./harness.ts";
 
 /** Each case is timed this many times for each contender; the best one counts. */
@@ -20,6 +26,9 @@ const ROUND_MS = 150;
 
 export const limitOf = (scenario: string, kind: Kind) =>
 	GUARD_LIMITS[`${scenario} ${kind}`]?.limit ?? GUARD_DEFAULT;
+
+export const entityLimitOf = (scenario: string, kind: Kind) =>
+	ENTITY_LIMITS[`${scenario} ${kind}`]?.limit ?? ENTITY_DEFAULT;
 
 /** The mean time of one call of `fn`, in nanoseconds, over about `ROUND_MS`. */
 function timeOf(fn: () => unknown, batch: number): number {
@@ -89,7 +98,7 @@ export const fmtNs = (ns: number) =>
 	ns >= 1000 ? ns.toFixed(0) : ns.toFixed(1);
 
 export function guard(scenarios: Scenario[]): boolean {
-	const names = [REFERENCE, GUARDED, WATCHED];
+	const names = [REFERENCE, GUARDED, WATCHED, ENTITY];
 	const timed = timeCases(
 		scenarios.flatMap((scenario) =>
 			KINDS.map((kind) => ({
@@ -111,13 +120,25 @@ export function guard(scenarios: Scenario[]): boolean {
 		`${GUARDED} against ${REFERENCE}, best of ${ROUNDS} rounds after a warm-up (ns per call)\n`,
 	);
 	for (const { scenario, kind, runs } of timed) {
-		const [reference, guarded, watched] = runs as [Timed, Timed, Timed];
+		const [reference, guarded, watched, entity] = runs as [
+			Timed,
+			Timed,
+			Timed,
+			Timed,
+		];
 		const limit = limitOf(scenario, kind);
 		const ratio = guarded.best / reference.best;
 		const ok = ratio <= limit;
 		if (!ok) passed = false;
+		const entityLimit = entityLimitOf(scenario, kind);
+		const entityRatio = entity.best / reference.best;
+		const entityOk = entityRatio <= entityLimit;
+		if (!entityOk) passed = false;
 		console.log(
 			`${ok ? "ok  " : "FAIL"}  ${`${scenario} ${kind}`.padEnd(22)} afora ${fmtNs(guarded.best).padStart(8)}  zod ${fmtNs(reference.best).padStart(8)}  ratio ${ratio.toFixed(2)}  limit ${limit.toFixed(2)}  (Record.safeParse ${(watched.best / reference.best).toFixed(2)}, not guarded)`,
+		);
+		console.log(
+			`${entityOk ? "ok  " : "FAIL"}  ${`${scenario} ${kind}`.padEnd(22)} Entity.safeParse ${fmtNs(entity.best).padStart(8)}  ratio ${entityRatio.toFixed(2)}  limit ${entityLimit.toFixed(2)}`,
 		);
 	}
 	console.log(

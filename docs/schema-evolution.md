@@ -26,6 +26,8 @@ Nested blueprints, records and the items of lists follow the same rules, key by 
 Two options of `.with()` (and of `ctx.<property>(options)`) describe a key to the rows stored before it:
 
 ```ts
+import { blueprintOf, entityOf } from "@afora/core";
+
 class Entry extends entityOf(
 	blueprintOf((ctx) => ({
 		title: ctx.text.with({ renamedFrom: "name" }),
@@ -45,6 +47,8 @@ Both are kept in the property's lineage, so `app.describe()` and `afora.json` ca
 A change that a `fill` cannot express (a type changed, a key split, a value computed from others) is an `upgrade` step between two versions of the entity:
 
 ```ts
+import { blueprintOf, entityOf } from "@afora/core";
+
 class Entry extends entityOf(
 	blueprintOf((ctx) => ({
 		title: ctx.text.with({ renamedFrom: "name" }),
@@ -90,7 +94,20 @@ Writes store the current shape (and `$v`), so the rows converge as they are writ
 
 `app.migrate` rewrites the stored rows in the current shape, walking each provider directly (by `after` when it reads by cursor, else by `offset`), deleted and expired rows included:
 
+<!-- docs:code continue -->
 ```ts
+import { applicationOf, inMemoryProvider, repositoryOf } from "@afora/core";
+import type { SchemaLock } from "@afora/core/adapters";
+
+const Entries = repositoryOf({ entity: Entry, actions: ["findById"] });
+const app = applicationOf({
+	name: "cms",
+	entities: { Entry },
+	repositories: { Entries },
+	provider: inMemoryProvider(),
+});
+const lock: SchemaLock = await Bun.file("afora.lock.json").json();
+
 const report = await app.migrate({
 	entities: ["Entry"], // every entity with a repository by default
 	mode: "check", // or "apply"

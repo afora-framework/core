@@ -5,18 +5,10 @@
  * change to those changes what the exported types mean, so it shows up too.
  */
 import ts from "typescript-language-service";
+import { baseOptions } from "./program";
 
 export function apiSurface(entry: string): Record<string, string[]> {
-	const program = ts.createProgram([entry], {
-		target: ts.ScriptTarget.ESNext,
-		module: ts.ModuleKind.ESNext,
-		moduleResolution: ts.ModuleResolutionKind.Bundler,
-		lib: ["lib.esnext.d.ts"],
-		types: [],
-		skipLibCheck: true,
-		noEmit: true,
-		allowImportingTsExtensions: true,
-	});
+	const program = ts.createProgram([entry], baseOptions);
 	const checker = program.getTypeChecker();
 	const source = program.getSourceFile(entry);
 	const moduleSymbol = source && checker.getSymbolAtLocation(source);

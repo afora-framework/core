@@ -5,6 +5,7 @@
 			"@afora/core": ["../../src/index.ts"],
 			"@afora/core/adapters": ["../../src/adapters.ts"],
 			"@afora/core/experimental": ["../../src/experimental.ts"],
+			"@afora/core/testing": ["../../src/testing/index.ts"],
 			"@afora/codegen": ["../../packages/codegen/src/index.ts"],
 			"@afora/hono": ["../../packages/hono/src/index.ts"]
 		}

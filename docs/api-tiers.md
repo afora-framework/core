@@ -16,7 +16,7 @@ Every export of `@afora/core` belongs to one tier. The tier says where it is imp
 - **Stable and adapters follow semver.** Before 27.0 they may still break, and each break is listed in `CHANGELOG.md` with a Migration block (before and after). From 27.0 on, a break waits for the next year's major (see [VERSIONING.md](../VERSIONING.md)).
 - **Experimental and internal are outside the contract.** An experimental export may change or go in any release; it is promoted to stable or adapters when it settles. Internal code is reached only through the stable builders.
 - **One name, one entry.** No name is exported by two entries. A package that needs both kinds imports from both: `import { ExceptionLayers } from "@afora/core"` and `import { sinkOf } from "@afora/core/adapters"`.
-- **The entries share module state.** They are built with code splitting, so a class, a symbol or a registry is the same object whichever entry it comes from (`bun run smoke` checks it on Node).
+- **The entries share module state.** `dist/` has one module per module of `src/`, transpiled and not bundled (`scripts/build.ts`), and every entry imports the same files, so a class, a symbol or a registry is the same object whichever entry it comes from (`bun run smoke` checks it on Node). With `"sideEffects": false` in `package.json`, a bundler keeps only the modules an application imports.
 - **`bun run test:api` snapshots each entry.** A change to the snapshot of `@afora/core`, `/adapters` or `/testing` is a change to the contract; one to `/experimental` is reviewed but is not.
 
 ## Deciding a tier
@@ -622,6 +622,10 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `StdUseCasePlugins`                | type  | stable       | `@afora/core`              | Standard use cases ([Standard use cases](std-use-cases.md)).                                                           |
 | `TagMaker`                         | type  | stable       | `@afora/core`              | Standard use cases ([Standard use cases](std-use-cases.md)).                                                           |
 | `UpdateMaker`                      | type  | stable       | `@afora/core`              | Standard use cases ([Standard use cases](std-use-cases.md)).                                                           |
+
+## Added after 0.0.9
+
+- **`@afora/core`** (#65): `memoryTracer`, `InvalidTraceDeclaration` and the types `ITracer`, `ITraceSpan`, `TraceAttributes`, `TraceStatus`, `MemoryTracer` and `MemorySpan`: the `trace` of an application, shown to application code in [Tracing](tracing.md) as `log` is in [Logging](logging.md) (`memoryTracer` is stable like `memoryLogProvider`). `ApplicationDescription` (`@afora/core/adapters`) gains `trace`, `{ kind: "opaque" }` when the application has one.
 
 ## Added in 0.0.9
 

@@ -5,7 +5,16 @@
 Pass one environment, or a list (merged in order), as `environmentDependencies` of a repository: the provider gets them as `context.env`, read on the first call, not on declaration. As a dependency of a use case, the use case gets the variables, and `execute` can replace some of them with values its blueprint accepts (see [Use cases](use-cases.md) and [Repositories](repositories.md)).
 
 ```ts
-import { blueprintOf, environmentOf, repositoryOf } from "@afora/core";
+import {
+	blueprintOf,
+	entityOf,
+	environmentOf,
+	repositoryOf,
+} from "@afora/core";
+import type { IRepositoryProvider } from "@afora/core/adapters";
+
+class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+declare const postgres: IRepositoryProvider; // a provider of yours
 
 const Database = environmentOf(
 	blueprintOf((ctx) => ({ DATABASE_URL: ctx.url })),

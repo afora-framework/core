@@ -125,6 +125,11 @@ export type StageDescription =
 	  }
 	| { readonly kind: "opaque" };
 
+/**
+ * What `transformOf` takes: the `name` of the stage, the `apply` function that
+ * changes each operation (or removes it) and an optional `validate` of its
+ * options.
+ */
 export interface TransformSettings<Options extends object> {
 	readonly name: string;
 	/** Returns the operation, a changed copy, or `null` to remove it. */
@@ -137,6 +142,11 @@ export interface TransformSettings<Options extends object> {
 	readonly validate?: (options: Options) => string | undefined;
 }
 
+/**
+ * What `sinkOf` takes: the `name` of the stage, the `build` function that turns
+ * the operations into the result of the output (a server, a document...) and an
+ * optional `validate` of its options.
+ */
 export interface SinkSettings<Result, Options extends object, Hooks = never> {
 	readonly name: string;
 	/**
@@ -158,6 +168,11 @@ export interface SinkSettings<Result, Options extends object, Hooks = never> {
 export type TransformFactory<Options extends object = StageOptions> = (
 	options?: Options,
 ) => TransformStage<Options>;
+/**
+ * Makes a sink stage from JSON `options` and, second, `hooks`: what cannot be
+ * JSON (functions, an instance of a server), which the description of the stage
+ * leaves out. What `sinkOf` returns.
+ */
 export type SinkFactory<
 	Result = unknown,
 	Options extends object = StageOptions,
@@ -198,6 +213,11 @@ export interface OutputApplication {
 /** What an output takes its commands from. */
 export type OutputSource = AnyCommand | OutputApplication;
 
+/**
+ * What `outputOf` takes: the `name` of the output, the `commands` it exposes
+ * (commands, applications or a mix), the `statuses` by exception name and the
+ * `pipe` of stages that transform its operations and end in a sink.
+ */
 export interface OutputSettings<Pipe extends readonly Stage[]> {
 	readonly name: string;
 	/** The commands the output exposes: commands, applications (all their commands) or a mix. */
@@ -244,6 +264,10 @@ export interface Problem {
 	readonly trace?: string;
 }
 
+/**
+ * What `problemOf` takes: the HTTP `status` of the problem and `debug`, which
+ * adds the `trace` and the real `detail` of a 5xx.
+ */
 export interface ProblemOptions {
 	readonly status: number;
 	readonly debug?: boolean;

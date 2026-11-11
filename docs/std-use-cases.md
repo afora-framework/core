@@ -3,7 +3,13 @@
 `commandOf` gives the `useCases` of a command a context of ready-made use cases, each made for a repository. What a use case takes, returns and does follows the repository and its entity: the actions it declares, how it deletes, the record plugins of the entity and the properties of its keys.
 
 ```ts
-import { blueprintOf, commandOf, entityOf, repositoryOf } from "@afora/core";
+import {
+	blueprintOf,
+	commandOf,
+	entityOf,
+	repositoryOf,
+	useCaseOf,
+} from "@afora/core";
 
 class Post extends entityOf(
 	blueprintOf((ctx) => ({ title: ctx.string, status: ctx.string })),
@@ -14,6 +20,16 @@ const Posts = repositoryOf({
 	deletion: "soft",
 	actions: ["findById", "findPage", "create", "update", "delete", "restore"],
 });
+
+class MyUseCase extends useCaseOf({
+	name: "MyUseCase",
+	blueprint: blueprintOf((ctx) => ({ id: ctx.id })),
+	response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+}) {
+	override async execute() {
+		return { ok: true };
+	}
+}
 
 const Blog = commandOf({
 	name: "Blog",
@@ -45,7 +61,24 @@ Each `ctx.<name>(repository, options?)` gives a use case class, the same as `use
 `resourceOf(repository, { path })` gives the `useCases` of a command the standard `create`, `get`, `list`, `update` and `delete`, each with the [route](use-cases.md#routes) of a REST resource:
 
 ```ts
-import { commandOf, resourceOf } from "@afora/core";
+import {
+	blueprintOf,
+	commandOf,
+	entityOf,
+	repositoryOf,
+	resourceOf,
+} from "@afora/core";
+
+class Post extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.text })),
+	{
+		change: ["title"],
+	},
+) {}
+const Posts = repositoryOf({
+	entity: Post,
+	actions: ["findById", "findPage", "create", "update", "delete"],
+});
 
 const Blog = commandOf({
 	name: "Blog",
@@ -65,6 +98,7 @@ It is only a shortcut for `(ctx) => ({ create: ctx.create(Posts, { route: { meth
 
 Each operation needs its repository actions (`create`; `findById` for `get`; `findPage` for `list`; `findById` and `update`; `findById` and `delete`), and a repository that lacks one throws `UseCaseUnavailable` when the command is declared. For anything more an operation needs (`omit`, `owner`, hooks, another name), write that one with `ctx` and spread the rest, since the result is a function of `ctx`:
 
+<!-- docs:code skip: a fragment of the settings of commandOf -->
 ```ts
 useCases: (ctx) => ({
 	...resourceOf(Posts, { path: "/posts", actions: ["get", "list", "delete"] })(ctx),
@@ -139,6 +173,32 @@ Options are JSON, exception classes and, for the hooks, functions and dependenci
 - `list` gives only the entities of the caller.
 
 ```ts
+import {
+	blueprintOf,
+	commandOf,
+	entityOf,
+	ExceptionLayers,
+	exceptionOf,
+	repositoryOf,
+} from "@afora/core";
+
+class User extends entityOf(blueprintOf((ctx) => ({ name: ctx.text }))) {}
+class Post extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.text, author: User })),
+) {}
+const Users = repositoryOf({ entity: User, actions: ["findById", "create"] });
+const Posts = repositoryOf({
+	entity: Post,
+	actions: ["findById", "create", "delete"],
+	relations: [Users],
+});
+const PostNotFound = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "PostNotFound",
+	message: "No such post.",
+});
+const { id: userId } = await Users.create(new User({ name: "Ana" }));
+
 const owner = { key: "author", context: "userId" } as const;
 const Blog = commandOf({
 	name: "Blog",
@@ -174,8 +234,12 @@ import {
 	ExceptionLayers,
 	exceptionOf,
 	InvalidJsonData,
+	type JsonValue,
 	repositoryOf,
 } from "@afora/core";
+
+/** The app's own: how the data of a content type is stored. */
+declare function renamed(type: ContentType, data: JsonValue): JsonValue;
 
 const ContentTypeNotFound = exceptionOf({
 	layer: ExceptionLayers.UseCase,
@@ -211,7 +275,7 @@ const Cms = commandOf({
 				const type = await dependencies.contentTypes.findBySlug(input.type);
 				if (!type) throw new ContentTypeNotFound({ source: input.type });
 				checkJsonSchema(type.schema, input.data, { source: input.type }); // InvalidJsonData, a 400 with its issues
-				return { ...input, data: renamed(type, input.data) }; // what is stored (renamed: the app's own)
+				return { ...input, data: renamed(type, input.data) }; // what is stored
 			},
 			after: async ({ entity, dependencies }) => {
 				/* history, notifications: within the transaction */

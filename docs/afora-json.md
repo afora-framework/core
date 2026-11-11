@@ -23,7 +23,7 @@ afora-codegen extract src/app.ts#App [--import key=./file.ts#name] > afora.json
 4. Add behavior in files of your own: extend a generated class, or point the spec at a hand-written function or class with `{ "import": "./file.ts#name" }`. Imports are relative to the output directory.
 5. Commit the generated code. A test that generates again and compares it with the committed files catches drift; `examples/blog` does exactly that.
 
-`extract` imports the file, so use Bun (or Node >= 23.6) for TypeScript files. The CLI runs on Node >= 22 or Bun. The same functions are available from code: `loadSpec`, `validateSpec`, `generate`, `writeGenerated`, `extractSpec`, `normalizeSpec`, `catalog`.
+`extract` imports the file, so use Bun (or Node >= 22.18, type stripping on by default) for TypeScript files. The CLI runs on Node >= 22 or Bun. The same functions are available from code: `loadSpec`, `validateSpec`, `generate`, `writeGenerated`, `extractSpec`, `normalizeSpec`, `catalog`.
 
 ## Versioned entities and increment
 
@@ -115,6 +115,7 @@ Some things are code, not data: a provider made by hand, a `run` function, the `
 | `provider`                         | the provider of the application, when created without `providerOf`         |
 | `log`                              | the `log` of the application, when made by `logFrom`                       |
 | `log.providers.<index>`            | a log provider other than `"console"` or `"json"`, by its position         |
+| `trace`                            | the tracer of the application (`trace`), always written by hand            |
 | `repositories.<Name>.provider`     | the own provider of a repository, when created without `providerOf`        |
 | `providers.<key>`                  | a provider of the top-level `providers`, when created without `providerOf` |
 | `useCases.<Name>`                  | a use case with a hand-written `execute`                                   |
@@ -164,6 +165,20 @@ The events come from the lifecycle of the entities. An entity (not a record) dec
 
 A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
 
+## Tracing
+
+`"trace"` is the tracer of the application (see [Tracing](tracing.md)), an import of one written by hand, such as `otelTracer()` of [`@afora/otel`](../packages/otel/README.md):
+
+```json
+{
+	"version": 1,
+	"name": "blog",
+	"trace": { "import": "../trace.ts#tracer" }
+}
+```
+
+`trace.ts` has `export const tracer = otelTracer();` and the generated application gets `trace: tracer`. Anything but an import is `invalid_trace`, a malformed one `invalid_import`. `describe()` gives the trace as `{ kind: "opaque" }`, so extraction needs `trace` in `imports`.
+
 ## Indexes and query cost
 
 A repository declares its [indexes](repositories.md#indexes) and what it does with a [scan](repositories.md#query-cost) as in TypeScript:
@@ -194,6 +209,83 @@ An entity (not a record) declares when its records expire with `expires`, genera
 ```
 
 `after` is a non-empty duration (`days`, `hours`, `minutes`, `seconds`, each a positive number) from `createdAt`, kept in an `expiresAt` identity key, so no field may be named `expiresAt` (`identity_key`). `at` names a `dateTime` or `date` field of the entity (optional or not); a record without a value never expires. Anything else is an `invalid_expires` issue. Repositories of the entity leave expired records out of every read unless `withExpired: true` (see [Repositories](repositories.md#records-that-expire)), and need a provider with `capabilities.expiry` (`"inMemory"` and `drizzle` have it).
+
+## When steps are not enough
+
+Steps are a sequence with no branching, no loops and no expressions (see [what steps will never have](use-cases.md#what-steps-will-never-have)). When a rule needs one, the use case moves to `import`: the same declaration, with a hand-written `execute` in place of its steps. Its input, response, context, dependencies, errors, route and access stay in the spec, so the operation, its validation and the use cases that call it do not change.
+
+`Reserve` takes stock away from an item, and fits in steps:
+
+```json
+"Reserve": {
+	"input": { "fields": { "itemId": "id", "quantity": "integer" } },
+	"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] }, "item": "Item" } },
+	"dependencies": { "items": "Items" },
+	"errors": ["ItemNotFound"],
+	"implementation": {
+		"steps": [
+			{ "find": "items.findById", "args": ["$input.itemId"], "as": "item" },
+			{ "ensure": "exists", "value": "$item", "error": "ItemNotFound" },
+			{ "run": "remaining", "fn": { "import": "../stock#remaining" }, "args": ["$item.stock", "$input.quantity"], "as": "stock" },
+			{ "change": "$item", "key": "stock", "value": "$stock", "as": "changed" },
+			{ "update": "items", "value": "$changed", "as": "saved" },
+			{ "return": { "status": "reserved", "item": "$saved" } }
+		]
+	}
+}
+```
+
+Then the rule changes: when the stock is short, leave it as it is and answer `back-ordered`. That is a branch, so `Reserve` moves to code. Only `implementation` changes:
+
+```json
+"Reserve": {
+	"input": { "fields": { "itemId": "id", "quantity": "integer" } },
+	"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] }, "item": "Item" } },
+	"dependencies": { "items": "Items" },
+	"errors": ["ItemNotFound"],
+	"implementation": { "import": "../handlers/reserve#Reserve" }
+}
+```
+
+`generate` now writes `export abstract class ReserveBase extends useCaseOf({...}) {}` in `src/domain/reserve.use-case.ts` (the file is named after the use case in kebab case), with the declaration above. The class is written once, at the path the spec names (relative to the output directory), and `application.ts` registers it:
+
+<!-- docs:code skip: src/handlers/reserve.ts imports the files afora-codegen generates from the spec above -->
+```ts
+// src/handlers/reserve.ts
+import { ItemNotFound } from "../domain/exceptions";
+import { ReserveBase } from "../domain/reserve.use-case";
+
+export class Reserve extends ReserveBase {
+	override async execute() {
+		const item = await this.dependencies.items.findById(this.input.itemId);
+		if (!item) throw new ItemNotFound({ source: "Reserve" });
+		if (item.stock < this.input.quantity) {
+			return { status: "back-ordered" as const, item };
+		}
+		item.change.stock(item.stock - this.input.quantity);
+		const saved = await this.dependencies.items.update(item);
+		return { status: "reserved" as const, item: saved };
+	}
+}
+```
+
+`this.input`, `this.context` and `this.dependencies` are typed from the declaration, and the response is validated by its blueprint as for steps; throw only the exceptions `errors` lists. A use case in steps that depends on `Reserve` keeps it as it is, `call` included:
+
+```json
+"PlaceOrder": {
+	"input": { "fields": { "itemId": "id", "quantity": "integer" } },
+	"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] } } },
+	"dependencies": { "reserve": "Reserve" },
+	"implementation": {
+		"steps": [
+			{ "call": "reserve", "input": { "itemId": "$input.itemId", "quantity": "$input.quantity" }, "as": "reservation" },
+			{ "return": { "status": "$reservation.status" } }
+		]
+	}
+}
+```
+
+The generated `use-cases.ts` imports `Reserve` from `../handlers/reserve` for it. So that this has no import cycle, every use case a hand-written class needs has a file of its own, `<kebab-name>.use-case.ts`: the base of each `import` use case, and each steps use case that such a class depends on, directly or through other steps use cases. None of these files imports `use-cases.ts`, which re-exports them all. Extraction needs `useCases.Reserve` in `imports`, and gives the same spec back.
 
 ## Standard use cases
 
@@ -306,11 +398,12 @@ What the spec and the round trip do not cover. Each is reported by an issue or a
 - **Function messages.** An exception whose message is a function comes back without `message`, so generation gives it the default `"<Name>."`.
 - **Standard use cases come from `@afora/core`.** `generic` names a use case of `StdUseCases`; a use case plugin of another catalog cannot be named in a spec yet. A use case made by one in hand-written code is extracted as its steps.
 - **Names are shared.** Every kind of declaration shares one namespace, so a command cannot be called `Users` while a repository already is.
-- **Imported use cases and dependencies.** A use case cannot list an imported use case (a hand-written class, `{ "import": ... }`) as a dependency: its handler imports the generated file that would import it back, which is an import cycle. The validator reports `import_dependency`.
-- **Hand-written use cases.** With `{ "import": "../handlers/register#Register" }`, the generated file has `export abstract class RegisterBase extends useCaseOf({...}) {}`; your class extends it and implements `execute`, and `application.ts` registers your class. Extraction needs the `useCases.<Name>` mapping.
+- **Imported use cases and dependencies.** Any use case can list an imported one (a hand-written class, `{ "import": ... }`) as a dependency (see [When steps are not enough](#when-steps-are-not-enough)). What the generator cannot order is a hand-written module that holds several classes or functions which need each other through the generated files, such as two imported use cases in `../handlers/all.ts` where one depends on the other: the validator reports `import_cycle`, and the fix is a module per class. Two use cases whose files would have the same name (`GetURL` and `GetUrl` are both `get-url.use-case.ts`) are `file_collision`.
+- **Hand-written use cases.** With `{ "import": "../handlers/register#Register" }`, the generated `register.use-case.ts` has `export abstract class RegisterBase extends useCaseOf({...}) {}`, also re-exported by `use-cases.ts`; your class extends it and implements `execute`, and `application.ts` registers your class. Import the base from `register.use-case.ts`: a handler that imports it from `use-cases.ts` works only as long as no other use case depends on that handler, since `use-cases.ts` then imports the handler. Extraction needs the `useCases.<Name>` mapping.
 - **`Register` is written by hand.** The generated `application.ts` does not augment `Register` (two generated applications in one project would conflict), so `useApplication()` is `AnyApplication` until a file of yours declares it (see [Applications](applications.md#the-started-application)). A `provider` made with `providerFrom` is code, so it is an `{ "import": ... }`; `examples/blog` declares it as `"providers": { "database": { "import": "../provider.ts#database" } }` with `"provider": "database"` (`examples/blog/src/provider.ts`).
 - **Named providers come from this spec or one it extends directly.** `"provider": "<key>"` names a key of the top-level `providers` of the spec or of a spec it `extends` directly (imported as `Providers` from its output). A key of a spec further up is reported as `unknown_provider`. A provider written as `"inMemory"` or `{ "use" }` is made when the module loads, so it is shared by every application that registers it; for one instance per application, import a `providerFrom` (`{ "import": "./audit.ts#audit" }`).
-- **Step types are checked by TypeScript.** `check` follows the paths of `$input` and `$context` at any depth (`unknown_key` for `$input.address.zipp`), but knows nothing of the types of the results of steps or of the `run` functions. The generated steps use cases declare [`strictSteps: true`](use-cases.md#strict-steps), so type-checking the generated code reports a wrong path of a step result, an arg that does not fit the repository method, record method or `run` function, and a `build` value the record does not take.
+- **Step types are checked by TypeScript.** `check` follows the paths of `$input` and `$context` at any depth (`unknown_key` for `$input.address.zipp`), but knows nothing of the types of the results of steps or of the `run` functions. The generated steps use cases declare [`strictSteps: true`](use-cases.md#strict-steps), so type-checking the generated code reports a wrong path of a step result, an arg that does not fit the repository method, record method or `run` function, a `build` value the record does not take and a `return` the response does not take.
+- **The args of a `run` are checked at run time only with `params`.** A `run` step may declare `"params"`, a blueprint by name or `{ "fields": {...} }` whose fields match its `args` by position (`check` reports `invalid_args` when the counts differ): the args are parsed before the function is called. Without it the function gets whatever the args resolve to; see [use cases](use-cases.md#steps).
 - **Transactions are checked at run time.** `"transaction": true` needs a provider with transactions; the provider is unknown when the spec is validated, so `commandOf` throws `InvalidCommandDeclaration` when the code runs, not `validateSpec`.
 - **Constructs the core does not describe.** A `change` on a plugin key and the order of `plugins` are not recovered.
 - **Repositories point at the generated classes.** To add behavior, extend the generated class in a file of your own.

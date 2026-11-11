@@ -26,6 +26,11 @@ export interface ContractRunner {
 	};
 }
 
+/**
+ * What {@link providerContract} takes: which optional groups of cases to run,
+ * each defaulting to what the provider advertises in `capabilities`, except the
+ * schema evolution ones.
+ */
 export interface ProviderContractOptions {
 	/**
 	 * Run the transaction cases. Defaults to `provider.capabilities?.transactions`.
@@ -54,16 +59,20 @@ export interface ProviderContractOptions {
 	 * Run the cases of schema evolution, through repositories and
 	 * `app.migrate` over the basic methods: an old row read back upgraded,
 	 * the backfill in check and apply, rows moved from a previous name.
-	 * Default `true`. Their entities are named `Accounts` (and `One`, the
+	 * Their entities are named `Accounts` (and `One`, the
 	 * previous name), with the keys of the other cases; `createdAt` and
 	 * `updatedAt` are never written.
+	 *
+	 * @default true
 	 */
 	readonly schemaEvolution?: boolean;
 	/**
 	 * Run the schema evolution cases that store the version key
 	 * (`SCHEMA_VERSION_KEY`, `"$v"`) in rows, for an entity declared with
-	 * `schemaVersion`. Default `true`; a provider with a fixed set of
-	 * columns needs one for it (or maps `context.schema.key` to its own).
+	 * `schemaVersion`. A provider with a fixed set of columns needs one for
+	 * it (or maps `context.schema.key` to its own).
+	 *
+	 * @default true
 	 */
 	readonly schemaVersionKey?: boolean;
 }

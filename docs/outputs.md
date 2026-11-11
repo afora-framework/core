@@ -3,7 +3,40 @@
 `outputOf` turns commands into **operations** and runs them through a **pipe** of stages: transforms change or remove operations, and a last stage, a **sink**, builds something concrete (an OpenAPI document, an HTTP app, MCP tools).
 
 ```ts
-import { outputOf, select } from "@afora/core";
+import {
+	blueprintOf,
+	commandOf,
+	entityOf,
+	outputOf,
+	repositoryOf,
+	resourceOf,
+	select,
+} from "@afora/core";
+import type { SinkFactory } from "@afora/core/adapters";
+
+class User extends entityOf(
+	blueprintOf((ctx) => ({ email: ctx.email })),
+	{
+		unique: ["email"],
+	},
+) {}
+class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+const actions = ["findById", "findPage", "create", "update", "delete"] as const;
+const Users = commandOf({
+	name: "Users",
+	useCases: resourceOf(repositoryOf({ entity: User, actions: [...actions] }), {
+		path: "/users",
+	}),
+});
+const Posts = commandOf({
+	name: "Posts",
+	tags: ["public"],
+	useCases: resourceOf(repositoryOf({ entity: Post, actions: [...actions] }), {
+		path: "/posts",
+	}),
+});
+declare const someSink: SinkFactory<unknown, { basePath: string }>; // a sink of a package
+declare const otherSink: SinkFactory;
 
 const Api = outputOf({
 	name: "Api",
@@ -26,6 +59,7 @@ To register an output in an application, use `outputs: { Api }` (see [Applicatio
 
 **Stages** come from factories, so a stage is a name plus JSON options (validated like the options of `providerOf`, and frozen):
 
+<!-- docs:code continue -->
 ```ts
 import { transformOf } from "@afora/core";
 import { sinkOf } from "@afora/core/adapters"; // the plumbing for sink authors
@@ -48,16 +82,17 @@ outputOf({
 });
 ```
 
-`apply` and `build` also get `{ output: { name, statuses } }`. `stageDescriptionOf(stage)` (from `@afora/core/experimental`) gives `{ kind, name, options }` for a stage made by a factory and `{ kind: "opaque" }` for a hand-written object of the stage shape (accepted at runtime). `stageCatalogOf(...factories)` (from `@afora/core/adapters`) resolves names to stages (`catalog.resolve("select", options)`), and `StdStages` holds the built-in ones. `select` keeps the operations that match `tags` (any of), `operations` (ids to keep) and `exclude` (ids to drop).
+`apply` and `build` also get `{ output: { name, statuses } }`. `stageDescriptionOf(stage)` (from `@afora/core/experimental`) gives `{ kind, name, options }` for a stage made by a factory and `{ kind: "opaque" }` for a hand-written object of the stage shape (accepted at runtime). `stageKindOf(factory)` (from `@afora/core/adapters`) tells whether a factory made by `transformOf` or `sinkOf` builds transforms or sinks, without calling it (`"transform"`, `"sink"`, or `undefined` for any other function), e.g. to check that a pipe read from JSON ends with a sink. `stageCatalogOf(...factories)` (from `@afora/core/adapters`) resolves names to stages (`catalog.resolve("select", options)`), and `StdStages` holds the built-in ones. `select` keeps the operations that match `tags` (any of), `operations` (ids to keep) and `exclude` (ids to drop).
 
-**Errors at the boundary.** The helpers of this paragraph and the next are imported from `@afora/core/adapters` (see [API tiers](api-tiers.md)): a sink uses them, application code does not need them. `statusOf(error, operation?, statuses?)` gives an HTTP-style status: `statuses[error.name]` if given; 400 for `InvalidUseCaseInput`, `InvalidUseCaseContext`, `InvalidCommandContext` and any exception whose `details.issues` is a list; 401 for `UseCaseInvalidCredentials` and `Unauthenticated`; 403 for `Forbidden`; 404 for `RepositoryEntityNotFound` and `UnknownCommandOperation`; 409 for `RepositoryUniqueViolation`, `RepositoryConcurrencyConflict` (a versioned entity written by someone else since it was read) and `UseCaseEntityConflict`; 422 for an exception listed in `operation.errors`; 500 for anything else, including `CommandEventFailed` (the call committed, but the response cannot claim success) and errors that are not exceptions. `problemOf(error, { status, debug? })` returns an RFC 9457 object (`type: "urn:afora:exception:<name>"`, `title`, `status`, `detail`, `layer`), served as `PROBLEM_MEDIA_TYPE` (`application/problem+json`). `issues` (`path`, `code`, `message`; no values, no causes) only appears for a 400, `trace` only with `debug: true`, and the `detail` of a 5xx is `"Internal error."` unless `debug` is set, so internal messages do not leak.
+**Errors at the boundary.** The helpers of this paragraph and the next are imported from `@afora/core/adapters` (see [API tiers](api-tiers.md)): a sink uses them, application code does not need them. `statusOf(error, operation?, statuses?)` gives an HTTP-style status: `statuses[error.name]` if given; 400 for `InvalidUseCaseInput`, `InvalidUseCaseContext`, `InvalidCommandContext` and any exception whose `details.issues` is a list; 401 for `UseCaseInvalidCredentials` and `Unauthenticated`; 403 for `Forbidden`; 404 for `RepositoryEntityNotFound` and `UnknownCommandOperation`; 409 for `RepositoryUniqueViolation`, `RepositoryConcurrencyConflict` (a versioned entity written by someone else since it was read) and `UseCaseEntityConflict`; 422 for an exception listed in `operation.errors`; 500 for anything else, including `CommandEventFailed` (the call committed, but the response cannot claim success) and errors that are not exceptions. `problemOf(error, { status, debug? })` returns an RFC 9457 object (`type: "urn:afora:exception:<name>"`, `title`, `status`, `detail`, `layer`; the `detail` of an invalid input names its first issue, as in `Invalid UseCase input: "email" must match format "email" (and 1 more).`), served as `PROBLEM_MEDIA_TYPE` (`application/problem+json`). `issues` (`path`, `code`, `message`; no values, no causes) only appears for a 400, `trace` only with `debug: true`, and the `detail` of a 5xx is `"Internal error."` unless `debug` is set, so internal messages do not leak.
 
 **Masking.** `outputValueOf(value)` is `JSON.parse(JSON.stringify(value))`: every record goes through its `toJSON`, so sensitive values (a `Password` always) are masked at any depth. A sink must send its response values through it.
 
 **The `openapi` sink.** `openapi({ info, servers?, basePath?, route?, responses?, requestId?, security? })` (in `StdStages`) builds an OpenAPI 3.1 document from the operations:
 
+<!-- docs:code continue -->
 ```ts
-import { openapi, outputOf } from "@afora/core";
+import { openapi } from "@afora/core";
 
 const Docs = outputOf({
 	name: "Blog",

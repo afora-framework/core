@@ -12,6 +12,7 @@ import {
 	checkLog,
 	checkProvider,
 	checkProviders,
+	checkTrace,
 } from "./provider";
 import {
 	checkEnvironmentNames,
@@ -25,6 +26,7 @@ import { isIdentifier, isObject } from "./spec/field";
 import {
 	COLLECTIONS,
 	type CodegenOptions,
+	DEFAULT_OUTPUT_DIR,
 	type EventPolicyCatalogEntry,
 	KIND_OF,
 	type ProviderCatalogEntry,
@@ -33,6 +35,11 @@ import {
 	type StageCatalogEntry,
 } from "./spec/types";
 import { checkException, checkUseCase } from "./use-case";
+import {
+	generatedFileIssues,
+	useCaseFileIssues,
+	useCaseFiles,
+} from "./use-case-files";
 
 const TOP_LEVEL_KEYS = [
 	"$schema",
@@ -43,6 +50,7 @@ const TOP_LEVEL_KEYS = [
 	"provider",
 	"providers",
 	"log",
+	"trace",
 	"publishers",
 	...COLLECTIONS,
 ];
@@ -1282,6 +1290,7 @@ function check(
 	checkPublishers(input.publishers, issues);
 	checkProviders(input.providers, providers, issues);
 	if (input.log !== undefined) checkLog(input.log, ["log"], issues);
+	if (input.trace !== undefined) checkTrace(input.trace, ["trace"], issues);
 	for (const key of Object.keys(input)) {
 		if (!TOP_LEVEL_KEYS.includes(key)) {
 			issues.push(
@@ -1415,6 +1424,16 @@ function check(
 				`Circular reference ${cycle.join(" -> ")}. v1 does not support cycles between declarations (the class types would be circular); break the loop, e.g. store an id instead of the entity.`,
 			),
 		);
+	}
+	// The files of the use cases hand-written classes need, and imports of generated files.
+	const files = useCaseFiles(own, scope);
+	issues.push(...useCaseFileIssues(files, scope));
+	const dir = isObject(input.output) ? input.output.dir : DEFAULT_OUTPUT_DIR;
+	if (
+		!issues.some((i) => i.code === "invalid_output") &&
+		typeof dir === "string"
+	) {
+		issues.push(...generatedFileIssues(input, files, dir));
 	}
 	// Stable output: by path, then code.
 	issues.sort(

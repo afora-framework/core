@@ -67,6 +67,26 @@ describe("writeGenerated", () => {
 		expect(await exists(join(root, "src/domain/index.ts"))).toBe(false);
 	});
 
+	test("a hand-written file named as a generated one is refused, with the file and a rename", async () => {
+		const root = await temp();
+		const dir = join(root, "src/domain");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "greet.use-case.ts"), "export const mine = 1;\n");
+		const files = [
+			...generate(blogSpec),
+			{ path: "src/domain/greet.use-case.ts", contents: `${BANNER}\n` },
+		];
+		const result = await writeGenerated(root, files);
+		expect(result.refused).toHaveLength(1);
+		const [refused] = result.refused;
+		expect(refused?.path).toBe("src/domain/greet.use-case.ts");
+		expect(refused?.reason).toContain("greet.use-case.ts");
+		expect(refused?.reason).toContain("rename");
+		expect(await readFile(join(dir, "greet.use-case.ts"), "utf8")).toBe(
+			"export const mine = 1;\n",
+		);
+	});
+
 	test("refuses paths outside the project", async () => {
 		const root = await temp();
 		const result = await writeGenerated(root, [
@@ -117,6 +137,19 @@ describe("writeGenerated", () => {
 		expect(
 			await readFile(join(root, "src/domain/environments.ts"), "utf8"),
 		).toBe("// mine now\n");
+	});
+
+	test("removes the file of a use case that no longer needs one, only if it carries the banner", async () => {
+		const root = await temp();
+		const dir = join(root, "src/domain");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "greet.use-case.ts"), `${BANNER}\n`);
+		await writeFile(join(dir, "mine.use-case.ts"), "// mine\n");
+		const result = await writeGenerated(root, generate(blogSpec));
+		expect(result.removed).toContain("src/domain/greet.use-case.ts");
+		expect(result.removed).not.toContain("src/domain/mine.use-case.ts");
+		expect(await exists(join(dir, "greet.use-case.ts"))).toBe(false);
+		expect(await exists(join(dir, "mine.use-case.ts"))).toBe(true);
 	});
 
 	test("does not touch other files in the directory", async () => {

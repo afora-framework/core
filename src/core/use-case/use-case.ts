@@ -42,6 +42,15 @@ import { recordNameOf } from "../record/name";
 import { AbstractRepository, isRepository } from "../repository/repository";
 import type { AnyRepository } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import {
+	endSpan,
+	failSpan,
+	type ITracer,
+	type ITraceSpan,
+	resolveTracer,
+	runInSpan,
+	startSpan,
+} from "../tracing/tracing";
 import { accessDeclarationOf } from "./access";
 import { routeDeclarationOf } from "./route";
 import { type ExecutionScope, ScopeKey } from "./scope";
@@ -94,6 +103,10 @@ export type UseCaseDependency =
 	| AnyEnvironment
 	| LoggerDeclaration;
 
+/**
+ * The `dependencies` of a use case, by name: use case classes, repositories,
+ * environments or the {@link Logger}.
+ */
 export type UseCaseCollection = Readonly<Record<string, UseCaseDependency>>;
 
 type Declaration = {
@@ -102,12 +115,25 @@ type Declaration = {
 	readonly dependencies: UseCaseCollection;
 };
 
+/**
+ * The input of a use case class, as its constructor takes it: the input of its
+ * `blueprint`.
+ */
 export type UseCaseInput<Class extends Declaration> = BlueprintInput<
 	Class["blueprint"]["properties"]
 >;
+/**
+ * The value `execute` of a use case class resolves with: the value of its
+ * `response` blueprint.
+ */
 export type UseCaseResponse<Class extends Declaration> = BlueprintValue<
 	Class["response"]["properties"]
 >;
+/**
+ * The dependencies of a use case class as `this.dependencies` gives them: a
+ * function for a use case, the repository itself, the variables of an
+ * environment or an {@link ILogger} (see {@link DependencyOf}).
+ */
 export type UseCaseDependencies<Class extends Declaration> =
 	DependencyFunctions<Class["dependencies"]>;
 /** The context of a use case class, as `this.context` gives it; `undefined` without one. */
@@ -144,6 +170,10 @@ export type DependencyOf<Dependency> = Dependency extends AnyUseCaseClass
 			? ILogger
 			: Dependency;
 
+/**
+ * A collection of dependencies as a use case receives them: each one as {@link
+ * DependencyOf} gives it.
+ */
 export type DependencyFunctions<Dependencies extends UseCaseCollection> = {
 	readonly [Key in keyof Dependencies]: DependencyOf<Dependencies[Key]>;
 };
@@ -158,6 +188,12 @@ export type DependencyOverrides<Dependencies extends UseCaseCollection> = {
 		: DependencyOf<Dependencies[Key]>;
 };
 
+/**
+ * What {@link useCaseOf} takes: the `name`, the `blueprint` of the input, the
+ * `response` blueprint, the `dependencies` and the `context`, with the
+ * documentation of the operation (`description`, `tags`, `deprecated`,
+ * `errors`) and where it is served and who may call it (`route`, `access`).
+ */
 export interface UseCaseSettings<
 	Input extends IBlueprintCollection,
 	Output extends IBlueprintCollection,
@@ -226,14 +262,16 @@ export interface UseCaseDeclaration<
 	 * class concrete: validated here, interpreted by its `execute`, and
 	 * described by `describe()`. TypeScript checks the kinds of the steps and
 	 * the names of dependencies and actions; with `strictSteps`, also their
-	 * references and values (see `CheckedSteps`).
+	 * references and values, and the `return` against the response (see
+	 * `CheckedSteps`).
 	 */
 	readonly steps?: [Strict] extends [true]
 		? CheckedSteps<
 				Steps,
 				NoInfer<Input>,
 				NoInfer<Context>,
-				NoInfer<Dependencies>
+				NoInfer<Dependencies>,
+				NoInfer<Output>
 			>
 		: Steps;
 	/**
@@ -246,16 +284,26 @@ export interface UseCaseDeclaration<
 	readonly strictSteps?: Strict;
 }
 
+/**
+ * A use case, or a decorator of one, is declared with what it cannot use;
+ * `reason` says what.
+ */
 export const InvalidUseCaseDeclaration = exceptionOf({
 	layer: ExceptionLayers.UseCase,
 	name: "InvalidUseCaseDeclaration",
 	message: ({ reason }: { reason: string }) => reason,
 });
+/** `execute` was called twice on one instance of a use case, which runs only once. */
 export const UseCaseAlreadyExecuted = exceptionOf({
 	layer: ExceptionLayers.UseCase,
 	name: "UseCaseAlreadyExecuted",
 	message: "A UseCase instance can execute only once.",
 });
+/**
+ * The overrides given to `execute` name a dependency the use case does not
+ * declare, or give the wrong kind of value for one; or a dependency was called
+ * after `execute` ended.
+ */
 export const InvalidUseCaseDependencies = exceptionOf({
 	layer: ExceptionLayers.UseCase,
 	name: "InvalidUseCaseDependencies",
@@ -277,6 +325,11 @@ interface ExecutionState {
 	resolved?: Record<string, unknown>;
 	/** The class the use case was made from (bound by an application, maybe). */
 	readonly owner: object;
+	/** While it executes with a tracer: the tracer and its span. */
+	tracer?: ITracer;
+	span?: ITraceSpan;
+	/** The scope its children get: `scope`, with its span as their parent when traced. */
+	childScope?: ExecutionScope;
 }
 
 /** The logger a call writes to, if any (see `resolveLogger`). */
@@ -284,6 +337,19 @@ function loggerOfCall(state: ExecutionState): ILogger | undefined {
 	return resolveLogger(state.scope?.logger, state.owner);
 }
 const states = new WeakMap<object, ExecutionState>();
+
+/**
+ * `: "user.email" must match format "email" (and 2 more).` for the first of
+ * `issues`, or `.` when there are none: the end of the message of an
+ * invalid input, context or response.
+ */
+function issuesSummaryOf(issues: readonly Issue[]): string {
+	const [first] = issues;
+	if (first === undefined) return ".";
+	const path = first.path.join(".");
+	const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : "";
+	return `: ${path === "" ? "" : `"${path}" `}${first.message}${more}.`;
+}
 
 function invalidValue(
 	issues: readonly Issue[],
@@ -299,7 +365,7 @@ function invalidValue(
 					? "InvalidUseCaseContext"
 					: "InvalidUseCaseResponse",
 		source,
-		message: `Invalid UseCase ${phase}.`,
+		message: `Invalid UseCase ${phase}${issuesSummaryOf(issues)}`,
 		details: { issues },
 		cause: issues.find((issue) => issue.cause)?.cause,
 	});
@@ -375,6 +441,74 @@ function methodNamesOf(repository: object): string[] {
 }
 
 /**
+ * Starts the span of a use case, child of the span of its caller, and keeps
+ * it on `state` for the repository calls and the use cases it runs.
+ */
+function traceUseCase(
+	tracer: ITracer,
+	state: ExecutionState,
+	source: string,
+): ITraceSpan | undefined {
+	const span = startSpan(
+		tracer,
+		`use-case ${source}`,
+		{ "afora.use_case": source },
+		state.scope?.span,
+	);
+	if (span === undefined) return undefined;
+	state.tracer = tracer;
+	state.span = span;
+	state.childScope = {
+		...state.scope,
+		providers: state.scope?.providers ?? new Map(),
+		tracer,
+		span,
+	};
+	return span;
+}
+
+/** Forgets the tracer and the span of an execution that ended. */
+function untrace(state: ExecutionState): void {
+	state.tracer = undefined;
+	state.span = undefined;
+	state.childScope = undefined;
+}
+
+/**
+ * A repository call in a span of its own, child of the span of its use case,
+ * or of the repository call that made it through `this`. `run` gets the span.
+ */
+async function tracedRepositoryCall(
+	tracer: ITracer,
+	parent: ITraceSpan,
+	repository: string,
+	method: string,
+	useCase: string,
+	run: (span: ITraceSpan | undefined) => unknown,
+): Promise<unknown> {
+	const span = startSpan(
+		tracer,
+		`repository ${repository}.${method}`,
+		{
+			"afora.repository": repository,
+			"afora.method": method,
+			"afora.use_case": useCase,
+		},
+		parent,
+	);
+	try {
+		const result = await (span === undefined
+			? run(undefined)
+			: runInSpan(tracer, span, () => run(span)));
+		endSpan(span);
+		return result;
+	} catch (error) {
+		failSpan(span, error, ExceptionLayers.Repository);
+		throw error;
+	}
+}
+
+/**
  * The methods of `repository`, with those of `overrides` in their place, that
  * run only while the use case executes, and hand the events of the entities
  * of the repository they take and give to it. The methods of the repository
@@ -411,14 +545,50 @@ function bindRepository(
 			Reflect.defineProperty(repository, key, descriptor),
 		deleteProperty: (_target, key) => Reflect.deleteProperty(repository, key),
 	});
+	// Each method by name, with the span its call is a child of.
+	const calls: Record<
+		string,
+		(args: unknown[], parent: ITraceSpan | undefined) => Promise<unknown>
+	> = Object.create(null);
+	// With a tracer, what a traced call of the repository gets as `this`: the
+	// view, whose methods are children of the span of that call.
+	const nestedView = (span: ITraceSpan): object =>
+		new Proxy(view, {
+			get: (_target, key, receiver) =>
+				typeof key === "string" && Object.hasOwn(calls, key)
+					? (...args: unknown[]) => (calls[key] as Call)(args, span)
+					: Reflect.get(view, key, receiver),
+		});
+	type Call = (
+		args: unknown[],
+		parent: ITraceSpan | undefined,
+	) => Promise<unknown>;
 	const bind = (target: object, name: string, receiver: object) => {
 		const method = (target as Record<string, (...args: unknown[]) => unknown>)[
 			name
 		] as (...args: unknown[]) => unknown;
-		bound[name] = async (...args: unknown[]) => {
+		const call: Call = async (args, parent) => {
 			if (!state.active) throw new InvalidUseCaseDependencies({ source });
 			const started = clock();
-			const result = await method.apply(receiver, args);
+			// Traced only when the use case is: its span, or the span of the
+			// repository call that made this one, is the parent.
+			const result =
+				parent === undefined
+					? await method.apply(receiver, args)
+					: await tracedRepositoryCall(
+							state.tracer as ITracer,
+							parent,
+							repositoryName,
+							name,
+							source,
+							(span) =>
+								method.apply(
+									span !== undefined && receiver === view
+										? nestedView(span)
+										: receiver,
+									args,
+								),
+						);
 			writeLog(loggerOfCall(state), "debug", "repository", {
 				repository: repositoryName,
 				method: name,
@@ -429,6 +599,8 @@ function bindRepository(
 			pullEntities(result, Entity, state.events);
 			return result;
 		};
+		calls[name] = call;
+		bound[name] = (...args: unknown[]) => call(args, state.span);
 	};
 	for (const name of methodNamesOf(repository)) bind(repository, name, view);
 	if (overrides) {
@@ -558,7 +730,7 @@ export abstract class AbstractUseCase<
 				if (!state.active) throw new InvalidUseCaseDependencies({ source });
 				const child = new Child(value, {
 					context: narrowedContext(Child, state.context),
-					[ScopeKey]: state.scope,
+					[ScopeKey]: state.childScope ?? state.scope,
 				});
 				try {
 					return await child.execute();
@@ -573,79 +745,107 @@ export abstract class AbstractUseCase<
 			value: async (overrides: unknown = {}) => {
 				if (state.started) throw new UseCaseAlreadyExecuted({ source });
 				state.started = true;
-				if (
-					typeof overrides !== "object" ||
-					overrides === null ||
-					Array.isArray(overrides) ||
-					Reflect.ownKeys(overrides).some(
-						(key) =>
-							typeof key !== "string" ||
-							!Object.hasOwn(declaration.dependencies, key) ||
-							!isOverrideOf(
-								declaration.dependencies[key] as UseCaseDependency,
-								(overrides as Record<string, unknown>)[key],
-							),
-					)
-				) {
-					throw new InvalidUseCaseDependencies({ source });
+				// Its span starts before the dependencies are resolved, so that
+				// their failures show.
+				const tracer = resolveTracer(state.scope?.tracer, state.owner);
+				const span =
+					tracer === undefined
+						? undefined
+						: traceUseCase(tracer, state, source);
+				try {
+					if (
+						typeof overrides !== "object" ||
+						overrides === null ||
+						Array.isArray(overrides) ||
+						Reflect.ownKeys(overrides).some(
+							(key) =>
+								typeof key !== "string" ||
+								!Object.hasOwn(declaration.dependencies, key) ||
+								!isOverrideOf(
+									declaration.dependencies[key] as UseCaseDependency,
+									(overrides as Record<string, unknown>)[key],
+								),
+						)
+					) {
+						throw new InvalidUseCaseDependencies({ source });
+					}
+					const replaced = overrides as Record<string, unknown>;
+					const dependencies: Record<string, unknown> = {};
+					for (const key of Object.keys(declaration.dependencies)) {
+						if (!Object.hasOwn(replaced, key)) {
+							dependencies[key] = state.dependencies[key];
+						}
+					}
+					for (const [key, substitute] of Object.entries(replaced)) {
+						const dependency = declaration.dependencies[
+							key
+						] as UseCaseDependency;
+						if (isRepository(dependency)) {
+							dependencies[key] = bindRepository(
+								dependency,
+								substitute as object,
+								state,
+								source,
+							);
+							continue;
+						}
+						if (isLoggerDeclaration(dependency)) {
+							dependencies[key] = substitute;
+							continue;
+						}
+						if (isEnvironment(dependency)) {
+							const parsed = dependency.blueprint.safeParse(substitute);
+							if (parsed.issues)
+								throw new InvalidUseCaseDependencies({ source });
+							dependencies[key] = Object.freeze(parsed.value);
+							continue;
+						}
+						const Child = dependency as AnyUseCaseClass;
+						dependencies[key] = async (value: unknown) => {
+							if (!state.active)
+								throw new InvalidUseCaseDependencies({ source });
+							const childSource = Child.useCaseName;
+							const input = Child.blueprint.safeParse(value);
+							if (input.issues)
+								invalidValue(input.issues, childSource, "input");
+							const output = Child.response.safeParse(
+								await guard(
+									{ layer: ExceptionLayers.UseCase, source: childSource },
+									() =>
+										(substitute as (input: unknown) => unknown)(input.value),
+								),
+							);
+							if (output.issues)
+								invalidValue(output.issues, childSource, "response");
+							collectEvents(Child.response, output.value, state.events);
+							return output.value;
+						};
+					}
+					state.resolved = Object.freeze(dependencies);
+				} catch (error) {
+					if (tracer !== undefined) {
+						failSpan(span, error, ExceptionLayers.UseCase);
+						untrace(state);
+					}
+					throw error;
 				}
-				const replaced = overrides as Record<string, unknown>;
-				const dependencies: Record<string, unknown> = {};
-				for (const key of Object.keys(declaration.dependencies)) {
-					if (!Object.hasOwn(replaced, key)) {
-						dependencies[key] = state.dependencies[key];
-					}
-				}
-				for (const [key, substitute] of Object.entries(replaced)) {
-					const dependency = declaration.dependencies[key] as UseCaseDependency;
-					if (isRepository(dependency)) {
-						dependencies[key] = bindRepository(
-							dependency,
-							substitute as object,
-							state,
-							source,
-						);
-						continue;
-					}
-					if (isLoggerDeclaration(dependency)) {
-						dependencies[key] = substitute;
-						continue;
-					}
-					if (isEnvironment(dependency)) {
-						const parsed = dependency.blueprint.safeParse(substitute);
-						if (parsed.issues) throw new InvalidUseCaseDependencies({ source });
-						dependencies[key] = Object.freeze(parsed.value);
-						continue;
-					}
-					const Child = dependency as AnyUseCaseClass;
-					dependencies[key] = async (value: unknown) => {
-						if (!state.active) throw new InvalidUseCaseDependencies({ source });
-						const childSource = Child.useCaseName;
-						const input = Child.blueprint.safeParse(value);
-						if (input.issues) invalidValue(input.issues, childSource, "input");
-						const output = Child.response.safeParse(
-							await guard(
-								{ layer: ExceptionLayers.UseCase, source: childSource },
-								() => (substitute as (input: unknown) => unknown)(input.value),
-							),
-						);
-						if (output.issues)
-							invalidValue(output.issues, childSource, "response");
-						collectEvents(Child.response, output.value, state.events);
-						return output.value;
-					};
-				}
-				state.resolved = Object.freeze(dependencies);
 				state.active = true;
 				const started = clock();
 				try {
 					const result = await guard(
 						{ layer: ExceptionLayers.UseCase, source },
 						() =>
-							implementation.call(
-								this,
-								state.resolved as DependencyOverrides<Dependencies>,
-							),
+							span === undefined
+								? implementation.call(
+										this,
+										state.resolved as DependencyOverrides<Dependencies>,
+									)
+								: runInSpan(tracer as ITracer, span, () =>
+										implementation.call(
+											this,
+											state.resolved as DependencyOverrides<Dependencies>,
+										),
+									),
 					);
 					const parsed = declaration.response.safeParse(result);
 					if (parsed.issues) invalidValue(parsed.issues, source, "response");
@@ -655,6 +855,7 @@ export abstract class AbstractUseCase<
 						outcome: "ok",
 						ms: elapsed(started),
 					});
+					endSpan(span);
 					return parsed.value;
 				} catch (error) {
 					logFailure(
@@ -663,10 +864,12 @@ export abstract class AbstractUseCase<
 						{ useCase: source, ms: elapsed(started) },
 						error,
 					);
+					failSpan(span, error, ExceptionLayers.UseCase);
 					throw error;
 				} finally {
 					state.active = false;
 					state.resolved = undefined;
+					if (tracer !== undefined) untrace(state);
 				}
 			},
 		});
@@ -679,6 +882,14 @@ export abstract class AbstractUseCase<
 			state?.dependencies) as DependencyFunctions<Dependencies>;
 	}
 
+	/**
+	 * Runs the operation and gives its response. `dependencies` replace the
+	 * declared ones for this call: a function for a use case, some methods of a
+	 * repository, the variables of an environment.
+	 *
+	 * @throws {@link UseCaseAlreadyExecuted} when this instance already executed.
+	 * @throws {@link InvalidUseCaseDependencies} when an override names an undeclared dependency or is of the wrong kind.
+	 */
 	abstract execute(
 		dependencies?: DependencyOverrides<Dependencies>,
 	): Promise<BlueprintValue<Output>>;
@@ -725,6 +936,11 @@ type UseCaseInstanceContext<Context extends IBlueprintCollection | undefined> =
 			: undefined;
 	};
 
+/**
+ * What {@link useCaseOf} gives without `steps`: an abstract class to extend,
+ * implementing an async `execute`. Its constructor takes the input and, when
+ * the use case declares a context, `{ context }`.
+ */
 export type UseCaseConstructor<
 	Input extends IBlueprintCollection,
 	Output extends IBlueprintCollection,
@@ -761,6 +977,25 @@ export type StepsUseCaseConstructor<
  * Declares an operation. With `steps` the class is concrete: its `execute`
  * interprets them. Without, it is abstract: extend it and implement an async
  * execute method.
+ *
+ * @throws {@link InvalidUseCaseDeclaration} when the name, the blueprints or the dependencies are missing or of the wrong kind, or a setting is not valid.
+ *
+ * @example
+ * ```ts
+ * import { blueprintOf, useCaseOf } from "@afora/core";
+ *
+ * class Greet extends useCaseOf({
+ * 	name: "Greet",
+ * 	blueprint: blueprintOf((ctx) => ({ name: ctx.text })),
+ * 	response: blueprintOf((ctx) => ({ message: ctx.string })),
+ * }) {
+ * 	override async execute() {
+ * 		return { message: `Hello, ${this.input.name}!` };
+ * 	}
+ * }
+ *
+ * const { message } = await new Greet({ name: "Ana" }).execute();
+ * ```
  */
 export function useCaseOf<
 	Input extends IBlueprintCollection,
@@ -923,6 +1158,10 @@ function isDependency(value: unknown): value is UseCaseDependency {
 	);
 }
 
+/**
+ * Whether `value` is a use case class made by {@link useCaseOf}, abstract or
+ * concrete, or a subclass of one.
+ */
 export function isUseCaseClass(value: unknown): value is AnyUseCaseClass {
 	return (
 		typeof value === "function" &&
@@ -932,6 +1171,7 @@ export function isUseCaseClass(value: unknown): value is AnyUseCaseClass {
 	);
 }
 
+/** Whether `value` is an instance of a use case class. */
 export function isUseCase(
 	value: unknown,
 ): value is AbstractUseCase<

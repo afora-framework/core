@@ -85,14 +85,23 @@ export type RepositoryCreateInput<Entity> =
 	| EntityInstanceOf<Entity>
 	| (Entity extends new (value: infer Input) => unknown ? Input : never);
 
-/** `create`: stores the entity, or a new one built from the input, and gives it. */
+/**
+ * `create`: stores the entity, or a new one built from the input, and gives it.
+ *
+ * @throws {@link RepositoryUniqueViolation} when another entity holds the same value of a unique key (`id` included).
+ */
 export interface RepositoryCreate<Entity> {
 	create(
 		entity: RepositoryCreateInput<Entity>,
 	): Promise<EntityInstanceOf<Entity>>;
 }
 
-/** `update`: stores the current value of an entity it holds, and gives it. */
+/**
+ * `update`: stores the current value of an entity it holds, and gives it.
+ *
+ * @throws {@link RepositoryUniqueViolation} when another entity holds the same value of a unique key.
+ * @throws {@link RepositoryEntityNotFound} when the repository holds no entity with its id.
+ */
 export interface RepositoryUpdate<Entity> {
 	update(entity: EntityInstanceOf<Entity>): Promise<EntityInstanceOf<Entity>>;
 }
@@ -348,18 +357,21 @@ export interface RepositoryContext<Environment = unknown> {
 }
 
 /**
- * How a repository reads and writes: plain values of its entity, by its
- * context. `insert` and `update` enforce `context.unique`, throwing
- * `RepositoryUniqueViolation`; `update` and `remove` throw
- * `RepositoryEntityNotFound` for an unknown id.
- */
-/**
  * What `IRepositoryProvider.migrate` gives when it did not apply the plan to
  * the store (it wrote it to a file to be run later): `app.migrate` skips the
  * backfill of the entity and reports it `deferred`.
  */
 export type ProviderMigrationResult = { readonly deferred: true };
 
+/**
+ * How a repository reads and writes: plain values of its entity, by its
+ * context. Implement it to store entities somewhere else; `inMemoryProvider`
+ * is the default, and `providerContract` (from `@afora/core/testing`) checks
+ * an implementation.
+ *
+ * @throws {@link RepositoryUniqueViolation} from `insert` and `update`, when they would break `context.unique`.
+ * @throws {@link RepositoryEntityNotFound} from `update` and `remove`, for an unknown id.
+ */
 export interface IRepositoryProvider<Environment = unknown> {
 	findOne(
 		context: RepositoryContext<Environment>,

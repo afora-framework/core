@@ -407,6 +407,16 @@ export type {
 export type { StandardSchemaV1 } from "./core/standard/standard-schema";
 export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
+export { InvalidTraceDeclaration } from "./core/tracing/exceptions";
+export type {
+	ITracer,
+	ITraceSpan,
+	MemorySpan,
+	MemoryTracer,
+	TraceAttributes,
+	TraceStatus,
+} from "./core/tracing/tracing";
+export { memoryTracer } from "./core/tracing/tracing";
 export { Access, Route } from "./core/use-case/decorators";
 export {
 	IncompatibleUseCasePlugin,

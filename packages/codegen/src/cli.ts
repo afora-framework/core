@@ -54,7 +54,7 @@ with a hand-written execute ("useCases.<Name>") or a run function of a steps use
 schema lock refuses to replace a lock when a change needs a declaration the code lacks
 (a fill, renamedFrom, previousNames or an upgrade step) unless --force; schema check prints
 an upgrade stub for each missing step.
-extract imports the file: use Bun, or Node >= 23.6 for TypeScript files.`;
+extract imports the file: use Bun, or Node >= 22.18 for TypeScript files.`;
 
 /** A catalog exported by a module: `key`, or the default export. */
 async function loadCatalog<Entry>(
