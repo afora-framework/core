@@ -53,13 +53,15 @@ type Split<Path extends string> = Path extends `${infer Head}.${infer Tail}`
 	? [Head, ...Split<Tail>]
 	: [Path];
 
-/** `Value[Key]` for a value that is not `null` or `undefined`: by index in a list; `never` when absent. */
+/** `Value[Key]` for a value that is not `null` or `undefined`: by index (or `length`) in a list; `never` when absent. */
 type GetDefined<Value, Key extends string> = Value extends readonly unknown[]
 	? Key extends `${number}`
 		? Key extends keyof Value
 			? Value[Key]
 			: Value[number]
-		: never
+		: Key extends "length"
+			? number
+			: never
 	: Key extends keyof Value
 		? Value[Key]
 		: never;

@@ -819,6 +819,8 @@ function missingInField(
 	const [segment, ...rest] = path;
 	if (segment === undefined) return undefined;
 	if (field.list && !item) {
+		// The length of a list is a number, which has no keys to follow.
+		if (segment === "length") return rest[0];
 		return INDEX.test(segment)
 			? missingInField(field, rest, scope, true)
 			: segment;
