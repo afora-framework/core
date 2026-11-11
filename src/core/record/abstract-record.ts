@@ -13,7 +13,6 @@ import { parseCollection, parseField } from "../parse/parse";
 import type { Issue, ParseResult } from "../parse/types/parse.interface";
 import { standardOfClass } from "../standard/standard";
 import type { StandardSchemaV1 } from "../standard/standard-schema";
-import { Kind } from "../symbols/kind";
 import { Meta } from "../symbols/meta";
 import {
 	InvalidRecordValue,
@@ -178,55 +177,63 @@ function issuesOfError(error: unknown, source: string): readonly Issue[] {
 }
 
 /**
- * The value `parseRecord` has handled for the record it is about to build, so
- * that the constructor does not handle it again.
+ * What `safeParse` asks of the record it is about to build: to hand its
+ * issues over instead of raising the exception they stand for, which nobody
+ * would read. The first record of `Class` to reach the constructor of
+ * `AbstractRecord` takes the request, so the records it holds, and those its
+ * constructor builds, raise as they always do.
  */
-let handled:
-	| {
-			readonly Class: object;
-			readonly input: unknown;
-			readonly value: Readonly<Record<string, unknown>>;
-	  }
-	| undefined;
+interface Request {
+	readonly Class: object;
+	/** What the record threw in place of its exception. */
+	rejection?: object;
+	issues?: readonly Issue[];
+}
 
-/** Whether each record class, from itself to the one `recordOf` made, has no constructor of its own. */
-const declaredConstructors = new WeakMap<object, boolean>();
+let request: Request | undefined;
+
+/** The issues of a rejected value, and the exception they stand for once it is asked for. */
+interface Rejection {
+	readonly issues: readonly Issue[];
+	readonly source: string;
+	exception?: Exception;
+}
+
+function exceptionOfRejection(rejection: Rejection): Exception {
+	rejection.exception ??= exceptionOfIssues(rejection.issues, rejection.source);
+	return rejection.exception;
+}
 
 /**
- * Whether a record of `Class` is built from the value it is given, as it is:
- * `Class` is made by `recordOf`, or extends one without declaring a
- * constructor at any level. A class that declares one may change the value
- * before the record sees it, or reject it after, so only its constructor can
- * tell what the record is. A class is told by its source; one that is not
- * written as a `class` (compiled to a function, for instance) counts as
- * declaring a constructor.
+ * Makes what a record throws for `safeParse` the exception `new` would have
+ * thrown, to a constructor that catches it around `super(...)`: `instanceof`,
+ * `name`, `details`, `trace`... all answer as that exception, which is built
+ * the first time one of them is read. `safeParse` itself never reads it.
  */
-function constructsAsDeclared(Class: object): boolean {
-	let declared = declaredConstructors.get(Class);
-	if (declared === undefined) {
-		declared = false;
-		for (
-			let current: unknown = Class;
-			typeof current === "function";
-			current = Object.getPrototypeOf(current)
-		) {
-			// The class `recordOf` made: what it extends decides.
-			if (Object.hasOwn(current, Kind)) {
-				declared = Object.getPrototypeOf(current) === AbstractRecord;
-				break;
-			}
-			const source = Function.prototype.toString.call(current);
-			if (!source.startsWith("class") || source.includes("constructor")) break;
-		}
-		declaredConstructors.set(Class, declared);
-	}
-	return declared;
-}
+const REJECTION_HANDLER: ProxyHandler<Rejection> = {
+	get: (rejection, key) => Reflect.get(exceptionOfRejection(rejection), key),
+	set: (rejection, key, value) =>
+		Reflect.set(exceptionOfRejection(rejection), key, value),
+	has: (rejection, key) => Reflect.has(exceptionOfRejection(rejection), key),
+	getPrototypeOf: (rejection) =>
+		Reflect.getPrototypeOf(exceptionOfRejection(rejection)),
+	ownKeys: (rejection) => Reflect.ownKeys(exceptionOfRejection(rejection)),
+	getOwnPropertyDescriptor: (rejection, key) => {
+		const descriptor = Reflect.getOwnPropertyDescriptor(
+			exceptionOfRejection(rejection),
+			key,
+		);
+		// A proxy can only tell of keys its target lacks as configurable ones.
+		return descriptor && { ...descriptor, configurable: true };
+	},
+};
 
 /**
  * An instance of `Class`, a class made by `recordOf`, for `value`: `value`
  * itself if it is one already, otherwise what its constructor makes of it, or
- * the issues of the error the constructor throws.
+ * the issues that reject it. The constructor always runs, as a class may
+ * change the value before the record sees it, or reject it after; only the
+ * exception of a value the record rejects is left unbuilt.
  */
 function parseRecord(
 	Class: new (value: never) => object,
@@ -234,34 +241,19 @@ function parseRecord(
 ): ParseResult<object> {
 	if (value instanceof Class) return { value };
 
-	// A class that gives its value to the record as it is, and whose members
-	// were checked by a first record, has the value handled first: one that is
-	// rejected is not built, so nothing is thrown for it.
-	if (checked.has(Class) && constructsAsDeclared(Class)) {
-		const source = recordNameOf(Class);
-		const result = parseCollection(
-			(Class as unknown as RecordDeclaration<IBlueprintCollection>).blueprint
-				.properties,
-			value,
-			[],
-			source,
-		);
-		if (result.issues) return result;
-
-		handled = { Class, input: value, value: result.value };
-		try {
-			return { value: new Class(value as never) };
-		} catch (error) {
-			return { issues: issuesOfError(error, source) };
-		} finally {
-			handled = undefined;
-		}
-	}
-
+	// A constructor may parse other records before its own is built.
+	const outer = request;
+	const own: Request = { Class };
+	request = own;
 	try {
 		return { value: new Class(value as never) };
 	} catch (error) {
+		if (own.issues !== undefined && own.rejection === error) {
+			return { issues: own.issues };
+		}
 		return { issues: issuesOfError(error, recordNameOf(Class)) };
+	} finally {
+		request = outer;
 	}
 }
 
@@ -449,15 +441,13 @@ export abstract class AbstractRecord<
 	}
 
 	constructor(value: BlueprintInput<Properties>) {
-		// `safeParse` has handled the value of the record it is building.
-		if (
-			handled !== undefined &&
-			handled.input === value &&
-			handled.Class === this.constructor
-		) {
-			values.set(this, handled.value);
-			handled = undefined;
-			return;
+		// `safeParse` is building this record: it takes the issues, unthrown.
+		// The class tells it, not the value, which a constructor may replace
+		// (an entity does, to make its id).
+		let asked: Request | undefined;
+		if (request !== undefined && request.Class === this.constructor) {
+			asked = request;
+			request = undefined;
 		}
 
 		const { properties } = this[Meta].blueprint;
@@ -465,7 +455,15 @@ export abstract class AbstractRecord<
 
 		const source = recordNameOf(this.constructor);
 		const result = parseCollection(properties, value, [], source);
-		if (result.issues) throw exceptionOfIssues(result.issues, source);
+		if (result.issues) {
+			if (asked === undefined) throw exceptionOfIssues(result.issues, source);
+			asked.issues = result.issues;
+			asked.rejection = new Proxy<Rejection>(
+				{ issues: asked.issues, source },
+				REJECTION_HANDLER,
+			);
+			throw asked.rejection;
+		}
 		values.set(this, result.value);
 	}
 
