@@ -66,7 +66,7 @@ class Entry extends entityOf(
 - `schemaVersion` is a positive integer, 1 when absent. It is not `versioned`, which is [optimistic concurrency](entities.md#versioned-entities).
 - With `schemaVersion`, every write stores it in the row under `SCHEMA_VERSION_KEY` (`"$v"`), and reads strip it before parsing. A row without it is version 1. The key is never a key of the entity; an entity with `schemaVersion` cannot declare `$v` (`ReservedEntityKey`), any other can.
 - `upgrade[n]` takes the stored data of version `n - 1` (frozen, without `$v`) and gives that of version `n`. Steps are optional: a version with nothing to convert has none.
-- Invalid options throw `InvalidEntitySchemaVersion` when the entity is declared: a `schemaVersion` that is not a positive integer, a step that is not a function or reaches a version outside `2..schemaVersion`, a previous name that is not an identifier or is the entity's own.
+- Invalid options throw `InvalidEntitySchemaVersion` when the entity is declared: a `schemaVersion` that is not a positive integer, a step that is not a function or reaches a version outside `2..schemaVersion`, a previous name that is not an identifier or is the entity's own. An entity without `name` is named by its class, which `entityOf` does not know yet: a previous name equal to it throws when its repository is declared (`repositoryOf`), and `app.migrate` never reads the entity's own name as a previous one.
 
 ## What a read does
 

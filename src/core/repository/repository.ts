@@ -5,6 +5,7 @@ import { recordFieldOf } from "../blueprint/record-field";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
 import {
 	EntityClock,
+	EntitySettings,
 	EntityUniqueKeys,
 	identityKeysOf,
 	isVersionedEntityClass,
@@ -12,6 +13,8 @@ import {
 } from "../entity/abstract-entity";
 import { isEntity, isEntityClass } from "../entity/entity";
 import { enqueueLifecycle } from "../entity/event";
+import { InvalidEntitySchemaVersion } from "../entity/exceptions";
+import type { EntityStorageSettings } from "../entity/types/entity.interface";
 import {
 	type EnvironmentDependencies,
 	isEnvironment,
@@ -897,6 +900,27 @@ function invalid(source: string, reason: string): never {
 	throw new InvalidRepositoryDeclaration({ source, details: { reason } });
 }
 
+/**
+ * Throws `InvalidEntitySchemaVersion` when a previous name of `entity` is its
+ * own record name: `entityOf` only knows the `name` option, and an entity
+ * without one is named by its class, known here. Moving its rows from that
+ * name to itself would remove them (`app.migrate({ destructive: true })`).
+ */
+function assertPreviousNames(entity: object): void {
+	const own = recordNameOf(entity);
+	const previous =
+		(entity as { readonly [EntitySettings]?: EntityStorageSettings })[
+			EntitySettings
+		]?.previousNames ?? [];
+	if (!previous.includes(own)) return;
+	throw new InvalidEntitySchemaVersion({
+		source: own,
+		details: {
+			reason: `"${own}" cannot be a previous name: expected an identifier other than the name of the entity.`,
+		},
+	});
+}
+
 const INDEX_NAME = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 /**
@@ -1020,6 +1044,7 @@ export function repositoryOf<
 		invalid("repositoryOf", "Expected an entity class made by entityOf.");
 	}
 	const name = `${recordNameOf(entity)}Repository`;
+	assertPreviousNames(entity);
 	const deletion = settings.deletion ?? "hard";
 	if (deletion !== "hard" && deletion !== "soft") {
 		invalid(name, 'Expected deletion to be "hard" or "soft".');

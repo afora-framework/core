@@ -6,6 +6,7 @@ import {
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
 import { Exception } from "../exception/exception";
 import type { Issue } from "../parse/types/parse.interface";
+import { recordNameOf } from "../record/name";
 import {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
@@ -257,10 +258,17 @@ export async function migrateRepository(
 	const versioned =
 		isVersionedEntityClass(state.entity) &&
 		provider.capabilities?.versioning === true;
-	const previousNames =
+	// A previous name that is the entity's own is its own table: moving its
+	// rows to itself, then removing them, would delete them all.
+	const own = recordNameOf(state.entity);
+	const previousNames = (
 		(state.entity as { readonly [EntitySettings]?: EntityStorageSettings })[
 			EntitySettings
-		]?.previousNames ?? [];
+		]?.previousNames ?? []
+	).filter(
+		(previous) =>
+			previous !== own && `${previous}Repository` !== context.name,
+	);
 	const needs: (keyof IRepositoryProvider)[] = ["findMany"];
 	if (apply) needs.push("update");
 	if (previousNames.length > 0) needs.push("findOne");

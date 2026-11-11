@@ -495,6 +495,33 @@ describe("app.migrate", () => {
 		expect(await provider.count(current)).toBe(3);
 	});
 
+	test("a previous name equal to the record name of the class is rejected, and its rows survive", async () => {
+		const provider = inMemoryProvider();
+		// No `name`: the record name is the name of the class, "Post".
+		class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text })), {
+			previousNames: ["Post"],
+		}) {}
+		const raw = contextOf(Post, "Post");
+		for (const title of ["a", "b"]) {
+			await provider.insert(raw, { id: idOf(), createdAt, title });
+		}
+		let error: unknown;
+		try {
+			const app = applicationOf({
+				name: "cms",
+				entities: { Post },
+				repositories: {
+					Posts: repositoryOf({ entity: Post, actions: ["findMany"], provider }),
+				},
+			});
+			await app.migrate({ mode: "apply", destructive: true });
+		} catch (caught) {
+			error = caught;
+		}
+		expect(error instanceof InvalidEntitySchemaVersion).toBe(true);
+		expect(await provider.count(raw)).toBe(2);
+	});
+
 	test("in apply, gives each provider the plan of its entity", async () => {
 		const plans: unknown[] = [];
 		const { provider } = await seeded();
