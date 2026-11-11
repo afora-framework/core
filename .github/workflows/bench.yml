@@ -74,5 +74,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Delete the branch that asked for this run
-        if: always() && github.event_name == 'push'
+        # When a release calls this workflow, github.event_name is the caller's
+        # ("push" to main), so the event alone would try to delete main.
+        if: always() && github.event_name == 'push' && startsWith(github.ref, 'refs/heads/bench-results/')
         run: git push origin --delete "$GITHUB_REF_NAME"
