@@ -1,6 +1,6 @@
 {
 	"name": "@afora/core",
-	"version": "0.0.11",
+	"version": "0.0.12",
 	"description": "Simple to write, built to hold: domain-first TypeScript backends whose guarantees live in the runtime, for people and AI agents alike.",
 	"keywords": [
 		"domain-driven-design",
