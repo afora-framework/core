@@ -110,7 +110,7 @@ test("a builder that vouches for nothing has its id and its date checked", () =>
 test("what an entity vouches for does not reach the next record", () => {
 	class Plain extends entityOf(Named) {}
 
-	// A rejected entity made its id, and the record after it is checked whole.
+	// A rejected entity made no id, and the record after it is checked whole.
 	expect(User.safeParse({ name: 1 }).issues).toBeDefined();
 	expect(
 		Plain.safeParse({ name: "Jane", id: "not-an-id" }).issues?.map(

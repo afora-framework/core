@@ -15,10 +15,12 @@ import type {
 } from "../record/types/plugin.interface";
 import {
 	AbstractEntity,
+	completeOf,
 	ENTITY_IDENTITY_KEYS,
 	ENTITY_MEMBERS,
 	ENTITY_VERSION_KEY,
 	EntityClock,
+	EntityComplete,
 	EntityLifetime,
 	EntitySettings,
 	EntityUniqueKeys,
@@ -73,6 +75,7 @@ export function entityBuilderOf<
 		options: EntityOptions<IBlueprintCollection> = {},
 	) => {
 		const lifetime = lifetimeOf(blueprint, options);
+		const complete = completeOf(clock, lifetime);
 		const expiring = lifetime !== undefined;
 		const versioned = options.versioned === true;
 		const added = [
@@ -139,6 +142,7 @@ export function entityBuilderOf<
 		});
 
 		Object.defineProperty(DeclaredEntity, EntityLifetime, { value: lifetime });
+		Object.defineProperty(DeclaredEntity, EntityComplete, { value: complete });
 		Object.defineProperty(DeclaredEntity, EntitySettings, {
 			value: Object.freeze({
 				versioned,
