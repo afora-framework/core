@@ -1,4 +1,11 @@
 export { GUIDE } from "./guide";
+export {
+	type ProjectView,
+	projectDifferences,
+	projectViewOfDescription,
+	projectViewOfSpec,
+	type RouteView,
+} from "./project-view";
 export { createServer, type ServerOptions } from "./server";
 export {
 	type McpCallExtra,
@@ -6,6 +13,7 @@ export {
 	type McpToolDefinition,
 	type McpToolResult,
 	type McpTools,
+	type McpToolsHooks,
 	type McpToolsOptions,
 	mcpTools,
 	stages,

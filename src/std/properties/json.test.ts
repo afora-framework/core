@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import { Type } from "typebox";
+import { statusOf } from "../../adapters";
 import {
 	blueprintOf,
 	checkJsonSchema,
@@ -14,7 +15,6 @@ import {
 	jsonSchemaIssues,
 	recordOf,
 	repositoryOf,
-	statusOf,
 } from "../../index";
 
 describe("ctx.json", () => {

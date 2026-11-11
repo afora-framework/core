@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { outputOf, StdStages, stageDescriptionOf } from "@afora/core";
+import { outputOf, StdStages } from "@afora/core";
+import { stageDescriptionOf } from "@afora/core/experimental";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { blog, requireAuth } from "../../hono/tests/blog";

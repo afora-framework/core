@@ -1,5 +1,14 @@
-import { isRecordClass } from "../../blueprint/record-field";
-import type { AnyBlueprint } from "../../blueprint/types/blueprint.interface";
+import { isBlueprint } from "../../blueprint/is-blueprint";
+import { isBlueprintList } from "../../blueprint/list";
+import { isRecordClass, recordFieldOf } from "../../blueprint/record-field";
+import type {
+	AnyBlueprint,
+	BlueprintVariants,
+} from "../../blueprint/types/blueprint.interface";
+import {
+	blueprintOfVariant,
+	isBlueprintVariant,
+} from "../../blueprint/variant";
 import { isEnvironment } from "../../environment/environment";
 import { isDeclaredException } from "../../exception/exception";
 import { isRepository } from "../../repository/repository";
@@ -65,6 +74,84 @@ const WRITE_ACTIONS = new Set([
 	"increment",
 ]);
 
+const INDEX = /^(?:0|[1-9][0-9]*)$/;
+/** What `missingSegment` reaches through the `length` of a list, which `followPath` reads. */
+const LENGTH = Symbol("length");
+const PRIMITIVE_SCHEMA_TYPES = new Set([
+	"string",
+	"number",
+	"integer",
+	"boolean",
+	"null",
+]);
+
+/** Whether `field` is a property whose values are primitives, which have no keys to follow. */
+function isPrimitiveProperty(field: unknown): boolean {
+	const schema = (field as { type?: { schema?: { toString(): string } } })?.type
+		?.schema;
+	if (typeof field !== "function" || schema === undefined) return false;
+	try {
+		const type = (JSON.parse(schema.toString()) as { type?: unknown }).type;
+		return typeof type === "string" && PRIMITIVE_SCHEMA_TYPES.has(type);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The first segment of `path` that a value of `field` (a blueprint, a list, a
+ * record or a property) cannot hold, or `undefined` when the path may name a
+ * value. A key of a record that its blueprint lacks may still be a member of
+ * its class (a getter), after which the path is not followed.
+ */
+function missingSegment(
+	field: unknown,
+	path: readonly string[],
+): string | undefined {
+	let current = field;
+	for (const segment of path) {
+		// The length of a list is a number, which has no keys to follow.
+		if (current === LENGTH) return segment;
+		if (isBlueprint(current)) {
+			if (!Object.hasOwn(current.properties, segment)) return segment;
+			current = current.properties[segment];
+			continue;
+		}
+		if (isBlueprintList(current)) {
+			if (segment === "length") {
+				current = LENGTH;
+				continue;
+			}
+			if (!INDEX.test(segment)) return segment;
+			current = current.item;
+			continue;
+		}
+		if (isBlueprintVariant(current)) {
+			// Its key, or a key of any of its variants: which one a value is, is
+			// only known when it runs.
+			if (segment === current.key) return undefined;
+			const variants: BlueprintVariants = current.variants;
+			const holder = Object.values(variants)
+				.map(blueprintOfVariant)
+				.find((variant) => Object.hasOwn(variant.properties, segment));
+			if (!holder) return segment;
+			current = holder.properties[segment];
+			continue;
+		}
+		const record = recordFieldOf(current)?.record;
+		if (record) {
+			const { properties } = record.blueprint;
+			if (Object.hasOwn(properties, segment)) {
+				current = properties[segment];
+				continue;
+			}
+			return segment in record.prototype ? undefined : segment;
+		}
+		return isPrimitiveProperty(current) ? segment : undefined;
+	}
+	return undefined;
+}
+
 /** What is known of a name bound by a step: the class `build` made, if known. */
 interface Bound {
 	readonly record: object | undefined;
@@ -120,14 +207,12 @@ export function validateSteps(
 				);
 				return;
 			}
-			if (
-				firstKey !== undefined &&
-				!Object.hasOwn(blueprint.properties, firstKey)
-			) {
+			const missing = missingSegment(blueprint, path);
+			if (missing !== undefined) {
 				fail(
 					index,
 					"unknown_key",
-					`"${text}" names "${firstKey}", which the ${root} does not declare.`,
+					`"${text}" names "${missing}", which the ${root} does not declare.`,
 				);
 			}
 			return;

@@ -18,6 +18,8 @@ new Name("a"); // throws: Invalid value for property "name": ...
 Name.demo().value; // "Jane"
 ```
 
+A handler only gets a value of the types of the schema: before `preHandle` runs, the value is checked against the schema without its constraints (`minLength`, `format`...), and one of another type is rejected there. A property with no `preHandle` has no such step, its value goes straight to validation.
+
 Pass `optional: true` to accept `undefined`, `sensitive: true` to have records mask it (as `Password` does) and `unique: true` to have records list its key in `options.unique` (as `Slug` does). `Std` ships `Id`, `Slug`, `Email`, `Phone`, `Url`, `Ip`, `Password`, strings, numbers, booleans, date properties and [JSON](#json).
 
 A property whose callers give another form of its value than the one it stores says so with a static under the `PropertyInput` symbol: `{ accepts, convert }`, the property that validates what a caller gives (of the same value type) and the function that turns it into what is stored. `Password` declares `{ accepts: PlainPassword, convert }`, a plain password checked by the password rules and hashed, so what derives inputs from an entity, as the [standard use cases](std-use-cases.md) do, takes a plain password for a `Password` key and stores its hash. `propertyInputOf(field)` reads it (`undefined` for a property that takes its value as it stores it); a class extending or refining the property keeps it. `PlainPassword` is exported; it is not in the `Std` context.
@@ -58,6 +60,37 @@ const Post = blueprintOf((ctx) => ({
 	level: ctx.optionalOf(ctx.enumOf([1, 2, 3])), // or ctx.enumOf([1, 2, 3], { optional: true })
 }));
 ```
+
+## Unions
+
+A property can hold one of several shapes: give it a union as its schema. When the shapes are objects with properties of their own (to trim, to mask, to report by key), use a [variant field](blueprints.md#one-of-several-blueprints) instead, whose variants are blueprints.
+
+```ts
+import { blueprintOf, listOf, propertyOf } from "@afora/core";
+import { Type } from "typebox";
+
+const Event = propertyOf({
+	name: "event",
+	schema: Type.Union([
+		Type.Object({
+			type: Type.Literal("click"),
+			x: Type.Integer({ minimum: 0 }),
+		}),
+		Type.Object({
+			type: Type.Literal("view"),
+			url: Type.String({ minLength: 1 }),
+		}),
+	]),
+});
+
+const Feed = blueprintOf(() => ({ events: listOf(Event) }));
+Feed.safeParse({ events: [{ type: "click", x: -1 }, { type: "scroll" }] })
+	.issues;
+// [{ path: ["events", 0, "x"], message: "must be >= 0", ... },
+//  { path: ["events", 1, "type"], message: "must be equal to one of the allowed values", ... }]
+```
+
+When every variant is an object that requires one same key with a literal, a different one in each (`type` above), the union is discriminated, and a rejected object is told by the variant its key names, and by that one alone: the issues of `{ type: "click", x: -1 }` are those of a click. An object whose key names no variant, or has none, gets one issue, at the key. Any other union (variants that are not objects, no such key, two variants with the same literal) and any value that is not an object are told as TypeBox tells them, with the errors of every variant.
 
 ## JSON
 

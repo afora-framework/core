@@ -29,8 +29,15 @@ import type {
 	AnyRepository,
 	IRepositoryProvider,
 } from "../../repository/types/repository.interface";
+import type {
+	SchemaLock,
+	SchemaMigrationOptions,
+	SchemaMigrationReport,
+} from "../../repository/types/schema.interface";
 import type { Kind } from "../../symbols/kind";
 import type { UseCaseStepDescription } from "../../use-case/steps/types/steps.interface";
+import type { AccessDeclaration } from "../../use-case/types/access.interface";
+import type { RouteDeclaration } from "../../use-case/types/route.interface";
 import type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
@@ -274,6 +281,17 @@ export interface IApplication<
 	 * started application of the process.
 	 */
 	stop(): Promise<void>;
+	/**
+	 * Brings the stored rows of its entities up to their current shape,
+	 * walking each provider directly: in `check` it only reports, in `apply`
+	 * it gives each provider the plan of its entity (`provider.migrate`, the
+	 * changes from `lock`), then rewrites the rows below the current
+	 * `schemaVersion` or with a `fill` or `renamedFrom` pending, and moves the
+	 * rows stored under `previousNames`. Keys no longer declared, and the
+	 * rows of the previous names, are only removed with `destructive: true`.
+	 * Idempotent and resumable.
+	 */
+	migrate(options: SchemaMigrationOptions): Promise<SchemaMigrationReport>;
 	/** The variables of an environment registered in the application. */
 	get<Environment extends AnyEnvironment>(
 		environment: Environment,
@@ -302,6 +320,13 @@ export interface ApplicationStartOptions {
 	readonly register?: boolean;
 	/** Stop the started application of the process and take its place, e.g. on hot reload. Default `false`. */
 	readonly replace?: boolean;
+	/**
+	 * The committed schema lock (`afora.lock.json`): start throws
+	 * `SchemaLockMismatch` when an entity of the lock is no longer named, and
+	 * no entity lists it in `previousNames`, or when the `schemaVersion` of
+	 * an entity is lower than the lock's.
+	 */
+	readonly lock?: SchemaLock;
 }
 
 /** Any application. */
@@ -369,6 +394,13 @@ export type FieldDescription =
 			readonly kind: "record" | "entity";
 			readonly ref: string;
 			readonly optional: boolean;
+	  }
+	| {
+			/** One of several blueprints, told apart by the value of `key`, the name of the variant. */
+			readonly kind: "variant";
+			readonly key: string;
+			readonly optional: boolean;
+			readonly variants: Readonly<Record<string, FieldDescription>>;
 	  };
 
 export type FieldsDescription = Readonly<Record<string, FieldDescription>>;
@@ -403,6 +435,12 @@ export interface RecordDescription {
 	 * `fields`) or `{ at: key }`. Present only when it has one.
 	 */
 	readonly expires?: EntityExpires;
+	/** The `schemaVersion` of an entity; present only when declared. */
+	readonly schemaVersion?: number;
+	/** The versions the `upgrade` of an entity has a step to, ascending; present only when it has some. */
+	readonly upgrade?: readonly number[];
+	/** The `previousNames` of an entity; present only when it has some. */
+	readonly previousNames?: readonly string[];
 }
 
 /** What a use case depends on, by the name it has in the application. */
@@ -420,6 +458,10 @@ export interface UseCaseDescription {
 	readonly description?: string;
 	readonly tags: readonly string[];
 	readonly deprecated: boolean;
+	/** Where it is served over HTTP, from the `route` setting or `@Route`. */
+	readonly route?: RouteDeclaration;
+	/** Who may call it, from the `access` setting or `@Access`. */
+	readonly access?: AccessDeclaration;
 	readonly input: FieldsDescription;
 	readonly response: FieldsDescription;
 	readonly context?: FieldsDescription;

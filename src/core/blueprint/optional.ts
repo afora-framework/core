@@ -14,12 +14,15 @@ import { isOptionalRecord, isRecordClass } from "./record-field";
 import type {
 	AnyBlueprint,
 	AnyBlueprintList,
+	AnyBlueprintVariant,
 	AnyRecordClass,
 	BlueprintField,
 	OptionalBlueprint,
 	OptionalBlueprintList,
+	OptionalBlueprintVariant,
 	OptionalRecord,
 } from "./types/blueprint.interface";
+import { isBlueprintVariant, standardVariantOf } from "./variant";
 
 const cache = new WeakMap<BlueprintField, unknown>();
 
@@ -41,6 +44,10 @@ export function optionalOf<Blueprint extends AnyBlueprint>(
 export function optionalOf<List extends AnyBlueprintList>(
 	list: List,
 ): OptionalBlueprintList<List>;
+/** The version of `variant` that, as a field of a blueprint, accepts `undefined`. */
+export function optionalOf<Variant extends AnyBlueprintVariant>(
+	variant: Variant,
+): OptionalBlueprintVariant<Variant>;
 /**
  * The version of `record` that, as a field of a blueprint, accepts `undefined`
  * or an instance of `record`. Returns `record` itself when it is already optional.
@@ -88,6 +95,14 @@ export function optionalOf(given: BlueprintField): unknown {
 		if (field.optional) return field;
 
 		const optional = standardListOf({ ...field, optional: true });
+		cache.set(field, optional);
+		return optional;
+	}
+
+	if (isBlueprintVariant(field)) {
+		if (field.optional) return field;
+
+		const optional = standardVariantOf({ ...field, optional: true });
 		cache.set(field, optional);
 		return optional;
 	}

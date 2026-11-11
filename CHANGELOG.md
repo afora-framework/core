@@ -1,6 +1,176 @@
 # Changelog
 
-## 0.0.8 — unreleased (draft: dated when it is published)
+## 0.0.9 — unreleased (draft: dated when it is published)
+
+### Changed
+
+- Every `@afora` package (`codegen`, `mcp`, `hono`, `fastify`, `express`, `elysia`, `ws`, `drizzle`, `dynamodb`) requires `@afora/core` 0.0.9 or later: they import exports added or moved in this release (`@afora/core/adapters`, routes and access of a use case, the variant field).
+- **Breaking.** The exports of `@afora/core` are split into tiers (#42); see `docs/api-tiers.md` for the tier of each one, with the reason. Application code keeps importing from `@afora/core`: everything the README and the docs show for declaring, running and serving a domain stays there (468 of 557 exports). See Migration below.
+- **Breaking.** New stable subpath `@afora/core/adapters`, for authors of sinks, providers and code generators. These moved there from `@afora/core` (49): `coerceTextValues`, `outputValueOf`, `problemOf`, `PROBLEM_MEDIA_TYPE`, `statusOf`, `sinkOf`, `stageCatalogOf`, `stageKindOf`, `operationRoutes`, `routeOptionsIssue`, `requestIdHeaderOf`, `ROUTE_OPTION_KEYS`, `ENTITY_IDENTITY_KEYS`, `RESERVED_ENTITY_KEYS`, `RESERVED_RECORD_KEYS`, the symbols `Kind` and `Demo`; the provider types `IRepositoryProvider`, `RepositoryContext`, `RepositoryData`, `ProviderQuery`, `ProviderCapabilities`, `ProviderIncrementOptions`, `ProviderKeyset`, `ProviderUpdateOptions`; the sink types `OperationDescriptor`, `OperationRoute`, `Problem`, `ProblemOptions`, `SinkFactory`, `SinkSettings`, `SinkStage`; and the `app.describe()` types `ApplicationDescription`, `CommandDescription`, `ExceptionDescription`, `FieldDescription`, `FieldsDescription`, `LogDescription`, `OutputDescription`, `PropertyDescription`, `PropertyLineageDescription`, `PropertyReference`, `ProviderReference`, `RecordDescription`, `UseCaseDependencyDescription`, `UseCaseDescription`, `ProviderDescription`, `EventPolicyDescription`, `StageDescription`. Like the main entry and `@afora/core/testing`, it is part of the contract of `VERSIONING.md`.
+- **Breaking.** Moved to `@afora/core/experimental`, outside the contract (9): `providerDescriptionOf`, `eventPolicyCatalogOf`, `eventPolicyDescriptionOf`, `stageDescriptionOf`, `propertyLineageOf`, `useCaseOriginOf`, `useCaseTargetOf` and the types `PropertyLineage` and `UseCaseOriginInfo`. `app.describe()` gives the same descriptions.
+- **Breaking.** No longer exported (31): the base classes `AbstractProperty`, `AbstractDefineProperty`, `AbstractRecord`, `AbstractEntity`, `AbstractRepository` and `AbstractUseCase` (extend what `propertyOf`, `recordOf`, `entityOf`, `repositoryOf` and `useCaseOf` return); the guards `isApplication`, `isProviderSlot`, `isProviderStorage`, `isLogFactory`, `isBlueprint`, `isBlueprintList`, `isOptionalRecord`, `isRecordClass`, `isEnvironment`, `isProperty`, `isRecordPlugin`, `isRepository` and `isPasswordHash`; `recordFieldOf`, `schemaOf` and its type `SchemaClass`; `PropertyStates` and `UNEXPECTED_ERROR`; `PASSWORD_MIN_LENGTH`, `PASSWORD_MAX_LENGTH`, `PASSWORD_SPECIAL_CHARACTERS` and `passwordIssues`; and the `@internal` types `UseCaseContextOf`, `UseCasePluginContext` and `UseCasePluginsByName`.
+- `@afora/hono`, `@afora/mcp`, `@afora/ws`, `@afora/drizzle` and `@afora/codegen` import their plumbing from `@afora/core/adapters` (and their tests `stageDescriptionOf` from `@afora/core/experimental`), so they need a `@afora/core` with that subpath. Code generated from an `afora.json` imports only from `@afora/core`, unchanged; the names it reserves for declarations (`afora_catalog` `reservedDeclarationNames`) are those of `@afora/core` only, so the names that moved can now be declared.
+- `VERSIONING.md` lists `@afora/core/adapters` and `@afora/core/testing` as contract and `@afora/core/experimental` as not, uses the `**Breaking.**` marker of this file, and has the CHANGELOG template: from now on every breaking change has a Migration block, before and after. `docs/README.md` explains the tiers.
+- **Breaking.** A value rejected by a property whose schema is a discriminated union (every variant an object that requires one same key with a literal, a different one in each) is told by the variant its key names, and by that one alone (#77); see `docs/properties.md`. It was told with the errors of every variant, as TypeBox `Errors` gives them: fifteen issues and more for one value, most of them about variants it was never meant to be. An object whose key names no variant, or has none, gets one issue at the key (`must be equal to one of the allowed values`, `invalid_value`). Unions that are not discriminated, and values that are not objects, are told as before. Code that counts or matches the issues of such a union gets fewer.
+- A value rejected by a property whose schema is an object, an array or a union is told why without TypeBox `Errors`, as a string or a number already was: the schema is read once into its own explanation, which gives the same errors, in the same order, with the same paths, messages, locale and `maxErrors` (each variant of an `anyOf` with the limit to itself, as in TypeBox). It covers schemas made of the keywords of a leaf, `required`, `properties`, `additionalProperties: false`, `items` with one schema, `minItems`, `maxItems` and `anyOf`, at every depth; a schema with any other keyword (`allOf`, `not`, references, refinements) still goes to `Errors`. With the change above, an invalid value of the `union` case of `bench/` takes about 0.5x the time of Zod 4 `safeParse`, from 9.4x, and that case is back under the default guard limit of 1.15x.
+- An entity does not check again the id and the `createdAt` it has just made with the defaults of `entityOf` (the built-in UUID v7 generator and `new Date().toISOString()`), which `Id` and `CreatedAt` keep as they are: `Entity.safeParse` takes about a quarter less time on a small object. Nothing else is trusted: the id of a generator set with `configure({ idGenerator })`, what a builder made with `entityBuilderOf` generates, and any `id` or `createdAt` the value brings are checked and handled as before.
+- Creating an entity is faster (measured with `bun run bench -- --compare`, on Bun): `Entity.safeParse` takes 0.44x to 0.72x the time it took on an object of up to twenty values, about half on a small one. The default id generator builds a UUID v7 from a table of hexadecimal digits and takes its random bytes from a pool filled by `crypto.getRandomValues` every 64 ids, instead of one call and about 45 allocations per id; the ids are the same (RFC 9562, time-ordered, counting up within a millisecond). An entity also hands its `id` and `createdAt` to its record in the order of its blueprint.
+- `blueprint.safeParse`, `blueprint["~standard"].validate` and the constructor of a record look up what they need of the blueprint and of the class on the first value and keep it, instead of on every value: about 5% less time on a small object for `blueprint.safeParse` and up to 12% for `Record.safeParse`. A class reads its record name (the `name` option or a `static recordName`) when its first record is built; changing a `static recordName` after that no longer changes the `source` of its issues.
+- `inMemoryProvider` keys the table of an entity that declares a name (`entityOf(blueprint, { name })` or a `static recordName`) by that name instead of by its class, so a context made for a previous name of an entity reads its rows: two entity classes declaring the same name and sharing one provider now share a table. An entity without a name keeps a table of its own class.
+- `useCaseOf` validates the paths of `$input` and `$context` at any depth when a steps use case is declared (through nested blueprints, list indices and `length`, and record fields; below a primitive there is no key; `$input.tags.length` is typed `number` with `strictSteps`), and `afora-codegen check` does the same; only the first key was checked.
+- `useCaseOf` has one signature (it had one with `steps` and one without, so a wrong step was reported as "No overload matches this call" on the call): a type error in the settings or the steps is reported where it is. The returned class is the same; the settings type is the new `UseCaseDeclaration`. `UseCaseStepsSettings` takes `strictSteps?: boolean`.
+- Validation is faster, with the same values and the same issues (#41). On the four cases of `bench/` (flat and nested, valid and invalid), `blueprint.safeParse` went from between 1.1x and 3.4x the time of Zod 4 `safeParse` to between 0.65x and 0.9x on Bun (and on Node), and `Record.safeParse` from between 1.4x and 6.4x to between 0.75x and 1.25x on Bun; see `bench/RESULTS.md`. What changed underneath:
+  - A property that declares no `preHandle` skips the shape check that protects it, so its value goes through TypeBox once, not twice; `propertyOf` no longer gives every property a `preHandle` and an `afterHandle` that do nothing. A definition written on `AbstractDefineProperty` with a `handle` of its own keeps the shape check.
+  - A rejected string, number, boolean, literal or enum is told why by each keyword of its schema, compiled once, instead of TypeBox `Errors`, which walks the schema on every call. The errors, their order and their messages are the same, and follow TypeBox's locale and `maxErrors`; object, array and union schemas got the same treatment later (see above), and refined schemas still go to `Errors`.
+  - The path of a value is made only for an issue, and a field gives its value back without a result object.
+  - `Record.safeParse` still builds the record through its constructor, for every class (a subclass with a constructor of its own and an entity included), but the record it is building no longer builds the exception of a value it rejects, with its stack and its trace: it hands its issues over. A constructor that wraps `super(...)` in `try`/`catch` catches, during a `safeParse`, a stand-in that answers as that exception (`instanceof`, `name`, `details`, `trace`...) and builds it only when it is read; see `docs/standard-schema.md`. `new Record(value)` is unchanged, inside a constructor too.
+  - The `cause` of an issue raised by a property is a getter of the issue's class instead of a non-enumerable property of its own: `issue.cause`, `Object.keys(issue)`, spreading and `JSON.stringify` give what they gave; `Object.getOwnPropertyDescriptor(issue, "cause")` is now `undefined`. The issues of a rejected `Record.safeParse` are no longer a frozen array.
+
+### Added
+
+- `resourceOf(repository, { path, actions?, access? })` (#68): the standard `create`, `get`, `list`, `update` and `delete` for the `useCases` of `commandOf`, each with the route of a REST resource. Only a shortcut: the command is an ordinary one, typed by the repository and described by `describe()` as if written with `ctx`. With the types `ResourceAction`, `ResourceOptions` and `ResourceUseCases`. See `docs/std-use-cases.md#a-resource-in-one-line`.
+- Docs (#67, #68): `docs/README.md` opens with a CRUD API that fits on one screen; `docs/tutorial.md` builds an API step by step, with Node commands beside the Bun ones and what a record is; `docs/coming-from-hono-zod.md` shows one endpoint both ways. Their listings are `examples/interop/crud.ts` and `tutorial.ts`, run by `bun run test:interop`. The quick start of the README declares the route of its use case (`POST /api/users`, 201).
+- `@afora/mcp` (#75, #64, #69): the tool `afora_project` maps a project (operations, routes, access, entities), reading a TypeScript application with no `afora.json`; the guide says when a use case is steps and when it is code; the `mcpTools` sink enforces access; and what a spec names (`import`, `extends`) may not leave the project. `@afora/ws` enforces access too, from the principal of a session or an authenticator hook. `SECURITY.md` states the trust model of `@afora/mcp` and `@afora/codegen`.
+- `@afora/codegen`: `route` and `access` in the `useCases` of `afora.json`, generated as settings and kept by the round trip (#75, #60); see `docs/afora-json.md#routes-and-access`.
+- `@Route` and `@Access` accept the declaration the class already has, so a hand-written class may repeat what its generated base carries; a different one still throws `InvalidUseCaseDeclaration`.
+- Three new packages, sinks that serve an output on other servers (#75): `@afora/fastify`, `@afora/express` and `@afora/elysia`. Each takes the options of `@afora/hono` (the `HttpOptions`) and the hooks `authenticator`, `middlewares` (of its server) and `app`, and is built on `compileRoutes`. See `docs/providers.md`.
+- `httpProviderContract(name, { sink, fetch, close? }, runner)` in `@afora/core/testing`: the cases every sink that serves HTTP must pass, on real requests (declared routes, input from each place, context, problems, statuses, masking, access, cookies, request id, the document), with the type `HttpProviderContractSettings`. The four HTTP packages run it.
+- Tokens and sessions, **experimental** (#60, #75), see `docs/auth.md#tokens-and-sessions`:
+  - `jwtOf(options)` in `@afora/core/experimental`: JSON Web Tokens signed with a shared secret (HS256, HS384, HS512) on Web Crypto, with `sign`, `verify` (a `Principal`, or `Unauthenticated`) and `authenticator({ header?, cookie? })`; `InvalidJwtOptions` and the types `Jwt`, `JwtOptions`, `DescribedJwtOptions`, `JwtAlgorithm`, `JwtSubject`, `JwtTokenOptions` and `StdTokenOptions`.
+  - The option `auth: { jwt: { secret: { env }, issuer?, audience?, algorithm?, header?, cookie? } }` of the sinks that serve HTTP (`HttpOptions`) authenticates callers from such a token and gives the OpenAPI document its security scheme.
+  - The standard `login` takes `token: { secret: { env }, issuer?, audience?, expiresIn?, algorithm?, refresh?, scopes?, scopesFrom?, claims? }` and then answers a `token` (and a `refreshToken`) with the entity; new standard use cases `refresh` (a refresh token for new tokens) and `logout` (empty tokens, which remove cookies). Without the option `login` is as before.
+  - Where these options are described (`describe()`, `afora.json`), the secret is named by its environment variable and a written secret is rejected.
+- Every standard use case takes `route` and `access`, passed to `useCaseOf`.
+- A route can send keys of the response as cookies: `setCookie: { [responseKey]: { name, httpOnly?, secure?, sameSite?, path?, domain?, maxAge? } }` (by default `HttpOnly; Secure; SameSite=Lax; Path=/`). The key leaves the body, an empty text removes the cookie, and the `openapi` sink leaves the key out of the response schema and documents `set-cookie`. An `OperationRoute` gains `setCookies`.
+- `compileRoutes(operations, options, context, { source, authenticator?, document? })` in `@afora/core/adapters` (#75): the route table of an output for a sink that serves HTTP on any server. Reading the body, query, path, headers and cookies, coercion, the context, the caller, statuses, problems, the request id and the docs route are decided once, and a sink only routes each `{ method, path }` to `handle(request)` and sends its `{ status, headers, cookies, body }`. With it: `HTTP_OPTION_KEYS`, `httpOptionsIssue` and the types `HttpOptions`, `HttpRequest`, `HttpResult`, `CompiledRoute`, `RouteTable`, `CompileRoutesSettings`, `Authenticator` and `AuthRequest`.
+- `sinkOf` factories take a second argument, the hooks (`sink(options, hooks)`), for what JSON cannot hold; `build` receives it as its fourth argument and the description of the stage leaves it out. `SinkSettings` and `SinkFactory` have a third type parameter for it.
+- Authorization declared and enforced (#60, #75): the `access` setting of `useCaseOf` or the decorator `@Access(...)` says who may call a use case: `{ public: true }`, or an authenticated caller with all the `scopes`, that is the `owner` named by an input key (its subject, or a `claim`), with keys of the `context` filled from the caller over what the request sent. The check is made once per operation and runs in `invoke(input, { context, principal })`, before the input is validated, so every sink enforces it, and one that passes no principal fails closed. New exports of `@afora/core`: `Access`, the exceptions `Unauthenticated` (401) and `Forbidden` (403, `details.reason` `"scope"` or `"owner"`), both of the `Output` layer and known to `statusOf`, and the types `AccessDeclaration` and `Principal`. See `docs/auth.md`.
+  - An `OperationDescriptor` has an optional `access`, and `OperationCallOptions` an optional `principal`.
+  - The `openapi` sink derives the `security` of an operation from its access (the `default` scheme, else the only one, with the declared scopes; `security: []` for a public one under a `default`) and documents its `401` and `403`. `security.operations[id]: false` on an operation with an access throws `InvalidOutputStage`.
+  - `app.describe().useCases.<name>.access` carries the declaration.
+  - A call in process (`execute`, `app.run`, `command.run`) is not checked.
+- A use case can declare its HTTP route (#75, #68): the `route` setting of `useCaseOf` (`{ method, path?, status?, query?, headers?, cookie? }`) or the class decorator `@Route(method, path?, options?)`, which record the same frozen data in the static `route`. The blueprint stays the only description of the input; the route says which keys are read from the path, the query, a header or a cookie, and those must be scalar keys with one place each (`InvalidUseCaseDeclaration` otherwise). `@Route` is a standard decorator (no `experimentalDecorators`, no `Symbol.metadata`) that also runs as a legacy one. New exports of `@afora/core`: `Route` and the types `RouteDeclaration` and `RouteSettings`. See `docs/use-cases.md#routes`.
+  - An `OperationDescriptor` has an optional `route`, and `operationRoutes` resolves method, path and status from the `route` option of the sink, then the route of the use case, then the default. An `OperationRoute` gains `body`, `query`, `requestHeaders` and `cookies`.
+  - The `openapi` sink documents the keys a route reads elsewhere as `in: query`, `in: header` and `in: cookie` parameters and leaves them out of the request body.
+  - `app.describe().useCases.<name>.route` carries the declaration.
+  - The error for two operations on one method and path names both operation ids.
+- `variantOf(key, variants)` and `ctx.variantOf` (#80): a field that holds one of several blueprints, told apart by the value of `key`, which is the name of the variant; see `docs/blueprints.md`. The blueprints do not declare the key, the field adds it, first. A value is handled by the blueprint its key names as a nested blueprint handles it (handlers, issues with their codes and paths, frozen result), and its type is the union of the variants, narrowed by the key. `optionalOf` and `listOf` take it; it has a `~standard`; `toJSON` masks the sensitive properties of a variant; `stripUndeclared`, `describe()` (a new `kind: "variant"` of `FieldDescription`), the schema lock and `diffSchemas` (each variant by its name) and `toOpenAPI` (`oneOf` with a `discriminator`) handle it. `variantOf` is a reserved key of the blueprint context, so a plugin that declared a property or a factory with that name now throws `ReservedBlueprintKey`. New types: `IBlueprintVariant`, `AnyBlueprintVariant`, `OptionalBlueprintVariant`, `BlueprintVariants`; new exception: `InvalidBlueprintVariant`. A variant can also be a record class or an entity: the value is then an instance, told apart by its class, and the key is only in the plain value given, in `toJSON` and in what is stored; an entity is stored by reference as `{ [key]: name, id }` and read back through the relations of the repository. Not yet: `sliceOf` by the keys of a variant, and the schema evolution options of the properties inside a variant on read. A union that needs no properties of its own is still faster as the schema of one property (about half the time on valid values), which is what the `union` case of `bench/` measures.
+- `afora.json` has a variant field (#80): `{ "variant": { "key": "type", "of": { "click": "Click", "visit": { "fields": { "path": "string" } } } } }`, where each variant is a declared blueprint, record or entity, or a blueprint declared in place, and `optional` and `list` apply as to the other forms; see `docs/afora-json.md`. `@afora/codegen` validates it (new issue code `invalid_variant`: an empty key, no variant, a variant that declares the key, a record or an entity named by two variants; `unknown_type`, `wrong_kind`, `missing_relation` for an entity among the variants, `invalid_environment_field`, and `invalid_index` for an `orderBy` on it), follows `$input` paths into it, generates it as `ctx.variantOf(...)`, and extracts it back from `describe()`, where it threw an `ExtractionError`. `afora.schema.json` and the field schema of the `@afora/mcp` tools have the new form, and the `@afora/mcp` guide teaches it. New types `VariantField` and `VariantSpec` in `@afora/codegen`. The generated code hugs a last object argument of `listOf` as Biome prints it (`listOf(X, {` on the first line) when the call does not fit on one line; such a call was broken argument by argument, which Biome reformats.
+- A new kind of field costs the editor about 3% more type work per edit in every case of `tests/type-perf`; its ceilings were raised by that, and the largest case is at 98% of the target.
+- `examples/agent-built`: a ticketing backend built only through the `@afora/mcp` tools from a written brief (`BRIEF.md`), with the tool calls committed and replayed byte for byte (`scripts/replay.ts`), and an invariant evaluation on the running API (`eval/`): no sensitive value in any response, undeclared keys rejected, business errors as problem+json with the right status and never a 5xx, unique keys enforced, checked on every afora run and on a hand-rolled Hono + Zod baseline from the same brief. `scripts/build-with-agent.ts` and `scripts/build-baseline.ts` make N runs with the Claude API (`bun run eval:agent-built`, needs `ANTHROPIC_API_KEY`); the committed runs are one Claude Code session and its baseline, see `examples/agent-built/README.md`. Its tests run in CI (`bun run test:agent-built`).
+- The README leads with the application as data and agent-written backends (#40): a 30-second path from an `afora.json` to a running API, and a "Why afora" section mapping the guarantees an agent-written backend usually breaks to the mechanism that keeps each one.
+- The Strata Matéria brand (#46): README banners for the light and dark themes in `.github/assets/`, and the fluid, mono and app icon symbols in `.github/assets/brand/`.
+- Schema evolution (#28), see `docs/schema-evolution.md`:
+  - Property options `fill` (the value a stored row lacking the key gets, on read and in a backfill; unlike `default`, the demo value) and `renamedFrom` (the key that held the value before), in `.with()`; both kept in the lineage `describe()` gives.
+  - Entity options `schemaVersion`, `upgrade: { [version]: (data) => data }` and `previousNames`. Every write of an entity with `schemaVersion` stores it in the row under `SCHEMA_VERSION_KEY` (`"$v"`), which such an entity cannot declare (`ReservedEntityKey`); a row without it is version 1. Invalid options throw the new `InvalidEntitySchemaVersion` (layer `entity`); a previous name equal to the record name of an entity without `name` (its class name) throws it when its repository is declared, and `app.migrate` skips a previous name equal to the entity's own, which a destructive run would otherwise empty. `describe().entities.<Name>` has `schemaVersion`, `upgrade` (the versions with a step) and `previousNames` when declared.
+  - Upcast on read: for an entity declaring any of them, each row read (and each row of a related entity) runs its `upgrade` steps from the stored version, then the automatic steps of the current blueprint (renames, fills, keys no longer declared left out), at any depth, before it is parsed. Other entities are read as before. A stored version that is not a positive integer or is above `schemaVersion` throws `InvalidRepositoryData` caused by the new `InvalidStoredSchemaVersion` (layer `repository`). `increment` of a key with `renamedFrom` first writes the row brought up when it still holds the old key, so the delta adds to the stored value.
+  - `app.migrate({ entities?, mode: "check" | "apply", destructive?, pageSize?, lock? })` walks each provider and gives, per entity, `{ scanned, upToDate, upgraded, removalPending, invalid, movedFromPreviousNames, removedKeys, deferred }`: in `apply` it calls `provider.migrate(context, plan)` (which gives `{ deferred: true }`, `ProviderMigrationResult`, when it only wrote the plan for later: the backfill of that entity is then skipped and reported `deferred`), rewrites the rows below the version or with a fill or rename pending, and moves the rows of previous names; keys and old rows are removed only with `destructive: true`. Idempotent and resumable. Invalid options throw the new `InvalidSchemaMigration` (layer `application`). New types `SchemaMigrationOptions`, `SchemaMigrationReport`, `EntityMigrationReport`, `SchemaMigrationInvalidRow`.
+  - `schemaLockOf(app.describe())` (the normalized lock, `afora.lock.json`; `SchemaLockEntity.upgrade` lists the versions with a step), `diffSchemas(lock, current)` (each change classed `automatic`, `declared` or `check`, with `satisfied` and `destructive`) and `schemaLockProblemsOf(lock, current)`. `app.start({ lock })` throws the new `SchemaLockMismatch` (layer `application`) when an entity of the lock is gone without a `previousNames` naming it, or when a `schemaVersion` is lower than the lock's.
+  - `providerContract` has schema evolution cases (`{ schemaEvolution }`, default `true`), and `{ schemaVersionKey }` (default `true`) for those storing `$v`. Providers made with `providersOf` and `providerFrom` forward `migrate`.
+- `@afora/dynamodb`, a new package (#33): `dynamoDbProvider({ table, client })`, a repository provider on one DynamoDB table (`pk` / `sk`; entities at `E#<repository name>`, unique keys enforced by marker items written in the same transaction), with `keyset`, `versioning`, `atomic` and `expiry`, verified by `providerContract` on DynamoDB Local in CI. `migrate` is a no-op: the schema version key and any other key stay in the item data. See `packages/dynamodb/README.md`.
+- `@afora/drizzle`: opt-in `migrations: "apply" | { file }` gives the provider a `migrate(context, plan)` that turns a `SchemaPlan` into DDL for SQLite and Postgres (added, renamed and, when destructive, removed columns, unique indexes, the schema version column), run on the database or written as a drizzle-kit compatible SQL file (then `migrate` returns `{ deferred: true }` and the backfill waits for the next `app.migrate`); `$v` maps to a `schema_version` column. See `packages/drizzle/README.md#schema-evolution`.
+- `strictSteps: true` in `useCaseOf` checks the steps written inline at compile time (#43): every `$` reference must name a value in scope at any depth (the input, the context, an environment or the result of an earlier step, typed from what it calls or builds), the `args` of `find`, `invoke` and `run` must fit the parameters of the repository method, record method or function, the `values` of `build` the input of the record class (unknown and missing keys included), the `value` of `change` and of the repository writes and the `input` of `call` what they take, `invoke.method` a public method and `change.key` a change key of the record. A wrong reference is reported with the references that fit, which the editor completes inside a `"$"` string. Opt-in, as it costs about 17% more per edit on a five-step use case; no effect at run time. New types `CheckedSteps`, `StepReferenceType`, `StepReferencesOf`, `StepValueCheck`, `StepsInitialScope` and `UseCaseDeclaration`. See `docs/use-cases.md#strict-steps`.
+- `@afora/codegen` generates steps use cases with `strictSteps: true`, so type-checking the generated code checks their steps.
+- `bun run bench:guard` (and the `bench` job in CI) fails when `blueprint.safeParse` takes more than 1.15x the time of Zod 4 `safeParse` in any of the four cases.
+- The benchmark (`bench/`) has seven scenarios instead of two (`flat`, `nested`, `api-payload`, `large-list`, `union`, `deep`, `no-transform`) and five more libraries (Ajv, Typia, Effect Schema, Yup and Joi, next to TypeBox, Zod 4, Valibot and ArkType). Every contender is checked before it is timed (it accepts the valid input, rejects the invalid one and rejects an undeclared key), each row is timed by a process of its own, after a warm-up and in three rounds taking turns with the others (in one process a row depended on the rows before it), the tables give p75, p99 and the margin of the mean, and rows whose intervals overlap are reported as tied. It also measures the bundle size and the cold start of each library. The report is `bench/results/latest.json` (with the version of every library), from which `bench/RESULTS.md` is generated; `bench/README.md` tells how it is measured and how to contest a row. `bun run bench -- --only <ids>` runs some scenarios, `--rounds <n>` sets the rounds and `--jobs <n>` runs rows side by side to iterate (its times are not published).
+- The Performance section of the README has a table and a chart generated from `bench/results/latest.json` (`bun run bench -- --render`), and `bun run bench:check`, in CI, fails when they, `bench/RESULTS.md` or the chart were edited by hand.
+- A pull request is timed against its base (`bun run bench -- --compare <checkout>`, the `Benchmark against the base` workflow): it fails when `blueprint.safeParse` takes more than 1.1x its base on a case, and the table is posted on the pull request. The same workflow runs the cases on CodSpeed once the repository variable `CODSPEED_ENABLED` is `true`.
+- The cold start of `bench/` is timed by a file that imports the bundle, not by an inline script (`-e`), which Bun runs 1.5x to 4x slower: afora was reported at 62 ms on Bun where it takes 23 ms (Apple M2), and ArkType, Ajv and Joi were overstated the same way. The entry of afora is bundled with one copy of TypeBox instead of two. The numbers published so far for cold start on Bun are from before this (#86).
+- `bench/RESULTS.md`, the table and the chart of the README are those of a GitHub runner (AMD EPYC, Linux, Bun 1.4.4 and Node 24), measured by the `Benchmark results` workflow instead of on a laptop, and kept as `bench/results/history/0.0.8.json`.
+- The `Benchmark results` workflow, run by hand or after a release, measures everything on a GitHub runner and opens a pull request with the results, kept per version in `bench/results/history/`.
+- `bun run bench:guard` covers the fourteen cases of the seven scenarios, each with its limit against Zod 4 in `bench/guard.limits.ts` (1.15x unless stated, with the reason).
+- The benchmark runs on several versions of Node: `BENCH_NODE_BINS` lists the Node binaries (paths separated by `:`, or `;` on Windows), one run per binary, and the `Benchmark results` workflow measures Node 22 and Node 24. `bench/RESULTS.md` names each run by its version, the cold start has a column per version, and the block of the README leads with the newest Node. `bench/results/latest.json` is now `schema: 2` (a run per Node version; the cold start keyed by the version of the runtime instead of `bun` and `node`); `bench/render.ts` still reads schema 1.
+- `bun run bench:guard` and `bun run bench -- --compare` warm each contender up for 400 ms before its first round, as a row of the benchmark is, so that no ratio is taken on code the engine has not optimized yet.
+
+### Fixed
+
+- The README's steps to generate and serve the quick start's `afora.json` passed `--stages @afora/hono`, which `afora-codegen` resolves as a path and fails on; they now use a `stages.ts` that re-exports `stages` from `@afora/hono`. The three files are `examples/interop/from-json`, generated and served by `bun run test:interop`.
+
+### Migration
+
+**Sinks and providers import their plumbing from `@afora/core/adapters`.** Before:
+
+```ts
+import {
+	exceptionOf,
+	type IRepositoryProvider,
+	type OperationDescriptor,
+	outputValueOf,
+	problemOf,
+	type RepositoryData,
+	RepositoryUniqueViolation,
+	sinkOf,
+	statusOf,
+} from "@afora/core";
+```
+
+After: the exceptions and the declaration API stay in `@afora/core`, the rest comes from the adapters entry. Both entries share one module state, so classes and symbols are the same objects.
+
+```ts
+import { exceptionOf, RepositoryUniqueViolation } from "@afora/core";
+import {
+	type IRepositoryProvider,
+	type OperationDescriptor,
+	outputValueOf,
+	problemOf,
+	type RepositoryData,
+	sinkOf,
+	statusOf,
+} from "@afora/core/adapters";
+```
+
+**Description helpers come from `@afora/core/experimental`.** Before:
+
+```ts
+import {
+	providerDescriptionOf,
+	stageDescriptionOf,
+	useCaseTargetOf,
+} from "@afora/core";
+```
+
+After (or read the same data from `app.describe()`, typed `ApplicationDescription` from `@afora/core/adapters`):
+
+```ts
+import {
+	providerDescriptionOf,
+	stageDescriptionOf,
+	useCaseTargetOf,
+} from "@afora/core/experimental";
+```
+
+**Base classes and guards are gone.** Before:
+
+```ts
+import { AbstractEntity, isRepository } from "@afora/core";
+
+if (value instanceof AbstractEntity) save(value);
+if (isRepository(dependency)) register(dependency);
+```
+
+After: test against your own declarations, or the guards that stay (`isEntity`, `isEntityClass`, `isUseCase`, `isUseCaseClass`, `isCommand`, `isOutput`, `isUseCasePlugin`, `isUseCaseCatalog`, `isProviderFactory`):
+
+```ts
+import { isEntity } from "@afora/core";
+
+if (isEntity(value)) save(value);
+if (dependency === Posts) register(dependency);
+```
+
+**Password rules.** Before, `PASSWORD_MIN_LENGTH` and `passwordIssues(plain)` were exported. After, check a plain password with `PlainPassword`, which holds the same rules, or let `Password.hash` reject it:
+
+```ts
+import { InvalidPropertyValue, Password, PlainPassword } from "@afora/core";
+
+const result = PlainPassword.safeParse(plain); // { success: false, issues } when a rule is broken
+try {
+	await Password.hash(plain);
+} catch (error) {
+	if (error instanceof InvalidPropertyValue) error.details; // { errors: [...] }, what passwordIssues gave
+}
+```
+
+## 0.0.8 — 2026-11-10
 
 ### Changed
 

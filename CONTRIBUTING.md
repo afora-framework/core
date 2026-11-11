@@ -22,7 +22,7 @@ The library ships to Bun **and** Node >= 22 and must load in browsers and Worker
 - `src/std/`: concrete properties (`Id`, `Email`, `Password`…), `blueprintOf`, `entityOf` and the standard use cases.
 - `src/index.ts`: the single public entry. Anything exported goes through it.
 - `docs/`: the spec of behavior, one file per concept ([index](docs/README.md)).
-- `packages/*`: `@afora/codegen`, `@afora/mcp`, `@afora/hono` and `@afora/drizzle`, each with its own build and tests.
+- `packages/*`: `@afora/codegen`, `@afora/mcp`, `@afora/hono`, `@afora/drizzle` and `@afora/dynamodb`, each with its own build and tests.
 - `examples/`, `tests/types-compat`, `tests/type-perf`, `bench/`: interop, type compatibility, editor performance and benchmarks, each with its own scripts.
 
 ## Making a change
@@ -55,7 +55,7 @@ bun run smoke           # the build, run on plain Node
 - A change to public types runs `test:types` and `test:type-perf`, not only `bun check`.
 - A snapshot (`test:api`, `test:type-perf`) is updated with `-u` only on purpose, and the pull request says why.
 - The quick start in `README.md` must stay equal to `examples/interop/quickstart.ts` and `quickstart.afora.json`; `test:interop` checks it.
-- The invalid-input path is performance-sensitive: check `bun run bench` when you touch parsing or validation.
+- Parsing and validation are performance-sensitive, valid and invalid input alike. `bun run bench:guard` (the `bench` job in CI) times `blueprint.safeParse` against Zod 4 `safeParse` on the fourteen cases of `bench/` (seven scenarios, valid and invalid input) and fails when afora is over the limit of a case; it compares a ratio measured in one process, so it does not depend on the machine. Run it when you touch `src/core/parse`, `src/core/property`, `src/core/schema` or the constructor of a record. When it fails, run it again to rule out noise, then find what the change costs; a limit (`bench/guard.limits.ts`, 1.15x unless stated) is only raised for a cost that is wanted, with the reason next to it, and the pull request says why. `bun run bench` runs every contender on Bun and Node and rewrites `bench/results/latest.json` and `bench/RESULTS.md` (about half an hour; `bun run bench -- --only flat,union` runs some scenarios and writes nothing); run it on an idle machine, when a change moves them; the table and the chart of the Performance section of `README.md` are generated with it (`bun run bench:check` fails when they are edited by hand), and the prose under them is updated by hand. A pull request is also timed against its base and fails when `blueprint.safeParse` takes more than 1.1x its base on a case (`bun run bench -- --compare <checkout of the base>` runs it locally). A new scenario or library follows [bench/README.md](bench/README.md); the Typia validators are regenerated with `bun run typia` in `bench/`, which needs Go.
 
 ## Releases
 

@@ -1,6 +1,7 @@
+import { InvalidOutputStage, type Principal, toOpenAPI } from "@afora/core";
 import {
+	type Authenticator,
 	coerceTextValues,
-	InvalidOutputStage,
 	type OperationDescriptor,
 	outputValueOf,
 	type Problem,
@@ -8,8 +9,7 @@ import {
 	sinkOf,
 	stageCatalogOf,
 	statusOf,
-	toOpenAPI,
-} from "@afora/core";
+} from "@afora/core/adapters";
 import {
 	InvalidWsMessage,
 	WsSubscriptionsUnavailable,
@@ -48,10 +48,26 @@ export interface WebSocketOptions {
 /** Text values the context is read from: headers of the upgrade, a token, a user id. */
 export type WsValues = Readonly<Record<string, string | undefined>>;
 
+/** What the `websocket` sink takes that JSON cannot hold: `websocket(options, hooks)`. */
+export interface WebSocketHooks {
+	/**
+	 * Who calls an operation: `request.header(name)` reads the values of the
+	 * session. Asked for each call of an operation with an `access` other
+	 * than `public`, unless the session was opened with a `principal`;
+	 * without either, those operations answer a 401 problem.
+	 */
+	readonly authenticator?: Authenticator;
+}
+
 /** What a session is opened with. */
 export interface WsSessionOptions {
 	/** The values the `context` option reads, e.g. from the headers of the upgrade request. */
 	readonly values?: WsValues;
+	/**
+	 * Who the socket belongs to, when the upgrade already authenticated it:
+	 * used for every call of the session. `null` is an anonymous caller.
+	 */
+	readonly principal?: Principal | null;
 	/** Where subscriptions go; without it, a subscription is a 501 problem. */
 	readonly hub?: WsHub;
 	/**
@@ -92,7 +108,10 @@ export interface WebSocketEndpoint {
 	 */
 	handle(
 		message: string | ArrayBuffer | Uint8Array | object,
-		extra?: { readonly values?: WsValues },
+		extra?: {
+			readonly values?: WsValues;
+			readonly principal?: Principal | null;
+		},
 	): Promise<WsReply>;
 	/** A session for one socket, with subscriptions when given a hub. */
 	session(socket: WsSocket, options?: WsSessionOptions): WsSession;
@@ -187,6 +206,9 @@ function matches(pattern: string, topic: string): boolean {
  *   `statusOf` (the output `statuses` first); invalid input is a 400 with
  *   `issues`, an unknown `op` a 404, a message that is not a frame a 400
  *   `InvalidWsMessage`. `id` is the request's, or `null`.
+ * - An operation with an `access` checks the caller before it runs (a 401
+ *   or 403 problem): the `principal` the session was opened with, else the
+ *   `authenticator` hook; with neither it always answers 401.
  * - The context comes from the values of the session through the `context`
  *   option; richer rules, such as authentication, are a `transform` stage.
  * - In a session with a hub, `{ id?, subscribe: topic }` subscribes the
@@ -195,10 +217,15 @@ function matches(pattern: string, topic: string): boolean {
  *   `{ id?, unsubscribe }` leaves the topic. The hub then sends
  *   `{ topic, event }` for each event published to the topic.
  */
-export const websocket = sinkOf<WebSocketEndpoint, WebSocketOptions>({
+export const websocket = sinkOf<
+	WebSocketEndpoint,
+	WebSocketOptions,
+	WebSocketHooks
+>({
 	name: "websocket",
 	validate,
-	build: (operations, options, { output }) => {
+	build: (operations, options, { output }, hooks) => {
+		const authenticator = hooks?.authenticator;
 		const mapping = options.context ?? {};
 		const include = options.include;
 		const patterns = options.subscriptions?.topics ?? [];
@@ -237,6 +264,7 @@ export const websocket = sinkOf<WebSocketEndpoint, WebSocketOptions>({
 			request: Extract<WsRequest, { op: string }>,
 			id: WsRequestId | null,
 			values: WsValues,
+			known?: Principal | null,
 		): Promise<WsReply> => {
 			const operation = served.get(request.op);
 			if (!operation) {
@@ -250,7 +278,7 @@ export const websocket = sinkOf<WebSocketEndpoint, WebSocketOptions>({
 					},
 				};
 			}
-			const options_: { context?: unknown } = {};
+			const options_: { context?: unknown; principal?: Principal | null } = {};
 			if (operation.context) {
 				const raw: Record<string, string | undefined> = {};
 				for (const key of Object.keys(operation.context.properties)) {
@@ -260,6 +288,18 @@ export const websocket = sinkOf<WebSocketEndpoint, WebSocketOptions>({
 				options_.context = coerceTextValues(operation.context, raw);
 			}
 			try {
+				if (operation.access && operation.access.public !== true) {
+					options_.principal =
+						known !== undefined
+							? known
+							: authenticator
+								? await authenticator({
+										header: (name) => values[name],
+										cookie: () => undefined,
+										operation,
+									})
+								: null;
+				}
 				const response = await operation.invoke(request.input ?? {}, options_);
 				return { id, value: outputValueOf(response) ?? null };
 			} catch (error) {
@@ -306,7 +346,7 @@ export const websocket = sinkOf<WebSocketEndpoint, WebSocketOptions>({
 				if ("reply" in read_) return read_.reply;
 				const { request, id } = read_;
 				if ("op" in request)
-					return await call(request, id, extra?.values ?? {});
+					return await call(request, id, extra?.values ?? {}, extra?.principal);
 				return unavailable(id);
 			} catch (error) {
 				return { id: null, problem: problemOf(error, { status: 500, debug }) };
@@ -359,7 +399,11 @@ export const websocket = sinkOf<WebSocketEndpoint, WebSocketOptions>({
 						const read_ = read(data);
 						if ("reply" in read_) return send(read_.reply);
 						const { request, id } = read_;
-						if ("op" in request) return send(await call(request, id, values));
+						if ("op" in request) {
+							return send(
+								await call(request, id, values, sessionOptions.principal),
+							);
+						}
 						if ("subscribe" in request) {
 							return send(await subscribe(request.subscribe, id));
 						}

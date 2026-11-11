@@ -1,6 +1,6 @@
 {
 	"name": "@afora/core",
-	"version": "0.0.8",
+	"version": "0.0.9",
 	"description": "Domain modeling on TypeBox: entities with invariants, repositories, use cases, sensitive data masking and layered exceptions, usable by any Standard Schema consumer.",
 	"keywords": [
 		"domain-driven-design",
@@ -40,6 +40,11 @@
 			"import": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
+		"./adapters": {
+			"types": "./dist/adapters.d.ts",
+			"import": "./dist/adapters.js",
+			"default": "./dist/adapters.js"
+		},
 		"./experimental": {
 			"types": "./dist/experimental.d.ts",
 			"import": "./dist/experimental.js",
@@ -68,9 +73,11 @@
 		"lint": "biome lint .",
 		"fmt": "biome check --write .",
 		"knip": "knip",
-		"build": "rm -rf dist && bun build ./src/index.ts ./src/experimental.ts ./src/testing/index.ts --outdir ./dist --target node --format esm --splitting --packages external && tsc -p tsconfig.build.json",
+		"build": "rm -rf dist && bun build ./src/index.ts ./src/adapters.ts ./src/experimental.ts ./src/testing/index.ts --outdir ./dist --target node --format esm --splitting --packages external && tsc -p tsconfig.build.json",
 		"postbuild": "bun scripts/add-dts-extensions.ts",
 		"bench": "cd bench && bun install && bun run.ts",
+		"bench:guard": "cd bench && bun install && bun run.ts --guard",
+		"bench:check": "cd bench && bun install && bun run.ts --check",
 		"smoke": "bun run build && node scripts/smoke.mjs",
 		"test:types": "bun run build && bun tests/types-compat/run.ts",
 		"test:type-perf": "bun run build && bun test ./tests/type-perf",
@@ -78,15 +85,21 @@
 		"docs:links": "bun scripts/check-doc-links.ts",
 		"test:interop": "cd examples/interop && bun install && bun test",
 		"test:blog": "cd examples/blog && bun install && bun test",
+		"test:agent-built": "cd examples/agent-built && bun install && bun check && bun test",
+		"eval:agent-built": "cd examples/agent-built && bun install && bun run eval:all",
 		"prepare": "husky",
 		"prepublishOnly": "bun run typecheck && bun test && bun run smoke",
 		"test:codegen": "bun run --cwd packages/codegen test",
 		"test:roundtrip": "bun run --cwd packages/codegen test:roundtrip",
 		"test:mcp": "bun test --cwd packages/mcp",
 		"test:hono": "bun test --cwd packages/hono",
+		"test:fastify": "bun test --cwd packages/fastify",
+		"test:express": "bun test --cwd packages/express",
+		"test:elysia": "bun test --cwd packages/elysia",
 		"test:ws": "bun test --cwd packages/ws",
 		"test:drizzle": "bun test --cwd packages/drizzle",
-		"build:packages": "bun run build && bun run --cwd packages/codegen build && bun run --cwd packages/mcp build && bun run --cwd packages/hono build && bun run --cwd packages/ws build && bun run --cwd packages/drizzle build"
+		"test:dynamodb": "bun test --cwd packages/dynamodb",
+		"build:packages": "bun run build && bun run --cwd packages/codegen build && bun run --cwd packages/mcp build && bun run --cwd packages/hono build && bun run --cwd packages/fastify build && bun run --cwd packages/express build && bun run --cwd packages/elysia build && bun run --cwd packages/ws build && bun run --cwd packages/drizzle build && bun run --cwd packages/dynamodb build"
 	},
 	"dependencies": {
 		"slugify": "^1.6.9"

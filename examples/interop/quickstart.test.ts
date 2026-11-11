@@ -12,7 +12,7 @@ const ana = {
 };
 
 const post = (value: unknown) =>
-	api.request("/api/accounts/register", {
+	api.request("/api/users", {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify(value),
@@ -36,7 +36,7 @@ test("quickstart: a body becomes a saved user, password masked", async () => {
 	const response = await post(ana);
 	const { user } = (await response.json()) as { user: Record<string, unknown> };
 
-	expect(response.status).toBe(200);
+	expect(response.status).toBe(201);
 	expect(user.name).toBe("Ana");
 	expect(user.email).toBe("ana@example.com");
 	expect(user.password).toBe("********");
@@ -73,7 +73,7 @@ test("quickstart: the OpenAPI document lists the operation", async () => {
 	const document = (await response.json()) as { paths: object };
 
 	expect(response.status).toBe(200);
-	expect(Object.keys(document.paths)).toEqual(["/api/accounts/register"]);
+	expect(Object.keys(document.paths)).toEqual(["/api/users"]);
 });
 
 test("quickstart: the afora.json validates and generates the same app", async () => {
@@ -92,4 +92,7 @@ test("quickstart: the afora.json validates and generates the same app", async ()
 	);
 	expect(contents("use-cases.ts")).toContain("../hash-password.ts");
 	expect(contents("commands.ts")).toContain("transaction: true");
+	expect(contents("use-cases.ts")).toContain(
+		'route: { method: "post", path: "/users", status: 201 }',
+	);
 });

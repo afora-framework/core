@@ -556,6 +556,55 @@ describe("validation", () => {
 		expect(validateSpec(ok)).toEqual([]);
 	});
 
+	test("paths of input and context are checked at any depth", () => {
+		const reference = (path: string) =>
+			codes(
+				edit((c) => {
+					c.useCases.Register.input.fields.address = {
+						fields: { zip: "string" },
+					};
+					c.useCases.Register.input.fields.tags = {
+						type: "string",
+						list: true,
+					};
+					c.useCases.Register.input.fields.owner = "User";
+					c.useCases.Register.input.fields.by = {
+						variant: {
+							key: "type",
+							of: { user: "User", note: { fields: { body: "text" } } },
+						},
+					};
+					steps(c)[1].details = { at: path };
+				}),
+			);
+		for (const valid of [
+			"$input.address.zip",
+			"$input.tags.0",
+			"$input.tags.length",
+			"$input.owner.name",
+			"$input.owner.id",
+			"$input.by.type",
+			"$input.by.name",
+			"$input.by.id",
+			"$input.by.body",
+		]) {
+			expect(reference(valid)).toEqual([]);
+		}
+		for (const invalid of [
+			"$input.email.domain",
+			"$input.address.zipp",
+			"$input.tags.first",
+			"$input.tags.length.x",
+			"$input.owner.nope",
+			"$input.by.nope",
+			"$input.by.body.x",
+		]) {
+			expect(reference(invalid)).toEqual([
+				"unknown_key@useCases.Register.implementation.steps.1.details",
+			]);
+		}
+	});
+
 	test("an environment is a dependency of $env", () => {
 		const spec = edit((c) => {
 			c.environments = { Mail: { fields: { URL: "url" } } };

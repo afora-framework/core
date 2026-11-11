@@ -3,8 +3,14 @@ import { isBlueprintList } from "../blueprint/list";
 import { recordFieldOf } from "../blueprint/record-field";
 import type {
 	BlueprintField,
+	BlueprintVariants,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import {
+	blueprintOfVariant,
+	isBlueprintVariant,
+	namedVariantOf,
+} from "../blueprint/variant";
 import { isEntityClass } from "../entity/entity";
 import { recordNameOf } from "../record/name";
 import { type ExecutionScope, scopedProvider } from "../use-case/scope";
@@ -18,6 +24,7 @@ import type {
 	AnyRepositoryEntity,
 	RepositoryData,
 } from "./types/repository.interface";
+import { upcastRows } from "./upcast";
 
 type Plain = Readonly<Record<string, unknown>>;
 
@@ -48,6 +55,12 @@ function entityClassesOf(
 			visit(field.item);
 		} else if (isBlueprint(field)) {
 			walk(field.properties);
+		} else if (isBlueprintVariant(field)) {
+			for (const variant of Object.values(
+				field.variants as BlueprintVariants,
+			)) {
+				visit(variant);
+			}
 		} else {
 			const record = recordClassOf(field);
 			if (!record) return;
@@ -84,6 +97,18 @@ function mapReferences(
 		}
 		if (isBlueprint(field)) {
 			return isPlain(value) ? mapCollection(field.properties, value) : value;
+		}
+		if (isBlueprintVariant(field)) {
+			// What is stored names its variant with the key. An entity is stored
+			// as `{ [key], id }`: its id is what `visit` is given, and what it
+			// gives takes the place of the whole, unless it gives the id back.
+			const variant = namedVariantOf(field, value);
+			if (!variant || !isPlain(value)) return value;
+			if (isEntityClass(variant as unknown)) {
+				const mapped = visit(variant as AnyRepositoryEntity, value.id);
+				return mapped === value.id ? value : mapped;
+			}
+			return mapCollection(blueprintOfVariant(variant).properties, value);
 		}
 		const record = recordClassOf(field);
 		if (!record) return value;
@@ -239,7 +264,10 @@ export async function resolveReferences(
 		const missing = [...ids].filter((id) => !loaded.has(id));
 		if (missing.length === 0) continue;
 
-		const found = await loadByIds(relation, missing, scope);
+		const found = upcastRows(
+			relation,
+			await loadByIds(relation, missing, scope),
+		);
 		const resolved = await resolveReferences(relation, found, session, scope);
 		for (const data of resolved) {
 			const id = data.id as string;

@@ -1,6 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import {
-	AbstractUseCase,
 	blueprintOf,
 	type EventDefinition,
 	Exception,
@@ -21,6 +20,8 @@ import {
 	type UseCaseResponse,
 	useCaseOf,
 } from "../../index";
+import { variantOf } from "../blueprint/variant";
+import { AbstractUseCase } from "./use-case";
 
 const Input = blueprintOf((ctx) => ({ name: ctx.string }));
 const Empty = blueprintOf(() => ({}));
@@ -461,6 +462,37 @@ describe("repositories and environments as dependencies", () => {
 		const store = new Store({ name: "Bia" });
 		await store.execute();
 		expect(store.pullEvents().map((event) => event.name)).toEqual(["created"]);
+	});
+
+	test("events of an entity a response holds in a variant go up to the use case", async () => {
+		const Guest = blueprintOf((ctx) => ({ label: ctx.string }));
+		class Find extends useCaseOf({
+			name: "Find",
+			blueprint: Input,
+			response: blueprintOf((ctx) => ({
+				owner: variantOf("kind", { user: User, guest: Guest }),
+				others: ctx.listOf(variantOf("kind", { user: User, guest: Guest })),
+			})),
+		}) {
+			override async execute() {
+				const owner = new User(this.input);
+				owner.publish();
+				const other = new User({ name: "other" });
+				other.publish();
+				return {
+					owner,
+					others: [{ kind: "guest" as const, label: "g" }, other],
+				};
+			}
+		}
+		const find = new Find({ name: "Bia" });
+		const { owner, others } = await find.execute();
+
+		expect(owner).toBeInstanceOf(User);
+		expect(others[0]).toEqual({ kind: "guest", label: "g" });
+		expect(
+			find.pullEvents().map((event) => (event.entity as User).name),
+		).toEqual(["Bia", "other"]);
 	});
 
 	test("the repository works only while the use case executes", async () => {

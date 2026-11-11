@@ -49,6 +49,59 @@ A repository lists `"increment"` among its actions for atomic counters; the enti
 }
 ```
 
+## Schema evolution
+
+An entity takes `schemaVersion`, `previousNames` and `upgrade` (each step an import of a hand-written function, by the version it reaches), and the object form of a type or enum field takes `fill` and `renamedFrom` (see [Schema evolution](schema-evolution.md)):
+
+```json
+{
+	"entities": {
+		"Entry": {
+			"fields": {
+				"title": { "type": "text", "renamedFrom": "name" },
+				"locale": { "enum": ["pt", "en"], "fill": "pt" }
+			},
+			"schemaVersion": 2,
+			"previousNames": ["Post"],
+			"upgrade": { "2": { "import": "./upgrades#entryV2" } }
+		}
+	}
+}
+```
+
+They are generated as `.with({ fill, renamedFrom })` and the options of `entityOf`, and extracted back (`entities.<Name>.upgrade.<n>` in `imports` for a step). `afora-codegen schema lock src/app.ts#App [--out afora.lock.json]` writes the [schema lock](schema-evolution.md#the-lock), and `afora-codegen schema check src/app.ts#App [--lock afora.lock.json]` fails in CI when the lock is stale, a change lacks its declaration or a version was not bumped, printing an `upgrade` stub for each missing step.
+
+## Variant fields
+
+A field that holds one of several objects, told apart by the value of one key ([`variantOf`](blueprints.md#one-of-several-blueprints)), is `{ "variant": { "key", "of" } }`, next to the `type`, `enum` and `fields` forms. `of` maps the value of the key to each variant: the name of a declared blueprint, record or entity, or a blueprint declared in place (`{ "fields": {...} }`). `optional` and `list` apply as to the other forms; `with`, `fill` and `renamedFrom` do not.
+
+```json
+{
+	"entities": {
+		"Payment": {
+			"fields": {
+				"method": {
+					"variant": { "key": "method", "of": { "card": "Card", "pix": "Pix" } }
+				},
+				"events": {
+					"variant": {
+						"key": "type",
+						"of": {
+							"click": "Click",
+							"visit": { "fields": { "path": "string" } }
+						}
+					},
+					"list": { "maxItems": 10 },
+					"optional": true
+				}
+			}
+		}
+	}
+}
+```
+
+It is generated as `ctx.variantOf("method", { card: Card, pix: Pix })`, wrapped in `listOf` and `optionalOf`, and extracted back from `describe()`. The validator checks that `key` is a string that is not empty and that `of` has at least one variant (`invalid_variant`), that each name is declared (`unknown_type`) and is a blueprint, a record or an entity (`wrong_kind`), that no variant declares the key, which the field adds (`invalid_variant`, an entity's identity keys and a plugin's keys included), and that a record or an entity is not two variants (`invalid_variant`: an instance is told apart by its class). An entity among the variants needs its repository in the `relations` of the holder's repository, as for any entity field (`missing_relation`). A variant field cannot be an environment variable (`invalid_environment_field`) nor the `orderBy` of an index (`invalid_index`), and `$input.<field>.<key>` in a step is checked against the key and the keys of every variant.
+
 ## Round trip
 
 `extractSpec(app)` reads `app.describe()` and is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec, and `normalizeSpec` makes the shorthand and object forms of a field compare equal. This holds for code that was generated, and for code written by hand, as long as everything the core cannot describe is mapped to an export (next section). An unmapped piece makes extraction throw an `ExtractionError` naming the key, instead of guessing. `examples/blog` extracts its own spec back in its tests, and `bun run test:roundtrip` proves both directions on complete applications.
@@ -185,6 +238,41 @@ They generate `before: checkEntry, after: recordEntry, dependencies: { contentTy
 
 The validator checks that the use case exists (`unknown_generic`), that the repository is declared (`unknown_repository`) and has the actions (`generic_requires_action`), that the entity has the plugins (`generic_requires_plugin`), and the shape of the options and the keys they name (`invalid_generic_option`; `invalid_import` for `before` or `after`, and the issues of a use case's `dependencies` for theirs). What an option asks of the entity beyond its keys, such as omitting a required key, is checked by the use case itself when the generated code loads, which throws `UseCaseUnavailable`. `extractSpec` gives the declaration back as written, from `describe().useCases.<Name>.generic`, and needs no import mapped, a hashing function included, but for `before` and `after`.
 
+## Routes and access
+
+A use case in `afora.json` takes the same `route` and `access` as in TypeScript (see [Routes](use-cases.md#routes) and [Access](auth.md)), beside its description:
+
+```json
+"useCases": {
+	"ListPosts": {
+		"route": {
+			"method": "get",
+			"path": "/posts/{slug}",
+			"headers": { "locale": "accept-language" },
+			"cookie": { "session": "sid" }
+		},
+		"access": { "scopes": ["posts:read"], "context": { "userId": "subject" } },
+		"input": "ListPostsInput",
+		"response": "PostList",
+		"context": { "fields": { "userId": "id" } },
+		"implementation": { "import": "../handlers/list-posts#ListPosts" }
+	},
+	"RemovePost": {
+		"generic": "delete",
+		"repository": "Posts",
+		"route": { "method": "delete", "path": "/posts/{id}", "status": 204 },
+		"access": { "scopes": ["posts:write"] }
+	}
+}
+```
+
+- **Generated as settings.** `route` and `access` become the settings of `useCaseOf`, and options of a standard use case; the generator writes no decorators, so the code runs on Node as it is.
+- **Extracted from either form.** `extractSpec` reads what the class declares, whether it was written with the `route` setting or with `@Route` (and `access` or `@Access`). So a hand-written class may keep its decorators: its generated base carries the same declaration, and declaring the same route or access twice is accepted. A different one throws `InvalidUseCaseDeclaration` when the module loads.
+- **Checked against the spec.** For a use case written in the spec, each key a route places must be a key of the input (`setCookie`, of the response), no key may have two places, the `owner` of an access must name an input key and its `context` keys must be in the context: `invalid_route` and `invalid_access`. For a standard use case only the shape is checked, since its input follows the repository; the generated code checks the rest when it loads.
+- **The route of a sink still wins.** The `route` option of a `hono` (or `fastify`, `express`, `elysia`, `openapi`) stage, by operation id, overrides the method, path and status, as in TypeScript.
+- **Tokens.** `login` and `refresh` take `"token": { "secret": { "env": "JWT_SECRET" }, ... }` in `options`, and a sink `"auth": { "jwt": { "secret": { "env": "JWT_SECRET" } } }`; the secret is always the name of an environment variable (see [Tokens and sessions](auth.md#tokens-and-sessions)).
+- **Hooks are code.** The middlewares and the authenticator of a sink are its second argument, which JSON cannot hold. A stage that needs them is written in a file and named with `{ "import": "./stages.ts#api" }`.
+
 ## Catalogs: providers, stages and event policies
 
 A provider, a stage or an event policy that is not built in is not part of the spec. The spec names it (`"provider": { "use": "drizzle", "options": {...} }`, `{ "sink": "hono" }`, `"events": { "policy": "audit" }`) and a catalog, a codegen option, says which module and export make it.
@@ -222,6 +310,7 @@ What the spec and the round trip do not cover. Each is reported by an issue or a
 - **Hand-written use cases.** With `{ "import": "../handlers/register#Register" }`, the generated file has `export abstract class RegisterBase extends useCaseOf({...}) {}`; your class extends it and implements `execute`, and `application.ts` registers your class. Extraction needs the `useCases.<Name>` mapping.
 - **`Register` is written by hand.** The generated `application.ts` does not augment `Register` (two generated applications in one project would conflict), so `useApplication()` is `AnyApplication` until a file of yours declares it (see [Applications](applications.md#the-started-application)). A `provider` made with `providerFrom` is code, so it is an `{ "import": ... }`; `examples/blog` declares it as `"providers": { "database": { "import": "../provider.ts#database" } }` with `"provider": "database"` (`examples/blog/src/provider.ts`).
 - **Named providers come from this spec or one it extends directly.** `"provider": "<key>"` names a key of the top-level `providers` of the spec or of a spec it `extends` directly (imported as `Providers` from its output). A key of a spec further up is reported as `unknown_provider`. A provider written as `"inMemory"` or `{ "use" }` is made when the module loads, so it is shared by every application that registers it; for one instance per application, import a `providerFrom` (`{ "import": "./audit.ts#audit" }`).
+- **Step types are checked by TypeScript.** `check` follows the paths of `$input` and `$context` at any depth (`unknown_key` for `$input.address.zipp`), but knows nothing of the types of the results of steps or of the `run` functions. The generated steps use cases declare [`strictSteps: true`](use-cases.md#strict-steps), so type-checking the generated code reports a wrong path of a step result, an arg that does not fit the repository method, record method or `run` function, and a `build` value the record does not take.
 - **Transactions are checked at run time.** `"transaction": true` needs a provider with transactions; the provider is unknown when the spec is validated, so `commandOf` throws `InvalidCommandDeclaration` when the code runs, not `validateSpec`.
 - **Constructs the core does not describe.** A `change` on a plugin key and the order of `plugins` are not recovered.
 - **Repositories point at the generated classes.** To add behavior, extend the generated class in a file of your own.

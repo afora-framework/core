@@ -20,7 +20,7 @@ REPO=afora-framework/core
 WORKFLOW=release.yml
 ENVIRONMENT=npm
 # core first, then the packages that depend on it (mcp depends on codegen)
-DIRS=(. packages/codegen packages/mcp packages/hono packages/ws packages/drizzle)
+DIRS=(. packages/codegen packages/mcp packages/hono packages/fastify packages/express packages/elysia packages/ws packages/drizzle packages/dynamodb)
 
 # npm trust needs npm >= 11.10; the npm of the local Node may be older
 npm_() { npx -y npm@11 "$@"; }

@@ -1,3 +1,4 @@
+export { projectBoundaryIssues } from "./boundary";
 export {
 	type Catalog,
 	catalog,
@@ -24,6 +25,7 @@ export {
 export { compactSpec, normalizeSpec } from "./normalize";
 export { declarationSchemas, fieldDefinition, specSchema } from "./spec/schema";
 export type {
+	AccessSpec,
 	BlueprintRefSpec,
 	BlueprintSpec,
 	CodegenOptions,
@@ -57,6 +59,7 @@ export type {
 	RepositoryIndexSpec,
 	RepositorySpec,
 	ResolvedSpec,
+	RouteSpec,
 	Spec,
 	SpecIssue,
 	StageCatalogEntry,
@@ -65,6 +68,8 @@ export type {
 	TypeField,
 	UseCaseImplementationSpec,
 	UseCaseSpec,
+	VariantField,
+	VariantSpec,
 	WithOptions,
 } from "./spec/types";
 export { COLLECTIONS as COLLECTION_KEYS } from "./spec/types";

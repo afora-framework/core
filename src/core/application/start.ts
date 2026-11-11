@@ -209,6 +209,14 @@ export function deferredProvider(
 				IRepositoryProvider["transaction"]
 			>
 		)(run as never);
+	// Optional: nothing to apply when the provider made on start has none.
+	proxy.migrate = async (
+		...args: Parameters<NonNullable<IRepositoryProvider["migrate"]>>
+	) => {
+		const { provider } = state;
+		if (!provider) real("migrate");
+		return provider?.migrate?.(...args);
+	};
 	Object.defineProperty(proxy, "capabilities", {
 		get: () => state.provider?.capabilities,
 		enumerable: true,

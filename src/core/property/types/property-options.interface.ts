@@ -15,6 +15,16 @@ export interface PropertyMetadata<Value> {
 	readonly writeOnly?: boolean;
 	/** The demo value, as `default` in `propertyOf`; it is not written to the schema. */
 	readonly default?: Value;
+	/**
+	 * The value a repository gives the key when a stored row lacks it, on read
+	 * and in a backfill (`app.migrate`); unlike `default`, it fills real data.
+	 */
+	readonly fill?: Value;
+	/**
+	 * The key that held the value in rows stored before the key was renamed:
+	 * a repository moves it on read and in a backfill.
+	 */
+	readonly renamedFrom?: string;
 }
 
 /**

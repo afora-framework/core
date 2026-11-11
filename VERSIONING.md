@@ -4,7 +4,7 @@ afora follows [Semantic Versioning](https://semver.org). This file says what tha
 
 ## Policy
 
-- Before 1.0 (`0.0.x`), anything may break. Every breaking change is listed in `CHANGELOG.md` under `## Unreleased`, and later under its release, prefixed with "Breaking:".
+- Before 1.0 (`0.0.x`), anything may break. Every breaking change is listed in `CHANGELOG.md` under the section of the next release (`## <version> — unreleased` until it is dated), marked **Breaking.**, and has a block in that release's `### Migration` section: what the code looked like before and what it looks like after, in `ts` blocks.
 - From 1.0 on, a breaking change only happens in a major version. A major is not planned. After 1.0, releases are fixes and quality-of-life improvements.
 - A minor adds features. A patch fixes bugs.
 - `@afora/core`, `@afora/codegen` and `@afora/mcp` follow the same rules. A change to the `afora.json` spec counts for `@afora/codegen`.
@@ -12,17 +12,23 @@ afora follows [Semantic Versioning](https://semver.org). This file says what tha
 ## What is the contract
 
 - The runtime behavior documented in `README.md` and the docs.
-- Every exported value and type of `@afora/core`, from `src/index.ts` and its subpaths, except what is listed below as not the contract.
+- Every exported value and type of these entries, except what is listed below as not the contract:
+  - `@afora/core` (`src/index.ts`): the stable API, what application code imports;
+  - `@afora/core/adapters` (`src/adapters.ts`): the plumbing for sinks, providers and code generators, such as `IRepositoryProvider`, `sinkOf`, `problemOf` and the `app.describe()` types;
+  - `@afora/core/testing` (`src/testing/index.ts`): `providerContract` and `memoryPublisher`.
+
+  [docs/api-tiers.md](docs/api-tiers.md) lists the tier of every export.
 - The format of serializable descriptors: record plugin descriptors (`kind: "record-plugin"`), the output of `app.describe()`, and operation descriptors when they exist.
 - Standard Schema behavior: the vendor is `"afora"`, `~standard.validate` never throws for invalid input, and each issue has a `code`, a `path` and a `source`. The `code` values are part of the contract.
 - The `afora.json` spec (`version: 1`) and its JSON Schema, `afora.schema.json`. The spec only receives additions.
-- The lists of reserved keys, such as `RESERVED_RECORD_KEYS`. They do not grow: new framework members are only added under symbol keys, so a key that is valid today stays valid.
+- The lists of reserved keys, such as `RESERVED_RECORD_KEYS` (in `@afora/core/adapters`). They do not grow: new framework members are only added under symbol keys, so a key that is valid today stays valid.
 
 ## What is not the contract
 
 - The text of error messages. Match on the exception class, its `layer` or an issue `code`.
 - Types marked `@internal`.
-- Anything under an `experimental` subpath (`@afora/core/experimental`). It may change in any release.
+- Anything under the `experimental` subpath (`@afora/core/experimental`). It may change or be removed in any release; it is promoted to `@afora/core` or `@afora/core/adapters` when it settles.
+- Internal modules of the package (`dist/core/...`, `dist/std/...`): only the entries above are exported, and what they do not export is not the API.
 - Performance numbers, such as those in `bench/RESULTS.md`.
 - The exact shape of hovers, completions and diagnostics in an editor. They are tracked by `bun run test:type-perf`, and a change to them is reviewed, but it is not breaking.
 - Private and protected members and any internal that the docs do not describe.
@@ -76,10 +82,44 @@ Dropping a version of TypeScript, Bun or Node is breaking, except when that vers
 
 ## How it is enforced
 
-- `bun run test:api` snapshots the public surface (exports, signatures and `afora.schema.json`). A change to the snapshot has to be intended and shows up in review.
+- `bun run test:api` snapshots the public surface of each entry (exports, signatures and `afora.schema.json`). A change to the snapshot has to be intended and shows up in review.
 - `bun run test:types` type-checks the packed package on the supported TypeScript versions.
 - `bun run test:type-perf` budgets the editor cost and snapshots hovers, completions and diagnostics.
-- `CHANGELOG.md` lists every public change under `## Unreleased`, and a breaking one is marked "Breaking:".
+- `CHANGELOG.md` lists every public change under the section of the next release; a breaking one is marked **Breaking.** and has a Migration block (before and after).
+
+## Changelog template
+
+Each release in `CHANGELOG.md` has these sections, in this order, each only when it has entries:
+
+````md
+## 0.1.0 — unreleased (draft: dated when it is published)
+
+### Changed
+
+- **Breaking.** What changed, and what to use instead. See Migration below.
+
+### Added
+
+### Deprecated
+
+### Fixed
+
+### Migration
+
+**Short title of the change.** Before:
+
+```ts
+// the code that worked in the previous release
+```
+
+After:
+
+```ts
+// the same code for this release
+```
+````
+
+Every **Breaking.** entry, of values, types or behavior, has its block under Migration.
 
 ## Releasing
 

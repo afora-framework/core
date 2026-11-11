@@ -7,7 +7,6 @@ import {
 	environmentOf,
 	InvalidApplicationDeclaration,
 	inMemoryProvider,
-	isLogFactory,
 	isProviderFactory,
 	type LogLevel,
 	logFrom,
@@ -18,6 +17,7 @@ import {
 	UnregisteredApplicationReference,
 	useApplication,
 } from "../../index";
+import { isLogFactory } from "./start";
 
 afterEach(() => resetApplication());
 

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import type { IRepositoryProvider, RepositoryContext } from "../../adapters";
 import {
 	blueprintOf,
 	EntitySettings,
@@ -6,10 +7,8 @@ import {
 	ImmutableEntityKey,
 	InvalidEntityExpiry,
 	InvalidRepositoryQuery,
-	type IRepositoryProvider,
 	inMemoryProvider,
 	optionalOf,
-	type RepositoryContext,
 	type RepositoryQuery,
 	RepositoryUniqueViolation,
 	ReservedEntityKey,
@@ -82,7 +81,14 @@ describe("entityOf expires", () => {
 		expect(Window.blueprint.properties).not.toHaveProperty("expiresAt");
 		expect(
 			(Window as unknown as Record<symbol, unknown>)[EntitySettings],
-		).toEqual({ versioned: false, expires: { at: "until" } });
+		).toEqual({
+			versioned: false,
+			expires: { at: "until" },
+			schemaVersioned: false,
+			schemaVersion: 1,
+			upgrade: {},
+			previousNames: [],
+		});
 	});
 
 	test("an entity that does not expire may have a key named expiresAt", () => {

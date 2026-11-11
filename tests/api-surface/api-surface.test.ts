@@ -1,6 +1,6 @@
 /**
  * The public surface of the package, snapshotted: every name exported by
- * `dist/index.d.ts` (re-exports resolved) with its declaration text, with the
+ * `dist/index.d.ts` and the subpaths (re-exports resolved) with its declaration text, with the
  * declarations they reference that are not exported (`(internal) Name`), plus the
  * `afora.json` JSON Schema of `packages/codegen`. After 1.0 a change here is a
  * breaking or additive change to the contract: review it, then update the
@@ -15,11 +15,13 @@ import { apiSurface } from "./surface";
 
 const root = join(import.meta.dir, "../..");
 const entry = join(root, "dist/index.d.ts");
+const adaptersEntry = join(root, "dist/adapters.d.ts");
 const experimentalEntry = join(root, "dist/experimental.d.ts");
 const testingEntry = join(root, "dist/testing/index.d.ts");
 
 if (
 	!existsSync(entry) ||
+	!existsSync(adaptersEntry) ||
 	!existsSync(experimentalEntry) ||
 	!existsSync(testingEntry)
 )
@@ -27,6 +29,14 @@ if (
 
 test("exports of the package and their declarations", () => {
 	const surface = apiSurface(entry);
+	expect(Object.keys(surface).length).toBeGreaterThan(0);
+	expect(surface).toMatchSnapshot();
+});
+
+// Part of the contract: `@afora/core/adapters` is the plumbing the companion
+// packages (sinks, providers, codegen) build on.
+test("adapters entry (contract)", () => {
+	const surface = apiSurface(adaptersEntry);
 	expect(Object.keys(surface).length).toBeGreaterThan(0);
 	expect(surface).toMatchSnapshot();
 });

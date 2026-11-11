@@ -3,8 +3,10 @@ import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import { recordFieldOf } from "../blueprint/record-field";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant } from "../blueprint/variant";
 import {
 	EntityClock,
+	EntitySettings,
 	EntityUniqueKeys,
 	identityKeysOf,
 	isVersionedEntityClass,
@@ -12,12 +14,15 @@ import {
 } from "../entity/abstract-entity";
 import { isEntity, isEntityClass } from "../entity/entity";
 import { enqueueLifecycle } from "../entity/event";
+import { InvalidEntitySchemaVersion } from "../entity/exceptions";
+import type { EntityStorageSettings } from "../entity/types/entity.interface";
 import {
 	type EnvironmentDependencies,
 	isEnvironment,
 	type MergedEnvironment,
 } from "../environment/environment";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
+import { Exception } from "../exception/exception";
 import { guard } from "../exception/guard";
 import { resolveLogger, writeLog } from "../logger/logger";
 import type { Issue } from "../parse/types/parse.interface";
@@ -36,6 +41,7 @@ import {
 	InvalidRepositoryEntity,
 	InvalidRepositoryIncrement,
 	InvalidRepositoryQuery,
+	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 } from "./exceptions";
 import { inMemoryProvider } from "./in-memory";
@@ -71,6 +77,12 @@ import type {
 	RepositoryData,
 	RepositoryOf as RepositoryType,
 } from "./types/repository.interface";
+import {
+	fullUpcastPlanOf,
+	upcast,
+	upcastRows,
+	withSchemaVersion,
+} from "./upcast";
 
 /** What `repositoryOf` takes. */
 export interface RepositorySettings<
@@ -193,7 +205,12 @@ export abstract class AbstractRepository<
 	): Promise<EntityInstanceOf<Entity>[]> {
 		const state = stateOf(this);
 		const scope = (this as { [ScopeKey]?: ExecutionScope })[ScopeKey];
-		const resolved = await resolveReferences(state, list, new Map(), scope);
+		const resolved = await resolveReferences(
+			state,
+			upcastRows(state, list),
+			new Map(),
+			scope,
+		);
 		return resolved.map((data) =>
 			parseEntity(state, data),
 		) as EntityInstanceOf<Entity>[];
@@ -204,7 +221,10 @@ export abstract class AbstractRepository<
 		if (!(entity instanceof stateOf(this).entity)) {
 			throw new InvalidRepositoryEntity({ source: stateOf(this).name });
 		}
-		return recordDataOf(entity as object, REFERENCES);
+		return withSchemaVersion(
+			stateOf(this).entity,
+			recordDataOf(entity as object, REFERENCES),
+		);
 	}
 }
 
@@ -741,6 +761,74 @@ function createdOf(
 	return entity;
 }
 
+/** The key `field` was stored under before (`renamedFrom`), if any. */
+function renamedFromOf(field: BlueprintField | undefined): string | undefined {
+	if (field === undefined) return undefined;
+	const property = fieldOf(field);
+	if (!isProperty(property)) return undefined;
+	const { renamedFrom } = property.type as { readonly renamedFrom?: unknown };
+	return typeof renamedFrom === "string" ? renamedFrom : undefined;
+}
+
+/**
+ * Before the provider adds `deltas` to the row `id`: when a key of `deltas`
+ * was renamed (`renamedFrom`) and the stored row still holds the old key,
+ * writes the row brought up first, so the delta adds to the value it had,
+ * not to 0 (the provider increments the stored keys, and the read that
+ * follows would leave the old one out). A row written in between (a
+ * versioned conflict) is already in the current shape.
+ */
+async function bringUpRenamed(
+	self: Internal,
+	id: string,
+	deltas: Readonly<Record<string, number>>,
+): Promise<void> {
+	const { context } = self;
+	const properties = context.entity.blueprint.properties as Readonly<
+		Record<string, BlueprintField | undefined>
+	>;
+	const renamed: [string, string][] = [];
+	for (const key of Object.keys(deltas)) {
+		const from = renamedFromOf(properties[key]);
+		if (from !== undefined) renamed.push([key, from]);
+	}
+	if (renamed.length === 0) return;
+	const stored = await self.provider.findOne(context, {
+		where: { id },
+		withDeleted: true,
+		...(context.expiry === undefined ? {} : { withExpired: true }),
+	});
+	if (
+		stored === undefined ||
+		!renamed.some(
+			([key, from]) => stored[key] === undefined && Object.hasOwn(stored, from),
+		)
+	) {
+		return;
+	}
+	const data = withSchemaVersion(
+		context.entity,
+		upcast(context.name, fullUpcastPlanOf(context.entity), stored, false),
+	);
+	const expected = stored.version;
+	try {
+		await self.provider.update(
+			context,
+			data,
+			isVersionedEntityClass(context.entity) && typeof expected === "number"
+				? { expectedVersion: expected }
+				: undefined,
+		);
+	} catch (error) {
+		if (
+			!(error instanceof Exception) ||
+			!error.is(RepositoryConcurrencyConflict)
+		) {
+			throw error;
+		}
+	}
+}
+
 const increment = action(
 	async (self, target: unknown, deltas: unknown, options: unknown) => {
 		const { context } = self;
@@ -757,6 +845,7 @@ const increment = action(
 			create === undefined
 				? undefined
 				: createdOf(context, id, create, checked);
+		await bringUpRenamed(self, id, checked);
 		const stored = await (
 			self.provider.increment as NonNullable<IRepositoryProvider["increment"]>
 		)(context, id, versioned ? { ...checked, version: 1 } : checked, {
@@ -820,8 +909,13 @@ const restore = action(async (self, target: unknown) => {
 		});
 	}
 	if (data.deletedAt === undefined) return self.hydrate(data);
-	const { deletedAt: _deletedAt, ...alive } = data;
-	const restored = { ...alive, updatedAt: nowOf(context) };
+	// Written back in the current shape, as any write is.
+	const [current] = upcastRows(stateOf(self), [data]) as [RepositoryData];
+	const { deletedAt: _deletedAt, ...alive } = current;
+	const restored = withSchemaVersion(context.entity, {
+		...alive,
+		updatedAt: nowOf(context),
+	});
 	return self.hydrate(await write(self, restored));
 });
 
@@ -881,6 +975,27 @@ function unknownAction(
 
 function invalid(source: string, reason: string): never {
 	throw new InvalidRepositoryDeclaration({ source, details: { reason } });
+}
+
+/**
+ * Throws `InvalidEntitySchemaVersion` when a previous name of `entity` is its
+ * own record name: `entityOf` only knows the `name` option, and an entity
+ * without one is named by its class, known here. Moving its rows from that
+ * name to itself would remove them (`app.migrate({ destructive: true })`).
+ */
+function assertPreviousNames(entity: object): void {
+	const own = recordNameOf(entity);
+	const previous =
+		(entity as { readonly [EntitySettings]?: EntityStorageSettings })[
+			EntitySettings
+		]?.previousNames ?? [];
+	if (!previous.includes(own)) return;
+	throw new InvalidEntitySchemaVersion({
+		source: own,
+		details: {
+			reason: `"${own}" cannot be a previous name: expected an identifier other than the name of the entity.`,
+		},
+	});
 }
 
 const INDEX_NAME = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
@@ -955,6 +1070,7 @@ function indexesOf(
 			if (
 				isBlueprint(field) ||
 				isBlueprintList(field) ||
+				isBlueprintVariant(field) ||
 				recordFieldOf(field)
 			) {
 				invalid(
@@ -1006,6 +1122,7 @@ export function repositoryOf<
 		invalid("repositoryOf", "Expected an entity class made by entityOf.");
 	}
 	const name = `${recordNameOf(entity)}Repository`;
+	assertPreviousNames(entity);
 	const deletion = settings.deletion ?? "hard";
 	if (deletion !== "hard" && deletion !== "soft") {
 		invalid(name, 'Expected deletion to be "hard" or "soft".');

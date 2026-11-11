@@ -1,6 +1,9 @@
-<h1 align="center">afora</h1>
-
-<p align="center"><strong>Model the domain. Keep the invariants.</strong><br>Domain modeling for TypeScript, built on TypeBox.</p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/afora-banner-dark.png">
+    <img alt="afora — Model the domain. Keep the invariants." src=".github/assets/afora-banner-light.png" width="100%">
+  </picture>
+</p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@afora/core"><img alt="npm" src="https://img.shields.io/npm/v/@afora/core?color=cb3837&logo=npm"></a>
@@ -20,9 +23,34 @@
   <a href="https://github.com/afora-framework/core/discussions">Discussions</a>
 </p>
 
-Domain modeling on [TypeBox](https://github.com/sinclairzx81/typebox): entities with invariants, sensitive data masking and exceptions that know their layer, usable by any [Standard Schema](https://standardschema.dev) consumer.
+**A backend an agent can write without breaking its guarantees.** With afora the whole application is data: an `afora.json` declares the entities, repositories, use cases, commands and HTTP API, [`@afora/codegen`](packages/codegen/README.md) turns it into TypeScript you review and commit, [`@afora/mcp`](packages/mcp/README.md) lets an agent write it, and `extractSpec(app)` gives the spec back from code written by hand. Whoever writes the spec or the code, the runtime keeps the invariants: sensitive fields are masked, undeclared keys are rejected, unique keys are enforced and business errors become problem+json with the right status.
 
-afora is not a general-purpose validator. It is for code that models a domain, and it plugs into the validators your framework already accepts.
+### 30 seconds: from afora.json to a running API
+
+```bash
+bun add @afora/core @afora/hono hono typebox && bun add -d @afora/codegen
+bunx afora-codegen generate afora.json --stages ./stages.ts   # writes src/domain/*.ts
+bun src/server.ts
+```
+
+With the [quick start's `afora.json`](#the-same-app-as-an-aforajson) and three small files written by hand (the hashing function, the `hono` stage catalog and the server, shown there), that is the whole API: a `User` with a masked password and a unique email, a use case written as steps, problem+json errors and an OpenAPI document. The same app written by hand in TypeScript is the [quick start](#quick-start), and the [afora.json guide](docs/afora-json.md) covers the whole spec.
+
+## Why afora
+
+An HTTP backend written by an agent (or in a hurry) tends to break the same few guarantees. In afora each one is a mechanism of the runtime, not a convention the code has to remember:
+
+| What usually breaks                            | What afora does                                                                                                                                                                                         |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A password hash or token ends up in a response | A property declared `sensitive` (`Password`) is masked by `toJSON()` at any depth, so no serializer can leak it ([records](docs/records.md)).                                                           |
+| Extra fields in a request body are accepted    | Records reject undeclared keys at any depth (issue code `undeclared_key`), and the HTTP sink answers 400 ([Standard Schema](docs/standard-schema.md)).                                                  |
+| A business error is returned as a 500          | Exceptions know their layer; an output maps them to problem+json with a status (404, 409, 401, 422 for the errors a use case declares) and hides the detail of a real 500 ([outputs](docs/outputs.md)). |
+| A duplicate email is written twice             | `unique` keys are enforced by the repository and its provider, and a violation is a 409 ([repositories](docs/repositories.md)).                                                                         |
+
+[`examples/agent-built`](examples/agent-built/README.md) checks these four invariants on the running API of a ticketing backend built only through the MCP server, and of a Hono + Zod baseline written from the same brief. In the committed run both hold all four, but the afora one wrote no code for any of them: the spec declares the fields and errors, and the runtime does the rest. Scripted runs that measure how often each approach holds them across independent agent runs are in the example, waiting to be run with an API key.
+
+afora is not a general-purpose validator. It models a domain on [TypeBox](https://github.com/sinclairzx81/typebox), and every field plugs into the validators your framework already accepts through [Standard Schema](https://standardschema.dev).
+
+## Features
 
 - **Records with invariants.** Properties (`Email`, `Slug`, `Password`, your own) validate and normalize every value; blueprints compose them; a record (`class User extends recordOf(...)`) holds the handled value and rejects undeclared keys at any depth.
 - **Sensitive data masking.** A property declared `sensitive` (`Password`) is masked by `toJSON()` at any depth, so `JSON.stringify(user)` cannot leak it.
@@ -31,9 +59,11 @@ afora is not a general-purpose validator. It is for code that models a domain, a
 - **Exceptions that know their layer.** Each error carries a layer (`Property`, `Record`, `UseCase`, `Output`...) and a `trace` that grows as it goes up.
 - **Standard Schema V1 on every field.** Properties, blueprints, lists and record classes work as is in Hono, tRPC and TanStack Form, and `safeParse` never throws for an invalid value.
 - **Commands and outputs.** `commandOf` groups use cases behind one execution boundary (context, transactions, event policies); `outputOf` turns commands into operations and pipes them to a sink: an HTTP API with `@afora/hono`, WebSocket messages with `@afora/ws`, an OpenAPI 3.1 document, or MCP tools, with problem+json errors and masked responses.
+- **Routes and access on the use case.** A use case says where it is served (`route`, or `@Route("GET", "/posts/{slug}")`) and who may call it (`access`, or `@Access({ scopes: [...] })`), next to its input; the blueprint stays the only description of the input, and every server and transport enforces the access before the use case runs. `resourceOf(Posts, { path: "/posts" })` is a whole CRUD. See the [tutorial](docs/tutorial.md).
+- **Any server.** The same output runs on [Hono](packages/hono/README.md), [Fastify](packages/fastify/README.md), [Express](packages/express/README.md) or [Elysia](packages/elysia/README.md), with that server's own middlewares: they share one compiled route table and one contract test suite ([HTTP providers](docs/providers.md)).
 - **Standard use cases.** `commandOf({ useCases: (ctx) => ({ create: ctx.create(Posts), publish: ctx.publish(Posts) }) })` picks ready-made use cases that follow the repository and its entity: the actions it declares, its record plugins and the properties of its keys ([docs](docs/std-use-cases.md)).
 - **The whole application in JSON.** An `afora.json` generates the code (`@afora/codegen`), use cases included, as data (steps), and `extractSpec(app)` gives back the `afora.json` of an application written by hand.
-- **Repositories on any store.** A provider contract with typed queries, soft deletion and transactions, a runner-agnostic kit to test one (`@afora/core/testing`), in memory by default and on Drizzle ORM with `@afora/drizzle`.
+- **Repositories on any store.** A provider contract with typed queries, soft deletion and transactions, a runner-agnostic kit to test one (`@afora/core/testing`), in memory by default, on Drizzle ORM with `@afora/drizzle` and on DynamoDB with `@afora/dynamodb`.
 
 ## Install
 
@@ -58,7 +88,7 @@ configure({ hasher, idGenerator: () => myUuidV7() }); // both optional; `resetRu
 
 ## Quick start
 
-A `User` entity with a sensitive key and a unique key, a repository, a use case written as steps, a command that wraps it in a transaction, and an output that serves the command as an HTTP API with an OpenAPI document. Install what it uses:
+A `User` entity with a sensitive key and a unique key, a repository, a use case written as steps that says where it is served, a command that wraps it in a transaction, and an output that serves the command as an HTTP API with an OpenAPI document. Install what it uses:
 
 ```bash
 bun add @afora/core @afora/hono hono typebox
@@ -106,9 +136,10 @@ async function hashPassword(plain: string) {
 	return (await Password.hash(plain)).value;
 }
 
-// Use case: the steps are data, so they can also live in an afora.json
+// Use case: the steps and the route are data, so they can also live in an afora.json
 class Register extends useCaseOf({
 	name: "Register",
+	route: { method: "post", path: "/users", status: 201 }, // where it is served
 	blueprint: blueprintOf((ctx) => ({
 		name: ctx.text,
 		email: ctx.email,
@@ -167,8 +198,8 @@ if (import.meta.main) Bun.serve({ fetch: api.fetch });
 What it does:
 
 ```
-POST /api/accounts/register  { "name": "Ana", "email": "  Ana@Example.COM ", "plainPassword": "Str0ng!Pass" }
--> 200 { "user": { "id": "...", "name": "Ana", "email": "ana@example.com", "password": "********", ... } }
+POST /api/users  { "name": "Ana", "email": "  Ana@Example.COM ", "plainPassword": "Str0ng!Pass" }
+-> 201 { "user": { "id": "...", "name": "Ana", "email": "ana@example.com", "password": "********", ... } }
 
 the same email again
 -> 409 application/problem+json  { "title": "UserAlreadyExists", "layer": "use-case", ... }
@@ -206,6 +237,7 @@ Everything above, except the hashing function, is data, so it can be written as 
 	},
 	"useCases": {
 		"Register": {
+			"route": { "method": "post", "path": "/users", "status": 201 },
 			"input": {
 				"fields": {
 					"name": "text",
@@ -283,18 +315,29 @@ export async function hashPassword(plain: string) {
 }
 ```
 
-Then generate, telling codegen where the `hono` stage comes from, and serve the application:
+Then generate, telling codegen where the `hono` stage comes from in `stages.ts`:
+
+```ts
+export { stages } from "@afora/hono";
+```
 
 ```bash
 bun add -d @afora/codegen
-bunx afora-codegen generate afora.json --stages @afora/hono   # writes src/domain/*.ts
+bunx afora-codegen generate afora.json --stages ./stages.ts   # writes src/domain/*.ts
 ```
+
+and serve the application from `src/server.ts` (`bun src/server.ts`):
 
 ```ts
-import { App } from "./src/domain";
+import { App } from "./domain/index.ts";
 
-Bun.serve({ fetch: App.outputs.Api.build().fetch });
+await App.start();
+export const api = App.outputs.Api.build();
+
+if (import.meta.main) Bun.serve({ fetch: api.fetch });
 ```
+
+These three files are `examples/interop/from-json`, which `bun run test:interop` generates and serves.
 
 `generate` writes one file per kind (`entities.ts`, `repositories.ts`, `use-cases.ts`, `commands.ts`, `outputs.ts`...), an `application.ts` and an `index.ts`, each starting with a banner saying not to edit it. `afora-codegen extract` goes the other way and gives the `afora.json` of an `Application`. The guide is in [docs/afora-json.md](docs/afora-json.md).
 
@@ -307,6 +350,7 @@ Each concept has a page in [docs/](docs/README.md), in the order they build on o
 - [Records](docs/records.md): a class that holds the handled value, masks sensitive keys and generates `change.<key>`; plugins; experimental slicing.
 - [Entities](docs/entities.md): a record with identity, timestamps, `destroy()` and domain events.
 - [Repositories](docs/repositories.md): typed async methods for an entity, queries, soft deletion, providers, transactions and relations.
+- [Schema evolution](docs/schema-evolution.md): `fill`, `renamedFrom`, `schemaVersion` with `upgrade` steps and `previousNames`, so old rows are still read; `app.migrate` to rewrite them, and a schema lock checked in CI and on `start`.
 - [Use cases](docs/use-cases.md): the Command pattern with method injection, written as code or as steps.
 - [Commands](docs/commands.md): use cases under operation names, with a context, a transaction and an event policy.
 - [Outputs](docs/outputs.md): commands through stages into a sink, such as an HTTP API or an OpenAPI document.
@@ -327,22 +371,79 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 | [`@afora/codegen`](packages/codegen/README.md)             | Generates afora code from an `afora.json`, and extracts the `afora.json` of an `Application` back.                                                            |
 | [`@afora/mcp`](packages/mcp/README.md)                     | An MCP server that lets an agent build a domain with `@afora/codegen`.                                                                                        |
 | [`@afora/hono`](packages/hono/README.md)                   | A `hono` sink for outputs: serves the operations as a Hono app, with problem+json errors, masked responses, signed webhooks and an optional OpenAPI document. |
+| [`@afora/fastify`](packages/fastify/README.md)             | A `fastify` sink: the same operations, options and behavior on Fastify.                                                                                       |
+| [`@afora/express`](packages/express/README.md)             | An `express` sink: the same on Express 5.                                                                                                                     |
+| [`@afora/elysia`](packages/elysia/README.md)               | An `elysia` sink: the same on Elysia.                                                                                                                         |
 | [`@afora/ws`](packages/ws/README.md)                       | A `websocket` sink: operations over JSON messages on any runtime, with topic subscriptions that `publishEvents` feeds with domain events.                     |
 | [`@afora/drizzle`](packages/drizzle/README.md)             | A repository provider on Drizzle ORM (SQLite and Postgres) that passes the provider contract kit.                                                             |
+| [`@afora/dynamodb`](packages/dynamodb/README.md)           | A repository provider on one DynamoDB table (single-table layout, unique keys as marker items) that passes the provider contract kit on DynamoDB Local.       |
 
 ## Example
 
 `examples/blog` is a blog (users with the `authenticatable` plugin, posts with soft deletion, every use case a [standard one](docs/std-use-cases.md), a Hono API on Drizzle and SQLite) whose whole `src/domain` is generated from one `afora.json` by `@afora/codegen`. Only the database, the schema, the provider (made from a `Database` environment with `providerFrom` when the server calls `App.start()`, and named `database` in the `providers` of the spec) and the server are hand-written. Its tests check that the committed code is what the spec generates, drive the API end to end and extract the spec back from the application: `bun run test:blog`.
 
+`examples/agent-built` is an event ticketing API (organizers, events with a capacity, tickets) built only through the `@afora/mcp` tools from a written brief, with the tool calls committed and replayed byte for byte, and an evaluation of four invariants on its running API and on a Hono + Zod baseline: `bun run test:agent-built`. See [its write-up](examples/agent-built/README.md).
+
 ## Performance
 
-`bun run bench` compares afora with TypeBox (compiled), Zod 4, Valibot and ArkType on the same data, on Bun and on Node; the results are in `bench/RESULTS.md`. Absolute numbers depend on the machine, so read the ratios. On the measured machine (Apple M2):
+`bun run bench` times afora next to TypeBox (compiled), Ajv, Typia, Zod 4, Valibot, ArkType, Effect Schema, Yup and Joi on seven scenarios (a flat object, a nested one, the body of an API request, a list of 1,000 items, a union, six levels of nesting, and a flat object with nothing to transform), with valid and invalid input, on Bun and on Node. Every library declares the same rules, rejects undeclared keys and collects every error, and is checked before it is timed; each row is timed by a process of its own, after a warm-up, in three rounds. The tables are in [`bench/RESULTS.md`](bench/RESULTS.md) and the method in [`bench/README.md`](bench/README.md). Absolute numbers depend on the machine, so read the ratios.
 
-- **Valid input.** afora is about 1.8x to 2.5x slower than Valibot and about 1.1x to 2.1x slower than Zod 4 (flat and nested objects, Bun and Node). It is faster than ArkType in these cases, where ArkType's morphs move it to a slower path.
-- **Invalid input.** This is still where afora is weakest, but much closer than before. Flat objects are about 5x slower than Valibot and 3.7x slower than Zod 4 on Bun, and about 4.4x and 3.6x on Node; nested objects are about 2.9x and 2.1x on Bun, and about 3.1x on Node. It is faster than ArkType here. Most of what remains is TypeBox's own error collection, which runs once for each failing property; the `cause` exception of an issue is built only when it is read.
-- **Floor.** Compiled TypeBox, which only checks and does not transform, is about 9x to 27x faster than afora on valid input. afora builds on it.
+<!-- bench:start -->
 
-What afora does that the fast rows do not all do: a handler pipeline per property (`preHandle`, schema check, `afterHandle`), preceded by a shape check so handlers only see the right types; objects walked key by key instead of one compiled function; frozen results; every issue with `code`, `path` and `source`; and, for `Record.safeParse` and `new Record`, creating the instance. If you validate untrusted bulk data in a hot path and need none of that, use a validator built for it, and use afora at the domain boundary, where the cost per entity is small next to I/O.
+![Validations per second on the body of an API request, Node v24.22.2](bench/results/chart.svg)
+
+Time of each library as a multiple of afora `blueprint.safeParse` on the same case: above 1.00x it is slower than afora, below it is faster. TypeBox, Ajv and Typia only check, they do not transform. afora 0.0.8, Bun 1.4.4 and Node v24.22.2, AMD EPYC 9V45 96-Core Processor; generated from `bench/results/latest.json`.
+
+| Node 24                                                  |    afora | TypeBox |   Ajv | Typia |   Zod | Valibot | ArkType | Effect Schema |    Yup |    Joi |
+| -------------------------------------------------------- | -------: | ------: | ----: | ----: | ----: | ------: | ------: | ------------: | -----: | -----: |
+| Small flat object, valid                                 | 299.5 ns |   0.13x | 0.14x | 0.15x | 1.23x |   1.97x |  10.30x |         2.74x | 12.44x |  8.25x |
+| Small flat object, invalid                               | 474.6 ns |   9.50x | 0.13x | 0.58x | 3.22x |   2.71x |  27.57x |         4.04x | 68.43x |  7.66x |
+| Nested user (address, 5 tags max, 10 addresses), valid   |  2036 ns |   0.12x | 0.17x | 0.13x | 1.27x |   1.02x |  14.85x |         3.24x | 22.52x |  6.67x |
+| Nested user (address, 5 tags max, 10 addresses), invalid |  2688 ns |   9.83x | 0.15x | 0.83x | 1.84x |   1.21x |  21.43x |         3.46x | 38.49x |  6.84x |
+| API request body (an order with 5 items), valid          |  2518 ns |   0.35x | 0.35x | 0.24x | 1.21x |   1.16x |   9.55x |         2.46x | 17.06x |  5.63x |
+| API request body (an order with 5 items), invalid        |  3540 ns |   5.17x | 0.12x | 0.86x | 1.90x |   1.10x |  14.67x |         2.50x | 30.63x |  5.11x |
+| List of 1,000 items, valid                               | 152.4 µs |   0.06x | 0.10x | 0.06x | 0.67x |   2.34x |  20.61x |         3.96x | 27.77x |  7.40x |
+| List of 1,000 items, invalid                             | 155.5 µs |  20.58x | 0.10x | 0.18x | 0.72x |   2.35x |  26.62x |         3.70x | 28.82x |  7.43x |
+| Union of 4 variants (12 events), valid                   | 579.7 ns |   0.47x | 0.59x | 0.51x | 3.90x |  14.54x |   1.54x |        13.42x | 91.04x | 94.11x |
+| Union of 4 variants (12 events), invalid                 |  55.0 µs |   0.64x | 0.01x | 0.03x | 0.09x |   0.19x |   0.34x |         0.17x |  1.44x |  1.69x |
+| 6 levels of nesting, valid                               | 829.3 ns |   0.06x | 0.09x | 0.06x | 0.78x |   1.13x |  14.16x |         4.12x | 19.31x |  5.65x |
+| 6 levels of nesting, invalid                             | 971.4 ns |  21.55x | 0.10x | 1.69x | 1.99x |   1.72x |  27.50x |         5.35x | 52.46x |  7.37x |
+| Small flat object, checks only, valid                    | 177.6 ns |   0.23x | 0.24x | 0.25x | 0.82x |   2.68x |   0.44x |         2.34x | 18.10x | 12.73x |
+| Small flat object, checks only, invalid                  | 424.3 ns |  10.48x | 0.15x | 0.68x | 2.94x |   2.85x |  22.80x |         3.92x | 74.92x |  8.39x |
+
+| Bun                                                      |    afora | TypeBox |   Ajv | Typia |   Zod | Valibot | ArkType | Effect Schema |    Yup |    Joi |
+| -------------------------------------------------------- | -------: | ------: | ----: | ----: | ----: | ------: | ------: | ------------: | -----: | -----: |
+| Small flat object, valid                                 | 195.7 ns |   0.15x | 0.18x | 0.17x | 1.63x |   0.95x |  10.95x |         2.58x | 22.27x | 10.44x |
+| Small flat object, invalid                               | 426.1 ns |   7.87x | 0.21x | 1.26x | 1.62x |   0.97x |  16.14x |         2.50x | 39.07x |  8.12x |
+| Nested user (address, 5 tags max, 10 addresses), valid   |  3154 ns |   0.05x | 0.08x | 0.03x | 0.93x |   0.41x |   4.73x |         1.35x | 16.66x |  3.81x |
+| Nested user (address, 5 tags max, 10 addresses), invalid |  2260 ns |   8.15x | 0.16x | 0.99x | 1.64x |   0.91x |  13.57x |         2.40x | 39.16x |  6.88x |
+| API request body (an order with 5 items), valid          |  2355 ns |   0.19x | 0.21x | 0.32x | 1.34x |   0.68x |   5.08x |         1.83x | 21.04x |  4.97x |
+| API request body (an order with 5 items), invalid        |  2456 ns |   5.33x | 0.13x | 1.13x | 2.06x |   0.97x |  11.38x |         2.24x | 38.34x |  7.81x |
+| List of 1,000 items, valid                               | 185.7 µs |   0.02x | 0.05x | 0.01x | 1.05x |   0.45x |   7.61x |         1.53x | 29.36x |  5.07x |
+| List of 1,000 items, invalid                             |  92.7 µs |  23.63x | 0.12x | 0.45x | 2.25x |   0.96x |  23.45x |         3.00x | 65.59x | 11.20x |
+| Union of 4 variants (12 events), valid                   |  1627 ns |   0.11x | 0.14x | 0.20x | 1.83x |   1.97x |   0.26x |         2.06x | 39.17x | 27.28x |
+| Union of 4 variants (12 events), invalid                 |  41.8 µs |   0.64x | 0.01x | 0.04x | 0.10x |   0.11x |   0.21x |         0.11x |  1.81x |  2.01x |
+| 6 levels of nesting, valid                               | 528.2 ns |   0.02x | 0.10x | 0.06x | 1.98x |   1.54x |  11.94x |         2.87x | 39.56x |  7.63x |
+| 6 levels of nesting, invalid                             | 838.9 ns |  17.86x | 0.09x | 1.60x | 1.74x |   1.59x |  18.13x |         3.09x | 53.04x |  7.92x |
+| Small flat object, checks only, valid                    | 110.1 ns |   0.28x | 0.35x | 0.29x | 1.83x |   0.92x |   0.34x |         1.91x | 33.82x | 15.15x |
+| Small flat object, checks only, invalid                  | 414.7 ns |   7.74x | 0.21x | 1.25x | 1.52x |   0.86x |  11.63x |         2.06x | 39.99x |  7.60x |
+
+<!-- bench:end -->
+
+What the table says, for `blueprint.safeParse`, on a GitHub runner (AMD EPYC, Linux, Bun 1.4.4 and Node 24). The table is of afora at commit `8c4395e`; what changed after it is said where it applies.
+
+- **Against Zod 4.** On Bun, faster in 12 of the 14 cases, by 1.05x to 2.25x; Zod 4 is ahead on the valid nested object (7%). On Node, faster in 9 of the 14, by 1.2x to 3.9x; Zod 4 is ahead on the list of 1,000 items (1.4x to 1.5x), on the valid deep object (1.3x) and on the valid flat object with nothing to transform (1.2x). The invalid union is told apart below.
+- **Against Valibot.** On Node afora is faster in 13 of the 14 cases, by 1.02x to 2.9x outside the valid union (14.5x). On Bun it is the other way: Valibot is ahead in 11 of them, within 15% on small objects and by 1.5x to 2.4x on the valid nested object, the valid API body and the valid list, and afora is ahead on the valid union (2x) and the deep object (1.5x to 1.6x).
+- **Against Effect Schema, Joi and Yup.** Faster in every case but the invalid union: 1.35x to 5.4x Effect Schema, 3.8x to 15x Joi and 12x to 75x Yup, and more than that on the valid union (up to 13x, 94x and 91x).
+- **Against ArkType.** Faster wherever a value is transformed or rejected, by 4.7x to 28x, because its morphs and its errors take a slower path. With nothing to transform and a valid value, ArkType is 2.3x to 3x faster than afora, and 3.8x on the valid union on Bun.
+- **An invalid union.** In the table it takes about 10x the time of Zod 4: TypeBox `Errors` reported every variant of the union for each rejected value. Since then a property whose schema is a discriminated union tells a rejected value by the variant it names, without `Errors`, and takes about 0.5x the time of Zod 4 on Bun (measured on an Apple M2; the table follows at the next measurement). Valid values of the same union are 1.8x to 3.9x faster than Zod 4.
+- **Floor.** The checkers that compile and do not transform (TypeBox, Ajv, Typia) are 3x to 9x faster than afora on a valid small object, and 10x to 70x on the larger ones. afora builds on TypeBox. On invalid input afora is 5x to 24x faster than TypeBox `Errors` (outside the union), and Ajv stays 5x to 11x ahead.
+- **Records and entities.** `Record.safeParse`, which also creates the instance, takes 1.0x to 2.1x the time of `blueprint.safeParse` on Bun and up to 4x on Node. `Entity.safeParse` also makes an id and the time stamps, which on a small object is most of its time: 5x to 13x `blueprint.safeParse` on the flat object in the table, 1.0x to 4.7x on the larger ones; since then it takes about three quarters of that on a small object, for not checking again the id and the date it has just made. `new Record(value)` throws on invalid input, which costs an exception with its trace (2x to 6x `blueprint.safeParse` on Bun, 2.5x to 13x on Node); use `safeParse` where invalid input is expected.
+- **Bundle and cold start.** afora is a framework with one entry point: validating one object bundles to 100 kB gzipped (Zod 4: 24 kB, Valibot: 1.7 kB) and takes 40 ms to load, build and run once in a new Node process (85 ms on Bun; Zod 4: 7 to 8 ms).
+
+What afora does that the fast rows do not all do: a pipeline per property (`preHandle`, schema check, `afterHandle`), where a property with a handler has the shape of the value checked first, so handlers only see the right types; objects walked key by key instead of one compiled function; frozen results; every issue with `code`, `path` and `source`; and, for `Record.safeParse` and `new Record`, creating the instance. If you validate bulk data in a hot path and need none of that, a compiled checker alone is an order of magnitude faster.
+
+CI keeps it there: `bun run bench:guard` times `blueprint.safeParse` and Zod 4 `safeParse` on the fourteen cases and fails when afora is over the limit of a case as a multiple of Zod 4 (1.15x unless `bench/guard.limits.ts` states another, with the reason).
 
 ## Comparison
 
@@ -378,8 +479,9 @@ bun run test:type-perf # build, then budget the editor cost per edit and snapsho
 bun run test:api      # build, then snapshot the public surface (exports and declarations) and the afora.json schema
 bun run test:interop  # Hono, tRPC and TanStack Form tests (examples/interop), including the quick start
 bun run test:blog     # the generated blog (examples/blog): drift, API and extraction
+bun run test:agent-built # the agent-built example (examples/agent-built): drift, replay, API and the invariant evaluation
 bun run smoke         # build, then run the package on plain Node
-bun run bench         # benchmark against TypeBox, Zod, Valibot and ArkType
+bun run bench         # benchmark against TypeBox, Ajv, Typia, Zod, Valibot, ArkType, Effect Schema, Yup and Joi
 bun run lint          # biome lint
 bun run knip          # unused files, exports and dependencies
 bun run fmt           # biome format + fix
@@ -387,9 +489,11 @@ bun run build         # build dist/ (ESM + .d.ts)
 bun run test:codegen  # tests of packages/codegen
 bun run test:mcp      # tests of packages/mcp
 bun run test:hono     # tests of packages/hono
+bun run test:fastify  # tests of packages/fastify (also test:express, test:elysia)
 bun run test:ws       # tests of packages/ws
 bun run test:drizzle  # tests of packages/drizzle (SQLite and PGlite)
-bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/ws and packages/drizzle
+bun run test:dynamodb # tests of packages/dynamodb (DynamoDB Local, with DYNAMODB_ENDPOINT)
+bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/fastify, packages/express, packages/elysia, packages/ws, packages/drizzle and packages/dynamodb
 ```
 
 ## Versioning

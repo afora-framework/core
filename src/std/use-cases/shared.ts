@@ -54,18 +54,29 @@ export function checkOptions(
 	}
 }
 
-const COMMON = ["name", "description", "tags", "deprecated", "errors"];
+const COMMON = [
+	"name",
+	"description",
+	"tags",
+	"deprecated",
+	"errors",
+	"route",
+	"access",
+];
 
 /** The options of the use cases that write: `before`, `after`, `dependencies`, `throws`. */
 export const HOOKS = ["before", "after", "dependencies", "throws"] as const;
 
-/** The name, description, tags and `deprecated` of the use case. */
+/** The name, description, tags, `deprecated`, route and access of the use case. */
 export function metaOf(
 	target: UseCaseTargetInfo,
 	options: Options,
 	verb: string,
-): Pick<UseCaseCompilation, "name" | "description" | "tags" | "deprecated"> {
-	const { name, description, tags, deprecated } = options;
+): Pick<
+	UseCaseCompilation,
+	"name" | "description" | "tags" | "deprecated" | "route" | "access"
+> {
+	const { name, description, tags, deprecated, route, access } = options;
 	if (name !== undefined && (typeof name !== "string" || name === "")) {
 		target.unavailable("the option name must be a non-empty string");
 	}
@@ -76,6 +87,13 @@ export function metaOf(
 			: { description: description as string }),
 		...(tags === undefined ? {} : { tags: tags as readonly string[] }),
 		...(deprecated === undefined ? {} : { deprecated: deprecated as boolean }),
+		// Checked by `useCaseOf`, against the input and the response it is given.
+		...(route === undefined
+			? {}
+			: { route: route as UseCaseCompilation["route"] }),
+		...(access === undefined
+			? {}
+			: { access: access as UseCaseCompilation["access"] }),
 	};
 }
 

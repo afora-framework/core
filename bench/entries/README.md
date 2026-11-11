@@ -1,0 +1,1 @@
+One file per library: it builds the schema of the flat object (`{ name, email, age }`, with the transforms where the library has them) and validates one value. `../size.ts` bundles each file by itself to measure what the library adds to a bundle, and times how long a new process takes to import that bundle, which builds the schema and runs the first validation.

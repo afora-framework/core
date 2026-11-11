@@ -74,7 +74,67 @@ With a declared `context`, the second constructor argument is required by type a
 
 A child called through a dependency function receives its parent's context narrowed to the keys of its own `context` blueprint and validated by it. A child with no context gets none; a child that declares one under a parent without context fails with `InvalidUseCaseContext`. Overrides passed to `execute` keep the signature `(input) => response`.
 
-The class gets the frozen statics `context`, `description`, `tags`, `deprecated` and `errors`, beside `useCaseName`, `blueprint`, `response` and `dependencies`. `context` is a non-optional blueprint, `tags` are distinct non-empty strings, and `errors` are distinct classes made by `exceptionOf`; anything else throws `InvalidUseCaseDeclaration`. `errors` documents what to expect and changes nothing at runtime: an exception that is not listed still propagates.
+The class gets the frozen statics `context`, `description`, `tags`, `deprecated`, `errors`, `route` (see [Routes](#routes)) and `access` (see [Access](auth.md)), beside `useCaseName`, `blueprint`, `response` and `dependencies`. `context` is a non-optional blueprint, `tags` are distinct non-empty strings, and `errors` are distinct classes made by `exceptionOf`; anything else throws `InvalidUseCaseDeclaration`. `errors` documents what to expect and changes nothing at runtime: an exception that is not listed still propagates.
+
+## Routes
+
+A use case can say where it is served over HTTP, next to its input, instead of in the options of a sink:
+
+```ts
+import { blueprintOf, Route, useCaseOf } from "@afora/core";
+
+const ListPostsInput = blueprintOf((ctx) => ({
+	slug: ctx.slug,
+	page: ctx.integer,
+	locale: ctx.optional.text,
+	session: ctx.text,
+}));
+
+class ListPosts extends useCaseOf({
+	name: "ListPosts",
+	blueprint: ListPostsInput,
+	response: PostList,
+	route: {
+		method: "get",
+		path: "/posts/{slug}",
+		headers: { locale: "accept-language" },
+		cookie: { session: "sid" },
+	},
+}) {
+	override async execute() {
+		// this.input: { slug, page, locale?, session }
+	}
+}
+
+// The same declaration, as a decorator of the class:
+@Route("GET", "/posts/{slug}", {
+	headers: { locale: "accept-language" },
+	cookie: { session: "sid" },
+})
+class ListPosts extends useCaseOf({
+	name: "ListPosts",
+	blueprint: ListPostsInput,
+	response: PostList,
+}) {
+	// ...
+}
+```
+
+The blueprint stays the only description of the input: a route adds no schema, it says where each key is read from.
+
+- **`method`** is `get`, `post`, `put`, `patch` or `delete`, in either case; it is stored in lower case.
+- **`path`** starts with `/`, and a `{name}` segment fills the input key `name`. Without a path, the sink uses its default (`/{command}/{operation}`).
+- **`status`** is the status of a success: `200` (the default), `201`, `202` or `204`.
+- **`query`** lists input keys read from the query string. A `get` or `delete` route already reads from the query every key that has no other place, so `query` is for routes with a body.
+- **`headers`** and **`cookie`** map input keys to the header or the cookie each is read from: `{ locale: "accept-language" }`.
+- **What is left** is the JSON body of a `post`, `put` or `patch`, and the query of a `get` or `delete`.
+- **`setCookie`** maps keys of the _response_ to cookies: `{ token: { name: "sid" } }` sends the `token` of the response as the cookie `sid` and leaves it out of the body. A cookie is `{ name, httpOnly?, secure?, sameSite?, path?, domain?, maxAge? }`, by default `HttpOnly; Secure; SameSite=Lax; Path=/`. An empty text removes the cookie, and an absent value sets none. The key must be a scalar key of the response.
+
+A key read from the path, the query, a header or a cookie arrives as text, so it must be a scalar property of the input (a number or a boolean is converted), and each key has one place. Anything else throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class whose decorator says another route than the one it already has (the same route again is accepted, which is what a class over a base generated from `afora.json` does).
+
+The route is data: `ListPosts.route` is the frozen declaration, `app.describe().useCases.ListPosts.route` and `afora.json` carry it, and a subclass inherits it. It names no server. The use case becomes an operation through a [command](commands.md), and the sink of an [output](outputs.md) (`openapi`, `hono`…) serves or documents it; the `route` option of that sink still overrides the method, path and status per operation id.
+
+`@Route(method, path?, options?)` (or `@Route(method, options)`) is a standard class decorator, with no `experimentalDecorators` and no metadata reflection; it also works as a legacy TypeScript decorator. Bun runs it as written. Node has no decorator syntax yet, so there the code goes through a compiler (`tsc` with a `target` of `ES2022` or lower, `tsx`, esbuild), or uses the `route` setting, which needs nothing.
 
 `UseCaseInput`, `UseCaseResponse` and `UseCaseDependencies` extract a declaration's types. `isUseCase` identifies instances; `isUseCaseClass` identifies concrete declarations with a prototype `execute`. UseCases carry their own kind and cannot be used as fields of ordinary data blueprints. Validation errors carry `details.issues`; errors crossing an execution boundary preserve their cause and gain a `UseCase` trace frame using the declared name.
 
@@ -109,7 +169,7 @@ class Register extends useCaseOf({
 }) {}
 ```
 
-The steps are the same objects in TypeScript and in JSON, except for the class of `build`, the exception class of `ensure.error` and the function of `run`, which the descriptor names or marks `opaque`. TypeScript checks the dependency and action names (`"users.findByEmail"` only exists if `Users` has that read action); the values are checked at execution by the blueprints. Steps run in order, each awaited, and every repository and use case call goes through the same dependency functions as a hand-written `execute`: execution scope, events, trace frames, `UseCaseAlreadyExecuted` and `execute({ ...overrides })` behave identically.
+The steps are the same objects in TypeScript and in JSON, except for the class of `build`, the exception class of `ensure.error` and the function of `run`, which the descriptor names or marks `opaque`. TypeScript checks the dependency and action names (`"users.findByEmail"` only exists if `Users` has that read action); with [`strictSteps: true`](#strict-steps) it also checks the references and values, which are otherwise checked at declaration and at execution by the blueprints. Steps run in order, each awaited, and every repository and use case call goes through the same dependency functions as a hand-written `execute`: execution scope, events, trace frames, `UseCaseAlreadyExecuted` and `execute({ ...overrides })` behave identically.
 
 A _value_ is a reference, a literal or a mapping:
 
@@ -139,7 +199,36 @@ There are no operators or interpolation: anything computed goes through `run`. T
 | `{ run: "<name>", fn, args?, as? }`                    | `await fn(...args, { context, dependencies })`, the dependencies as the call resolved them (overrides included); `name` is unique in the use case                                  | its result    |
 | `{ return: value }`                                    | the response, validated by the response blueprint; required, last, once                                                                                                            | none          |
 
-`useCaseOf` validates the steps at declaration and throws `InvalidUseCaseStep` (`UseCase` layer, `details: { index, reason, code }`) for an unknown or malformed step, a bad or repeated `as`, a reference to an unbound name, a `$context` without a declared context, a first-level `$input.<key>` or `$context.<key>` the blueprint lacks, an unknown repository, action, use case or environment, a `find` of a write action, a `build` that is not a record class, an `ensure.error` missing from `errors`, a `change.key` that is not a change key of the class `build` made, and a missing, repeated or misplaced `return`. A `change` or `invoke` on something that is not a record, or on a member it lacks, throws `InvalidUseCaseStep` with the `index` while the steps run. In an application, the classes of `build` and `ensure.error` must be registered (`UnregisteredApplicationReference`); `describe()` gives `implementation: { kind: "steps", steps }` with them by name (`"User"`, `"UserAlreadyExists"`, or `{ core: "RepositoryUniqueViolation" }` for an exported exception) and `run.fn` as `{ kind: "opaque" }`. A subclass that overrides `execute` is hand-written, so it is `{ kind: "opaque" }`.
+`useCaseOf` validates the steps at declaration and throws `InvalidUseCaseStep` (`UseCase` layer, `details: { index, reason, code }`) for an unknown or malformed step, a bad or repeated `as`, a reference to an unbound name, a `$context` without a declared context, a path of `$input` or `$context` the blueprint lacks at any depth (`$input.address.zipp`, `$input.tags.first`, `$input.name.length` below a string; a list has its indices and its `length`, a number, as in `$input.tags.length`; below a key of a record that its blueprint lacks but its class has, such as a getter, the path is not followed), an unknown repository, action, use case or environment, a `find` of a write action, a `build` that is not a record class, an `ensure.error` missing from `errors`, a `change.key` that is not a change key of the class `build` made, and a missing, repeated or misplaced `return`. A `change` or `invoke` on something that is not a record, or on a member it lacks, throws `InvalidUseCaseStep` with the `index` while the steps run. In an application, the classes of `build` and `ensure.error` must be registered (`UnregisteredApplicationReference`); `describe()` gives `implementation: { kind: "steps", steps }` with them by name (`"User"`, `"UserAlreadyExists"`, or `{ core: "RepositoryUniqueViolation" }` for an exported exception) and `run.fn` as `{ kind: "opaque" }`. A subclass that overrides `execute` is hand-written, so it is `{ kind: "opaque" }`.
+
+### Strict steps
+
+With `strictSteps: true`, TypeScript checks the steps written inline in `useCaseOf` as it checks a hand-written `execute`. The steps are read in order, each against the values in scope: the input, the context, the environments and the results of the earlier steps, typed (`find` gives what the repository method returns, `build` the instance, `change` the record, `invoke` and `run` what the method or function returns, awaited, `call` the response of the use case). An `ensure: "exists"` on a bound name removes `undefined` from it for the steps after.
+
+```ts
+class Register extends useCaseOf({
+	name: "Register",
+	blueprint: RegisterInput,
+	response: UserResponse,
+	dependencies: { users: Users },
+	errors: [UserAlreadyExists],
+	strictSteps: true,
+	steps: [
+		// Type '"$input.emial"' is not assignable to type '"$input.name" | "$input.email" | "$input.plainPassword"'.
+		{ find: "users.findByEmail", args: ["$input.emial"], as: "existing" },
+		// ...
+	],
+}) {}
+```
+
+- every reference must name a value in scope, at any depth (`$input.address.zip`, `$existing.email`, `$env.mail.FROM`); a name bound by a later step is an error;
+- the `args` of `find`, `invoke` and `run` must fit the parameters of the repository method, the record method and the function (for `run`, without the `{ context, dependencies }` the interpreter adds); the `values` of `build` the input of the record class, keys included (a missing key or one it does not declare is an error); the `value` of `change` the change key, and of `create`, `update`, `delete` and `restore` the repository method; the `input` of `call` the input of the use case;
+- `invoke.method` must be a public method of the record, and `change.key` one of its change keys;
+- the values of `ensure`, `details` and `return` are checked as references only.
+
+A reference that does not fit is reported with the references that would (`'"$input.emial"' is not assignable to type '"$input.name" | "$input.email" | ...'`), and the editor offers them inside a `"$"` string. A path through a value that may be `undefined` (the result of `findByEmail`, an optional key) resolves to a possibly `undefined` value, as `followPath` reads it. A list index is typed as the item. Paths are offered three keys deep below their root.
+
+Checking costs the editor about 9,000 more type instantiations per edit (17%) on a use case of five steps (see `bun run test:type-perf`), which is why it is opt-in. It only applies to steps written inline (a tuple); steps built at run time are checked at declaration only. `strictSteps` has no effect at run time and must be a boolean. The code [codegen](../packages/codegen/README.md) generates from `afora.json` declares it.
 
 ## Plugins
 
@@ -202,7 +291,7 @@ const Generics = useCaseCatalogOf(get); // for commandBuilderOf, see Commands
 | `relation(key, actions?)`                         | the repository of the entity a key holds, taken from the `relations` of the target, to load it by id                                                                                            |
 | `unavailable(reason)`                             | throws `UseCaseUnavailable` for an option the entity cannot satisfy                                                                                                                             |
 
-The `input` of a plan is what an input blueprint takes for the key: the key and its field, `<key>Id` and the `id` field of the related entity for a key that holds an entity, or the property a `PropertyInput` accepts (see [Properties](properties.md)), whose `convert` the plan then carries. `useCaseTargetOf(repository)` gives the same target outside a plugin.
+The `input` of a plan is what an input blueprint takes for the key: the key and its field, `<key>Id` and the `id` field of the related entity for a key that holds an entity, or the property a `PropertyInput` accepts (see [Properties](properties.md)), whose `convert` the plan then carries. `useCaseTargetOf(repository)`, from `@afora/core/experimental`, gives the same target outside a plugin.
 
 `plugin.make(repository, options)` gives one class per repository and options: the same call anywhere gives the same class (options are compared by value, classes among them by identity), which is what lets a command, an application and a test name the same use case. It throws `UseCaseUnavailable` (`UseCase` layer, `details: { repository, reason, missing }`) when the repository lacks an action of `requires.actions` or the entity a record plugin of `requires.plugins`, `InvalidUseCasePlugin` for what is not a repository or options that are not a plain object, and whatever `useCaseOf` throws for the compiled steps. `useCaseOriginOf(UseCase)` gives `{ plugin, repository, options }` for a class a plugin made (and for a class extending it), `undefined` otherwise.
 

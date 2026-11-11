@@ -17,14 +17,19 @@ export function fieldsOfDecl(decl: Decl): Record<string, Field> | undefined {
 	return parseFields(decl.spec.fields, [], sink) ?? undefined;
 }
 
-/** The names of the declarations (PascalCase types) `fields` use, at any depth of inline fields. */
-function typesIn(fields: Readonly<Record<string, Field>>): string[] {
+/** The names of the declarations (PascalCase types) `fields` use, at any depth of inline fields and variants. */
+export function typesIn(fields: Readonly<Record<string, Field>>): string[] {
 	const found: string[] = [];
 	const visit = (field: Field): void => {
 		if (field.kind === "type") {
 			if (/^[A-Z]/.test(field.type)) found.push(field.type);
 		} else if (field.kind === "inline") {
 			for (const inner of Object.values(field.fields)) visit(inner);
+		} else if (field.kind === "variant") {
+			for (const target of Object.values(field.variants)) {
+				if ("type" in target) found.push(target.type);
+				else for (const inner of Object.values(target.fields)) visit(inner);
+			}
 		}
 	};
 	for (const field of Object.values(fields)) visit(field);

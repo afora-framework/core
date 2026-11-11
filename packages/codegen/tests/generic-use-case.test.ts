@@ -185,6 +185,8 @@ describe("catalog", () => {
 					"tags",
 					"deprecated",
 					"errors",
+					"route",
+					"access",
 					...info.options,
 				].sort(),
 			]);

@@ -3,10 +3,12 @@ import {
 	genericUseCase,
 	identityKeysOf,
 	recordPlugin,
+	stdProperty,
 } from "./catalog";
 import { fieldsOfDecl } from "./graph";
 import type { Field } from "./model";
 import { checkImport, isImportObject } from "./provider";
+import { checkAccess, checkRoute } from "./route";
 import { type Decl, issue, type Scope } from "./scope";
 import { isIdentifier, isObject } from "./spec/field";
 import type { SpecIssue } from "./spec/types";
@@ -289,6 +291,8 @@ function checkGenericUseCase(
 		"description",
 		"tags",
 		"deprecated",
+		"route",
+		"access",
 	];
 	for (const key of Object.keys(spec)) {
 		if (!allowed.includes(key)) {
@@ -302,6 +306,14 @@ function checkGenericUseCase(
 		}
 	}
 	checkMetadata(spec, path, issues);
+	// What a standard use case takes and gives follows its repository: the
+	// keys are checked by the generated code.
+	if (spec.route !== undefined) {
+		checkRoute(spec.route, [...path, "route"], {}, issues);
+	}
+	if (spec.access !== undefined) {
+		checkAccess(spec.access, [...path, "access"], {}, issues);
+	}
 	const names = catalog().useCases.map((useCase) => useCase.name);
 	const info =
 		typeof spec.generic === "string" ? genericUseCase(spec.generic) : undefined;
@@ -646,6 +658,8 @@ export function checkUseCase(
 		"description",
 		"tags",
 		"deprecated",
+		"route",
+		"access",
 		"input",
 		"response",
 		"context",
@@ -682,15 +696,34 @@ export function checkUseCase(
 		return checkBlueprintRef(spec[key], [...path, key], scope, inline, issues);
 	};
 	const input = blueprint("input");
-	blueprint("response");
+	const response = blueprint("response");
 	const context = blueprint("context");
-	const keysOf = (ref: BlueprintRef | undefined): Set<string> | undefined => {
+	const fieldsOf = (
+		ref: BlueprintRef | undefined,
+	): Readonly<Record<string, Field>> | undefined => {
 		if (!ref) return undefined;
-		const fields = ref.kind === "inline" ? ref.fields : fieldsOfDecl(ref.decl);
-		return fields ? new Set(Object.keys(fields)) : undefined;
+		return (
+			(ref.kind === "inline" ? ref.fields : fieldsOfDecl(ref.decl)) ?? undefined
+		);
 	};
-	const inputKeys = keysOf(input);
-	const contextKeys = keysOf(context);
+	const inputFields = fieldsOf(input);
+	const contextFields = fieldsOf(context);
+	const responseFields = fieldsOf(response);
+	const known = {
+		...(inputFields ? { input: Object.keys(inputFields) } : {}),
+		...(responseFields ? { response: Object.keys(responseFields) } : {}),
+		...(context === undefined
+			? { context: [] }
+			: contextFields
+				? { context: Object.keys(contextFields) }
+				: {}),
+	};
+	if (spec.route !== undefined) {
+		checkRoute(spec.route, [...path, "route"], known, issues);
+	}
+	if (spec.access !== undefined) {
+		checkAccess(spec.access, [...path, "access"], known, issues);
+	}
 
 	const dependencies = checkDependencies(
 		decl,
@@ -773,8 +806,8 @@ export function checkUseCase(
 	}
 	checkSteps(implementation.steps, implPath, {
 		scope,
-		inputKeys,
-		contextKeys,
+		inputFields,
+		contextFields,
 		hasContext: context !== undefined,
 		dependencies,
 		errors,
@@ -782,10 +815,95 @@ export function checkUseCase(
 	});
 }
 
+const INDEX = /^(?:0|[1-9][0-9]*)$/;
+const PRIMITIVE_SCHEMAS = new Set(["string", "number", "integer", "boolean"]);
+
+/**
+ * The first segment of `path` that a value of `fields` cannot hold, or
+ * `undefined` when the path may name a value. `followed` are keys that exist
+ * but whose values are not followed (identity and plugin keys).
+ */
+function missingIn(
+	fields: Readonly<Record<string, Field>>,
+	followed: readonly string[],
+	path: readonly string[],
+	scope: Scope,
+): string | undefined {
+	const [segment, ...rest] = path;
+	if (segment === undefined) return undefined;
+	const field = fields[segment];
+	if (!Object.hasOwn(fields, segment) || field === undefined) {
+		return followed.includes(segment) ? undefined : segment;
+	}
+	return missingInField(field, rest, scope, false);
+}
+
+/** The keys of a record or entity besides its fields: identity keys and those of its plugins. */
+function followedKeysOf(decl: Decl): string[] {
+	return [
+		...(decl.kind === "entity" ? identityKeysOf(decl.spec) : []),
+		...(Array.isArray(decl.spec.plugins)
+			? decl.spec.plugins.flatMap((name) =>
+					typeof name === "string" ? (recordPlugin(name)?.keys ?? []) : [],
+				)
+			: []),
+	];
+}
+
+/** `missingIn` for the value of one field: a list, inline fields, a variant, a declaration or a property. */
+function missingInField(
+	field: Field,
+	path: readonly string[],
+	scope: Scope,
+	item: boolean,
+): string | undefined {
+	const [segment, ...rest] = path;
+	if (segment === undefined) return undefined;
+	if (field.list && !item) {
+		// The length of a list is a number, which has no keys to follow.
+		if (segment === "length") return rest[0];
+		return INDEX.test(segment)
+			? missingInField(field, rest, scope, true)
+			: segment;
+	}
+	if (field.kind === "inline") return missingIn(field.fields, [], path, scope);
+	if (field.kind === "variant") {
+		// Its key, or a key of any of its variants: which one a value is, is
+		// only known when it runs.
+		if (segment === field.key) return undefined;
+		for (const target of Object.values(field.variants)) {
+			if ("fields" in target) {
+				if (Object.hasOwn(target.fields, segment))
+					return missingIn(target.fields, [], path, scope);
+				continue;
+			}
+			const decl = scope.decls.get(target.type);
+			const fields = decl ? fieldsOfDecl(decl) : undefined;
+			if (!decl || !fields) continue;
+			const followed = followedKeysOf(decl);
+			if (Object.hasOwn(fields, segment) || followed.includes(segment))
+				return missingIn(fields, followed, path, scope);
+		}
+		return segment;
+	}
+	if (field.kind === "enum") return segment;
+	const decl = scope.decls.get(field.type);
+	if (decl) {
+		const fields = fieldsOfDecl(decl);
+		if (!fields || (decl.kind !== "record" && decl.kind !== "entity"))
+			return fields ? missingIn(fields, [], path, scope) : undefined;
+		return missingIn(fields, followedKeysOf(decl), path, scope);
+	}
+	const schema = stdProperty(field.type)?.schemaType;
+	return schema !== undefined && PRIMITIVE_SCHEMAS.has(schema)
+		? segment
+		: undefined;
+}
+
 interface StepsContext {
 	readonly scope: Scope;
-	readonly inputKeys: Set<string> | undefined;
-	readonly contextKeys: Set<string> | undefined;
+	readonly inputFields: Readonly<Record<string, Field>> | undefined;
+	readonly contextFields: Readonly<Record<string, Field>> | undefined;
 	readonly hasContext: boolean;
 	readonly dependencies: ReadonlyMap<string, Decl>;
 	readonly errors: readonly string[];
@@ -832,11 +950,12 @@ function checkSteps(steps: unknown, implPath: Path, ctx: StepsContext): void {
 					);
 					return;
 				}
-				const keys = root === "input" ? ctx.inputKeys : ctx.contextKeys;
-				if (first !== undefined && keys && !keys.has(first)) {
+				const fields = root === "input" ? ctx.inputFields : ctx.contextFields;
+				const missing = fields && missingIn(fields, [], path, scope);
+				if (missing !== undefined) {
 					fail(
 						"unknown_key",
-						`"${text}" names "${first}", which the ${root} does not declare.`,
+						`"${text}" names "${missing}", which the ${root} does not declare.`,
 						key,
 					);
 				}

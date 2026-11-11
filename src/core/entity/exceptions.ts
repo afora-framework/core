@@ -43,3 +43,16 @@ export const InvalidEntityExpiry = exceptionOf({
 	message: ({ reason }: { readonly reason: string }, source) =>
 		`Invalid expires of entity "${source}": ${reason}`,
 });
+
+/**
+ * The schema evolution options of an entity are invalid: `schemaVersion` is
+ * not a positive integer, a step of `upgrade` is not a function or reaches a
+ * version outside `2..schemaVersion`, or `previousNames` holds something
+ * that cannot name a record, or its own name; `source` is the entity name.
+ */
+export const InvalidEntitySchemaVersion = exceptionOf({
+	layer: ExceptionLayers.Entity,
+	name: "InvalidEntitySchemaVersion",
+	message: ({ reason }: { readonly reason: string }, source) =>
+		`Invalid schema evolution options of entity "${source}": ${reason}`,
+});

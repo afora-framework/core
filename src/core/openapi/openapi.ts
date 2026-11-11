@@ -1,11 +1,13 @@
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
-import { recordFieldOf } from "../blueprint/record-field";
+import { isRecordClass, recordFieldOf } from "../blueprint/record-field";
 import type {
 	AnyRecordClass,
 	BlueprintField,
+	BlueprintVariants,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant } from "../blueprint/variant";
 import { identityKeysOf } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
 import { isProperty } from "../property/is-property";
@@ -38,6 +40,7 @@ function isField(value: unknown): value is BlueprintField {
 		isProperty(value) ||
 		isBlueprint(value) ||
 		isBlueprintList(value) ||
+		isBlueprintVariant(value) ||
 		recordFieldOf(value) !== undefined
 	);
 }
@@ -45,7 +48,13 @@ function isField(value: unknown): value is BlueprintField {
 /** Whether `field`, as a key of a blueprint, accepts `undefined`. */
 function isOptional(field: BlueprintField): boolean {
 	if (isProperty(field)) return field.type.optional === true;
-	if (isBlueprint(field) || isBlueprintList(field)) return field.optional;
+	if (
+		isBlueprint(field) ||
+		isBlueprintList(field) ||
+		isBlueprintVariant(field)
+	) {
+		return field.optional;
+	}
 	return recordFieldOf(field)?.optional ?? false;
 }
 
@@ -118,6 +127,30 @@ function schemaOf(field: BlueprintField, scope: Scope): Schema {
 		};
 	}
 	if (isBlueprint(field)) return objectOf(field.properties, scope, NO_MARKS);
+	if (isBlueprintVariant(field)) {
+		// One object per variant, with the key first as its name, and the key
+		// declared as what tells them apart.
+		const variants: BlueprintVariants = field.variants;
+		return {
+			oneOf: Object.entries(variants).map(([tag, variant]) => {
+				// A record class is written out here, not as a `$ref`: it has the key too.
+				const object = (
+					isRecordClass(variant)
+						? recordSchemaOf(variant, scope)
+						: objectOf(variant.properties, scope, NO_MARKS)
+				) as {
+					readonly properties: Record<string, Schema>;
+					readonly required?: readonly string[];
+				};
+				return {
+					...object,
+					properties: { [field.key]: { const: tag }, ...object.properties },
+					required: [field.key, ...(object.required ?? [])],
+				};
+			}),
+			discriminator: { propertyName: field.key },
+		};
+	}
 
 	const record = recordFieldOf(field);
 	if (record) {

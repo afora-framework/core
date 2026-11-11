@@ -133,6 +133,30 @@ export const ApplicationAlreadyStarted = exceptionOf({
 });
 
 /**
+ * `app.start({ lock })` found that the code cannot run over the stores the
+ * lock describes: an entity of the lock that no entity is named or lists in
+ * `previousNames` (renamed without it, its rows would no longer be read), or
+ * an entity whose `schemaVersion` is lower than the lock's.
+ * `details.problems` lists each.
+ */
+export const SchemaLockMismatch = exceptionOf({
+	layer: ExceptionLayers.Application,
+	name: "SchemaLockMismatch",
+	message: ({ problems }: { readonly problems: readonly string[] }) =>
+		`The application does not match its schema lock: ${problems.join(" ")}`,
+});
+
+/**
+ * `app.migrate` got invalid options, or names an entity without a
+ * repository; `source` is the application name.
+ */
+export const InvalidSchemaMigration = exceptionOf({
+	layer: ExceptionLayers.Application,
+	name: "InvalidSchemaMigration",
+	message: ({ reason }: { readonly reason: string }) => reason,
+});
+
+/**
  * `app.start()` found environments whose variables are missing or rejected;
  * `details.environments` gives the keys of each, by name.
  */

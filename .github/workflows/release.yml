@@ -117,8 +117,12 @@ jobs:
           publish packages/codegen
           publish packages/mcp
           publish packages/hono
+          publish packages/fastify
+          publish packages/express
+          publish packages/elysia
           publish packages/ws
           publish packages/drizzle
+          publish packages/dynamodb
       - name: Create the tag and the GitHub release
         run: |
           prerelease=""
@@ -128,3 +132,11 @@ jobs:
           gh release create "v$VERSION" --target "$GITHUB_SHA" --generate-notes $prerelease
         env:
           GH_TOKEN: ${{ github.token }}
+
+  bench:
+    name: Benchmark results of the release
+    needs: publish
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ./.github/workflows/bench.yml

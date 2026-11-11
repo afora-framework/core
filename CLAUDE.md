@@ -24,10 +24,12 @@ bun run docs:links                       # every relative link and #anchor in RE
 bun run test:types                       # packs the package and type-checks tests/types-compat on TS 5.5, latest 5.x and 7, bundler + nodenext
 bun run test:type-perf                   # tests/type-perf: per-edit type instantiations of README code (budgeted) + snapshot of hovers/completions/diagnostics, src and dist
 bun run smoke                            # build, then run scripts/smoke.mjs on plain Node
-bun run bench                            # bench/ vs TypeBox, Zod, Valibot, ArkType; results in bench/RESULTS.md
+bun run bench                            # bench/: 7 scenarios vs TypeBox, Ajv, Typia, Zod, Valibot, ArkType, Effect, Yup, Joi; writes bench/results/latest.json and bench/RESULTS.md (-- --only <ids> writes nothing)
+bun run bench:guard                      # blueprint.safeParse vs Zod 4 on the 14 cases, limits in bench/guard.limits.ts (what CI runs)
+bun run bench:check                      # README block, bench/RESULTS.md and the chart are what bench/results/latest.json gives; regenerate with `bun run bench -- --render`
 ```
 
-`packages/*` (`codegen`, `mcp`, `hono`, `ws`, `drizzle`) are workspaces with their own build and tests (`bun run build:packages`). Releases are published by `.github/workflows/release.yml` through npm trusted publishing (OIDC) when a version bump is merged to `main`; a new package under `packages/` must be added to `DIRS` in `scripts/release-setup.sh` and the script run once by hand (`bash scripts/release-setup.sh`), since npm cannot create a package through OIDC. `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
+`packages/*` (`codegen`, `mcp`, `hono`, `ws`, `drizzle`, `dynamodb`) are workspaces with their own build and tests (`bun run build:packages`). Releases are published by `.github/workflows/release.yml` through npm trusted publishing (OIDC) when a version bump is merged to `main`; a new package under `packages/` must be added to `DIRS` in `scripts/release-setup.sh` and the script run once by hand (`bash scripts/release-setup.sh`), since npm cannot create a package through OIDC. `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
 
 ## Runtime constraint
 
@@ -42,7 +44,7 @@ The library ships to Bun **and** Node >= 22 (and must load in browsers/Workers).
 **The layering of concepts**, each built on the previous:
 
 - **Property** (`core/property`): a class wrapping one value, run through `preHandle → TypeBox validation → afterHandle`; flags `optional`, `sensitive`, `unique` propagate up to records.
-- **Blueprint** (`core/blueprint`): an object shape built from a context `ctx` supplied by plugins (`blueprintPluginOf`), with `listOf`, `optionalOf`, `join`, nested blueprints and record classes as fields. `optional`, `list`, `listOf`, `optionalOf`, `propertyOf` are reserved context keys.
+- **Blueprint** (`core/blueprint`): an object shape built from a context `ctx` supplied by plugins (`blueprintPluginOf`), with `listOf`, `optionalOf`, `variantOf`, `join`, nested blueprints and record classes as fields. `variantOf(key, { tag: Blueprint })` is one of several blueprints told apart by a key. `optional`, `list`, `listOf`, `optionalOf`, `propertyOf`, `variantOf` are reserved context keys.
 - **Record** (`core/record`): `recordOf(blueprint, { sensitive, unique, change })` returns a class. Values live in a `WeakMap`; keys are prototype getters (so spreading a record yields nothing — use `toJSON()`). `set` is protected; `change: [...]` exposes `instance.change.<key>(value)` (a `change` namespace getter); `toJSON` masks sensitive leaves at any depth; undeclared keys are rejected at any depth; keys colliding with record members or `Object.prototype` throw `ReservedRecordKey`.
 - **Entity** (`core/entity`): a record plus identity keys (`id`, `createdAt`, `updatedAt`, `deletedAt`), `destroy()`, and domain events (`eventOf`, protected `emit`, `pullEvents`, `onCreate/onUpdate/onDelete` options).
 - **Repository** (`core/repository`): `repositoryOf({ entity, actions, provider, relations, environmentDependencies })` generates only the chosen async methods (`findBy<Key>` restricted to unique keys at type level and at declaration). Nested entities are stored by id reference and reloaded through `relations` in batches (`findIn`). `inMemoryProvider()` is the default `IRepositoryProvider`.

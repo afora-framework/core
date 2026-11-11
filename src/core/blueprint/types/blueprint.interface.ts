@@ -21,6 +21,7 @@ import type { StandardSchemaV1 } from "../../standard/standard-schema";
 import type { Kind } from "../../symbols/kind";
 import type { listOf } from "../list";
 import type { optionalOf } from "../optional";
+import type { variantOf } from "../variant";
 import type {
 	IBlueprintFactories,
 	IBlueprintPlugin,
@@ -29,6 +30,21 @@ import type {
 /** Any blueprint, whatever its properties, optional or not. */
 // biome-ignore lint/suspicious/noExplicitAny: any blueprint, whatever its properties
 export type AnyBlueprint = IBlueprint<any, boolean>;
+
+/**
+ * Any variant field, whatever its key and its variants, optional or not.
+ * Written out, not as `IBlueprintVariant` of anything: every field of every
+ * blueprint is compared with it, and this way nothing is worked out for that.
+ */
+export interface AnyBlueprintVariant {
+	readonly [Kind]: "variant";
+	readonly key: string;
+	// biome-ignore lint/suspicious/noExplicitAny: any variants
+	readonly variants: any;
+	readonly optional: boolean;
+	// biome-ignore lint/suspicious/noExplicitAny: whatever the field takes and gives
+	readonly "~standard": StandardSchemaV1.Props<any, any>;
+}
 
 /** Any list, whatever its item, optional or not. */
 // biome-ignore lint/suspicious/noExplicitAny: any list, whatever its item
@@ -66,14 +82,16 @@ export type AnyOptionalRecord = OptionalRecord<AnyRecordClass>;
 
 /**
  * What a blueprint key holds: a property, a blueprint for a nested object, a
- * record, or a list of any of them.
+ * record, a list of any of them, or one of several blueprints told apart by a
+ * key.
  */
 export type BlueprintField =
 	| AnyPropertyConstructor
 	| AnyBlueprint
 	| AnyBlueprintList
 	| AnyRecordClass
-	| AnyOptionalRecord;
+	| AnyOptionalRecord
+	| AnyBlueprintVariant;
 
 /** Fields by key, e.g. `{ name: Name, address: Address }`. */
 export type IBlueprintCollection = Record<string, BlueprintField>;
@@ -119,7 +137,22 @@ type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field
 						? Optional extends true
 							? TOptional<TArray<FieldSchema<Item, Mode>>>
 							: TArray<FieldSchema<Item, Mode>>
-						: never;
+						: VariantSchema<Field, Mode>;
+
+/**
+ * The schema of a variant field: its value as it is, since a union of objects
+ * is only read for whether the key is optional. Apart from `FieldSchema`, so
+ * that a field that is not a variant costs one comparison there.
+ */
+type VariantSchema<Field, Mode extends FieldMode> = Field extends {
+	readonly key: infer Key extends string;
+	readonly variants: infer Variants;
+	readonly optional: infer Optional;
+}
+	? Optional extends true
+		? TOptional<TUnsafe<VariantValue<Key, Variants, Mode>>>
+		: TUnsafe<VariantValue<Key, Variants, Mode>>
+	: never;
 
 /** Declares the records a field of a record class takes besides its own. */
 export declare const RecordAccepts: unique symbol;
@@ -198,7 +231,56 @@ type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field
 					? CollectionValue<Properties, Mode>
 					: Field extends { readonly item: infer Item }
 						? FieldValue<Item, Mode>[]
-						: never;
+						: Field extends {
+									readonly key: infer Key extends string;
+									readonly variants: infer Variants;
+								}
+							? VariantValue<Key, Variants, Mode>
+							: never;
+
+/**
+ * The value of a variant field: for each variant, its own value with `Key`
+ * set to its name, so that `value[Key]` tells which one it is. Anything for a
+ * field of any variants (as `AnyBlueprintVariant`'s).
+ */
+type VariantValue<
+	Key extends string,
+	Variants,
+	Mode extends FieldMode,
+> = 0 extends 1 & Variants
+	? // biome-ignore lint/suspicious/noExplicitAny: the value of any variant field
+		any
+	: {
+			[Tag in keyof Variants & string]: VariantMember<
+				Key,
+				Tag,
+				Variants[Tag],
+				Mode
+			>;
+		}[keyof Variants & string];
+
+/**
+ * The value of one variant named `Tag`. A blueprint gives its value with the
+ * key. A record class gives an instance, which has no key and is told apart
+ * by its class; what it takes is an instance or its plain input with the key,
+ * and its plain data has the key.
+ */
+type VariantMember<
+	Key extends string,
+	Tag,
+	Variant,
+	Mode extends FieldMode,
+> = Variant extends AnyRecordClass
+	? Mode extends "value"
+		? InstanceType<Variant>
+		: Mode extends "input"
+			?
+					| InstanceType<Variant>
+					| Evaluate<{ readonly [Name in Key]: Tag } & RecordInput<Variant>>
+			: Evaluate<
+					{ readonly [Name in Key]: Tag } & RecordValueOf<Variant, "data">
+				>
+	: Evaluate<{ readonly [Name in Key]: Tag } & FieldValue<Variant, Mode>>;
 
 /** The value of a record field, as `RecordSchema` describes it. */
 type RecordValueOf<
@@ -370,6 +452,7 @@ export interface BlueprintHelpers {
 	readonly listOf: typeof listOf;
 	readonly optionalOf: typeof optionalOf;
 	readonly propertyOf: typeof propertyOf;
+	readonly variantOf: typeof variantOf;
 }
 
 /**
@@ -419,7 +502,12 @@ export type OptionalProperties<Properties> = {
 					? OptionalRecord<Properties[Key]>
 					: Properties[Key] extends AnyOptionalRecord
 						? Properties[Key]
-						: never;
+						: Properties[Key] extends {
+									readonly key: infer Name extends string;
+									readonly variants: infer Variants extends BlueprintVariants;
+								}
+							? IBlueprintVariant<Name, Variants, true>
+							: never;
 };
 
 export type BlueprintDefinition<
@@ -540,6 +628,51 @@ type ListShape<
 > = Optional extends true
 	? FieldValue<Item, Mode>[] | undefined
 	: FieldValue<Item, Mode>[];
+
+/** The variants of a variant field, by the value its key has for each: blueprints, or record classes. */
+export type BlueprintVariants = Readonly<
+	Record<string, AnyBlueprint | AnyRecordClass>
+>;
+
+/**
+ * A field holding one of the objects of `Variants`, told apart by the value
+ * of `Key`, which is the name of the variant.
+ */
+export interface IBlueprintVariant<
+	Key extends string,
+	Variants extends BlueprintVariants,
+	Optional extends boolean = false,
+> {
+	readonly [Kind]: "variant";
+	/** The key that tells the variants apart; no variant declares it. */
+	readonly key: Key;
+	readonly variants: Variants;
+	/** Whether, as a field of a blueprint, it accepts `undefined`. */
+	readonly optional: Optional;
+	/**
+	 * The Standard Schema of the field: `validate` gives the frozen value of
+	 * the variant the key names, or the issues that reject the value.
+	 */
+	readonly "~standard": StandardSchemaV1.Props<
+		VariantShape<Key, Variants, "input", Optional>,
+		VariantShape<Key, Variants, "value", Optional>
+	>;
+}
+
+type VariantShape<
+	Key extends string,
+	Variants,
+	Mode extends FieldMode,
+	Optional extends boolean,
+> = Optional extends true
+	? VariantValue<Key, Variants, Mode> | undefined
+	: VariantValue<Key, Variants, Mode>;
+
+/** `Variant` as a field that accepts `undefined`. */
+export type OptionalBlueprintVariant<Variant extends AnyBlueprintVariant> =
+	Variant extends IBlueprintVariant<infer Key, infer Variants, boolean>
+		? IBlueprintVariant<Key, Variants, true>
+		: never;
 
 /** `List` as a field that accepts `undefined`. */
 export type OptionalBlueprintList<List extends AnyBlueprintList> =

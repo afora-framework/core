@@ -1,5 +1,5 @@
-import { type TSchema, Type } from "typebox";
-import { parseCollection } from "../parse/parse";
+import { type TObject, type TSchema, Type } from "typebox";
+import { collectionParserOf } from "../parse/parse";
 import { isProperty } from "../property/is-property";
 import { propertyOf } from "../property/property";
 import { schemaOf } from "../schema/schema";
@@ -22,6 +22,7 @@ import type {
 	BlueprintField,
 	BlueprintSchema,
 	BlueprintSource,
+	BlueprintVariants,
 	IBlueprint,
 	IBlueprintCollection,
 } from "./types/blueprint.interface";
@@ -29,6 +30,7 @@ import type {
 	IBlueprintFactories,
 	IBlueprintPlugin,
 } from "./types/blueprint-plugin.interface";
+import { blueprintOfVariant, isBlueprintVariant, variantOf } from "./variant";
 
 /**
  * A `blueprintOf` that builds blueprints from `base`, plugins or blueprints,
@@ -90,14 +92,14 @@ function create(
 		Type.Object(shape) as BlueprintSchema<IBlueprintCollection>,
 	);
 
+	const safeParse = collectionParserOf(properties, "blueprint");
 	const blueprint = {
 		[Kind]: "blueprint" as const,
 		plugins: Object.freeze([...new Set(plugins)]),
 		properties: Object.freeze(properties),
 		schema: new SchemaConstructor(),
 		optional: false,
-		safeParse: (value: unknown) =>
-			parseCollection(properties, value, [], "blueprint"),
+		safeParse,
 		join: ((...others: readonly AnyBlueprint[]) =>
 			create(
 				[blueprint, ...others].flatMap((source) => source.plugins),
@@ -108,20 +110,19 @@ function create(
 			)) as IBlueprint<IBlueprintCollection>["join"],
 	} as IBlueprint<IBlueprintCollection>;
 
-	return Object.freeze(
-		withStandard(blueprint, (value) => blueprint.safeParse(value)),
-	);
+	return Object.freeze(withStandard(blueprint, safeParse));
 }
 
 /** Functions every context has, to make fields inline, as `ctx.listOf(ctx.id)`. */
-const HELPERS = { listOf, optionalOf, propertyOf } as const;
+const HELPERS = { listOf, optionalOf, propertyOf, variantOf } as const;
 
 /** Keys of the context that are not fields, so no source can declare them. */
 const RESERVED_KEYS = ["optional", "list", ...Object.keys(HELPERS)];
 
 /**
  * The fields of every source, the factories of its plugins (which replace a
- * field with the same name), `listOf`, `optionalOf` and `propertyOf`, the
+ * field with the same name), `listOf`, `optionalOf`, `propertyOf` and
+ * `variantOf`, the
  * optional versions of the fields under
  * `optional`, and a list of each under `list`, with `list.optional` for the
  * optional lists.
@@ -193,7 +194,7 @@ function contextOf(
 
 /**
  * The schema of `field`; a blueprint becomes a nested object, as does a record,
- * by its blueprint, and a list an array.
+ * by its blueprint, a list an array, and a variant field a union of objects.
  */
 function schemaOfField(
 	key: string,
@@ -209,6 +210,27 @@ function schemaOfField(
 	}
 	if (isBlueprint(field)) {
 		const schema = field.schema.type.Type();
+		return field.optional ? Type.Optional(schema) : schema;
+	}
+	if (isBlueprintVariant(field)) {
+		// Each variant is the object of its blueprint with the key first, as a literal.
+		const schema = Type.Union(
+			Object.entries(field.variants as BlueprintVariants).map(
+				([tag, variant]) => {
+					const object = blueprintOfVariant(
+						variant,
+					).schema.type.Type() as TObject;
+					return {
+						...object,
+						properties: {
+							[field.key]: Type.Literal(tag),
+							...object.properties,
+						},
+						required: [field.key, ...(object.required ?? [])],
+					} as TSchema;
+				},
+			),
+		);
 		return field.optional ? Type.Optional(schema) : schema;
 	}
 	const record = recordFieldOf(field);

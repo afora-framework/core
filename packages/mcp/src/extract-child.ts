@@ -1,6 +1,6 @@
 /**
  * Runs in a Bun subprocess: imports the application of the project and prints
- * its spec between markers, so what the application logs cannot be mistaken for it.
+ * its spec (or, with `--describe`, its description) between markers, so what the application logs cannot be mistaken for it.
  */
 import { pathToFileURL } from "node:url";
 import { extractSpec } from "@afora/codegen";
@@ -26,8 +26,13 @@ if (
 ) {
 	throw new Error(`${file} does not export an application named "${name}".`);
 }
-const spec = extractSpec(app as Parameters<typeof extractSpec>[0], {
-	...(outputDir ? { outputDir } : {}),
-	...(importsJson ? { imports: JSON.parse(importsJson) } : {}),
-});
-process.stdout.write(`${START}${JSON.stringify(spec)}${END}`);
+// `--describe` in place of the output directory: what the application says
+// of itself, which needs no mapping of what a spec cannot express.
+const result =
+	outputDir === "--describe"
+		? (app as { describe(): unknown }).describe()
+		: extractSpec(app as Parameters<typeof extractSpec>[0], {
+				...(outputDir ? { outputDir } : {}),
+				...(importsJson ? { imports: JSON.parse(importsJson) } : {}),
+			});
+process.stdout.write(`${START}${JSON.stringify(result)}${END}`);

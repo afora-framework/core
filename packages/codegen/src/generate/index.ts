@@ -8,7 +8,8 @@ import {
 	eventsConstOf,
 } from "../entity-events";
 import { canonicalExpires } from "../entity-expires";
-import { fieldsOfDecl, orderOf } from "../graph";
+import { canonicalEntitySchema } from "../entity-schema";
+import { fieldsOfDecl, orderOf, typesIn } from "../graph";
 import { type Field, parseFields } from "../model";
 import { defaultMessageOf, normalizeSpec } from "../normalize";
 import { pipeKindOf } from "../output";
@@ -28,6 +29,7 @@ import {
 import { errorNameOf, isGeneric, isImported } from "../use-case";
 import { validateSpec } from "../validate";
 import {
+	choice,
 	type Doc,
 	group,
 	hardline,
@@ -187,6 +189,31 @@ function call(callee: string, args: readonly Doc[]): Doc {
 	]);
 }
 
+/**
+ * A call whose last argument is an object, as Biome prints it: on one line
+ * when it fits, else with the object broken and hugging the parentheses when
+ * the line up to its `{` fits, else with every argument on its own line.
+ */
+function callHuggingLast(
+	callee: string,
+	args: readonly Doc[],
+	props: readonly (readonly [key: string, value: Doc])[],
+): Doc {
+	const hugged = (expand: boolean): Doc => [
+		callee,
+		"(",
+		join(", ", args),
+		args.length > 0 ? ", " : "",
+		objectDoc(props, expand),
+		")",
+	];
+	return choice([
+		hugged(false),
+		hugged(true),
+		call(callee, [...args, objectDoc(props)]),
+	]);
+}
+
 /** A call whose only argument is an object, which hugs the parentheses. */
 function callWithObject(callee: string, object: Doc): Doc {
 	return [callee, "(", object, ")"];
@@ -254,6 +281,17 @@ function withOptions(options: unknown): Doc | undefined {
 	return Object.keys(options).length === 0 ? undefined : literal(options);
 }
 
+/** `fill` and `renamedFrom` of a field, as options of `with`. */
+function evolutionOptions(field: Field): Record<string, unknown> {
+	if (field.kind === "inline" || field.kind === "variant") return {};
+	return {
+		...(field.fill === undefined ? {} : { fill: field.fill }),
+		...(field.renamedFrom === undefined
+			? {}
+			: { renamedFrom: field.renamedFrom }),
+	};
+}
+
 /** The property a field names, without optional or list. */
 function itemDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 	if (field.kind === "enum") {
@@ -263,13 +301,28 @@ function itemDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 		if (field.default !== undefined) {
 			options.push(["default", literal(field.default)]);
 		}
-		return call("ctx.enumOf", [
+		const made = call("ctx.enumOf", [
 			literal([...field.values]),
 			...(options.length > 0 ? [objectDoc(options)] : []),
 		]);
+		const evolution = withOptions(evolutionOptions(field));
+		return evolution ? [made, ".with(", evolution, ")"] : made;
 	}
 	if (field.kind === "inline") return blueprintDoc(field.fields, e, false);
-	const options = withOptions(field.with);
+	if (field.kind === "variant") {
+		ctx.used = true;
+		return callHuggingLast(
+			"ctx.variantOf",
+			[literal(field.key)],
+			Object.entries(field.variants).map(([tag, target]) => [
+				tag,
+				"type" in target
+					? e.ref(target.type)
+					: blueprintDoc(target.fields, e, false),
+			]),
+		);
+	}
+	const options = withOptions({ ...field.with, ...evolutionOptions(field) });
 	if (/^[a-z]/.test(field.type)) {
 		ctx.used = true;
 		return options
@@ -286,6 +339,8 @@ function fieldDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 		field.kind === "type" &&
 		/^[a-z]/.test(field.type) &&
 		!field.with &&
+		field.fill === undefined &&
+		field.renamedFrom === undefined &&
 		!bounded;
 	if (plain && field.kind === "type") {
 		ctx.used = true;
@@ -298,18 +353,13 @@ function fieldDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 	}
 	let doc = itemDoc(field, e, ctx);
 	if (field.list) {
-		doc = call(e.use("listOf"), [
-			doc,
-			...(bounded
-				? [
-						objectDoc(
-							Object.entries(field.list).map(
-								([k, v]) => [k, literal(v)] as const,
-							),
-						),
-					]
-				: []),
-		]);
+		doc = bounded
+			? callHuggingLast(
+					e.use("listOf"),
+					[doc],
+					Object.entries(field.list).map(([k, v]) => [k, literal(v)] as const),
+				)
+			: call(e.use("listOf"), [doc]);
 	}
 	if (field.optional) doc = call(e.use("optionalOf"), [doc]);
 	return doc;
@@ -415,6 +465,35 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	}
 	const expires = entity ? canonicalExpires(decl.spec.expires) : undefined;
 	if (expires) options.push(["expires", literal(expires)]);
+	if (entity) {
+		const { schemaVersion, upgrade, previousNames } = canonicalEntitySchema(
+			decl.spec,
+		) as {
+			schemaVersion?: number;
+			upgrade?: Record<string, { import: string }>;
+			previousNames?: string[];
+		};
+		if (schemaVersion !== undefined) {
+			options.push(["schemaVersion", literal(schemaVersion)]);
+		}
+		if (upgrade !== undefined) {
+			options.push([
+				"upgrade",
+				objectDoc(
+					Object.entries(upgrade).map(([version, step]) => {
+						const { module, name } = parseImportRef(step.import) as {
+							module: string;
+							name: string;
+						};
+						return [version, e.bind(module, name, providers.taken)] as const;
+					}),
+				),
+			]);
+		}
+		if (previousNames !== undefined) {
+			options.push(["previousNames", literal(previousNames)]);
+		}
+	}
 	for (const cycle of CYCLES) {
 		const list = cycles[cycle];
 		if (!list || list.length === 0) continue;
@@ -781,6 +860,8 @@ function genericUseCaseDoc(
 		props.push(["tags", literal(spec.tags)]);
 	}
 	if (spec.deprecated === true) props.push(["deprecated", "true"]);
+	if (spec.route !== undefined) props.push(["route", literal(spec.route)]);
+	if (spec.access !== undefined) props.push(["access", literal(spec.access)]);
 	return [
 		"export const ",
 		decl.name,
@@ -844,6 +925,8 @@ function useCaseDoc(
 		props.push(["tags", literal(spec.tags)]);
 	}
 	if (spec.deprecated === true) props.push(["deprecated", "true"]);
+	if (spec.route !== undefined) props.push(["route", literal(spec.route)]);
+	if (spec.access !== undefined) props.push(["access", literal(spec.access)]);
 	const implementation = spec.implementation as {
 		steps?: Record<string, unknown>[];
 	};
@@ -853,6 +936,8 @@ function useCaseDoc(
 		const docs = steps.map((step) => stepDoc(step, e, scope, providers));
 		const forced =
 			steps.length > 1 && steps.every((step) => Object.keys(step).length > 1);
+		// TypeScript checks the references and values of the generated steps too.
+		props.push(["strictSteps", "true"]);
 		props.push([
 			"steps",
 			group(
@@ -1152,7 +1237,7 @@ export function generate(
 			];
 		}
 		const fields = fieldsOfDecl(decl);
-		return fields ? typesUsed(fields) : [];
+		return fields ? typesIn(fields) : [];
 	};
 	let merged = true;
 	while (merged) {
@@ -1481,16 +1566,6 @@ export function generate(
 		]),
 	});
 	return out;
-}
-
-function typesUsed(fields: Readonly<Record<string, Field>>): string[] {
-	const found: string[] = [];
-	for (const field of Object.values(fields)) {
-		if (field.kind === "type" && /^[A-Z]/.test(field.type))
-			found.push(field.type);
-		if (field.kind === "inline") found.push(...typesUsed(field.fields));
-	}
-	return found;
 }
 
 function importsFor(

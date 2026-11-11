@@ -18,13 +18,21 @@ interface FieldModifiers {
 }
 
 /** A field naming a type: a Std property (`email`) or a declaration (`Age`, `Address`, `User`). */
-export interface TypeField extends FieldModifiers {
+/** What a stored row lacking the key gets, and the key that held it before (not for lists). */
+interface FieldEvolution {
+	/** The value a repository gives the key when a stored row lacks it. */
+	readonly fill?: unknown;
+	/** The key that held the value in rows stored before the rename. */
+	readonly renamedFrom?: string;
+}
+
+export interface TypeField extends FieldModifiers, FieldEvolution {
 	readonly type: string;
 	readonly with?: WithOptions;
 }
 
 /** A field holding one of some values. */
-export interface EnumField extends FieldModifiers {
+export interface EnumField extends FieldModifiers, FieldEvolution {
 	readonly enum: readonly EnumValue[];
 	readonly name?: string;
 	readonly default?: EnumValue;
@@ -36,9 +44,30 @@ export interface InlineField extends FieldModifiers {
 }
 
 /**
+ * A variant of a variant field: the name of a declared blueprint, record or
+ * entity, or a blueprint declared in place.
+ */
+export type VariantSpec = string | { readonly fields: FieldsSpec };
+
+/** A field holding one of several objects, told apart by the value of `key` (`variantOf`). */
+export interface VariantField extends FieldModifiers {
+	readonly variant: {
+		/** The key whose value names the variant; no variant declares it. */
+		readonly key: string;
+		/** The variants, by the value the key has for each. */
+		readonly of: Readonly<Record<string, VariantSpec>>;
+	};
+}
+
+/**
  * A field: `"email"`, `"Age?"`, `"string[]"`, `"User[]?"`, or the object form.
  */
-export type FieldSpec = string | TypeField | EnumField | InlineField;
+export type FieldSpec =
+	| string
+	| TypeField
+	| EnumField
+	| InlineField
+	| VariantField;
 
 export type FieldsSpec = Readonly<Record<string, FieldSpec>>;
 
@@ -81,6 +110,12 @@ export interface RecordSpec {
 	readonly versioned?: boolean;
 	/** Entities only: when their records expire, which reads then leave out. */
 	readonly expires?: EntityExpiresSpec;
+	/** Entities only: the version of the stored shape, 1 when absent. */
+	readonly schemaVersion?: number;
+	/** Entities only: the hand-written step reaching each version, by version. */
+	readonly upgrade?: Readonly<Record<string, ImportRef>>;
+	/** Entities only: the names the entity had before. */
+	readonly previousNames?: readonly string[];
 }
 
 /**
@@ -317,10 +352,35 @@ export type UseCaseImplementationSpec =
 	| { readonly steps: readonly StepSpec[] }
 	| ImportRef;
 
+/** Where a use case is served over HTTP: the `route` of `useCaseOf`. */
+export interface RouteSpec {
+	readonly method: string;
+	readonly path?: string;
+	readonly status?: 200 | 201 | 202 | 204;
+	readonly query?: readonly string[];
+	readonly headers?: Readonly<Record<string, string>>;
+	readonly cookie?: Readonly<Record<string, string>>;
+	readonly setCookie?: Readonly<
+		Record<string, Readonly<Record<string, unknown>>>
+	>;
+}
+
+/** Who may call a use case: the `access` of `useCaseOf`. */
+export type AccessSpec =
+	| { readonly public: true }
+	| {
+			readonly public?: false;
+			readonly scopes?: readonly string[];
+			readonly owner?: { readonly input: string; readonly claim?: string };
+			readonly context?: Readonly<Record<string, string>>;
+	  };
+
 export interface UseCaseSpec {
 	readonly description?: string;
 	readonly tags?: readonly string[];
 	readonly deprecated?: boolean;
+	readonly route?: RouteSpec;
+	readonly access?: AccessSpec;
 	readonly input: BlueprintRefSpec;
 	readonly response: BlueprintRefSpec;
 	readonly context?: BlueprintRefSpec;
@@ -349,6 +409,9 @@ export interface GenericUseCaseSpec {
 	readonly description?: string;
 	readonly tags?: readonly string[];
 	readonly deprecated?: boolean;
+	/** Beside `generic`, like the metadata: not in `options`. */
+	readonly route?: RouteSpec;
+	readonly access?: AccessSpec;
 	/** Only a use case written in the spec has them (`UseCaseSpec`). */
 	readonly input?: undefined;
 	readonly response?: undefined;

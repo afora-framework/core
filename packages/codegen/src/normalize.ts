@@ -1,6 +1,7 @@
 import { catalog, identityKeysOf, recordPlugin } from "./catalog";
 import { cyclesOf } from "./entity-events";
 import { canonicalExpires } from "./entity-expires";
+import { canonicalEntitySchema } from "./entity-schema";
 import { flagOf } from "./graph";
 import { type Field, parseField } from "./model";
 import { type Scope, scopeOf } from "./scope";
@@ -35,11 +36,38 @@ export function canonicalField(field: Field): Json {
 						...(field.name === undefined ? {} : { name: field.name }),
 						...(field.default === undefined ? {} : { default: field.default }),
 					}
-				: { fields: canonicalFields(field.fields) };
+				: field.kind === "variant"
+					? { variant: canonicalVariant(field) }
+					: { fields: canonicalFields(field.fields) };
+	const evolution =
+		field.kind === "inline" || field.kind === "variant"
+			? {}
+			: {
+					...(field.fill === undefined ? {} : { fill: field.fill }),
+					...(field.renamedFrom === undefined
+						? {}
+						: { renamedFrom: field.renamedFrom }),
+				};
 	return {
 		...base,
+		...evolution,
 		...(field.optional ? { optional: true } : {}),
 		...(field.list ? { list: { ...field.list } } : {}),
+	};
+}
+
+/** The `variant` of a variant field: its key, and each variant by name or with canonical fields. */
+function canonicalVariant(field: Extract<Field, { kind: "variant" }>): Json {
+	return {
+		key: field.key,
+		of: Object.fromEntries(
+			Object.entries(field.variants).map(([tag, target]) => [
+				tag,
+				"type" in target
+					? target.type
+					: { fields: canonicalFields(target.fields) },
+			]),
+		),
 	};
 }
 
@@ -143,6 +171,7 @@ function canonicalRecord(
 		...(Object.keys(events).length > 0 ? { events } : {}),
 		...(entity && value.versioned === true ? { versioned: true } : {}),
 		...(expires ? { expires: expires as Json } : {}),
+		...(entity ? canonicalEntitySchema(value) : {}),
 	};
 }
 
@@ -243,6 +272,51 @@ function canonicalGenericOptions(options: Json): Json {
 	return rest;
 }
 
+/**
+ * The `route` and `access` of a use case as `useCaseOf` keeps them: the
+ * method and the header names in lower case, the keys in one order, and no
+ * `public: false`.
+ */
+function canonicalRouting(value: Json): Json {
+	const out: Json = {};
+	const { route, access } = value;
+	if (isObject(route)) {
+		const headers = isObject(route.headers)
+			? Object.fromEntries(
+					Object.entries(route.headers).map(([key, name]) => [
+						key,
+						typeof name === "string" ? name.toLowerCase() : name,
+					]),
+				)
+			: route.headers;
+		out.route = {
+			method:
+				typeof route.method === "string"
+					? route.method.toLowerCase()
+					: route.method,
+			...(route.path === undefined ? {} : { path: route.path }),
+			...(route.status === undefined ? {} : { status: route.status }),
+			...(route.query === undefined ? {} : { query: route.query }),
+			...(headers === undefined ? {} : { headers }),
+			...(route.cookie === undefined ? {} : { cookie: route.cookie }),
+			...(route.setCookie === undefined ? {} : { setCookie: route.setCookie }),
+		};
+	} else if (route !== undefined) out.route = route;
+	if (isObject(access)) {
+		out.access =
+			access.public === true
+				? { public: true }
+				: {
+						...(access.scopes === undefined ? {} : { scopes: access.scopes }),
+						...(access.owner === undefined ? {} : { owner: access.owner }),
+						...(access.context === undefined
+							? {}
+							: { context: access.context }),
+					};
+	} else if (access !== undefined) out.access = access;
+	return out;
+}
+
 function canonicalUseCase(value: Json): Json {
 	const tags = keep(value.tags);
 	if (typeof value.generic === "string") {
@@ -258,6 +332,7 @@ function canonicalUseCase(value: Json): Json {
 				: {}),
 			...(tags ? { tags } : {}),
 			...(value.deprecated === true ? { deprecated: true } : {}),
+			...canonicalRouting(value),
 		};
 	}
 	const errors = keep(value.errors);
@@ -276,6 +351,7 @@ function canonicalUseCase(value: Json): Json {
 			: {}),
 		...(tags ? { tags } : {}),
 		...(value.deprecated === true ? { deprecated: true } : {}),
+		...canonicalRouting(value),
 		input: canonicalBlueprintRef(value.input),
 		response: canonicalBlueprintRef(value.response),
 		...(value.context === undefined
@@ -468,13 +544,26 @@ function compactField(field: Json): FieldSpec {
 	if (typeof type === "string" && Object.keys(rest).length === 0 && !bounded) {
 		return `${type}${list ? "[]" : ""}${optional ? "?" : ""}`;
 	}
-	if (isObject(rest.fields)) {
-		rest.fields = Object.fromEntries(
-			Object.entries(rest.fields).map(([key, inner]) => [
+	const compactFields = (fields: Json): Json =>
+		Object.fromEntries(
+			Object.entries(fields).map(([key, inner]) => [
 				key,
 				compactField(inner as Json),
 			]),
 		);
+	if (isObject(rest.fields)) rest.fields = compactFields(rest.fields);
+	if (isObject(rest.variant) && isObject(rest.variant.of)) {
+		rest.variant = {
+			...rest.variant,
+			of: Object.fromEntries(
+				Object.entries(rest.variant.of).map(([tag, target]) => [
+					tag,
+					isObject(target) && isObject(target.fields)
+						? { fields: compactFields(target.fields) }
+						: target,
+				]),
+			),
+		};
 	}
 	return {
 		...(type === undefined ? {} : { type }),

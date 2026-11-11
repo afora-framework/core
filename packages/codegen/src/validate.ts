@@ -2,6 +2,7 @@ import { catalog, identityKeysOf, recordPlugin } from "./catalog";
 import { checkCommand } from "./command";
 import { checkEntityEvents } from "./entity-events";
 import { checkEntityExpires } from "./entity-expires";
+import { checkEntitySchema } from "./entity-schema";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
@@ -211,6 +212,10 @@ function checkField(
 		}
 		return;
 	}
+	if (field.kind === "variant") {
+		checkVariant(field, path, scope, owner, issues);
+		return;
+	}
 	const target = targetOf(field.type, scope);
 	const typePath = [...path, "type"];
 	if (!target) {
@@ -282,6 +287,93 @@ function checkField(
 			);
 		} else {
 			checkWith(field.with, root, [...path, "with"], issues);
+		}
+	}
+}
+
+/**
+ * Checks a variant field: each variant is a declared blueprint, record or
+ * entity (a class names one variant only) or a blueprint declared in place,
+ * and none declares the key, which the field adds.
+ */
+function checkVariant(
+	field: Extract<Field, { kind: "variant" }>,
+	path: Path,
+	scope: Scope,
+	owner: OwnerKind,
+	issues: SpecIssue[],
+): void {
+	if (owner === "environment") {
+		issues.push(
+			issue(
+				path,
+				"invalid_environment_field",
+				"An environment variable is a property, not one of several objects.",
+			),
+		);
+		return;
+	}
+	const classes = new Map<string, string>();
+	for (const [tag, target] of Object.entries(field.variants)) {
+		const here = [...path, "variant", "of", tag];
+		let keys: string[];
+		if ("fields" in target) {
+			checkKeys(target.fields, [...here, "fields"], "inline", issues);
+			for (const [key, inner] of Object.entries(target.fields)) {
+				checkField(inner, [...here, "fields", key], scope, "inline", issues);
+			}
+			keys = Object.keys(target.fields);
+		} else {
+			const decl = scope.decls.get(target.type);
+			if (!decl) {
+				issues.push(
+					issue(
+						here,
+						"unknown_type",
+						`"${target.type}" is not declared in this spec (or the specs it extends). Declare it under blueprints, records or entities.`,
+					),
+				);
+				continue;
+			}
+			if (
+				decl.kind !== "blueprint" &&
+				decl.kind !== "record" &&
+				decl.kind !== "entity"
+			) {
+				issues.push(
+					issue(
+						here,
+						"wrong_kind",
+						`"${target.type}" is a ${decl.kind}; a variant is a blueprint, a record or an entity.`,
+					),
+				);
+				continue;
+			}
+			if (decl.kind !== "blueprint") {
+				const other = classes.get(decl.name);
+				if (other !== undefined) {
+					issues.push(
+						issue(
+							here,
+							"invalid_variant",
+							`"${target.type}" is already the variant "${other}": a record or an entity is told apart by its class, so it names one variant only.`,
+						),
+					);
+				} else classes.set(decl.name, tag);
+			}
+			keys =
+				decl.kind === "blueprint"
+					? Object.keys(fieldsOfDecl(decl) ?? {})
+					: keysOf(decl);
+		}
+		if (keys.includes(field.key)) {
+			issues.push(
+				issue(
+					[...path, "variant", "key"],
+					"invalid_variant",
+					`The variant "${tag}" declares "${field.key}", which the field adds with the name of the variant for its value. Rename the key or the field of the variant.`,
+				),
+			);
 		}
 	}
 }
@@ -398,20 +490,25 @@ function entitiesIn(
 	const found = new Set<string>();
 	const seen = new Set<string>();
 	const walk = (list: Readonly<Record<string, Field>>): void => {
+		const named = (type: string): void => {
+			const decl = /^[A-Z]/.test(type) ? scope.decls.get(type) : undefined;
+			if (!decl) return;
+			if (decl.kind === "entity") found.add(decl.name);
+			else if (
+				(decl.kind === "blueprint" || decl.kind === "record") &&
+				!seen.has(decl.name)
+			) {
+				seen.add(decl.name);
+				walk(fieldsOfDecl(decl) ?? {});
+			}
+		};
 		for (const field of Object.values(list)) {
 			if (field.kind === "inline") walk(field.fields);
-			else if (field.kind === "type") {
-				const decl = /^[A-Z]/.test(field.type)
-					? scope.decls.get(field.type)
-					: undefined;
-				if (!decl) continue;
-				if (decl.kind === "entity") found.add(decl.name);
-				else if (
-					(decl.kind === "blueprint" || decl.kind === "record") &&
-					!seen.has(decl.name)
-				) {
-					seen.add(decl.name);
-					walk(fieldsOfDecl(decl) ?? {});
+			else if (field.kind === "type") named(field.type);
+			else if (field.kind === "variant") {
+				for (const target of Object.values(field.variants)) {
+					if ("type" in target) named(target.type);
+					else walk(target.fields);
 				}
 			}
 		}
@@ -582,6 +679,9 @@ function checkFieldsOf(
 					"events",
 					"versioned",
 					"expires",
+					"schemaVersion",
+					"upgrade",
+					"previousNames",
 				]
 			: owner === "record"
 				? ["fields", "sensitive", "unique", "change", "plugins"]
@@ -643,6 +743,10 @@ function checkRecord(
 			scope,
 			issues,
 		);
+	}
+
+	if (owner === "entity") {
+		checkEntitySchema(decl.name, decl.spec, path, issues);
 	}
 
 	if (owner === "entity" && decl.spec.expires !== undefined) {
@@ -860,9 +964,10 @@ function checkIndexes(
 	}
 }
 
-/** Whether `field` holds one scalar: not a list, an inline object, or a blueprint, record or entity. */
+/** Whether `field` holds one scalar: not a list, an inline object, a variant, or a blueprint, record or entity. */
 function isScalarField(field: Field, scope: Scope): boolean {
-	if (field.list || field.kind === "inline") return false;
+	if (field.list || field.kind === "inline" || field.kind === "variant")
+		return false;
 	if (field.kind !== "type" || !/^[A-Z]/.test(field.type)) return true;
 	const decl = scope.decls.get(field.type);
 	return (

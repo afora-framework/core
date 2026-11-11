@@ -13,6 +13,7 @@ import type {
 	BlueprintField,
 	BlueprintValue,
 } from "./types/blueprint.interface";
+import { variantOf } from "./variant";
 
 const Id = propertyOf({ name: "id", schema: Type.String() });
 const CreatedAt = propertyOf({ name: "createdAt", schema: Type.Number() });
@@ -48,6 +49,7 @@ test("passes the properties of every plugin to the definition", () => {
 			listOf,
 			optionalOf,
 			propertyOf,
+			variantOf,
 			id: Id,
 			name: Name,
 			nickname: Nickname,
@@ -102,7 +104,7 @@ test("every context has listOf, optionalOf and propertyOf, generics kept", () =>
 	}>();
 });
 
-test.each(["listOf", "optionalOf", "propertyOf"])(
+test.each(["listOf", "optionalOf", "propertyOf", "variantOf"])(
 	'"%s" is reserved for plugins, as a property or a factory',
 	(key) => {
 		const AsProperty = blueprintPluginOf("broken", { [key]: Id });

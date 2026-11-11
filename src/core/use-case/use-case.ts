@@ -1,6 +1,6 @@
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
-import { recordFieldOf } from "../blueprint/record-field";
+import { isRecordClass, recordFieldOf } from "../blueprint/record-field";
 import type {
 	AnyBlueprint,
 	BlueprintField,
@@ -9,6 +9,7 @@ import type {
 	IBlueprint,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant, variantOfValue } from "../blueprint/variant";
 import { isEntity } from "../entity/entity";
 import type { EntityEvent } from "../entity/event";
 import {
@@ -41,11 +42,16 @@ import { recordNameOf } from "../record/name";
 import { AbstractRepository, isRepository } from "../repository/repository";
 import type { AnyRepository } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import { accessDeclarationOf } from "./access";
+import { routeDeclarationOf } from "./route";
 import { type ExecutionScope, ScopeKey } from "./scope";
 import { freezeData } from "./steps/references";
 import { executeSteps } from "./steps/run";
+import type { CheckedSteps } from "./steps/types/check.interface";
 import type { UseCaseStep } from "./steps/types/steps.interface";
 import { validateSteps } from "./steps/validate";
+import type { AccessDeclaration } from "./types/access.interface";
+import type { RouteDeclaration, RouteSettings } from "./types/route.interface";
 
 /** A concrete UseCase declaration, usable as a dependency. */
 export interface AnyUseCaseClass {
@@ -59,6 +65,10 @@ export interface AnyUseCaseClass {
 	readonly tags: readonly string[];
 	readonly deprecated: boolean;
 	readonly errors: readonly AnyExceptionClass[];
+	/** Where it is served over HTTP, if it says so (see `RouteDeclaration`). */
+	readonly route: RouteDeclaration | undefined;
+	/** Who may call it, if it says so (see `AccessDeclaration`). */
+	readonly access: AccessDeclaration | undefined;
 	new (
 		// biome-ignore lint/suspicious/noExplicitAny: heterogeneous concrete UseCase constructors
 		input: any,
@@ -165,6 +175,22 @@ export interface UseCaseSettings<
 	readonly deprecated?: boolean;
 	/** The exceptions (made by `exceptionOf`) a caller should expect; documentation only. */
 	readonly errors?: readonly AnyExceptionClass[];
+	/**
+	 * Where the use case is served over HTTP: method, path and where each
+	 * input key is read from (see `RouteDeclaration`). A decorated class says
+	 * the same with `@Route`. Read by the sinks that serve or document HTTP;
+	 * the `route` option of a sink overrides the method, path and status.
+	 */
+	readonly route?: RouteSettings;
+	/**
+	 * Who may call the use case through an output: anyone (`{ public: true }`),
+	 * or an authenticated caller with these `scopes`, that is the `owner`
+	 * named by an input key, and whose values fill the `context` (see
+	 * `AccessDeclaration`). A decorated class says the same with `@Access`.
+	 * Enforced before the use case runs; a call made in process, with
+	 * `execute` or `command.run`, is trusted and not checked.
+	 */
+	readonly access?: AccessDeclaration;
 }
 
 /** `UseCaseSettings` with the `steps` that are its `execute`. */
@@ -179,6 +205,45 @@ export interface UseCaseStepsSettings<
 	 * interpreted by its `execute`, and described by `describe()`.
 	 */
 	readonly steps: readonly UseCaseStep<NoInfer<Dependencies>>[];
+	/** Checks the references and values of the steps at compile time (see `CheckedSteps`). */
+	readonly strictSteps?: boolean;
+}
+
+/**
+ * What `useCaseOf` takes: `UseCaseSettings`, and the `steps` that make the
+ * class concrete, if any.
+ */
+export interface UseCaseDeclaration<
+	Input extends IBlueprintCollection,
+	Output extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined = undefined,
+	Steps extends readonly UseCaseStep<Dependencies>[] | undefined = undefined,
+	Strict extends boolean = false,
+> extends UseCaseSettings<Input, Output, Dependencies, Context> {
+	/**
+	 * What the use case does, as data (see `UseCaseStep`), which makes the
+	 * class concrete: validated here, interpreted by its `execute`, and
+	 * described by `describe()`. TypeScript checks the kinds of the steps and
+	 * the names of dependencies and actions; with `strictSteps`, also their
+	 * references and values (see `CheckedSteps`).
+	 */
+	readonly steps?: [Strict] extends [true]
+		? CheckedSteps<
+				Steps,
+				NoInfer<Input>,
+				NoInfer<Context>,
+				NoInfer<Dependencies>
+			>
+		: Steps;
+	/**
+	 * `true` checks the steps, written inline, at compile time: each reference
+	 * must name a value in scope (the input, the context, an environment or the
+	 * result of an earlier step, at any depth), and the `args`, `values`,
+	 * `value` and `input` of a step must fit what it calls or builds. It costs
+	 * the editor more than the default checks. Without effect at run time.
+	 */
+	readonly strictSteps?: Strict;
 }
 
 export const InvalidUseCaseDeclaration = exceptionOf({
@@ -256,9 +321,15 @@ function collectEvents(
 			for (const item of current as unknown[]) visit(field.item, item);
 			return;
 		}
+		// A variant is walked by the class of the record it holds, or by the
+		// blueprint its key names.
 		const shape = isBlueprint(field)
 			? field
-			: recordFieldOf(field)?.record.blueprint;
+			: isBlueprintVariant(field)
+				? isRecordClass(current.constructor)
+					? current.constructor.blueprint
+					: variantOfValue(field, current)
+				: recordFieldOf(field)?.record.blueprint;
 		if (!shape) return;
 		for (const [key, child] of Object.entries(shape.properties)) {
 			visit(child as BlueprintField, (current as Record<string, unknown>)[key]);
@@ -639,6 +710,10 @@ type UseCaseStatics<
 	readonly deprecated: boolean;
 	/** The exceptions a caller should expect. */
 	readonly errors: readonly AnyExceptionClass[];
+	/** Where it is served over HTTP, from the `route` setting or `@Route`. */
+	readonly route: RouteDeclaration | undefined;
+	/** Who may call it, from the `access` setting or `@Access`. */
+	readonly access: AccessDeclaration | undefined;
 };
 
 /** What a use case instance carries beyond `AbstractUseCase`. */
@@ -692,24 +767,29 @@ export function useCaseOf<
 	Output extends IBlueprintCollection,
 	const Dependencies extends UseCaseCollection = Record<never, never>,
 	Context extends IBlueprintCollection | undefined = undefined,
+	const Steps extends
+		| readonly UseCaseStep<NoInfer<Dependencies>>[]
+		| undefined = undefined,
+	Strict extends boolean = false,
 >(
-	settings: UseCaseStepsSettings<Input, Output, Dependencies, Context>,
-): StepsUseCaseConstructor<Input, Output, Dependencies, Context>;
-export function useCaseOf<
-	Input extends IBlueprintCollection,
-	Output extends IBlueprintCollection,
-	const Dependencies extends UseCaseCollection = Record<never, never>,
-	Context extends IBlueprintCollection | undefined = undefined,
->(
-	settings: UseCaseSettings<Input, Output, Dependencies, Context>,
-): UseCaseConstructor<Input, Output, Dependencies, Context>;
+	settings: UseCaseDeclaration<
+		Input,
+		Output,
+		Dependencies,
+		Context,
+		Steps,
+		Strict
+	>,
+): [Steps] extends [undefined]
+	? UseCaseConstructor<Input, Output, Dependencies, Context>
+	: StepsUseCaseConstructor<Input, Output, Dependencies, Context>;
 export function useCaseOf(
 	settings: UseCaseSettings<
 		IBlueprintCollection,
 		IBlueprintCollection,
 		UseCaseCollection,
 		IBlueprintCollection | undefined
-	> & { readonly steps?: unknown },
+	> & { readonly steps?: unknown; readonly strictSteps?: unknown },
 ): unknown {
 	type Input = IBlueprintCollection;
 	type Output = IBlueprintCollection;
@@ -758,6 +838,12 @@ export function useCaseOf(
 		invalidSetting("Expected deprecated to be a boolean.");
 	}
 	if (
+		settings.strictSteps !== undefined &&
+		typeof settings.strictSteps !== "boolean"
+	) {
+		invalidSetting("Expected strictSteps to be a boolean.");
+	}
+	if (
 		!Array.isArray(tags) ||
 		tags.some((tag) => typeof tag !== "string" || tag === "") ||
 		new Set(tags).size !== tags.length
@@ -772,6 +858,16 @@ export function useCaseOf(
 		invalidSetting(
 			"Expected errors to be distinct classes made by exceptionOf.",
 		);
+	}
+	let route: RouteDeclaration | undefined;
+	if (settings.route !== undefined) {
+		const declared = routeDeclarationOf(settings.route, blueprint, response);
+		route = typeof declared === "string" ? invalidSetting(declared) : declared;
+	}
+	let access: AccessDeclaration | undefined;
+	if (settings.access !== undefined) {
+		const declared = accessDeclarationOf(settings.access, blueprint);
+		access = typeof declared === "string" ? invalidSetting(declared) : declared;
 	}
 	if (settings.steps !== undefined) {
 		validateSteps(
@@ -800,6 +896,8 @@ export function useCaseOf(
 		static readonly errors = Object.freeze([
 			...errors,
 		]) as readonly AnyExceptionClass[];
+		static readonly route = route;
+		static readonly access = access;
 	}
 	Object.defineProperty(DeclaredUseCase, "name", { value: name });
 	if (settings.steps !== undefined) {

@@ -1,225 +1,312 @@
-// Runs every scenario with mitata, on Bun and (if there is a `node`) on Node,
-// then writes RESULTS.md. `bun run.ts`; the Node leg is spawned by this file.
+// `bun run.ts` times every contender on every scenario, on Bun and on Node
+// (the `node` on the PATH, or each binary of `BENCH_NODE_BINS`), measures
+// bundle size and cold start, and writes results/latest.json and RESULTS.md.
+//   --only flat,nested   only these scenarios; nothing is written
+//   --rounds 3           times each row is timed, in turns; the best counts (default 3)
+//   --jobs 3             that many rows at a time, to iterate: the times are off by 1.4x and more, and nothing is written
+//   --guard              afora against Zod 4, fails over a limit (what CI runs)
+//   --compare <base>    afora here against afora in another checkout (or built module)
+//   --check             fails when RESULTS.md, the chart or the block of the README are not what results/latest.json gives
+//   --render             RESULTS.md again from results/latest.json, no timing
 import { writeFileSync } from "node:fs";
-import { cpus } from "node:os";
-import { bench, do_not_optimize, group, run } from "mitata";
-import { build } from "./scenarios.ts";
+import { delimiter } from "node:path";
+import type { Scenario } from "./contenders.ts";
+import { fmtNs, guard } from "./guard.ts";
+import {
+	here,
+	isBun,
+	KINDS,
+	type Kind,
+	libraryVersions,
+	loadScenarios,
+	measure,
+	type RuntimeReport,
+} from "./harness.ts";
+import {
+	normalized,
+	type Report,
+	renderChart,
+	renderResults,
+	withSummary,
+} from "./render.ts";
 
-const here = new URL(".", import.meta.url).pathname;
-const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
-const runtime = isBun ? "bun" : "node";
-const isChild = process.env.BENCH_CHILD === "1";
+const args = process.argv.slice(2);
+const flag = (name: string) => args.includes(name);
+const optionOf = (name: string) => {
+	const index = args.indexOf(name);
+	return index === -1 ? undefined : args[index + 1];
+};
+const only = (process.env.BENCH_ONLY ?? optionOf("--only") ?? "")
+	.split(",")
+	.filter(Boolean);
 
-type Row = { contender: string; note?: string; avg: number };
-type Table = { scenario: string; title: string; case: string; rows: Row[] };
-type Report = {
-	runtime: string;
-	version: string;
-	cpu: string;
-	os: string;
-	standard: boolean;
-	tables: Table[];
+/** Processes at a time. Above 1 they share the machine and its cores, and a row takes 1.4x to 4x its time alone: for iterating, never for publishing. */
+const jobs = Math.max(1, Number.parseInt(optionOf("--jobs") ?? "1", 10) || 1);
+
+/** Times each row is timed, in turns; the best counts. */
+const rounds = Math.max(
+	1,
+	Number.parseInt(optionOf("--rounds") ?? "3", 10) || 3,
+);
+
+const latest = `${here}results/latest.json`;
+const generated = {
+	results: `${here}RESULTS.md`,
+	chart: `${here}results/chart.svg`,
+	readme: `${here}../README.md`,
 };
 
-async function measure(): Promise<Report> {
-	const afora = isBun
-		? await import("../src/index.ts")
-		: await import("./.dist/afora.js");
-	const { scenarios, hasStandard } = await build(afora);
-
-	// Check every contender once: valid input succeeds, invalid input fails.
-	for (const scenario of scenarios) {
-		for (const contender of scenario.contenders) {
-			const valid =
-				contender.validInput === "clean"
-					? scenario.input.validClean
-					: scenario.input.valid;
-			if (!contender.ok(contender.make(valid))) {
-				throw new Error(
-					`${scenario.id}: ${contender.name} rejects the valid input`,
-				);
-			}
-			if (contender.ok(contender.make(scenario.input.invalid))) {
-				throw new Error(
-					`${scenario.id}: ${contender.name} accepts the invalid input`,
-				);
-			}
-		}
-	}
-
-	for (const scenario of scenarios) {
-		for (const kind of ["valid", "invalid"] as const) {
-			group(`${scenario.id}|${kind}`, () => {
-				for (const contender of scenario.contenders) {
-					const input =
-						kind === "valid" && contender.validInput === "clean"
-							? scenario.input.validClean
-							: scenario.input[kind];
-					bench(
-						`${scenario.id}|${kind}|${contender.name}|${contender.note ?? ""}`,
-						() => do_not_optimize(contender.make(input)),
-					);
-				}
-			});
-		}
-	}
-
-	const { benchmarks } = await run({
-		format: process.env.BENCH_QUIET ? "quiet" : "mitata",
-	});
-
-	const tables = new Map<string, Table>();
-	for (const trial of benchmarks) {
-		const [id, kind, contender, note] = trial.alias.split("|") as [
-			string,
-			string,
-			string,
-			string,
-		];
-		const scenario = scenarios.find((s) => s.id === id);
-		const key = `${id}|${kind}`;
-		let table = tables.get(key);
-		if (!table) {
-			table = {
-				scenario: id,
-				title: scenario?.title ?? id,
-				case: kind,
-				rows: [],
-			};
-			tables.set(key, table);
-		}
-		const stats = trial.runs[0]?.stats;
-		if (stats)
-			table.rows.push({ contender, note: note || undefined, avg: stats.avg });
-	}
-
+/** Everything that is generated from a report. */
+async function rendered(report: Report) {
 	return {
-		runtime,
-		version: isBun ? `Bun ${Bun.version}` : `Node ${process.version}`,
-		cpu: cpus()[0]?.model ?? "unknown",
-		os: `${process.platform} ${process.arch}`,
-		standard: hasStandard,
-		tables: [...tables.values()],
+		results: renderResults(report),
+		chart: renderChart(report),
+		readme: withSummary(await Bun.file(generated.readme).text(), report),
 	};
 }
 
-function fmtOps(avgNs: number): string {
-	const ops = 1e9 / avgNs;
-	return ops >= 1e6
-		? `${(ops / 1e6).toFixed(2)}M`
-		: `${(ops / 1e3).toFixed(1)}k`;
-}
-
-function fmtNs(avgNs: number): string {
-	return avgNs >= 1000 ? avgNs.toFixed(0) : avgNs.toFixed(1);
-}
-
-function render(reports: Report[]): string {
-	const first = reports[0] as Report;
-	const out: string[] = [
-		"# Benchmark results",
-		"",
-		"Generated by `bun run bench` (see `bench/run.ts`). Numbers are the mean time per call reported by [mitata](https://github.com/evanwashere/mitata); they vary by machine, so compare rows within a table, not across machines.",
-		"",
-		"## Machine",
-		"",
-		...reports.map((r) => `- ${r.version}, ${r.os}, CPU: ${r.cpu}`),
-		"",
-		"## What is compared",
-		"",
-		"Same data shape for every library. Each case is a call on an already-built schema; schema construction is not timed.",
-		"",
-		"- **Small flat object**: `{ name: string (minLength 3, trimmed), email: email (trimmed, lowercased), age: integer >= 0 }`.",
-		"- **Nested**: the flat user plus `address: { street (trimmed), zip (minLength 5) }`, `tags: string[]` (`maxItems 5`) and `addresses: Address[]` with 10 items.",
-		"- **Valid** inputs carry whitespace and upper case, so the transforms really run. **Invalid** inputs break several rules at once (flat: 3 rules broken; nested: 7, in different places).",
-		'- Objects reject undeclared keys everywhere (afora always does): `additionalProperties: false`, Zod/Valibot `strictObject`, ArkType `"+": "reject"`.',
-		"",
-		"Differences to keep in mind:",
-		"",
-		"- **TypeBox compiled** has no transforms: it only checks, so its valid input is the already-trimmed value, and on failure it also runs `Errors` (which is what afora does on failure). It is the floor afora builds on.",
-		"- **Zod, Valibot, ArkType** transform in the same order as afora: trim, lowercase, then check. ArkType lowercases through a function morph. ArkType is very fast without morphs (about 50 ns for the flat valid case in a separate probe, no transforms) but morphs move it to a slower traversal path, which is what this table measures.",
-		"- **afora `Record.safeParse`** also creates the record instance; **`new Record(value)`** throws on invalid input, so its invalid case is measured inside `try/catch`, which includes creating and throwing an exception with its trace.",
-		`- afora \`blueprint["~standard"].validate\`: ${first.standard ? "measured." : "not on this branch, skipped."}`,
-		"- afora returns frozen values, and an issue with `code`, `message`, `path` and `source` per failure; the others return their own issue shapes (Zod and Valibot build message strings and paths too, TypeBox `Errors` yields error objects).",
-		"",
-	];
-
-	for (const report of reports) {
-		out.push(`## Results on ${report.runtime === "bun" ? "Bun" : "Node"}`, "");
-		for (const table of report.tables) {
-			const fastest = Math.min(...table.rows.map((r) => r.avg));
-			out.push(
-				`### ${table.title}, ${table.case} input (${report.runtime})`,
-				"",
-				"| Contender | ops/s | ns/iter | vs fastest |",
-				"| --- | ---: | ---: | ---: |",
-			);
-			for (const row of [...table.rows].sort((a, b) => a.avg - b.avg)) {
-				const label = row.note
-					? `${row.contender} (${row.note})`
-					: row.contender;
-				const rel =
-					row.avg === fastest
-						? "fastest"
-						: `${(row.avg / fastest).toFixed(1)}x slower`;
-				out.push(
-					`| ${label} | ${fmtOps(row.avg)} | ${fmtNs(row.avg)} | ${rel} |`,
-				);
-			}
-			out.push("");
-		}
+async function writeGenerated(report: Report) {
+	const files = await rendered(report);
+	for (const key of Object.keys(files) as Array<keyof typeof files>) {
+		await Bun.write(generated[key], files[key]);
 	}
-
-	out.push(
-		"## Reading the numbers",
-		"",
-		"TypeBox compiled is the floor: one generated function, no transforms, no result object. Everything afora does on top is paid for by features the other rows do not all have. Each value runs a handler pipeline (`preHandle`, schema check, `afterHandle`) with a state machine per property, preceded by a shape check so that handlers only ever see the right types; objects are walked key by key, so each field is a separate small validation instead of one compiled function for the whole object; results are frozen; issues are collected with their full path and source (failing properties also keep an exception as `cause`); and `Record.safeParse` / `new Record` additionally create an instance with its prototype getters and member checks. Zod, Valibot and ArkType make fewer of those guarantees, or make them differently, so a lower number here is not a verdict on either side, only on the cost of that feature set. Re-run on your machine before relying on a ratio.",
-		"",
-	);
-	return out.join("\n");
+	// The repository formats its Markdown with Biome; what is written is what a commit would hold.
+	await Bun.$`bunx biome format --write ${generated.results} ${generated.readme}`
+		.cwd(`${here}..`)
+		.nothrow()
+		.quiet();
+	console.log(`Wrote ${Object.values(generated).join(", ")}`);
 }
 
-if (isChild) {
-	// Node leg: write the report for the parent to merge.
-	const report = await measure();
-	writeFileSync(`${here}.node-report.json`, JSON.stringify(report));
-} else {
-	// Only Bun gets here: the Node leg is the `isChild` branch above.
+/** afora's source imports `typebox` and `slugify` from the root install. */
+async function installRoot() {
 	const root = `${here}..`;
-	// afora's source imports `typebox` and `slugify` from the root install.
 	if (!(await Bun.file(`${root}/node_modules/typebox/package.json`).exists())) {
 		await Bun.$`bun install`.cwd(root);
 	}
+}
 
-	const reports: Report[] = [await measure()];
+type Runtime = {
+	/** What its report states as `version` ("Node v24.11.0"), which tells two Node legs apart. */
+	label: string;
+	command: string[];
+};
 
-	const nodeVersion = await Bun.$`node --version`.nothrow().quiet();
-	if (nodeVersion.exitCode === 0) {
-		const version = nodeVersion.text().trim();
-		const major = Number.parseInt(version.slice(1), 10);
-		const build =
-			await Bun.$`bun build ../src/index.ts --outfile .dist/afora.js --target node --format esm --packages external`
-				.cwd(here)
-				.nothrow();
-		if (major >= 22 && build.exitCode === 0) {
-			const flags =
-				major >= 23 ? [] : ["--experimental-strip-types", "--no-warnings"];
-			console.log(`\nRunning the same benchmark on Node ${version}...\n`);
-			const child = await Bun.$`node ${flags} run.ts`
-				.cwd(here)
-				.env({ ...process.env, BENCH_CHILD: "1" })
-				.nothrow();
-			const file = Bun.file(`${here}.node-report.json`);
-			if (child.exitCode === 0 && (await file.exists())) {
-				reports.push((await file.json()) as Report);
-			} else {
-				console.log("The Node run failed; RESULTS.md is Bun-only.");
-			}
+/**
+ * The Node binaries to run the benchmark on: those of `BENCH_NODE_BINS`
+ * (paths separated by the delimiter of the platform, `:` or `;`), or else the
+ * `node` on the PATH.
+ */
+const nodeBinaries = () =>
+	(process.env.BENCH_NODE_BINS ?? "node").split(delimiter).filter(Boolean);
+
+/** Bun, and each Node that can run the benchmark against a build of afora. */
+async function runtimes(): Promise<Runtime[]> {
+	const list: Runtime[] = [{ label: `Bun ${Bun.version}`, command: ["bun"] }];
+	let built: boolean | undefined;
+	for (const binary of nodeBinaries()) {
+		const found = await Bun.$`${binary} --version`.nothrow().quiet();
+		if (found.exitCode !== 0) {
+			console.log(`No Node at \`${binary}\`; it is left out.`);
+			continue;
 		}
-	} else {
-		console.log("No `node` found; RESULTS.md is Bun-only.");
+		const version = found.text().trim();
+		const label = `Node ${version}`;
+		if (list.some((runtime) => runtime.label === label)) {
+			console.log(
+				`${label} is already in the list; \`${binary}\` is left out.`,
+			);
+			continue;
+		}
+		const major = Number.parseInt(version.slice(1), 10);
+		built ??=
+			(
+				await Bun.$`bun build ../src/index.ts --outfile .dist/afora.js --target node --format esm --packages external`
+					.cwd(here)
+					.nothrow()
+					.quiet()
+			).exitCode === 0;
+		if (major < 22 || !built) {
+			console.log(`${label} cannot run the benchmark; it is left out.`);
+			continue;
+		}
+		const flags =
+			major >= 23 ? [] : ["--experimental-strip-types", "--no-warnings"];
+		list.push({ label, command: [binary, ...flags] });
 	}
+	if (list.length === 1)
+		console.log("No Node to run; the results are Bun-only.");
+	return list;
+}
 
-	await Bun.write(`${here}RESULTS.md`, render(reports));
-	console.log(`\nWrote ${here}RESULTS.md`);
+/**
+ * Every row of a runtime, each timed by a process of its own: one contender,
+ * one case, nothing before it. `jobs` of them run at a time. `undefined` when
+ * a process fails.
+ */
+async function leg(
+	runtime: Runtime,
+	scenarios: Scenario[],
+	jobs: number,
+): Promise<RuntimeReport | undefined> {
+	const rows = scenarios.flatMap((scenario) =>
+		KINDS.flatMap((kind) =>
+			scenario.contenders.map((contender, index) => ({
+				scenario,
+				kind,
+				contender,
+				index,
+			})),
+		),
+	);
+	const parts: Array<RuntimeReport | undefined> = new Array(rows.length);
+	let next = 0;
+	let failed = false;
+	const worker = async (slot: number) => {
+		const out = `${here}.dist/row-${runtime.label.replace(/\W+/g, "-")}-${slot}.json`;
+		while (!failed && next < rows.length) {
+			const position = next++;
+			const { scenario, kind, contender, index } = rows[
+				position
+			] as (typeof rows)[number];
+			const child = await Bun.$`${runtime.command} run.ts`
+				.cwd(here)
+				.env({
+					...process.env,
+					BENCH_CHILD: "1",
+					BENCH_ONLY: scenario.id,
+					BENCH_PICK: `${kind},${index}`,
+					BENCH_OUT: out,
+				})
+				.nothrow()
+				.quiet();
+			if (child.exitCode !== 0) {
+				failed = true;
+				console.log(child.stderr.toString());
+				console.log(`The ${runtime.label} run failed at ${scenario.id}.`);
+				return;
+			}
+			const part = (await Bun.file(out).json()) as RuntimeReport;
+			const row = part.tables[0]?.rows[0];
+			const best = parts[position]?.tables[0]?.rows[0];
+			if (!best || (row && row.avg < best.avg)) parts[position] = part;
+			console.log(
+				`${runtime.label.padEnd(14)}  ${`${scenario.id} ${kind}`.padEnd(22)} ${fmtNs(row?.avg ?? 0).padStart(9)} ns  ${contender.name}`,
+			);
+		}
+	};
+	// Every row is timed once per round and its best round counts. A machine
+	// drifts over the minutes a run takes (heat, power, other programs); taking
+	// turns spreads that over every row instead of the rows of one moment.
+	for (let round = 1; round <= rounds && !failed; round++) {
+		console.log(`\n${runtime.label}: round ${round} of ${rounds}`);
+		next = 0;
+		await Promise.all(Array.from({ length: jobs }, (_, slot) => worker(slot)));
+	}
+	if (failed) return undefined;
+
+	// Merged in the order of the scenarios, whatever order the processes ended in.
+	let report: RuntimeReport | undefined;
+	for (const part of parts) {
+		const table = part?.tables[0];
+		const row = table?.rows[0];
+		if (!part || !table || !row) continue;
+		report ??= { ...part, tables: [] };
+		const merged = report.tables.find(
+			(candidate) =>
+				candidate.scenario === table.scenario && candidate.case === table.case,
+		);
+		if (merged) merged.rows.push(row);
+		else report.tables.push({ ...table, rows: [row] });
+	}
+	return report;
+}
+
+if (process.env.BENCH_CHILD === "1") {
+	// One row, for the parent to merge.
+	const [kind, index] = (process.env.BENCH_PICK ?? "").split(",");
+	const report = await measure(await loadScenarios(only), {
+		kind: kind as Kind,
+		contender: Number(index),
+	});
+	writeFileSync(process.env.BENCH_OUT as string, JSON.stringify(report));
+} else if (flag("--guard")) {
+	await installRoot();
+	process.exit(guard(await loadScenarios(only)) ? 0 : 1);
+} else if (flag("--compare")) {
+	await installRoot();
+	const base = optionOf("--compare");
+	if (!base) throw new Error("--compare needs the root of the base checkout.");
+	const { compare } = await import("./compare.ts");
+	process.exit((await compare(base, only)) ? 0 : 1);
+} else if (flag("--render")) {
+	await writeGenerated((await Bun.file(latest).json()) as Report);
+} else if (flag("--check")) {
+	const files = await rendered((await Bun.file(latest).json()) as Report);
+	const stale: string[] = [];
+	for (const key of Object.keys(files) as Array<keyof typeof files>) {
+		const current = await Bun.file(generated[key]).text();
+		if (normalized(current) !== normalized(files[key]))
+			stale.push(generated[key]);
+	}
+	if (stale.length > 0) {
+		console.log(
+			`Not what bench/results/latest.json gives:\n${stale.map((file) => `  ${file}`).join("\n")}\nThese are generated: run \`bun run bench -- --render\` instead of editing them.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		"RESULTS.md, the chart and the block of README.md match results/latest.json.",
+	);
+} else {
+	// Only Bun gets here: the Node leg is the `BENCH_CHILD` branch above.
+	if (!isBun) throw new Error("Run it with Bun: `bun run bench`.");
+	await installRoot();
+
+	const scenarios = await loadScenarios(only);
+	const runs: RuntimeReport[] = [];
+	/** The binary of each run, for its cold start, under the version its report states. */
+	const binaries: Array<{ label: string; command: string }> = [];
+	for (const runtime of await runtimes()) {
+		const report = await leg(runtime, scenarios, jobs);
+		if (!report) continue;
+		runs.push(report);
+		binaries.push({
+			label: report.version,
+			command: runtime.command[0] as string,
+		});
+	}
+	if (runs.length === 0) throw new Error("Nothing was measured.");
+
+	if (only.length > 0 || jobs > 1) {
+		const file = `${here}.dist/partial.json`;
+		await Bun.write(file, JSON.stringify(runs));
+		console.log(
+			`\n--only or --jobs: results/latest.json and RESULTS.md are left as they are; the rows are in ${file}.`,
+		);
+	} else {
+		const { footprints } = await import("./size.ts");
+		const root = await Bun.file(`${here}../package.json`).json();
+		const commit = await Bun.$`git rev-parse --short HEAD`
+			.cwd(here)
+			.nothrow()
+			.text();
+		const report: Report = {
+			schema: 2,
+			generatedAt: new Date().toISOString(),
+			afora: { version: root.version, commit: commit.trim() || "unknown" },
+			libraries: libraryVersions(),
+			runs,
+			footprints: await footprints(binaries),
+		};
+		await Bun.write(latest, `${JSON.stringify(report, null, "\t")}\n`);
+		// A release keeps its report, for the history of each row over the versions.
+		if (process.env.BENCH_HISTORY) {
+			await Bun.write(
+				`${here}results/history/${root.version}.json`,
+				`${JSON.stringify(report)}\n`,
+			);
+		}
+		await writeGenerated(report);
+	}
 }

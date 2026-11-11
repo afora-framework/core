@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it } from "bun:test";
+import type { RepositoryContext, SchemaPlan } from "@afora/core/adapters";
 import { providerContract } from "@afora/core/testing";
 import { PGlite } from "@electric-sql/pglite";
 import { boolean, integer, jsonb, pgTable, text } from "drizzle-orm/pg-core";
@@ -20,6 +21,7 @@ const accountTable = (name: string) =>
 		version: integer("version"),
 		deletedAt: text("deletedAt"),
 		expiresAt: text("expiresAt"),
+		schemaVersion: integer("schema_version"),
 	});
 
 /** One PGlite instance (Postgres compiled to WASM) serves every case; each gets fresh tables. */
@@ -38,7 +40,7 @@ async function freshDatabase() {
 	};
 	for (const table of Object.values(names)) {
 		await client.exec(
-			`CREATE TABLE ${table} (id text PRIMARY KEY, email text UNIQUE, name text, age integer, active boolean, address jsonb, tags jsonb, "group" integer, n integer, visits integer, version integer, "deletedAt" text, "expiresAt" text)`,
+			`CREATE TABLE ${table} (id text PRIMARY KEY, email text UNIQUE, name text, age integer, active boolean, address jsonb, tags jsonb, "group" integer, n integer, visits integer, version integer, "deletedAt" text, "expiresAt" text, schema_version integer)`,
 		);
 	}
 	return {
@@ -141,5 +143,148 @@ describe("repositoryOf on Postgres", () => {
 		expect((await Sessions.findMany()).map((s) => s.name)).toEqual(["new"]);
 		expect(await Sessions.count()).toBe(1);
 		expect(await Sessions.count({ withExpired: true })).toBe(2);
+	});
+});
+
+describe("migrate on Postgres", () => {
+	it("applies the plan, maps the schema version and runs again as a no-op", async () => {
+		const { blueprintOf, entityOf } = await import("@afora/core");
+		await client.exec(
+			`CREATE TABLE articles (id text PRIMARY KEY, name text, legacy text); INSERT INTO articles VALUES ('a1', 'Old', 'x')`,
+		);
+		const articles = pgTable("articles", {
+			id: text("id").primaryKey(),
+			title: text("title"),
+			published: boolean("published").notNull().default(false),
+			meta: jsonb("meta"),
+			version: integer("schema_version"),
+		});
+		class Article extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string })),
+			{ name: "Article" },
+		) {}
+		const context = {
+			entity: Article,
+			name: "ArticleRepository",
+			unique: ["id"],
+			env: {},
+			schema: { version: 2, key: "$v", previousNames: [] },
+		} as unknown as RepositoryContext;
+		const base = {
+			entity: "Article",
+			class: "automatic",
+			satisfied: true,
+			destructive: false,
+		} as const;
+		const plan = (destructive: boolean): SchemaPlan => ({
+			entity: "Article",
+			destructive,
+			changes: [
+				{ ...base, key: "title", change: "renamed", from: "name" },
+				{ ...base, key: "published", change: "added-required" },
+				{ ...base, key: "meta", change: "added-optional" },
+				{ ...base, key: "legacy", change: "removed", destructive: true },
+			],
+		});
+		const provider = drizzleProvider({
+			db: drizzle(client),
+			tables: { Article: articles },
+			migrations: "apply",
+		});
+		const columns = async () =>
+			(
+				await client.query<{ column_name: string }>(
+					`SELECT column_name FROM information_schema.columns WHERE table_name = 'articles' ORDER BY ordinal_position`,
+				)
+			).rows.map((row) => row.column_name);
+
+		await provider.migrate?.(context, plan(false));
+		expect(await columns()).toEqual([
+			"id",
+			"title",
+			"legacy",
+			"published",
+			"meta",
+			"schema_version",
+		]);
+		await provider.migrate?.(context, plan(false));
+		await provider.migrate?.(context, plan(true));
+		expect(await columns()).toEqual([
+			"id",
+			"title",
+			"published",
+			"meta",
+			"schema_version",
+		]);
+
+		expect(await provider.findOne(context, { where: { id: "a1" } })).toEqual({
+			id: "a1",
+			title: "Old",
+			published: false,
+		});
+		const data = { id: "a2", title: "New", published: true, $v: 2 };
+		await provider.insert(context, data);
+		expect(await provider.findOne(context, { where: { id: "a2" } })).toEqual(
+			data,
+		);
+		expect(
+			(
+				await client.query<{ schema_version: number }>(
+					`SELECT schema_version FROM articles WHERE id = 'a2'`,
+				)
+			).rows,
+		).toEqual([{ schema_version: 2 }]);
+	});
+
+	it("drops a unique key made a constraint by drizzle-kit, or an index", async () => {
+		const { blueprintOf, entityOf } = await import("@afora/core");
+		// drizzle-kit declares `.unique()` as a named UNIQUE constraint.
+		await client.exec(
+			`CREATE TABLE handles (id text PRIMARY KEY, slug text, CONSTRAINT "handles_slug_unique" UNIQUE("slug")); CREATE TABLE codes (id text PRIMARY KEY, slug text); CREATE UNIQUE INDEX "codes_slug_unique" ON codes (slug)`,
+		);
+		const tableWithSlug = (name: string) =>
+			pgTable(name, { id: text("id").primaryKey(), slug: text("slug") });
+		class Handle extends entityOf(
+			blueprintOf((ctx) => ({ slug: ctx.string })),
+			{ name: "Handle" },
+		) {}
+		const contextOf = (name: string) =>
+			({
+				entity: Handle,
+				name,
+				unique: ["id"],
+				env: {},
+			}) as unknown as RepositoryContext;
+		const plan: SchemaPlan = {
+			entity: "Handle",
+			destructive: false,
+			changes: [
+				{
+					entity: "Handle",
+					class: "automatic",
+					satisfied: true,
+					destructive: false,
+					key: "slug",
+					change: "unique-removed",
+				},
+			],
+		};
+		const provider = drizzleProvider({
+			db: drizzle(client),
+			tables: {
+				Handles: tableWithSlug("handles"),
+				Codes: tableWithSlug("codes"),
+			},
+			migrations: "apply",
+		});
+		await provider.migrate?.(contextOf("Handles"), plan);
+		await provider.migrate?.(contextOf("Codes"), plan);
+		for (const table of ["handles", "codes"]) {
+			await client.exec(
+				`INSERT INTO ${table} VALUES ('1', 'same'), ('2', 'same')`,
+			);
+		}
+		// And again, with nothing left to drop.
+		await provider.migrate?.(contextOf("Handles"), plan);
 	});
 });

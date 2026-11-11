@@ -1,5 +1,8 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, it } from "bun:test";
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
 	blueprintOf,
 	commandOf,
@@ -7,6 +10,11 @@ import {
 	repositoryOf,
 	useCaseOf,
 } from "@afora/core";
+import type {
+	RepositoryContext,
+	SchemaChange,
+	SchemaPlan,
+} from "@afora/core/adapters";
 import { providerContract } from "@afora/core/testing";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
@@ -28,6 +36,7 @@ const accountTable = (name: string) =>
 		version: integer("version"),
 		deletedAt: text("deletedAt"),
 		expiresAt: text("expiresAt"),
+		schemaVersion: integer("schema_version"),
 	});
 
 function contractDatabase() {
@@ -39,7 +48,7 @@ function contractDatabase() {
 	};
 	for (const table of ["accounts", "one", "two"]) {
 		sqlite.run(
-			`CREATE TABLE ${table} (id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, age INTEGER, active INTEGER, address TEXT, tags TEXT, "group" INTEGER, n INTEGER, visits INTEGER, version INTEGER, deletedAt TEXT, expiresAt TEXT)`,
+			`CREATE TABLE ${table} (id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, age INTEGER, active INTEGER, address TEXT, tags TEXT, "group" INTEGER, n INTEGER, visits INTEGER, version INTEGER, deletedAt TEXT, expiresAt TEXT, schema_version INTEGER)`,
 		);
 	}
 	return { db: drizzle(sqlite), tables };
@@ -340,5 +349,400 @@ describe("repositoryOf", () => {
 			Commands.run("register", { name: "Fail", email: "fail@example.com" }),
 		).rejects.toBeDefined();
 		expect(await Users.count()).toBe(1);
+	});
+});
+
+describe("migrate", () => {
+	const change = (
+		fields: Pick<SchemaChange, "change"> & Partial<SchemaChange>,
+	): SchemaChange => ({
+		entity: "Note",
+		class: "automatic",
+		satisfied: true,
+		destructive: false,
+		...fields,
+	});
+	const plan = (destructive = false): SchemaPlan => ({
+		entity: "Note",
+		destructive,
+		changes: [
+			change({
+				key: "title",
+				change: "renamed",
+				from: "name",
+				class: "declared",
+			}),
+			change({ key: "locale", change: "added-required", class: "declared" }),
+			change({ key: "tags", change: "added-optional" }),
+			change({ key: "slug", change: "unique-added", class: "check" }),
+			change({ key: "legacy", change: "removed", destructive: true }),
+			change({ key: "body", change: "type-changed", class: "declared" }),
+			change({ key: "meta.color", change: "added-optional" }),
+		],
+	});
+	const notes = sqliteTable("notes", {
+		id: text("id").primaryKey(),
+		title: text("title"),
+		body: text("body"),
+		slug: text("slug"),
+		locale: text("locale").notNull().default("pt"),
+		tags: text("tags", { mode: "json" }),
+		schemaVersion: integer("schema_version"),
+	});
+	class Note extends entityOf(
+		blueprintOf((ctx) => ({ title: ctx.string, body: ctx.string })),
+		{ name: "Note" },
+	) {}
+	const context = {
+		entity: Note,
+		name: "NoteRepository",
+		unique: ["id"],
+		env: {},
+		schema: { version: 2, key: "$v", previousNames: [] },
+	} as unknown as RepositoryContext;
+	const notesDatabase = () => {
+		const sqlite = new Database(":memory:");
+		sqlite.run(
+			`CREATE TABLE notes (id TEXT PRIMARY KEY, name TEXT, body TEXT, slug TEXT, legacy TEXT)`,
+		);
+		sqlite.run(
+			`INSERT INTO notes (id, name, body, slug, legacy) VALUES ('n1', 'Old', 'b', 's', 'x')`,
+		);
+		return sqlite;
+	};
+	const columnsOf = (sqlite: Database) =>
+		(sqlite.query("PRAGMA table_info(notes)").all() as { name: string }[]).map(
+			(column) => column.name,
+		);
+
+	it("is absent without migrations", () => {
+		const provider = drizzleProvider({
+			db: drizzle(new Database(":memory:")),
+			tables: { Note: notes },
+		});
+		expect(provider.migrate).toBeUndefined();
+		expect(() =>
+			drizzleProvider({
+				db: drizzle(new Database(":memory:")),
+				tables: {},
+				migrations: "later" as never,
+			}),
+		).toThrow();
+	});
+
+	it("applies the structural changes, destructive ones only when asked", async () => {
+		const sqlite = notesDatabase();
+		const provider = drizzleProvider({
+			db: drizzle(sqlite),
+			tables: { Note: notes },
+			migrations: "apply",
+		});
+		await provider.migrate?.(context, plan());
+		expect(columnsOf(sqlite)).toEqual([
+			"id",
+			"title",
+			"body",
+			"slug",
+			"legacy",
+			"locale",
+			"tags",
+			"schema_version",
+		]);
+		// The rows already stored keep their values, and get the default.
+		expect(sqlite.query("SELECT title, locale FROM notes").all()).toEqual([
+			{ title: "Old", locale: "pt" },
+		]);
+		const indexes = sqlite.query("PRAGMA index_list(notes)").all() as {
+			name: string;
+			unique: number;
+		}[];
+		expect(
+			indexes.some(
+				(index) => index.name === "notes_slug_unique" && index.unique,
+			),
+		).toBe(true);
+
+		// Applied already: nothing to do.
+		await provider.migrate?.(context, plan());
+		expect(columnsOf(sqlite)).toContain("legacy");
+
+		await provider.migrate?.(context, plan(true));
+		expect(columnsOf(sqlite)).not.toContain("legacy");
+	});
+
+	it("maps the schema version key to its column", async () => {
+		const sqlite = notesDatabase();
+		const provider = drizzleProvider({
+			db: drizzle(sqlite),
+			tables: { Note: notes },
+			migrations: "apply",
+		});
+		await provider.migrate?.(context, plan(true));
+		const data = { id: "n2", title: "T", body: "b", locale: "en", $v: 2 };
+		await provider.insert(context, data);
+		expect(
+			sqlite.query("SELECT schema_version FROM notes WHERE id = 'n2'").get(),
+		).toEqual({ schema_version: 2 });
+		expect(await provider.findOne(context, { where: { id: "n2" } })).toEqual(
+			data,
+		);
+		// A row written before has no version: version 1 for the core.
+		expect(await provider.findOne(context, { where: { id: "n1" } })).toEqual({
+			id: "n1",
+			title: "Old",
+			body: "b",
+			slug: "s",
+			locale: "pt",
+		});
+		expect(
+			(await provider.findMany(context, { where: { $v: 2 } })).map(
+				(row) => row.id,
+			),
+		).toEqual(["n2"]);
+		await provider.update(context, { ...data, $v: 3 });
+		expect((await provider.findOne(context, { where: { id: "n2" } }))?.$v).toBe(
+			3,
+		);
+	});
+
+	it("a schema version needs its column; an added key, its Drizzle column", async () => {
+		const bare = sqliteTable("notes", {
+			id: text("id").primaryKey(),
+			title: text("name"),
+		});
+		const provider = drizzleProvider({
+			db: drizzle(notesDatabase()),
+			tables: { Note: bare },
+			migrations: "apply",
+		});
+		const missing = await provider
+			.migrate?.(context, { entity: "Note", destructive: false, changes: [] })
+			.catch((error: Error) => error);
+		expect((missing as Error).message).toContain("schema_version");
+		const unknown = await provider
+			.migrate?.({ ...context, schema: undefined } as RepositoryContext, {
+				entity: "Note",
+				destructive: false,
+				changes: [change({ key: "locale", change: "added-optional" })],
+			})
+			.catch((error: Error) => error);
+		expect((unknown as Error).message).toContain('"locale"');
+		const write = await provider
+			.insert(context, { id: "n3", title: "T", $v: 2 })
+			.catch((error: Error) => error);
+		expect((write as Error).message).toContain("schema_version");
+	});
+
+	it("returns nothing in apply mode, { deferred: true } in file mode", async () => {
+		const apply = drizzleProvider({
+			db: drizzle(notesDatabase()),
+			tables: { Note: notes },
+			migrations: "apply",
+		});
+		expect(await apply.migrate?.(context, plan())).toBeUndefined();
+		const file = join(
+			await mkdtemp(join(tmpdir(), "afora-drizzle-")),
+			"0001_afora.sql",
+		);
+		const written = drizzleProvider({
+			db: drizzle(notesDatabase()),
+			tables: { Note: notes },
+			migrations: { file },
+		});
+		expect((await written.migrate?.(context, plan())) as unknown).toEqual({
+			deferred: true,
+		});
+		// Nothing to write (the file was applied): the backfill can run.
+		expect(
+			await written.migrate?.(
+				{ ...context, schema: undefined } as RepositoryContext,
+				{ entity: "Other", destructive: false, changes: [] },
+			),
+		).toBeUndefined();
+	});
+
+	describe("a renamed key whose column has another SQL name", () => {
+		const people = sqliteTable("people", {
+			id: text("id").primaryKey(),
+			displayName: text("display_name"),
+		});
+		const rename: SchemaPlan = {
+			entity: "Note",
+			destructive: false,
+			changes: [
+				change({
+					key: "displayName",
+					change: "renamed",
+					from: "fullName",
+					class: "declared",
+				}),
+			],
+		};
+		const bare = { ...context, schema: undefined } as RepositoryContext;
+		const peopleDatabase = (column: string) => {
+			const sqlite = new Database(":memory:");
+			sqlite.run(`CREATE TABLE people (id TEXT PRIMARY KEY, ${column} TEXT)`);
+			sqlite.run(`INSERT INTO people VALUES ('p1', 'Ada')`);
+			return sqlite;
+		};
+		const peopleColumns = (sqlite: Database) =>
+			(
+				sqlite.query("PRAGMA table_info(people)").all() as { name: string }[]
+			).map((column) => column.name);
+
+		it("renames the snake_case column of the old key", async () => {
+			const sqlite = peopleDatabase("full_name");
+			const provider = drizzleProvider({
+				db: drizzle(sqlite),
+				tables: { Note: people },
+				migrations: "apply",
+			});
+			await provider.migrate?.(bare, rename);
+			expect(peopleColumns(sqlite)).toEqual(["id", "display_name"]);
+			expect(sqlite.query("SELECT display_name FROM people").all()).toEqual([
+				{ display_name: "Ada" },
+			]);
+		});
+
+		it("renames the column named as the old key", async () => {
+			const sqlite = peopleDatabase("fullName");
+			const provider = drizzleProvider({
+				db: drizzle(sqlite),
+				tables: { Note: people },
+				migrations: "apply",
+			});
+			await provider.migrate?.(bare, rename);
+			expect(peopleColumns(sqlite)).toEqual(["id", "display_name"]);
+		});
+
+		it("refuses in apply mode when no source column is found", async () => {
+			const sqlite = peopleDatabase("nickname");
+			const provider = drizzleProvider({
+				db: drizzle(sqlite),
+				tables: { Note: people },
+				migrations: "apply",
+			});
+			const error = await provider
+				.migrate?.(bare, rename)
+				.catch((error: Error) => error);
+			expect((error as Error).message).toContain('"fullName"');
+			expect(peopleColumns(sqlite)).toEqual(["id", "nickname"]);
+		});
+
+		it("adds the column with a note in file mode when no source column is found", async () => {
+			const file = join(
+				await mkdtemp(join(tmpdir(), "afora-drizzle-")),
+				"0001_afora.sql",
+			);
+			const provider = drizzleProvider({
+				db: drizzle(peopleDatabase("nickname")),
+				tables: { Note: people },
+				migrations: { file },
+			});
+			await provider.migrate?.(bare, rename);
+			const written = await readFile(file, "utf8");
+			expect(written).toContain(
+				'-- Note: renamed "displayName" from "fullName"',
+			);
+			expect(written).toEndWith(
+				'ALTER TABLE "people" ADD COLUMN "display_name" text;\n',
+			);
+		});
+	});
+
+	it("starts the file again on the next run of app.migrate", async () => {
+		const sqlite = notesDatabase();
+		const file = join(
+			await mkdtemp(join(tmpdir(), "afora-drizzle-")),
+			"0001_afora.sql",
+		);
+		const tags = sqliteTable("tags", {
+			id: text("id").primaryKey(),
+			label: text("label"),
+		});
+		sqlite.run(`CREATE TABLE tags (id TEXT PRIMARY KEY)`);
+		const provider = drizzleProvider({
+			db: drizzle(sqlite),
+			tables: { Note: notes, Tag: tags },
+			migrations: { file },
+		});
+		class Tag extends entityOf(
+			blueprintOf((ctx) => ({ label: ctx.string })),
+			{ name: "Tag" },
+		) {}
+		const tagContext = {
+			...context,
+			entity: Tag,
+			name: "TagRepository",
+			schema: undefined,
+		} as unknown as RepositoryContext;
+		const tagPlan: SchemaPlan = {
+			entity: "Tag",
+			destructive: false,
+			changes: [
+				{
+					...change({ key: "label", change: "added-optional" }),
+					entity: "Tag",
+				},
+			],
+		};
+		// One run: every entity once, the file gathers them.
+		await provider.migrate?.(context, plan());
+		await provider.migrate?.(tagContext, tagPlan);
+		const first = await readFile(file, "utf8");
+		expect(first).toContain('ALTER TABLE "notes" ADD COLUMN "locale"');
+		expect(first).toEndWith('ALTER TABLE "tags" ADD COLUMN "label" text;\n');
+
+		// The next run (Note again) starts the file over instead of appending.
+		await provider.migrate?.(context, plan());
+		await provider.migrate?.(tagContext, tagPlan);
+		expect(await readFile(file, "utf8")).toBe(first);
+	});
+
+	it("writes a drizzle-kit migration file instead, one per provider", async () => {
+		const sqlite = notesDatabase();
+		const file = join(
+			await mkdtemp(join(tmpdir(), "afora-drizzle-")),
+			"drizzle",
+			"0001_afora.sql",
+		);
+		const provider = drizzleProvider({
+			db: drizzle(sqlite),
+			tables: { Note: notes },
+			migrations: { file },
+		});
+		await provider.migrate?.(context, plan());
+		// The database is left as it was.
+		expect(columnsOf(sqlite)).toEqual(["id", "name", "body", "slug", "legacy"]);
+		const written = await readFile(file, "utf8");
+		const parts = written.split("--> statement-breakpoint\n");
+		expect(parts.map((part) => part.trim().split("\n").at(-1))).toEqual([
+			'ALTER TABLE "notes" RENAME COLUMN "name" TO "title";',
+			'ALTER TABLE "notes" ADD COLUMN "locale" text NOT NULL DEFAULT \'pt\';',
+			'ALTER TABLE "notes" ADD COLUMN "tags" text;',
+			'CREATE UNIQUE INDEX IF NOT EXISTS "notes_slug_unique" ON "notes" ("slug");',
+			'ALTER TABLE "notes" ADD COLUMN "schema_version" integer;',
+		]);
+		expect(written).toContain(
+			'-- Note: removed "legacy" (destructive) is left to',
+		);
+		// The file runs as it is.
+		for (const statement of parts) sqlite.run(statement);
+		expect(columnsOf(sqlite)).toContain("schema_version");
+
+		// The plan of another entity in the same run adds to the file.
+		await provider.migrate?.(
+			{ ...context, schema: undefined } as RepositoryContext,
+			{
+				entity: "Other",
+				destructive: true,
+				changes: [
+					change({ key: "legacy", change: "removed", destructive: true }),
+				],
+			},
+		);
+		expect(await readFile(file, "utf8")).toEndWith(
+			'--> statement-breakpoint\nALTER TABLE "notes" DROP COLUMN "legacy";\n',
+		);
 	});
 });

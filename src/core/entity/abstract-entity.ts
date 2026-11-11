@@ -7,6 +7,7 @@ import {
 	AbstractRecord,
 	runRecordEffects,
 	storeRecordValue,
+	vouchFor,
 } from "../record/abstract-record";
 import { recordNameOf } from "../record/name";
 import { Meta } from "../symbols/meta";
@@ -18,6 +19,7 @@ import {
 	pullEntityEvents,
 } from "./event";
 import { DeletedEntity, ImmutableEntityKey } from "./exceptions";
+import type { ValidMakers } from "./trust";
 import type {
 	EntityIdentityKey,
 	EntityStorageSettings,
@@ -65,6 +67,12 @@ export const EXPIRES_AT = "expiresAt";
 
 /** The key a versioned entity adds to its identity. */
 export const ENTITY_VERSION_KEY = "version";
+
+/**
+ * The key of each stored row holding its schema version, for entities
+ * declared with `schemaVersion`; it is never a key of the entity.
+ */
+export const SCHEMA_VERSION_KEY = "$v";
 
 /** Whether `entityClass` was declared with `versioned: true`. */
 export function isVersionedEntityClass(entityClass: unknown): boolean {
@@ -115,7 +123,14 @@ export function storeEntityVersion(entity: object, version: number): void {
 interface EntityClockSettings {
 	readonly generateId: () => string;
 	readonly now: () => string;
+	/** When what the two above make is known to be valid (see `MakesValid`). */
+	readonly makesValid?: ValidMakers;
 }
+
+/** The keys an entity may vouch for, in each combination. */
+const ID_MADE: readonly string[] = Object.freeze(["id"]);
+const CREATED_AT_MADE: readonly string[] = Object.freeze(["createdAt"]);
+const BOTH_MADE: readonly string[] = Object.freeze(["id", "createdAt"]);
 
 /** The identity of `entity`, as its members expose it. */
 function identityOf(entity: object): {
@@ -168,12 +183,27 @@ function withIdentity(
 	if (id !== undefined && createdAt !== undefined && !expiring && !unversioned)
 		return value;
 	const created = createdAt === undefined ? clock.now() : createdAt;
+	// `id` and `createdAt` come first, as in the blueprint of an entity, whose
+	// keys the record then finds in their places; the spread may bring either
+	// one as `undefined`, so both are set after it.
 	const identity: Record<string, unknown> = {
+		id: undefined,
+		createdAt: undefined,
 		...value,
-		id: id === undefined ? clock.generateId() : id,
-		createdAt: created,
-		...(unversioned ? { [ENTITY_VERSION_KEY]: 1 } : {}),
 	};
+	identity.id = id === undefined ? clock.generateId() : id;
+	identity.createdAt = created;
+	// What this entity has just made with makers known to make it valid is not
+	// checked again by its record; what the value brought always is.
+	const { makesValid } = clock;
+	if (makesValid !== undefined) {
+		const idMade = id === undefined && makesValid.id();
+		const createdAtMade = createdAt === undefined && makesValid.createdAt();
+		if (idMade && createdAtMade) vouchFor(BOTH_MADE);
+		else if (idMade) vouchFor(ID_MADE);
+		else if (createdAtMade) vouchFor(CREATED_AT_MADE);
+	}
+	if (unversioned) identity[ENTITY_VERSION_KEY] = 1;
 	if (expiring) {
 		const start = typeof created === "string" ? Date.parse(created) : NaN;
 		if (!Number.isNaN(start)) {

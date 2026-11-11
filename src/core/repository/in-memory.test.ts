@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import type {
+	IRepositoryProvider,
+	RepositoryContext,
+	RepositoryData,
+} from "../../adapters";
+import { providerDescriptionOf } from "../../experimental";
 import {
 	blueprintOf,
 	entityOf,
 	InvalidRepositoryDeclaration,
-	type IRepositoryProvider,
 	inMemoryProvider,
-	providerDescriptionOf,
-	type RepositoryContext,
-	type RepositoryData,
 	RepositoryUniqueViolation,
+	repositoryOf,
 } from "../../index";
 
 class Item extends entityOf(
@@ -41,6 +44,47 @@ describe("inMemoryProvider", () => {
 			options: {},
 		});
 		expect(provider.capabilities?.transactions).toBe(true);
+	});
+
+	test("keeps the tables of two entities without a name apart", async () => {
+		const provider = inMemoryProvider();
+		const one = entityOf(blueprintOf((ctx) => ({ title: ctx.string })));
+		const two = entityOf(blueprintOf((ctx) => ({ count: ctx.integer })));
+		const Ones = repositoryOf({
+			entity: one,
+			actions: ["create", "findMany"],
+			provider,
+		});
+		const Twos = repositoryOf({
+			entity: two,
+			actions: ["create", "findMany"],
+			provider,
+		});
+		await Ones.create({ title: "a" });
+		await Twos.create({ count: 1 });
+		expect((await Ones.findMany()).map((item) => item.title)).toEqual(["a"]);
+		expect((await Twos.findMany()).map((item) => item.count)).toEqual([1]);
+	});
+
+	test("shares the table of entities that declare the same name", async () => {
+		const provider = inMemoryProvider();
+		class V1 extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string })),
+			{
+				name: "Note",
+			},
+		) {}
+		class V2 extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string })),
+			{
+				name: "Note",
+			},
+		) {}
+		await repositoryOf({ entity: V1, actions: ["create"], provider }).create({
+			title: "a",
+		});
+		const read = repositoryOf({ entity: V2, actions: ["findMany"], provider });
+		expect((await read.findMany()).map((item) => item.title)).toEqual(["a"]);
 	});
 
 	test("where supports equality and in, ANDed, and an empty in matches nothing", async () => {

@@ -1,6 +1,6 @@
 {
 	"name": "@afora/mcp",
-	"version": "0.0.8",
+	"version": "0.0.9",
 	"description": "An MCP server that lets an agent discover the afora catalog, edit afora.json, validate it, generate the code and check the result.",
 	"keywords": [
 		"afora",
@@ -57,7 +57,7 @@
 		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.8",
+		"@afora/core": ">=0.0.9",
 		"typebox": "^1"
 	}
 }

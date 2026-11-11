@@ -1,0 +1,80 @@
+name: Benchmark against the base
+
+# A file of its own, not a job of ci.yml: it writes a comment on the pull
+# request, and ci.yml is also called by the release, whose token cannot.
+on:
+  pull_request:
+  # CodSpeed needs the runs of the base branches to compare a pull request with
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-compare-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench-compare:
+    name: Validation speed against the base
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: bench
+      # afora of the base and of this branch, taking turns in one process; fails when blueprint.safeParse is over 1.1x its base (COMPARE_LIMIT in bench/compare.ts)
+      - run: bun run.ts --compare ../.base
+        working-directory: bench
+        env:
+          BENCH_COMPARE_OUT: ${{ runner.temp }}/compare.md
+      - name: Show the comparison in the summary
+        if: always()
+        run: test -f "$RUNNER_TEMP/compare.md" && cat "$RUNNER_TEMP/compare.md" >> "$GITHUB_STEP_SUMMARY" || true
+      # a pull request from a fork has a read-only token: it gets the summary alone
+      - name: Comment the comparison on the pull request
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        run: test -f "$RUNNER_TEMP/compare.md" && gh pr comment "$PR" --edit-last --create-if-none --body-file "$RUNNER_TEMP/compare.md" || true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+
+  codspeed:
+    name: CodSpeed
+    # off until the CodSpeed app is installed on the repository: set the repository variable CODSPEED_ENABLED to "true"
+    if: vars.CODSPEED_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: bench
+      # the benchmark runs on Node, against a build of afora
+      - run: bun build ../src/index.ts --outfile .dist/afora.js --target node --format esm --packages external
+        working-directory: bench
+      - uses: CodSpeedHQ/action@v5
+        with:
+          mode: simulation
+          working-directory: bench
+          run: node codspeed.ts

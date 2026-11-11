@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Project boundary (#69)
+
+- `projectBoundaryIssues(spec, root)`: the places where a spec reaches outside a project directory, as issues `outside_project`: an `{ "import": "<module>#<name>" }` whose module is a file outside it (resolved from `output.dir`), an absolute path or a URL, and an `extends` outside it. For tools that take a spec from someone they do not trust; `validateSpec` does not run it, since a spec has no directory of its own. `@afora/mcp` runs it on every spec.
+
+### Routes and access (#75, #60)
+
+- A use case takes `"route"` (`{ method, path?, status?, query?, headers?, cookie?, setCookie? }`) and `"access"` (`{ public: true }` or `{ scopes?, owner?, context? }`), in a written use case and beside `"generic"` in a standard one. They are generated as the `route` and `access` settings of `useCaseOf` (options of a standard use case; no decorators are written) and extracted back from `describe()`, whether the class used the settings or `@Route` and `@Access`. `afora.schema.json` describes both.
+- Validation: `invalid_route` and `invalid_access` for a malformed declaration and, in a written use case, for a key that is not in the input, the response or the context, or that a route reads from two places.
+- The catalog lists the standard `refresh` and `logout`, and `token` among the options of `login`.
+
+### Schema evolution (#28)
+
+- Fields take `"fill"` and `"renamedFrom"` in the object form of a type or enum field (not a list), generated as options of `with` (`ctx.enumOf([...]).with({ fill })`, `ctx.text({ renamedFrom })`) and extracted back to the field level from `describe()`; an enum refined only with them is no longer opaque. Entities take `"schemaVersion"`, `"upgrade"` (`{ "<n>": { "import": "./upgrades#toV2" } }`, generated as imported bindings; extraction needs `entities.<Name>.upgrade.<n>` in `imports`) and `"previousNames"`, in `afora.schema.json` too. Invalid values are `invalid_option`, `invalid_import`, `invalid_field` or `invalid_enum`. Generated code with them needs the `@afora/core` that has schema evolution.
+- CLI: `afora-codegen schema lock <file.ts>#App [--out afora.lock.json] [--force]` writes the schema lock of the application, refusing a change that lacks its declaration or version bump unless `--force`; `afora-codegen schema check <file.ts>#App [--lock afora.lock.json]` fails when the lock is stale, a declared change is unsatisfied, an entity of the lock is gone without `previousNames`, or a `schemaVersion` went down, and prints an `upgrade` stub for each missing step.
+
 ### Optimistic concurrency and atomic increment (#44, #34)
 
 - An entity takes `"versioned": true`, generated as `entityOf(..., { versioned: true })` and extracted back from `describe()`. Its identity has `version`, so a field `version` is `identity_key` and `change: ["version"]` is `change_identity`; on a record it is `unknown_key`, and a value that is not a boolean is `invalid_option`.

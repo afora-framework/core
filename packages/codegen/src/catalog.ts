@@ -1,11 +1,11 @@
 import * as core from "@afora/core";
+import { Std, StdRecordPlugins } from "@afora/core";
 import {
 	ENTITY_IDENTITY_KEYS,
 	RESERVED_ENTITY_KEYS,
 	RESERVED_RECORD_KEYS,
-	Std,
-	StdRecordPlugins,
-} from "@afora/core";
+	stageKindOf,
+} from "@afora/core/adapters";
 
 /** The key a versioned entity adds to its identity. */
 const VERSION_KEY = "version";
@@ -283,7 +283,7 @@ function build(): Catalog {
 		stages: Object.entries(core.StdStages.stages)
 			.map(([name, factory]) => ({
 				name,
-				kind: core.stageKindOf(factory) as "transform" | "sink",
+				kind: stageKindOf(factory) as "transform" | "sink",
 				builtin: true as const,
 			}))
 			.sort((a, b) => (a.name < b.name ? -1 : 1)),
@@ -329,7 +329,9 @@ const GENERIC_OPTIONS: Readonly<Record<string, readonly string[]>> = {
 	tag: ["as", "owner", ...GENERIC_HOOKS],
 	untag: ["as", "owner", ...GENERIC_HOOKS],
 	register: ["as", "owner", "omit", "values", ...GENERIC_HOOKS],
-	login: ["as"],
+	login: ["as", "token"],
+	refresh: ["token"],
+	logout: [],
 };
 
 let cached: Catalog | undefined;

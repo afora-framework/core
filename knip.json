@@ -7,6 +7,7 @@
 		".": {
 			"entry": [
 				"src/index.ts",
+				"src/adapters.ts",
 				"src/experimental.ts",
 				"src/testing/index.ts",
 				"src/**/*.sandbox.ts",
@@ -27,11 +28,27 @@
 			"entry": ["src/index.ts", "tests/**/*.test.ts"],
 			"project": ["src/**/*.ts", "tests/**/*.ts"]
 		},
+		"packages/fastify": {
+			"entry": ["src/index.ts", "tests/**/*.test.ts"],
+			"project": ["src/**/*.ts", "tests/**/*.ts"]
+		},
+		"packages/express": {
+			"entry": ["src/index.ts", "tests/**/*.test.ts"],
+			"project": ["src/**/*.ts", "tests/**/*.ts"]
+		},
+		"packages/elysia": {
+			"entry": ["src/index.ts", "tests/**/*.test.ts"],
+			"project": ["src/**/*.ts", "tests/**/*.ts"]
+		},
 		"packages/ws": {
 			"entry": ["src/index.ts", "tests/**/*.test.ts"],
 			"project": ["src/**/*.ts", "tests/**/*.ts"]
 		},
 		"packages/drizzle": {
+			"entry": ["src/index.ts", "src/**/*.test.ts"],
+			"project": ["src/**/*.ts"]
+		},
+		"packages/dynamodb": {
 			"entry": ["src/index.ts", "src/**/*.test.ts"],
 			"project": ["src/**/*.ts"]
 		},

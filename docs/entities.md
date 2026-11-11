@@ -148,3 +148,29 @@ new Doc({ title: "Draft" }).version; // 1
 ```
 
 The repository uses it for optimistic concurrency: `update` (and a soft `delete`, `restore` and `increment`) writes only when the stored version is the one the entity was read with, and bumps it; otherwise it throws `RepositoryConcurrencyConflict` (409). See [Repositories](repositories.md) (Concurrency). The standard use cases leave `version` out of their inputs, as any identity key, and `app.describe()` marks the entity `versioned: true`.
+
+## Schema evolution
+
+Three options describe how the stored shape of an entity changed, so that a repository still reads the rows written before. They are not record options: the entity keeps them, with `versioned` and `expires`, under the `EntitySettings` symbol.
+
+- `schemaVersion`: the version of its stored shape, a positive integer (1 when absent). Every write stores it in the row under `$v` (`SCHEMA_VERSION_KEY`), which the blueprint of such an entity cannot declare.
+- `upgrade`: `{ [version]: (data) => data }`, the steps that bring a stored row from the version before each key up to it.
+- `previousNames`: the `name`s the entity had, whose rows `app.migrate` moves.
+
+```ts
+class Article extends entityOf(
+	blueprintOf((ctx) => ({
+		title: ctx.text,
+		slug: ctx.slug,
+		locale: ctx.enumOf(["pt", "en"]).with({ fill: "pt" }),
+	})),
+	{
+		name: "Article",
+		previousNames: ["Entry"],
+		schemaVersion: 2,
+		upgrade: { 2: (data) => ({ ...data, slug: data.path }) },
+	},
+) {}
+```
+
+Invalid options throw `InvalidEntitySchemaVersion`. `app.describe().entities.<Name>` gives `schemaVersion`, `upgrade` (the versions with a step) and `previousNames` when declared. See [Schema evolution](schema-evolution.md), with the `fill` and `renamedFrom` options of a property.

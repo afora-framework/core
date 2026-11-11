@@ -5,9 +5,9 @@ import {
 	ExceptionLayers,
 	exceptionOf,
 	outputOf,
-	PROBLEM_MEDIA_TYPE,
 	useCaseOf,
 } from "@afora/core";
+import { PROBLEM_MEDIA_TYPE } from "@afora/core/adapters";
 import { type SpecData, Validator } from "@seriousme/openapi-schema-validator";
 import { Hono } from "hono";
 import { type HonoOptions, hono } from "../src/index";

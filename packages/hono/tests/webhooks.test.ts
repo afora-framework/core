@@ -5,9 +5,9 @@ import {
 	InvalidOutputStage,
 	optionalOf,
 	outputOf,
-	PROBLEM_MEDIA_TYPE,
 	useCaseOf,
 } from "@afora/core";
+import { PROBLEM_MEDIA_TYPE } from "@afora/core/adapters";
 import { type SpecData, Validator } from "@seriousme/openapi-schema-validator";
 import type { Hono } from "hono";
 import {

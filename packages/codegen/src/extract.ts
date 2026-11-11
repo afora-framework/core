@@ -1,15 +1,14 @@
-import {
-	type AnyApplication,
-	type ApplicationDescription,
-	type FieldDescription,
-	type PropertyDescription,
-	type PropertyReference,
-	type ProviderDescription,
-	type ProviderReference,
-	Std,
-} from "@afora/core";
+import { type AnyApplication, Std } from "@afora/core";
+import type {
+	ApplicationDescription,
+	FieldDescription,
+	PropertyDescription,
+	PropertyReference,
+	ProviderDescription,
+	ProviderReference,
+} from "@afora/core/adapters";
 import { genericUseCase, stdProperty } from "./catalog";
-import type { Field } from "./model";
+import type { Field, VariantTarget } from "./model";
 import { canonicalField, compactSpec } from "./normalize";
 import { DEFAULT_OUTPUT_DIR, type Spec } from "./spec/types";
 
@@ -199,10 +198,25 @@ class Extraction {
 		switch (lineage.kind) {
 			case "refined": {
 				const inner = this.property(lineage.base);
+				// fill and renamedFrom are keys of the field, not options of `with`.
+				const { fill, renamedFrom, ...options } = lineage.options as Record<
+					string,
+					unknown
+				>;
+				const evolution = {
+					...(fill === undefined ? {} : { fill }),
+					...(typeof renamedFrom === "string" ? { renamedFrom } : {}),
+				};
+				if (inner.kind === "enum" && Object.keys(options).length === 0) {
+					return { ...inner, ...evolution };
+				}
 				if (inner.kind !== "type") return this.opaqueFor(property);
+				const merged = { ...(inner.with ?? {}), ...options };
+				const { with: _with, ...rest } = inner;
 				return {
-					...inner,
-					with: { ...(inner.with ?? {}), ...lineage.options },
+					...rest,
+					...(Object.keys(merged).length > 0 ? { with: merged } : {}),
+					...evolution,
 				};
 			}
 			case "optional":
@@ -264,9 +278,36 @@ class Extraction {
 							optional: field.optional,
 							fields: this.fields(field.fields),
 						};
+			case "variant":
+				return {
+					kind: "variant",
+					key: field.key,
+					optional: field.optional,
+					variants: Object.fromEntries(
+						Object.entries(field.variants).map(([tag, variant]) => [
+							tag,
+							this.variant(field.key, tag, variant),
+						]),
+					),
+				};
 			default:
 				return { kind: "type", type: field.ref, optional: field.optional };
 		}
+	}
+
+	/** A variant of a variant field: a blueprint, record or entity by name, or a blueprint in place. */
+	variant(key: string, tag: string, variant: FieldDescription): VariantTarget {
+		if (variant.kind === "blueprint") {
+			return "ref" in variant
+				? { type: variant.ref }
+				: { fields: this.fields(variant.fields) };
+		}
+		if (variant.kind === "record" || variant.kind === "entity") {
+			return { type: variant.ref };
+		}
+		throw new ExtractionError(
+			`The variant "${tag}" of a field made with variantOf (key "${key}") is not a blueprint, a record or an entity, so this application cannot be described.`,
+		);
 	}
 
 	fields(
@@ -403,6 +444,28 @@ export function extractSpec(
 		...(value.expires === undefined
 			? {}
 			: { expires: structuredClone(value.expires) as Json }),
+		...(value.schemaVersion === undefined
+			? {}
+			: { schemaVersion: value.schemaVersion }),
+		...(value.upgrade === undefined || value.upgrade.length === 0
+			? {}
+			: {
+					upgrade: Object.fromEntries(
+						value.upgrade.map((version) => [
+							String(version),
+							{
+								import: importFor(
+									options.imports,
+									`entities.${name}.upgrade.${version}`,
+									`The upgrade step ${version} of the entity "${name}"`,
+								),
+							},
+						]),
+					),
+				}),
+		...(value.previousNames === undefined || value.previousNames.length === 0
+			? {}
+			: { previousNames: [...value.previousNames].sort() }),
 		...(value.events === undefined
 			? {}
 			: {
@@ -472,6 +535,18 @@ export function extractSpec(
 			? {}
 			: { message: value.message }),
 	}));
+	/** The route and the access a use case declares, by setting or by decorator. */
+	const routing = (value: {
+		readonly route?: unknown;
+		readonly access?: unknown;
+	}) => ({
+		...(value.route === undefined
+			? {}
+			: { route: structuredClone(value.route) }),
+		...(value.access === undefined
+			? {}
+			: { access: structuredClone(value.access) }),
+	});
 	const useCases = entries(description.useCases, (value, name) => {
 		// A standard use case is given back as it was asked for, not as its steps.
 		// One made by a plugin of another catalog cannot be named in a spec:
@@ -485,6 +560,8 @@ export function extractSpec(
 				description: _description,
 				tags: _tags,
 				deprecated: _deprecated,
+				route: _route,
+				access: _access,
 				...given
 			} = value.generic.options;
 			const generic = structuredClone(given) as Record<string, unknown>;
@@ -509,6 +586,7 @@ export function extractSpec(
 					: { description: value.description }),
 				...(value.tags.length > 0 ? { tags: [...value.tags] } : {}),
 				...(value.deprecated ? { deprecated: true } : {}),
+				...routing(value),
 			};
 		}
 		const steps =
@@ -536,6 +614,7 @@ export function extractSpec(
 				: { description: value.description }),
 			...(value.tags.length > 0 ? { tags: [...value.tags] } : {}),
 			...(value.deprecated ? { deprecated: true } : {}),
+			...routing(value),
 			input: value.refs?.input ?? { fields: extraction.json(value.input) },
 			response: value.refs?.response ?? {
 				fields: extraction.json(value.response),
