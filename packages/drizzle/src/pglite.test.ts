@@ -235,4 +235,56 @@ describe("migrate on Postgres", () => {
 			).rows,
 		).toEqual([{ schema_version: 2 }]);
 	});
+
+	it("drops a unique key made a constraint by drizzle-kit, or an index", async () => {
+		const { blueprintOf, entityOf } = await import("@afora/core");
+		// drizzle-kit declares `.unique()` as a named UNIQUE constraint.
+		await client.exec(
+			`CREATE TABLE handles (id text PRIMARY KEY, slug text, CONSTRAINT "handles_slug_unique" UNIQUE("slug")); CREATE TABLE codes (id text PRIMARY KEY, slug text); CREATE UNIQUE INDEX "codes_slug_unique" ON codes (slug)`,
+		);
+		const tableWithSlug = (name: string) =>
+			pgTable(name, { id: text("id").primaryKey(), slug: text("slug") });
+		class Handle extends entityOf(
+			blueprintOf((ctx) => ({ slug: ctx.string })),
+			{ name: "Handle" },
+		) {}
+		const contextOf = (name: string) =>
+			({
+				entity: Handle,
+				name,
+				unique: ["id"],
+				env: {},
+			}) as unknown as RepositoryContext;
+		const plan: SchemaPlan = {
+			entity: "Handle",
+			destructive: false,
+			changes: [
+				{
+					entity: "Handle",
+					class: "automatic",
+					satisfied: true,
+					destructive: false,
+					key: "slug",
+					change: "unique-removed",
+				},
+			],
+		};
+		const provider = drizzleProvider({
+			db: drizzle(client),
+			tables: {
+				Handles: tableWithSlug("handles"),
+				Codes: tableWithSlug("codes"),
+			},
+			migrations: "apply",
+		});
+		await provider.migrate?.(contextOf("Handles"), plan);
+		await provider.migrate?.(contextOf("Codes"), plan);
+		for (const table of ["handles", "codes"]) {
+			await client.exec(
+				`INSERT INTO ${table} VALUES ('1', 'same'), ('2', 'same')`,
+			);
+		}
+		// And again, with nothing left to drop.
+		await provider.migrate?.(contextOf("Handles"), plan);
+	});
 });
