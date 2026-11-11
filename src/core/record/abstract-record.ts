@@ -112,12 +112,32 @@ function checkMembers(record: object, properties: IBlueprintCollection): void {
 	checked.add(Class);
 }
 
+/**
+ * The keys of the value of the record about to be built that its class made
+ * itself and knows to be valid: its constructor takes them and keeps those
+ * values without checking them.
+ */
+let vouched: readonly string[] | undefined;
+
+/**
+ * Tells the record whose constructor runs next that the values of `keys` are
+ * valid as they are. For a class that makes values for its own record on the
+ * way to `super()`, as an entity does of its id.
+ * @internal
+ */
+export function vouchFor(keys: readonly string[]): void {
+	vouched = keys;
+}
+
 /** What building a record of a class needs, the same for each of them. */
 interface Construction {
 	/** The name of the class, the `source` of its issues. */
 	readonly source: string;
-	/** Its values handled by its blueprint. */
-	parse(value: unknown): ParseResult<Readonly<Record<string, unknown>>>;
+	/** Its values handled by its blueprint; the keys of `vouched` are kept as they are. */
+	parse(
+		value: unknown,
+		vouched?: readonly string[],
+	): ParseResult<Readonly<Record<string, unknown>>>;
 }
 
 /** The construction of each record class, made on its first record. */
@@ -482,8 +502,12 @@ export abstract class AbstractRecord<
 			request = undefined;
 		}
 
+		// What the class has just made and knows to be valid, for this record alone.
+		const made = vouched;
+		vouched = undefined;
+
 		const { source, parse } = constructionOf(this);
-		const result = parse(value);
+		const result = parse(value, made);
 		if (result.issues) {
 			if (asked === undefined) throw exceptionOfIssues(result.issues, source);
 			asked.issues = result.issues;

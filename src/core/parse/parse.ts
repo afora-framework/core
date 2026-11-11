@@ -241,18 +241,22 @@ const ROOT: Path = Object.freeze([]) as unknown as Path;
  * `parseCollection` at the root, as a function of the value alone: what it
  * needs of `properties` is looked up on the first value and kept, instead of
  * on every one. For what parses many values of one shape, a blueprint or a
- * record class.
+ * record class. The values of the keys in `vouched` are kept as they are,
+ * unchecked: for what the caller made itself and knows to be valid.
  * @internal
  */
 export function collectionParserOf(
 	properties: IBlueprintCollection,
 	source: string,
-): (value: unknown) => ParseResult<Readonly<Record<string, unknown>>> {
+): (
+	value: unknown,
+	vouched?: readonly string[],
+) => ParseResult<Readonly<Record<string, unknown>>> {
 	let collection: Collection | undefined;
-	return (value) => {
+	return (value, vouched) => {
 		collection ??= collectionOf(properties);
 		const run = runOf(ROOT, source);
-		return resultOf(run, collectionAt(collection, value, run, 0));
+		return resultOf(run, collectionAt(collection, value, run, 0, vouched));
 	};
 }
 
@@ -265,6 +269,7 @@ function collectionAt(
 	value: unknown,
 	run: Run,
 	depth: number,
+	vouched?: readonly string[],
 ): unknown {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		return reject(run, "invalid_type", "must be an object", pathOf(run, depth));
@@ -288,6 +293,10 @@ function collectionAt(
 	const handled: Record<string, unknown> = {};
 	for (let index = 0; index < names.length; index++) {
 		const name = names[index] as string;
+		if (vouched?.includes(name)) {
+			handled[name] = (value as Record<string, unknown>)[name];
+			continue;
+		}
 		run.keys[depth] = name;
 		const item = fieldAt(
 			steps[index] as Step,

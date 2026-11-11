@@ -311,7 +311,8 @@ export function uuidv7(now: number = Date.now()): string {
 }
 
 let hasher: PasswordHasher | undefined;
-let idGenerator: IdGenerator = () => uuidv7();
+const defaultIdGenerator: IdGenerator = () => uuidv7();
+let idGenerator: IdGenerator = defaultIdGenerator;
 
 /** Replaces the password hasher and/or the id generator. */
 export function configure(services: RuntimeServices): void {
@@ -322,7 +323,7 @@ export function configure(services: RuntimeServices): void {
 /** Puts both services back to their defaults and restarts the id clock. */
 export function resetRuntime(): void {
 	hasher = undefined;
-	idGenerator = () => uuidv7();
+	idGenerator = defaultIdGenerator;
 	lastTimestamp = 0;
 	sequence = 0;
 }
@@ -351,6 +352,15 @@ export function currentHasher(): PasswordHasher {
 		crypto: nodeCryptoOf(),
 	});
 	return hasher;
+}
+
+/**
+ * Whether the generator in use is the default one, whose ids `Id` accepts as
+ * they are; one that `configure` put in its place is checked as any value.
+ * @internal
+ */
+export function makesDefaultIds(): boolean {
+	return idGenerator === defaultIdGenerator;
 }
 
 /** Makes an id with the generator in use. */

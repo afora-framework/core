@@ -1,9 +1,10 @@
 import { blueprintBuilderOf } from "../core/blueprint/blueprint";
 import { entityBuilderOf } from "../core/entity/entity";
+import { vouching } from "../core/entity/trust";
 import { Id } from "./properties/identity";
 import { CreatedAt, DeletedAt, ExpiresAt, UpdatedAt } from "./properties/time";
 import { StdRecordPlugins } from "./record-plugins";
-import { generateId } from "./runtime";
+import { generateId, makesDefaultIds } from "./runtime";
 
 /** The identity of every `std` entity. */
 const Identity = blueprintBuilderOf()(() => ({
@@ -25,10 +26,17 @@ const Identity = blueprintBuilderOf()(() => ({
  * from the standard plugins, as `(ctx) => [ctx.publishable]`, or takes any
  * plugin made by `recordPluginOf`.
  */
-export const entityOf = entityBuilderOf({
-	identity: Identity,
-	generateId,
-	now: () => new Date().toISOString(),
-	expiresAt: ExpiresAt,
-	plugins: [StdRecordPlugins],
-});
+export const entityOf = entityBuilderOf(
+	vouching(
+		{
+			identity: Identity,
+			generateId,
+			now: () => new Date().toISOString(),
+			expiresAt: ExpiresAt,
+			plugins: [StdRecordPlugins],
+		},
+		// The default id is a UUID v7 in lower case and `toISOString` a date and
+		// time, which `Id` and `CreatedAt` keep as they are.
+		{ id: makesDefaultIds, createdAt: () => true },
+	),
+);

@@ -1942,7 +1942,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function consoleLogProvider(): ILogProvider;",
   ],
   "entityBuilderOf": [
-    "export declare function entityBuilderOf<Identity extends IEntityIdentity, const Catalogs extends readonly IRecordPluginCatalog[] = [ ]>({ identity, generateId, now, expiresAt, plugins: catalogs, }: EntityBuilderSettings<Identity, Catalogs>): EntityBuilder<Identity, RecordPluginContext<Catalogs>>;",
+    "export declare function entityBuilderOf<Identity extends IEntityIdentity, const Catalogs extends readonly IRecordPluginCatalog[] = [ ]>(settings: EntityBuilderSettings<Identity, Catalogs>): EntityBuilder<Identity, RecordPluginContext<Catalogs>>;",
   ],
   "entityOf": [
     "entityOf: import("../index.js").EntityBuilder<import("../core/property/types/property-options.interface.js").StoredFields<{ id: typeof Id; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; }>, Omit<import("../core/record/types/plugin.interface.js").RecordPluginsByName<readonly [ import("../index.js").IRecordPlugin<typeof import("./record-plugins.js").PublishableRecord, "publishable">, import("../index.js").IRecordPlugin<typeof import("./record-plugins.js").ArchivableRecord, "archivable">, import("../index.js").IRecordPlugin<typeof import("./record-plugins.js").TaggableRecord, "taggable">, import("../index.js").IRecordPlugin<typeof import("./record-plugins.js").OwnableRecord, "ownable">, import("../index.js").IRecordPlugin<typeof import("./record-plugins.js").AuthenticatableRecord, "authenticatable"> ]>, never> & Record<never, never>>",
