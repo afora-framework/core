@@ -16,7 +16,7 @@ Every export of `@afora/core` belongs to one tier. The tier says where it is imp
 - **Stable and adapters follow semver.** Before 1.0 they may still break, and each break is listed in `CHANGELOG.md` with a Migration block (before and after). From 1.0 on, a break waits for a major.
 - **Experimental and internal are outside the contract.** An experimental export may change or go in any release; it is promoted to stable or adapters when it settles. Internal code is reached only through the stable builders.
 - **One name, one entry.** No name is exported by two entries. A package that needs both kinds imports from both: `import { ExceptionLayers } from "@afora/core"` and `import { sinkOf } from "@afora/core/adapters"`.
-- **The entries share module state.** They are built with code splitting, so a class, a symbol or a registry is the same object whichever entry it comes from (`bun run smoke` checks it on Node).
+- **The entries share module state.** `dist/` has one module per module of `src/`, transpiled and not bundled (`scripts/build.ts`), and every entry imports the same files, so a class, a symbol or a registry is the same object whichever entry it comes from (`bun run smoke` checks it on Node). With `"sideEffects": false` in `package.json`, a bundler keeps only the modules an application imports.
 - **`bun run test:api` snapshots each entry.** A change to the snapshot of `@afora/core`, `/adapters` or `/testing` is a change to the contract; one to `/experimental` is reviewed but is not.
 
 ## Deciding a tier
