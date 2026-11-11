@@ -38,7 +38,7 @@ export const verify = (
 ) => user.hash === \`hash:\${String(plain)}\` && call.context !== undefined;
 `;
 
-const GREET_TS = `import { GreetBase } from "../domain/use-cases";
+const GREET_TS = `import { GreetBase } from "../domain/greet.use-case";
 
 export class Greet extends GreetBase {
 	override async execute() {
@@ -302,11 +302,6 @@ describe("validation", () => {
 			"dependency of the wrong kind",
 			(c) => (c.useCases.Greet.dependencies = { x: "User" }),
 			"wrong_kind@useCases.Greet.dependencies.x",
-		],
-		[
-			"dependency on an imported use case",
-			(c) => (c.useCases.Login.dependencies.greet = "Greet"),
-			"import_dependency@useCases.Login.dependencies.greet",
 		],
 		[
 			"unknown error",
@@ -678,8 +673,11 @@ describe("generation", () => {
 			generate(accounts).map((f) => [f.path, f.contents]),
 		);
 		expect(files).toMatchSnapshot();
-		expect(files["src/domain/use-cases.ts"]).toContain(
+		expect(files["src/domain/greet.use-case.ts"]).toContain(
 			"export abstract class GreetBase extends useCaseOf(",
+		);
+		expect(files["src/domain/use-cases.ts"]).toContain(
+			'export { GreetBase } from "./greet.use-case";',
 		);
 		expect(files["src/domain/application.ts"]).toContain(
 			'import { Greet } from "../handlers/greet";',
@@ -908,5 +906,134 @@ describe("hand-written application -> extract -> generate", () => {
 		expect(extractSpec(generated.domain.App, { imports: IMPORTS })).toEqual(
 			spec,
 		);
+	});
+});
+
+describe("a generated use case that depends on an imported one", () => {
+	/** `Welcome` (steps) calls `Greet` (hand-written), and `Shout` (hand-written) depends on `Welcome`. */
+	const composed: Spec = JSON.parse(JSON.stringify(accounts));
+	(composed.useCases as Draft).Welcome = {
+		input: { fields: { name: "text" } },
+		response: { fields: { message: "string" } },
+		dependencies: { greet: "Greet" },
+		implementation: {
+			steps: [
+				{ call: "greet", input: { name: "$input.name" }, as: "greeted" },
+				{ return: { message: "$greeted.greeting" } },
+			],
+		},
+	};
+	(composed.useCases as Draft).Shout = {
+		input: { fields: { name: "text" } },
+		response: { fields: { message: "string" } },
+		dependencies: { welcome: "Welcome" },
+		implementation: { import: "../handlers/shout#Shout" },
+	};
+	const SHOUT_TS = `import { ShoutBase } from "../domain/shout.use-case";
+
+export class Shout extends ShoutBase {
+	override async execute() {
+		const { message } = await this.dependencies.welcome({ name: this.input.name });
+		return { message: message.toUpperCase() };
+	}
+}
+`;
+	const extra = { ...EXTRA, "src/handlers/shout.ts": SHOUT_TS };
+
+	test("is valid", () => {
+		expect(validateSpec(composed)).toEqual([]);
+	});
+
+	test("the use cases a hand-written class needs have a file each; use-cases.ts imports the classes", () => {
+		const files = Object.fromEntries(
+			generate(composed).map((f) => [f.path, f.contents]),
+		);
+		expect(Object.keys(files).sort()).toContain(
+			"src/domain/welcome.use-case.ts",
+		);
+		expect(files["src/domain/shout.use-case.ts"]).toContain(
+			'import { Welcome } from "./welcome.use-case";',
+		);
+		expect(files["src/domain/welcome.use-case.ts"]).toContain(
+			'import { Greet } from "../handlers/greet";',
+		);
+		expect(files["src/domain/welcome.use-case.ts"]).not.toContain(
+			'"./use-cases"',
+		);
+		expect(files["src/domain/use-cases.ts"]).toContain(
+			'export { Welcome } from "./welcome.use-case";',
+		);
+	});
+
+	test("clean for Biome, type-checks and runs", async () => {
+		const { dir, domain } = await build(composed, extra);
+		await Bun.write(
+			join(dir, "biome.json"),
+			JSON.stringify({
+				formatter: { indentStyle: "tab" },
+				javascript: { formatter: { quoteStyle: "double" } },
+				linter: { rules: { preset: "recommended" } },
+				assist: { actions: { source: { organizeImports: "on" } } },
+			}),
+		);
+		const biome = await run(
+			dir,
+			BIOME,
+			"check",
+			`--config-path=${dir}`,
+			join(dir, "src/domain"),
+		);
+		expect(biome.output).not.toContain("error");
+		expect(biome.code).toBe(0);
+		const tsc = await run(dir, "bunx", "tsc", "--noEmit", "-p", dir);
+		expect(tsc.output).toBe("");
+		expect(tsc.code).toBe(0);
+
+		const { Welcome, Shout } = domain.App.useCases;
+		expect(await new Welcome({ name: "Ana" }).execute()).toEqual({
+			message: "Hello, Ana!",
+		});
+		expect(await new Shout({ name: "Ana" }).execute()).toEqual({
+			message: "HELLO, ANA!",
+		});
+		expect(await exercise(domain)).toEqual(EXPECTED);
+		const extracted = extractSpec(domain.App, {
+			imports: { ...IMPORTS, "useCases.Shout": "../handlers/shout#Shout" },
+		});
+		expect(extracted).toEqual(canonical(composed));
+	}, 120_000);
+
+	test("a handler importing its base from use-cases.ts still works when nothing depends on it", async () => {
+		const legacy = GREET_TS.replace(
+			'"../domain/greet.use-case"',
+			'"../domain/use-cases"',
+		);
+		const { domain } = await build(accounts, {
+			...EXTRA,
+			"src/handlers/greet.ts": legacy,
+		});
+		expect(await exercise(domain)).toEqual(EXPECTED);
+	});
+
+	test("a module of hand-written classes that would import itself back is an import_cycle", () => {
+		const copy: Draft = JSON.parse(JSON.stringify(composed));
+		copy.useCases.Greet.implementation = { import: "../handlers/all#Greet" };
+		copy.useCases.Shout.implementation = { import: "../handlers/all#Shout" };
+		expect(codes(copy)).toEqual(["import_cycle@useCases.Shout.implementation"]);
+	});
+
+	test("two use cases with the same file are a file_collision", () => {
+		const copy: Draft = JSON.parse(JSON.stringify(accounts));
+		copy.useCases.GetURL = {
+			input: { fields: {} },
+			response: { fields: {} },
+			implementation: { import: "../handlers/a#GetURL" },
+		};
+		copy.useCases.GetUrl = {
+			input: { fields: {} },
+			response: { fields: {} },
+			implementation: { import: "../handlers/b#GetUrl" },
+		};
+		expect(codes(copy)).toEqual(["file_collision@useCases.GetUrl"]);
 	});
 });

@@ -119,6 +119,19 @@ describe("writeGenerated", () => {
 		).toBe("// mine now\n");
 	});
 
+	test("removes the file of a use case that no longer needs one, only if it carries the banner", async () => {
+		const root = await temp();
+		const dir = join(root, "src/domain");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "greet.use-case.ts"), `${BANNER}\n`);
+		await writeFile(join(dir, "mine.use-case.ts"), "// mine\n");
+		const result = await writeGenerated(root, generate(blogSpec));
+		expect(result.removed).toContain("src/domain/greet.use-case.ts");
+		expect(result.removed).not.toContain("src/domain/mine.use-case.ts");
+		expect(await exists(join(dir, "greet.use-case.ts"))).toBe(false);
+		expect(await exists(join(dir, "mine.use-case.ts"))).toBe(true);
+	});
+
 	test("does not touch other files in the directory", async () => {
 		const root = await temp();
 		await mkdir(join(root, "src/domain"), { recursive: true });

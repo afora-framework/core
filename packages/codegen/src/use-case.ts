@@ -580,20 +580,6 @@ function checkDependencies(
 			issues.push(issue(here, "cycle", "A use case cannot depend on itself."));
 			continue;
 		}
-		if (
-			target.kind === "useCase" &&
-			target.via === undefined &&
-			isImported(target.spec)
-		) {
-			issues.push(
-				issue(
-					here,
-					"import_dependency",
-					`"${target.name}" is implemented by a hand-written class, which imports the generated file that would import it back. Make it a steps use case, or call it through a step of a use case that does not need it as a dependency.`,
-				),
-			);
-			continue;
-		}
 		dependencies.set(key, target);
 	}
 	return dependencies;

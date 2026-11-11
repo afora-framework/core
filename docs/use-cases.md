@@ -140,7 +140,7 @@ The route is data: `ListPosts.route` is the frozen declaration, `app.describe().
 
 ## Steps
 
-Instead of writing `execute`, a use case can declare `steps`: plain data that the use case interprets. The class is concrete, so it needs no body, and `describe()` reports the steps (a hand-written `execute` is `{ kind: "opaque" }`).
+Instead of writing `execute`, a use case can declare `steps`: plain data that the use case interprets. The class is concrete, so it needs no body, and `describe()` reports the steps (a hand-written `execute` is `{ kind: "opaque" }`). Steps are a sequence, with no branching, loops or expressions; a rule that needs them is written in code (see [What steps will never have](#what-steps-will-never-have)).
 
 ```ts
 class Register extends useCaseOf({
@@ -229,6 +229,19 @@ class Register extends useCaseOf({
 A reference that does not fit is reported with the references that would (`'"$input.emial"' is not assignable to type '"$input.name" | "$input.email" | ...'`), and the editor offers them inside a `"$"` string. A path through a value that may be `undefined` (the result of `findByEmail`, an optional key) resolves to a possibly `undefined` value, as `followPath` reads it. A list index is typed as the item. Paths are offered three keys deep below their root.
 
 Checking costs the editor about 9,000 more type instantiations per edit (17%) on a use case of five steps (see `bun run test:type-perf`), which is why it is opt-in. It only applies to steps written inline (a tuple); steps built at run time are checked at declaration only. `strictSteps` has no effect at run time and must be a boolean. The code [codegen](../packages/codegen/README.md) generates from `afora.json` declares it.
+
+### What steps will never have
+
+Steps are for a rule that is a sequence: read, check, build, change, store, call and return, in order. Each step names declared things (a repository action, a record class, an exception, a dependency) and values that are references or literals, so the whole rule is data that a spec, a reviewer or an agent can govern: `useCaseOf` and the `afora.json` validator check every name and path, `describe()` reports the rule, and [`afora.json`](afora-json.md) generates it and extracts it back unchanged.
+
+Steps have no branching (`if`, `switch`), no loops (`forEach`, `while`) and no expressions (operators, interpolation, conditions on values), and will not get them. Each would turn the list into a small programming language inside JSON, with its own scoping, evaluation order and errors, that the validator, the types of [strict steps](#strict-steps) and the round trip would all have to follow. And from 27.0 on the vocabulary is bound by compatibility: a step added once stays in every later version. The vocabulary is the table above.
+
+What does not fit leaves the steps in one of two ways, and neither changes the declaration:
+
+- **A value computed from others** (a hash, a total, a slug): keep the steps and add a `run` step with a function. The function is code; the flow stays data.
+- **A rule that branches, loops over a list with effects, or reads better as code**: implement the use case in code. In TypeScript, the class drops `steps` and overrides `execute`. In `afora.json`, `implementation` becomes `{ "import": "../handlers/reserve#Reserve" }`: the generator writes `export abstract class ReserveBase extends useCaseOf({...}) {}` with the same declaration (in `reserve.use-case.ts`), and the hand-written `Reserve` extends it and implements `execute`. The input, response, context, dependencies, errors, route and access stay declared, so the response is still validated, the errors are still listed, and every use case that depends on it stays as it is, a steps use case that `call`s it included. [When steps are not enough](afora-json.md#when-steps-are-not-enough) shows the move, before and after.
+
+Bending a rule into steps with flags and `ensure` tricks to avoid code is not the intent: a use case implemented in code is the supported way out, not a failure of the spec.
 
 ## Plugins
 

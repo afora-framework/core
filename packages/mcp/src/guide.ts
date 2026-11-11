@@ -128,8 +128,9 @@ a file of your own.
 - \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`. \`dependencies\` map a key to a use case, repository
   or environment, or to \`"Logger"\` for the logger of the application (an \`ILogger\`; no step reads it). \`errors\` are declared exceptions or exceptions exported by @afora/core (\`coreExceptions\` of \`afora_catalog\`).
 - \`implementation\` is \`{ "steps": [...] }\` (generated complete, no hand-written file) or \`{ "import": "../handlers/x.ts#Name" }\`:
-  the generated file has \`abstract class <Name>Base\`; write \`class Name extends <Name>Base\` with \`execute\` at that path.
-  A use case cannot list an imported (hand-written) use case as a dependency.
+  \`afora_generate\` writes \`abstract class <Name>Base\` in \`<kebab-name>.use-case.ts\` of output.dir (\`RegisterUser\` -> \`register-user.use-case.ts\`);
+  write \`class Name extends <Name>Base\` with \`execute\` at that path, importing the base from that file. Any use case can list an imported one
+  as a dependency; two hand-written classes in one module that depend on each other are an \`import_cycle\` (give each a module).
 - Steps run in order and \`return\` is last, exactly once: \`find\` ("<repo>.<read action>"), \`ensure\` (exists | absent | equals | notEquals | true | false;
   \`other\` for the comparisons, \`error\` a declared exception name or a core one, listed in \`errors\`; optional \`details\`), \`build\` (a record or
   entity name, \`values\`, \`as\`), \`change\` ($ref, \`key\` in the class's change keys, \`value\`), \`invoke\` ($ref, \`method\`, \`args\`),
@@ -235,10 +236,11 @@ reference, and the rule round-trips as data. Use steps when the rule reads as "f
   errors, route and access; only \`execute\` is hand-written.
 
 Do not bend a rule into steps with flags and \`ensure\` tricks to avoid code: an \`import\` use case is the supported way out, not a failure.
-With \`import\`, \`afora_generate\` writes \`export abstract class <Name>Base extends useCaseOf({...})\` and you write the class once, in the file named:
+With \`import\`, \`afora_generate\` writes \`export abstract class <Name>Base extends useCaseOf({...})\` in \`<kebab-name>.use-case.ts\`
+and you write the class once, in the file named:
 
 \`\`\`ts
-import { ReserveBase } from "../domain/use-cases";
+import { ReserveBase } from "../domain/reserve.use-case";
 
 export class Reserve extends ReserveBase {
   override async execute() {
@@ -252,7 +254,8 @@ export class Reserve extends ReserveBase {
 \`\`\`
 
 \`this.input\`, \`this.context\` and \`this.dependencies\` are typed from the spec. A dependency that is another use case is a function:
-\`await this.dependencies.charge(input)\`. Throw only exceptions the spec lists in \`errors\`.
+\`await this.dependencies.charge(input)\`. Throw only exceptions the spec lists in \`errors\`. A steps use case may depend on an \`import\` one
+and \`call\` it, so moving one use case to code does not move the ones that use it.
 
 ## A project written in code
 

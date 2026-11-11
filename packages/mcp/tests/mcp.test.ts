@@ -877,7 +877,7 @@ export const App = applicationOf({ name: "notes", entities: { Note }, repositori
 describe("exceptions and use cases", () => {
 	const hashTs =
 		"export const hashPassword = (plain: unknown) => String(plain);\n";
-	const greetTs = `import { GreetBase } from "../domain/use-cases";
+	const greetTs = `import { GreetBase } from "../domain/greet.use-case";
 export class Greet extends GreetBase {
 	override async execute() {
 		return { greeting: \`Hello, \${this.input.name}!\` };

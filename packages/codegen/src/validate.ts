@@ -33,6 +33,7 @@ import {
 	type StageCatalogEntry,
 } from "./spec/types";
 import { checkException, checkUseCase } from "./use-case";
+import { useCaseFileIssues } from "./use-case-files";
 
 const TOP_LEVEL_KEYS = [
 	"$schema",
@@ -1416,6 +1417,8 @@ function check(
 			),
 		);
 	}
+	// The files of the use cases hand-written classes need.
+	issues.push(...useCaseFileIssues(own, scope));
 	// Stable output: by path, then code.
 	issues.sort(
 		(a, b) =>
