@@ -624,4 +624,3 @@ afora is a framework with one entry point: its bundle carries TypeBox and the co
 `bun run bench:guard` times `blueprint.safeParse` and Zod 4 safeParse on every case above, several times each in one process, and fails when the best time of afora is over the limit of the case, as a multiple of the best time of Zod 4. The limit is 1.15x, except:
 
 - `large-list valid`: 1.25x. afora is level with Zod 4 here (about 1.0x): freezing 1,000 objects and their array is most of the time. The limit is that plus noise.
-- `union invalid`: 2.75x. A property whose schema is a union is told by the variant the value names, through TypeBox `Errors` on that variant, which walks its schema without the compiled code: about 2.2x Zod 4. The limit is that plus noise.
