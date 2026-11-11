@@ -84,6 +84,7 @@ Writes store the current shape (and `$v`), so the rows converge as they are writ
 
 - A query filters and orders on the stored rows: `where: { locale: "pt" }` does not match an old row that lacks `locale`, nor `where: { title }` one that still has `name`. Run the backfill before relying on such queries.
 - Each read of an old row repeats the steps. On large lists, run the backfill.
+- `increment` of a key with `renamedFrom` reads the row first and, when it still holds the old key, writes it brought up (at the version read, for a versioned entity) before the provider adds the delta, so the delta adds to the old value instead of to 0. Without `capabilities.versioning`, a write of the same row in between can be lost; the backfill avoids it.
 
 ## app.migrate
 

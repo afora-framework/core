@@ -818,5 +818,38 @@ describe("app.start({ lock })", () => {
 	});
 });
 
+describe("increment of a renamed key", () => {
+	for (const versioned of [false, true]) {
+		test(`adds to the value stored under the old key${versioned ? " (versioned)" : ""}`, async () => {
+			const provider = inMemoryProvider();
+			class Page extends entityOf(
+				blueprintOf((ctx) => ({
+					hits: ctx.integer.with({ renamedFrom: "views" }),
+				})),
+				{ name: "Page", change: ["hits"], versioned },
+			) {}
+			const Pages = repositoryOf({
+				entity: Page,
+				actions: ["increment", "findById"],
+				provider,
+			});
+			const raw = contextOf(Page, "Page");
+			const id = idOf();
+			await provider.insert(raw, {
+				id,
+				createdAt,
+				views: 40,
+				...(versioned ? { version: 1 } : {}),
+			});
+			const page = await Pages.increment(id, { hits: 1 });
+			expect(page.hits).toBe(41);
+			expect((await Pages.findById(id))?.hits).toBe(41);
+			const [stored] = await provider.findMany(raw, { where: { id } });
+			expect(stored).not.toHaveProperty("views");
+			expect(stored?.hits).toBe(41);
+		});
+	}
+});
+
 // Keeps the helper types honest.
 export type { RepositoryData };

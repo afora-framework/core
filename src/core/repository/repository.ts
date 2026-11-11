@@ -21,6 +21,7 @@ import {
 	type MergedEnvironment,
 } from "../environment/environment";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
+import { Exception } from "../exception/exception";
 import { guard } from "../exception/guard";
 import { resolveLogger, writeLog } from "../logger/logger";
 import type { Issue } from "../parse/types/parse.interface";
@@ -39,6 +40,7 @@ import {
 	InvalidRepositoryEntity,
 	InvalidRepositoryIncrement,
 	InvalidRepositoryQuery,
+	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 } from "./exceptions";
 import { inMemoryProvider } from "./in-memory";
@@ -74,7 +76,12 @@ import type {
 	RepositoryData,
 	RepositoryOf as RepositoryType,
 } from "./types/repository.interface";
-import { upcastRows, withSchemaVersion } from "./upcast";
+import {
+	fullUpcastPlanOf,
+	upcast,
+	upcastRows,
+	withSchemaVersion,
+} from "./upcast";
 
 /** What `repositoryOf` takes. */
 export interface RepositorySettings<
@@ -753,6 +760,74 @@ function createdOf(
 	return entity;
 }
 
+/** The key `field` was stored under before (`renamedFrom`), if any. */
+function renamedFromOf(field: BlueprintField | undefined): string | undefined {
+	if (field === undefined) return undefined;
+	const property = fieldOf(field);
+	if (!isProperty(property)) return undefined;
+	const { renamedFrom } = property.type as { readonly renamedFrom?: unknown };
+	return typeof renamedFrom === "string" ? renamedFrom : undefined;
+}
+
+/**
+ * Before the provider adds `deltas` to the row `id`: when a key of `deltas`
+ * was renamed (`renamedFrom`) and the stored row still holds the old key,
+ * writes the row brought up first, so the delta adds to the value it had,
+ * not to 0 (the provider increments the stored keys, and the read that
+ * follows would leave the old one out). A row written in between (a
+ * versioned conflict) is already in the current shape.
+ */
+async function bringUpRenamed(
+	self: Internal,
+	id: string,
+	deltas: Readonly<Record<string, number>>,
+): Promise<void> {
+	const { context } = self;
+	const properties = context.entity.blueprint.properties as Readonly<
+		Record<string, BlueprintField | undefined>
+	>;
+	const renamed: [string, string][] = [];
+	for (const key of Object.keys(deltas)) {
+		const from = renamedFromOf(properties[key]);
+		if (from !== undefined) renamed.push([key, from]);
+	}
+	if (renamed.length === 0) return;
+	const stored = await self.provider.findOne(context, {
+		where: { id },
+		withDeleted: true,
+		...(context.expiry === undefined ? {} : { withExpired: true }),
+	});
+	if (
+		stored === undefined ||
+		!renamed.some(
+			([key, from]) => stored[key] === undefined && Object.hasOwn(stored, from),
+		)
+	) {
+		return;
+	}
+	const data = withSchemaVersion(
+		context.entity,
+		upcast(context.name, fullUpcastPlanOf(context.entity), stored, false),
+	);
+	const expected = stored.version;
+	try {
+		await self.provider.update(
+			context,
+			data,
+			isVersionedEntityClass(context.entity) && typeof expected === "number"
+				? { expectedVersion: expected }
+				: undefined,
+		);
+	} catch (error) {
+		if (
+			!(error instanceof Exception) ||
+			!error.is(RepositoryConcurrencyConflict)
+		) {
+			throw error;
+		}
+	}
+}
+
 const increment = action(
 	async (self, target: unknown, deltas: unknown, options: unknown) => {
 		const { context } = self;
@@ -769,6 +844,7 @@ const increment = action(
 			create === undefined
 				? undefined
 				: createdOf(context, id, create, checked);
+		await bringUpRenamed(self, id, checked);
 		const stored = await (
 			self.provider.increment as NonNullable<IRepositoryProvider["increment"]>
 		)(context, id, versioned ? { ...checked, version: 1 } : checked, {
