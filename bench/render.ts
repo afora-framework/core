@@ -249,7 +249,13 @@ const SYMBOL: Array<[x: number, y: number, width: number, faded?: true]> = [
 ];
 
 /** A band of waves across `width`, from `y`, `amplitude` high, shifted by `phase` (0 to 1). */
-function wave(width: number, y: number, amplitude: number, phase: number, bottom: number) {
+function wave(
+	width: number,
+	y: number,
+	amplitude: number,
+	phase: number,
+	bottom: number,
+) {
 	const period = 260;
 	let d = `M0,${bottom} L0,${y}`;
 	for (let x = -period * phase; x < width; x += period) {
@@ -310,7 +316,11 @@ export function renderChart(report: Report): string {
 		([x, y, w, faded]) =>
 			`<rect x="${x}" y="${y}" width="${w}" height="7" rx="3.5" fill="url(#sun)"${faded ? ' opacity=".42"' : ""}/>`,
 	);
-	symbol.splice(9, 0, '<rect class="horizon" x="63" y="124.5" width="130" height="7" rx="3.5"/>');
+	symbol.splice(
+		9,
+		0,
+		'<rect class="horizon" x="63" y="124.5" width="130" height="7" rx="3.5"/>',
+	);
 
 	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-labelledby="title desc" font-family="'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
 <title id="title">Validations per second: ${escapeXml(table.title)}, ${table.case} input</title>
