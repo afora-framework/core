@@ -11,8 +11,4 @@ export const GUARD_LIMITS: Record<string, { limit: number; why: string }> = {
 		limit: 1.25,
 		why: "afora is level with Zod 4 here (about 1.0x): freezing 1,000 objects and their array is most of the time. The limit is that plus noise.",
 	},
-	"union invalid": {
-		limit: 2.75,
-		why: "A property whose schema is a union is told by the variant the value names, through TypeBox `Errors` on that variant, which walks its schema without the compiled code: about 2.2x Zod 4. The limit is that plus noise.",
-	},
 };

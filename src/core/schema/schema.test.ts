@@ -95,7 +95,7 @@ const LEAVES: Record<string, TSchema> = {
 	"limits without type": Type.Unsafe({ minLength: 2, minimum: 3 }),
 };
 
-/** Schemas only `Errors` can tell about. */
+/** Schemas that are not leaves; those in `ASKED` are told by `Errors`, the others without it. */
 const OTHERS: Record<string, TSchema> = {
 	object: Type.Object({ a: Type.Number() }),
 	array: Type.Array(Type.String({ minLength: 1 })),
@@ -111,6 +111,13 @@ const OTHERS: Record<string, TSchema> = {
 		minLength: "3",
 	}),
 };
+
+/** The schemas above with a keyword only TypeBox tells. */
+const ASKED = new Set([
+	"intersect",
+	"a keyword that is not a leaf's",
+	"a limit TypeBox does not read",
+]);
 
 function schemaFor(type: TSchema) {
 	const Schema = schemaOf("probe", type);
@@ -135,8 +142,8 @@ for (const [name, type] of Object.entries({ ...LEAVES, ...OTHERS })) {
 			expect(errorsOfSchema(schema, value)).toEqual(errors(value) as never);
 		}
 		if (name !== "unknown") expect(rejected).toBeGreaterThan(0);
-		// A leaf never asks TypeBox, any other schema always does.
-		expect(asked).toBe(name in LEAVES ? 0 : rejected);
+		// TypeBox is only asked about a keyword that has no explanation here.
+		expect(asked).toBe(ASKED.has(name) ? rejected : 0);
 	});
 }
 
@@ -330,12 +337,14 @@ test.each<[string, TSchema, unknown]>([
 		}),
 		{ type: "a", x: "1" },
 	],
-])("TypeBox tells the errors of %s", (_, type, value) => {
-	const { errors, asked, typebox } = explained(type, value);
+])(
+	"the errors of %s are those of TypeBox, of every variant",
+	(_, type, value) => {
+		const { errors, typebox } = explained(type, value);
 
-	expect(errors).toEqual(typebox as never);
-	expect(asked).toBe(1);
-});
+		expect(errors).toEqual(typebox as never);
+	},
+);
 
 test("a union inside a variant is told by TypeBox, under the variant", () => {
 	const Nested = Type.Union([
@@ -351,4 +360,217 @@ test("a union inside a variant is told by TypeBox, under the variant", () => {
 		errors.every((error) => error.schemaPath.startsWith("#/anyOf/0")),
 	).toBe(true);
 	expect(errors.at(-1)?.keyword).toBe("anyOf");
+});
+
+// ------------------------------------------- objects, arrays and unions
+// Schemas and values made from a seed, so that a failure can be run again.
+function generatorOf(seed: number) {
+	let state = seed;
+	const next = () => {
+		state = (state + 0x6d2b79f5) | 0;
+		let mixed = Math.imul(state ^ (state >>> 15), 1 | state);
+		mixed = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed;
+		return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+	};
+	const pick = <Item>(items: readonly Item[]) =>
+		items[Math.floor(next() * items.length)] as Item;
+	const chance = (odds: number) => next() < odds;
+	return { pick, chance };
+}
+
+const KEYS = ["a", "b", "a/b", "c~d", "type"] as const;
+
+function leafSchema({ pick, chance }: ReturnType<typeof generatorOf>) {
+	return pick<() => object>([
+		() => ({
+			type: "string",
+			...(chance(0.5) ? { minLength: pick([1, 2, 3]) } : {}),
+			...(chance(0.3) ? { maxLength: pick([1, 2]) } : {}),
+			...(chance(0.2) ? { pattern: "^a" } : {}),
+			...(chance(0.2) ? { format: "email" } : {}),
+		}),
+		() => ({
+			type: pick(["number", "integer"]),
+			...(chance(0.5) ? { minimum: pick([0, 1]) } : {}),
+			...(chance(0.3) ? { exclusiveMaximum: pick([2, 3]) } : {}),
+			...(chance(0.2) ? { multipleOf: 2 } : {}),
+		}),
+		() => ({ type: "boolean" }),
+		() => ({ type: "null" }),
+		() => ({ const: pick(["a", 1, true]) }),
+		() => ({
+			enum: pick([
+				["a", "b"],
+				[1, 2],
+				["a", 1, null],
+			]),
+		}),
+		() => ({}),
+	])();
+}
+
+function anySchema(
+	random: ReturnType<typeof generatorOf>,
+	depth: number,
+): object {
+	const { pick, chance } = random;
+	if (depth === 0 || chance(0.35)) return leafSchema(random);
+	return pick<() => object>([
+		() => {
+			const keys = KEYS.filter(() => chance(0.5));
+			const required = keys.filter(() => chance(0.6));
+			return {
+				...(chance(0.8) ? { type: "object" } : {}),
+				...(keys.length > 0 || chance(0.5)
+					? {
+							properties: Object.fromEntries(
+								keys.map((key) => [key, anySchema(random, depth - 1)]),
+							),
+						}
+					: {}),
+				...(required.length > 0 ? { required } : {}),
+				...(chance(0.5) ? { additionalProperties: false } : {}),
+			};
+		},
+		() => ({
+			...(chance(0.8) ? { type: "array" } : {}),
+			...(chance(0.8) ? { items: anySchema(random, depth - 1) } : {}),
+			...(chance(0.3) ? { minItems: pick([1, 2]) } : {}),
+			...(chance(0.3) ? { maxItems: pick([0, 1]) } : {}),
+		}),
+		() => ({
+			anyOf: Array.from({ length: pick([1, 2, 3]) }, () =>
+				anySchema(random, depth - 1),
+			),
+		}),
+	])();
+}
+
+function anyValue(
+	random: ReturnType<typeof generatorOf>,
+	depth: number,
+): unknown {
+	const { pick, chance } = random;
+	if (depth === 0 || chance(0.4)) {
+		return pick([
+			null,
+			true,
+			false,
+			-1,
+			0,
+			1,
+			2,
+			2.5,
+			3,
+			"",
+			"a",
+			"ab",
+			"abc",
+			"a@b.co",
+			"b",
+		]);
+	}
+	if (chance(0.5)) {
+		const keys = [...KEYS, "extra"].filter(() => chance(0.45));
+		return Object.fromEntries(
+			keys.map((key) => [
+				key,
+				chance(0.1) ? undefined : anyValue(random, depth - 1),
+			]),
+		);
+	}
+	return Array.from({ length: pick([0, 1, 2, 3]) }, () =>
+		anyValue(random, depth - 1),
+	);
+}
+
+test("objects, arrays and unions are told as TypeBox tells them, without asking it", () => {
+	// `AFORA_SEED` runs it on other schemas and values.
+	const random = generatorOf(Number(process.env.AFORA_SEED ?? 20261111));
+	let compared = 0;
+
+	for (let round = 0; round < 400; round++) {
+		const generated = anySchema(random, 3);
+		// A union at the top could be a discriminated one, told differently on purpose.
+		const wrapped = "anyOf" in generated;
+		const raw = wrapped
+			? { type: "object", properties: { root: generated }, required: ["root"] }
+			: generated;
+		const schema = schemaFor(Type.Unsafe(raw));
+		const validator = schema.type as { Errors(value: unknown): unknown };
+		const errors = validator.Errors.bind(validator);
+		let asked = 0;
+		validator.Errors = (value) => {
+			asked++;
+			return errors(value);
+		};
+
+		for (let sample = 0; sample < 30; sample++) {
+			const inner = anyValue(random, 3);
+			const value = wrapped ? { root: inner } : inner;
+			if (schema.match(value)) continue;
+			for (const settings of [{}, { maxErrors: 1 }, { maxErrors: 3 }]) {
+				Settings.Reset();
+				Settings.Set(settings);
+				const told = errorsOfSchema(schema, value);
+				const expected = errors(value);
+				if (!Bun.deepEquals(told, expected)) {
+					// Says which schema and value, which `toEqual` alone would not.
+					expect({ raw, value, settings, told }).toEqual({
+						raw,
+						value,
+						settings,
+						told: expected,
+					} as never);
+				}
+				compared++;
+			}
+			Locale.Set(Locale.pt_BR);
+			expect(errorsOfSchema(schema, value)).toEqual(errors(value) as never);
+			Locale.Reset();
+			Settings.Reset();
+		}
+		expect({ raw, asked }).toEqual({ raw, asked: 0 });
+	}
+	expect(compared).toBeGreaterThan(10000);
+});
+
+test("an optional key given as undefined is checked when TypeBox is told to", () => {
+	const schema = schemaFor(
+		Type.Object({ a: Type.Optional(Type.String()), b: Type.Number() }),
+	);
+	const value = { a: undefined, b: "1" };
+
+	expect(errorsOfSchema(schema, value)).toEqual(
+		schema.type.Errors(value) as never,
+	);
+	Settings.Set({ exactOptionalPropertyTypes: true });
+	expect(errorsOfSchema(schema, value)).toEqual(
+		schema.type.Errors(value) as never,
+	);
+	expect(errorsOfSchema(schema, value)).toHaveLength(2);
+});
+
+test("inherited keys, own hidden keys and holes are read as TypeBox reads them", () => {
+	const schema = schemaFor(
+		Type.Object(
+			{ a: Type.String(), list: Type.Array(Type.Number()) },
+			{ additionalProperties: false },
+		),
+	);
+	const hidden = Object.create(
+		{ a: 1 },
+		{
+			secret: { value: 1, enumerable: false },
+		},
+	);
+	// biome-ignore lint/suspicious/noSparseArray: a hole is what is tested
+	hidden.list = [1, , "x"];
+
+	expect(errorsOfSchema(schema, hidden)).toEqual(
+		schema.type.Errors(hidden) as never,
+	);
+	expect(
+		errorsOfSchema(schema, hidden).map((error) => error.instancePath),
+	).toEqual(["/secret", "", "/a", "/list/2"]);
 });
