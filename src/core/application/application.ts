@@ -1,3 +1,4 @@
+import type { TSchema } from "typebox";
 import { fieldOf } from "../blueprint/callable";
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
@@ -74,6 +75,8 @@ import {
 import type { ProviderDescription } from "../repository/types/query.interface";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import type { SchemaMigrationOptions } from "../repository/types/schema.interface";
+import { rawTypeOf } from "../schema/schema";
+import type { ISchema } from "../schema/types/schema.interface";
 import { Kind } from "../symbols/kind";
 import {
 	ApplicationTracerKey,
@@ -763,7 +766,7 @@ function propertyDescriptionOf(
 			readonly optional?: boolean;
 			readonly sensitive?: boolean;
 			readonly unique?: boolean;
-			readonly schema: { readonly type: { Type(): unknown } };
+			readonly schema: ISchema<TSchema>;
 		};
 	};
 	const lineage = propertyLineageOf(Property);
@@ -772,7 +775,7 @@ function propertyDescriptionOf(
 		optional: type.optional === true,
 		sensitive: type.sensitive === true,
 		unique: type.unique === true,
-		schema: plainOf(type.schema.type.Type()) as Record<string, unknown>,
+		schema: plainOf(rawTypeOf(type.schema)) as Record<string, unknown>,
 		...(lineage ? { lineage: lineageDescriptionOf(lineage, scope) } : {}),
 	};
 }

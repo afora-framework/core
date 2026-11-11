@@ -11,6 +11,7 @@ import { isBlueprintVariant } from "../blueprint/variant";
 import { identityKeysOf } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
 import { isProperty } from "../property/is-property";
+import { rawTypeOf } from "../schema/schema";
 import { InvalidOpenAPIModel } from "./exceptions";
 import type {
 	OpenAPIComponents,
@@ -166,7 +167,7 @@ function schemaOf(field: BlueprintField, scope: Scope): Schema {
 			details: { name: String(field) },
 		});
 	}
-	const schema = plainOf(field.type.schema.type.Type()) as Schema;
+	const schema = plainOf(rawTypeOf(field.type.schema)) as Schema;
 	if (field.type.sensitive) schema.writeOnly = true;
 	return schema;
 }

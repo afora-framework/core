@@ -8,6 +8,16 @@
 - New package `@afora/otel`: `otelTracer(tracer?)` adapts an OpenTelemetry `Tracer` (by default `trace.getTracer("@afora/otel")`) to `ITracer`. A command span is a child of the active span; failures set the status to `ERROR`. `@opentelemetry/api` is a peer dependency.
 - `@afora/codegen`: `"trace": { "import": "./trace.ts#tracer" }` in `afora.json` generates `applicationOf({ trace })`; extraction needs `imports.trace`.
 
+### Changed
+
+- `@afora/core` is smaller in a bundle and loads faster (#86), with no change to its API. Measured on an Apple M2 with Bun 1.4.4 and Node 22, on the cold start entry of `bench/` (`blueprintOf` with three properties and one `safeParse`, bundled with `Bun.build` minified): 418 kB minified / 110 kB gzip before, 190 kB / 53 kB after, from `src/index.ts` or from the built `dist/index.js` (422 / 111 kB before); 24 TypeBox compiles at import before, 3 after (the entry's own); a new process imports that bundle in about 17 ms on Node and on Bun, from 60 to 68 ms on Node and 44 to 47 ms on Bun measured side by side on the same loaded machine (38 and 26 ms on a quieter run). What changed:
+  - Reading the TypeBox schema of a property, a blueprint or a record no longer compiles it. Twelve places only read it back through `schema.type.Type()`, which compiled first; the JSON Schema meta-schema of `ctx.schema` alone took 10 to 50 ms to compile at import.
+  - `ctx.optional.*`, `ctx.list.*` and `ctx.list.optional.*` are made when they are first read, and kept. They were made for every field of every source on each `blueprintOf` (95 objects per blueprint with Std). They are still frozen, with the same keys, and `ctx.list.optional.x` is still `optionalOf(ctx.list.x)`; they are getters now, not data properties.
+  - The TypeBox locales are no longer all kept by a bundler: `Locale` and `Settings` are imported by name (about 100 kB minified with Bun; esbuild still keeps them as soon as `Locale` is referenced).
+  - `package.json` declares `"sideEffects": false`, so a bundler drops the modules an application does not import. No module of the package is imported for what it does at import.
+  - `dist/` has one module per module of `src/`, transpiled and not bundled (`scripts/build.ts`), instead of four entries bundled with code splitting into shared chunks, which left a bundler no whole module to drop. The `exports` are the same, and the entries still share one copy of each class, symbol and registry. Imported without a bundler, the package has 133 files instead of 9: on Node that load takes about as long as before (the changes above pay for the extra files; about 20% longer than the same code in chunks would), and on Bun less.
+- `bench/` bundles every entry with the TypeBox copy afora uses, the TypeBox entry included; it used the version `bench/package.json` pins.
+
 ## 0.0.10 — unreleased (draft: dated when it is published)
 
 ### Changed

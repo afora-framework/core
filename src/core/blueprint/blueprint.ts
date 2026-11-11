@@ -2,7 +2,7 @@ import { type TObject, type TSchema, Type } from "typebox";
 import { collectionParserOf } from "../parse/parse";
 import { isProperty } from "../property/is-property";
 import { propertyOf } from "../property/property";
-import { schemaOf } from "../schema/schema";
+import { rawTypeOf, schemaOf } from "../schema/schema";
 import { withStandard } from "../standard/standard";
 import { Kind } from "../symbols/kind";
 import { callableOf, fieldOf } from "./callable";
@@ -120,6 +120,28 @@ const HELPERS = { listOf, optionalOf, propertyOf, variantOf } as const;
 const RESERVED_KEYS = ["optional", "list", ...Object.keys(HELPERS)];
 
 /**
+ * An object with an enumerable getter for each of `keys`, which makes its
+ * value with `make` when it is first read and gives that same value after.
+ */
+function lazyMirror(
+	keys: readonly string[],
+	make: (key: string) => BlueprintField,
+): IBlueprintCollection {
+	const fields: IBlueprintCollection = {};
+	for (const key of keys) {
+		let field: BlueprintField | undefined;
+		Object.defineProperty(fields, key, {
+			get: () => {
+				field ??= make(key);
+				return field;
+			},
+			enumerable: true,
+		});
+	}
+	return fields;
+}
+
+/**
  * The fields of every source, the factories of its plugins (which replace a
  * field with the same name), `listOf`, `optionalOf`, `propertyOf` and
  * `variantOf`, the
@@ -173,22 +195,36 @@ function contextOf(
 		Object.fromEntries(
 			Object.entries(fields).map(([key, field]) => [key, map(field)]),
 		);
-
-	const list = mirror(available, (field) => listOf(field));
 	const callable = (field: BlueprintField): BlueprintField =>
 		isProperty(field) ? callableOf(field) : field;
+
+	// `optional`, `list` and `list.optional` hold a field for every key, made
+	// when the key is first read: a blueprint reads few of them, and making
+	// them all (an optional property, a list, a callable) cost most of the
+	// time `blueprintOf` took with Std.
+	const keys = Object.keys(available);
+	const list = lazyMirror(keys, (key) =>
+		listOf(available[key] as BlueprintField),
+	);
+	const optional = lazyMirror(keys, (key) =>
+		callable(optionalOf(available[key] as BlueprintField)),
+	);
+	const listOptional = Object.freeze(
+		lazyMirror(keys, (key) => optionalOf(list[key] as BlueprintField)),
+	);
+	Object.defineProperty(list, "optional", {
+		value: listOptional,
+		enumerable: true,
+	});
 
 	return Object.freeze({
 		...mirror(available, callable),
 		...factories,
 		...HELPERS,
-		optional: Object.freeze(
-			mirror(available, (field) => callable(optionalOf(field))),
+		optional: Object.freeze(optional),
+		list: Object.freeze(
+			list as IBlueprintCollection & { readonly optional: typeof listOptional },
 		),
-		list: Object.freeze({
-			...list,
-			optional: Object.freeze(mirror(list, optionalOf)),
-		}),
 	}) as BlueprintContext<readonly BlueprintSource[]>;
 }
 
@@ -209,7 +245,7 @@ function schemaOfField(
 		return field.optional ? Type.Optional(schema) : schema;
 	}
 	if (isBlueprint(field)) {
-		const schema = field.schema.type.Type();
+		const schema = rawTypeOf(field.schema);
 		return field.optional ? Type.Optional(schema) : schema;
 	}
 	if (isBlueprintVariant(field)) {
@@ -217,9 +253,9 @@ function schemaOfField(
 		const schema = Type.Union(
 			Object.entries(field.variants as BlueprintVariants).map(
 				([tag, variant]) => {
-					const object = blueprintOfVariant(
-						variant,
-					).schema.type.Type() as TObject;
+					const object = rawTypeOf(
+						blueprintOfVariant(variant).schema,
+					) as TObject;
 					return {
 						...object,
 						properties: {
@@ -235,11 +271,11 @@ function schemaOfField(
 	}
 	const record = recordFieldOf(field);
 	if (record) {
-		const schema = record.record.blueprint.schema.type.Type();
+		const schema = rawTypeOf(record.record.blueprint.schema);
 		return record.optional ? Type.Optional(schema) : schema;
 	}
 	if (isProperty(field)) {
-		return field.type.schema.type.Type();
+		return rawTypeOf(field.type.schema);
 	}
 
 	throw new UndeclaredBlueprintProperty({

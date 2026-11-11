@@ -1,5 +1,5 @@
 import type { TSchema } from "typebox";
-import { schemaOf } from "../schema/schema";
+import { rawTypeOf, schemaOf } from "../schema/schema";
 import { Demo } from "../symbols/demo";
 import type { AbstractDefineProperty } from "./define-property";
 import { recordPropertyLineage } from "./lineage";
@@ -125,7 +125,7 @@ export function refinePropertyOf<Property extends AnyPropertyConstructor>(
 ): Property {
 	const base = Property.type;
 	const settings = options as Record<string, unknown>;
-	const schema = refinedSchemaOf(base.schema.type.Type(), settings);
+	const schema = refinedSchemaOf(rawTypeOf(base.schema), settings);
 	const SchemaConstructor = schemaOf(base.name, schema);
 	const examples = settings.examples as readonly unknown[] | undefined;
 

@@ -1,3 +1,4 @@
+import type { TSchema } from "typebox";
 import { blueprintFromProperties } from "../blueprint/blueprint";
 import { isRecordClass } from "../blueprint/record-field";
 import type {
@@ -13,6 +14,8 @@ import type {
 	IRecordPluginCatalog,
 	RecordPluginContext,
 } from "../record/types/plugin.interface";
+import { rawTypeOf } from "../schema/schema";
+import type { ISchema } from "../schema/types/schema.interface";
 import {
 	AbstractEntity,
 	ENTITY_IDENTITY_KEYS,
@@ -250,13 +253,10 @@ const DURATION_UNITS: Readonly<Record<keyof EntityDuration, number>> = {
 /** Whether `field` holds a date, or a date and time, as an ISO 8601 string. */
 function isDateField(field: unknown): boolean {
 	if (!isProperty(field)) return false;
-	const schema = (
-		field as {
-			readonly type: {
-				readonly schema: { readonly type: { Type(): unknown } };
-			};
-		}
-	).type.schema.type.Type() as {
+	const schema = rawTypeOf(
+		(field as { readonly type: { readonly schema: ISchema<TSchema> } }).type
+			.schema,
+	) as {
 		readonly type?: unknown;
 		readonly format?: unknown;
 	};

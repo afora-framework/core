@@ -149,7 +149,7 @@
     },
     "packages/otel": {
       "name": "@afora/otel",
-      "version": "0.0.9",
+      "version": "0.0.10",
       "devDependencies": {
         "@afora/hono": "workspace:*",
         "@opentelemetry/api": "^1.9.0",
