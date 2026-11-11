@@ -665,7 +665,7 @@ export function errorsOfSchema(
 ): readonly SchemaError[] {
 	let checks = leafChecks.get(schema);
 	if (checks === undefined) {
-		checks = leafChecksOf(schema.type.Type()) ?? null;
+		checks = leafChecksOf(rawTypeOf(schema)) ?? null;
 		leafChecks.set(schema, checks);
 	}
 	const maxErrors = Settings?.Get?.().maxErrors;
@@ -689,7 +689,7 @@ export function errorsOfSchema(
 	if (checks === null && isRecord(value)) {
 		let union = discriminatedUnions.get(schema);
 		if (union === undefined) {
-			union = discriminatedUnionOf(schema.type.Type()) ?? null;
+			union = discriminatedUnionOf(rawTypeOf(schema)) ?? null;
 			discriminatedUnions.set(schema, union);
 		}
 		const errors = union && errorsOfVariant(union, value);
@@ -698,7 +698,7 @@ export function errorsOfSchema(
 	if (checks === null) {
 		let explain = explainers.get(schema);
 		if (explain === undefined) {
-			explain = explainerOf(schema.type.Type()) ?? null;
+			explain = explainerOf(rawTypeOf(schema)) ?? null;
 			explainers.set(schema, explain);
 		}
 		const sink = explain && sinkOf();
@@ -782,6 +782,22 @@ export function checksOfSchema(schema: ISchema<TSchema>): SchemaChecks {
 				match: (value) => schema.match(value),
 				matchShape: (value) => schema.matchShape(value),
 			};
+}
+
+/**
+ * The TypeBox schema of `schema`, as it was given, without compiling it:
+ * `schema.type.Type()` gives the same schema but compiles it first, which is
+ * most of the time spent at import when only the schema is read (the
+ * meta-schema of `ctx.schema` alone takes milliseconds). A schema not made
+ * by `schemaOf` is asked through `type`.
+ * @internal
+ */
+export function rawTypeOf<SchemaType extends TSchema>(
+	schema: ISchema<SchemaType>,
+): SchemaType {
+	return schema instanceof AbstractSchema
+		? (schema as unknown as { readonly _type: SchemaType })._type
+		: (schema.type.Type() as SchemaType);
 }
 
 /** A schema class declared with `schemaOf`. */

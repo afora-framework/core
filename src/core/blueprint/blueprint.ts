@@ -2,7 +2,7 @@ import { type TObject, type TSchema, Type } from "typebox";
 import { collectionParserOf } from "../parse/parse";
 import { isProperty } from "../property/is-property";
 import { propertyOf } from "../property/property";
-import { schemaOf } from "../schema/schema";
+import { rawTypeOf, schemaOf } from "../schema/schema";
 import { withStandard } from "../standard/standard";
 import { Kind } from "../symbols/kind";
 import { callableOf, fieldOf } from "./callable";
@@ -209,7 +209,7 @@ function schemaOfField(
 		return field.optional ? Type.Optional(schema) : schema;
 	}
 	if (isBlueprint(field)) {
-		const schema = field.schema.type.Type();
+		const schema = rawTypeOf(field.schema);
 		return field.optional ? Type.Optional(schema) : schema;
 	}
 	if (isBlueprintVariant(field)) {
@@ -217,9 +217,9 @@ function schemaOfField(
 		const schema = Type.Union(
 			Object.entries(field.variants as BlueprintVariants).map(
 				([tag, variant]) => {
-					const object = blueprintOfVariant(
-						variant,
-					).schema.type.Type() as TObject;
+					const object = rawTypeOf(
+						blueprintOfVariant(variant).schema,
+					) as TObject;
 					return {
 						...object,
 						properties: {
@@ -235,11 +235,11 @@ function schemaOfField(
 	}
 	const record = recordFieldOf(field);
 	if (record) {
-		const schema = record.record.blueprint.schema.type.Type();
+		const schema = rawTypeOf(record.record.blueprint.schema);
 		return record.optional ? Type.Optional(schema) : schema;
 	}
 	if (isProperty(field)) {
-		return field.type.schema.type.Type();
+		return rawTypeOf(field.type.schema);
 	}
 
 	throw new UndeclaredBlueprintProperty({

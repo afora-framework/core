@@ -33,6 +33,7 @@ import {
 	recordFieldDataOf,
 } from "../record/abstract-record";
 import { recordNameOf } from "../record/name";
+import { rawTypeOf } from "../schema/schema";
 import { Kind } from "../symbols/kind";
 import { type ExecutionScope, ScopeKey } from "../use-case/scope";
 import { decodeCursor, encodeCursor } from "./cursor";
@@ -677,7 +678,7 @@ function isNumericField(field: BlueprintField | undefined): boolean {
 	if (field === undefined) return false;
 	const property = fieldOf(field);
 	if (!isProperty(property)) return false;
-	const { type } = property.type.schema.type.Type() as { type?: unknown };
+	const { type } = rawTypeOf(property.type.schema) as { type?: unknown };
 	return type === "number" || type === "integer";
 }
 
