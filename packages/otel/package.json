@@ -1,0 +1,61 @@
+{
+	"name": "@afora/otel",
+	"version": "0.0.9",
+	"description": "OpenTelemetry tracing for afora applications: a span per command, use case and repository call, nested as the calls are, with no input, response or sensitive value in any span.",
+	"keywords": [
+		"afora",
+		"opentelemetry",
+		"otel",
+		"tracing",
+		"observability"
+	],
+	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
+	"license": "MIT",
+	"homepage": "https://github.com/afora-framework/core/tree/main/packages/otel#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/afora-framework/core.git",
+		"directory": "packages/otel"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"bun": ">=1.4.4",
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"typecheck": "bun check",
+		"build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target node --format esm --packages external --tsconfig-override tsconfig.build.json && tsc -p tsconfig.build.json && bun ../../scripts/add-dts-extensions.ts dist",
+		"test": "bun test"
+	},
+	"devDependencies": {
+		"@afora/hono": "workspace:*",
+		"@opentelemetry/api": "^1.9.0",
+		"@opentelemetry/context-async-hooks": "^2.2.0",
+		"@opentelemetry/sdk-trace-base": "^2.2.0",
+		"@types/bun": "^1.4.4",
+		"hono": "^4.13.14",
+		"typebox": "^1.4.3"
+	},
+	"peerDependencies": {
+		"@afora/core": ">=0.0.9",
+		"@opentelemetry/api": "^1.9.0"
+	}
+}
