@@ -383,56 +383,56 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 
 <!-- bench:start -->
 
-![Validations per second on the body of an API request, Node v22.23.3](bench/results/chart.svg)
+![Validations per second on the body of an API request, Node v24.22.2](bench/results/chart.svg)
 
-Time of each library as a multiple of afora `blueprint.safeParse` on the same case: above 1.00x it is slower than afora, below it is faster. TypeBox, Ajv and Typia only check, they do not transform. afora 0.0.8, Bun 1.4.4 and Node v22.23.3, Apple M2; generated from `bench/results/latest.json`.
+Time of each library as a multiple of afora `blueprint.safeParse` on the same case: above 1.00x it is slower than afora, below it is faster. TypeBox, Ajv and Typia only check, they do not transform. afora 0.0.8, Bun 1.4.4 and Node v24.22.2, AMD EPYC 9V45 96-Core Processor; generated from `bench/results/latest.json`.
 
-| Node                                                     |    afora | TypeBox |   Ajv | Typia |   Zod | Valibot | ArkType | Effect Schema |     Yup |    Joi |
-| -------------------------------------------------------- | -------: | ------: | ----: | ----: | ----: | ------: | ------: | ------------: | ------: | -----: |
-| Small flat object, valid                                 | 299.2 ns |   0.19x | 0.19x | 0.18x | 1.37x |   1.03x |   9.11x |         2.06x |  10.79x |  5.83x |
-| Small flat object, invalid                               | 543.8 ns |   6.19x | 0.14x | 0.59x | 1.94x |   0.83x |  21.43x |         2.68x | 119.15x |  5.22x |
-| Nested user (address, 5 tags max, 10 addresses), valid   |  2321 ns |   0.12x | 0.22x | 0.14x | 1.29x |   1.25x |  11.94x |         2.26x |  21.42x |  4.49x |
-| Nested user (address, 5 tags max, 10 addresses), invalid |  2743 ns |   7.67x | 0.22x | 0.76x | 1.49x |   1.30x |  19.78x |         2.63x |  59.21x |  5.36x |
-| API request body (an order with 5 items), valid          |  2473 ns |   0.26x | 0.32x | 0.20x | 1.25x |   1.36x |   9.66x |         1.96x |  19.52x |  4.88x |
-| API request body (an order with 5 items), invalid        |  3076 ns |   4.69x | 0.21x | 0.85x | 1.68x |   1.28x |  15.53x |         2.21x |  55.52x |  5.01x |
-| List of 1,000 items, valid                               | 195.5 µs |   0.05x | 0.12x | 0.05x | 0.66x |   1.08x |  15.12x |         2.22x |  24.91x |  5.12x |
-| List of 1,000 items, invalid                             | 195.4 µs |  13.30x | 0.13x | 0.17x | 0.69x |   1.10x |  19.02x |         2.24x |  27.29x |  5.21x |
-| Union of 4 variants (12 events), valid                   | 663.4 ns |   0.53x | 0.73x | 0.57x | 3.57x |   7.42x |   1.89x |         8.28x |  95.13x | 69.67x |
-| Union of 4 variants (12 events), invalid                 |  44.3 µs |   0.62x | 0.01x | 0.04x | 0.08x |   0.13x |   0.39x |         0.14x |   2.51x |  1.74x |
-| 6 levels of nesting, valid                               | 978.5 ns |   0.06x | 0.10x | 0.07x | 0.76x |   1.29x |  11.92x |         2.58x |  18.34x |  4.25x |
-| 6 levels of nesting, invalid                             |  1105 ns |  14.55x | 0.11x | 1.49x | 1.49x |   1.61x |  23.13x |         3.54x |  82.04x |  5.51x |
-| Small flat object, checks only, valid                    | 225.9 ns |   0.25x | 0.25x | 0.25x | 0.80x |   1.02x |   0.47x |         1.70x |  13.01x |  7.02x |
-| Small flat object, checks only, invalid                  | 506.2 ns |   6.64x | 0.15x | 0.64x | 1.66x |   0.82x |  17.69x |         2.38x | 127.06x |  5.50x |
+| Node                                                     |    afora | TypeBox |   Ajv | Typia |   Zod | Valibot | ArkType | Effect Schema |    Yup |    Joi |
+| -------------------------------------------------------- | -------: | ------: | ----: | ----: | ----: | ------: | ------: | ------------: | -----: | -----: |
+| Small flat object, valid                                 | 299.5 ns |   0.13x | 0.14x | 0.15x | 1.23x |   1.97x |  10.30x |         2.74x | 12.44x |  8.25x |
+| Small flat object, invalid                               | 474.6 ns |   9.50x | 0.13x | 0.58x | 3.22x |   2.71x |  27.57x |         4.04x | 68.43x |  7.66x |
+| Nested user (address, 5 tags max, 10 addresses), valid   |  2036 ns |   0.12x | 0.17x | 0.13x | 1.27x |   1.02x |  14.85x |         3.24x | 22.52x |  6.67x |
+| Nested user (address, 5 tags max, 10 addresses), invalid |  2688 ns |   9.83x | 0.15x | 0.83x | 1.84x |   1.21x |  21.43x |         3.46x | 38.49x |  6.84x |
+| API request body (an order with 5 items), valid          |  2518 ns |   0.35x | 0.35x | 0.24x | 1.21x |   1.16x |   9.55x |         2.46x | 17.06x |  5.63x |
+| API request body (an order with 5 items), invalid        |  3540 ns |   5.17x | 0.12x | 0.86x | 1.90x |   1.10x |  14.67x |         2.50x | 30.63x |  5.11x |
+| List of 1,000 items, valid                               | 152.4 µs |   0.06x | 0.10x | 0.06x | 0.67x |   2.34x |  20.61x |         3.96x | 27.77x |  7.40x |
+| List of 1,000 items, invalid                             | 155.5 µs |  20.58x | 0.10x | 0.18x | 0.72x |   2.35x |  26.62x |         3.70x | 28.82x |  7.43x |
+| Union of 4 variants (12 events), valid                   | 579.7 ns |   0.47x | 0.59x | 0.51x | 3.90x |  14.54x |   1.54x |        13.42x | 91.04x | 94.11x |
+| Union of 4 variants (12 events), invalid                 |  55.0 µs |   0.64x | 0.01x | 0.03x | 0.09x |   0.19x |   0.34x |         0.17x |  1.44x |  1.69x |
+| 6 levels of nesting, valid                               | 829.3 ns |   0.06x | 0.09x | 0.06x | 0.78x |   1.13x |  14.16x |         4.12x | 19.31x |  5.65x |
+| 6 levels of nesting, invalid                             | 971.4 ns |  21.55x | 0.10x | 1.69x | 1.99x |   1.72x |  27.50x |         5.35x | 52.46x |  7.37x |
+| Small flat object, checks only, valid                    | 177.6 ns |   0.23x | 0.24x | 0.25x | 0.82x |   2.68x |   0.44x |         2.34x | 18.10x | 12.73x |
+| Small flat object, checks only, invalid                  | 424.3 ns |  10.48x | 0.15x | 0.68x | 2.94x |   2.85x |  22.80x |         3.92x | 74.92x |  8.39x |
 
 | Bun                                                      |    afora | TypeBox |   Ajv | Typia |   Zod | Valibot | ArkType | Effect Schema |    Yup |    Joi |
 | -------------------------------------------------------- | -------: | ------: | ----: | ----: | ----: | ------: | ------: | ------------: | -----: | -----: |
-| Small flat object, valid                                 | 198.6 ns |   0.18x | 0.21x | 0.20x | 1.48x |   0.94x |   7.85x |         2.10x | 16.38x |  6.82x |
-| Small flat object, invalid                               | 433.0 ns |   5.03x | 0.20x | 0.90x | 1.22x |   0.86x |  11.20x |         1.79x | 28.78x |  5.18x |
-| Nested user (address, 5 tags max, 10 addresses), valid   |  2307 ns |   0.08x | 0.13x | 0.06x | 1.06x |   0.60x |   5.67x |         1.60x | 17.97x |  3.39x |
-| Nested user (address, 5 tags max, 10 addresses), invalid |  1979 ns |   6.28x | 0.21x | 0.76x | 1.46x |   0.99x |  12.32x |         2.27x | 33.61x |  5.96x |
-| API request body (an order with 5 items), valid          |  1893 ns |   0.24x | 0.26x | 0.29x | 1.27x |   0.86x |   5.81x |         1.78x | 20.73x |  4.47x |
-| API request body (an order with 5 items), invalid        |  1933 ns |   4.63x | 0.19x | 0.88x | 1.97x |   1.11x |  11.21x |         2.25x | 35.71x |  6.81x |
-| List of 1,000 items, valid                               | 181.7 µs |   0.03x | 0.08x | 0.02x | 0.98x |   0.52x |   6.28x |         1.42x | 20.59x |  3.54x |
-| List of 1,000 items, invalid                             | 106.7 µs |  13.18x | 0.15x | 0.32x | 1.72x |   0.90x |  14.48x |         2.40x | 37.32x |  6.05x |
-| Union of 4 variants (12 events), valid                   |  1161 ns |   0.18x | 0.26x | 0.26x | 1.99x |   2.54x |   0.42x |         2.67x | 42.50x | 26.89x |
-| Union of 4 variants (12 events), invalid                 |  29.2 µs |   0.60x | 0.01x | 0.04x | 0.10x |   0.12x |   0.22x |         0.13x |  2.04x |  2.05x |
-| 6 levels of nesting, valid                               | 571.1 ns |   0.03x | 0.12x | 0.06x | 1.72x |   1.40x |   9.90x |         2.49x | 28.16x |  5.55x |
-| 6 levels of nesting, invalid                             | 752.7 ns |  13.29x | 0.11x | 0.98x | 1.68x |   1.69x |  15.18x |         2.75x | 44.18x |  6.55x |
-| Small flat object, checks only, valid                    | 131.0 ns |   0.27x | 0.32x | 0.30x | 1.55x |   0.91x |   0.35x |         1.73x | 21.67x |  7.99x |
-| Small flat object, checks only, invalid                  | 419.0 ns |   5.22x | 0.20x | 0.92x | 1.17x |   0.77x |   8.69x |         1.44x | 28.99x |  4.87x |
+| Small flat object, valid                                 | 195.7 ns |   0.15x | 0.18x | 0.17x | 1.63x |   0.95x |  10.95x |         2.58x | 22.27x | 10.44x |
+| Small flat object, invalid                               | 426.1 ns |   7.87x | 0.21x | 1.26x | 1.62x |   0.97x |  16.14x |         2.50x | 39.07x |  8.12x |
+| Nested user (address, 5 tags max, 10 addresses), valid   |  3154 ns |   0.05x | 0.08x | 0.03x | 0.93x |   0.41x |   4.73x |         1.35x | 16.66x |  3.81x |
+| Nested user (address, 5 tags max, 10 addresses), invalid |  2260 ns |   8.15x | 0.16x | 0.99x | 1.64x |   0.91x |  13.57x |         2.40x | 39.16x |  6.88x |
+| API request body (an order with 5 items), valid          |  2355 ns |   0.19x | 0.21x | 0.32x | 1.34x |   0.68x |   5.08x |         1.83x | 21.04x |  4.97x |
+| API request body (an order with 5 items), invalid        |  2456 ns |   5.33x | 0.13x | 1.13x | 2.06x |   0.97x |  11.38x |         2.24x | 38.34x |  7.81x |
+| List of 1,000 items, valid                               | 185.7 µs |   0.02x | 0.05x | 0.01x | 1.05x |   0.45x |   7.61x |         1.53x | 29.36x |  5.07x |
+| List of 1,000 items, invalid                             |  92.7 µs |  23.63x | 0.12x | 0.45x | 2.25x |   0.96x |  23.45x |         3.00x | 65.59x | 11.20x |
+| Union of 4 variants (12 events), valid                   |  1627 ns |   0.11x | 0.14x | 0.20x | 1.83x |   1.97x |   0.26x |         2.06x | 39.17x | 27.28x |
+| Union of 4 variants (12 events), invalid                 |  41.8 µs |   0.64x | 0.01x | 0.04x | 0.10x |   0.11x |   0.21x |         0.11x |  1.81x |  2.01x |
+| 6 levels of nesting, valid                               | 528.2 ns |   0.02x | 0.10x | 0.06x | 1.98x |   1.54x |  11.94x |         2.87x | 39.56x |  7.63x |
+| 6 levels of nesting, invalid                             | 838.9 ns |  17.86x | 0.09x | 1.60x | 1.74x |   1.59x |  18.13x |         3.09x | 53.04x |  7.92x |
+| Small flat object, checks only, valid                    | 110.1 ns |   0.28x | 0.35x | 0.29x | 1.83x |   0.92x |   0.34x |         1.91x | 33.82x | 15.15x |
+| Small flat object, checks only, invalid                  | 414.7 ns |   7.74x | 0.21x | 1.25x | 1.52x |   0.86x |  11.63x |         2.06x | 39.99x |  7.60x |
 
 <!-- bench:end -->
 
-What the table says, for `blueprint.safeParse`:
+What the table says, for `blueprint.safeParse`, on a GitHub runner (AMD EPYC, Linux, Bun 1.4.4 and Node 24). The table is of afora at commit `8c4395e`; what changed after it is said where it applies.
 
-- **Against Zod 4.** On Bun, faster in 12 of the 14 cases, by 1.2x to 2.0x (the valid nested object by 6%), and level on the valid list of 1,000 items. On Node, faster in 9 of the 14, by 1.25x to 3.6x; Zod 4 is ahead on the list of 1,000 items (about 1.5x), on the valid deep object and on the valid flat object with nothing to transform (about 1.3x). The invalid union is told apart below.
-- **Against Valibot.** On Node afora is faster in 11 of the 14 cases, by up to 1.6x outside the valid union (7.4x); Valibot is ahead on two invalid flat objects (1.2x). On Bun it is the other way: Valibot is ahead in 9 cases, by up to 1.3x on small objects and 1.7x to 1.9x on the valid nested object and the valid list, and afora on the valid union (2.5x), the deep object (1.4x to 1.7x) and the invalid API body (1.1x).
-- **Against Effect Schema, Joi and Yup.** Faster in every case but the invalid union: 1.4x to 3.5x Effect Schema (8x on the valid union), 3.4x to 8x Joi, 11x to 127x Yup.
-- **Against ArkType.** Faster wherever a value is transformed or rejected, by 5.7x to 23x, because its morphs and its errors take a slower path. With nothing to transform and a valid value, ArkType is 2x to 3x faster than afora.
-- **An invalid union.** A property whose schema is a discriminated union tells a rejected value by the variant it names, without TypeBox `Errors`: about 0.5x the time of Zod 4 on Bun. It was 10x to 12x when `Errors` reported every variant, which is what the table above still shows until it is measured again. Valid values of the same union are 2x to 3.6x faster than Zod 4.
-- **Floor.** The checkers that compile and do not transform (TypeBox, Ajv, Typia) are 1.4x to 50x faster than afora on valid input, 3x to 5x on small objects. afora builds on TypeBox. On invalid input afora is 4.6x to 14.5x faster than TypeBox `Errors` (outside the union), and Ajv stays 5x to 9x ahead.
-- **Records and entities.** `Record.safeParse`, which also creates the instance, takes 1.0x to 1.6x the time of `blueprint.safeParse` on Bun and up to 2.7x on Node. `Entity.safeParse` also makes an id and the time stamps, which on a small object is most of its time: 5.5x to 19x `blueprint.safeParse` on the flat object, 1.0x to 7x on the larger ones. `new Record(value)` throws on invalid input, which costs an exception with its trace (2x to 4x `blueprint.safeParse` on Bun, 3.4x to 14x on Node); use `safeParse` where invalid input is expected.
-- **Bundle and cold start.** afora is a framework with one entry point: validating one object bundles to 100 kB gzipped (Zod 4: 24 kB, Valibot: 1.7 kB) and takes 32 ms to load, build and run once in a new Node process (62 ms on Bun; Zod 4: 6 ms).
+- **Against Zod 4.** On Bun, faster in 12 of the 14 cases, by 1.05x to 2.25x; Zod 4 is ahead on the valid nested object (7%). On Node, faster in 9 of the 14, by 1.2x to 3.9x; Zod 4 is ahead on the list of 1,000 items (1.4x to 1.5x), on the valid deep object (1.3x) and on the valid flat object with nothing to transform (1.2x). The invalid union is told apart below.
+- **Against Valibot.** On Node afora is faster in 13 of the 14 cases, by 1.02x to 2.9x outside the valid union (14.5x). On Bun it is the other way: Valibot is ahead in 10 of them, within 10% on small objects and by 1.5x to 2.4x on the valid nested object, the valid API body and the valid list, and afora is ahead on the valid union (2x) and the deep object (1.5x to 1.6x).
+- **Against Effect Schema, Joi and Yup.** Faster in every case but the invalid union: 1.35x to 5.4x Effect Schema (13x on the valid union on Node), 3.8x to 15x Joi, 12x to 75x Yup.
+- **Against ArkType.** Faster wherever a value is transformed or rejected, by 4.7x to 28x, because its morphs and its errors take a slower path. With nothing to transform and a valid value, ArkType is 2.3x to 3x faster than afora, and 3.8x on the valid union on Bun.
+- **An invalid union.** In the table it takes about 10x the time of Zod 4: TypeBox `Errors` reported every variant of the union for each rejected value. Since then a property whose schema is a discriminated union tells a rejected value by the variant it names, without `Errors`, and takes about 0.5x the time of Zod 4 on Bun (measured on an Apple M2; the table follows at the next measurement). Valid values of the same union are 1.8x to 3.9x faster than Zod 4.
+- **Floor.** The checkers that compile and do not transform (TypeBox, Ajv, Typia) are 3x to 9x faster than afora on a valid small object, and 10x to 70x on the larger ones. afora builds on TypeBox. On invalid input afora is 5x to 24x faster than TypeBox `Errors` (outside the union), and Ajv stays 5x to 11x ahead.
+- **Records and entities.** `Record.safeParse`, which also creates the instance, takes 1.0x to 2.1x the time of `blueprint.safeParse` on Bun and up to 4x on Node. `Entity.safeParse` also makes an id and the time stamps, which on a small object is most of its time: 5x to 13x `blueprint.safeParse` on the flat object in the table, 1.0x to 4.7x on the larger ones; since then it takes about three quarters of that on a small object, for not checking again the id and the date it has just made. `new Record(value)` throws on invalid input, which costs an exception with its trace (2x to 6x `blueprint.safeParse` on Bun, 2.5x to 13x on Node); use `safeParse` where invalid input is expected.
+- **Bundle and cold start.** afora is a framework with one entry point: validating one object bundles to 100 kB gzipped (Zod 4: 24 kB, Valibot: 1.7 kB) and takes 40 ms to load, build and run once in a new Node process (85 ms on Bun; Zod 4: 7 to 8 ms).
 
 What afora does that the fast rows do not all do: a pipeline per property (`preHandle`, schema check, `afterHandle`), where a property with a handler has the shape of the value checked first, so handlers only see the right types; objects walked key by key instead of one compiled function; frozen results; every issue with `code`, `path` and `source`; and, for `Record.safeParse` and `new Record`, creating the instance. If you validate bulk data in a hot path and need none of that, a compiled checker alone is an order of magnitude faster.
 
