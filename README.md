@@ -365,7 +365,7 @@ afora validates and transforms faster than Zod 4 on most of the fourteen measure
 
 ![Validations per second on the body of an API request, Node v24.22.2](bench/results/chart.svg)
 
-afora 0.0.11 on Bun 1.4.4, Node v22.23.4 and Node v24.22.2, AMD EPYC 9V74 80-Core Processor; generated from `bench/results/latest.json`. Every case, runtime and library, and how it is measured: [Performance](docs/performance.md).
+afora 0.0.12 on Bun 1.4.4, Node v22.23.4 and Node v24.22.2, AMD EPYC 7763 64-Core Processor; generated from `bench/results/latest.json`. Every case, runtime and library, and how it is measured: [Performance](docs/performance.md).
 
 <!-- bench:end -->
 
