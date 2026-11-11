@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { type TSchema, Type } from "typebox";
 import { Locale, Settings } from "typebox/system";
-import { errorsOfSchema, schemaOf } from "./schema";
+import { checksOfSchema, errorsOfSchema, schemaOf } from "./schema";
 
 afterEach(() => {
 	Locale.Reset();
@@ -164,5 +164,24 @@ test("a format registered later is told as TypeBox tells it", () => {
 		expect(errorsOfSchema(schema, value)).toEqual(
 			schema.type.Errors(value) as never,
 		);
+	}
+});
+
+test("the checks of a schema answer as its methods do", () => {
+	for (const type of Object.values({ ...LEAVES, ...OTHERS })) {
+		const schema = schemaFor(type);
+		const made = checksOfSchema(schema);
+		// A schema that is not made by `schemaOf` is asked through its methods.
+		const asked = checksOfSchema({
+			match: (value: unknown) => schema.match(value),
+			matchShape: (value: unknown) => schema.matchShape(value),
+		} as never);
+
+		for (const value of VALUES) {
+			for (const checks of [made, asked]) {
+				expect(checks.match(value)).toBe(schema.match(value));
+				expect(checks.matchShape(value)).toBe(schema.matchShape(value));
+			}
+		}
 	}
 });

@@ -261,6 +261,23 @@ abstract class AbstractSchema<
 		return this.shapeValidator.Check(value);
 	}
 
+	/** `match` and `matchShape` as functions that go straight to the compiled checks. */
+	checks(): SchemaChecks {
+		const validator = this.type;
+		const shape = shapeOf(this._type) as { readonly type?: unknown };
+		// The shape of a string alone is what TypeBox compiles it to.
+		if (shape.type === "string" && Object.keys(shape).length === 1) {
+			return {
+				match: (value) => validator.Check(value),
+				matchShape: (value) => typeof value === "string",
+			};
+		}
+		return {
+			match: (value) => validator.Check(value),
+			matchShape: (value) => this.matchShape(value),
+		};
+	}
+
 	errors(value: unknown): string[] {
 		return this.type.Errors(value).map(describeError);
 	}
@@ -276,6 +293,26 @@ abstract class AbstractSchema<
 		>;
 		return this.validator;
 	}
+}
+
+/** The two checks of a schema, as functions. */
+export interface SchemaChecks {
+	match(value: unknown): boolean;
+	matchShape(value: unknown): boolean;
+}
+
+/**
+ * `schema.match` and `schema.matchShape`, compiled now, for who checks many
+ * values with one schema; those of a schema not made by `schemaOf` call it.
+ * @internal
+ */
+export function checksOfSchema(schema: ISchema<TSchema>): SchemaChecks {
+	return schema instanceof AbstractSchema
+		? schema.checks()
+		: {
+				match: (value) => schema.match(value),
+				matchShape: (value) => schema.matchShape(value),
+			};
 }
 
 /** A schema class declared with `schemaOf`. */

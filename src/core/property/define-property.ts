@@ -7,6 +7,7 @@ import type {
 	ParseResult,
 } from "../parse/types/parse.interface";
 import {
+	checksOfSchema,
 	describeError,
 	errorsOfSchema,
 	type SchemaError,
@@ -349,6 +350,7 @@ export function parserOf(
 	}
 
 	const { name, optional, schema } = pipeline.type;
+	const { match, matchShape } = checksOfSchema(schema);
 	const preHandle =
 		pipeline.preHandle === PASS.preHandle ? undefined : pipeline.preHandle;
 	const afterHandle =
@@ -362,10 +364,10 @@ export function parserOf(
 		}
 		try {
 			if (preHandle !== undefined) {
-				if (!schema.matchShape(value)) return pipeline.mismatch(value);
+				if (!matchShape(value)) return pipeline.mismatch(value);
 				value = preHandle.call(pipeline, value);
 			}
-			if (!schema.match(value)) return pipeline.mismatch(value);
+			if (!match(value)) return pipeline.mismatch(value);
 			return afterHandle === undefined
 				? value
 				: afterHandle.call(pipeline, value);
