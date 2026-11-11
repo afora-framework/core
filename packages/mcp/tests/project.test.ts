@@ -265,6 +265,46 @@ describe("afora_project", () => {
 		expect(data.notes).toEqual([]);
 	});
 
+	test("source chooses between the application and afora.json", async () => {
+		const { dir, client } = await setup(
+			{ "src/app.ts": APP_TS },
+			{ app: "src/app.ts#App" },
+		);
+		const missing = await client.call("afora_project", { source: "file" });
+		expect(missing.isError).toBe(true);
+		expect(missing.data).toContain("no afora.json");
+		await writeFile(
+			join(dir, "afora.json"),
+			JSON.stringify({
+				version: 1,
+				name: "from-file",
+				blueprints: { A: { fields: { x: "text" } } },
+			}),
+		);
+		// The application is the default when the server knows one.
+		expect((await client.call("afora_project")).data.name).toBe("blog");
+		const file = await client.call("afora_project", { source: "file" });
+		expect(file.data.source).toBe("file");
+		expect(file.data.name).toBe("from-file");
+		expect(
+			(await client.call("afora_project", { source: "app" })).data.source,
+		).toBe("app");
+		const both = await client.call("afora_project", {
+			source: "file",
+			app: "src/app.ts#App",
+		});
+		expect(both.isError).toBe(true);
+		const other = await client.call("afora_project", { source: "nope" });
+		expect(other.isError).toBe(true);
+	});
+
+	test("without an application, source app says so", async () => {
+		const { client } = await setup();
+		const result = await client.call("afora_project", { source: "app" });
+		expect(result.isError).toBe(true);
+		expect(result.data).toContain("No application is known");
+	});
+
 	test("is listed as read-only, and the guide says when to leave steps", async () => {
 		const { client } = await setup();
 		const { tools } = await client.client.listTools();

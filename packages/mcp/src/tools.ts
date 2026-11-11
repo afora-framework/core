@@ -206,7 +206,7 @@ export const tools: readonly ToolDefinition[] = [
 	{
 		name: "afora_project",
 		description:
-			"The project as a map, without writing anything: its entities and repositories, every operation (command, use case, how it is implemented: steps, code or a standard use case, its declared route and access), and each output with the route every operation is served at (method, path, status, and whether the sink, the use case or the default decided it) and who may call it (public, open, authenticated, scopes, owner). `notes` point at what deserves a look: operations left open beside protected ones, operations that will answer 401 for lack of an authenticator, commands no output serves. Read from the running application when the server was started with --app or `app` is given (this imports the module in a Bun subprocess, and works on code written by hand, with no afora.json); from afora.json otherwise. Call it before adding a use case or a route, to see what exists and which paths are taken.",
+			"The project as a map, without writing anything: its entities and repositories, every operation (command, use case, how it is implemented: steps, code or a standard use case, its declared route and access), and each output with the route every operation is served at (method, path, status, and whether the sink, the use case or the default decided it) and who may call it (public, open, authenticated, scopes, owner). `notes` point at what deserves a look: operations left open beside protected ones, operations that will answer 401 for lack of an authenticator, commands no output serves. Read from the running application when the server was started with --app or `app` is given (this imports the module in a Bun subprocess, and works on code written by hand, with no afora.json); from afora.json otherwise. `source` chooses: `file` reads afora.json even when there is an application, `app` the application. Call it before adding a use case or a route, to see what exists and which paths are taken.",
 		inputSchema: json(
 			Type.Object(
 				{
@@ -216,14 +216,34 @@ export const tools: readonly ToolDefinition[] = [
 								'An application to read, as a path inside the project and an export name: "src/app.ts#App". Defaults to the --app the server was started with, else afora.json.',
 						}),
 					),
+					source: Type.Optional(
+						Type.Union([Type.Literal("app"), Type.Literal("file")], {
+							description:
+								'Where to read the project from: "file" is afora.json, "app" the application. By default the application when one is known, else afora.json.',
+						}),
+					),
 				},
 				{ additionalProperties: false },
 			),
 		),
 		readOnly: true,
 		async handle(args, project) {
+			const { source } = args;
+			if (source !== undefined && source !== "app" && source !== "file") {
+				throw new ToolError('`source` must be "app" or "file".');
+			}
+			if (source === "file" && typeof args.app === "string") {
+				throw new ToolError(
+					'`app` names an application, and `source` is "file": give one of them.',
+				);
+			}
 			const app = typeof args.app === "string" ? args.app : project.app;
-			if (app) {
+			if (source === "app" && !app) {
+				throw new ToolError(
+					'No application is known. Pass `app` ("src/app.ts#App") or start the server with --app.',
+				);
+			}
+			if (app && source !== "file") {
 				return {
 					source: "app",
 					app,
@@ -233,7 +253,9 @@ export const tools: readonly ToolDefinition[] = [
 			const spec = await readSpec(project);
 			if (!spec) {
 				throw new ToolError(
-					'There is no afora.json and no application was given. Pass `app` ("src/app.ts#App"), start the server with --app, or create a spec with afora_spec_upsert.',
+					source === "file"
+						? "There is no afora.json in the project."
+						: 'There is no afora.json and no application was given. Pass `app` ("src/app.ts#App"), start the server with --app, or create a spec with afora_spec_upsert.',
 				);
 			}
 			return { source: "file", ...projectViewOfSpec(spec) };
