@@ -1,6 +1,6 @@
 # OpenAPI
 
-`toOpenAPI` turns any field (a property, blueprint, list, record or entity) into an OpenAPI 3.1 schema, which is plain JSON Schema. Given named models, it gives the `components` of a document, and a record named among them is a `$ref` wherever another model holds it:
+`toOpenAPI` turns any field (a property, blueprint, list, variant, record or entity) into an OpenAPI 3.1 schema, which is plain JSON Schema. A variant field (`variantOf`) is `oneOf` with one object per variant, each with the key as a `const`, and a `discriminator` naming the key. Given named models, it gives the `components` of a document, and a record named among them is a `$ref` wherever another model holds it:
 
 ```ts
 import { blueprintOf, entityOf, toOpenAPI } from "@afora/core";

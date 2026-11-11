@@ -63,7 +63,7 @@ const Post = blueprintOf((ctx) => ({
 
 ## Unions
 
-A property can hold one of several shapes: give it a union as its schema.
+A property can hold one of several shapes: give it a union as its schema. When the shapes are objects with properties of their own (to trim, to mask, to report by key), use a [variant field](blueprints.md#one-of-several-blueprints) instead, whose variants are blueprints.
 
 ```ts
 import { blueprintOf, listOf, propertyOf } from "@afora/core";

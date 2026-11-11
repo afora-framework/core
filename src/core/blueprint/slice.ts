@@ -2,7 +2,10 @@ import { AbstractRecord } from "../record/abstract-record";
 import { recordNameOf } from "../record/name";
 import { declareRecord } from "../record/record";
 import { blueprintFromProperties } from "./blueprint";
-import { UndeclaredBlueprintProperty } from "./exceptions";
+import {
+	InvalidBlueprintVariant,
+	UndeclaredBlueprintProperty,
+} from "./exceptions";
 import { isBlueprint } from "./is-blueprint";
 import { isBlueprintList, listOf } from "./list";
 import { optionalOf } from "./optional";
@@ -22,6 +25,7 @@ import type {
 	SliceMask,
 	ValueMask,
 } from "./types/slice.interface";
+import { isBlueprintVariant } from "./variant";
 
 type Mask = { readonly [key: string]: true | Mask | undefined };
 
@@ -163,6 +167,15 @@ function sliceField(
 			sliceCollection(field.properties, selected, `${path}.`),
 		);
 		return field.optional ? optionalOf(sliced) : sliced;
+	}
+	if (isBlueprintVariant(field)) {
+		throw new InvalidBlueprintVariant({
+			source: "blueprint",
+			details: {
+				key: field.key,
+				reason: `"${path}" cannot be sliced by its keys yet, only picked whole`,
+			},
+		});
 	}
 	// A property has no keys to pick from.
 	throw new UndeclaredBlueprintProperty({

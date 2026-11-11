@@ -4,8 +4,10 @@ import { recordFieldOf } from "../blueprint/record-field";
 import type {
 	AnyRecordClass,
 	BlueprintField,
+	BlueprintVariants,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant } from "../blueprint/variant";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { Exception } from "../exception/exception";
 import { toOpenAPI } from "../openapi/openapi";
@@ -572,6 +574,14 @@ function collectRecords(
 		}
 		if (isBlueprint(field)) {
 			collectRecords(field.properties, found);
+			return;
+		}
+		if (isBlueprintVariant(field)) {
+			for (const variant of Object.values(
+				field.variants as BlueprintVariants,
+			)) {
+				collectRecords(variant.properties, found);
+			}
 			return;
 		}
 		const record = recordFieldOf(field)?.record;

@@ -50,6 +50,7 @@ export type {
 export { blueprintBuilderOf } from "./core/blueprint/blueprint";
 export { blueprintPluginOf } from "./core/blueprint/blueprint-plugin";
 export {
+	InvalidBlueprintVariant,
 	ReservedBlueprintKey,
 	UndeclaredBlueprintProperty,
 } from "./core/blueprint/exceptions";
@@ -58,6 +59,7 @@ export { optionalOf } from "./core/blueprint/optional";
 export type {
 	AnyBlueprint,
 	AnyBlueprintList,
+	AnyBlueprintVariant,
 	AnyOptionalRecord,
 	AnyRecordClass,
 	BlueprintBuilder,
@@ -72,11 +74,14 @@ export type {
 	BlueprintSchema,
 	BlueprintSource,
 	BlueprintValue,
+	BlueprintVariants,
 	IBlueprint,
 	IBlueprintCollection,
 	IBlueprintList,
+	IBlueprintVariant,
 	OptionalBlueprint,
 	OptionalBlueprintList,
+	OptionalBlueprintVariant,
 	OptionalRecord,
 } from "./core/blueprint/types/blueprint.interface";
 export type {
@@ -84,6 +89,7 @@ export type {
 	IBlueprintFactories,
 	IBlueprintPlugin,
 } from "./core/blueprint/types/blueprint-plugin.interface";
+export { variantOf } from "./core/blueprint/variant";
 export { commandBuilderOf, isCommand } from "./core/command/command";
 export {
 	CommandEventFailed,

@@ -4,10 +4,12 @@ import { recordFieldOf } from "../blueprint/record-field";
 import type {
 	AnyBlueprint,
 	AnyBlueprintList,
+	AnyBlueprintVariant,
 	AnyRecordClass,
 	BlueprintField,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant } from "../blueprint/variant";
 import {
 	AbstractProperty,
 	parsingDefinitionOf,
@@ -60,12 +62,14 @@ const LIST = 1;
 const BLUEPRINT = 2;
 const RECORD = 3;
 const UNDECLARED_FIELD = 4;
+const VARIANT = 5;
 type Kind =
 	| typeof PROPERTY
 	| typeof LIST
 	| typeof BLUEPRINT
 	| typeof RECORD
-	| typeof UNDECLARED_FIELD;
+	| typeof UNDECLARED_FIELD
+	| typeof VARIANT;
 
 /**
  * How a field handles a value, worked out once: what it is, and what it is
@@ -88,6 +92,9 @@ interface Step {
 	collection: Collection | undefined;
 	readonly record: AnyRecordClass | undefined;
 	readonly optionalRecord: boolean;
+	readonly variant: AnyBlueprintVariant | undefined;
+	/** The collection of each variant of `variant`, by its name; made on its first value. */
+	variants: Map<string, Collection> | undefined;
 }
 
 /** The fields of a collection of properties, in order: the name and the step of each. */
@@ -103,11 +110,13 @@ function stepOf(field: BlueprintField | undefined): Step {
 		? LIST
 		: isBlueprint(field)
 			? BLUEPRINT
-			: record
-				? RECORD
-				: isProperty(field)
-					? PROPERTY
-					: UNDECLARED_FIELD;
+			: isBlueprintVariant(field)
+				? VARIANT
+				: record
+					? RECORD
+					: isProperty(field)
+						? PROPERTY
+						: UNDECLARED_FIELD;
 
 	return {
 		kind,
@@ -119,6 +128,8 @@ function stepOf(field: BlueprintField | undefined): Step {
 		collection: undefined,
 		record: kind === RECORD ? record?.record : undefined,
 		optionalRecord: kind === RECORD && record?.optional === true,
+		variant: kind === VARIANT ? (field as AnyBlueprintVariant) : undefined,
+		variants: undefined,
 	};
 }
 
@@ -133,6 +144,8 @@ const UNDECLARED: Step = {
 	collection: undefined,
 	record: undefined,
 	optionalRecord: false,
+	variant: undefined,
+	variants: undefined,
 };
 
 /** The step of each field, made once. */
@@ -262,7 +275,8 @@ export function collectionParserOf(
 
 /**
  * `parseCollection` for the value `run` is handling at `depth`: the handled
- * value, or `REJECTED` with its issues in `run`.
+ * value, or `REJECTED` with its issues in `run`. With `tag`, the value is a
+ * variant: it also has the key `tag`, which is kept, first, as it is.
  */
 function collectionAt(
 	collection: Collection,
@@ -270,6 +284,7 @@ function collectionAt(
 	run: Run,
 	depth: number,
 	vouched?: readonly string[],
+	tag?: string,
 ): unknown {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		return reject(run, "invalid_type", "must be an object", pathOf(run, depth));
@@ -282,7 +297,13 @@ function collectionAt(
 	for (let index = 0; index < keys.length; index++) {
 		const name = keys[index] as string;
 		// A value written in the order of the blueprint has each key in its place.
-		if (name === names[index] || Object.hasOwn(properties, name)) continue;
+		if (
+			name === names[index] ||
+			name === tag ||
+			Object.hasOwn(properties, name)
+		) {
+			continue;
+		}
 		rejected = true;
 		reject(run, "undeclared_key", "is not declared", [
 			...pathOf(run, depth),
@@ -290,7 +311,9 @@ function collectionAt(
 		]);
 	}
 
-	const handled: Record<string, unknown> = {};
+	// The key of a variant goes first, with the name that chose this collection.
+	const handled: Record<string, unknown> =
+		tag === undefined ? {} : { [tag]: (value as Record<string, unknown>)[tag] };
 	for (let index = 0; index < names.length; index++) {
 		const name = names[index] as string;
 		if (vouched?.includes(name)) {
@@ -398,6 +421,47 @@ function fieldAt(step: Step, value: unknown, run: Run, depth: number): unknown {
 			}
 			step.collection ??= collectionOf(blueprint.properties);
 			return collectionAt(step.collection, value, run, depth);
+		}
+
+		case VARIANT: {
+			const variant = step.variant as AnyBlueprintVariant;
+			if (value === undefined) {
+				return variant.optional ? value : required(run, depth);
+			}
+			if (typeof value !== "object" || value === null || Array.isArray(value)) {
+				return reject(
+					run,
+					"invalid_type",
+					"must be an object",
+					pathOf(run, depth),
+				);
+			}
+
+			let { variants } = step;
+			if (variants === undefined) {
+				variants = new Map();
+				const blueprints: Record<string, AnyBlueprint> = variant.variants;
+				for (const tag of Object.keys(blueprints)) {
+					variants.set(
+						tag,
+						collectionOf((blueprints[tag] as AnyBlueprint).properties),
+					);
+				}
+				step.variants = variants;
+			}
+			const { key } = variant;
+			const tag = (value as Record<string, unknown>)[key];
+			const collection =
+				typeof tag === "string" ? variants.get(tag) : undefined;
+			if (collection === undefined) {
+				return reject(
+					run,
+					"invalid_value",
+					"must be equal to one of the allowed values",
+					[...pathOf(run, depth), key],
+				);
+			}
+			return collectionAt(collection, value, run, depth, undefined, key);
 		}
 
 		case RECORD: {

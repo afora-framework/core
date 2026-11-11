@@ -4,6 +4,7 @@ import { isBlueprintList } from "../blueprint/list";
 import { optionalOf } from "../blueprint/optional";
 import { recordFieldOf } from "../blueprint/record-field";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant } from "../blueprint/variant";
 import { identityKeysOf } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
 import { propertyInputOf } from "../property/input";
@@ -54,7 +55,8 @@ function planOf(
 			? related
 				? "entity-list"
 				: "list"
-			: isBlueprint(field)
+			: // A variant is an object too: one of several blueprints.
+				isBlueprint(field) || isBlueprintVariant(field)
 				? "blueprint"
 				: "property";
 	let input: UseCaseFieldPlan["input"] = { key, field };

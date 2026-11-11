@@ -22,27 +22,25 @@ if (!existsSync(join(import.meta.dir, "../../dist/index.d.ts")))
 	throw new Error("dist/ is missing: run `bun run test:type-perf`.");
 
 /**
- * Instantiations per edit, the most of both modes (source mode), as measured
- * on 2026-11-05, plus 2%.
+ * Instantiations per edit, the most of both modes (source mode). Raised on
+ * 2026-11-11 with `variantOf` (#80): a new kind of field costs about 3% in
+ * every case, most of it one more branch in the schema of a field, after the
+ * branch it added to the optional fields of the context was moved last (it
+ * cost 8% more where it was). Measured plus 1%.
  */
 const CEILING: Record<string, number> = {
-	"bare blueprint": 34_500,
-	"quick start": 44_900,
-	entity: 53_000,
-	// Raised on 2026-11-10 when #51 (increment, forEachPage, expiry) met #52
-	// (indexes, explain, keyset-typed findCursor, hooks, JSON): measured plus 1%.
-	repository: 54_500,
-	"use case": 54_300,
-	// Added on 2026-11-07 (T32), measured plus 2%.
-	queries: 52_100,
-	"steps use case": 53_900,
-	// Added on 2026-11-10 (#43): the steps checked with strictSteps, measured plus 2%.
-	"strict steps use case": 63_800,
-	"command and output": 64_000,
-	// Added on 2026-11-10, measured plus 2%.
-	"named providers": 50_700,
-	// Added on 2026-11-10 with the standard use cases, measured plus 2%.
-	"standard use cases": 96_300,
+	"bare blueprint": 35_900,
+	"quick start": 46_700,
+	entity: 55_200,
+	repository: 56_100,
+	"use case": 56_600,
+	queries: 53_700,
+	"steps use case": 55_800,
+	"strict steps use case": 64_900,
+	"command and output": 66_700,
+	"named providers": 52_700,
+	// 2% under the target: the next kind of field has to be paid for elsewhere.
+	"standard use cases": 99_000,
 };
 
 /** About 100 ms per edit: what IntelliSense should cost. */

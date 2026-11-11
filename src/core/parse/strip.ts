@@ -7,6 +7,7 @@ import type {
 	BlueprintField,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant, variantOfValue } from "../blueprint/variant";
 import { fieldsOf, isPlainObject } from "./parse";
 
 /** A copy of `value` with only the keys `properties` declares, each stripped by its field. */
@@ -40,6 +41,15 @@ function fieldOf(field: BlueprintField | undefined, value: unknown): unknown {
 			: value;
 	}
 	if (isBlueprint(field)) return collectionOf(field.properties, value);
+	if (isBlueprintVariant(field)) {
+		// The key that names the variant is kept, first; a value that names none is left whole.
+		const variant = variantOfValue(field, value);
+		if (!variant || !isPlainObject(value)) return value;
+		return {
+			[field.key]: value[field.key],
+			...(collectionOf(variant.properties, value) as object),
+		};
+	}
 
 	const record = recordFieldOf(field);
 	if (record) {

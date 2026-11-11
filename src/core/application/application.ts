@@ -5,8 +5,10 @@ import { isRecordClass, recordFieldOf } from "../blueprint/record-field";
 import type {
 	AnyBlueprint,
 	BlueprintField,
+	BlueprintVariants,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant } from "../blueprint/variant";
 import {
 	commandOf,
 	commandTransactionProvider,
@@ -450,7 +452,13 @@ function recordsIn(properties: IBlueprintCollection): Set<object> {
 	const visit = (field: unknown): void => {
 		if (isBlueprintList(field)) visit(field.item);
 		else if (isBlueprint(field)) walk(field.properties);
-		else {
+		else if (isBlueprintVariant(field)) {
+			for (const variant of Object.values(
+				field.variants as BlueprintVariants,
+			)) {
+				visit(variant);
+			}
+		} else {
 			const record = recordFieldOf(field)?.record;
 			if (record) found.add(record);
 		}
@@ -788,6 +796,20 @@ function fieldDescriptionOf(field: unknown, scope: Scope): FieldDescription {
 					fields: fieldsDescriptionOf(field.properties, scope),
 				}
 			: { kind: "blueprint", ref, optional: field.optional };
+	}
+	if (isBlueprintVariant(field)) {
+		const variants: BlueprintVariants = field.variants;
+		return {
+			kind: "variant",
+			key: field.key,
+			optional: field.optional,
+			variants: Object.fromEntries(
+				Object.entries(variants).map(([tag, variant]) => [
+					tag,
+					fieldDescriptionOf(variant, scope),
+				]),
+			),
+		};
 	}
 	const record = recordFieldOf(field);
 	if (record) {
