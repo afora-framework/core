@@ -1,6 +1,6 @@
 import type { Static, TSchema } from "typebox";
 import Compile from "typebox/compile";
-import * as System from "typebox/system";
+import { Locale, Settings } from "typebox/system";
 import type { ISchema, ISchemaType } from "./types/schema.interface";
 
 /** Keywords kept as they are: the types, and the references between schemas. */
@@ -197,12 +197,6 @@ function leafChecksOf(schema: unknown): readonly LeafCheck[] | undefined {
 	}
 	return checks;
 }
-
-/**
- * The settings and the messages of TypeBox, read as they are on each value;
- * a version of TypeBox without them leaves every error to `Errors`.
- */
-const { Locale, Settings } = System as Partial<typeof System>;
 
 /** The leaf checks of each schema, `null` when it is not a leaf; made on its first rejected value. */
 const leafChecks = new WeakMap<object, readonly LeafCheck[] | null>();
@@ -506,8 +500,8 @@ const explainers = new WeakMap<object, Explain | null>();
 
 /** A sink with the limit, the messages and the settings TypeBox has now; `undefined` without them. */
 function sinkOf(): Sink | undefined {
-	const settings = Settings?.Get?.();
-	const locale = Locale?.Get?.();
+	const settings = Settings.Get();
+	const locale = Locale.Get();
 	if (typeof settings?.maxErrors !== "number" || typeof locale !== "function") {
 		return undefined;
 	}
@@ -636,8 +630,8 @@ function errorsOfVariant(
 		}));
 	}
 
-	const maxErrors = Settings?.Get?.().maxErrors;
-	const locale = Locale?.Get?.();
+	const maxErrors = Settings.Get().maxErrors;
+	const locale = Locale.Get();
 	if (typeof maxErrors !== "number" || typeof locale !== "function") {
 		return undefined;
 	}
@@ -668,8 +662,8 @@ export function errorsOfSchema(
 		checks = leafChecksOf(rawTypeOf(schema)) ?? null;
 		leafChecks.set(schema, checks);
 	}
-	const maxErrors = Settings?.Get?.().maxErrors;
-	const locale = Locale?.Get?.();
+	const maxErrors = Settings.Get().maxErrors;
+	const locale = Locale.Get();
 	// Without the limit and the messages of TypeBox, only TypeBox can answer.
 	if (
 		checks !== null &&
