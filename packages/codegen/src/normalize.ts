@@ -248,6 +248,9 @@ function canonicalStep(step: unknown): unknown {
 			copy.error = { core: name };
 		}
 	}
+	if (Object.hasOwn(copy, "run") && copy.params !== undefined) {
+		copy.params = canonicalBlueprintRef(copy.params) as Json;
+	}
 	return copy;
 }
 
@@ -635,6 +638,14 @@ export function compactSpec(normalized: Spec): Spec {
 			for (const key of ["input", "response", "context"]) {
 				const ref = value[key];
 				if (isObject(ref)) ref.fields = compactFields(ref.fields);
+			}
+			const implementation = value.implementation;
+			if (isObject(implementation) && Array.isArray(implementation.steps)) {
+				for (const step of implementation.steps) {
+					if (isObject(step) && isObject(step.params)) {
+						step.params.fields = compactFields(step.params.fields);
+					}
+				}
 			}
 		}
 	}

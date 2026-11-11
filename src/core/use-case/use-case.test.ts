@@ -76,7 +76,7 @@ describe("use cases", () => {
 		expect(Object.isFrozen(op.input)).toBe(true);
 		expect(() => Object.assign(op, { input: {} })).toThrow();
 		expect(() => new Leaf({ name: 4 } as never)).toThrow(
-			"Invalid UseCase input",
+			/^Invalid UseCase input: "name" /,
 		);
 		const result = await op.execute();
 		expect(result.user).toBeInstanceOf(User);
@@ -125,7 +125,7 @@ describe("use cases", () => {
 			new Parent({ name: "Ana" }).execute({
 				create: async () => ({ user: 1 }),
 			} as never),
-		).rejects.toThrow("Invalid UseCase response");
+		).rejects.toThrow(/^Invalid UseCase response: "user" .+\.$/);
 		await expect(
 			new Parent({ name: "Ana" }).execute({
 				absent: async () => ({}),

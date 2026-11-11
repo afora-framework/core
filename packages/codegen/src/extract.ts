@@ -603,6 +603,9 @@ export function extractSpec(
 										`The function of the step run "${step.run}" of the use case "${name}"`,
 									),
 								},
+								...(step.params === undefined
+									? {}
+									: { params: { fields: extraction.json(step.params) } }),
 							};
 						}
 						return { ...step };

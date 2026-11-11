@@ -483,7 +483,10 @@ const JoinInput = blueprintOf((ctx) => ({
 export class StrictJoin extends useCaseOf({
 	name: "StrictJoin",
 	blueprint: JoinInput,
-	response: blueprintOf(() => ({ member: ClubMember })),
+	response: blueprintOf((ctx) => ({
+		member: ClubMember,
+		actor: ctx.optional.string,
+	})),
 	context: blueprintOf((ctx) => ({ actor: ctx.optional.string })),
 	dependencies: { members: ClubMembers },
 	errors: [ClubMemberExists],

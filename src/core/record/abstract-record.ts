@@ -181,6 +181,29 @@ function withIssues<Details extends object>(
 }
 
 /**
+ * The message of a property exception as the record raises it: the key and
+ * the record instead of the name of the property (`Property "password" of
+ * record "User" is required.`); any other exception keeps its message.
+ */
+function recordMessageOf(
+	cause: Exception,
+	key: string,
+	source: string,
+): string {
+	if (key === "" || cause.layer !== ExceptionLayers.Property) {
+		return cause.message;
+	}
+	if (cause.name === "PropertyRequired") {
+		return `Property "${key}" of record "${source}" is required.`;
+	}
+	const errors = (cause.details as { errors?: unknown } | undefined)?.errors;
+	if (cause.name === "InvalidPropertyValue" && Array.isArray(errors)) {
+		return `Invalid value for "${key}" of record "${source}": ${errors.join("; ")}`;
+	}
+	return cause.message;
+}
+
+/**
  * The exception of the first of `issues`, as the record raised it before
  * issues existed, with all of them in its `details`: the exception of a
  * property goes up a layer, an undeclared key is `UndeclaredRecordProperty`,
@@ -197,6 +220,7 @@ function exceptionOfIssues(
 		return first.cause.propagate({
 			layer: ExceptionLayers.Record,
 			source,
+			message: recordMessageOf(first.cause, key, source),
 			details: withIssues({ key }, issues),
 		});
 	}
