@@ -237,11 +237,18 @@ function withIdentity(
 		createdAt === undefined && makesValid?.createdAt() === true;
 	// The expiry follows `createdAt`: with that one left for later, so is it.
 	const expiresLater = expiring && createdAtLater;
-	if (idLater && createdAtLater) {
-		vouchFor(expiresLater ? BOTH_EXPIRES : BOTH_MADE, complete);
-	} else if (createdAtLater) {
-		vouchFor(expiresLater ? CREATED_AT_EXPIRES : CREATED_AT_MADE, complete);
-	} else if (idLater) vouchFor(ID_MADE, complete);
+	const vouched =
+		idLater && createdAtLater
+			? expiresLater
+				? BOTH_EXPIRES
+				: BOTH_MADE
+			: createdAtLater
+				? expiresLater
+					? CREATED_AT_EXPIRES
+					: CREATED_AT_MADE
+				: idLater
+					? ID_MADE
+					: undefined;
 
 	if (
 		!unversioned &&
@@ -249,6 +256,7 @@ function withIdentity(
 		(id !== undefined || idLater) &&
 		(createdAt !== undefined || createdAtLater)
 	) {
+		if (vouched !== undefined) vouchFor(vouched, complete);
 		return value;
 	}
 	const created =
@@ -270,6 +278,9 @@ function withIdentity(
 			identity[EXPIRES_AT] = new Date(start + lifetime).toISOString();
 		}
 	}
+	// Vouched for last, once nothing above can throw: a maker or a date that
+	// throws must not leave the vouch to the next record built.
+	if (vouched !== undefined) vouchFor(vouched, complete);
 	return identity;
 }
 

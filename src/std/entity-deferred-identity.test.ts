@@ -243,3 +243,26 @@ test("onCreate is queued only for a new, valid entity", () => {
 		new User({ name: "Jane", id: ID, createdAt: FIXED }).pullEvents(),
 	).toHaveLength(0);
 });
+
+test("a maker or a date that throws leaves no vouch to the next record", () => {
+	const { entityOf } = builder(true);
+	class Session extends entityOf(Named, { expires: { after: { days: 1 } } }) {}
+	class User extends entityOf(Named) {}
+
+	// The id is left for later, then the expiry of this date throws.
+	expect(
+		Session.safeParse({ name: "a", createdAt: "+275760-09-13T00:00:00.000Z" })
+			.issues?.[0]?.message,
+	).toBe("Invalid Date");
+
+	expect(
+		paths(
+			Session.safeParse({ name: "Jane", id: "not-an-id", createdAt: FIXED })
+				.issues,
+		),
+	).toEqual([["id"]]);
+	expect(
+		paths(User.safeParse({ name: "Jane", id: "not-an-id" }).issues),
+	).toEqual([["id"]]);
+	expect(User.safeParse({ name: "Jane" }).issues).toBeUndefined();
+});
