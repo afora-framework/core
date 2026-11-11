@@ -28,6 +28,7 @@
 		"url": "https://github.com/afora-framework/core/issues"
 	},
 	"type": "module",
+	"sideEffects": false,
 	"workspaces": [
 		"packages/*"
 	],
