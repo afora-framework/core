@@ -266,8 +266,7 @@ export async function migrateRepository(
 			EntitySettings
 		]?.previousNames ?? []
 	).filter(
-		(previous) =>
-			previous !== own && `${previous}Repository` !== context.name,
+		(previous) => previous !== own && `${previous}Repository` !== context.name,
 	);
 	const needs: (keyof IRepositoryProvider)[] = ["findMany"];
 	if (apply) needs.push("update");

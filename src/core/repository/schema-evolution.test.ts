@@ -472,7 +472,7 @@ describe("app.migrate", () => {
 			},
 			provider,
 		});
-		const old = contextOf(Article, "Entry");
+		const old = contextOf(EntryV1, "Entry");
 		const current = contextOf(Article, "Article");
 		const check = await app.migrate({ mode: "check" });
 		expect(check.entities.Article?.movedFromPreviousNames).toBe(3);
@@ -498,9 +498,12 @@ describe("app.migrate", () => {
 	test("a previous name equal to the record name of the class is rejected, and its rows survive", async () => {
 		const provider = inMemoryProvider();
 		// No `name`: the record name is the name of the class, "Post".
-		class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text })), {
-			previousNames: ["Post"],
-		}) {}
+		class Post extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.text })),
+			{
+				previousNames: ["Post"],
+			},
+		) {}
 		const raw = contextOf(Post, "Post");
 		for (const title of ["a", "b"]) {
 			await provider.insert(raw, { id: idOf(), createdAt, title });
@@ -511,7 +514,11 @@ describe("app.migrate", () => {
 				name: "cms",
 				entities: { Post },
 				repositories: {
-					Posts: repositoryOf({ entity: Post, actions: ["findMany"], provider }),
+					Posts: repositoryOf({
+						entity: Post,
+						actions: ["findMany"],
+						provider,
+					}),
 				},
 			});
 			await app.migrate({ mode: "apply", destructive: true });

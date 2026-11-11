@@ -130,5 +130,5 @@ A provider needs nothing new to support schema evolution: the core brings rows u
 
 - `context.schema` (`RepositorySchema`), for an entity with `schemaVersion`: `{ version, key, previousNames }`.
 - `provider.migrate?(context, plan)` is optional. `app.migrate({ mode: "apply" })` calls it before the backfill of each entity, with `{ entity, changes, destructive }`: the changes of `diffSchemas` from the given `lock`, or none without one. A provider with a structural schema (SQL) turns them into DDL; it applies destructive changes only when `plan.destructive`. Document stores leave it out.
-- `inMemoryProvider` keys its tables by `context.name`, as a database names its tables, so a context made for a previous name reads its old rows.
+- `inMemoryProvider` keys the table of an entity that declares a name (`name`, or a `static recordName`) by that name, as a database names its tables, so a context made for a previous name reads its old rows; the table of an entity without one stays keyed by its class.
 - The [provider contract](repositories.md#testing-a-provider) has schema evolution cases.
