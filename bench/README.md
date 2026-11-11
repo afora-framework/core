@@ -56,3 +56,12 @@ If a library is used here in a way that is slower than it has to be, open a pull
 ## What CI holds
 
 `bun run bench:guard` times `blueprint.safeParse` and Zod 4 `safeParse` on every case, taking turns in one process, and fails when afora is over the limit of the case as a multiple of Zod 4. It compares a ratio, so it does not depend on the machine. The limits and the reason for each are in `guard.limits.ts`.
+
+Two more checks run on a pull request (`.github/workflows/bench-compare.yml`):
+
+- **Against the base.** `bun run bench -- --compare <checkout of the base>` builds afora from both checkouts and times `blueprint.safeParse`, `Record.safeParse` and `Entity.safeParse` of each on every case, taking turns in one process. A `blueprint.safeParse` row over 1.1x its base fails; the table goes to the summary of the job and to a comment on the pull request. The same code against itself stays within 4% on these rows.
+- **CodSpeed**, once its app is installed on the repository and the variable `CODSPEED_ENABLED` is `true`: `codspeed.ts` runs the cases of the guard on a simulated CPU, which does not move with the load of the runner, and keeps their history.
+
+## Publishing the results
+
+The `Benchmark results` workflow (`.github/workflows/bench.yml`, by hand or after a release) runs everything on a GitHub runner and opens a pull request with `results/latest.json`, `results/history/<version>.json`, `RESULTS.md`, `results/chart.svg` and the block of the root README between `<!-- bench:start -->` and `<!-- bench:end -->`. All of them are generated: `bun run bench -- --render` writes them again from `results/latest.json`, and `bun run bench:check` (in CI) fails when one was edited by hand. `results/latest.json` is the contract for anything that draws these numbers (`Report` in `render.ts`): `schema` is raised by a change that breaks a reader.

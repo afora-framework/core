@@ -5,6 +5,8 @@
 //   --rounds 3           times each row is timed, in turns; the best counts (default 3)
 //   --jobs 3             that many rows at a time, to iterate: the times are off by 1.4x and more, and nothing is written
 //   --guard              afora against Zod 4, fails over a limit (what CI runs)
+//   --compare <base>    afora here against afora in another checkout (or built module)
+//   --check             fails when RESULTS.md, the chart or the block of the README are not what results/latest.json gives
 //   --render             RESULTS.md again from results/latest.json, no timing
 import { writeFileSync } from "node:fs";
 import type { Scenario } from "./contenders.ts";
@@ -19,7 +21,13 @@ import {
 	measure,
 	type RuntimeReport,
 } from "./harness.ts";
-import { type Report, renderResults } from "./render.ts";
+import {
+	normalized,
+	type Report,
+	renderChart,
+	renderResults,
+	withSummary,
+} from "./render.ts";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(name);
@@ -41,6 +49,33 @@ const rounds = Math.max(
 );
 
 const latest = `${here}results/latest.json`;
+const generated = {
+	results: `${here}RESULTS.md`,
+	chart: `${here}results/chart.svg`,
+	readme: `${here}../README.md`,
+};
+
+/** Everything that is generated from a report. */
+async function rendered(report: Report) {
+	return {
+		results: renderResults(report),
+		chart: renderChart(report),
+		readme: withSummary(await Bun.file(generated.readme).text(), report),
+	};
+}
+
+async function writeGenerated(report: Report) {
+	const files = await rendered(report);
+	for (const key of Object.keys(files) as Array<keyof typeof files>) {
+		await Bun.write(generated[key], files[key]);
+	}
+	// The repository formats its Markdown with Biome; what is written is what a commit would hold.
+	await Bun.$`bunx biome format --write ${generated.results} ${generated.readme}`
+		.cwd(`${here}..`)
+		.nothrow()
+		.quiet();
+	console.log(`Wrote ${Object.values(generated).join(", ")}`);
+}
 
 /** afora's source imports `typebox` and `slugify` from the root install. */
 async function installRoot() {
@@ -171,10 +206,31 @@ if (process.env.BENCH_CHILD === "1") {
 } else if (flag("--guard")) {
 	await installRoot();
 	process.exit(guard(await loadScenarios(only)) ? 0 : 1);
+} else if (flag("--compare")) {
+	await installRoot();
+	const base = optionOf("--compare");
+	if (!base) throw new Error("--compare needs the root of the base checkout.");
+	const { compare } = await import("./compare.ts");
+	process.exit((await compare(base, only)) ? 0 : 1);
 } else if (flag("--render")) {
-	const report = (await Bun.file(latest).json()) as Report;
-	await Bun.write(`${here}RESULTS.md`, renderResults(report));
-	console.log(`Wrote ${here}RESULTS.md`);
+	await writeGenerated((await Bun.file(latest).json()) as Report);
+} else if (flag("--check")) {
+	const files = await rendered((await Bun.file(latest).json()) as Report);
+	const stale: string[] = [];
+	for (const key of Object.keys(files) as Array<keyof typeof files>) {
+		const current = await Bun.file(generated[key]).text();
+		if (normalized(current) !== normalized(files[key]))
+			stale.push(generated[key]);
+	}
+	if (stale.length > 0) {
+		console.log(
+			`Not what bench/results/latest.json gives:\n${stale.map((file) => `  ${file}`).join("\n")}\nThese are generated: run \`bun run bench -- --render\` instead of editing them.`,
+		);
+		process.exit(1);
+	}
+	console.log(
+		"RESULTS.md, the chart and the block of README.md match results/latest.json.",
+	);
 } else {
 	// Only Bun gets here: the Node leg is the `BENCH_CHILD` branch above.
 	if (!isBun) throw new Error("Run it with Bun: `bun run bench`.");
@@ -211,7 +267,13 @@ if (process.env.BENCH_CHILD === "1") {
 			footprints: await footprints(node ? ["bun", "node"] : ["bun"]),
 		};
 		await Bun.write(latest, `${JSON.stringify(report, null, "\t")}\n`);
-		await Bun.write(`${here}RESULTS.md`, renderResults(report));
-		console.log(`\nWrote ${latest} and ${here}RESULTS.md`);
+		// A release keeps its report, for the history of each row over the versions.
+		if (process.env.BENCH_HISTORY) {
+			await Bun.write(
+				`${here}results/history/${root.version}.json`,
+				`${JSON.stringify(report)}\n`,
+			);
+		}
+		await writeGenerated(report);
 	}
 }

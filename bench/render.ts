@@ -136,3 +136,150 @@ export function renderResults(report: Report): string {
 	);
 	return out.join("\n");
 }
+
+// ------------------------------------------------------------- README
+/** The row of afora that does what the other libraries do. */
+const HEADLINE = GUARDED;
+/** The scenario and case of the chart: the body of a request, valid. */
+const CHART = { scenario: "api-payload", case: "valid" } as const;
+
+/** The run the README leads with: Node when it was measured, as most servers run on it. */
+const leadRun = (report: Report) =>
+	report.runs.find((run) => run.runtime === "node") ?? report.runs[0];
+
+/** The first row of each library in a table (for afora, the headline row). */
+function rowsByLibrary(table: Table): Map<string, Row> {
+	const rows = new Map<string, Row>();
+	for (const row of table.rows) {
+		if (row.library === "afora" && row.contender !== HEADLINE) continue;
+		if (!rows.has(row.library)) rows.set(row.library, row);
+	}
+	return rows;
+}
+
+function summaryTable(run: RuntimeReport): string[] {
+	const libraries = Object.keys(LIBRARIES).filter((key) => key !== "afora");
+	const out = [
+		`| ${runtimeName(run.runtime)} | afora | ${libraries.map((key) => LIBRARIES[key]?.label).join(" | ")} |`,
+		`| --- | ---: | ${libraries.map(() => "---:").join(" | ")} |`,
+	];
+	for (const table of run.tables) {
+		const rows = rowsByLibrary(table);
+		const afora = rows.get("afora");
+		if (!afora) continue;
+		const cells = libraries.map((key) => {
+			const row = rows.get(key);
+			return row ? `${(row.avg / afora.avg).toFixed(2)}x` : "";
+		});
+		out.push(
+			`| ${table.title}, ${table.case} | ${fmtNs(afora.avg)} | ${cells.join(" | ")} |`,
+		);
+	}
+	return out;
+}
+
+/** The block of README.md between `<!-- bench:start -->` and `<!-- bench:end -->`. */
+export function renderSummary(report: Report): string {
+	const lead = leadRun(report);
+	if (!lead) return "";
+	const others = report.runs.filter((run) => run !== lead);
+	return [
+		`![Validations per second on the body of an API request, ${lead.version}](bench/results/chart.svg)`,
+		"",
+		`Time of each library as a multiple of afora \`blueprint.safeParse\` on the same case: above 1.00x it is slower than afora, below it is faster. TypeBox, Ajv and Typia only check, they do not transform. afora ${report.afora.version}, ${report.runs.map((run) => run.version).join(" and ")}, ${lead.cpu}; generated from \`bench/results/latest.json\`.`,
+		"",
+		...summaryTable(lead),
+		...others.flatMap((run) => ["", ...summaryTable(run)]),
+	].join("\n");
+}
+
+const escapeXml = (text: string) =>
+	text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** Horizontal bars of validations per second, one per library, afora in the accent. */
+export function renderChart(report: Report): string {
+	const run = leadRun(report);
+	const table = run?.tables.find(
+		(candidate) =>
+			candidate.scenario === CHART.scenario && candidate.case === CHART.case,
+	);
+	if (!run || !table) return "";
+	const rows = [...rowsByLibrary(table).entries()]
+		.map(([library, row]) => ({ library, row, ops: 1e9 / row.avg }))
+		.sort((a, b) => b.ops - a.ops);
+	const max = Math.max(...rows.map((entry) => entry.ops));
+
+	const width = 760;
+	const labelWidth = 150;
+	const valueWidth = 190;
+	const barMax = width - labelWidth - valueWidth;
+	const barHeight = 18;
+	const step = 30;
+	const top = 56;
+	const height = top + rows.length * step + 34;
+
+	const bars = rows.map(({ library, row, ops }, index) => {
+		const y = top + index * step;
+		const length = Math.max(2, (ops / max) * barMax);
+		const radius = Math.min(4, length / 2);
+		const checksOnly = row.note?.includes("no transforms");
+		const name = LIBRARIES[library]?.label ?? library;
+		// A bar with a square start on the baseline and a rounded data-end.
+		const path = `M${labelWidth},${y} h${length - radius} a${radius},${radius} 0 0 1 ${radius},${radius} v${barHeight - 2 * radius} a${radius},${radius} 0 0 1 -${radius},${radius} h-${length - radius} z`;
+		return [
+			`<text class="${library === "afora" ? "name strong" : "name"}" x="${labelWidth - 10}" y="${y + 13}" text-anchor="end">${escapeXml(name)}</text>`,
+			`<path class="${library === "afora" ? "bar accent" : "bar"}" d="${path}"/>`,
+			`<text class="value" x="${labelWidth + length + 8}" y="${y + 13}">${fmtOps(row.avg)} ops/s${checksOnly ? '<tspan class="muted"> · checks only</tspan>' : ""}</text>`,
+		].join("\n");
+	});
+
+	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-labelledby="title desc" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="title">Validations per second: ${escapeXml(table.title)}, ${table.case} input</title>
+<desc id="desc">${rows.map(({ library, row }) => `${LIBRARIES[library]?.label ?? library}: ${fmtOps(row.avg)} per second`).join("; ")}.</desc>
+<style>
+	.title { font-size: 15px; font-weight: 600; fill: #0b0b0b; }
+	.subtitle, .foot { font-size: 12px; fill: #52514e; }
+	.name { font-size: 13px; fill: #52514e; }
+	.name.strong { font-weight: 600; fill: #0b0b0b; }
+	.value { font-size: 12px; fill: #0b0b0b; font-variant-numeric: tabular-nums; }
+	.muted { fill: #52514e; }
+	.bar { fill: #a3a29c; }
+	.bar.accent { fill: #2a78d6; }
+	.axis { stroke: #a3a29c; stroke-width: 1; }
+	@media (prefers-color-scheme: dark) {
+		.title, .name.strong, .value { fill: #f0efec; }
+		.subtitle, .foot, .name, .muted { fill: #c3c2b7; }
+		.bar { fill: #6b6a65; }
+		.bar.accent { fill: #3987e5; }
+		.axis { stroke: #6b6a65; }
+	}
+</style>
+<text class="title" x="0" y="18">Validations per second, ${escapeXml(table.title.replace(/^API/, "API"))}</text>
+<text class="subtitle" x="0" y="38">Valid input, every rule and transform applied; longer is faster. ${escapeXml(run.version)}, ${escapeXml(run.cpu)}.</text>
+<line class="axis" x1="${labelWidth}" y1="${top - 6}" x2="${labelWidth}" y2="${top + rows.length * step - 6}"/>
+${bars.join("\n")}
+<text class="foot" x="0" y="${height - 8}">afora ${escapeXml(report.afora.version)} blueprint.safeParse. "Checks only": the library has no transforms and gets the already-clean value.</text>
+</svg>
+`;
+}
+
+const START = "<!-- bench:start -->";
+const END = "<!-- bench:end -->";
+
+/** `readme` with its generated block replaced. */
+export function withSummary(readme: string, report: Report): string {
+	const start = readme.indexOf(START);
+	const end = readme.indexOf(END);
+	if (start === -1 || end === -1) {
+		throw new Error(`README.md has no ${START} ... ${END} block.`);
+	}
+	return `${readme.slice(0, start + START.length)}\n\n${renderSummary(report)}\n\n${readme.slice(end)}`;
+}
+
+/** What a formatter may change in Markdown: the padding of a table and the length of its rules. */
+export const normalized = (markdown: string) =>
+	markdown
+		.replace(/[ \t]+/g, " ")
+		.replace(/-{2,}/g, "-")
+		.replace(/ ?\| ?/g, "|")
+		.trim();

@@ -62,6 +62,8 @@ jobs:
       - run: bun run test:blog
       - run: bun run test:agent-built
       - run: bun run docs:links
+      # bench/RESULTS.md, the chart and the block of the README are what bench/results/latest.json gives
+      - run: bun run bench:check
 
   bench:
     name: Validation speed against Zod 4
