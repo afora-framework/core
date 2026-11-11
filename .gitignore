@@ -41,5 +41,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # test scratch projects of the workspace packages
 packages/*/tests/.tmp
 
-# planning notes (kept local)
-docs/plans/
+# planning notes (kept local), except the usage report of the stable exports
+docs/plans/*
+!docs/plans/stable-usage.md

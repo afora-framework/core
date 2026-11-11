@@ -7,9 +7,15 @@
 - Tracing (#65). `applicationOf({ trace })` takes an `ITracer`, a small structural interface of the core (`startSpan(name, attributes, parent)`, optional `withSpan(span, run)`; spans have `end(status, attributes)`), and makes a span per command operation (`command Posts.publish`), use case (`use-case Publish`) and repository call made through a use case (`repository Post.create`), at the points that log, nested as the calls are: a use case run by another nests in it, a repository method called through `this` nests in the call that made it, and the parent is passed explicitly, so nesting holds without a context manager. A span starts before the checks of its call (context, environment, dependency overrides), and the span of `command.run` covers its event policy, failing when a handler or publisher fails. Attributes are names and outcomes only (`afora.command`, `afora.operation`, `afora.use_case`, `afora.repository`, `afora.method`, `afora.outcome`); a failed span has `afora.exception.layer`, `afora.exception.name` and `afora.exception.unexpected` of the exception where it was first raised, never its message or details, and no span holds an input, argument, response or sensitive value. Without a `trace` the execution path is unchanged (no allocation or closure added). A tracer that throws (in `startSpan`, `end` or `withSpan`) breaks no call. The `trace` is inherited by `extends` and kept by `app.extend()`; `describe()` gives it as `{ kind: "opaque" }` (`ApplicationDescription.trace`). New exports: `memoryTracer` (keeps the spans with their parent, for tests), `InvalidTraceDeclaration`, and the types `ITracer`, `ITraceSpan`, `TraceAttributes`, `TraceStatus`, `MemoryTracer`, `MemorySpan`. See `docs/tracing.md`.
 - New package `@afora/otel`: `otelTracer(tracer?)` adapts an OpenTelemetry `Tracer` (by default `trace.getTracer("@afora/otel")`) to `ITracer`. A command span is a child of the active span; failures set the status to `ERROR`. `@opentelemetry/api` is a peer dependency.
 - `@afora/codegen`: `"trace": { "import": "./trace.ts#tracer" }` in `afora.json` generates `applicationOf({ trace })`; extraction needs `imports.trace`.
+- `bun run stable:usage` (`scripts/stable-usage.ts`, after `bun run build`) writes `docs/plans/stable-usage.md`: each stable export of `@afora/core`, the examples, packages and docs that name it, and the used exports whose declarations name it (#59).
 
 ### Changed
 
+- **Breaking.** The stable surface is cut before the 27.0 freeze (#59). These moved from `@afora/core` to `@afora/core/experimental`, outside the contract (15), all types: `AbstractPropertyConstructor`, `IPropertyCollection`, `EntityStorageSettings`, `RepositoryCount`, `RepositoryCreate`, `RepositoryDelete`, `RepositoryIncrement`, `RepositoryRestore`, `RepositoryUpdate`, `RepositoryExists`, `RepositoryExplain`, `RepositoryFindCursor`, `RepositoryFindMany`, `RepositoryFindPage` and `RepositoryForEachPage` (name a repository with `RepositoryOf`). Nothing changes at run time. Twenty-six other unused exports were weighed and stay stable; `docs/api-tiers.md` ("Moved before 27.0") gives the reason for each, moved or kept, and what would promote a moved one back. See Migration below.
+- The version scheme is year-based, `YY.minor.patch` (#62): the first stable release is 27.0.0, the major is the year of the cycle and only a major may break the contract. `VERSIONING.md` describes it, drops "A major is not planned", says that a breaking change ships only in the next year's major after a deprecation, and has the changelog template at `27.1.0`. `docs/api-tiers.md` and `docs/README.md` say 27.0 where they said 1.0.
+- `VERSIONING.md` has the rules of release candidates (#63): `27.0.0-rc.1` goes to `next` once the blocking issues of the 27.0 milestone are closed, only fixes land during the rc, it stays open at least two weeks after the last candidate, and `27.0.0` ships when no blocking issue is open.
+- The Release workflow fails on a version that is neither `0.0.<n>` nor `<YY>.<minor>.<patch>[-rc.<n>]` with `YY` at 27 or more, or whose numbers have leading zeros.
+- `CONTRIBUTING.md` describes how a change is reviewed and how any maintainer makes a release (#70), and lists every package.
 - **Breaking** (`@afora/codegen`). A use case implemented by `{ "import" }` can be a dependency of another use case and be `call`ed by its steps (#64); the `import_dependency` issue is gone. To make this possible, each use case that hand-written code needs (the `<Name>Base` of every `import` use case, and every steps use case such a class depends on) is generated in its own `<kebab-name>.use-case.ts` in `output.dir`, and `use-cases.ts` re-exports it. New issues: `import_cycle` (a hand-written module that would import itself back through the generated files), `file_collision` (two use cases that would get the same file name) and `generated_file` (an `{ "import" }` of a file the generator writes in `output.dir`, such as `./greet.use-case`). `writeGenerated` removes stale generated `*.use-case.ts` files. See Migration below.
 - Every export of `@afora/core`, `/adapters`, `/experimental` and `/testing` has JSDoc (#92). The main builders (`propertyOf`, `blueprintOf`, `recordOf`, `entityOf`, `eventOf`, `repositoryOf`, `useCaseOf`, `environmentOf`, `exceptionOf`, `guard`, `applicationOf`) have an `@example` that is type-checked; functions that throw name the exception with `@throws`, and settings with a default carry `@default`. The block of `IRepositoryProvider` was attached to the wrong declaration.
 - `@afora/core` is smaller in a bundle and loads faster (#86), with no change to its API. Measured on an Apple M2 with Bun 1.4.4 and Node 22, on the cold start entry of `bench/` (`blueprintOf` with three properties and one `safeParse`, bundled with `Bun.build` minified): 418 kB minified / 110 kB gzip before, 190 kB / 53 kB after, from `src/index.ts` or from the built `dist/index.js` (422 / 111 kB before); 24 TypeBox compiles at import before, 3 after (the entry's own); a new process imports that bundle in about 17 ms on Node and on Bun, from 60 to 68 ms on Node and 44 to 47 ms on Bun measured side by side on the same loaded machine (38 and 26 ms on a quieter run). What changed:
@@ -36,6 +42,25 @@
 import { RegisterBase } from "../domain/use-cases";
 // after
 import { RegisterBase } from "../domain/register.use-case";
+```
+
+**Types moved to `@afora/core/experimental` (#59).** Before:
+
+```ts
+import type { EntityStorageSettings, RepositoryCreate } from "@afora/core";
+```
+
+After: the same names, from the experimental entry; a repository method type can also be taken from `RepositoryOf`, which stays stable:
+
+```ts
+import type {
+	EntityStorageSettings,
+	RepositoryCreate,
+} from "@afora/core/experimental";
+
+// or, staying on the stable entry
+import type { RepositoryOf } from "@afora/core";
+type Create = RepositoryOf<typeof Post, ["create"]>["create"];
 ```
 
 ## 0.0.10 — unreleased (draft: dated when it is published)

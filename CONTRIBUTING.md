@@ -69,9 +69,34 @@ bun run smoke           # the build, run on plain Node
 - The quick start in `README.md` must stay equal to `examples/interop/quickstart.ts` and `quickstart.afora.json`; `test:interop` checks it.
 - Parsing and validation are performance-sensitive, valid and invalid input alike. `bun run bench:guard` (the `bench` job in CI) times `blueprint.safeParse` against Zod 4 `safeParse` on the fourteen cases of `bench/` (seven scenarios, valid and invalid input) and fails when afora is over the limit of a case; it compares a ratio measured in one process, so it does not depend on the machine. Run it when you touch `src/core/parse`, `src/core/property`, `src/core/schema` or the constructor of a record. When it fails, run it again to rule out noise, then find what the change costs; a limit (`bench/guard.limits.ts`, 1.15x unless stated) is only raised for a cost that is wanted, with the reason next to it, and the pull request says why. `bun run bench` runs every contender on Bun and Node and rewrites `bench/results/latest.json` and `bench/RESULTS.md` (about half an hour; `bun run bench -- --only flat,union` runs some scenarios and writes nothing); run it on an idle machine, when a change moves them; the table and the chart of the Performance section of `README.md` are generated with it (`bun run bench:check` fails when they are edited by hand), and the prose under them is updated by hand. A pull request is also timed against its base and fails when `blueprint.safeParse` takes more than 1.1x its base on a case (`bun run bench -- --compare <checkout of the base>` runs it locally). A new scenario or library follows [bench/README.md](bench/README.md); the Typia validators are regenerated with `bun run typia` in `bench/`, which needs Go.
 
+## Reviewing a change
+
+Every pull request into `dev` or `main` is reviewed by a maintainer other than its author before it is merged. (While the project has only one maintainer, the author merges after the checks pass.)
+
+The reviewer checks that:
+
+- CI is green.
+- The docs and the CHANGELOG are updated: a change in behavior updates the matching `docs/*.md`, and a public change has an entry under the section of the next release.
+- A snapshot update (`test:api`, `test:type-perf`) is intended and the pull request says why.
+- A breaking change is marked **Breaking.** and has a Migration block (before and after), as [VERSIONING.md](VERSIONING.md) asks.
+- The bench guard passes, or a raised limit has its reason next to it.
+
+On the pull request, choose "Review changes". Choose "Approve" when the checks above hold, or "Request changes" with what has to change; the author pushes the fix and asks for another look. After the approval, the author merges.
+
 ## Releases
 
-Versions follow [VERSIONING.md](VERSIONING.md). A pull request that bumps the version in `package.json` (or in a `packages/*/package.json`), once merged to `main`, runs CI, publishes to npm with provenance and creates the tag and the GitHub release.
+Versions follow [VERSIONING.md](VERSIONING.md). Any maintainer can make a release, not only the author of the changes. All the `@afora/*` packages share one version.
+
+1. From `dev`, open a release pull request against `main`. In it, set the same new `version` in `package.json` and in every `packages/*/package.json`, run `bun install` to update `bun.lock`, and replace `unreleased (draft: ...)` with the date in the heading of the `CHANGELOG.md` section.
+2. Have it reviewed as described above and merge `dev` into `main`.
+3. `.github/workflows/release.yml` runs on the push to `main`. It reads the version and fails when it is outside the scheme, when a package is at another version, or when it is behind the `latest` on npm. If the version has no tag yet, it runs CI, publishes every package to npm, then creates the `v<version>` tag and the GitHub release. A version with `-rc.<n>` goes to the `next` dist-tag and is marked as a prerelease. The benchmark job runs last.
+4. If a release fails halfway, run the workflow again from the Actions tab (`workflow_dispatch`, on `main`). What is already on npm is skipped.
+
+Publishing uses npm trusted publishing (OIDC), with no token, and runs in the GitHub environment `npm`. A maintainer who releases needs access to that environment; the owner of the repository grants it in the repository settings, under Environments. Without access, the publish job waits for or fails on the environment.
+
+A new package under `packages/` is added to `DIRS` in `scripts/release-setup.sh`, and the script is run once by hand (`bash scripts/release-setup.sh`), since npm cannot create a package through OIDC.
+
+The first stable release goes through release candidates; see [Release candidates](VERSIONING.md#release-candidates).
 
 ## License
 

@@ -74,6 +74,7 @@
 		"lint": "biome lint .",
 		"fmt": "biome check --write .",
 		"knip": "knip",
+		"stable:usage": "bun scripts/stable-usage.ts",
 		"build": "rm -rf dist && bun scripts/build.ts && tsc -p tsconfig.build.json",
 		"postbuild": "bun scripts/add-dts-extensions.ts",
 		"bench": "cd bench && bun install && bun run.ts",

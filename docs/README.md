@@ -141,7 +141,7 @@ Every export belongs to a tier, and the tier says where to import it from. [API 
 | experimental | `@afora/core/experimental` | Slicing, and description helpers such as `stageDescriptionOf` and `useCaseTargetOf`.                                                     | no     |
 | internal     | not exported               | Base classes (`AbstractEntity`...), runtime guards, constants of a rule.                                                                 | no     |
 
-Only stable, adapters and testing are the contract of [VERSIONING.md](../VERSIONING.md): before 1.0 a break there is marked **Breaking.** in the CHANGELOG with a Migration block (before and after), and from 1.0 on it waits for a major. Experimental exports may change in any release, and internal code is not the API. Application code needs only `@afora/core`.
+Only stable, adapters and testing are the contract of [VERSIONING.md](../VERSIONING.md): before 27.0 a break there is marked **Breaking.** in the CHANGELOG with a Migration block (before and after), and from 27.0 on it waits for the next year's major. Experimental exports may change in any release, and internal code is not the API. Application code needs only `@afora/core`.
 
 ## Project
 

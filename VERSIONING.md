@@ -4,10 +4,13 @@ afora follows [Semantic Versioning](https://semver.org). This file says what tha
 
 ## Policy
 
-- Before 1.0 (`0.0.x`), anything may break. Every breaking change is listed in `CHANGELOG.md` under the section of the next release (`## <version> — unreleased` until it is dated), marked **Breaking.**, and has a block in that release's `### Migration` section: what the code looked like before and what it looks like after, in `ts` blocks.
-- From 1.0 on, a breaking change only happens in a major version. A major is not planned. After 1.0, releases are fixes and quality-of-life improvements.
-- A minor adds features. A patch fixes bugs.
-- `@afora/core`, `@afora/codegen` and `@afora/mcp` follow the same rules. A change to the `afora.json` spec counts for `@afora/codegen`.
+Versions are `YY.minor.patch`, for example `27.1.3`. It is valid semver, so a range such as `^27.0.0` works and means "any 27.x.y from 27.0.0".
+
+- **Major (`YY`)** is the year of the cycle: 27 is the 2027 cycle. It is raised at most once a year, and only a major may break the contract. Within one major, nothing in the contract breaks.
+- **Minor** adds features. **Patch** fixes bugs.
+- Before 27.0 (`0.0.x`), anything may break. Every breaking change is listed in `CHANGELOG.md` under the section of the next release (`## <version> — unreleased` until it is dated), marked **Breaking.**, and has a block in that release's `### Migration` section: what the code looked like before and what it looks like after, in `ts` blocks.
+- From 27.0 on, a breaking change can only ship in the next year's major (28.0.0 for the 2028 cycle), and only after it was deprecated as described in [Deprecation](#deprecation). The same **Breaking.** and Migration rules apply to that major.
+- `@afora/core`, `@afora/codegen` and `@afora/mcp` follow the same rules, as do the other `@afora/*` packages. A change to the `afora.json` spec counts for `@afora/codegen`.
 
 ## What is the contract
 
@@ -69,12 +72,12 @@ Something in the contract is not removed at once. First it is deprecated:
 2. It logs a warning once per process, with `console.warn`.
 3. The CHANGELOG lists it under "Deprecated".
 
-It is removed only in a major.
+It is removed only in a major, and no sooner than the next year's major.
 
 ## Supported ranges
 
 - TypeScript >= 5.5. It is tested on 5.5, on the latest 5.x and on 7 with `bun run test:types`, in `bundler` and `nodenext` resolution.
-- TypeBox `^1`. A new TypeBox major means a new afora major.
+- TypeBox `^1`. A new TypeBox major means a new afora major, which ships with the next year's major.
 - Bun >= 1.4.4 and Node >= 22.
 - Browsers and Workers must load the core: `src/` imports no `node:crypto`, `Buffer` or Bun-only API at load.
 
@@ -92,7 +95,7 @@ Dropping a version of TypeScript, Bun or Node is breaking, except when that vers
 Each release in `CHANGELOG.md` has these sections, in this order, each only when it has entries:
 
 ````md
-## 0.1.0 — unreleased (draft: dated when it is published)
+## 27.1.0 — unreleased (draft: dated when it is published)
 
 ### Changed
 
@@ -121,14 +124,25 @@ After:
 
 Every **Breaking.** entry, of values, types or behavior, has its block under Migration.
 
+## Release candidates
+
+The first stable release, 27.0.0, goes through release candidates. A version such as `27.0.0-rc.1` is published to the `next` dist-tag and marked as a prerelease on GitHub; `latest` does not move.
+
+1. `27.0.0-rc.1` is published once the blocking issues of the 27.0 milestone are closed.
+2. During the rc, only fixes land. No new exports, and no change to the contract, except to fix a blocking issue. Each fix that needs a new build ships as the next candidate (`27.0.0-rc.2`, and so on).
+3. The rc stays open for at least two weeks after the last candidate.
+4. It ends when no blocking issue is open. Then `27.0.0` is published to `latest`.
+
+Later majors can use the same flow (`28.0.0-rc.1`).
+
 ## Releasing
 
-Releases are automatic. All the `@afora/*` packages share one version.
+Releases are automatic. All the `@afora/*` packages share one version. [CONTRIBUTING.md](CONTRIBUTING.md#releases) has the steps.
 
 1. In a pull request, set the same new `version` in `package.json` and in every `packages/*/package.json`, run `bun install` to update `bun.lock`, and date the release in `CHANGELOG.md`.
-2. Merge it to `main`. `.github/workflows/release.yml` sees a version without a tag, runs CI, publishes the packages to npm with provenance, then creates the `v<version>` tag and the GitHub release.
+2. Merge it to `main`. `.github/workflows/release.yml` reads the version and refuses one that is not `0.0.<n>` (before 27.0) or `<YY>.<minor>.<patch>` with an optional `-rc.<n>`, with `YY` at 27 or more. If the version has no tag, it runs CI, publishes the packages to npm with provenance, then creates the `v<version>` tag and the GitHub release.
 
-A version with a `-` (such as `1.0.0-rc.1`) is published under the `next` dist-tag and marked as a prerelease. The others go to `latest`. A version behind the `latest` on npm, or packages at different versions, fail the release.
+A version with a `-` (such as `27.0.0-rc.1`) is published under the `next` dist-tag and marked as a prerelease. The others go to `latest`. A version behind the `latest` on npm, or packages at different versions, fail the release.
 
 If a release fails halfway, run the workflow again from the Actions tab (`workflow_dispatch`). What is already on npm is skipped.
 
