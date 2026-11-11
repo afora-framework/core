@@ -26,6 +26,7 @@ bun run test:type-perf                   # tests/type-perf: per-edit type instan
 bun run smoke                            # build, then run scripts/smoke.mjs on plain Node
 bun run bench                            # bench/: 7 scenarios vs TypeBox, Ajv, Typia, Zod, Valibot, ArkType, Effect, Yup, Joi; writes bench/results/latest.json and bench/RESULTS.md (-- --only <ids> writes nothing)
 bun run bench:guard                      # blueprint.safeParse vs Zod 4 on the 14 cases, limits in bench/guard.limits.ts (what CI runs)
+bun run bench:check                      # README block, bench/RESULTS.md and the chart are what bench/results/latest.json gives; regenerate with `bun run bench -- --render`
 ```
 
 `packages/*` (`codegen`, `mcp`, `hono`, `ws`, `drizzle`, `dynamodb`) are workspaces with their own build and tests (`bun run build:packages`). Releases are published by `.github/workflows/release.yml` through npm trusted publishing (OIDC) when a version bump is merged to `main`; a new package under `packages/` must be added to `DIRS` in `scripts/release-setup.sh` and the script run once by hand (`bash scripts/release-setup.sh`), since npm cannot create a package through OIDC. `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
