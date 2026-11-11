@@ -1462,6 +1462,9 @@ export function generate(
 	if (spec.log !== undefined) {
 		props.push(["log", logDoc(spec.log, app, providers)]);
 	}
+	if (spec.trace !== undefined) {
+		props.push(["trace", importedDoc(spec.trace, app, providers)]);
+	}
 	const publishers = (spec as { publishers?: Record<string, unknown> })
 		.publishers;
 	if (publishers && Object.keys(publishers).length > 0) {

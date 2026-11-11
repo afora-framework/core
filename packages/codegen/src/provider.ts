@@ -248,6 +248,25 @@ export function checkCatalog(
 	}
 }
 
+/** `trace`: an import of a tracer written by hand (`otelTracer()` of `@afora/otel`, ...). */
+export function checkTrace(
+	value: unknown,
+	path: Path,
+	issues: SpecIssue[],
+): void {
+	if (isImportObject(value)) {
+		checkImport(value, path, issues);
+		return;
+	}
+	issues.push(
+		issue(
+			path,
+			"invalid_trace",
+			'"trace" is an import of a tracer: { "import": "./trace.ts#tracer" }.',
+		),
+	);
+}
+
 const LOG_LEVELS = ["debug", "info", "warn", "error"];
 const BUILTIN_LOG_PROVIDERS = ["console", "json"];
 
