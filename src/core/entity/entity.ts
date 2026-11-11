@@ -37,6 +37,7 @@ import {
 	InvalidEntitySchemaVersion,
 	ReservedEntityKey,
 } from "./exceptions";
+import { validMakersOf } from "./trust";
 import type {
 	EntityBuilder,
 	EntityBuilderSettings,
@@ -56,17 +57,15 @@ import { VersionIdentity } from "./version";
 export function entityBuilderOf<
 	Identity extends IEntityIdentity,
 	const Catalogs extends readonly IRecordPluginCatalog[] = [],
->({
-	identity,
-	generateId,
-	now,
-	expiresAt,
-	plugins: catalogs,
-}: EntityBuilderSettings<Identity, Catalogs>): EntityBuilder<
-	Identity,
-	RecordPluginContext<Catalogs>
-> {
-	const clock = Object.freeze({ generateId, now });
+>(
+	settings: EntityBuilderSettings<Identity, Catalogs>,
+): EntityBuilder<Identity, RecordPluginContext<Catalogs>> {
+	const { identity, generateId, now, expiresAt, plugins: catalogs } = settings;
+	const clock = Object.freeze({
+		generateId,
+		now,
+		makesValid: validMakersOf(settings),
+	});
 	const context = pluginContextOf(catalogs ?? []);
 
 	return ((
