@@ -7,6 +7,7 @@ import {
 	GetEvent,
 	LoginOrganizer,
 	RegisterOrganizer,
+	UpdateEvent,
 } from "./use-cases";
 
 export const Accounts = commandOf({
@@ -22,6 +23,7 @@ export const BoxOffice = commandOf({
 	useCases: {
 		createEvent: CreateEvent,
 		getEvent: GetEvent,
+		updateEvent: UpdateEvent,
 		buyTicket: BuyTicket,
 	},
 	transaction: true,

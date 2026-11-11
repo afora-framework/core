@@ -39,8 +39,9 @@ An HTTP backend written by an agent (or in a hurry) tends to break the same few 
 | Extra fields in a request body are accepted    | Undeclared keys are rejected at any depth, and the API answers 400 ([Standard Schema](docs/standard-schema.md)).        |
 | A business error is returned as a 500          | Errors know their layer and become problem+json with the right status ([outputs](docs/outputs.md)).                     |
 | A duplicate email is written twice             | `unique` keys are enforced by the repository, and a violation is a 409 ([repositories](docs/repositories.md)).          |
+| One user reads or changes another user's data  | A use case declares its `access` (scopes, owner), and every output enforces it before it runs ([access](docs/auth.md)). |
 
-[`examples/agent-built`](examples/agent-built/README.md) checks these four on the running API of a ticketing backend an agent built through the MCP server, next to a Hono + Zod baseline written from the same brief. Both hold them; the afora one wrote no code for any of them.
+[`examples/agent-built`](examples/agent-built/README.md) checks these five on the running API of a ticketing backend an agent built through the MCP server, next to a Hono + Zod baseline written from the same brief. Both hold them; the afora one wrote no code for any of them.
 
 ## For you and your agent
 
@@ -57,7 +58,7 @@ An HTTP backend written by an agent (or in a hurry) tends to break the same few 
 - **The application is data:** an `afora.json` declares the entities, the use cases (as steps), the commands and the HTTP API ([guide](docs/afora-json.md)).
 - **An MCP server to write it:** [`@afora/mcp`](packages/mcp/README.md) lets an agent read the catalog, edit and validate the spec, generate the code and see its TypeScript diagnostics.
 - **Code you review:** [`@afora/codegen`](packages/codegen/README.md) turns the spec into the TypeScript you would write by hand, committed; `extractSpec(app)` gives the spec back from code written by hand.
-- **The runtime holds what the agent forgets:** the four rows above, with no code written for them. `examples/blog` is a whole API generated from one `afora.json`.
+- **The runtime holds what the agent forgets:** the five rows above, with no code written for them. `examples/blog` is a whole API generated from one `afora.json`.
 
 ## Install
 

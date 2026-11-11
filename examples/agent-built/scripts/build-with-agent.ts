@@ -6,6 +6,7 @@
  *   transcript.jsonl   every message of the conversation, one per line
  *   tool-calls.json    the tool calls, in order (what scripts/replay.ts replays)
  *   prompts.md         the system prompt and the first message, as sent
+ *   run.json           the version of the brief the run was built from
  *   afora.json, src/domain/   the spec and the generated code
  *
  *   bun scripts/build-with-agent.ts [--runs 5] [--model claude-opus-5-5] [--effort high] [--max-turns 60]
@@ -14,6 +15,7 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import Anthropic from "@anthropic-ai/sdk";
+import { CURRENT_BRIEF } from "../eval/invariants.ts";
 import {
 	baseParams,
 	clientOrExit,
@@ -68,6 +70,10 @@ async function buildOnce(
 		`${JSON.stringify({ extends: "../../tsconfig.json", include: ["src"] }, null, "\t")}\n`,
 	);
 	const brief = await readFile(join(ROOT, "BRIEF.md"), "utf8");
+	await writeFile(
+		join(dir, "run.json"),
+		`${JSON.stringify({ brief: CURRENT_BRIEF })}\n`,
+	);
 	const mcp = await connectMcp(dir);
 	const calls: RecordedCall[] = [];
 	const transcript = join(dir, "transcript.jsonl");

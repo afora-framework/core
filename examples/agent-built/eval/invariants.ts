@@ -3,6 +3,10 @@
  * contract of BRIEF.md. The same probes run against every implementation:
  * an afora run (the generated Hono app) or a hand-rolled baseline. They only
  * need a fetch-like handler, so nothing listens on a port.
+ *
+ * A run is checked against the version of the brief it was built from:
+ * version 1 (BRIEF.v1.md) has no sessions nor owners, version 2 (BRIEF.md)
+ * adds a token and events only their organizer reads or changes.
  */
 
 /** A fetch-like handler: `app.fetch` of a Hono app, or anything with that shape. */
@@ -13,9 +17,28 @@ export const INVARIANTS = {
 	undeclared: "Undeclared keys rejected (4xx)",
 	problems: "Errors are problem+json with the right status, never 5xx",
 	unique: "Unique keys enforced (409)",
+	ownership: "Only its organizer reads or changes an event (401, 403/404)",
 } as const;
 export type Invariant = keyof typeof INVARIANTS;
 export const INVARIANT_IDS = Object.keys(INVARIANTS) as Invariant[];
+
+/** The versions of the brief: BRIEF.v1.md and BRIEF.md. */
+export type BriefVersion = 1 | 2;
+export const CURRENT_BRIEF: BriefVersion = 2;
+
+/** The invariants a run of this version of the brief is checked for. */
+export function invariantsOf(brief: BriefVersion): Invariant[] {
+	return brief === 1
+		? INVARIANT_IDS.filter((id) => id !== "ownership")
+		: INVARIANT_IDS;
+}
+
+/**
+ * The JWT secret an implementation of brief 2 is started with (the brief has
+ * it read from JWT_SECRET). The evaluation sets the variable before it loads
+ * an implementation.
+ */
+export const EVAL_JWT_SECRET = "agent-built-evaluation-secret-0123456789";
 
 export interface Check {
 	readonly invariant: Invariant;
@@ -26,9 +49,10 @@ export interface Check {
 }
 
 export interface Evaluation {
+	readonly brief: BriefVersion;
 	readonly checks: readonly Check[];
-	/** Whether every check of each invariant passed. */
-	readonly passed: Readonly<Record<Invariant, boolean>>;
+	/** Whether every check of each invariant of the brief passed. */
+	readonly passed: Readonly<Partial<Record<Invariant, boolean>>>;
 }
 
 interface Exchange {
@@ -58,8 +82,45 @@ function otherId(id: string): string {
 	return `${id.slice(0, -1)}${next}`;
 }
 
+/** An HS256 JSON Web Token for `subject`, signed with `secret`. */
+async function signJwt(subject: string, secret: string): Promise<string> {
+	const encode = (value: string | Uint8Array) =>
+		Buffer.from(value).toString("base64url");
+	const now = Math.floor(Date.now() / 1000);
+	const header = encode(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+	const payload = encode(
+		JSON.stringify({ sub: subject, iat: now, exp: now + 900 }),
+	);
+	const key = await crypto.subtle.importKey(
+		"raw",
+		new TextEncoder().encode(secret),
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["sign"],
+	);
+	const signature = await crypto.subtle.sign(
+		"HMAC",
+		key,
+		new TextEncoder().encode(`${header}.${payload}`),
+	);
+	return `${header}.${payload}.${encode(new Uint8Array(signature))}`;
+}
+
+/** The id of the organizer of an event: an id, or the nested organizer. */
+// biome-ignore lint/suspicious/noExplicitAny: a JSON body of any shape
+function organizerOf(event: any): unknown {
+	const organizer = event?.organizer ?? event?.organizerId;
+	return typeof organizer === "object" && organizer !== null
+		? organizer.id
+		: organizer;
+}
+
 /** Runs the scenario of the brief on `handler` and checks each invariant. */
-export async function evaluate(handler: Handler): Promise<Evaluation> {
+export async function evaluate(
+	handler: Handler,
+	brief: BriefVersion = CURRENT_BRIEF,
+): Promise<Evaluation> {
+	const v2 = brief === 2;
 	const exchanges: Exchange[] = [];
 	const checks: Check[] = [];
 	const check = (
@@ -71,18 +132,25 @@ export async function evaluate(handler: Handler): Promise<Evaluation> {
 		checks.push({ invariant, name, ok, ...(ok ? {} : { detail }) });
 	};
 
+	/** The token requests are sent with, when the brief has one. */
+	let token: string | undefined;
+
 	async function send(
 		label: string,
 		method: string,
 		path: string,
 		body?: unknown,
 		raw?: string,
+		as: string | null | undefined = token,
 	): Promise<Exchange> {
 		const init: RequestInit = { method };
+		const headers: Record<string, string> = {};
 		if (body !== undefined || raw !== undefined) {
-			init.headers = { "content-type": "application/json" };
+			headers["content-type"] = "application/json";
 			init.body = raw ?? JSON.stringify(body);
 		}
+		if (v2 && as) headers.authorization = `Bearer ${as}`;
+		init.headers = headers;
 		let exchange: Exchange;
 		try {
 			const response = await handler(new Request(`${BASE}${path}`, init));
@@ -155,13 +223,14 @@ export async function evaluate(handler: Handler): Promise<Evaluation> {
 	});
 	check(
 		"problems",
-		"setup: log in",
-		success(login),
-		`expected 2xx, got ${describe(login)}`,
+		v2 ? "setup: log in, which gives a token" : "setup: log in",
+		success(login) && (!v2 || typeof login.json?.token === "string"),
+		`expected 2xx${v2 ? " { token }" : ""}, got ${describe(login)}`,
 	);
+	if (v2) token = login.json?.token;
 
 	const party = {
-		organizerId,
+		...(v2 ? {} : { organizerId }),
 		title: "Launch party",
 		slug: "launch-party",
 		capacity: 2,
@@ -245,17 +314,19 @@ export async function evaluate(handler: Handler): Promise<Evaluation> {
 		}),
 		401,
 	);
-	const missingOrganizer = organizerId ? otherId(organizerId) : "unknown";
-	expectProblem(
-		"problems",
-		"an event of an unknown organizer is a 404 problem",
-		await send("unknown organizer", "POST", "/api/events", {
-			...party,
-			organizerId: missingOrganizer,
-			slug: "orphan-event",
-		}),
-		404,
-	);
+	if (!v2) {
+		const missingOrganizer = organizerId ? otherId(organizerId) : "unknown";
+		expectProblem(
+			"problems",
+			"an event of an unknown organizer is a 404 problem",
+			await send("unknown organizer", "POST", "/api/events", {
+				...party,
+				organizerId: missingOrganizer,
+				slug: "orphan-event",
+			}),
+			404,
+		);
+	}
 	const missingEvent = eventId ? otherId(eventId) : "unknown";
 	expectProblem(
 		"problems",
@@ -321,12 +392,40 @@ export async function evaluate(handler: Handler): Promise<Evaluation> {
 		"problems",
 		"a missing field is a 400 problem",
 		await send("missing field", "POST", "/api/events", {
-			organizerId,
+			...(v2 ? {} : { organizerId }),
 			title: "No slug",
 			capacity: 3,
 		}),
 		400,
 	);
+
+	// --- changing an event (brief 2) ---
+	let title = party.title;
+	if (v2) {
+		const renamed = await send(
+			"rename event",
+			"PATCH",
+			`/api/events/${eventId}`,
+			{
+				title: "Launch night",
+			},
+		);
+		check(
+			"problems",
+			"setup: the organizer renames the event",
+			success(renamed) && renamed.json?.event?.title === "Launch night",
+			`expected 2xx { event: { title: "Launch night" } }, got ${describe(renamed)}`,
+		);
+		if (success(renamed)) title = "Launch night";
+		expectProblem(
+			"problems",
+			"a capacity of 0 in a change is a 400 problem",
+			await send("change capacity 0", "PATCH", `/api/events/${eventId}`, {
+				capacity: 0,
+			}),
+			400,
+		);
+	}
 
 	// --- undeclared keys ---
 	const rejected = (exchange: Exchange) =>
@@ -361,6 +460,16 @@ export async function evaluate(handler: Handler): Promise<Evaluation> {
 			`/api/events/${eventId}/tickets`,
 			{ buyerEmail: "fay@example.com", seat: 1 },
 		],
+		...(v2
+			? ([
+					[
+						"change with price",
+						"PATCH",
+						`/api/events/${eventId}`,
+						{ title: "Priced", price: 0 },
+					],
+				] as [string, string, string, unknown][])
+			: []),
 	];
 	for (const [label, method, path, body] of undeclared) {
 		const exchange = await send(label, method, path, body);
@@ -369,6 +478,196 @@ export async function evaluate(handler: Handler): Promise<Evaluation> {
 			`${label}: the extra key is rejected`,
 			rejected(exchange),
 			`expected a 4xx, got ${describe(exchange)}`,
+		);
+	}
+
+	// --- ownership (brief 2): who may read or change an event ---
+	if (v2) {
+		const notYours = (exchange: Exchange) =>
+			isProblem(exchange, 404) || isProblem(exchange, 403);
+		const expectNotYours = (name: string, exchange: Exchange) =>
+			check(
+				"ownership",
+				name,
+				notYours(exchange),
+				`expected a 404 or 403 problem+json, got ${describe(exchange)}`,
+			);
+
+		expectProblem(
+			"ownership",
+			"creating an event without a token is a 401 problem",
+			await send(
+				"create without token",
+				"POST",
+				"/api/events",
+				{ ...party, slug: "anonymous-event" },
+				undefined,
+				null,
+			),
+			401,
+		);
+		expectProblem(
+			"ownership",
+			"reading an event without a token is a 401 problem",
+			await send(
+				"get without token",
+				"GET",
+				`/api/events/${eventId}`,
+				undefined,
+				undefined,
+				null,
+			),
+			401,
+		);
+		expectProblem(
+			"ownership",
+			"changing an event without a token is a 401 problem",
+			await send(
+				"change without token",
+				"PATCH",
+				`/api/events/${eventId}`,
+				{ title: "Anonymous" },
+				undefined,
+				null,
+			),
+			401,
+		);
+		expectProblem(
+			"ownership",
+			"a malformed token is a 401 problem",
+			await send(
+				"garbage token",
+				"GET",
+				`/api/events/${eventId}`,
+				undefined,
+				undefined,
+				"not-a-token",
+			),
+			401,
+		);
+		expectProblem(
+			"ownership",
+			"a token signed with another secret is a 401 problem",
+			await send(
+				"forged token",
+				"GET",
+				`/api/events/${eventId}`,
+				undefined,
+				undefined,
+				await signJwt(
+					String(organizerId),
+					"not-the-secret-of-the-server-0123456789",
+				),
+			),
+			401,
+		);
+
+		const bo = {
+			name: "Bo",
+			email: "bo@example.com",
+			password: OTHER_PASSWORD,
+		};
+		const boRegistered = await send(
+			"register another organizer",
+			"POST",
+			"/api/organizers",
+			bo,
+			undefined,
+			null,
+		);
+		const boId: string | undefined = boRegistered.json?.organizer?.id;
+		const boLogin = await send(
+			"log in as another organizer",
+			"POST",
+			"/api/sessions",
+			{ email: bo.email, password: bo.password },
+			undefined,
+			null,
+		);
+		const boToken: string | undefined = boLogin.json?.token;
+		check(
+			"ownership",
+			"setup: a second organizer signs up and logs in",
+			success(boRegistered) &&
+				typeof boId === "string" &&
+				typeof boToken === "string",
+			`expected 2xx { organizer: { id } } and 2xx { token }, got ${describe(boRegistered)} and ${describe(boLogin)}`,
+		);
+
+		expectNotYours(
+			"another organizer cannot read the event",
+			await send(
+				"get as another organizer",
+				"GET",
+				`/api/events/${eventId}`,
+				undefined,
+				undefined,
+				boToken,
+			),
+		);
+		expectNotYours(
+			"another organizer cannot change the event",
+			await send(
+				"change as another organizer",
+				"PATCH",
+				`/api/events/${eventId}`,
+				{ title: "Taken over", capacity: 500 },
+				undefined,
+				boToken,
+			),
+		);
+		const unchanged = await send(
+			"get after the other organizer",
+			"GET",
+			`/api/events/${eventId}`,
+		);
+		check(
+			"ownership",
+			"the event is unchanged after another organizer tried to change it",
+			success(unchanged) &&
+				unchanged.json?.event?.title === title &&
+				unchanged.json?.event?.capacity === party.capacity,
+			`expected 2xx { event: { title: ${JSON.stringify(title)}, capacity: ${party.capacity} } }, got ${describe(unchanged)}`,
+		);
+
+		const boEvent = await send(
+			"create as another organizer",
+			"POST",
+			"/api/events",
+			{ title: "Bo's gig", slug: "bos-gig", capacity: 5 },
+			undefined,
+			boToken,
+		);
+		const boEventId: string | undefined = boEvent.json?.event?.id;
+		check(
+			"ownership",
+			"an event belongs to the organizer of the token",
+			success(boEvent) &&
+				typeof boEventId === "string" &&
+				organizerOf(boEvent.json?.event) === boId,
+			`expected 2xx { event } whose organizer is ${boId}, got ${describe(boEvent)}`,
+		);
+		expectNotYours(
+			"the first organizer cannot read the event of the second",
+			await send("get the other's event", "GET", `/api/events/${boEventId}`),
+		);
+
+		const spoofed = await send(
+			"create for another organizer",
+			"POST",
+			"/api/events",
+			{
+				...party,
+				slug: "spoofed-event",
+				organizerId: boId,
+			},
+		);
+		check(
+			"ownership",
+			"an event cannot be created for another organizer",
+			(spoofed.status >= 400 && spoofed.status < 500) ||
+				(success(spoofed) && organizerOf(spoofed.json?.event) === organizerId),
+			`expected a 4xx, or an event of ${organizerId}, got ${describe(spoofed)}`,
 		);
 	}
 
@@ -395,12 +694,12 @@ export async function evaluate(handler: Handler): Promise<Evaluation> {
 	}
 
 	const passed = Object.fromEntries(
-		INVARIANT_IDS.map((id) => [
+		invariantsOf(brief).map((id) => [
 			id,
 			checks.filter((c) => c.invariant === id).every((c) => c.ok),
 		]),
-	) as Record<Invariant, boolean>;
-	return { checks, passed };
+	) as Partial<Record<Invariant, boolean>>;
+	return { brief, checks, passed };
 }
 
 /** What a response shows of a secret: a password sent, a hash, or a secret key that is not masked. */

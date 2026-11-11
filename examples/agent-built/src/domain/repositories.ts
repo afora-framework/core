@@ -10,7 +10,7 @@ export const Organizers = repositoryOf({
 
 export const Events = repositoryOf({
 	entity: Event,
-	actions: ["findById", "create"],
+	actions: ["findById", "create", "update"],
 	relations: [Organizers],
 });
 
