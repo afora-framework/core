@@ -130,7 +130,7 @@ A variable is missing or its value is rejected by the blueprint of the environme
 
 > `No password hasher is available: this runtime has neither Bun.password nor native argon2 (node:crypto, Node >= 24.7). Call configure({ hasher }) with your own PasswordHasher.`
 
-`Password` hashes with argon2id and the runtime has none. Call `configure({ hasher })` at startup with `hash`, `verify` and, if you use `verifySync`, `verifySync`. `SyncVerifyUnsupported` means the hasher you configured has no `verifySync`; use `verify`. See the [README](../README.md#install).
+`Password` hashes with argon2id and the runtime has none. Call `configure({ hasher })` at startup with `hash`, `verify` and, if you use `verifySync`, `verifySync`. `SyncVerifyUnsupported` means the hasher you configured has no `verifySync`; use `verify`. See [Runtime](runtime.md#password-hashing).
 
 ## Access and HTTP
 

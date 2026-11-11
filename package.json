@@ -1,7 +1,7 @@
 {
 	"name": "@afora/core",
 	"version": "0.0.11",
-	"description": "Domain modeling on TypeBox: entities with invariants, repositories, use cases, sensitive data masking and layered exceptions, usable by any Standard Schema consumer.",
+	"description": "Simple to write, built to hold: domain-first TypeScript backends whose guarantees live in the runtime, for people and AI agents alike.",
 	"keywords": [
 		"domain-driven-design",
 		"ddd",
@@ -15,7 +15,12 @@
 		"validation",
 		"schema",
 		"typescript",
-		"bun"
+		"bun",
+		"backend",
+		"api",
+		"codegen",
+		"ai-agents",
+		"mcp"
 	],
 	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
 	"license": "MIT",

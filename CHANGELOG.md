@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **Docs.** A new line, "Simple to write. Built to hold.", and a shorter README: why afora, what it gives developers and agents, the quick start (its `afora.json` version folded), the packages and the chart. The benchmark tables, their analysis and the comparison with other validators moved to `docs/performance.md`, generated from the same `bench/results/latest.json`; `docs/brand.md` holds the line, the descriptions, the voice and the palette. The benchmark chart uses the colors of the brand, in light and dark.
 - **Breaking** (`@afora/codegen`, `@afora/mcp`). In an `afora.json`, a `run` step with `args` must declare `params` (#98): `check`, `generate` and the validation of the MCP tools (`afora_spec_validate`, `afora_spec_upsert`, `afora_spec_write`) report the new error `run_without_params` at the `args` of the step. A `run` without `args` needs no `params`. An agent writing the spec has no compile step that knows the parameters of the function, so without `params` the function ran on whatever the args resolved to. In TypeScript `useCaseOf` does not require it (`strictSteps` checks the parameters of `fn` at compile time); a hand-written use case without `params` still extracts, but the spec fails validation until it is declared. The README quick start, the MCP guide and `docs/use-cases.md` and `docs/afora-json.md` declare it. See Migration below.
 
 ### Docs
