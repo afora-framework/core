@@ -99,6 +99,30 @@ describe("describe() of steps use cases", () => {
 		expect(Register).toBeDefined();
 	});
 
+	test("the params of a run are described by their fields", () => {
+		const Hash = class extends useCaseOf({
+			name: "Hash",
+			blueprint: blueprintOf((ctx) => ({ plain: ctx.string })),
+			response: Empty,
+			steps: [
+				{
+					run: "hash",
+					fn: hashPassword,
+					args: ["$input.plain"],
+					params: blueprintOf((ctx) => ({ plain: ctx.string })),
+				},
+				{ return: {} },
+			],
+		}) {};
+		const described = applicationOf({
+			name: "x",
+			useCases: { Hash },
+		} as never).describe();
+		const [run] = stepsOf(described, "Hash") as [{ params: unknown }];
+		expect(run.params).toEqual(described.useCases.Hash?.input);
+		expect(JSON.parse(JSON.stringify(run))).toEqual(run);
+	});
+
 	test("a core exception is described as { core }", () => {
 		const Core = class extends useCaseOf({
 			name: "Core",

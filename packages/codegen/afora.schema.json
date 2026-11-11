@@ -1982,6 +1982,33 @@
 																		],
 																		"description": "The arguments: a list of values, or one \"$reference\" to a list, which is spread."
 																	},
+																	"params": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"pattern": "^[A-Z][A-Za-z0-9]*$",
+																				"description": "The name of a declared blueprint."
+																			},
+																			{
+																				"type": "object",
+																				"required": ["fields"],
+																				"properties": {
+																					"fields": {
+																						"type": "object",
+																						"patternProperties": {
+																							"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+																								"$ref": "#/$defs/Field"
+																							}
+																						},
+																						"additionalProperties": false,
+																						"description": "Fields by key."
+																					}
+																				},
+																				"additionalProperties": false
+																			}
+																		],
+																		"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+																	},
 																	"as": {
 																		"type": "string",
 																		"description": "Binds the result."
