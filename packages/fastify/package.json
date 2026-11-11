@@ -52,7 +52,7 @@
 		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.8",
+		"@afora/core": ">=0.0.9",
 		"fastify": "^5.12.8",
 		"typebox": "^1"
 	}

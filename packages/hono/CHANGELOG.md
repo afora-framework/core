@@ -17,6 +17,7 @@
 
 ### Changed
 
+- The peer dependency on `@afora/core` is `>=0.0.9`: the sink is built on `compileRoutes`.
 - The requests are handled by the route table of `@afora/core/adapters` (`compileRoutes`), shared with the other HTTP sinks, so this package needs a `@afora/core` that has it. Responses are the same; the body is serialized once instead of twice. `HonoOptions` extends `HttpOptions`.
 - `route[id].path` rejects `:` and `*`, which were accepted and served as Hono patterns while the document showed them as text; write parameters as `{name}`.
 

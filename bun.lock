@@ -80,7 +80,7 @@
         "typebox": "^1.4.3",
       },
       "peerDependencies": {
-        "@afora/core": ">=0.0.8",
+        "@afora/core": ">=0.0.9",
         "elysia": "^2.0.0-rc.4",
         "typebox": "^1",
       },
@@ -95,7 +95,7 @@
         "typebox": "^1.4.3",
       },
       "peerDependencies": {
-        "@afora/core": ">=0.0.8",
+        "@afora/core": ">=0.0.9",
         "express": "^5.3.0",
         "typebox": "^1",
       },
@@ -109,7 +109,7 @@
         "typebox": "^1.4.3",
       },
       "peerDependencies": {
-        "@afora/core": ">=0.0.8",
+        "@afora/core": ">=0.0.9",
         "fastify": "^5.12.8",
         "typebox": "^1",
       },
@@ -124,7 +124,7 @@
         "typebox": "^1.4.3",
       },
       "peerDependencies": {
-        "@afora/core": ">=0.0.8",
+        "@afora/core": ">=0.0.9",
         "hono": "^4.13.14",
         "typebox": "^1",
       },
@@ -144,7 +144,7 @@
         "typebox": "^1.4.3",
       },
       "peerDependencies": {
-        "@afora/core": ">=0.0.8",
+        "@afora/core": ">=0.0.9",
         "typebox": "^1",
       },
     },
