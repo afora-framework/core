@@ -930,6 +930,7 @@ export class Greet extends GreetBase {
 							run: "hashPassword",
 							fn: { import: "../hash#hashPassword" },
 							args: ["$input.plainPassword"],
+							params: { fields: { plain: "string" } },
 							as: "hash",
 						},
 						{
@@ -957,6 +958,34 @@ export class Greet extends GreetBase {
 			},
 		},
 	];
+
+	test("a run with args and no params is refused by afora_spec_validate and afora_spec_upsert", async () => {
+		const { dir, client } = await setup({ "src/hash.ts": hashTs });
+		for (const declaration of declarations.slice(0, 3)) {
+			await client.call("afora_spec_upsert", declaration);
+		}
+		const register = JSON.parse(JSON.stringify(declarations[3]));
+		delete register.declaration.implementation.steps[2].params;
+		const before = await readFile(join(dir, "afora.json"), "utf8");
+		const upserted = await client.call("afora_spec_upsert", register);
+		expect(upserted.data.written).toBe(false);
+		expect(upserted.data.issues).toContainEqual(
+			expect.objectContaining({
+				code: "run_without_params",
+				path: ["useCases", "Register", "implementation", "steps", 2, "args"],
+			}),
+		);
+		expect(await readFile(join(dir, "afora.json"), "utf8")).toBe(before);
+		const validated = await client.call("afora_spec_validate", {
+			spec: {
+				...JSON.parse(before),
+				useCases: { Register: register.declaration },
+			},
+		});
+		expect(
+			validated.data.issues.map((i: { code: string }) => i.code),
+		).toContain("run_without_params");
+	});
 
 	test("the catalog and the guide teach them", async () => {
 		const { client } = await setup();

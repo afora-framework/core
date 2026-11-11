@@ -137,6 +137,7 @@ class Register extends useCaseOf({
 			run: "hashPassword",
 			fn: hashPassword,
 			args: ["$input.plainPassword"],
+			params: blueprintOf((ctx) => ({ plain: ctx.string })),
 			as: "hash",
 		},
 		{
@@ -251,6 +252,7 @@ This is `examples/interop/quickstart.afora.json`, which the same test validates 
 						"run": "hashPassword",
 						"fn": { "import": "../hash-password.ts#hashPassword" },
 						"args": ["$input.plainPassword"],
+						"params": { "fields": { "plain": "string" } },
 						"as": "hash"
 					},
 					{
