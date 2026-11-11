@@ -22,6 +22,7 @@ import {
 	recordOf,
 	repositoryOf,
 	type StandardSchemaV1,
+	variantOf,
 } from "@afora/core";
 import type { IRepositoryProvider } from "@afora/core/adapters";
 import { type SliceMask, sliceOf } from "@afora/core/experimental";
@@ -154,6 +155,26 @@ export const nameOutput: Equals<
 export const blueprintOutput: Equals<
 	StandardSchemaV1.InferOutput<typeof Address>,
 	{ street: string; zip: string }
+> = true;
+const Pin = blueprintOf((ctx) => ({ label: ctx.string }));
+const Place = variantOf("kind", { address: Address, pin: Pin });
+export const variantOutput: Equals<
+	StandardSchemaV1.InferOutput<typeof Place>,
+	| { readonly kind: "address"; street: string; zip: string }
+	| { readonly kind: "pin"; label: string }
+> = true;
+const Visit = blueprintOf((ctx) => ({
+	at: Place,
+	next: ctx.optionalOf(ctx.variantOf("kind", { pin: Pin })),
+}));
+export const variantInBlueprint: Equals<
+	StandardSchemaV1.InferOutput<typeof Visit>,
+	{
+		next?: { readonly kind: "pin"; label: string };
+		at:
+			| { readonly kind: "address"; street: string; zip: string }
+			| { readonly kind: "pin"; label: string };
+	}
 > = true;
 const OptionalAddress = optionalOf(Address);
 export const optionalBlueprintOutput: Equals<

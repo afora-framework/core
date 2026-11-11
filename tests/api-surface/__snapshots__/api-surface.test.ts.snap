@@ -195,16 +195,16 @@ exports[`exports of the package and their declarations 1`] = `
     "type FieldAt<Properties, Key extends string> = Properties extends { readonly [Name in Key]: infer Field extends BlueprintField; } ? Field : never;",
   ],
   "(internal) FieldDescription": [
-    "export type FieldDescription = { readonly kind: "property"; readonly ref: string; readonly optional: boolean; } | ({ readonly kind: "property"; } & PropertyDescription) | { readonly kind: "list"; readonly item: FieldDescription; readonly optional: boolean; readonly minItems?: number; readonly maxItems?: number; } | { readonly kind: "blueprint"; readonly ref: string; readonly optional: boolean; } | { readonly kind: "blueprint"; readonly optional: boolean; readonly fields: Readonly<Record<string, FieldDescription>>; } | { readonly kind: "record" | "entity"; readonly ref: string; readonly optional: boolean; };",
+    "export type FieldDescription = { readonly kind: "property"; readonly ref: string; readonly optional: boolean; } | ({ readonly kind: "property"; } & PropertyDescription) | { readonly kind: "list"; readonly item: FieldDescription; readonly optional: boolean; readonly minItems?: number; readonly maxItems?: number; } | { readonly kind: "blueprint"; readonly ref: string; readonly optional: boolean; } | { readonly kind: "blueprint"; readonly optional: boolean; readonly fields: Readonly<Record<string, FieldDescription>>; } | { readonly kind: "record" | "entity"; readonly ref: string; readonly optional: boolean; } | { readonly kind: "variant"; readonly key: string; readonly optional: boolean; readonly variants: Readonly<Record<string, FieldDescription>>; };",
   ],
   "(internal) FieldMode": [
     "type FieldMode = "data" | "value" | "input";",
   ],
   "(internal) FieldSchema": [
-    "type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field ? TSchema : Field extends { readonly type: IPropertyType<infer SchemaType extends TSchema, any>; } ? SchemaType : Field extends AnyRecordClass ? RecordSchema<Field, Mode> : Field extends OptionalRecord<infer Record> ? TOptional<RecordSchema<Record, Mode>> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; readonly optional: infer Optional; } ? Optional extends true ? TOptional<CollectionSchema<Properties, Mode>> : CollectionSchema<Properties, Mode> : Field extends { readonly item: infer Item; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TArray<FieldSchema<Item, Mode>>> : TArray<FieldSchema<Item, Mode>> : never;",
+    "type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field ? TSchema : Field extends { readonly type: IPropertyType<infer SchemaType extends TSchema, any>; } ? SchemaType : Field extends AnyRecordClass ? RecordSchema<Field, Mode> : Field extends OptionalRecord<infer Record> ? TOptional<RecordSchema<Record, Mode>> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; readonly optional: infer Optional; } ? Optional extends true ? TOptional<CollectionSchema<Properties, Mode>> : CollectionSchema<Properties, Mode> : Field extends { readonly item: infer Item; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TArray<FieldSchema<Item, Mode>>> : TArray<FieldSchema<Item, Mode>> : VariantSchema<Field, Mode>;",
   ],
   "(internal) FieldValue": [
-    "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : never;",
+    "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? VariantValue<Key, Variants, Mode> : never;",
   ],
   "(internal) FieldsDescription": [
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
@@ -258,7 +258,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type JoinedProperties<Blueprints extends readonly { readonly properties: IBlueprintCollection; }[]> = BlueprintPluginContext<Blueprints> extends infer Properties extends IBlueprintCollection ? Properties : never;",
   ],
   "(internal) JsonField": [
-    "type JsonField<Field, Data> = Field extends { readonly type: { readonly sensitive: true; }; } ? Masked<Data> : Field extends { readonly type: unknown; } ? Data : Field extends AnyRecordClass ? JsonOfRecord<Field, Data> : Field extends { readonly record: infer Class extends AnyRecordClass; } ? JsonOfRecord<Class, Data> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? Data extends object ? JsonKeys<Properties, Data, never> : Data : Field extends { readonly item: infer Item; } ? Data extends readonly (infer ItemData)[] ? JsonField<Item, ItemData>[] : Data : Data;",
+    "type JsonField<Field, Data> = Field extends { readonly type: { readonly sensitive: true; }; } ? Masked<Data> : Field extends { readonly type: unknown; } ? Data : Field extends AnyRecordClass ? JsonOfRecord<Field, Data> : Field extends { readonly record: infer Class extends AnyRecordClass; } ? JsonOfRecord<Class, Data> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? Data extends object ? JsonKeys<Properties, Data, never> : Data : Field extends { readonly item: infer Item; } ? Data extends readonly (infer ItemData)[] ? JsonField<Item, ItemData>[] : Data : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? JsonVariant<Key, Variants, Data> : Data;",
   ],
   "(internal) JsonKeys": [
     "type JsonKeys<Properties, Data, Sensitive, Result = { readonly [Key in keyof Data]: Key extends Sensitive ? Masked<Data[Key]> : Key extends keyof Properties ? JsonField<Properties[Key], Data[Key]> : Data[Key]; }> = Result;",
@@ -269,6 +269,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) JsonValue": [
     "export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };",
     "type JsonValue<Properties extends IBlueprintCollection, Sensitive, Result = 0 extends 1 & Properties ? Readonly<Record<string, unknown>> : string extends keyof Properties ? Readonly<Record<string, unknown>> : JsonKeys<Properties, BlueprintData<Properties>, Sensitive>> = Result;",
+  ],
+  "(internal) JsonVariant": [
+    "type JsonVariant<Key extends string, Variants, Data> = Data extends { readonly [Name in Key]: infer Tag extends keyof Variants; } ? Variants[Tag] extends { readonly properties: infer Properties extends IBlueprintCollection; } ? JsonKeys<Properties, Data, never> : Data : Data;",
   ],
   "(internal) KeyOf": [
     "type KeyOf<Repository> = keyof Props<Repository> & string;",
@@ -322,7 +325,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type OptionalKeys<Schemas> = { [Key in keyof Schemas]: Schemas[Key] extends TOptional<TSchema> ? Schemas[Key] extends TReadonly<Schemas[Key]> ? never : Key : never; }[keyof Schemas];",
   ],
   "(internal) OptionalProperties": [
-    "export type OptionalProperties<Properties> = { readonly [Key in keyof Properties]: Properties[Key] extends AnyPropertyConstructor ? OptionalProperty<Properties[Key]> : Properties[Key] extends AnyBlueprint ? OptionalBlueprint<Properties[Key]> : Properties[Key] extends AnyBlueprintList ? OptionalBlueprintList<Properties[Key]> : Properties[Key] extends AnyRecordClass ? OptionalRecord<Properties[Key]> : Properties[Key] extends AnyOptionalRecord ? Properties[Key] : never; };",
+    "export type OptionalProperties<Properties> = { readonly [Key in keyof Properties]: Properties[Key] extends AnyPropertyConstructor ? OptionalProperty<Properties[Key]> : Properties[Key] extends AnyBlueprint ? OptionalBlueprint<Properties[Key]> : Properties[Key] extends AnyBlueprintList ? OptionalBlueprintList<Properties[Key]> : Properties[Key] extends AnyRecordClass ? OptionalRecord<Properties[Key]> : Properties[Key] extends AnyOptionalRecord ? Properties[Key] : Properties[Key] extends { readonly key: infer Name extends string; readonly variants: infer Variants extends BlueprintVariants; } ? IBlueprintVariant<Name, Variants, true> : never; };",
   ],
   "(internal) OptionsArgs": [
     "type OptionsArgs<Context extends IBlueprintCollection | undefined> = Context extends IBlueprintCollection ? [ options: UseCaseOptions<Context> ] : [ ];",
@@ -632,6 +635,15 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) ValueStep": [
     "type ValueStep<Step, Field, Expected, Result, Scope> = [ { readonly [Key in keyof Step]: Key extends Field ? StepValueCheck<Step[Key], Expected, Scope> : Step[Key]; }, Result ];",
   ],
+  "(internal) VariantSchema": [
+    "type VariantSchema<Field, Mode extends FieldMode> = Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TUnsafe<VariantValue<Key, Variants, Mode>>> : TUnsafe<VariantValue<Key, Variants, Mode>> : never;",
+  ],
+  "(internal) VariantShape": [
+    "type VariantShape<Key extends string, Variants, Mode extends FieldMode, Optional extends boolean> = Optional extends true ? VariantValue<Key, Variants, Mode> | undefined : VariantValue<Key, Variants, Mode>;",
+  ],
+  "(internal) VariantValue": [
+    "type VariantValue<Key extends string, Variants, Mode extends FieldMode> = 0 extends 1 & Variants ? any : { [Tag in keyof Variants & string]: Evaluate<{ readonly [Name in Key]: Tag; } & FieldValue<Variants[Tag], Mode>>; }[keyof Variants & string];",
+  ],
   "(internal) VersionKey": [
     "type VersionKey<Repository> = Props<Repository> extends { readonly version: typeof EntityVersion; } ? "version" : never;",
   ],
@@ -655,6 +667,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "AnyBlueprintList": [
     "export type AnyBlueprintList = IBlueprintList<any, boolean>;",
+  ],
+  "AnyBlueprintVariant": [
+    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; }",
   ],
   "AnyCommand": [
     "export type AnyCommand = CommandOf<any, any, any>;",
@@ -747,10 +762,10 @@ exports[`exports of the package and their declarations 1`] = `
     "export type BlueprintFactory = (...args: any[]) => BlueprintField;",
   ],
   "BlueprintField": [
-    "export type BlueprintField = AnyPropertyConstructor | AnyBlueprint | AnyBlueprintList | AnyRecordClass | AnyOptionalRecord;",
+    "export type BlueprintField = AnyPropertyConstructor | AnyBlueprint | AnyBlueprintList | AnyRecordClass | AnyOptionalRecord | AnyBlueprintVariant;",
   ],
   "BlueprintHelpers": [
-    "export interface BlueprintHelpers { readonly listOf: typeof listOf; readonly optionalOf: typeof optionalOf; readonly propertyOf: typeof propertyOf; }",
+    "export interface BlueprintHelpers { readonly listOf: typeof listOf; readonly optionalOf: typeof optionalOf; readonly propertyOf: typeof propertyOf; readonly variantOf: typeof variantOf; }",
   ],
   "BlueprintInput": [
     "export type BlueprintInput<Properties extends IBlueprintCollection> = CollectionValue<Properties, "input">;",
@@ -769,6 +784,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "BlueprintValue": [
     "export type BlueprintValue<Properties extends IBlueprintCollection> = CollectionValue<Properties, "value">;",
+  ],
+  "BlueprintVariants": [
+    "export type BlueprintVariants = Readonly<Record<string, AnyBlueprint>>;",
   ],
   "BooleanProperty": [
     "BooleanProperty: import("../../index.js").PropertyClass<Type.TBoolean, boolean>",
@@ -1055,6 +1073,9 @@ exports[`exports of the package and their declarations 1`] = `
   "IBlueprintPlugin": [
     "export interface IBlueprintPlugin<Properties extends IBlueprintCollection = IBlueprintCollection, Factories extends IBlueprintFactories = IBlueprintFactories> { readonly name: string; readonly properties: Properties; readonly factories?: Factories; }",
   ],
+  "IBlueprintVariant": [
+    "export interface IBlueprintVariant<Key extends string, Variants extends BlueprintVariants, Optional extends boolean = false> { readonly [Kind]: "variant"; readonly key: Key; readonly variants: Variants; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<VariantShape<Key, Variants, "input", Optional>, VariantShape<Key, Variants, "value", Optional>>; }",
+  ],
   "IDefineProperty": [
     "export interface IDefineProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { [State]: PropertyStates; get type(): IPropertyType<SchemaType, Value>; make(value: Value): Value; parse(value: unknown): ParseResult<Value>; }",
   ],
@@ -1141,6 +1162,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "InvalidApplicationEnvironment": [
     "InvalidApplicationEnvironment: import("../../index.js").DeclaredExceptionClass<{ readonly environments: Readonly<Record<string, readonly string[]>>; }>",
+  ],
+  "InvalidBlueprintVariant": [
+    "InvalidBlueprintVariant: import("../../index.js").DeclaredExceptionClass<{ readonly key: string; readonly reason: string; }>",
   ],
   "InvalidCommandContext": [
     "InvalidCommandContext: import("../../index.js").DeclaredExceptionClass<{ readonly issues: readonly Issue[]; }>",
@@ -1336,6 +1360,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "OptionalBlueprintList": [
     "export type OptionalBlueprintList<List extends AnyBlueprintList> = List extends IBlueprintList<infer Item, boolean> ? IBlueprintList<Item, true> : never;",
+  ],
+  "OptionalBlueprintVariant": [
+    "export type OptionalBlueprintVariant<Variant extends AnyBlueprintVariant> = Variant extends IBlueprintVariant<infer Key, infer Variants, boolean> ? IBlueprintVariant<Key, Variants, true> : never;",
   ],
   "OptionalProperty": [
     "export type OptionalProperty<Property extends AnyPropertyConstructor> = Property extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? SchemaType extends TOptional<TSchema> ? StoredField<Property> : Omit<Property, "type" | "prototype" | "safeParse" | "~standard" | CallableKey> & { new (value: PropertyValue<TOptional<SchemaType>, Value>): AbstractProperty<TOptional<SchemaType>, Value> & Omit<InstanceType<Property>, keyof AbstractProperty<TSchema>>; readonly type: IPropertyType<TOptional<SchemaType>, Value> & UniqueTypeOf<Property> & SensitiveTypeOf<Property>; safeParse(value: unknown): ParseResult<PropertyValue<TOptional<SchemaType>, Value>>; readonly "~standard": StandardSchemaV1.Props<PropertyValue<TOptional<SchemaType>, Value>, PropertyValue<TOptional<SchemaType>, Value>>; } : never;",
@@ -2032,6 +2059,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function optionalOf<List extends AnyBlueprintList>(list: List): OptionalBlueprintList<List>;",
     "export declare function optionalOf<Property extends AnyPropertyConstructor>(Property: Property): OptionalProperty<Property>;",
     "export declare function optionalOf<Record extends AnyRecordClass>(record: Record | OptionalRecord<Record>): OptionalRecord<Record>;",
+    "export declare function optionalOf<Variant extends AnyBlueprintVariant>(variant: Variant): OptionalBlueprintVariant<Variant>;",
   ],
   "outputOf": [
     "export declare function outputOf<const Pipe extends readonly Stage[] = readonly [ ]>(settings: OutputSettings<Pipe>): OutputOf<PipeResult<Pipe>>;",
@@ -2107,6 +2135,9 @@ exports[`exports of the package and their declarations 1`] = `
   "useCasePluginOf": [
     "export declare function useCasePluginOf<const Name extends string, Make extends UseCaseMaker = UseCaseMaker>(name: Name, settings: UseCasePluginSettings): IUseCasePlugin<Name, Make>;",
   ],
+  "variantOf": [
+    "export declare function variantOf<const Key extends string, const Variants extends BlueprintVariants>(key: Key, variants: Variants): IBlueprintVariant<Key, Variants>;",
+  ],
 }
 `;
 
@@ -2132,6 +2163,9 @@ exports[`adapters entry (contract) 1`] = `
   ],
   "(internal) AnyBlueprintList": [
     "export type AnyBlueprintList = IBlueprintList<any, boolean>;",
+  ],
+  "(internal) AnyBlueprintVariant": [
+    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; }",
   ],
   "(internal) AnyEntityClass": [
     "export type AnyEntityClass = (abstract new (value: never) => object) & { readonly [EntityClassBrand]: true; };",
@@ -2161,7 +2195,7 @@ exports[`adapters entry (contract) 1`] = `
     "export type BlueprintFactory = (...args: any[]) => BlueprintField;",
   ],
   "(internal) BlueprintField": [
-    "export type BlueprintField = AnyPropertyConstructor | AnyBlueprint | AnyBlueprintList | AnyRecordClass | AnyOptionalRecord;",
+    "export type BlueprintField = AnyPropertyConstructor | AnyBlueprint | AnyBlueprintList | AnyRecordClass | AnyOptionalRecord | AnyBlueprintVariant;",
   ],
   "(internal) BlueprintInput": [
     "export type BlueprintInput<Properties extends IBlueprintCollection> = CollectionValue<Properties, "input">;",
@@ -2260,10 +2294,10 @@ exports[`adapters entry (contract) 1`] = `
     "type FieldMode = "data" | "value" | "input";",
   ],
   "(internal) FieldSchema": [
-    "type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field ? TSchema : Field extends { readonly type: IPropertyType<infer SchemaType extends TSchema, any>; } ? SchemaType : Field extends AnyRecordClass ? RecordSchema<Field, Mode> : Field extends OptionalRecord<infer Record> ? TOptional<RecordSchema<Record, Mode>> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; readonly optional: infer Optional; } ? Optional extends true ? TOptional<CollectionSchema<Properties, Mode>> : CollectionSchema<Properties, Mode> : Field extends { readonly item: infer Item; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TArray<FieldSchema<Item, Mode>>> : TArray<FieldSchema<Item, Mode>> : never;",
+    "type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field ? TSchema : Field extends { readonly type: IPropertyType<infer SchemaType extends TSchema, any>; } ? SchemaType : Field extends AnyRecordClass ? RecordSchema<Field, Mode> : Field extends OptionalRecord<infer Record> ? TOptional<RecordSchema<Record, Mode>> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; readonly optional: infer Optional; } ? Optional extends true ? TOptional<CollectionSchema<Properties, Mode>> : CollectionSchema<Properties, Mode> : Field extends { readonly item: infer Item; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TArray<FieldSchema<Item, Mode>>> : TArray<FieldSchema<Item, Mode>> : VariantSchema<Field, Mode>;",
   ],
   "(internal) FieldValue": [
-    "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : never;",
+    "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? VariantValue<Key, Variants, Mode> : never;",
   ],
   "(internal) IBlueprint": [
     "export interface IBlueprint<Properties extends IBlueprintCollection, Optional extends boolean = false> { readonly [Kind]: "blueprint"; readonly plugins: readonly IBlueprintPlugin[]; readonly properties: Properties; readonly schema: ISchema<BlueprintSchema<Properties>, BlueprintData<Properties>>; readonly optional: Optional; safeParse(value: unknown): ParseResult<Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; readonly "~standard": StandardSchemaV1.Props<Optional extends true ? BlueprintInput<Properties> | undefined : BlueprintInput<Properties>, Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; join<const Blueprints extends readonly AnyBlueprint[]>(...blueprints: Blueprints): IBlueprint<JoinedProperties<readonly [ { readonly properties: Properties; }, ...Blueprints ]>>; }",
@@ -2318,7 +2352,7 @@ exports[`adapters entry (contract) 1`] = `
     "export type JoinedProperties<Blueprints extends readonly { readonly properties: IBlueprintCollection; }[]> = BlueprintPluginContext<Blueprints> extends infer Properties extends IBlueprintCollection ? Properties : never;",
   ],
   "(internal) JsonField": [
-    "type JsonField<Field, Data> = Field extends { readonly type: { readonly sensitive: true; }; } ? Masked<Data> : Field extends { readonly type: unknown; } ? Data : Field extends AnyRecordClass ? JsonOfRecord<Field, Data> : Field extends { readonly record: infer Class extends AnyRecordClass; } ? JsonOfRecord<Class, Data> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? Data extends object ? JsonKeys<Properties, Data, never> : Data : Field extends { readonly item: infer Item; } ? Data extends readonly (infer ItemData)[] ? JsonField<Item, ItemData>[] : Data : Data;",
+    "type JsonField<Field, Data> = Field extends { readonly type: { readonly sensitive: true; }; } ? Masked<Data> : Field extends { readonly type: unknown; } ? Data : Field extends AnyRecordClass ? JsonOfRecord<Field, Data> : Field extends { readonly record: infer Class extends AnyRecordClass; } ? JsonOfRecord<Class, Data> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? Data extends object ? JsonKeys<Properties, Data, never> : Data : Field extends { readonly item: infer Item; } ? Data extends readonly (infer ItemData)[] ? JsonField<Item, ItemData>[] : Data : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? JsonVariant<Key, Variants, Data> : Data;",
   ],
   "(internal) JsonKeys": [
     "type JsonKeys<Properties, Data, Sensitive, Result = { readonly [Key in keyof Data]: Key extends Sensitive ? Masked<Data[Key]> : Key extends keyof Properties ? JsonField<Properties[Key], Data[Key]> : Data[Key]; }> = Result;",
@@ -2329,6 +2363,9 @@ exports[`adapters entry (contract) 1`] = `
   "(internal) JsonValue": [
     "export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };",
     "type JsonValue<Properties extends IBlueprintCollection, Sensitive, Result = 0 extends 1 & Properties ? Readonly<Record<string, unknown>> : string extends keyof Properties ? Readonly<Record<string, unknown>> : JsonKeys<Properties, BlueprintData<Properties>, Sensitive>> = Result;",
+  ],
+  "(internal) JsonVariant": [
+    "type JsonVariant<Key extends string, Variants, Data> = Data extends { readonly [Name in Key]: infer Tag extends keyof Variants; } ? Variants[Tag] extends { readonly properties: infer Properties extends IBlueprintCollection; } ? JsonKeys<Properties, Data, never> : Data : Data;",
   ],
   "(internal) ListShape": [
     "type ListShape<Item, Mode extends FieldMode, Optional extends boolean> = Optional extends true ? FieldValue<Item, Mode>[] | undefined : FieldValue<Item, Mode>[];",
@@ -2537,6 +2574,12 @@ exports[`adapters entry (contract) 1`] = `
   "(internal) UseCaseStepDescription": [
     "export type UseCaseStepDescription = { readonly find: string; readonly args?: StepArgs; readonly as?: string; } | { readonly ensure: StepEnsureKind; readonly value: StepValue; readonly other?: StepValue; readonly error: StepErrorDescription; readonly details?: StepValue; } | { readonly build: string; readonly values: StepValue; readonly as: string; } | { readonly change: string; readonly key: string; readonly value: StepValue; readonly ifPresent?: boolean; readonly as?: string; } | { readonly invoke: string; readonly method: string; readonly args?: StepArgs; readonly as?: string; } | { readonly create: string; readonly value: StepValue; readonly as?: string; } | { readonly update: string; readonly value: StepValue; readonly as?: string; } | { readonly delete: string; readonly value: StepValue; readonly as?: string; } | { readonly restore: string; readonly value: StepValue; readonly as?: string; } | { readonly call: string; readonly input: StepValue; readonly as?: string; } | { readonly run: string; readonly fn: { readonly kind: "opaque"; }; readonly args?: StepArgs; readonly as?: string; } | { readonly return: StepValue; };",
   ],
+  "(internal) VariantSchema": [
+    "type VariantSchema<Field, Mode extends FieldMode> = Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TUnsafe<VariantValue<Key, Variants, Mode>>> : TUnsafe<VariantValue<Key, Variants, Mode>> : never;",
+  ],
+  "(internal) VariantValue": [
+    "type VariantValue<Key extends string, Variants, Mode extends FieldMode> = 0 extends 1 & Variants ? any : { [Tag in keyof Variants & string]: Evaluate<{ readonly [Name in Key]: Tag; } & FieldValue<Variants[Tag], Mode>>; }[keyof Variants & string];",
+  ],
   "ApplicationDescription": [
     "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; readonly providers?: Readonly<Record<string, ProviderDescription & { readonly from: string; }>>; readonly log?: LogDescription | { readonly kind: "opaque"; }; readonly publishers?: Readonly<Record<string, { readonly from: string; }>>; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly indexes: Readonly<Record<string, RepositoryIndex>>; readonly scans: RepositoryScans; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly commands: Readonly<Record<string, CommandDescription>>; readonly outputs: Readonly<Record<string, OutputDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
   ],
@@ -2556,7 +2599,7 @@ exports[`adapters entry (contract) 1`] = `
     "export interface ExceptionDescription { readonly from: string; readonly layer: ExceptionLayers; readonly message?: string; }",
   ],
   "FieldDescription": [
-    "export type FieldDescription = { readonly kind: "property"; readonly ref: string; readonly optional: boolean; } | ({ readonly kind: "property"; } & PropertyDescription) | { readonly kind: "list"; readonly item: FieldDescription; readonly optional: boolean; readonly minItems?: number; readonly maxItems?: number; } | { readonly kind: "blueprint"; readonly ref: string; readonly optional: boolean; } | { readonly kind: "blueprint"; readonly optional: boolean; readonly fields: Readonly<Record<string, FieldDescription>>; } | { readonly kind: "record" | "entity"; readonly ref: string; readonly optional: boolean; };",
+    "export type FieldDescription = { readonly kind: "property"; readonly ref: string; readonly optional: boolean; } | ({ readonly kind: "property"; } & PropertyDescription) | { readonly kind: "list"; readonly item: FieldDescription; readonly optional: boolean; readonly minItems?: number; readonly maxItems?: number; } | { readonly kind: "blueprint"; readonly ref: string; readonly optional: boolean; } | { readonly kind: "blueprint"; readonly optional: boolean; readonly fields: Readonly<Record<string, FieldDescription>>; } | { readonly kind: "record" | "entity"; readonly ref: string; readonly optional: boolean; } | { readonly kind: "variant"; readonly key: string; readonly optional: boolean; readonly variants: Readonly<Record<string, FieldDescription>>; };",
   ],
   "FieldsDescription": [
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
@@ -2752,6 +2795,9 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) AnyBlueprintList": [
     "export type AnyBlueprintList = IBlueprintList<any, boolean>;",
   ],
+  "(internal) AnyBlueprintVariant": [
+    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; }",
+  ],
   "(internal) AnyCommand": [
     "export type AnyCommand = CommandOf<any, any, any>;",
   ],
@@ -2801,7 +2847,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type BlueprintFactory = (...args: any[]) => BlueprintField;",
   ],
   "(internal) BlueprintField": [
-    "export type BlueprintField = AnyPropertyConstructor | AnyBlueprint | AnyBlueprintList | AnyRecordClass | AnyOptionalRecord;",
+    "export type BlueprintField = AnyPropertyConstructor | AnyBlueprint | AnyBlueprintList | AnyRecordClass | AnyOptionalRecord | AnyBlueprintVariant;",
   ],
   "(internal) BlueprintInput": [
     "export type BlueprintInput<Properties extends IBlueprintCollection> = CollectionValue<Properties, "input">;",
@@ -2957,10 +3003,10 @@ exports[`experimental entry (not contract) 1`] = `
     "type FieldMode = "data" | "value" | "input";",
   ],
   "(internal) FieldSchema": [
-    "type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field ? TSchema : Field extends { readonly type: IPropertyType<infer SchemaType extends TSchema, any>; } ? SchemaType : Field extends AnyRecordClass ? RecordSchema<Field, Mode> : Field extends OptionalRecord<infer Record> ? TOptional<RecordSchema<Record, Mode>> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; readonly optional: infer Optional; } ? Optional extends true ? TOptional<CollectionSchema<Properties, Mode>> : CollectionSchema<Properties, Mode> : Field extends { readonly item: infer Item; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TArray<FieldSchema<Item, Mode>>> : TArray<FieldSchema<Item, Mode>> : never;",
+    "type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field ? TSchema : Field extends { readonly type: IPropertyType<infer SchemaType extends TSchema, any>; } ? SchemaType : Field extends AnyRecordClass ? RecordSchema<Field, Mode> : Field extends OptionalRecord<infer Record> ? TOptional<RecordSchema<Record, Mode>> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; readonly optional: infer Optional; } ? Optional extends true ? TOptional<CollectionSchema<Properties, Mode>> : CollectionSchema<Properties, Mode> : Field extends { readonly item: infer Item; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TArray<FieldSchema<Item, Mode>>> : TArray<FieldSchema<Item, Mode>> : VariantSchema<Field, Mode>;",
   ],
   "(internal) FieldValue": [
-    "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : never;",
+    "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? VariantValue<Key, Variants, Mode> : never;",
   ],
   "(internal) IBlueprint": [
     "export interface IBlueprint<Properties extends IBlueprintCollection, Optional extends boolean = false> { readonly [Kind]: "blueprint"; readonly plugins: readonly IBlueprintPlugin[]; readonly properties: Properties; readonly schema: ISchema<BlueprintSchema<Properties>, BlueprintData<Properties>>; readonly optional: Optional; safeParse(value: unknown): ParseResult<Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; readonly "~standard": StandardSchemaV1.Props<Optional extends true ? BlueprintInput<Properties> | undefined : BlueprintInput<Properties>, Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; join<const Blueprints extends readonly AnyBlueprint[]>(...blueprints: Blueprints): IBlueprint<JoinedProperties<readonly [ { readonly properties: Properties; }, ...Blueprints ]>>; }",
@@ -3030,7 +3076,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type JoinedProperties<Blueprints extends readonly { readonly properties: IBlueprintCollection; }[]> = BlueprintPluginContext<Blueprints> extends infer Properties extends IBlueprintCollection ? Properties : never;",
   ],
   "(internal) JsonField": [
-    "type JsonField<Field, Data> = Field extends { readonly type: { readonly sensitive: true; }; } ? Masked<Data> : Field extends { readonly type: unknown; } ? Data : Field extends AnyRecordClass ? JsonOfRecord<Field, Data> : Field extends { readonly record: infer Class extends AnyRecordClass; } ? JsonOfRecord<Class, Data> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? Data extends object ? JsonKeys<Properties, Data, never> : Data : Field extends { readonly item: infer Item; } ? Data extends readonly (infer ItemData)[] ? JsonField<Item, ItemData>[] : Data : Data;",
+    "type JsonField<Field, Data> = Field extends { readonly type: { readonly sensitive: true; }; } ? Masked<Data> : Field extends { readonly type: unknown; } ? Data : Field extends AnyRecordClass ? JsonOfRecord<Field, Data> : Field extends { readonly record: infer Class extends AnyRecordClass; } ? JsonOfRecord<Class, Data> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? Data extends object ? JsonKeys<Properties, Data, never> : Data : Field extends { readonly item: infer Item; } ? Data extends readonly (infer ItemData)[] ? JsonField<Item, ItemData>[] : Data : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? JsonVariant<Key, Variants, Data> : Data;",
   ],
   "(internal) JsonKeys": [
     "type JsonKeys<Properties, Data, Sensitive, Result = { readonly [Key in keyof Data]: Key extends Sensitive ? Masked<Data[Key]> : Key extends keyof Properties ? JsonField<Properties[Key], Data[Key]> : Data[Key]; }> = Result;",
@@ -3041,6 +3087,9 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) JsonValue": [
     "export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };",
     "type JsonValue<Properties extends IBlueprintCollection, Sensitive, Result = 0 extends 1 & Properties ? Readonly<Record<string, unknown>> : string extends keyof Properties ? Readonly<Record<string, unknown>> : JsonKeys<Properties, BlueprintData<Properties>, Sensitive>> = Result;",
+  ],
+  "(internal) JsonVariant": [
+    "type JsonVariant<Key extends string, Variants, Data> = Data extends { readonly [Name in Key]: infer Tag extends keyof Variants; } ? Variants[Tag] extends { readonly properties: infer Properties extends IBlueprintCollection; } ? JsonKeys<Properties, Data, never> : Data : Data;",
   ],
   "(internal) KeptChange": [
     "type KeptChange<Instance, Keys> = Instance extends { readonly change: infer Change; } ? Extract<keyof Change, Keys & string> : never;",
@@ -3348,6 +3397,12 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) ValueAt": [
     "type ValueAt<Entity, Key extends string> = Key extends keyof EntityValueOf<Entity> ? EntityValueOf<Entity>[Key] : never;",
   ],
+  "(internal) VariantSchema": [
+    "type VariantSchema<Field, Mode extends FieldMode> = Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TUnsafe<VariantValue<Key, Variants, Mode>>> : TUnsafe<VariantValue<Key, Variants, Mode>> : never;",
+  ],
+  "(internal) VariantValue": [
+    "type VariantValue<Key extends string, Variants, Mode extends FieldMode> = 0 extends 1 & Variants ? any : { [Tag in keyof Variants & string]: Evaluate<{ readonly [Name in Key]: Tag; } & FieldValue<Variants[Tag], Mode>>; }[keyof Variants & string];",
+  ],
   "PropertyLineage": [
     "export type PropertyLineage = { readonly kind: "refined"; readonly base: AnyPropertyConstructor; readonly options: Readonly<Record<string, unknown>>; } | { readonly kind: "optional"; readonly base: AnyPropertyConstructor; } | { readonly kind: "factory"; readonly factory: string; readonly args: Readonly<Record<string, unknown>>; };",
   ],
@@ -3431,6 +3486,9 @@ exports[`testing entry (contract) 1`] = `
   "(internal) AnyBlueprintList": [
     "export type AnyBlueprintList = IBlueprintList<any, boolean>;",
   ],
+  "(internal) AnyBlueprintVariant": [
+    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; }",
+  ],
   "(internal) AnyEntityClass": [
     "export type AnyEntityClass = (abstract new (value: never) => object) & { readonly [EntityClassBrand]: true; };",
   ],
@@ -3456,7 +3514,7 @@ exports[`testing entry (contract) 1`] = `
     "export type BlueprintFactory = (...args: any[]) => BlueprintField;",
   ],
   "(internal) BlueprintField": [
-    "export type BlueprintField = AnyPropertyConstructor | AnyBlueprint | AnyBlueprintList | AnyRecordClass | AnyOptionalRecord;",
+    "export type BlueprintField = AnyPropertyConstructor | AnyBlueprint | AnyBlueprintList | AnyRecordClass | AnyOptionalRecord | AnyBlueprintVariant;",
   ],
   "(internal) BlueprintInput": [
     "export type BlueprintInput<Properties extends IBlueprintCollection> = CollectionValue<Properties, "input">;",
@@ -3540,10 +3598,10 @@ exports[`testing entry (contract) 1`] = `
     "type FieldMode = "data" | "value" | "input";",
   ],
   "(internal) FieldSchema": [
-    "type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field ? TSchema : Field extends { readonly type: IPropertyType<infer SchemaType extends TSchema, any>; } ? SchemaType : Field extends AnyRecordClass ? RecordSchema<Field, Mode> : Field extends OptionalRecord<infer Record> ? TOptional<RecordSchema<Record, Mode>> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; readonly optional: infer Optional; } ? Optional extends true ? TOptional<CollectionSchema<Properties, Mode>> : CollectionSchema<Properties, Mode> : Field extends { readonly item: infer Item; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TArray<FieldSchema<Item, Mode>>> : TArray<FieldSchema<Item, Mode>> : never;",
+    "type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field ? TSchema : Field extends { readonly type: IPropertyType<infer SchemaType extends TSchema, any>; } ? SchemaType : Field extends AnyRecordClass ? RecordSchema<Field, Mode> : Field extends OptionalRecord<infer Record> ? TOptional<RecordSchema<Record, Mode>> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; readonly optional: infer Optional; } ? Optional extends true ? TOptional<CollectionSchema<Properties, Mode>> : CollectionSchema<Properties, Mode> : Field extends { readonly item: infer Item; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TArray<FieldSchema<Item, Mode>>> : TArray<FieldSchema<Item, Mode>> : VariantSchema<Field, Mode>;",
   ],
   "(internal) FieldValue": [
-    "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : never;",
+    "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? VariantValue<Key, Variants, Mode> : never;",
   ],
   "(internal) IBlueprint": [
     "export interface IBlueprint<Properties extends IBlueprintCollection, Optional extends boolean = false> { readonly [Kind]: "blueprint"; readonly plugins: readonly IBlueprintPlugin[]; readonly properties: Properties; readonly schema: ISchema<BlueprintSchema<Properties>, BlueprintData<Properties>>; readonly optional: Optional; safeParse(value: unknown): ParseResult<Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; readonly "~standard": StandardSchemaV1.Props<Optional extends true ? BlueprintInput<Properties> | undefined : BlueprintInput<Properties>, Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; join<const Blueprints extends readonly AnyBlueprint[]>(...blueprints: Blueprints): IBlueprint<JoinedProperties<readonly [ { readonly properties: Properties; }, ...Blueprints ]>>; }",
@@ -3601,7 +3659,7 @@ exports[`testing entry (contract) 1`] = `
     "export type JoinedProperties<Blueprints extends readonly { readonly properties: IBlueprintCollection; }[]> = BlueprintPluginContext<Blueprints> extends infer Properties extends IBlueprintCollection ? Properties : never;",
   ],
   "(internal) JsonField": [
-    "type JsonField<Field, Data> = Field extends { readonly type: { readonly sensitive: true; }; } ? Masked<Data> : Field extends { readonly type: unknown; } ? Data : Field extends AnyRecordClass ? JsonOfRecord<Field, Data> : Field extends { readonly record: infer Class extends AnyRecordClass; } ? JsonOfRecord<Class, Data> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? Data extends object ? JsonKeys<Properties, Data, never> : Data : Field extends { readonly item: infer Item; } ? Data extends readonly (infer ItemData)[] ? JsonField<Item, ItemData>[] : Data : Data;",
+    "type JsonField<Field, Data> = Field extends { readonly type: { readonly sensitive: true; }; } ? Masked<Data> : Field extends { readonly type: unknown; } ? Data : Field extends AnyRecordClass ? JsonOfRecord<Field, Data> : Field extends { readonly record: infer Class extends AnyRecordClass; } ? JsonOfRecord<Class, Data> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? Data extends object ? JsonKeys<Properties, Data, never> : Data : Field extends { readonly item: infer Item; } ? Data extends readonly (infer ItemData)[] ? JsonField<Item, ItemData>[] : Data : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? JsonVariant<Key, Variants, Data> : Data;",
   ],
   "(internal) JsonKeys": [
     "type JsonKeys<Properties, Data, Sensitive, Result = { readonly [Key in keyof Data]: Key extends Sensitive ? Masked<Data[Key]> : Key extends keyof Properties ? JsonField<Properties[Key], Data[Key]> : Data[Key]; }> = Result;",
@@ -3612,6 +3670,9 @@ exports[`testing entry (contract) 1`] = `
   "(internal) JsonValue": [
     "export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };",
     "type JsonValue<Properties extends IBlueprintCollection, Sensitive, Result = 0 extends 1 & Properties ? Readonly<Record<string, unknown>> : string extends keyof Properties ? Readonly<Record<string, unknown>> : JsonKeys<Properties, BlueprintData<Properties>, Sensitive>> = Result;",
+  ],
+  "(internal) JsonVariant": [
+    "type JsonVariant<Key extends string, Variants, Data> = Data extends { readonly [Name in Key]: infer Tag extends keyof Variants; } ? Variants[Tag] extends { readonly properties: infer Properties extends IBlueprintCollection; } ? JsonKeys<Properties, Data, never> : Data : Data;",
   ],
   "(internal) Kind": [
     "Kind: unique symbol",
@@ -3783,6 +3844,12 @@ exports[`testing entry (contract) 1`] = `
   ],
   "(internal) Types": [
     "interface Types<Input = unknown, Output = Input> { readonly input: Input; readonly output: Output; }",
+  ],
+  "(internal) VariantSchema": [
+    "type VariantSchema<Field, Mode extends FieldMode> = Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TUnsafe<VariantValue<Key, Variants, Mode>>> : TUnsafe<VariantValue<Key, Variants, Mode>> : never;",
+  ],
+  "(internal) VariantValue": [
+    "type VariantValue<Key extends string, Variants, Mode extends FieldMode> = 0 extends 1 & Variants ? any : { [Tag in keyof Variants & string]: Evaluate<{ readonly [Name in Key]: Tag; } & FieldValue<Variants[Tag], Mode>>; }[keyof Variants & string];",
   ],
   "ContractRunner": [
     "export interface ContractRunner { describe(name: string, body: () => void): void; it(name: string, body: () => unknown): void; expect(value: unknown): { toBe(expected: unknown): unknown; toEqual(expected: unknown): unknown; }; }",

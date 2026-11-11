@@ -7,6 +7,7 @@ import type {
 	IBlueprint,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant, variantOfValue } from "../blueprint/variant";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { Exception } from "../exception/exception";
 import { collectionParserOf, parseField } from "../parse/parse";
@@ -381,6 +382,16 @@ export function recordFieldDataOf(
 			value as Readonly<Record<string, unknown>>,
 			options,
 		);
+	}
+	if (isBlueprintVariant(field)) {
+		const variant = variantOfValue(field, value);
+		return variant
+			? dataOfCollection(
+					variant.properties,
+					value as Readonly<Record<string, unknown>>,
+					options,
+				)
+			: value;
 	}
 	return value;
 }
