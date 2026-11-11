@@ -109,7 +109,29 @@ export function runInSpan<Result>(
 	span: ITraceSpan,
 	run: () => Result,
 ): Result {
-	return tracer.withSpan === undefined ? run() : tracer.withSpan(span, run);
+	if (tracer.withSpan === undefined) return run();
+	// A `withSpan` that throws breaks nothing: `run` runs once, and what it
+	// throws goes up unchanged.
+	let ran = "no" as "no" | "returned" | "threw";
+	let result: Result | undefined;
+	let thrown: unknown;
+	const once = (): Result => {
+		try {
+			result = run();
+			ran = "returned";
+			return result;
+		} catch (error) {
+			ran = "threw";
+			thrown = error;
+			throw error;
+		}
+	};
+	try {
+		return tracer.withSpan(span, once);
+	} catch {
+		if (ran === "threw") throw thrown;
+		return ran === "returned" ? (result as Result) : run();
+	}
 }
 
 const OK: TraceAttributes = Object.freeze({ "afora.outcome": "ok" });

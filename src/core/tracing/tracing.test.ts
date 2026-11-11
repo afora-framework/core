@@ -12,6 +12,7 @@ import {
 	inMemoryProvider,
 	type MemorySpan,
 	memoryTracer,
+	RepositoryOf,
 	repositoryOf,
 	resetApplication,
 	useCaseOf,
@@ -333,5 +334,180 @@ describe("the trace of an application", () => {
 				trace: { startSpan: () => ({ end() {} }), withSpan: 1 } as never,
 			}),
 		).toThrow(InvalidTraceDeclaration);
+	});
+
+	test("a withSpan that throws breaks nothing, and what the call throws goes up unchanged", async () => {
+		const memory = memoryTracer();
+		const runs: string[] = [];
+		const before: ITracer = {
+			startSpan: memory.startSpan,
+			withSpan: () => {
+				throw new Error("context lost");
+			},
+		};
+		class Count extends useCaseOf({
+			name: "Count",
+			blueprint: blueprintOf(() => ({})),
+			response: blueprintOf(() => ({})),
+		}) {
+			override async execute() {
+				runs.push("ran");
+				return {};
+			}
+		}
+		const app = applicationOf({
+			name: "count",
+			useCases: { Count },
+			trace: before,
+		});
+		expect(await app.run(Count, {})).toEqual({});
+		expect(runs).toEqual(["ran"]);
+		expect(memory.spans.map((span) => span.status)).toEqual(["ok"]);
+
+		const boom = new Error("boom");
+		class Throws extends useCaseOf({
+			name: "Throws",
+			blueprint: blueprintOf(() => ({})),
+			response: blueprintOf(() => ({})),
+		}) {
+			override execute(): Promise<Record<string, never>> {
+				runs.push("threw");
+				// Synchronously, inside withSpan.
+				throw boom;
+			}
+		}
+		const passing = applicationOf({
+			name: "throws",
+			useCases: { Throws },
+			trace: {
+				startSpan: memory.startSpan,
+				withSpan: (_span, run) => run(),
+			},
+		});
+		runs.length = 0;
+		const error = await passing.run(Throws, {}).catch((caught) => caught);
+		expect(runs).toEqual(["threw"]);
+		expect(error.cause).toBe(boom);
+	});
+
+	test("the command span covers its event policy, and fails with it", async () => {
+		const tracer = memoryTracer();
+		const PolicyFailed = exceptionOf({
+			layer: ExceptionLayers.Event,
+			name: "PublishFailed",
+			message: "The broker is down.",
+		});
+		const Publishing = commandOf({
+			name: "Publishing",
+			useCases: { add: AddNote },
+			events: async () => {
+				throw new PolicyFailed({ source: "broker" });
+			},
+		});
+		const app = applicationOf({
+			name: "notes",
+			entities: { Note },
+			repositories: { Notes },
+			useCases: { AddNote },
+			commands: { Publishing },
+			provider: inMemoryProvider(),
+			trace: tracer,
+		});
+		await expect(
+			app.commands.Publishing.run("add", { name: "a", secret: "b" }),
+		).rejects.toThrow();
+		const command = tracer.spans[0] as MemorySpan;
+		expect(command.name).toBe("command Publishing.add");
+		expect(command.status).toBe("error");
+		expect(command.attributes["afora.exception.name"]).toBe("PublishFailed");
+		// The use case itself succeeded.
+		expect(tracer.spans[1]?.status).toBe("ok");
+	});
+
+	test("a failure before the call runs still has its span", async () => {
+		const tracer = memoryTracer();
+		const Guarded = commandOf({
+			name: "Guarded",
+			context: blueprintOf((ctx) => ({ user: ctx.string })),
+			useCases: { add: AddNote },
+		});
+		const app = applicationOf({
+			name: "notes",
+			entities: { Note },
+			repositories: { Notes },
+			useCases: { AddNote },
+			commands: { Guarded },
+			provider: inMemoryProvider(),
+			trace: tracer,
+		});
+		await expect(
+			app.commands.Guarded.run(
+				"add",
+				{ name: "a", secret: "b" },
+				{ context: {} as never },
+			),
+		).rejects.toThrow();
+		expect(tracer.spans.map((span) => [span.name, span.status])).toEqual([
+			["command Guarded.add", "error"],
+		]);
+		// The exception where it was first raised: the property of the context.
+		expect(tracer.spans[0]?.attributes["afora.exception.layer"]).toBe(
+			"property",
+		);
+
+		tracer.clear();
+		const useCase = new app.useCases.AddNote({ name: "a", secret: "b" });
+		await expect(
+			useCase.execute({ unknown: () => {} } as never),
+		).rejects.toThrow();
+		expect(tracer.spans.map((span) => [span.name, span.status])).toEqual([
+			["use-case AddNote", "error"],
+		]);
+		expect(tracer.spans[0]?.attributes["afora.exception.name"]).toBe(
+			"InvalidUseCaseDependencies",
+		);
+	});
+
+	test("a repository method calling another through this nests it", async () => {
+		const tracer = memoryTracer();
+		class NotesWithAdd extends RepositoryOf(
+			repositoryOf({ entity: Note, actions: ["create", "count"] }),
+		) {
+			async addAndCount(name: string): Promise<number> {
+				await this.create({ name, secret: "s" });
+				return this.count();
+			}
+		}
+		const repository = new NotesWithAdd();
+		class AddAndCount extends useCaseOf({
+			name: "AddAndCount",
+			blueprint: Name,
+			response: blueprintOf((ctx) => ({ count: ctx.integer })),
+			dependencies: { notes: repository },
+		}) {
+			override async execute({ notes = this.dependencies.notes } = {}) {
+				const [count] = await Promise.all([
+					notes.addAndCount(this.input.name),
+					notes.count(),
+				]);
+				return { count };
+			}
+		}
+		const app = applicationOf({
+			name: "nested",
+			entities: { Note },
+			repositories: { Notes: repository },
+			useCases: { AddAndCount },
+			provider: inMemoryProvider(),
+			trace: tracer,
+		});
+		await app.run(AddAndCount, { name: "a" });
+		expect(tree(tracer.spans)).toEqual([
+			"use-case AddAndCount",
+			"repository Note.addAndCount < use-case AddAndCount",
+			"repository Note.create < repository Note.addAndCount",
+			"repository Note.count < use-case AddAndCount",
+			"repository Note.count < repository Note.addAndCount",
+		]);
 	});
 });

@@ -293,4 +293,41 @@ describe("otelTracer with a context manager", () => {
 			"use-case Work",
 		]);
 	});
+
+	test("a use case run by the event policy of a command nests in the command span", async () => {
+		const exporter = new InMemorySpanExporter();
+		const provider = new BasicTracerProvider({
+			spanProcessors: [new SimpleSpanProcessor(exporter)],
+		});
+		class Work extends useCaseOf({
+			name: "Work",
+			blueprint: blueprintOf(() => ({})),
+			response: blueprintOf(() => ({})),
+		}) {
+			override async execute() {
+				return {};
+			}
+		}
+		const Jobs = commandOf({
+			name: "Jobs",
+			useCases: { work: Work },
+			events: async () => {
+				await app.run(Work, {});
+			},
+		});
+		const app = applicationOf({
+			name: "jobs",
+			useCases: { Work },
+			commands: { Jobs },
+			trace: otelTracer(provider.getTracer("test")),
+		});
+		await app.commands.Jobs.run("work", {});
+		expect(tree(exporter.getFinishedSpans()).sort()).toEqual(
+			[
+				"command Jobs.work",
+				"use-case Work < command Jobs.work",
+				"use-case Work < command Jobs.work",
+			].sort(),
+		);
+	});
 });

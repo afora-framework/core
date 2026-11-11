@@ -172,6 +172,18 @@ const logSettings = new WeakMap<object, LogSettings | LogFactory>();
 /** The `trace` each application was declared with (or inherited), for `extends`. */
 const traceSettings = new WeakMap<object, ITracer>();
 
+/** What `settings` holds for the last of `extended` that has something there. */
+function inherited<Value>(
+	extended: readonly object[],
+	settings: WeakMap<object, Value>,
+): Value | undefined {
+	for (let index = extended.length - 1; index >= 0; index--) {
+		const value = settings.get(extended[index] as object);
+		if (value !== undefined) return value;
+	}
+	return undefined;
+}
+
 /** A provider of `providersOf` an application registers, by key. */
 interface NamedProvider {
 	readonly slot: ProviderSlot;
@@ -1476,11 +1488,7 @@ export function applicationOf<
 
 	// The log: its own, else the one of the last extended application with one.
 	const declaredLog: LogSettings | LogFactory | undefined =
-		settings.log ??
-		[...extended]
-			.reverse()
-			.map((other) => logSettings.get(other))
-			.find((log) => log !== undefined);
+		settings.log ?? inherited(extended, logSettings);
 	const log = declaredLog === undefined ? undefined : applicationLogger(name);
 	// A `log` of `logFrom` is made on start; until then nothing is written.
 	if (declaredLog !== undefined && !isLogFactory(declaredLog)) {
@@ -1490,10 +1498,7 @@ export function applicationOf<
 	// The tracer, the same way: its own, else the one of the last extended one.
 	const tracer: ITracer | undefined =
 		settings.trace === undefined
-			? [...extended]
-					.reverse()
-					.map((other) => traceSettings.get(other))
-					.find((found) => found !== undefined)
+			? inherited(extended, traceSettings)
 			: checkTracer(settings.trace);
 	const { publishers, origins } = publishersOf(
 		name,

@@ -32,11 +32,11 @@ A command span is a child of the span active when it runs, such as the server sp
 
 ## Spans and attributes
 
-| Span                            | When                                            | Attributes                                            |
-| ------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
-| `command <Command>.<operation>` | A command operation runs, with its transaction. | `afora.command` (`Name.operation`), `afora.operation` |
-| `use-case <UseCase>`            | A use case executes.                            | `afora.use_case`                                      |
-| `repository <Entity>.<method>`  | A repository method is called by a use case.    | `afora.repository`, `afora.method`, `afora.use_case`  |
+| Span                            | When                                                                                 | Attributes                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `command <Command>.<operation>` | A command operation runs, from the check of its context to its event policy (`run`). | `afora.command` (`Name.operation`), `afora.operation` |
+| `use-case <UseCase>`            | A use case executes, from the check of its dependencies.                             | `afora.use_case`                                      |
+| `repository <Entity>.<method>`  | A repository method is called by a use case, or by another method through `this`.    | `afora.repository`, `afora.method`, `afora.use_case`  |
 
 Each span ends with `afora.outcome`, `"ok"` or `"error"`. A failed span also has:
 
@@ -48,7 +48,9 @@ Each span ends with `afora.outcome`, `"ok"` or `"error"`. A failed span also has
 
 With `@afora/otel` its status is `ERROR`, with the exception name as the message; a span that succeeded keeps the status unset, as OpenTelemetry asks of libraries. Every span on the way up fails with the same attributes: the use case that threw, the use cases that ran it, the command.
 
-These are the points that [log](logging.md#what-afora-logs), on the same code paths: a repository called directly, outside a use case, makes no span, and the event policy of a command runs after its span ends.
+These are the points that [log](logging.md#what-afora-logs), on the same code paths: a repository called directly, outside a use case, makes no span. A span starts before the checks of its call, so an invalid context or environment of a command, or an invalid override of a use case, leaves a failed span. A repository method that calls another through `this` (a method of your own calling `this.create`) has the span of the inner call as a child of its own, even when calls run concurrently.
+
+The span of a command run with `run` covers its [event policy](commands.md#event-policies): a handler or a publisher that fails sets it to error, though the use case span stays ok. What the policy runs (an event handler calling a use case) nests in the command span when the tracer has a current span, as `@afora/otel` does with a context manager; without one it starts its own trace, since afora cannot hand the span through the handler. `execute`, which applies no policy, ends the span when the use case returns.
 
 ## No value in any span
 
@@ -70,7 +72,7 @@ tracer.spans.map((span) => [span.name, span.parent?.name, span.status]);
 // [["command Posts.publish", undefined, "ok"], ["use-case Publish", "command Posts.publish", "ok"], ...]
 ```
 
-Your own implements `startSpan(name, attributes, parent)`, which returns an `ITraceSpan` with `end(status, attributes)`; `parent` is the span afora started for the caller, `undefined` for a call that starts a trace. `withSpan(span, run)` is optional: it runs `run` with `span` as the current span of your tracing library. A tracer that throws breaks no call: afora goes on without the span. A `trace` that is not a tracer throws `InvalidTraceDeclaration` when the application is declared.
+Your own implements `startSpan(name, attributes, parent)`, which returns an `ITraceSpan` with `end(status, attributes)`; `parent` is the span afora started for the caller, `undefined` for a call that starts a trace. `withSpan(span, run)` is optional: it runs `run` with `span` as the current span of your tracing library. A tracer that throws, in `startSpan`, `end` or `withSpan`, breaks no call: afora goes on without the span, runs the call once, and what the call itself throws goes up unchanged. A `trace` that is not a tracer throws `InvalidTraceDeclaration` when the application is declared.
 
 Which tracer traces a call: the one of the application that bound the command or use case (`App.commands.X`, `App.useCases.X`, `app.run`); for a use case class run outside one, the started application's (`app.start()`); none when there is neither. A use case run by a command, or by another use case, is traced with its caller's.
 
@@ -95,4 +97,4 @@ Issue #65. **Context:** teams running an afora backend in production ask for tra
 
 **Options weighed:** making the core depend on `@opentelemetry/api` (rejected: a dependency for everyone, and the API's global state in the core); nesting only through the active OpenTelemetry context (rejected: needs a context manager, absent on Workers and in tests by default); a tracer made on start like `logFrom` (not needed: an OpenTelemetry tracer is a proxy that works before the SDK registers).
 
-**Consequences:** `ApplicationDescription` gains `trace`, the `afora.json` spec gains `"trace"`, and every HTTP sink gets tracing through `compileRoutes` and commands, with no change to the sinks. Event policies, events and steps inside a use case are not spans yet; they can be added at the same points later.
+**Consequences:** `ApplicationDescription` gains `trace`, the `afora.json` spec gains `"trace"`, and every HTTP sink gets tracing through `compileRoutes` and commands, with no change to the sinks. Event handlers and steps inside a use case are not spans of their own yet; they can be added at the same points later.
