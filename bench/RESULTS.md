@@ -30,61 +30,61 @@ Differences to keep in mind:
 
 | Contender                                                                           |  ops/s | ns/iter |   vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | ------: | -----------: |
-| TypeBox compiled (Check, then Errors on failure) (no transforms)                    | 27.16M |    36.8 |      fastest |
-| Valibot safeParse                                                                   |  5.18M |   193.1 |  5.2x slower |
-| afora blueprint.safeParse                                                           |  4.64M |   215.6 |  5.9x slower |
-| afora blueprint["~standard"].validate                                               |  4.48M |   223.2 |  6.1x slower |
-| afora Record.safeParse                                                              |  3.30M |   303.4 |  8.2x slower |
-| Zod 4 safeParse                                                                     |  3.28M |   305.2 |  8.3x slower |
-| afora Subclass.safeParse (class extends recordOf(...) {})                           |  3.24M |   309.0 |  8.4x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input)                    |  3.23M |   309.5 |  8.4x slower |
-| ArkType                                                                             | 570.6k |    1753 | 47.6x slower |
-| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 482.0k |    2074 | 56.3x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms)                    | 26.94M |    37.1 |      fastest |
+| Valibot safeParse                                                                   |  4.93M |   202.7 |  5.5x slower |
+| afora blueprint.safeParse                                                           |  4.51M |   221.8 |  6.0x slower |
+| afora blueprint["~standard"].validate                                               |  4.21M |   237.8 |  6.4x slower |
+| afora Record.safeParse                                                              |  3.16M |   316.5 |  8.5x slower |
+| afora Subclass.safeParse (class extends recordOf(...) {})                           |  3.14M |   318.6 |  8.6x slower |
+| Zod 4 safeParse                                                                     |  3.06M |   326.7 |  8.8x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input)                    |  3.03M |   329.6 |  8.9x slower |
+| ArkType                                                                             | 557.9k |    1793 | 48.3x slower |
+| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 474.8k |    2106 | 56.7x slower |
 
 ### Small flat object, invalid input (bun)
 
 | Contender                                                                           |  ops/s | ns/iter |   vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | ------: | -----------: |
-| Valibot safeParse                                                                   |  2.53M |   395.1 |      fastest |
-| afora blueprint.safeParse                                                           |  2.23M |   447.6 |  1.1x slower |
-| afora blueprint["~standard"].validate                                               |  2.19M |   457.3 |  1.2x slower |
-| Zod 4 safeParse                                                                     |  1.80M |   556.5 |  1.4x slower |
-| afora Record.safeParse                                                              |  1.44M |   693.8 |  1.8x slower |
-| afora Subclass.safeParse (class extends recordOf(...) {})                           |  1.37M |   730.6 |  1.8x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input)                    | 511.5k |    1955 |  4.9x slower |
-| TypeBox compiled (Check, then Errors on failure) (no transforms)                    | 445.3k |    2246 |  5.7x slower |
-| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 401.9k |    2488 |  6.3x slower |
-| ArkType                                                                             | 192.2k |    5203 | 13.2x slower |
+| Valibot safeParse                                                                   |  2.49M |   402.3 |      fastest |
+| afora blueprint.safeParse                                                           |  2.22M |   450.8 |  1.1x slower |
+| afora blueprint["~standard"].validate                                               |  2.05M |   486.8 |  1.2x slower |
+| Zod 4 safeParse                                                                     |  1.78M |   562.8 |  1.4x slower |
+| afora Record.safeParse                                                              |  1.39M |   721.5 |  1.8x slower |
+| afora Subclass.safeParse (class extends recordOf(...) {})                           |  1.28M |   782.1 |  1.9x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input)                    | 478.5k |    2090 |  5.2x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms)                    | 429.9k |    2326 |  5.8x slower |
+| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 396.6k |    2521 |  6.3x slower |
+| ArkType                                                                             | 187.1k |    5346 | 13.3x slower |
 
 ### Nested user (address, 5 tags max, 10 addresses), valid input (bun)
 
 | Contender                                                                           |  ops/s | ns/iter |   vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | ------: | -----------: |
-| TypeBox compiled (Check, then Errors on failure) (no transforms)                    |  5.26M |   190.3 |      fastest |
-| Valibot safeParse                                                                   | 573.4k |    1744 |  9.2x slower |
-| afora blueprint.safeParse                                                           | 433.5k |    2307 | 12.1x slower |
-| afora blueprint["~standard"].validate                                               | 430.0k |    2326 | 12.2x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input)                    | 414.4k |    2413 | 12.7x slower |
-| afora Subclass.safeParse (class extends recordOf(...) {})                           | 411.6k |    2429 | 12.8x slower |
-| Zod 4 safeParse                                                                     | 410.7k |    2435 | 12.8x slower |
-| afora Record.safeParse                                                              | 407.0k |    2457 | 12.9x slower |
-| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 231.2k |    4324 | 22.7x slower |
-| ArkType                                                                             |  67.2k |   14882 | 78.2x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms)                    |  5.28M |   189.3 |      fastest |
+| Valibot safeParse                                                                   | 572.8k |    1746 |  9.2x slower |
+| afora blueprint["~standard"].validate                                               | 427.6k |    2339 | 12.4x slower |
+| afora blueprint.safeParse                                                           | 426.0k |    2347 | 12.4x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input)                    | 409.0k |    2445 | 12.9x slower |
+| afora Subclass.safeParse (class extends recordOf(...) {})                           | 402.8k |    2483 | 13.1x slower |
+| Zod 4 safeParse                                                                     | 402.4k |    2485 | 13.1x slower |
+| afora Record.safeParse                                                              | 397.9k |    2513 | 13.3x slower |
+| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 221.8k |    4508 | 23.8x slower |
+| ArkType                                                                             |  66.4k |   15063 | 79.6x slower |
 
 ### Nested user (address, 5 tags max, 10 addresses), invalid input (bun)
 
 | Contender                                                                           |  ops/s | ns/iter |   vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | ------: | -----------: |
-| afora blueprint.safeParse                                                           | 516.0k |    1938 |      fastest |
-| afora blueprint["~standard"].validate                                               | 512.6k |    1951 |  1.0x slower |
-| afora Record.safeParse                                                              | 453.6k |    2205 |  1.1x slower |
-| afora Subclass.safeParse (class extends recordOf(...) {})                           | 444.5k |    2250 |  1.2x slower |
-| Valibot safeParse                                                                   | 443.3k |    2256 |  1.2x slower |
-| Zod 4 safeParse                                                                     | 339.3k |    2947 |  1.5x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input)                    | 262.8k |    3805 |  2.0x slower |
-| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 238.4k |    4195 |  2.2x slower |
-| TypeBox compiled (Check, then Errors on failure) (no transforms)                    |  79.5k |   12582 |  6.5x slower |
-| ArkType                                                                             |  36.2k |   27607 | 14.2x slower |
+| afora blueprint.safeParse                                                           | 510.9k |    1957 |      fastest |
+| afora blueprint["~standard"].validate                                               | 508.2k |    1968 |  1.0x slower |
+| afora Record.safeParse                                                              | 452.5k |    2210 |  1.1x slower |
+| Valibot safeParse                                                                   | 440.5k |    2270 |  1.2x slower |
+| afora Subclass.safeParse (class extends recordOf(...) {})                           | 440.4k |    2270 |  1.2x slower |
+| Zod 4 safeParse                                                                     | 333.8k |    2996 |  1.5x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input)                    | 258.4k |    3870 |  2.0x slower |
+| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 236.2k |    4234 |  2.2x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms)                    |  77.5k |   12909 |  6.6x slower |
+| ArkType                                                                             |  35.6k |   28116 | 14.4x slower |
 
 ## Results on Node
 
@@ -92,61 +92,61 @@ Differences to keep in mind:
 
 | Contender                                                                           |  ops/s | ns/iter |   vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | ------: | -----------: |
-| TypeBox compiled (Check, then Errors on failure) (no transforms)                    | 17.38M |    57.5 |      fastest |
-| afora blueprint.safeParse                                                           |  3.26M |   306.7 |  5.3x slower |
-| afora blueprint["~standard"].validate                                               |  3.26M |   307.1 |  5.3x slower |
-| Valibot safeParse                                                                   |  2.57M |   389.4 |  6.8x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input)                    |  1.90M |   525.4 |  9.1x slower |
-| Zod 4 safeParse                                                                     |  1.89M |   530.4 |  9.2x slower |
-| afora Record.safeParse                                                              |  1.78M |   560.4 |  9.7x slower |
-| afora Subclass.safeParse (class extends recordOf(...) {})                           |  1.70M |   587.5 | 10.2x slower |
-| ArkType                                                                             | 355.7k |    2811 | 48.9x slower |
-| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 210.6k |    4749 | 82.5x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms)                    | 17.45M |    57.3 |      fastest |
+| afora blueprint.safeParse                                                           |  3.24M |   308.3 |  5.4x slower |
+| afora blueprint["~standard"].validate                                               |  3.22M |   310.5 |  5.4x slower |
+| Valibot safeParse                                                                   |  2.53M |   394.8 |  6.9x slower |
+| Zod 4 safeParse                                                                     |  1.79M |   557.9 |  9.7x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input)                    |  1.78M |   563.3 |  9.8x slower |
+| afora Record.safeParse                                                              |  1.71M |   584.0 | 10.2x slower |
+| afora Subclass.safeParse (class extends recordOf(...) {})                           |  1.56M |   643.0 | 11.2x slower |
+| ArkType                                                                             | 330.4k |    3027 | 52.8x slower |
+| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 206.3k |    4848 | 84.6x slower |
 
 ### Small flat object, invalid input (node)
 
 | Contender                                                                           |  ops/s | ns/iter |   vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | ------: | -----------: |
-| afora blueprint.safeParse                                                           |  1.78M |   561.8 |      fastest |
-| afora blueprint["~standard"].validate                                               |  1.77M |   563.4 |  1.0x slower |
-| Valibot safeParse                                                                   | 945.6k |    1057 |  1.9x slower |
-| afora Record.safeParse                                                              | 885.9k |    1129 |  2.0x slower |
-| afora Subclass.safeParse (class extends recordOf(...) {})                           | 863.6k |    1158 |  2.1x slower |
-| Zod 4 safeParse                                                                     | 795.4k |    1257 |  2.2x slower |
-| TypeBox compiled (Check, then Errors on failure) (no transforms)                    | 289.7k |    3452 |  6.1x slower |
-| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 182.3k |    5485 |  9.8x slower |
-| ArkType                                                                             |  76.6k |   13051 | 23.2x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input)                    |  75.0k |   13329 | 23.7x slower |
+| afora blueprint.safeParse                                                           |  1.76M |   567.0 |      fastest |
+| afora blueprint["~standard"].validate                                               |  1.76M |   569.0 |  1.0x slower |
+| Valibot safeParse                                                                   | 920.8k |    1086 |  1.9x slower |
+| afora Record.safeParse                                                              | 878.0k |    1139 |  2.0x slower |
+| afora Subclass.safeParse (class extends recordOf(...) {})                           | 855.0k |    1170 |  2.1x slower |
+| Zod 4 safeParse                                                                     | 788.1k |    1269 |  2.2x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms)                    | 235.5k |    4246 |  7.5x slower |
+| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 179.8k |    5562 |  9.8x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input)                    |  74.7k |   13382 | 23.6x slower |
+| ArkType                                                                             |  74.1k |   13486 | 23.8x slower |
 
 ### Nested user (address, 5 tags max, 10 addresses), valid input (node)
 
-| Contender                                                                           |  ops/s | ns/iter |   vs fastest |
-| ----------------------------------------------------------------------------------- | -----: | ------: | -----------: |
-| TypeBox compiled (Check, then Errors on failure) (no transforms)                    |  3.53M |   283.4 |      fastest |
-| afora blueprint.safeParse                                                           | 430.5k |    2323 |  8.2x slower |
-| afora blueprint["~standard"].validate                                               | 429.9k |    2326 |  8.2x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input)                    | 361.0k |    2770 |  9.8x slower |
-| afora Record.safeParse                                                              | 357.5k |    2797 |  9.9x slower |
-| afora Subclass.safeParse (class extends recordOf(...) {})                           | 354.3k |    2823 | 10.0x slower |
-| Valibot safeParse                                                                   | 302.6k |    3305 | 11.7x slower |
-| Zod 4 safeParse                                                                     | 285.7k |    3500 | 12.4x slower |
-| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 141.9k |    7047 | 24.9x slower |
-| ArkType                                                                             |  35.6k |   28104 | 99.2x slower |
+| Contender                                                                           |  ops/s | ns/iter |    vs fastest |
+| ----------------------------------------------------------------------------------- | -----: | ------: | ------------: |
+| TypeBox compiled (Check, then Errors on failure) (no transforms)                    |  3.51M |   284.8 |       fastest |
+| afora blueprint.safeParse                                                           | 412.7k |    2423 |   8.5x slower |
+| afora blueprint["~standard"].validate                                               | 410.1k |    2439 |   8.6x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input)                    | 344.0k |    2907 |  10.2x slower |
+| afora Record.safeParse                                                              | 335.9k |    2977 |  10.5x slower |
+| afora Subclass.safeParse (class extends recordOf(...) {})                           | 327.6k |    3053 |  10.7x slower |
+| Valibot safeParse                                                                   | 297.3k |    3363 |  11.8x slower |
+| Zod 4 safeParse                                                                     | 282.8k |    3536 |  12.4x slower |
+| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 135.6k |    7376 |  25.9x slower |
+| ArkType                                                                             |  33.9k |   29485 | 103.5x slower |
 
 ### Nested user (address, 5 tags max, 10 addresses), invalid input (node)
 
 | Contender                                                                           |  ops/s | ns/iter |   vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | ------: | -----------: |
-| afora blueprint["~standard"].validate                                               | 355.0k |    2817 |      fastest |
-| afora blueprint.safeParse                                                           | 354.1k |    2824 |  1.0x slower |
-| afora Record.safeParse                                                              | 316.8k |    3157 |  1.1x slower |
-| afora Subclass.safeParse (class extends recordOf(...) {})                           | 313.4k |    3190 |  1.1x slower |
-| Zod 4 safeParse                                                                     | 214.4k |    4664 |  1.7x slower |
-| Valibot safeParse                                                                   | 196.0k |    5102 |  1.8x slower |
-| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 129.1k |    7748 |  2.8x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input)                    |  57.6k |   17369 |  6.2x slower |
-| TypeBox compiled (Check, then Errors on failure) (no transforms)                    |  47.2k |   21184 |  7.5x slower |
-| ArkType                                                                             |  17.1k |   58554 | 20.8x slower |
+| afora blueprint.safeParse                                                           | 353.0k |    2833 |      fastest |
+| afora blueprint["~standard"].validate                                               | 351.8k |    2842 |  1.0x slower |
+| afora Record.safeParse                                                              | 314.0k |    3185 |  1.1x slower |
+| afora Subclass.safeParse (class extends recordOf(...) {})                           | 311.9k |    3206 |  1.1x slower |
+| Zod 4 safeParse                                                                     | 218.9k |    4567 |  1.6x slower |
+| Valibot safeParse                                                                   | 194.0k |    5154 |  1.8x slower |
+| afora Entity.safeParse (class extends entityOf(...) {}, makes its id and createdAt) | 127.6k |    7837 |  2.8x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input)                    |  58.2k |   17182 |  6.1x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms)                    |  36.4k |   27465 |  9.7x slower |
+| ArkType                                                                             |  16.7k |   59704 | 21.1x slower |
 
 ## Reading the numbers
 
