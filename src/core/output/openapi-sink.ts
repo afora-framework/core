@@ -580,7 +580,7 @@ function collectRecords(
 			for (const variant of Object.values(
 				field.variants as BlueprintVariants,
 			)) {
-				collectRecords(variant.properties, found);
+				visit(variant);
 			}
 			return;
 		}

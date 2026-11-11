@@ -5,7 +5,11 @@ import type {
 	BlueprintField,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
-import { isBlueprintVariant, variantOfValue } from "../blueprint/variant";
+import {
+	isBlueprintVariant,
+	variantNameOf,
+	variantOfValue,
+} from "../blueprint/variant";
 import { isMarked } from "./marks";
 
 /** What a masked value becomes, whatever its length, so none is told apart. */
@@ -44,6 +48,17 @@ function maskField(
 	sensitive: boolean,
 ): unknown {
 	if (value === undefined) return value;
+	if (isBlueprintVariant(field)) {
+		// A record of one of its classes gives its `toJSON` with the key first.
+		const name = variantNameOf(field, value);
+		if (name !== undefined) {
+			const json = Object.freeze({
+				[field.key]: name,
+				...(value as { toJSON(): object }).toJSON(),
+			});
+			return sensitive ? maskAll(json) : json;
+		}
+	}
 	if (recordFieldOf(field)) {
 		const json = (value as { toJSON(): unknown }).toJSON();
 		return sensitive ? maskAll(json) : json;

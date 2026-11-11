@@ -7,6 +7,7 @@ import type {
 	AnyBlueprintVariant,
 	AnyRecordClass,
 	BlueprintField,
+	BlueprintVariants,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
 import { isBlueprintVariant } from "../blueprint/variant";
@@ -93,8 +94,11 @@ interface Step {
 	readonly record: AnyRecordClass | undefined;
 	readonly optionalRecord: boolean;
 	readonly variant: AnyBlueprintVariant | undefined;
-	/** The collection of each variant of `variant`, by its name; made on its first value. */
-	variants: Map<string, Collection> | undefined;
+	/**
+	 * Each variant of `variant`, by its name: the collection of a blueprint, or
+	 * a record class. Made on its first value.
+	 */
+	variants: Map<string, Collection | AnyRecordClass> | undefined;
 }
 
 /** The fields of a collection of properties, in order: the name and the step of each. */
@@ -440,20 +444,26 @@ function fieldAt(step: Step, value: unknown, run: Run, depth: number): unknown {
 			let { variants } = step;
 			if (variants === undefined) {
 				variants = new Map();
-				const blueprints: Record<string, AnyBlueprint> = variant.variants;
-				for (const tag of Object.keys(blueprints)) {
+				const declared: BlueprintVariants = variant.variants;
+				for (const tag of Object.keys(declared)) {
+					const one = declared[tag] as BlueprintVariants[string];
 					variants.set(
 						tag,
-						collectionOf((blueprints[tag] as AnyBlueprint).properties),
+						isBlueprint(one) ? collectionOf(one.properties) : one,
 					);
 				}
 				step.variants = variants;
 			}
+			// A record of one of its classes is kept, as a record field keeps one.
+			if (!isPlainObject(value)) {
+				for (const one of variants.values()) {
+					if (typeof one === "function" && value instanceof one) return value;
+				}
+			}
 			const { key } = variant;
 			const tag = (value as Record<string, unknown>)[key];
-			const collection =
-				typeof tag === "string" ? variants.get(tag) : undefined;
-			if (collection === undefined) {
+			const named = typeof tag === "string" ? variants.get(tag) : undefined;
+			if (named === undefined) {
 				return reject(
 					run,
 					"invalid_value",
@@ -461,7 +471,20 @@ function fieldAt(step: Step, value: unknown, run: Run, depth: number): unknown {
 					[...pathOf(run, depth), key],
 				);
 			}
-			return collectionAt(collection, value, run, depth, undefined, key);
+			if (typeof named !== "function") {
+				return collectionAt(named, value, run, depth, undefined, key);
+			}
+
+			// A record class builds its record from the value without the key.
+			const { [key]: _name, ...input } = value as Record<string, unknown>;
+			const result = named.safeParse(input);
+			if (!result.issues) return result.value;
+			const path = pathOf(run, depth);
+			run.issues ??= [];
+			for (const issue of result.issues) {
+				run.issues.push(movedIssue(issue, [...path, ...issue.path]));
+			}
+			return REJECTED;
 		}
 
 		case RECORD: {

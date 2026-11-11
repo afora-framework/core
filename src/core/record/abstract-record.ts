@@ -7,7 +7,11 @@ import type {
 	IBlueprint,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
-import { isBlueprintVariant, variantOfValue } from "../blueprint/variant";
+import {
+	isBlueprintVariant,
+	variantNameOf,
+	variantOfValue,
+} from "../blueprint/variant";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { Exception } from "../exception/exception";
 import { collectionParserOf, parseField } from "../parse/parse";
@@ -368,6 +372,19 @@ export function recordFieldDataOf(
 	options?: RecordDataOptions,
 ): unknown {
 	if (value === undefined || value === null) return value;
+	if (isBlueprintVariant(field) && value instanceof AbstractRecord) {
+		// A record of one of its classes is stored with the key, which says
+		// which class builds it again; a reference, as `{ [key], id }`.
+		const name = variantNameOf(field, value);
+		if (name !== undefined) {
+			const reference = options?.reference?.(value);
+			return Object.freeze(
+				reference === undefined
+					? { [field.key]: name, ...recordDataOf(value, options) }
+					: { [field.key]: name, id: reference },
+			);
+		}
+	}
 	if (value instanceof AbstractRecord) {
 		return options?.reference?.(value) ?? recordDataOf(value, options);
 	}
