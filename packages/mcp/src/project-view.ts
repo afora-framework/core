@@ -390,3 +390,120 @@ export function projectViewOfDescription(description: unknown): ProjectView {
 		outputs,
 	});
 }
+
+/** A value as text that does not depend on the order of its keys, nor on the case of a method. */
+function canonical(value: unknown): string {
+	if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+	if (isObject(value)) {
+		return `{${Object.keys(value)
+			.sort()
+			.map((key) => {
+				const item = value[key];
+				return `${JSON.stringify(key)}:${
+					key === "method" && typeof item === "string"
+						? JSON.stringify(item.toLowerCase())
+						: canonical(item)
+				}`;
+			})
+			.join(",")}}`;
+	}
+	return JSON.stringify(value) ?? "undefined";
+}
+
+const shown = (value: unknown): string =>
+	value === undefined ? "none" : JSON.stringify(value);
+
+/**
+ * Where the application and its `afora.json` say different things, one line
+ * each; empty when they agree. Compared: which entities, repositories (and
+ * their actions), operations and outputs exist, how each operation is
+ * implemented, the route and the access it declares, and the route each
+ * output serves it at. Fields are not compared: a plugin adds keys the spec
+ * does not list. What a spec inherits with `extends` is in the application
+ * only, so with `inherits` those are not reported as missing from the file.
+ */
+export function projectDifferences(
+	application: ProjectView,
+	file: ProjectView,
+	inherits = false,
+): string[] {
+	const differences: string[] = [];
+	const names = <Item extends { readonly name: string }>(
+		kind: string,
+		inApp: readonly Item[],
+		inFile: readonly Item[],
+	): Item[][] => {
+		const fileNames = new Map(inFile.map((item) => [item.name, item]));
+		const appNames = new Set(inApp.map((item) => item.name));
+		const both: Item[][] = [];
+		for (const item of inApp) {
+			const other = fileNames.get(item.name);
+			if (other) both.push([item, other]);
+			else if (!inherits) {
+				differences.push(
+					`The ${kind} "${item.name}" is in the application and not in afora.json.`,
+				);
+			}
+		}
+		for (const item of inFile) {
+			if (!appNames.has(item.name)) {
+				differences.push(
+					`The ${kind} "${item.name}" is in afora.json and not in the application.`,
+				);
+			}
+		}
+		return both;
+	};
+	names("entity", application.entities, file.entities);
+	for (const [inApp, inFile] of names(
+		"repository",
+		application.repositories,
+		file.repositories,
+	)) {
+		const a = [...(inApp?.actions ?? [])].sort().join(", ");
+		const b = [...(inFile?.actions ?? [])].sort().join(", ");
+		if (a !== b) {
+			differences.push(
+				`The repository "${inApp?.name}" has the actions [${a}] in the application and [${b}] in afora.json.`,
+			);
+		}
+	}
+	const operations = (view: ProjectView) =>
+		view.operations.map((operation) => ({ ...operation, name: operation.id }));
+	for (const [inApp, inFile] of names(
+		"operation",
+		operations(application),
+		operations(file),
+	)) {
+		if (!inApp || !inFile) continue;
+		for (const key of ["implementation", "route", "access"] as const) {
+			if (canonical(inApp[key]) !== canonical(inFile[key])) {
+				differences.push(
+					`The ${key} of "${inApp.id}" is ${shown(inApp[key])} in the application and ${shown(inFile[key])} in afora.json.`,
+				);
+			}
+		}
+	}
+	for (const [inApp, inFile] of names(
+		"output",
+		application.outputs,
+		file.outputs,
+	)) {
+		if (!inApp || !inFile) continue;
+		const served = new Map(
+			inFile.routes.map((route) => [route.operation, route]),
+		);
+		for (const route of inApp.routes) {
+			const other = served.get(route.operation);
+			if (!other) continue; // reported as an operation, or as inherited
+			const a = `${route.method.toUpperCase()} ${route.path} (${route.status})`;
+			const b = `${other.method.toUpperCase()} ${other.path} (${other.status})`;
+			if (a !== b) {
+				differences.push(
+					`The output "${inApp.name}" serves "${route.operation}" at ${a} in the application and at ${b} in afora.json.`,
+				);
+			}
+		}
+	}
+	return differences;
+}

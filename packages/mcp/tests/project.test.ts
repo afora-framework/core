@@ -298,6 +298,127 @@ describe("afora_project", () => {
 		expect(other.isError).toBe(true);
 	});
 
+	test("with both, drift says where the application and afora.json differ", async () => {
+		const { dir, client } = await setup(
+			{ "src/app.ts": APP_TS },
+			{ app: "src/app.ts#App" },
+		);
+		const spec = {
+			version: 1,
+			name: "blog",
+			entities: {
+				Post: { fields: { slug: "slug", title: "text" }, unique: ["slug"] },
+			},
+			repositories: {
+				Posts: { entity: "Post", actions: ["create", "findBySlug"] },
+			},
+			useCases: {
+				GetPost: {
+					route: { method: "GET", path: "/posts/{slug}" },
+					input: { fields: { slug: "slug" } },
+					response: { fields: { post: "Post" } },
+					dependencies: { posts: "Posts" },
+					implementation: { import: "../app#GetPost" },
+				},
+				WritePost: {
+					route: { method: "post", path: "/posts", status: 201 },
+					access: { context: { userId: "subject" }, scopes: ["posts:write"] },
+					input: { fields: { slug: "slug", title: "text" } },
+					response: { fields: { post: "Post" } },
+					context: { fields: { userId: "string" } },
+					dependencies: { posts: "Posts" },
+					implementation: { import: "../app#WritePost" },
+				},
+				Ping: {
+					input: { fields: {} },
+					response: { fields: { ok: "boolean" } },
+					implementation: { import: "../app#Ping" },
+				},
+			},
+			commands: {
+				Blog: { useCases: { getPost: "GetPost", writePost: "WritePost" } },
+				Health: { useCases: { ping: "Ping" } },
+			},
+			outputs: {
+				Docs: {
+					commands: ["Blog"],
+					pipe: [
+						{
+							sink: "openapi",
+							options: {
+								info: { title: "Blog", version: "1.0.0" },
+								basePath: "/api",
+								route: { "Blog.getPost": { path: "/articles/{slug}" } },
+							},
+						},
+					],
+				},
+			},
+		};
+		const write = (value: unknown) =>
+			writeFile(join(dir, "afora.json"), JSON.stringify(value));
+
+		await write(spec);
+		const same = await client.call("afora_project");
+		expect(same.data.source).toBe("app");
+		expect(same.data.drift).toEqual({
+			between: ["src/app.ts#App", "afora.json"],
+			inSync: true,
+			differences: [],
+		});
+
+		// The spec, fallen behind the code in six ways.
+		const behind = JSON.parse(JSON.stringify(spec));
+		behind.useCases.WritePost.access = { scopes: ["posts:admin"] };
+		behind.useCases.GetPost.route = { method: "get", path: "/p/{slug}" };
+		behind.useCases.Ping.implementation = {
+			steps: [{ return: { ok: true } }],
+		};
+		behind.repositories.Posts.actions = ["create"];
+		behind.entities.Tag = { fields: { name: "text" } };
+		delete behind.commands.Health;
+		behind.outputs.Docs.pipe[0].options.route = {};
+		await write(behind);
+		const { data } = await client.call("afora_project", { source: "file" });
+		expect(data.source).toBe("file");
+		expect(data.drift.inSync).toBe(false);
+		expect(data.drift.differences).toEqual([
+			'The entity "Tag" is in afora.json and not in the application.',
+			'The repository "Posts" has the actions [create, findBySlug] in the application and [create] in afora.json.',
+			'The operation "Health.ping" is in the application and not in afora.json.',
+			'The route of "Blog.getPost" is {"method":"get","path":"/posts/{slug}"} in the application and {"method":"get","path":"/p/{slug}"} in afora.json.',
+			'The access of "Blog.writePost" is {"scopes":["posts:write"],"context":{"userId":"subject"}} in the application and {"scopes":["posts:admin"]} in afora.json.',
+			'The output "Docs" serves "Blog.getPost" at GET /api/articles/{slug} (200) in the application and at GET /api/p/{slug} (200) in afora.json.',
+		]);
+
+		const skipped = await client.call("afora_project", { compare: false });
+		expect(skipped.data).not.toHaveProperty("drift");
+	});
+
+	test("drift is left out with only one of them, and an application that fails does not hide the file", async () => {
+		const only = await setup(
+			{ "src/app.ts": APP_TS },
+			{ app: "src/app.ts#App" },
+		);
+		expect((await only.client.call("afora_project")).data).not.toHaveProperty(
+			"drift",
+		);
+		const broken = await setup(
+			{ "src/app.ts": "export const App = 1;" },
+			{ app: "src/app.ts#App" },
+		);
+		await writeFile(
+			join(broken.dir, "afora.json"),
+			JSON.stringify({ version: 1, name: "ok" }),
+		);
+		const { isError, data } = await broken.client.call("afora_project", {
+			source: "file",
+		});
+		expect(isError).toBe(false);
+		expect(data.name).toBe("ok");
+		expect(data.drift.error).toContain("could not be read");
+	});
+
 	test("without an application, source app says so", async () => {
 		const { client } = await setup();
 		const result = await client.call("afora_project", { source: "app" });

@@ -257,6 +257,7 @@ A project may have no afora.json at all: its declarations are TypeScript. The se
 \`--app src/app.ts#App\` (or with \`app\` given to the tool):
 
 - \`afora_project\` reads the running application and shows its entities, operations, routes and access. It needs no mapping.
+- When the project has an afora.json too, \`afora_project\` adds \`drift\`: where the code and the spec differ. Read it before generating: \`afora_generate\` writes what the spec says, so a spec that is behind the code would take the code back.
 - To add to such a project, write TypeScript, in its style, not a spec. A use case with its route and access:
 
 \`\`\`ts

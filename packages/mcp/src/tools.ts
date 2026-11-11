@@ -12,7 +12,11 @@ import {
 } from "@afora/codegen";
 import { type TSchema, Type } from "typebox";
 import { describeApp, extractFromApp, ToolError } from "./extract";
-import { projectViewOfDescription, projectViewOfSpec } from "./project-view";
+import {
+	projectDifferences,
+	projectViewOfDescription,
+	projectViewOfSpec,
+} from "./project-view";
 import {
 	codegenOptionsOf,
 	type Project,
@@ -206,7 +210,7 @@ export const tools: readonly ToolDefinition[] = [
 	{
 		name: "afora_project",
 		description:
-			"The project as a map, without writing anything: its entities and repositories, every operation (command, use case, how it is implemented: steps, code or a standard use case, its declared route and access), and each output with the route every operation is served at (method, path, status, and whether the sink, the use case or the default decided it) and who may call it (public, open, authenticated, scopes, owner). `notes` point at what deserves a look: operations left open beside protected ones, operations that will answer 401 for lack of an authenticator, commands no output serves. Read from the running application when the server was started with --app or `app` is given (this imports the module in a Bun subprocess, and works on code written by hand, with no afora.json); from afora.json otherwise. `source` chooses: `file` reads afora.json even when there is an application, `app` the application. Call it before adding a use case or a route, to see what exists and which paths are taken.",
+			"The project as a map, without writing anything: its entities and repositories, every operation (command, use case, how it is implemented: steps, code or a standard use case, its declared route and access), and each output with the route every operation is served at (method, path, status, and whether the sink, the use case or the default decided it) and who may call it (public, open, authenticated, scopes, owner). `notes` point at what deserves a look: operations left open beside protected ones, operations that will answer 401 for lack of an authenticator, commands no output serves. Read from the running application when the server was started with --app or `app` is given (this imports the module in a Bun subprocess, and works on code written by hand, with no afora.json); from afora.json otherwise. `source` chooses: `file` reads afora.json even when there is an application, `app` the application. When the project has both, the result has `drift`: where the application and afora.json say different things (declarations in only one of them, an operation implemented, routed or protected differently, another path in an output), so a spec that fell behind the code, or code that was not regenerated, is seen at once; `compare: false` skips it (and does not import the application when reading the file). Call it before adding a use case or a route, to see what exists and which paths are taken.",
 		inputSchema: json(
 			Type.Object(
 				{
@@ -214,6 +218,12 @@ export const tools: readonly ToolDefinition[] = [
 						Type.String({
 							description:
 								'An application to read, as a path inside the project and an export name: "src/app.ts#App". Defaults to the --app the server was started with, else afora.json.',
+						}),
+					),
+					compare: Type.Optional(
+						Type.Boolean({
+							description:
+								"Compare the application with afora.json when the project has both, and report the differences in `drift`. Default true.",
 						}),
 					),
 					source: Type.Optional(
@@ -243,14 +253,41 @@ export const tools: readonly ToolDefinition[] = [
 					'No application is known. Pass `app` ("src/app.ts#App") or start the server with --app.',
 				);
 			}
-			if (app && source !== "file") {
-				return {
-					source: "app",
-					app,
-					...projectViewOfDescription(await describeApp(project.root, app)),
-				};
-			}
 			const spec = await readSpec(project);
+			const fromFile = spec ? projectViewOfSpec(spec) : undefined;
+			const inherits = (spec?.extends?.length ?? 0) > 0;
+			/** The differences between the two, when the project has both and they can be read. */
+			const driftOf = async (
+				application?: ReturnType<typeof projectViewOfDescription>,
+			) => {
+				if (args.compare === false || !app || !fromFile) return {};
+				try {
+					const fromApp =
+						application ??
+						projectViewOfDescription(await describeApp(project.root, app));
+					const differences = projectDifferences(fromApp, fromFile, inherits);
+					return {
+						drift: {
+							between: [app, "afora.json"],
+							inSync: differences.length === 0,
+							differences,
+						},
+					};
+				} catch (error) {
+					return {
+						drift: {
+							between: [app, "afora.json"],
+							error: `The application could not be read: ${error instanceof Error ? error.message : String(error)}`,
+						},
+					};
+				}
+			};
+			if (app && source !== "file") {
+				const view = projectViewOfDescription(
+					await describeApp(project.root, app),
+				);
+				return { source: "app", app, ...view, ...(await driftOf(view)) };
+			}
 			if (!spec) {
 				throw new ToolError(
 					source === "file"
@@ -258,7 +295,11 @@ export const tools: readonly ToolDefinition[] = [
 						: 'There is no afora.json and no application was given. Pass `app` ("src/app.ts#App"), start the server with --app, or create a spec with afora_spec_upsert.',
 				);
 			}
-			return { source: "file", ...projectViewOfSpec(spec) };
+			return {
+				source: "file",
+				...(fromFile as NonNullable<typeof fromFile>),
+				...(await driftOf()),
+			};
 		},
 	},
 	{

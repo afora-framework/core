@@ -1,6 +1,7 @@
 export { GUIDE } from "./guide";
 export {
 	type ProjectView,
+	projectDifferences,
 	projectViewOfDescription,
 	projectViewOfSpec,
 	type RouteView,
