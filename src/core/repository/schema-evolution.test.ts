@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
+	diffSchemas,
+	type RepositoryContext,
+	type RepositoryData,
+	SCHEMA_VERSION_KEY,
+	schemaLockOf,
+} from "../../adapters";
+import {
 	applicationOf,
 	blueprintOf,
-	diffSchemas,
 	entityOf,
 	InvalidEntitySchemaVersion,
 	InvalidRepositoryData,
@@ -10,13 +16,9 @@ import {
 	inMemoryProvider,
 	listOf,
 	providersOf,
-	type RepositoryContext,
-	type RepositoryData,
 	ReservedEntityKey,
 	repositoryOf,
-	SCHEMA_VERSION_KEY,
 	SchemaLockMismatch,
-	schemaLockOf,
 } from "../../index";
 import type { Exception } from "../exception/exception";
 

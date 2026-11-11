@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import * as core from "@afora/core";
+import { Std, StdRecordPlugins } from "@afora/core";
 import {
 	ENTITY_IDENTITY_KEYS,
 	RESERVED_ENTITY_KEYS,
 	RESERVED_RECORD_KEYS,
-	Std,
-	StdRecordPlugins,
-} from "@afora/core";
+} from "@afora/core/adapters";
 import { Value } from "typebox/value";
 import { catalog, specSchema } from "../src";
 import {

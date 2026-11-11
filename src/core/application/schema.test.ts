@@ -1,15 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
-	type AnyBlueprint,
-	applicationOf,
-	blueprintOf,
 	diffSchemas,
-	type EntityStorageOptions,
-	entityOf,
-	recordOf,
 	type SchemaChange,
 	schemaLockOf,
 	schemaLockProblemsOf,
+} from "../../adapters";
+import {
+	type AnyBlueprint,
+	applicationOf,
+	blueprintOf,
+	type EntityStorageOptions,
+	entityOf,
+	recordOf,
 } from "../../index";
 
 /** The lock of an application holding one entity named `name`. */

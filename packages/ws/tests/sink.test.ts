@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
-	InvalidOutputStage,
-	outputOf,
-	StdStages,
-	stageDescriptionOf,
-} from "@afora/core";
+import { InvalidOutputStage, outputOf, StdStages } from "@afora/core";
+import { stageDescriptionOf } from "@afora/core/experimental";
 import { stages, type WsReply, WsStages, websocket, wsHub } from "../src/index";
 import { fakeSocket, realtime } from "./fixture";
 

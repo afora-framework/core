@@ -33,6 +33,7 @@
 		"tests/types-compat",
 		"examples/interop",
 		"examples/blog",
+		"examples/agent-built",
 		"bench",
 		"packages"
 	]

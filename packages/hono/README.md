@@ -67,7 +67,7 @@ Invalid options throw `InvalidOutputStage` when the stage is made, and unknown o
 
 ## Behavior
 
-- **Routes.** `POST {basePath}/{kebab(command)}/{kebab(operation)}` (`/users/change-password`); `route` changes the method, path and status. It is the routing of the `openapi` sink (`operationRoutes` in the core), so the served routes and the document agree.
+- **Routes.** `POST {basePath}/{kebab(command)}/{kebab(operation)}` (`/users/change-password`); `route` changes the method, path and status. It is the routing of the `openapi` sink (`operationRoutes` of `@afora/core/adapters`), so the served routes and the document agree.
 - **Input.** `post`, `put` and `patch` read a JSON body (an empty body is `{}`; invalid JSON is a 400 `InvalidRequestBody` problem). `get` and `delete` read the query string, converting a value to a number or boolean when the input field takes one rather than a string; anything else is kept for the blueprint to reject. A `{name}` segment of the path fills the input key `name`, decoded and converted the same way, and wins over a `name` in the body or the query. The operation validates the input: a 400 problem with `issues` (`path`, `code`, `message`, no values).
 - **Context.** For an operation whose command or use case declares a `context`, each key listed in `context.headers` is read from its header, and each key in `context.variables` from the variable a middleware set (`c.get(name)`); a missing one leaves the key out (so an optional key is `undefined`, a required one a 400 problem). Header values are converted like query values; variables are passed as they are (objects too), and the `context` blueprint validates both. A key cannot come from both.
 - **Success.** The `route` status (`200` by default) with `outputValueOf(response)`: records go through `toJSON`, so sensitive values (a `Password`) are `"********"`. A `204` has no body. The `responses` headers of the operation are added.
@@ -246,7 +246,7 @@ The context only reaches `invoke` for operations that declare one, so the key (`
 
 ## Catalog
 
-`HonoStages` is `stageCatalogOf(hono)`, and `stages` are the entries codegen reads to resolve `{ "sink": "hono" }` in an `afora.json`:
+`HonoStages` is `stageCatalogOf(hono)` (from `@afora/core/adapters`), and `stages` are the entries codegen reads to resolve `{ "sink": "hono" }` in an `afora.json`:
 
 ```ts
 import { stages } from "@afora/hono";

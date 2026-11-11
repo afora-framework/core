@@ -3,8 +3,8 @@ import type {
 	IRepositoryProvider,
 	RepositoryContext,
 	RepositoryData,
-	RepositoryQuery,
-} from "../index";
+} from "../adapters";
+import type { RepositoryQuery } from "../index";
 import {
 	inMemoryProvider,
 	RepositoryEntityNotFound,

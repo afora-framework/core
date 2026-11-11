@@ -1,17 +1,19 @@
 import {
+	type IRepositoryProvider,
+	type ProviderQuery,
+	type RepositoryContext,
+	type RepositoryData,
+	SCHEMA_VERSION_KEY,
+} from "../adapters";
+import {
 	applicationOf,
 	blueprintOf,
 	entityOf,
-	type IRepositoryProvider,
-	type ProviderQuery,
 	RepositoryConcurrencyConflict,
-	type RepositoryContext,
-	type RepositoryData,
 	RepositoryEntityNotFound,
 	type RepositoryQuery,
 	RepositoryUniqueViolation,
 	repositoryOf,
-	SCHEMA_VERSION_KEY,
 } from "../index";
 
 /** The parts of a test runner the kit uses; `bun:test`, vitest and jest fit. */

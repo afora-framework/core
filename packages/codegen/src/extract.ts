@@ -1,13 +1,12 @@
-import {
-	type AnyApplication,
-	type ApplicationDescription,
-	type FieldDescription,
-	type PropertyDescription,
-	type PropertyReference,
-	type ProviderDescription,
-	type ProviderReference,
-	Std,
-} from "@afora/core";
+import { type AnyApplication, Std } from "@afora/core";
+import type {
+	ApplicationDescription,
+	FieldDescription,
+	PropertyDescription,
+	PropertyReference,
+	ProviderDescription,
+	ProviderReference,
+} from "@afora/core/adapters";
 import { genericUseCase, stdProperty } from "./catalog";
 import type { Field } from "./model";
 import { canonicalField, compactSpec } from "./normalize";

@@ -4,9 +4,9 @@ import { type IPropertyInput, PropertyInput } from "../../core/property/input";
 import { propertyOf } from "../../core/property/property";
 import { currentHasher, verifySyncWithCurrent } from "../runtime";
 
-export const PASSWORD_MIN_LENGTH = 7;
+const PASSWORD_MIN_LENGTH = 7;
 export const PASSWORD_MAX_LENGTH = 128;
-export const PASSWORD_SPECIAL_CHARACTERS = "!@#$%^&*()-_=+[]{}|\\;:'\",.<>/?`~";
+const PASSWORD_SPECIAL_CHARACTERS = "!@#$%^&*()-_=+[]{}|\\;:'\",.<>/?`~";
 
 const ARGON2_HASH =
 	"^\\$argon2(id|i|d)\\$v=\\d+\\$m=\\d+,t=\\d+,p=\\d+\\$[A-Za-z0-9+/]+\\$[A-Za-z0-9+/]+$";

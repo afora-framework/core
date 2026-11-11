@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type SpecData, Validator } from "@seriousme/openapi-schema-validator";
+import { PROBLEM_MEDIA_TYPE } from "../../adapters";
 import {
 	blueprintOf,
 	commandOf,
@@ -10,7 +11,6 @@ import {
 	listOf,
 	openapi,
 	outputOf,
-	PROBLEM_MEDIA_TYPE,
 	StdStages,
 	useCaseOf,
 } from "../../index";

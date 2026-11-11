@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
+import type { IRepositoryProvider, RepositoryContext } from "../../adapters";
 import {
 	blueprintOf,
 	type EntityNonUniqueKeyOf,
@@ -13,12 +14,9 @@ import {
 	InvalidRepositoryData,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryEntity,
-	type IRepositoryProvider,
 	inMemoryProvider,
-	isRepository,
 	listOf,
 	optionalOf,
-	type RepositoryContext,
 	RepositoryEntityNotFound,
 	RepositoryOf,
 	RepositoryUniqueViolation,
@@ -26,6 +24,7 @@ import {
 	repositoryOf,
 	useCaseOf,
 } from "../../index";
+import { isRepository } from "./repository";
 
 const deleted: string[] = [];
 class User extends entityOf(

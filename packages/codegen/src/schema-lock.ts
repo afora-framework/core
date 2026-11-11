@@ -4,7 +4,7 @@ import {
 	type SchemaLock,
 	schemaLockOf,
 	schemaLockProblemsOf,
-} from "@afora/core";
+} from "@afora/core/adapters";
 
 /** Changes an `upgrade` step can satisfy, when they have no `fill` or other declaration. */
 const STEPPED = new Set<SchemaChange["change"]>([

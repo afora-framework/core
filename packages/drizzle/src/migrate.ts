@@ -1,7 +1,5 @@
-import {
-	InvalidRepositoryDeclaration,
-	type RepositoryContext,
-} from "@afora/core";
+import { InvalidRepositoryDeclaration } from "@afora/core";
+import type { RepositoryContext } from "@afora/core/adapters";
 import { type Column, getTableColumns, getTableName, sql } from "drizzle-orm";
 import {
 	type DrizzleProviderOptions,

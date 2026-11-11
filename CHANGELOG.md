@@ -1,9 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.0.9 — unreleased (draft: dated when it is published)
+
+### Changed
+
+- **Breaking.** The exports of `@afora/core` are split into tiers (#42); see `docs/api-tiers.md` for the tier of each one, with the reason. Application code keeps importing from `@afora/core`: everything the README and the docs show for declaring, running and serving a domain stays there (468 of 557 exports). See Migration below.
+- **Breaking.** New stable subpath `@afora/core/adapters`, for authors of sinks, providers and code generators. These moved there from `@afora/core` (49): `coerceTextValues`, `outputValueOf`, `problemOf`, `PROBLEM_MEDIA_TYPE`, `statusOf`, `sinkOf`, `stageCatalogOf`, `stageKindOf`, `operationRoutes`, `routeOptionsIssue`, `requestIdHeaderOf`, `ROUTE_OPTION_KEYS`, `ENTITY_IDENTITY_KEYS`, `RESERVED_ENTITY_KEYS`, `RESERVED_RECORD_KEYS`, the symbols `Kind` and `Demo`; the provider types `IRepositoryProvider`, `RepositoryContext`, `RepositoryData`, `ProviderQuery`, `ProviderCapabilities`, `ProviderIncrementOptions`, `ProviderKeyset`, `ProviderUpdateOptions`; the sink types `OperationDescriptor`, `OperationRoute`, `Problem`, `ProblemOptions`, `SinkFactory`, `SinkSettings`, `SinkStage`; and the `app.describe()` types `ApplicationDescription`, `CommandDescription`, `ExceptionDescription`, `FieldDescription`, `FieldsDescription`, `LogDescription`, `OutputDescription`, `PropertyDescription`, `PropertyLineageDescription`, `PropertyReference`, `ProviderReference`, `RecordDescription`, `UseCaseDependencyDescription`, `UseCaseDescription`, `ProviderDescription`, `EventPolicyDescription`, `StageDescription`. Like the main entry and `@afora/core/testing`, it is part of the contract of `VERSIONING.md`.
+- **Breaking.** Moved to `@afora/core/experimental`, outside the contract (9): `providerDescriptionOf`, `eventPolicyCatalogOf`, `eventPolicyDescriptionOf`, `stageDescriptionOf`, `propertyLineageOf`, `useCaseOriginOf`, `useCaseTargetOf` and the types `PropertyLineage` and `UseCaseOriginInfo`. `app.describe()` gives the same descriptions.
+- **Breaking.** No longer exported (31): the base classes `AbstractProperty`, `AbstractDefineProperty`, `AbstractRecord`, `AbstractEntity`, `AbstractRepository` and `AbstractUseCase` (extend what `propertyOf`, `recordOf`, `entityOf`, `repositoryOf` and `useCaseOf` return); the guards `isApplication`, `isProviderSlot`, `isProviderStorage`, `isLogFactory`, `isBlueprint`, `isBlueprintList`, `isOptionalRecord`, `isRecordClass`, `isEnvironment`, `isProperty`, `isRecordPlugin`, `isRepository` and `isPasswordHash`; `recordFieldOf`, `schemaOf` and its type `SchemaClass`; `PropertyStates` and `UNEXPECTED_ERROR`; `PASSWORD_MIN_LENGTH`, `PASSWORD_MAX_LENGTH`, `PASSWORD_SPECIAL_CHARACTERS` and `passwordIssues`; and the `@internal` types `UseCaseContextOf`, `UseCasePluginContext` and `UseCasePluginsByName`.
+- `@afora/hono`, `@afora/mcp`, `@afora/ws`, `@afora/drizzle` and `@afora/codegen` import their plumbing from `@afora/core/adapters` (and their tests `stageDescriptionOf` from `@afora/core/experimental`), so they need a `@afora/core` with that subpath. Code generated from an `afora.json` imports only from `@afora/core`, unchanged; the names it reserves for declarations (`afora_catalog` `reservedDeclarationNames`) are those of `@afora/core` only, so the names that moved can now be declared.
+- `VERSIONING.md` lists `@afora/core/adapters` and `@afora/core/testing` as contract and `@afora/core/experimental` as not, uses the `**Breaking.**` marker of this file, and has the CHANGELOG template: from now on every breaking change has a Migration block, before and after. `docs/README.md` explains the tiers.
+- `inMemoryProvider` keys the table of an entity that declares a name (`entityOf(blueprint, { name })` or a `static recordName`) by that name instead of by its class, so a context made for a previous name of an entity reads its rows: two entity classes declaring the same name and sharing one provider now share a table. An entity without a name keeps a table of its own class.
+- `useCaseOf` validates the paths of `$input` and `$context` at any depth when a steps use case is declared (through nested blueprints, list indices and `length`, and record fields; below a primitive there is no key; `$input.tags.length` is typed `number` with `strictSteps`), and `afora-codegen check` does the same; only the first key was checked.
+- `useCaseOf` has one signature (it had one with `steps` and one without, so a wrong step was reported as "No overload matches this call" on the call): a type error in the settings or the steps is reported where it is. The returned class is the same; the settings type is the new `UseCaseDeclaration`. `UseCaseStepsSettings` takes `strictSteps?: boolean`.
+- Validation is faster, with the same values and the same issues (#41). On the four cases of `bench/` (flat and nested, valid and invalid), `blueprint.safeParse` went from between 1.1x and 3.4x the time of Zod 4 `safeParse` to between 0.65x and 0.9x on Bun (and on Node), and `Record.safeParse` from between 1.4x and 6.4x to between 0.75x and 1.25x on Bun; see `bench/RESULTS.md`. What changed underneath:
+  - A property that declares no `preHandle` skips the shape check that protects it, so its value goes through TypeBox once, not twice; `propertyOf` no longer gives every property a `preHandle` and an `afterHandle` that do nothing. A definition written on `AbstractDefineProperty` with a `handle` of its own keeps the shape check.
+  - A rejected string, number, boolean, literal or enum is told why by each keyword of its schema, compiled once, instead of TypeBox `Errors`, which walks the schema on every call. The errors, their order and their messages are the same, and follow TypeBox's locale and `maxErrors`; object, array, union and refined schemas still go to `Errors`.
+  - The path of a value is made only for an issue, and a field gives its value back without a result object.
+  - `Record.safeParse` still builds the record through its constructor, for every class (a subclass with a constructor of its own and an entity included), but the record it is building no longer builds the exception of a value it rejects, with its stack and its trace: it hands its issues over. A constructor that wraps `super(...)` in `try`/`catch` catches, during a `safeParse`, a stand-in that answers as that exception (`instanceof`, `name`, `details`, `trace`...) and builds it only when it is read; see `docs/standard-schema.md`. `new Record(value)` is unchanged, inside a constructor too.
+  - The `cause` of an issue raised by a property is a getter of the issue's class instead of a non-enumerable property of its own: `issue.cause`, `Object.keys(issue)`, spreading and `JSON.stringify` give what they gave; `Object.getOwnPropertyDescriptor(issue, "cause")` is now `undefined`. The issues of a rejected `Record.safeParse` are no longer a frozen array.
 
 ### Added
 
+- `examples/agent-built`: a ticketing backend built only through the `@afora/mcp` tools from a written brief (`BRIEF.md`), with the tool calls committed and replayed byte for byte (`scripts/replay.ts`), and an invariant evaluation on the running API (`eval/`): no sensitive value in any response, undeclared keys rejected, business errors as problem+json with the right status and never a 5xx, unique keys enforced, checked on every afora run and on a hand-rolled Hono + Zod baseline from the same brief. `scripts/build-with-agent.ts` and `scripts/build-baseline.ts` make N runs with the Claude API (`bun run eval:agent-built`, needs `ANTHROPIC_API_KEY`); the committed runs are one Claude Code session and its baseline, see `examples/agent-built/README.md`. Its tests run in CI (`bun run test:agent-built`).
+- The README leads with the application as data and agent-written backends (#40): a 30-second path from an `afora.json` to a running API, and a "Why afora" section mapping the guarantees an agent-written backend usually breaks to the mechanism that keeps each one.
+- The Strata Matéria brand (#46): README banners for the light and dark themes in `.github/assets/`, and the fluid, mono and app icon symbols in `.github/assets/brand/`.
 - Schema evolution (#28), see `docs/schema-evolution.md`:
   - Property options `fill` (the value a stored row lacking the key gets, on read and in a backfill; unlike `default`, the demo value) and `renamedFrom` (the key that held the value before), in `.with()`; both kept in the lineage `describe()` gives.
   - Entity options `schemaVersion`, `upgrade: { [version]: (data) => data }` and `previousNames`. Every write of an entity with `schemaVersion` stores it in the row under `SCHEMA_VERSION_KEY` (`"$v"`), which such an entity cannot declare (`ReservedEntityKey`); a row without it is version 1. Invalid options throw the new `InvalidEntitySchemaVersion` (layer `entity`); a previous name equal to the record name of an entity without `name` (its class name) throws it when its repository is declared, and `app.migrate` skips a previous name equal to the entity's own, which a destructive run would otherwise empty. `describe().entities.<Name>` has `schemaVersion`, `upgrade` (the versions with a step) and `previousNames` when declared.
@@ -17,19 +38,95 @@
 - `@afora/codegen` generates steps use cases with `strictSteps: true`, so type-checking the generated code checks their steps.
 - `bun run bench:guard` (and the `bench` job in CI) fails when `blueprint.safeParse` takes more than 1.15x the time of Zod 4 `safeParse` in any of the four cases.
 
-### Changed
+### Fixed
 
-- `inMemoryProvider` keys the table of an entity that declares a name (`entityOf(blueprint, { name })` or a `static recordName`) by that name instead of by its class, so a context made for a previous name of an entity reads its rows: two entity classes declaring the same name and sharing one provider now share a table. An entity without a name keeps a table of its own class.
-- `useCaseOf` validates the paths of `$input` and `$context` at any depth when a steps use case is declared (through nested blueprints, list indices and `length`, and record fields; below a primitive there is no key; `$input.tags.length` is typed `number` with `strictSteps`), and `afora-codegen check` does the same; only the first key was checked.
-- `useCaseOf` has one signature (it had one with `steps` and one without, so a wrong step was reported as "No overload matches this call" on the call): a type error in the settings or the steps is reported where it is. The returned class is the same; the settings type is the new `UseCaseDeclaration`. `UseCaseStepsSettings` takes `strictSteps?: boolean`.
-- Validation is faster, with the same values and the same issues (#41). On the four cases of `bench/` (flat and nested, valid and invalid), `blueprint.safeParse` went from between 1.1x and 3.4x the time of Zod 4 `safeParse` to between 0.65x and 0.9x on Bun (and on Node), and `Record.safeParse` from between 1.4x and 6.4x to between 0.75x and 1.25x on Bun; see `bench/RESULTS.md`. What changed underneath:
-  - A property that declares no `preHandle` skips the shape check that protects it, so its value goes through TypeBox once, not twice; `propertyOf` no longer gives every property a `preHandle` and an `afterHandle` that do nothing. A definition written on `AbstractDefineProperty` with a `handle` of its own keeps the shape check.
-  - A rejected string, number, boolean, literal or enum is told why by each keyword of its schema, compiled once, instead of TypeBox `Errors`, which walks the schema on every call. The errors, their order and their messages are the same, and follow TypeBox's locale and `maxErrors`; object, array, union and refined schemas still go to `Errors`.
-  - The path of a value is made only for an issue, and a field gives its value back without a result object.
-  - `Record.safeParse` still builds the record through its constructor, for every class (a subclass with a constructor of its own and an entity included), but the record it is building no longer builds the exception of a value it rejects, with its stack and its trace: it hands its issues over. A constructor that wraps `super(...)` in `try`/`catch` catches, during a `safeParse`, a stand-in that answers as that exception (`instanceof`, `name`, `details`, `trace`...) and builds it only when it is read; see `docs/standard-schema.md`. `new Record(value)` is unchanged, inside a constructor too.
-  - The `cause` of an issue raised by a property is a getter of the issue's class instead of a non-enumerable property of its own: `issue.cause`, `Object.keys(issue)`, spreading and `JSON.stringify` give what they gave; `Object.getOwnPropertyDescriptor(issue, "cause")` is now `undefined`. The issues of a rejected `Record.safeParse` are no longer a frozen array.
+- The README's steps to generate and serve the quick start's `afora.json` passed `--stages @afora/hono`, which `afora-codegen` resolves as a path and fails on; they now use a `stages.ts` that re-exports `stages` from `@afora/hono`. The three files are `examples/interop/from-json`, generated and served by `bun run test:interop`.
 
-## 0.0.8 — unreleased (draft: dated when it is published)
+### Migration
+
+**Sinks and providers import their plumbing from `@afora/core/adapters`.** Before:
+
+```ts
+import {
+	exceptionOf,
+	type IRepositoryProvider,
+	type OperationDescriptor,
+	outputValueOf,
+	problemOf,
+	type RepositoryData,
+	RepositoryUniqueViolation,
+	sinkOf,
+	statusOf,
+} from "@afora/core";
+```
+
+After: the exceptions and the declaration API stay in `@afora/core`, the rest comes from the adapters entry. Both entries share one module state, so classes and symbols are the same objects.
+
+```ts
+import { exceptionOf, RepositoryUniqueViolation } from "@afora/core";
+import {
+	type IRepositoryProvider,
+	type OperationDescriptor,
+	outputValueOf,
+	problemOf,
+	type RepositoryData,
+	sinkOf,
+	statusOf,
+} from "@afora/core/adapters";
+```
+
+**Description helpers come from `@afora/core/experimental`.** Before:
+
+```ts
+import {
+	providerDescriptionOf,
+	stageDescriptionOf,
+	useCaseTargetOf,
+} from "@afora/core";
+```
+
+After (or read the same data from `app.describe()`, typed `ApplicationDescription` from `@afora/core/adapters`):
+
+```ts
+import {
+	providerDescriptionOf,
+	stageDescriptionOf,
+	useCaseTargetOf,
+} from "@afora/core/experimental";
+```
+
+**Base classes and guards are gone.** Before:
+
+```ts
+import { AbstractEntity, isRepository } from "@afora/core";
+
+if (value instanceof AbstractEntity) save(value);
+if (isRepository(dependency)) register(dependency);
+```
+
+After: test against your own declarations, or the guards that stay (`isEntity`, `isEntityClass`, `isUseCase`, `isUseCaseClass`, `isCommand`, `isOutput`, `isUseCasePlugin`, `isUseCaseCatalog`, `isProviderFactory`):
+
+```ts
+import { isEntity } from "@afora/core";
+
+if (isEntity(value)) save(value);
+if (dependency === Posts) register(dependency);
+```
+
+**Password rules.** Before, `PASSWORD_MIN_LENGTH` and `passwordIssues(plain)` were exported. After, check a plain password with `PlainPassword`, which holds the same rules, or let `Password.hash` reject it:
+
+```ts
+import { InvalidPropertyValue, Password, PlainPassword } from "@afora/core";
+
+const result = PlainPassword.safeParse(plain); // { success: false, issues } when a rule is broken
+try {
+	await Password.hash(plain);
+} catch (error) {
+	if (error instanceof InvalidPropertyValue) error.details; // { errors: [...] }, what passwordIssues gave
+}
+```
+
+## 0.0.8 — 2026-11-10
 
 ### Changed
 

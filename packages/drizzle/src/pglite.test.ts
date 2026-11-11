@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "bun:test";
-import type { RepositoryContext, SchemaPlan } from "@afora/core";
+import type { RepositoryContext, SchemaPlan } from "@afora/core/adapters";
 import { providerContract } from "@afora/core/testing";
 import { PGlite } from "@electric-sql/pglite";
 import { boolean, integer, jsonb, pgTable, text } from "drizzle-orm/pg-core";

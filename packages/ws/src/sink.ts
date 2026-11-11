@@ -1,6 +1,6 @@
+import { InvalidOutputStage, toOpenAPI } from "@afora/core";
 import {
 	coerceTextValues,
-	InvalidOutputStage,
 	type OperationDescriptor,
 	outputValueOf,
 	type Problem,
@@ -8,8 +8,7 @@ import {
 	sinkOf,
 	stageCatalogOf,
 	statusOf,
-	toOpenAPI,
-} from "@afora/core";
+} from "@afora/core/adapters";
 import {
 	InvalidWsMessage,
 	WsSubscriptionsUnavailable,

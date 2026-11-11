@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
+	type OperationDescriptor,
+	outputValueOf,
+	PROBLEM_MEDIA_TYPE,
+	problemOf,
+	sinkOf,
+	stageCatalogOf,
+	statusOf,
+} from "../../adapters";
+import { stageDescriptionOf } from "../../experimental";
+import {
 	blueprintOf,
 	commandOf,
 	DuplicateOperation,
@@ -10,20 +20,12 @@ import {
 	InvalidOutputStage,
 	isOutput,
 	listOf,
-	type OperationDescriptor,
 	operationOf,
 	outputOf,
-	outputValueOf,
 	Password,
-	PROBLEM_MEDIA_TYPE,
-	problemOf,
 	recordOf,
 	StdStages,
 	select,
-	sinkOf,
-	stageCatalogOf,
-	stageDescriptionOf,
-	statusOf,
 	transformOf,
 	UnknownCommandOperation,
 	useCaseOf,

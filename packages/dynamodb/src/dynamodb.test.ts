@@ -2,10 +2,10 @@ import { afterAll, describe, expect, test } from "bun:test";
 import {
 	blueprintOf,
 	entityOf,
-	type RepositoryContext,
 	RepositoryUniqueViolation,
 	repositoryOf,
 } from "@afora/core";
+import type { RepositoryContext } from "@afora/core/adapters";
 import { providerContract } from "@afora/core/testing";
 import {
 	CreateTableCommand,

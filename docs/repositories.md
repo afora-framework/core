@@ -165,9 +165,15 @@ await Counters.increment(
 
 Without `create`, an id that holds no entity (or a soft-deleted one) throws `RepositoryEntityNotFound`. With `create`, the missing entity is built through the entity class from `create` and the given id, each delta added to its value (0 when left out), so it is validated, gets its identity (`version: 1`) and queues `onCreate`; the provider inserts it, and a concurrent call that inserted it first still gets its deltas added. A soft-deleted entity keeps its id, so `create` on one throws `RepositoryUniqueViolation`. On an entity that [expires](#records-that-expire), an expired record counts as absent: without `create` it is not found, and with it the record is replaced by a fresh one (new `createdAt` and `expiresAt`, `version: 1`, the deltas applied), which is how a rate-limit window starts again. The sum is validated when the entity is read back, not before it is stored: a property with a maximum is not a limit `increment` enforces. The provider needs `increment`, which `repositoryOf` checks when the action is declared, and advertises it with `capabilities.atomic`.
 
-**Providers.** A repository reads and writes through an `IRepositoryProvider` (v2), on plain unmasked values, each call getting a `context` with the `entity`, the repository `name`, its `unique` keys, `env` and, for an entity that expires, `expiry` (`{ key }`):
+**Providers.** A repository reads and writes through an `IRepositoryProvider` (v2), on plain unmasked values, each call getting a `context` with the `entity`, the repository `name`, its `unique` keys, `env` and, for an entity that expires, `expiry` (`{ key }`). Writing a provider is adapter work: `IRepositoryProvider`, `RepositoryContext`, `RepositoryData`, `ProviderQuery` and `ProviderCapabilities` are imported from `@afora/core/adapters` (see [API tiers](api-tiers.md)).
 
 ```ts
+import type {
+	IRepositoryProvider,
+	ProviderQuery,
+	RepositoryData,
+} from "@afora/core/adapters";
+
 interface IRepositoryProvider<Environment = unknown> {
 	findOne(context, query?: ProviderQuery): Promise<RepositoryData | undefined>; // first row after offset
 	findMany(context, query?: ProviderQuery): Promise<readonly RepositoryData[]>;
@@ -206,7 +212,7 @@ The bare `RepositoryQuery` uses string keys and stored values. Equality and `in`
 
 `transaction(run)` is optional: `run` gets a scoped provider whose writes commit when it resolves and roll back when it rejects; the scoped provider must not be used after `run` ends. `inMemoryProvider()` runs transactions on isolated snapshots, one at a time, makes other operations wait for the active one (so a rollback never discards unrelated writes), treats nested transactions through the scoped provider as savepoints, and clones data on write and read.
 
-`providerOf({ name, options = {}, create })` calls `create(options)` once and returns that provider unchanged, keeping an immutable JSON description out of band; `providerDescriptionOf(provider)` gives `{ kind: "provider", name, options }`, or `{ kind: "opaque" }` for a provider made without it. Empty names, non-JSON or cyclic options and non-providers throw `InvalidRepositoryDeclaration`. `app.describe()` reports `provider` for an application with an explicit provider and for each repository that declared its own; omitted providers stay omitted.
+`providerOf({ name, options = {}, create })` calls `create(options)` once and returns that provider unchanged, keeping an immutable JSON description out of band; `providerDescriptionOf(provider)` (from `@afora/core/experimental`) gives `{ kind: "provider", name, options }`, or `{ kind: "opaque" }` for a provider made without it. Empty names, non-JSON or cyclic options and non-providers throw `InvalidRepositoryDeclaration`. `app.describe()` reports `provider` for an application with an explicit provider and for each repository that declared its own; omitted providers stay omitted.
 
 **Environments.** `environmentOf(blueprint)` reads the declared variables from `process.env` (or `{ source }`), validates them on the first `load()` and keeps the value; a missing or rejected variable throws `InvalidEnvironment`. Pass one, or a list (merged in order), as `environmentDependencies`: the provider gets them as `context.env`, read on the first call, not on declaration.
 

@@ -3,14 +3,16 @@ import {
 	type ILogger,
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryQuery,
-	type IRepositoryProvider,
-	type ProviderQuery,
 	RepositoryConcurrencyConflict,
-	type RepositoryContext,
-	type RepositoryData,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
 } from "@afora/core";
+import type {
+	IRepositoryProvider,
+	ProviderQuery,
+	RepositoryContext,
+	RepositoryData,
+} from "@afora/core/adapters";
 import { matchesQuery, selectRows } from "@afora/core/experimental";
 import type { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {

@@ -7,12 +7,14 @@ import {
 	blueprintOf,
 	commandOf,
 	entityOf,
-	type RepositoryContext,
 	repositoryOf,
-	type SchemaChange,
-	type SchemaPlan,
 	useCaseOf,
 } from "@afora/core";
+import type {
+	RepositoryContext,
+	SchemaChange,
+	SchemaPlan,
+} from "@afora/core/adapters";
 import { providerContract } from "@afora/core/testing";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";

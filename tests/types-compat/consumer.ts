@@ -9,7 +9,6 @@ import {
 	eventOf,
 	exceptionOf,
 	guard,
-	type IRepositoryProvider,
 	type JsonValue,
 	listOf,
 	Meta,
@@ -24,6 +23,7 @@ import {
 	repositoryOf,
 	type StandardSchemaV1,
 } from "@afora/core";
+import type { IRepositoryProvider } from "@afora/core/adapters";
 import { type SliceMask, sliceOf } from "@afora/core/experimental";
 import { type ContractRunner, providerContract } from "@afora/core/testing";
 import { Type } from "typebox";
