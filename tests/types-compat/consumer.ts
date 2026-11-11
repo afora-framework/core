@@ -453,6 +453,45 @@ const badDependencies = { members: ClubMembers };
 // @ts-expect-error a find of an action the repository lacks
 useCaseOf({ name: "Bad", blueprint: BadInput, response: BadResponse, dependencies: badDependencies, steps: [{ find: "members.findById", args: ["$input.email"] }, { return: {} }] });
 
+// strictSteps: references, args and values checked against what they name.
+const JoinInput = blueprintOf((ctx) => ({
+	name: ctx.string,
+	age: ctx.integer,
+	email: ctx.email,
+}));
+export class StrictJoin extends useCaseOf({
+	name: "StrictJoin",
+	blueprint: JoinInput,
+	response: blueprintOf(() => ({ member: ClubMember })),
+	context: blueprintOf((ctx) => ({ actor: ctx.optional.string })),
+	dependencies: { members: ClubMembers },
+	errors: [ClubMemberExists],
+	strictSteps: true,
+	steps: [
+		{ find: "members.findByEmail", args: ["$input.email"], as: "existing" },
+		{ ensure: "absent", value: "$existing.email", error: ClubMemberExists },
+		{
+			build: ClubMember,
+			values: { name: "$input.name", age: "$input.age", email: "$input.email" },
+			as: "built",
+		},
+		{ create: "members", value: "$built", as: "member" },
+		{ return: { member: "$member", actor: "$context.actor" } },
+	],
+}) {}
+// biome-ignore format: one error per line, on the line TypeScript 5 and 7 report
+useCaseOf({ name: "BadSteps", blueprint: JoinInput, response: BadResponse, dependencies: badDependencies, errors: [ClubMemberExists], strictSteps: true, steps: [
+	// @ts-expect-error a reference to a key the input lacks
+	{ find: "members.findByEmail", args: ["$input.emial"], as: "a" },
+	// @ts-expect-error an arg of the wrong type
+	{ find: "members.findByEmail", args: ["$input.age"], as: "b" },
+	// @ts-expect-error a value the record does not declare
+	{ build: ClubMember, values: { name: "$input.name", age: 1, email: "$input.email", nope: 1 }, as: "c" },
+	// @ts-expect-error a name bound by no earlier step
+	{ ensure: "exists", value: "$later", error: ClubMemberExists },
+	{ return: {} },
+] });
+
 const Club = commandOf({
 	name: "Club",
 	useCases: { join: Join },
