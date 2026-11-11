@@ -4,7 +4,15 @@
 
 ### Changed
 
-- No change in the packages. This release republishes every `@afora` package through npm trusted publishing (OIDC): `@afora/fastify`, `@afora/express`, `@afora/elysia` and `@afora/dynamodb` 0.0.9 went out through a token, without provenance, and their trusted publisher stayed pending validation. The Release workflow no longer passes a token, so every package is published with provenance or the release fails.
+- This release republishes every `@afora` package through npm trusted publishing (OIDC): `@afora/fastify`, `@afora/express`, `@afora/elysia` and `@afora/dynamodb` 0.0.9 went out through a token, without provenance, and their trusted publisher stayed pending validation. The Release workflow no longer passes a token, so every package is published with provenance or the release fails.
+- **Messages.** A property exception raised through a record names the key and the record: `Property "password" of record "User" is required.` and `Invalid value for "email" of record "User": ...`, instead of `Property "string" is required.` (the name of the property, which says nothing of where it failed). The name, class, `details` (`{ key }`) and `trace` are the same, and the exception of the property in the trace keeps its own message. Code that matches the whole message of a record rejection must follow; see `docs/records.md`.
+- **Messages.** `InvalidUseCaseInput`, `InvalidUseCaseContext` and `InvalidUseCaseResponse` name their first issue: `Invalid UseCase response: "user" is required.`, with `(and N more)` when there are others, instead of `Invalid UseCase response.`. `details.issues` is the same. For a 400 this message is the `detail` of the problem+json; the `detail` of a 5xx stays `"Internal error."`.
+- With `strictSteps`, TypeScript checks the `return` step against what the response blueprint takes, as it checks the `values` of a `build`: a missing key, a value of another type or a result that may be `undefined` is an error (it was checked as references only, and a wrong response failed when the use case ran). A wrong value now names the type that is taken instead of `never` (`Type 'string' is not assignable to type 'number'`), and a reference that only fails because it may be `undefined` is offered the hint `"<ref> may be undefined: ensure it exists first"`. It costs about 3% more per edit on a strict steps use case; without `strictSteps` nothing changes. See `docs/use-cases.md#strict-steps`.
+- The quick start of the README declares `strictSteps: true`.
+
+### Added
+
+- `params` on a `run` step: a blueprint whose keys match the `args` by position. The args are parsed before `fn` is called, `fn` gets the values as the keys handled them, and a rejected arg throws `InvalidUseCaseStep` (`code: "invalid_args"`, the issues in `details.issues`) without running `fn`. Without `params` the args are still not checked at run time, as before. `useCaseOf` checks that it is a blueprint and that a list of args has as many items as it has keys; `describe()` gives it by its fields. `@afora/codegen` reads `"params"` (a blueprint by name or `{ "fields": {...} }`) in `afora.json`, checks it (`invalid_args`), generates it and extracts it back; `afora.schema.json` has it, and the `@afora/mcp` guide recommends it. See `docs/use-cases.md#steps`.
 
 ## 0.0.9 — 2026-11-11
 

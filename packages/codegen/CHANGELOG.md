@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### `params` on a `run` step
+
+- A `run` step of `afora.json` may declare `"params"`, a blueprint by name or `{ "fields": {...} }` whose fields match its `args` by position, so the args are checked before the function runs (see `docs/use-cases.md#steps` of `@afora/core`). `validateSpec` and `afora-codegen check` resolve it like the `input` of a use case and report `invalid_args` when a list of args has another length; `generate` emits it as a blueprint; `extractSpec` gives it back by its fields, and `normalizeSpec` compacts them. `afora.schema.json` has it. Needs the `@afora/core` that reads `params`.
+
 ### Project boundary (#69)
 
 - `projectBoundaryIssues(spec, root)`: the places where a spec reaches outside a project directory, as issues `outside_project`: an `{ "import": "<module>#<name>" }` whose module is a file outside it (resolved from `output.dir`), an absolute path or a URL, and an `extends` outside it. For tools that take a spec from someone they do not trust; `validateSpec` does not run it, since a spec has no directory of its own. `@afora/mcp` runs it on every spec.

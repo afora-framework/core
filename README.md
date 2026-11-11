@@ -148,6 +148,7 @@ class Register extends useCaseOf({
 	response: blueprintOf(() => ({ user: User })),
 	dependencies: { users: Users },
 	errors: [UserAlreadyExists],
+	strictSteps: true, // TypeScript checks every reference, arg and the return
 	steps: [
 		{ find: "users.findByEmail", args: ["$input.email"], as: "existing" },
 		{ ensure: "absent", value: "$existing", error: UserAlreadyExists },

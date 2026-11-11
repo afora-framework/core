@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### `params` on a `run` step
+
+- The guide's example declares `"params"` on its `run` step and says to declare it whenever the function relies on what it gets, so the args are checked before it runs.
+
 ### Code first, access and the project boundary (#75, #60, #64, #69)
 
 - New tool `afora_project` (read-only): entities, repositories, every operation with how it is implemented and its declared route and access, and each output with the route every operation is served at (and whether the sink, the use case or the default decided it) and who may call it, plus notes on operations left open or that will answer 401. It reads a TypeScript application directly (`--app` or `app`), from `app.describe()`, with no `afora.json` and no `imports`; else the file. `source: "app" | "file"` chooses between them when the project has both. With both, the result has `drift: { between, inSync, differences }`: where the application and `afora.json` say different things (an entity, repository, operation or output in only one of them, other repository actions, an operation implemented, routed or protected differently, another route in an output), so a spec that fell behind the code is seen at once. `compare: false` skips it; what a spec inherits with `extends` is not reported as missing from the file; an application that cannot be read gives `drift.error`, not a failed call. `projectDifferences` is exported. `projectViewOfSpec`, `projectViewOfDescription` and the types `ProjectView` and `RouteView` are exported.
