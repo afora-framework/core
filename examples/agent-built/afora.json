@@ -1,0 +1,286 @@
+{
+	"$schema": "../../packages/codegen/afora.schema.json",
+	"version": 1,
+	"name": "ticketing",
+	"output": {
+		"dir": "src/domain"
+	},
+	"provider": "inMemory",
+	"properties": {
+		"Capacity": {
+			"base": "integer",
+			"with": {
+				"min": 1,
+				"description": "The number of seats of an event."
+			}
+		}
+	},
+	"entities": {
+		"Organizer": {
+			"fields": {
+				"name": "text"
+			},
+			"plugins": [
+				"authenticatable"
+			]
+		},
+		"Event": {
+			"fields": {
+				"organizer": "Organizer",
+				"title": "text",
+				"slug": "slug",
+				"capacity": "Capacity"
+			}
+		},
+		"Ticket": {
+			"fields": {
+				"event": "Event",
+				"buyerEmail": "email"
+			}
+		}
+	},
+	"repositories": {
+		"Organizers": {
+			"entity": "Organizer",
+			"actions": [
+				"findById",
+				"findByEmail",
+				"create"
+			]
+		},
+		"Events": {
+			"entity": "Event",
+			"actions": [
+				"findById",
+				"create"
+			],
+			"relations": [
+				"Organizers"
+			]
+		},
+		"Tickets": {
+			"entity": "Ticket",
+			"actions": [
+				"create",
+				"exists"
+			],
+			"relations": [
+				"Events"
+			]
+		}
+	},
+	"exceptions": {
+		"EmailTaken": {
+			"layer": "use-case",
+			"message": "An organizer with this email already exists."
+		},
+		"InvalidCredentials": {
+			"layer": "use-case",
+			"message": "Wrong email or password."
+		},
+		"OrganizerNotFound": {
+			"layer": "use-case",
+			"message": "No such organizer."
+		},
+		"EventNotFound": {
+			"layer": "use-case",
+			"message": "No such event."
+		},
+		"SoldOut": {
+			"layer": "use-case",
+			"message": "Every seat of this event is taken."
+		}
+	},
+	"useCases": {
+		"RegisterOrganizer": {
+			"generic": "register",
+			"repository": "Organizers",
+			"description": "Signs an organizer up.",
+			"options": {
+				"as": "organizer",
+				"errors": {
+					"conflict": "EmailTaken"
+				}
+			}
+		},
+		"LoginOrganizer": {
+			"generic": "login",
+			"repository": "Organizers",
+			"description": "Checks the email and password of an organizer.",
+			"options": {
+				"as": "organizer",
+				"errors": {
+					"invalid": "InvalidCredentials"
+				}
+			}
+		},
+		"CreateEvent": {
+			"generic": "create",
+			"repository": "Events",
+			"description": "Creates an event of an organizer.",
+			"options": {
+				"as": "event",
+				"errors": {
+					"notFound": "OrganizerNotFound"
+				}
+			}
+		},
+		"GetEvent": {
+			"generic": "get",
+			"repository": "Events",
+			"description": "Gives an event.",
+			"options": {
+				"as": "event",
+				"errors": {
+					"notFound": "EventNotFound"
+				}
+			}
+		},
+		"BuyTicket": {
+			"description": "Sells one seat of an event. The ticket is stored first and the command runs in a transaction, so a ticket past the capacity is rolled back with SoldOut.",
+			"input": {
+				"fields": {
+					"eventId": "id",
+					"buyerEmail": "email"
+				}
+			},
+			"response": {
+				"fields": {
+					"ticket": "Ticket"
+				}
+			},
+			"dependencies": {
+				"events": "Events",
+				"tickets": "Tickets"
+			},
+			"errors": [
+				"EventNotFound",
+				"SoldOut"
+			],
+			"implementation": {
+				"steps": [
+					{
+						"find": "events.findById",
+						"args": [
+							"$input.eventId"
+						],
+						"as": "event"
+					},
+					{
+						"ensure": "exists",
+						"value": "$event",
+						"error": "EventNotFound"
+					},
+					{
+						"build": "Ticket",
+						"values": {
+							"event": "$event",
+							"buyerEmail": "$input.buyerEmail"
+						},
+						"as": "ticket"
+					},
+					{
+						"create": "tickets",
+						"value": "$ticket",
+						"as": "saved"
+					},
+					{
+						"find": "tickets.exists",
+						"args": [
+							{
+								"where": {
+									"event": "$event"
+								},
+								"offset": "$event.capacity"
+							}
+						],
+						"as": "overbooked"
+					},
+					{
+						"ensure": "false",
+						"value": "$overbooked",
+						"error": "SoldOut"
+					},
+					{
+						"return": {
+							"ticket": "$saved"
+						}
+					}
+				]
+			}
+		}
+	},
+	"commands": {
+		"Accounts": {
+			"description": "Organizer accounts.",
+			"useCases": {
+				"register": "RegisterOrganizer",
+				"login": "LoginOrganizer"
+			},
+			"transaction": true
+		},
+		"BoxOffice": {
+			"description": "Events and their tickets.",
+			"useCases": {
+				"createEvent": "CreateEvent",
+				"getEvent": "GetEvent",
+				"buyTicket": "BuyTicket"
+			},
+			"transaction": true
+		}
+	},
+	"outputs": {
+		"Api": {
+			"commands": [
+				"Accounts",
+				"BoxOffice"
+			],
+			"statuses": {
+				"EmailTaken": 409,
+				"InvalidCredentials": 401,
+				"OrganizerNotFound": 404,
+				"EventNotFound": 404
+			},
+			"pipe": [
+				{
+					"sink": "hono",
+					"options": {
+						"basePath": "/api",
+						"route": {
+							"Accounts.register": {
+								"method": "post",
+								"path": "/organizers",
+								"status": 201
+							},
+							"Accounts.login": {
+								"method": "post",
+								"path": "/sessions"
+							},
+							"BoxOffice.createEvent": {
+								"method": "post",
+								"path": "/events",
+								"status": 201
+							},
+							"BoxOffice.getEvent": {
+								"method": "get",
+								"path": "/events/{id}"
+							},
+							"BoxOffice.buyTicket": {
+								"method": "post",
+								"path": "/events/{eventId}/tickets",
+								"status": 201
+							}
+						},
+						"docs": {
+							"path": "/openapi.json",
+							"info": {
+								"title": "Ticketing",
+								"version": "1.0.0"
+							}
+						}
+					}
+				}
+			]
+		}
+	}
+}

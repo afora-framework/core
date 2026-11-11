@@ -1,14 +1,13 @@
+import { InvalidOutputStage, toOpenAPI } from "@afora/core";
 import {
 	coerceTextValues,
-	InvalidOutputStage,
 	type OperationDescriptor,
 	outputValueOf,
 	problemOf,
 	sinkOf,
 	stageCatalogOf,
 	statusOf,
-	toOpenAPI,
-} from "@afora/core";
+} from "@afora/core/adapters";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
 	CallToolRequestSchema,

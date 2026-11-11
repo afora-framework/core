@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
+import type { IRepositoryProvider } from "../../adapters";
 import {
 	blueprintOf,
 	CommandEventFailed,
@@ -16,7 +17,6 @@ import {
 	InvalidCommandDeclaration,
 	InvalidCommandEnvironment,
 	InvalidEnvironment,
-	type IRepositoryProvider,
 	inMemoryProvider,
 	isCommand,
 	repositoryOf,

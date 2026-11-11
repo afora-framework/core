@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
+import type { IRepositoryProvider } from "../../adapters";
 import {
 	applicationOf,
 	blueprintOf,
 	entityOf,
 	InvalidRepositoryDeclaration,
-	type IRepositoryProvider,
 	inMemoryProvider,
 	repositoryOf,
 } from "../../index";

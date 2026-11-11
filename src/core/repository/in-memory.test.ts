@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import type {
+	IRepositoryProvider,
+	RepositoryContext,
+	RepositoryData,
+} from "../../adapters";
+import { providerDescriptionOf } from "../../experimental";
 import {
 	blueprintOf,
 	entityOf,
 	InvalidRepositoryDeclaration,
-	type IRepositoryProvider,
 	inMemoryProvider,
-	providerDescriptionOf,
-	type RepositoryContext,
-	type RepositoryData,
 	RepositoryUniqueViolation,
 } from "../../index";
 

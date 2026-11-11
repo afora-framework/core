@@ -1,14 +1,16 @@
 import {
 	InvalidRepositoryDeclaration,
 	InvalidRepositoryQuery,
-	type IRepositoryProvider,
 	RepositoryConcurrencyConflict,
-	type RepositoryContext,
-	type RepositoryData,
 	RepositoryEntityNotFound,
 	type RepositoryQuery,
 	RepositoryUniqueViolation,
 } from "@afora/core";
+import type {
+	IRepositoryProvider,
+	RepositoryContext,
+	RepositoryData,
+} from "@afora/core/adapters";
 import {
 	and,
 	type Column,

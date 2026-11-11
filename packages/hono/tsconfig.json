@@ -1,7 +1,11 @@
 {
 	"extends": "../../tsconfig.json",
 	"compilerOptions": {
-		"paths": { "@afora/core": ["../../src/index.ts"] }
+		"paths": {
+			"@afora/core": ["../../src/index.ts"],
+			"@afora/core/adapters": ["../../src/adapters.ts"],
+			"@afora/core/experimental": ["../../src/experimental.ts"]
+		}
 	},
 	"include": ["src", "scripts", "tests"],
 	"exclude": ["node_modules", "dist", "tests/.tmp"]

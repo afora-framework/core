@@ -1,0 +1,24 @@
+{
+	"name": "afora-agent-built",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"generate": "bun ../../packages/codegen/src/cli.ts generate afora.json --stages ./catalogs.ts",
+		"start": "bun src/server.ts",
+		"build:agent": "bun scripts/build-with-agent.ts",
+		"build:baseline": "bun scripts/build-baseline.ts",
+		"replay": "bun scripts/replay.ts",
+		"eval": "bun eval/run.ts",
+		"eval:all": "bun scripts/build-with-agent.ts && bun scripts/build-baseline.ts && bun eval/run.ts"
+	},
+	"dependencies": {
+		"@anthropic-ai/sdk": "^1.8.0",
+		"@modelcontextprotocol/sdk": "^1.32.2",
+		"hono": "^4.13.17",
+		"typebox": "^1.4.6",
+		"zod": "^4.6.7"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.4.4"
+	}
+}

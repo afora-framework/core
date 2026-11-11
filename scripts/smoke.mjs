@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 // The application supplies the TypeBox peer used by these schemas and core.
 import { Type } from "typebox";
+import { outputValueOf, RESERVED_RECORD_KEYS } from "../dist/adapters.js";
 import { sliceOf, sliceValue } from "../dist/experimental.js";
 import {
 	blueprintOf,
@@ -103,6 +104,10 @@ assert.deepEqual(sliceValue(wrapped, { slim: { title: true } }), {
 });
 const Only = sliceOf(Wrapper.blueprint, { slim: true });
 assert.ok(Only.properties.slim === Slim);
+
+// adapters entry shares module state with the main one (records mask through it)
+assert.equal(outputValueOf({ user }).user.password, MASK);
+assert.ok(RESERVED_RECORD_KEYS.includes("toJSON"));
 
 // testing entry shares module state with the main one (same exception classes)
 assert.equal(typeof providerContract, "function");

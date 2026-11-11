@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import type { IRepositoryProvider } from "../../adapters";
 import {
 	ApplicationConflict,
 	applicationOf,
@@ -8,10 +9,7 @@ import {
 	environmentOf,
 	InvalidApplicationDeclaration,
 	InvalidCommandDeclaration,
-	type IRepositoryProvider,
 	inMemoryProvider,
-	isProviderSlot,
-	isProviderStorage,
 	ProviderNotBound,
 	providerFrom,
 	providersOf,
@@ -20,6 +18,7 @@ import {
 	UnregisteredApplicationReference,
 	useCaseOf,
 } from "../../index";
+import { isProviderSlot, isProviderStorage } from "./providers";
 
 const Name = blueprintOf((ctx) => ({ name: ctx.string }));
 const Empty = blueprintOf(() => ({}));

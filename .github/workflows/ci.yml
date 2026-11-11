@@ -59,6 +59,7 @@ jobs:
       - run: bun test
       - run: bun run test:interop
       - run: bun run test:blog
+      - run: bun run test:agent-built
       - run: bun run docs:links
 
   api-surface:

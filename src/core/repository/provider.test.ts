@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { providerDescriptionOf } from "../../experimental";
 import {
 	InvalidRepositoryDeclaration,
 	inMemoryProvider,
-	providerDescriptionOf,
 	providerOf,
 } from "../../index";
 
