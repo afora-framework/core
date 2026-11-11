@@ -596,6 +596,14 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `TagMaker`                         | type  | stable       | `@afora/core`              | Standard use cases ([Standard use cases](std-use-cases.md)).                                                           |
 | `UpdateMaker`                      | type  | stable       | `@afora/core`              | Standard use cases ([Standard use cases](std-use-cases.md)).                                                           |
 
+## Added in 0.0.9
+
+Exports that are new since the audit, with their tier:
+
+- **`@afora/core`:** the types of `app.migrate`: `SchemaMigrationOptions`, `SchemaMigrationReport`, `EntityMigrationReport` and `SchemaMigrationInvalidRow`; the exceptions `InvalidEntitySchemaVersion`, `InvalidStoredSchemaVersion`, `InvalidSchemaMigration` and `SchemaLockMismatch`; `EntityUpgrade` and `EntityUpgrades`; and the strict step types (`CheckedSteps`, `StepReferenceType`, `StepReferencesOf`, `StepValueCheck`, `StepsInitialScope`, `UseCaseDeclaration`). See [Schema evolution](schema-evolution.md) and [Use cases](use-cases.md).
+- **`@afora/core/adapters`:** what providers and code generators need for schema evolution: `SCHEMA_VERSION_KEY` (a reserved storage key, like the other reserved keys), `schemaLockOf`, `diffSchemas`, `schemaLockProblemsOf`, and the types `RepositorySchema`, `ProviderMigrationResult`, `SchemaPlan`, `SchemaChange`, `SchemaChangeKind`, `SchemaChangeClass`, `SchemaLock`, `SchemaLockEntity` and `SchemaLockField`.
+- **`@afora/core/experimental`:** `selectRows`, `matchesQuery`, `sameValue` and `prepareQuery`, the query rules of `inMemoryProvider` for providers that filter, order and page rows themselves (`@afora/dynamodb`).
+
 ## `@afora/core/experimental` (already there at 0.0.8)
 
 | Export            | Kind  | Tier         | Reason                             |

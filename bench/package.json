@@ -3,7 +3,8 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"bench": "bun run.ts"
+		"bench": "bun run.ts",
+		"bench:guard": "bun run.ts --guard"
 	},
 	"devDependencies": {
 		"arktype": "^2.2.9",

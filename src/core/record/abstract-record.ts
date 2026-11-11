@@ -89,9 +89,10 @@ const checked = new WeakSet<object>();
  * with the name of a key, e.g. a `name()` method, which would hide `user.name`.
  * Each class is checked once, on its first record.
  */
-function checkMembers(record: object, keys: readonly string[]): void {
+function checkMembers(record: object, properties: IBlueprintCollection): void {
 	const Class = record.constructor;
 	if (checked.has(Class)) return;
+	const keys = Object.keys(properties);
 
 	for (
 		let prototype = Object.getPrototypeOf(record);
@@ -176,19 +177,83 @@ function issuesOfError(error: unknown, source: string): readonly Issue[] {
 }
 
 /**
+ * What `safeParse` asks of the record it is about to build: to hand its
+ * issues over instead of raising the exception they stand for, which nobody
+ * would read. The first record of `Class` to reach the constructor of
+ * `AbstractRecord` takes the request, so the records it holds, and those its
+ * constructor builds, raise as they always do.
+ */
+interface Request {
+	readonly Class: object;
+	/** What the record threw in place of its exception. */
+	rejection?: object;
+	issues?: readonly Issue[];
+}
+
+let request: Request | undefined;
+
+/** The issues of a rejected value, and the exception they stand for once it is asked for. */
+interface Rejection {
+	readonly issues: readonly Issue[];
+	readonly source: string;
+	exception?: Exception;
+}
+
+function exceptionOfRejection(rejection: Rejection): Exception {
+	rejection.exception ??= exceptionOfIssues(rejection.issues, rejection.source);
+	return rejection.exception;
+}
+
+/**
+ * Makes what a record throws for `safeParse` the exception `new` would have
+ * thrown, to a constructor that catches it around `super(...)`: `instanceof`,
+ * `name`, `details`, `trace`... all answer as that exception, which is built
+ * the first time one of them is read. `safeParse` itself never reads it.
+ */
+const REJECTION_HANDLER: ProxyHandler<Rejection> = {
+	get: (rejection, key) => Reflect.get(exceptionOfRejection(rejection), key),
+	set: (rejection, key, value) =>
+		Reflect.set(exceptionOfRejection(rejection), key, value),
+	has: (rejection, key) => Reflect.has(exceptionOfRejection(rejection), key),
+	getPrototypeOf: (rejection) =>
+		Reflect.getPrototypeOf(exceptionOfRejection(rejection)),
+	ownKeys: (rejection) => Reflect.ownKeys(exceptionOfRejection(rejection)),
+	getOwnPropertyDescriptor: (rejection, key) => {
+		const descriptor = Reflect.getOwnPropertyDescriptor(
+			exceptionOfRejection(rejection),
+			key,
+		);
+		// A proxy can only tell of keys its target lacks as configurable ones.
+		return descriptor && { ...descriptor, configurable: true };
+	},
+};
+
+/**
  * An instance of `Class`, a class made by `recordOf`, for `value`: `value`
  * itself if it is one already, otherwise what its constructor makes of it, or
- * the issues of the error the constructor throws.
+ * the issues that reject it. The constructor always runs, as a class may
+ * change the value before the record sees it, or reject it after; only the
+ * exception of a value the record rejects is left unbuilt.
  */
 function parseRecord(
 	Class: new (value: never) => object,
 	value: unknown,
 ): ParseResult<object> {
 	if (value instanceof Class) return { value };
+
+	// A constructor may parse other records before its own is built.
+	const outer = request;
+	const own: Request = { Class };
+	request = own;
 	try {
 		return { value: new Class(value as never) };
 	} catch (error) {
+		if (own.issues !== undefined && own.rejection === error) {
+			return { issues: own.issues };
+		}
 		return { issues: issuesOfError(error, recordNameOf(Class)) };
+	} finally {
+		request = outer;
 	}
 }
 
@@ -376,16 +441,29 @@ export abstract class AbstractRecord<
 	}
 
 	constructor(value: BlueprintInput<Properties>) {
-		checkMembers(this, Object.keys(this[Meta].blueprint.properties));
+		// `safeParse` is building this record: it takes the issues, unthrown.
+		// The class tells it, not the value, which a constructor may replace
+		// (an entity does, to make its id).
+		let asked: Request | undefined;
+		if (request !== undefined && request.Class === this.constructor) {
+			asked = request;
+			request = undefined;
+		}
+
+		const { properties } = this[Meta].blueprint;
+		checkMembers(this, properties);
 
 		const source = recordNameOf(this.constructor);
-		const result = parseCollection(
-			this[Meta].blueprint.properties,
-			value,
-			[],
-			source,
-		);
-		if (result.issues) throw exceptionOfIssues(result.issues, source);
+		const result = parseCollection(properties, value, [], source);
+		if (result.issues) {
+			if (asked === undefined) throw exceptionOfIssues(result.issues, source);
+			asked.issues = result.issues;
+			asked.rejection = new Proxy<Rejection>(
+				{ issues: asked.issues, source },
+				REJECTION_HANDLER,
+			);
+			throw asked.rejection;
+		}
 		values.set(this, result.value);
 	}
 

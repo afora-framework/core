@@ -326,7 +326,7 @@ describe("applicationOf useCases and exceptions", () => {
 			expect(app.useCases.Handler.useCaseName).toBe("Handler");
 			await new app.useCases.Handler({ name: "Ana" }).execute();
 			const stored = await provider.findMany(
-				{ entity: User, name: "Users", unique: [], env: {} } as never,
+				{ entity: User, name: "UserRepository", unique: [], env: {} } as never,
 				{ where: {}, withDeleted: true } as never,
 			);
 			expect(stored).toHaveLength(1);

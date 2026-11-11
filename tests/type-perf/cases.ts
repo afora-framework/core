@@ -274,6 +274,41 @@ const { /*@hover*/user } = await new Register({ name: "Ana", email: "ana@example
 `,
 	},
 	{
+		name: "strict steps use case",
+		perf: true,
+		code: `import { blueprintOf, entityOf, ExceptionLayers, exceptionOf, repositoryOf, useCaseOf } from "@afora/core";
+
+class User extends entityOf(
+	blueprintOf((ctx) => ({ name: ctx.string, email: ctx.email })),
+	{ unique: ["email"] },
+) {}
+const Users = repositoryOf({ entity: User, actions: ["findByEmail", "create"] });
+const UserAlreadyExists = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "UserAlreadyExists",
+	message: "A user with this email already exists.",
+});
+
+class Register extends useCaseOf({
+	name: "Register",
+	blueprint: blueprintOf((ctx) => ({ name: ctx.string, email: ctx.email })),
+	response: blueprintOf(() => ({ user: User })),
+	dependencies: { users: Users },
+	errors: [UserAlreadyExists],
+	strictSteps: true,
+	steps: [
+		{ find: "users.findByEmail", args: ["$input.email"], as: "existing" },
+		{ ensure: "absent", value: "$existing", error: UserAlreadyExists },
+		{ build: User, values: "$input", as: "user" },
+		{ create: "users", value: "$user", as: "saved" },
+		{ return: { user: "$saved" } },
+	],
+}) {}
+
+const { /*@hover*/user } = await new Register({ name: "Ana", email: "ana@example.com" }).execute();
+`,
+	},
+	{
 		name: "command and output",
 		perf: true,
 		code: `import { blueprintOf, commandOf, entityOf, openapi, outputOf, repositoryOf, useCaseOf } from "@afora/core";
@@ -379,6 +414,60 @@ user./*@complete*/;
 user.change./*@complete*/;
 User./*@complete*/;
 const Users = repositoryOf({ entity: User, actions: ["/*@complete*/"] });
+`,
+	},
+	{
+		name: "completions: strict steps",
+		perf: false,
+		code: `import { blueprintOf, entityOf, repositoryOf, useCaseOf } from "@afora/core";
+
+class User extends entityOf(
+	blueprintOf((ctx) => ({ name: ctx.string, email: ctx.email, age: ctx.integer })),
+	{ unique: ["email"], change: ["name"] },
+) {}
+const Users = repositoryOf({ entity: User, actions: ["findByEmail", "create"] });
+const Address = blueprintOf((ctx) => ({ zip: ctx.string }));
+
+useCaseOf({
+	name: "Rename",
+	blueprint: blueprintOf((ctx) => ({ email: ctx.email, name: ctx.string, age: ctx.integer, address: Address })),
+	response: blueprintOf(() => ({ user: User })),
+	dependencies: { users: Users },
+	strictSteps: true,
+	steps: [
+		{ find: "users.findByEmail", args: ["$/*@complete*/"], as: "user" },
+		{ change: "$user", key: "/*@complete*/", value: "$input.name", as: "renamed" },
+		{ return: { user: "$/*@complete*/" } },
+	],
+});
+`,
+	},
+	{
+		name: "errors: strict steps",
+		perf: false,
+		code: `import { blueprintOf, entityOf, repositoryOf, useCaseOf } from "@afora/core";
+
+class User extends entityOf(
+	blueprintOf((ctx) => ({ name: ctx.string, email: ctx.email, age: ctx.integer })),
+	{ unique: ["email"] },
+) {}
+const Users = repositoryOf({ entity: User, actions: ["findByEmail", "create"] });
+const Address = blueprintOf((ctx) => ({ zip: ctx.string }));
+
+useCaseOf({
+	name: "Register",
+	blueprint: blueprintOf((ctx) => ({ email: ctx.email, name: ctx.string, age: ctx.integer, address: Address })),
+	response: blueprintOf(() => ({ user: User })),
+	dependencies: { users: Users },
+	strictSteps: true,
+	steps: [
+		{ find: "users.findByEmail", args: ["$input.adress.zip"], as: "existing" },
+		{ find: "users.findByEmail", args: ["$input.age"], as: "other" },
+		{ build: User, values: { name: "$input.name", email: "$input.email", age: "$input.age", nickname: "x" }, as: "user" },
+		{ create: "users", value: "$user", as: "saved" },
+		{ return: { user: "$saved" } },
+	],
+});
 `,
 	},
 	{

@@ -71,6 +71,7 @@ import {
 } from "../repository/state";
 import type { ProviderDescription } from "../repository/types/query.interface";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
+import type { SchemaMigrationOptions } from "../repository/types/schema.interface";
 import { Kind } from "../symbols/kind";
 import { useCaseOriginOf } from "../use-case/plugin";
 import { describeSteps } from "../use-case/steps/describe";
@@ -82,10 +83,12 @@ import {
 	DuplicateApplicationDeclaration,
 	InvalidApplicationDeclaration,
 	InvalidApplicationEnvironment,
+	SchemaLockMismatch,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
 	UnregisteredUseCaseDependency,
 } from "./exceptions";
+import { isLock, migrateApplication } from "./migrate";
 import {
 	isProviderSlot,
 	isProviderStorage,
@@ -94,6 +97,7 @@ import {
 	slotsOf,
 } from "./providers";
 import { setStartedApplication, startedApplication } from "./registry";
+import { schemaLockOf, schemaLockProblemsOf } from "./schema";
 import {
 	checkCapabilities,
 	checkTransactions,
@@ -829,12 +833,16 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 	};
 	const plugins = pluginsOf(Record).map((plugin) => plugin.toJSON());
 	const skip = new Set<string>(plugins.flatMap((plugin) => plugin.keys));
-	const expires =
+	const settings =
 		entry.collection === "entities"
 			? (Record as { readonly [EntitySettings]?: EntityStorageSettings })[
 					EntitySettings
-				]?.expires
+				]
 			: undefined;
+	const expires = settings?.expires;
+	const upgrade = Object.keys(settings?.upgrade ?? {})
+		.map(Number)
+		.sort((a, b) => a - b);
 	if (entry.collection === "entities") {
 		for (const key of identityKeysOf(Record)) skip.add(key);
 	}
@@ -869,6 +877,13 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 		...(expires === undefined ? {} : { expires }),
 		...(entry.collection === "entities" && isVersionedEntityClass(Record)
 			? { versioned: true }
+			: {}),
+		...(settings?.schemaVersioned
+			? { schemaVersion: settings.schemaVersion }
+			: {}),
+		...(upgrade.length > 0 ? { upgrade } : {}),
+		...(settings !== undefined && settings.previousNames.length > 0
+			? { previousNames: [...settings.previousNames] }
 			: {}),
 	};
 }
@@ -1593,7 +1608,22 @@ export function applicationOf<
 
 	let starting: Promise<unknown> | undefined;
 	let started = false;
-	const start = async () => {
+	const start = async (lock: unknown) => {
+		if (lock !== undefined) {
+			if (!isLock(lock)) {
+				invalid(
+					name,
+					"Expected lock to be a schema lock ({ lockVersion: 1, entities }).",
+				);
+			}
+			const problems = schemaLockProblemsOf(
+				lock,
+				schemaLockOf(application.describe()),
+			);
+			if (problems.length > 0) {
+				throw new SchemaLockMismatch({ source: name, details: { problems } });
+			}
+		}
 		// Every environment at once, so one start reports all that is missing.
 		const failures: Record<string, string[]> = {};
 		let cause: unknown;
@@ -1741,8 +1771,26 @@ export function applicationOf<
 		get started() {
 			return started;
 		},
-		start(options: { replace?: boolean; register?: boolean } = {}) {
-			const { replace = false, register = true } = options ?? {};
+		migrate(options: SchemaMigrationOptions) {
+			return migrateApplication(
+				{
+					name,
+					entities: new Map(
+						[...registry.entities.values()].map((entry) => [
+							entry.name,
+							entry.value as object,
+						]),
+					),
+					repositories: Object.values(repositories) as object[],
+					describe: () => application.describe(),
+				},
+				options,
+			);
+		},
+		start(
+			options: { replace?: boolean; register?: boolean; lock?: unknown } = {},
+		) {
+			const { replace = false, register = true, lock } = options ?? {};
 			starting ??= (async () => {
 				if (register) {
 					const current = startedApplication();
@@ -1756,7 +1804,7 @@ export function applicationOf<
 						await current.stop();
 					}
 				}
-				await start();
+				await start(lock);
 				if (register) setStartedApplication(application as never);
 			})().then(
 				() => application,

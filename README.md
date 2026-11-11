@@ -61,7 +61,7 @@ afora is not a general-purpose validator. It models a domain on [TypeBox](https:
 - **Commands and outputs.** `commandOf` groups use cases behind one execution boundary (context, transactions, event policies); `outputOf` turns commands into operations and pipes them to a sink: an HTTP API with `@afora/hono`, WebSocket messages with `@afora/ws`, an OpenAPI 3.1 document, or MCP tools, with problem+json errors and masked responses.
 - **Standard use cases.** `commandOf({ useCases: (ctx) => ({ create: ctx.create(Posts), publish: ctx.publish(Posts) }) })` picks ready-made use cases that follow the repository and its entity: the actions it declares, its record plugins and the properties of its keys ([docs](docs/std-use-cases.md)).
 - **The whole application in JSON.** An `afora.json` generates the code (`@afora/codegen`), use cases included, as data (steps), and `extractSpec(app)` gives back the `afora.json` of an application written by hand.
-- **Repositories on any store.** A provider contract with typed queries, soft deletion and transactions, a runner-agnostic kit to test one (`@afora/core/testing`), in memory by default and on Drizzle ORM with `@afora/drizzle`.
+- **Repositories on any store.** A provider contract with typed queries, soft deletion and transactions, a runner-agnostic kit to test one (`@afora/core/testing`), in memory by default, on Drizzle ORM with `@afora/drizzle` and on DynamoDB with `@afora/dynamodb`.
 
 ## Install
 
@@ -346,6 +346,7 @@ Each concept has a page in [docs/](docs/README.md), in the order they build on o
 - [Records](docs/records.md): a class that holds the handled value, masks sensitive keys and generates `change.<key>`; plugins; experimental slicing.
 - [Entities](docs/entities.md): a record with identity, timestamps, `destroy()` and domain events.
 - [Repositories](docs/repositories.md): typed async methods for an entity, queries, soft deletion, providers, transactions and relations.
+- [Schema evolution](docs/schema-evolution.md): `fill`, `renamedFrom`, `schemaVersion` with `upgrade` steps and `previousNames`, so old rows are still read; `app.migrate` to rewrite them, and a schema lock checked in CI and on `start`.
 - [Use cases](docs/use-cases.md): the Command pattern with method injection, written as code or as steps.
 - [Commands](docs/commands.md): use cases under operation names, with a context, a transaction and an event policy.
 - [Outputs](docs/outputs.md): commands through stages into a sink, such as an HTTP API or an OpenAPI document.
@@ -368,6 +369,7 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 | [`@afora/hono`](packages/hono/README.md)                   | A `hono` sink for outputs: serves the operations as a Hono app, with problem+json errors, masked responses, signed webhooks and an optional OpenAPI document. |
 | [`@afora/ws`](packages/ws/README.md)                       | A `websocket` sink: operations over JSON messages on any runtime, with topic subscriptions that `publishEvents` feeds with domain events.                     |
 | [`@afora/drizzle`](packages/drizzle/README.md)             | A repository provider on Drizzle ORM (SQLite and Postgres) that passes the provider contract kit.                                                             |
+| [`@afora/dynamodb`](packages/dynamodb/README.md)           | A repository provider on one DynamoDB table (single-table layout, unique keys as marker items) that passes the provider contract kit on DynamoDB Local.       |
 
 ## Example
 
@@ -379,11 +381,14 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 
 `bun run bench` compares afora with TypeBox (compiled), Zod 4, Valibot and ArkType on the same data, on Bun and on Node; the results are in `bench/RESULTS.md`. Absolute numbers depend on the machine, so read the ratios. On the measured machine (Apple M2):
 
-- **Valid input.** afora is about 1.8x to 2.5x slower than Valibot and about 1.1x to 2.1x slower than Zod 4 (flat and nested objects, Bun and Node). It is faster than ArkType in these cases, where ArkType's morphs move it to a slower path.
-- **Invalid input.** This is still where afora is weakest, but much closer than before. Flat objects are about 5x slower than Valibot and 3.7x slower than Zod 4 on Bun, and about 4.4x and 3.6x on Node; nested objects are about 2.9x and 2.1x on Bun, and about 3.1x on Node. It is faster than ArkType here. Most of what remains is TypeBox's own error collection, which runs once for each failing property; the `cause` exception of an issue is built only when it is read.
-- **Floor.** Compiled TypeBox, which only checks and does not transform, is about 9x to 27x faster than afora on valid input. afora builds on it.
+- **Valid input.** `blueprint.safeParse` takes about 0.7x the time of Zod 4 on the flat object and 0.9x on the nested one on Bun, and about 0.55x to 0.7x on Node. Valibot is ahead on Bun, by about 1.1x on the flat object and 1.3x on the nested one, and behind on Node. `Record.safeParse`, which also creates the instance through its constructor, takes about the time of Zod 4 on Bun (up to 1.1x); on Node it is about 0.8x on the nested object and the same on the flat one.
+- **Invalid input.** `blueprint.safeParse` takes about 0.8x the time of Zod 4 on the flat object and 0.65x on the nested one on Bun, and about 0.45x to 0.6x on Node; `Record.safeParse` still runs the constructor, whose record hands its issues over without building an exception: about 1.25x the time of Zod 4 on the flat object and 0.75x on the nested one on Bun, 0.9x and 0.7x on Node, for a class made by `recordOf` and for a subclass alike. Valibot is ahead only on the flat object on Bun, by about 1.1x. A rejected string, number or boolean is told why without TypeBox's error collection, a path is only made for an issue, and the `cause` exception of an issue is built only when it is read. `new Record(value)` throws, so an invalid value costs an exception with its trace: about 1.7x to 3x `Record.safeParse` on Bun and 5x to 12x on Node. Use `safeParse` where invalid input is expected.
+- **Floor.** Compiled TypeBox, which only checks and does not transform, is about 5x to 12x faster than afora on valid input. afora builds on it.
+- **ArkType** is slower than afora in every case here, because its morphs (the transforms) move it to a slower path; without them it is very fast.
 
-What afora does that the fast rows do not all do: a handler pipeline per property (`preHandle`, schema check, `afterHandle`), preceded by a shape check so handlers only see the right types; objects walked key by key instead of one compiled function; frozen results; every issue with `code`, `path` and `source`; and, for `Record.safeParse` and `new Record`, creating the instance. If you validate untrusted bulk data in a hot path and need none of that, use a validator built for it, and use afora at the domain boundary, where the cost per entity is small next to I/O.
+What afora does that the fast rows do not all do: a pipeline per property (`preHandle`, schema check, `afterHandle`), where a property with a handler has the shape of the value checked first, so handlers only see the right types; objects walked key by key instead of one compiled function; frozen results, which on Bun is most of what a nested valid value costs; every issue with `code`, `path` and `source`; and, for `Record.safeParse` and `new Record`, creating the instance. If you validate bulk data in a hot path and need none of that, compiled TypeBox alone is an order of magnitude faster.
+
+CI keeps it there: `bun run bench:guard` times `blueprint.safeParse` and Zod 4 `safeParse` on the four cases (flat and nested, valid and invalid) and fails when afora takes more than 1.15x the time of Zod 4 in any of them.
 
 ## Comparison
 
@@ -431,7 +436,8 @@ bun run test:mcp      # tests of packages/mcp
 bun run test:hono     # tests of packages/hono
 bun run test:ws       # tests of packages/ws
 bun run test:drizzle  # tests of packages/drizzle (SQLite and PGlite)
-bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/ws and packages/drizzle
+bun run test:dynamodb # tests of packages/dynamodb (DynamoDB Local, with DYNAMODB_ENDPOINT)
+bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/ws, packages/drizzle and packages/dynamodb
 ```
 
 ## Versioning

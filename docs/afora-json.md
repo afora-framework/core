@@ -49,6 +49,28 @@ A repository lists `"increment"` among its actions for atomic counters; the enti
 }
 ```
 
+## Schema evolution
+
+An entity takes `schemaVersion`, `previousNames` and `upgrade` (each step an import of a hand-written function, by the version it reaches), and the object form of a type or enum field takes `fill` and `renamedFrom` (see [Schema evolution](schema-evolution.md)):
+
+```json
+{
+	"entities": {
+		"Entry": {
+			"fields": {
+				"title": { "type": "text", "renamedFrom": "name" },
+				"locale": { "enum": ["pt", "en"], "fill": "pt" }
+			},
+			"schemaVersion": 2,
+			"previousNames": ["Post"],
+			"upgrade": { "2": { "import": "./upgrades#entryV2" } }
+		}
+	}
+}
+```
+
+They are generated as `.with({ fill, renamedFrom })` and the options of `entityOf`, and extracted back (`entities.<Name>.upgrade.<n>` in `imports` for a step). `afora-codegen schema lock src/app.ts#App [--out afora.lock.json]` writes the [schema lock](schema-evolution.md#the-lock), and `afora-codegen schema check src/app.ts#App [--lock afora.lock.json]` fails in CI when the lock is stale, a change lacks its declaration or a version was not bumped, printing an `upgrade` stub for each missing step.
+
 ## Round trip
 
 `extractSpec(app)` reads `app.describe()` and is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec, and `normalizeSpec` makes the shorthand and object forms of a field compare equal. This holds for code that was generated, and for code written by hand, as long as everything the core cannot describe is mapped to an export (next section). An unmapped piece makes extraction throw an `ExtractionError` naming the key, instead of guessing. `examples/blog` extracts its own spec back in its tests, and `bun run test:roundtrip` proves both directions on complete applications.
@@ -222,6 +244,7 @@ What the spec and the round trip do not cover. Each is reported by an issue or a
 - **Hand-written use cases.** With `{ "import": "../handlers/register#Register" }`, the generated file has `export abstract class RegisterBase extends useCaseOf({...}) {}`; your class extends it and implements `execute`, and `application.ts` registers your class. Extraction needs the `useCases.<Name>` mapping.
 - **`Register` is written by hand.** The generated `application.ts` does not augment `Register` (two generated applications in one project would conflict), so `useApplication()` is `AnyApplication` until a file of yours declares it (see [Applications](applications.md#the-started-application)). A `provider` made with `providerFrom` is code, so it is an `{ "import": ... }`; `examples/blog` declares it as `"providers": { "database": { "import": "../provider.ts#database" } }` with `"provider": "database"` (`examples/blog/src/provider.ts`).
 - **Named providers come from this spec or one it extends directly.** `"provider": "<key>"` names a key of the top-level `providers` of the spec or of a spec it `extends` directly (imported as `Providers` from its output). A key of a spec further up is reported as `unknown_provider`. A provider written as `"inMemory"` or `{ "use" }` is made when the module loads, so it is shared by every application that registers it; for one instance per application, import a `providerFrom` (`{ "import": "./audit.ts#audit" }`).
+- **Step types are checked by TypeScript.** `check` follows the paths of `$input` and `$context` at any depth (`unknown_key` for `$input.address.zipp`), but knows nothing of the types of the results of steps or of the `run` functions. The generated steps use cases declare [`strictSteps: true`](use-cases.md#strict-steps), so type-checking the generated code reports a wrong path of a step result, an arg that does not fit the repository method, record method or `run` function, and a `build` value the record does not take.
 - **Transactions are checked at run time.** `"transaction": true` needs a provider with transactions; the provider is unknown when the spec is validated, so `commandOf` throws `InvalidCommandDeclaration` when the code runs, not `validateSpec`.
 - **Constructs the core does not describe.** A `change` on a plugin key and the order of `plugins` are not recovered.
 - **Repositories point at the generated classes.** To add behavior, extend the generated class in a file of your own.

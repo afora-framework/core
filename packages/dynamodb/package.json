@@ -1,0 +1,60 @@
+{
+	"name": "@afora/dynamodb",
+	"version": "0.0.8",
+	"description": "A repository provider for @afora/core on one DynamoDB table.",
+	"keywords": [
+		"afora",
+		"dynamodb",
+		"aws",
+		"repository",
+		"provider",
+		"single-table"
+	],
+	"author": "Alan Reis <alanreisanjo@gmail.com> (https://github.com/Hoyasumii)",
+	"license": "MIT",
+	"homepage": "https://github.com/afora-framework/core/tree/main/packages/dynamodb#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/afora-framework/core.git",
+		"directory": "packages/dynamodb"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"engines": {
+		"bun": ">=1.4.4",
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"typecheck": "bun check",
+		"build": "rm -rf dist && bun build ./src/index.ts --outdir ./dist --target node --format esm --packages external --tsconfig-override tsconfig.build.json && tsc -p tsconfig.build.json && bun ../../scripts/add-dts-extensions.ts dist",
+		"test": "bun test"
+	},
+	"devDependencies": {
+		"@aws-sdk/client-dynamodb": "^3.1164.0",
+		"@aws-sdk/lib-dynamodb": "^3.1164.0",
+		"@types/bun": "^1.4.4",
+		"typebox": "^1.4.3"
+	},
+	"peerDependencies": {
+		"@afora/core": ">=0.0.9",
+		"@aws-sdk/client-dynamodb": "^3.1164.0",
+		"@aws-sdk/lib-dynamodb": "^3.1164.0"
+	}
+}

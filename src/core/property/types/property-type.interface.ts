@@ -19,6 +19,10 @@ export interface IPropertyType<
 	readonly sensitive?: boolean;
 	/** Whether a record lists a key holding it in `options.unique`, for repositories to enforce. */
 	readonly unique?: boolean;
+	/** `fill` of `.with()`: the value given to the key when a stored row lacks it. */
+	readonly fill?: Value;
+	/** `renamedFrom` of `.with()`: the key that held the value in older rows. */
+	readonly renamedFrom?: string;
 }
 
 /**

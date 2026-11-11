@@ -6,6 +6,7 @@ import type {
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
 import { isProperty } from "../property/is-property";
+import { isRecordName } from "../record/name";
 import { IdentifiedRecord } from "../record/plugin";
 import { declareRecord, pluginContextOf } from "../record/record";
 import type {
@@ -23,6 +24,7 @@ import {
 	EntityUniqueKeys,
 	EXPIRES_AT,
 	RESERVED_ENTITY_KEYS,
+	SCHEMA_VERSION_KEY,
 } from "./abstract-entity";
 import {
 	type AnyEntityClass,
@@ -32,6 +34,7 @@ import {
 import {
 	ImmutableEntityKey,
 	InvalidEntityExpiry,
+	InvalidEntitySchemaVersion,
 	ReservedEntityKey,
 } from "./exceptions";
 import type {
@@ -86,6 +89,10 @@ export function entityBuilderOf<
 				},
 			});
 		}
+		const schemaVersioned = options.schemaVersion !== undefined;
+		checkSchemaOptions(options);
+		// Only rows of an entity with a schema version hold the key.
+		if (schemaVersioned) added.push(SCHEMA_VERSION_KEY);
 		for (const key of Object.keys(blueprint.properties)) {
 			if (RESERVED_ENTITY_KEYS.includes(key) || added.includes(key)) {
 				throw new ReservedEntityKey({ source: "entity", details: { key } });
@@ -137,6 +144,10 @@ export function entityBuilderOf<
 			value: Object.freeze({
 				versioned,
 				expires: options.expires,
+				schemaVersioned,
+				schemaVersion: options.schemaVersion ?? 1,
+				upgrade: Object.freeze({ ...options.upgrade }),
+				previousNames: Object.freeze([...(options.previousNames ?? [])]),
 			}),
 		});
 
@@ -166,11 +177,67 @@ export function isEntity(
 	return value instanceof AbstractEntity;
 }
 
+/**
+ * Throws `InvalidEntitySchemaVersion` unless `schemaVersion` is a positive
+ * integer, each step of `upgrade` a function reaching a version in
+ * `2..schemaVersion`, and each of `previousNames` a record name other than
+ * the entity's own.
+ */
+function checkSchemaOptions(options: EntityOptions<IBlueprintCollection>) {
+	const source = options.name ?? "entity";
+	const fail = (reason: string): never => {
+		throw new InvalidEntitySchemaVersion({ source, details: { reason } });
+	};
+	const { schemaVersion = 1, upgrade, previousNames } = options;
+	if (!Number.isSafeInteger(schemaVersion) || schemaVersion < 1) {
+		fail("expected schemaVersion to be a positive integer.");
+	}
+	if (upgrade !== undefined) {
+		if (typeof upgrade !== "object" || upgrade === null) {
+			fail("expected upgrade to be an object of steps by version.");
+		}
+		for (const [key, step] of Object.entries(upgrade)) {
+			const version = Number(key);
+			if (
+				!Number.isSafeInteger(version) ||
+				version < 2 ||
+				version > schemaVersion
+			) {
+				fail(
+					`the upgrade step "${key}" must reach a version from 2 to the schemaVersion (${schemaVersion}).`,
+				);
+			}
+			if (typeof step !== "function") {
+				fail(`the upgrade step ${key} is not a function.`);
+			}
+		}
+	}
+	if (previousNames !== undefined) {
+		if (!Array.isArray(previousNames)) {
+			fail("expected previousNames to be a list of names.");
+		}
+		for (const previous of previousNames as readonly unknown[]) {
+			if (!isRecordName(previous) || previous === options.name) {
+				fail(
+					`"${String(previous)}" cannot be a previous name: expected an identifier other than the name of the entity.`,
+				);
+			}
+		}
+	}
+}
+
 /** The record options of `options`, without the storage ones of an entity. */
 function withoutStorage(
 	options: EntityOptions<IBlueprintCollection>,
 ): EntityOptions<IBlueprintCollection> {
-	const { versioned: _versioned, expires: _expires, ...rest } = options;
+	const {
+		versioned: _versioned,
+		expires: _expires,
+		schemaVersion: _schemaVersion,
+		upgrade: _upgrade,
+		previousNames: _previousNames,
+		...rest
+	} = options;
 	return rest;
 }
 

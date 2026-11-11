@@ -160,7 +160,8 @@ mirror the reasons: `unknown_step`, `invalid_reference`, `unbound_reference`,
 - When `steps` is given, the overload returns a concrete class and does not
   require `execute`.
 - Value types are checked at execution by the blueprints, as for any input.
-  Static value typing may be a later, additive refinement.
+  Static value typing may be a later, additive refinement. (Done in #43 as
+  the opt-in `strictSteps: true`: see `docs/use-cases.md#strict-steps`.)
 - Budget: T16 adds a `use-case.sandbox.ts` case with the six steps above and
   measures with `bun run test:type-perf`. It must stay under the per-edit
   target (100k). A snapshot change is a stop-and-report point.

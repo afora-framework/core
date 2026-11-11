@@ -2,64 +2,24 @@ import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import { recordFieldOf } from "../blueprint/record-field";
 import type {
+	AnyBlueprint,
+	AnyBlueprintList,
+	AnyRecordClass,
 	BlueprintField,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import {
+	AbstractProperty,
+	parsingDefinitionOf,
+} from "../property/abstract-property";
+import { parserOf, takeRejectionIssues } from "../property/define-property";
 import { isProperty } from "../property/is-property";
+import type { AnyPropertyConstructor } from "../property/types/property-collection.type";
 import { recordNameOf } from "../record/name";
-import { movedIssue } from "./issue";
+import { movedIssue, REJECTED } from "./issue";
 import type { Issue, IssueCode, ParseResult } from "./types/parse.interface";
 
 type Path = readonly (string | number)[];
-
-/** The parent path, when a value has no key of its own under it. */
-const NO_KEY = Symbol("no key");
-
-/** The path of the value `key` of `parent`; `parent` itself when there is no key. */
-function pathAt(parent: Path, key: string | number | typeof NO_KEY): Path {
-	return key === NO_KEY ? parent : [...parent, key];
-}
-
-/** A failed result with the one issue that `code` and `message` describe at `path`. */
-function rejection(
-	code: IssueCode,
-	message: string,
-	path: Path,
-	source: string,
-): { readonly issues: readonly Issue[] } {
-	return { issues: [{ code, message, path, source }] };
-}
-
-/** `result` with the path of each issue it has placed under `path`. */
-function underPath<Output>(
-	result: ParseResult<Output>,
-	path: Path,
-): ParseResult<Output> {
-	if (!result.issues) return result;
-	return {
-		issues: result.issues.map((issue) =>
-			movedIssue(issue, [...path, ...issue.path]),
-		),
-	};
-}
-
-/**
- * `underPath` for the result of a property, whose issues were made for this
- * parse and are not shared, so they are moved where they are, not copied.
- */
-function ownIssuesUnderPath<Output>(
-	result: ParseResult<Output>,
-	path: Path,
-): ParseResult<Output> {
-	if (!result.issues) return result;
-	if (result.issues.some((issue) => Object.isFrozen(issue))) {
-		return underPath(result, path);
-	}
-	for (const issue of result.issues) {
-		(issue as { path: Path }).path = [...path, ...issue.path];
-	}
-	return result;
-}
 
 /** The fields of each collection of properties, as `[key, field]` pairs, made once. */
 const entriesOf = new WeakMap<
@@ -94,6 +54,170 @@ export function isPlainObject(
 	return prototype === Object.prototype || prototype === null;
 }
 
+/** What a field is, told once from its brand. */
+const PROPERTY = 0;
+const LIST = 1;
+const BLUEPRINT = 2;
+const RECORD = 3;
+const UNDECLARED_FIELD = 4;
+type Kind =
+	| typeof PROPERTY
+	| typeof LIST
+	| typeof BLUEPRINT
+	| typeof RECORD
+	| typeof UNDECLARED_FIELD;
+
+/**
+ * How a field handles a value, worked out once: what it is, and what it is
+ * made of. Every step has the same members, so that the code reading them
+ * always sees one shape.
+ */
+interface Step {
+	readonly kind: Kind;
+	readonly property: AnyPropertyConstructor | undefined;
+	/**
+	 * What the definition `property` parses with does to a value, made on its
+	 * first value; `null` when only its `safeParse` can tell.
+	 */
+	parser: ((value: unknown) => unknown) | null | undefined;
+	readonly list: AnyBlueprintList | undefined;
+	/** The step of the items of `list`, made on its first item. */
+	item: Step | undefined;
+	readonly blueprint: AnyBlueprint | undefined;
+	/** The steps of the fields of `blueprint`, made on its first value. */
+	collection: Collection | undefined;
+	readonly record: AnyRecordClass | undefined;
+	readonly optionalRecord: boolean;
+}
+
+/** The fields of a collection of properties, in order: the name and the step of each. */
+interface Collection {
+	readonly properties: IBlueprintCollection;
+	readonly names: readonly string[];
+	readonly steps: readonly Step[];
+}
+
+function stepOf(field: BlueprintField | undefined): Step {
+	const record = recordFieldOf(field);
+	const kind = isBlueprintList(field)
+		? LIST
+		: isBlueprint(field)
+			? BLUEPRINT
+			: record
+				? RECORD
+				: isProperty(field)
+					? PROPERTY
+					: UNDECLARED_FIELD;
+
+	return {
+		kind,
+		property: kind === PROPERTY ? (field as AnyPropertyConstructor) : undefined,
+		parser: undefined,
+		list: kind === LIST ? (field as AnyBlueprintList) : undefined,
+		item: undefined,
+		blueprint: kind === BLUEPRINT ? (field as AnyBlueprint) : undefined,
+		collection: undefined,
+		record: kind === RECORD ? record?.record : undefined,
+		optionalRecord: kind === RECORD && record?.optional === true,
+	};
+}
+
+/** The step of a field that is not one. */
+const UNDECLARED: Step = {
+	kind: UNDECLARED_FIELD,
+	property: undefined,
+	parser: undefined,
+	list: undefined,
+	item: undefined,
+	blueprint: undefined,
+	collection: undefined,
+	record: undefined,
+	optionalRecord: false,
+};
+
+/** The step of each field, made once. */
+const steps = new WeakMap<object, Step>();
+
+/** `stepOf(field)`, kept for the next time. */
+function keptStepOf(field: BlueprintField | undefined): Step {
+	if (
+		(typeof field !== "object" && typeof field !== "function") ||
+		field === null
+	) {
+		return UNDECLARED;
+	}
+	let step = steps.get(field);
+	if (!step) {
+		step = stepOf(field);
+		steps.set(field, step);
+	}
+	return step;
+}
+
+/** The collection of each collection of properties, made once. */
+const collections = new WeakMap<IBlueprintCollection, Collection>();
+
+function collectionOf(properties: IBlueprintCollection): Collection {
+	let collection = collections.get(properties);
+	if (!collection) {
+		const fields = fieldsOf(properties);
+		collection = {
+			properties,
+			names: fields.map(([name]) => name),
+			steps: fields.map(([, field]) => keptStepOf(field)),
+		};
+		collections.set(properties, collection);
+	}
+	return collection;
+}
+
+/**
+ * One parse: who is parsing, the issues found so far, and where it is. The
+ * key of each value on the way down is written to `keys`, and a path is only
+ * made of them for an issue.
+ */
+interface Run {
+	readonly source: string;
+	/** The path of the value the parse started at. */
+	readonly base: Path;
+	/** The keys from that value to the one being handled, by depth. */
+	readonly keys: (string | number)[];
+	issues: Issue[] | undefined;
+}
+
+function runOf(base: Path, source: string): Run {
+	return { source, base, keys: [], issues: undefined };
+}
+
+/** The path of the value `run` is handling at `depth`. */
+function pathOf(run: Run, depth: number): (string | number)[] {
+	const { base, keys } = run;
+	const path: (string | number)[] = base.length === 0 ? [] : [...base];
+	for (let index = 0; index < depth; index++) {
+		path.push(keys[index] as string | number);
+	}
+	return path;
+}
+
+/** Rejects the value being handled with the one issue `code` and `message` describe at `path`. */
+function reject(
+	run: Run,
+	code: IssueCode,
+	message: string,
+	path: Path,
+): typeof REJECTED {
+	run.issues ??= [];
+	run.issues.push({ code, message, path, source: run.source });
+	return REJECTED;
+}
+
+/** What a run made of a value: the value handled, or its issues. */
+function resultOf<Output>(run: Run, handled: unknown): ParseResult<Output> {
+	return handled === REJECTED
+		? { issues: run.issues ?? [] }
+		: { value: handled as Output };
+}
+
 /**
  * `value` handled by each field of `properties`, or every issue found: each
  * key `properties` does not declare, then those of each field, in order. Keys
@@ -106,56 +230,54 @@ export function parseCollection(
 	path: Path,
 	source: string,
 ): ParseResult<Readonly<Record<string, unknown>>> {
-	return collectionAt(properties, value, path, NO_KEY, source);
+	const run = runOf(path, source);
+	return resultOf(run, collectionAt(collectionOf(properties), value, run, 0));
 }
 
-/** `parseCollection` for the value at `key` of `parent`, whose path is made only for an issue. */
+/**
+ * `parseCollection` for the value `run` is handling at `depth`: the handled
+ * value, or `REJECTED` with its issues in `run`.
+ */
 function collectionAt(
-	properties: IBlueprintCollection,
+	collection: Collection,
 	value: unknown,
-	parent: Path,
-	key: string | number | typeof NO_KEY,
-	source: string,
-): ParseResult<Readonly<Record<string, unknown>>> {
+	run: Run,
+	depth: number,
+): unknown {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
-		return rejection(
-			"invalid_type",
-			"must be an object",
-			pathAt(parent, key),
-			source,
-		);
+		return reject(run, "invalid_type", "must be an object", pathOf(run, depth));
 	}
 
-	let issues: Issue[] | undefined;
-	const path = pathAt(parent, key);
+	const { properties, names, steps } = collection;
+	let rejected = false;
 
-	for (const name of Object.keys(value)) {
-		if (Object.hasOwn(properties, name)) continue;
-		issues ??= [];
-		issues.push({
-			code: "undeclared_key",
-			message: "is not declared",
-			path: [...path, name],
-			source,
-		});
+	const keys = Object.keys(value);
+	for (let index = 0; index < keys.length; index++) {
+		const name = keys[index] as string;
+		// A value written in the order of the blueprint has each key in its place.
+		if (name === names[index] || Object.hasOwn(properties, name)) continue;
+		rejected = true;
+		reject(run, "undeclared_key", "is not declared", [
+			...pathOf(run, depth),
+			name,
+		]);
 	}
 
 	const handled: Record<string, unknown> = {};
-	for (const [name, field] of fieldsOf(properties)) {
-		const result = fieldAt(
-			field,
+	for (let index = 0; index < names.length; index++) {
+		const name = names[index] as string;
+		run.keys[depth] = name;
+		const item = fieldAt(
+			steps[index] as Step,
 			(value as Record<string, unknown>)[name],
-			path,
-			name,
-			source,
+			run,
+			depth + 1,
 		);
-		if (result.issues) {
-			issues ??= [];
-			issues.push(...result.issues);
-		} else if (result.value !== undefined) handled[name] = result.value;
+		if (item === REJECTED) rejected = true;
+		else if (item !== undefined) handled[name] = item;
 	}
 
-	return issues ? { issues } : { value: Object.freeze(handled) };
+	return rejected ? REJECTED : Object.freeze(handled);
 }
 
 /**
@@ -170,97 +292,165 @@ export function parseField(
 	path: Path,
 	source: string,
 ): ParseResult<unknown> {
-	return fieldAt(field, value, path, NO_KEY, source);
+	const run = runOf(path, source);
+	return resultOf(run, fieldAt(keptStepOf(field), value, run, 0));
 }
 
-/** `parseField` for the value at `key` of `parent`, whose path is made only for an issue. */
-function fieldAt(
-	field: BlueprintField | undefined,
+/** The `safeParse` of a property that does not declare one. */
+const DECLARED_SAFE_PARSE: unknown = AbstractProperty.safeParse;
+
+/**
+ * `parseField` for the value `run` is handling at `depth`: the handled value,
+ * or `REJECTED` with its issues in `run`.
+ */
+function fieldAt(step: Step, value: unknown, run: Run, depth: number): unknown {
+	switch (step.kind) {
+		case PROPERTY:
+			return propertyAt(step, value, run, depth);
+
+		case LIST: {
+			const list = step.list as AnyBlueprintList;
+			if (value === undefined) {
+				return list.optional ? value : required(run, depth);
+			}
+			if (!Array.isArray(value)) {
+				return reject(
+					run,
+					"invalid_type",
+					"must be an array",
+					pathOf(run, depth),
+				);
+			}
+
+			const { minItems, maxItems } = list;
+			let rejected = false;
+			if (
+				(minItems !== undefined && value.length < minItems) ||
+				(maxItems !== undefined && value.length > maxItems)
+			) {
+				rejected = true;
+				const path = pathOf(run, depth);
+				if (minItems !== undefined && value.length < minItems) {
+					reject(
+						run,
+						"too_few_items",
+						`must have at least ${minItems} items`,
+						path,
+					);
+				}
+				if (maxItems !== undefined && value.length > maxItems) {
+					reject(
+						run,
+						"too_many_items",
+						`must have at most ${maxItems} items`,
+						path,
+					);
+				}
+			}
+
+			step.item ??= keptStepOf(list.item);
+			const { item } = step;
+			const items: unknown[] = [];
+			for (let index = 0; index < value.length; index++) {
+				run.keys[depth] = index;
+				const handled = fieldAt(item, value[index], run, depth + 1);
+				if (handled === REJECTED) rejected = true;
+				else items.push(handled);
+			}
+			return rejected ? REJECTED : Object.freeze(items);
+		}
+
+		case BLUEPRINT: {
+			const blueprint = step.blueprint as AnyBlueprint;
+			if (value === undefined) {
+				return blueprint.optional ? value : required(run, depth);
+			}
+			step.collection ??= collectionOf(blueprint.properties);
+			return collectionAt(step.collection, value, run, depth);
+		}
+
+		case RECORD: {
+			const Record = step.record as AnyRecordClass;
+			if (value === undefined) {
+				return step.optionalRecord ? value : required(run, depth);
+			}
+			if (value instanceof Record) return value;
+			if (!isPlainObject(value)) {
+				return reject(
+					run,
+					"not_record",
+					`must be an instance of record "${recordNameOf(Record)}"`,
+					pathOf(run, depth),
+				);
+			}
+
+			const result = Record.safeParse(value);
+			if (!result.issues) return result.value;
+			const path = pathOf(run, depth);
+			run.issues ??= [];
+			for (const issue of result.issues) {
+				run.issues.push(movedIssue(issue, [...path, ...issue.path]));
+			}
+			return REJECTED;
+		}
+
+		default:
+			return reject(
+				run,
+				"undeclared_key",
+				"is not declared",
+				pathOf(run, depth),
+			);
+	}
+}
+
+/** Rejects `undefined`, for a field that is not optional. */
+function required(run: Run, depth: number): typeof REJECTED {
+	return reject(run, "required", "is required", pathOf(run, depth));
+}
+
+/** `fieldAt` for a property. */
+function propertyAt(
+	step: Step,
 	value: unknown,
-	parent: Path,
-	key: string | number | typeof NO_KEY,
-	source: string,
-): ParseResult<unknown> {
-	const required = () =>
-		rejection("required", "is required", pathAt(parent, key), source);
+	run: Run,
+	depth: number,
+): unknown {
+	const property = step.property as AnyPropertyConstructor;
 
-	if (isBlueprintList(field)) {
-		if (value === undefined) return field.optional ? { value } : required();
-		if (!Array.isArray(value)) {
-			return rejection(
-				"invalid_type",
-				"must be an array",
-				pathAt(parent, key),
-				source,
-			);
+	// A property that leaves `safeParse` and the `parse` of its definition as
+	// they are is run without the result object they would make.
+	if ((property.safeParse as unknown) === DECLARED_SAFE_PARSE) {
+		let { parser } = step;
+		if (parser === undefined) {
+			parser = parserOf(parsingDefinitionOf(property)) ?? null;
+			step.parser = parser;
 		}
-
-		const { minItems, maxItems } = field;
-		const path = pathAt(parent, key);
-		let issues: Issue[] | undefined;
-		if (minItems !== undefined && value.length < minItems) {
-			issues ??= [];
-			issues.push({
-				code: "too_few_items",
-				message: `must have at least ${minItems} items`,
-				path,
-				source,
-			});
+		if (parser !== null) {
+			const handled = parser(value);
+			if (handled !== REJECTED) return handled;
+			run.issues ??= [];
+			takeRejectionIssues(pathOf(run, depth), run.issues);
+			return REJECTED;
 		}
-		if (maxItems !== undefined && value.length > maxItems) {
-			issues ??= [];
-			issues.push({
-				code: "too_many_items",
-				message: `must have at most ${maxItems} items`,
-				path,
-				source,
-			});
-		}
-
-		const items: unknown[] = [];
-		for (const [index, item] of value.entries()) {
-			const result = fieldAt(field.item, item, path, index, source);
-			if (result.issues) {
-				issues ??= [];
-				issues.push(...result.issues);
-			} else items.push(result.value);
-		}
-		return issues ? { issues } : { value: Object.freeze(items) };
 	}
 
-	if (isBlueprint(field)) {
-		if (value === undefined) return field.optional ? { value } : required();
-		return collectionAt(field.properties, value, parent, key, source);
-	}
+	const result = property.safeParse(value);
+	if (!result.issues) return result.value;
 
-	const record = recordFieldOf(field);
-	if (record) {
-		if (value === undefined) return record.optional ? { value } : required();
-		if (value instanceof record.record) return { value };
-		if (!isPlainObject(value)) {
-			return rejection(
-				"not_record",
-				`must be an instance of record "${recordNameOf(record.record)}"`,
-				pathAt(parent, key),
-				source,
-			);
+	const path = pathOf(run, depth);
+	run.issues ??= [];
+	// The issues of a property were made for this parse and are not shared, so
+	// they are moved where they are, not copied, unless they cannot be.
+	if (result.issues.some((issue) => Object.isFrozen(issue))) {
+		for (const issue of result.issues) {
+			run.issues.push(movedIssue(issue, [...path, ...issue.path]));
 		}
-
-		const result = record.record.safeParse(value);
-		return result.issues ? underPath(result, pathAt(parent, key)) : result;
+	} else {
+		for (const issue of result.issues) {
+			(issue as { path: Path }).path = [...path, ...issue.path];
+			run.issues.push(issue);
+		}
 	}
-
-	if (isProperty(field)) {
-		const result = field.safeParse(value);
-		return result.issues
-			? ownIssuesUnderPath(result, pathAt(parent, key))
-			: result;
-	}
-
-	return rejection(
-		"undeclared_key",
-		"is not declared",
-		pathAt(parent, key),
-		source,
-	);
+	return REJECTED;
 }

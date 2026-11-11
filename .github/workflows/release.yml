@@ -119,6 +119,7 @@ jobs:
           publish packages/hono
           publish packages/ws
           publish packages/drizzle
+          publish packages/dynamodb
       - name: Create the tag and the GitHub release
         run: |
           prerelease=""

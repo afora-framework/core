@@ -1,3 +1,4 @@
+import { declaredRecordNameOf } from "../record/name";
 import {
 	InvalidRepositoryDeclaration,
 	RepositoryConcurrencyConflict,
@@ -27,7 +28,26 @@ export type InMemoryProvider = IRepositoryProvider & {
 };
 
 type Table = Map<string, RepositoryData>;
-type Tables = Map<object, Table>;
+/** By declared name (a string), or by entity class for an entity without one. */
+type Tables = Map<string | object, Table>;
+
+const tableKeys = new WeakMap<object, string | object>();
+
+/**
+ * The key of the table of `entity`: the name it declares (`name`, or a
+ * `static recordName`, as the context `app.migrate` makes for a previous
+ * name), as a database names its tables; the class itself otherwise, since
+ * every entity without a name is called after its class (`entity` when
+ * anonymous), which two unrelated entities can share.
+ */
+function tableKeyOf(entity: object): string | object {
+	let key = tableKeys.get(entity);
+	if (key === undefined) {
+		key = declaredRecordNameOf(entity) ?? entity;
+		tableKeys.set(entity, key);
+	}
+	return key;
+}
 
 /** The id of a stored value. */
 function idOf(data: RepositoryData): string {
@@ -48,10 +68,11 @@ function scopeOf(initial: Tables, root: boolean) {
 	let closed = false;
 
 	const tableOf = (context: RepositoryContext): Table => {
-		let table = tables.get(context.entity);
+		const key = tableKeyOf(context.entity);
+		let table = tables.get(key);
 		if (!table) {
 			table = new Map();
-			tables.set(context.entity, table);
+			tables.set(key, table);
 		}
 		return table;
 	};
@@ -238,8 +259,8 @@ function scopeOf(initial: Tables, root: boolean) {
 }
 
 /**
- * A provider that keeps the values in memory, one table per entity class,
- * enforcing its unique keys. Each `repositoryOf` without a provider gets its
+ * A provider that keeps the values in memory, one table per entity name it
+ * declares (or per entity class, without one), enforcing its unique keys. Each `repositoryOf` without a provider gets its
  * own; repositories given the same one share the tables of their entities.
  * Its `transaction` works on isolated snapshots: commits on success, discards
  * on rejection, runs one at a time and makes other operations wait; nested

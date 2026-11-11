@@ -12,7 +12,7 @@ import {
 } from "../index";
 import { providerContract } from "./provider-contract";
 
-type Tables = Map<object, RepositoryData[]>;
+type Tables = Map<string, RepositoryData[]>;
 
 const clone = <T>(value: T): T => structuredClone(value);
 const missing = (value: unknown) => value === undefined || value === null;
@@ -90,10 +90,10 @@ function referenceProvider(): IRepositoryProvider {
 		const rowsOf = (context: RepositoryContext) => {
 			if (!alive()) throw new Error("transaction scope used after it ended");
 			const tables = get();
-			let rows = tables.get(context.entity);
+			let rows = tables.get(context.name);
 			if (!rows) {
 				rows = [];
-				tables.set(context.entity, rows);
+				tables.set(context.name, rows);
 			}
 			return rows;
 		};

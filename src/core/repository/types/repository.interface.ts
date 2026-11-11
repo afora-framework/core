@@ -22,6 +22,7 @@ import type {
 	RepositoryIndex,
 	RepositoryQuery,
 } from "./query.interface";
+import type { SchemaPlan } from "./schema.interface";
 
 /** Any class made by `entityOf`, or extending one, that a repository holds. */
 export type AnyRepositoryEntity = AnyRecordClass &
@@ -304,6 +305,13 @@ export interface ProviderIncrementOptions {
 	readonly now?: string;
 }
 
+/** `RepositoryContext.schema`. */
+export interface RepositorySchema {
+	readonly version: number;
+	readonly key: string;
+	readonly previousNames: readonly string[];
+}
+
 /** What a provider gets with every call: whose entities, and the environment. */
 export interface RepositoryContext<Environment = unknown> {
 	/** The entity class; name a table after `recordNameOf(entity)`, not `entity.name`. */
@@ -328,6 +336,13 @@ export interface RepositoryContext<Environment = unknown> {
 	 * `query.withExpired`. A record without a date never expires.
 	 */
 	readonly expiry?: { readonly key: string };
+	/**
+	 * For an entity declared with `schemaVersion`: the current version, the
+	 * key of each row holding it (`SCHEMA_VERSION_KEY`, which repositories
+	 * write and strip, so a provider keeping it in a column of its own maps
+	 * that key), and the names the entity had before.
+	 */
+	readonly schema?: RepositorySchema;
 	/** The variables of the `environmentDependencies` of the repository. */
 	readonly env: Environment;
 }
@@ -338,6 +353,13 @@ export interface RepositoryContext<Environment = unknown> {
  * `RepositoryUniqueViolation`; `update` and `remove` throw
  * `RepositoryEntityNotFound` for an unknown id.
  */
+/**
+ * What `IRepositoryProvider.migrate` gives when it did not apply the plan to
+ * the store (it wrote it to a file to be run later): `app.migrate` skips the
+ * backfill of the entity and reports it `deferred`.
+ */
+export type ProviderMigrationResult = { readonly deferred: true };
+
 export interface IRepositoryProvider<Environment = unknown> {
 	findOne(
 		context: RepositoryContext<Environment>,
@@ -390,4 +412,19 @@ export interface IRepositoryProvider<Environment = unknown> {
 	): Promise<Result>;
 	/** Releases what the provider holds (connections, files); `app.stop()` calls it. */
 	close?(): void | Promise<void>;
+	/**
+	 * Applies the structural part of `plan` (columns, tables) for a provider
+	 * with a schema of its own, as SQL; `app.migrate({ mode: "apply" })` calls
+	 * it before the backfill. Document stores leave it out: they rely on the
+	 * upgrade on read and the backfill. Only destructive changes when
+	 * `plan.destructive`. Gives `{ deferred: true }` when it did not apply
+	 * the plan to the store (it wrote it to a file to be run later): the
+	 * backfill of the entity is then skipped, as its rows cannot be written
+	 * in the new shape yet.
+	 */
+	migrate?(
+		context: RepositoryContext<Environment>,
+		plan: SchemaPlan,
+		// biome-ignore lint/suspicious/noConfusingVoidType: an `async migrate() {}` gives Promise<void>
+	): Promise<void | ProviderMigrationResult>;
 }

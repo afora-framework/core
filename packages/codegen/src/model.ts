@@ -13,24 +13,79 @@ export type Field = {
 	/** Present when the field is a list. */
 	readonly list?: ListBounds;
 } & (
-	| {
+	| ({
 			readonly kind: "type";
 			readonly type: string;
 			readonly with?: WithOptions;
-	  }
-	| {
+	  } & FieldEvolution)
+	| ({
 			readonly kind: "enum";
 			readonly values: readonly EnumValue[];
 			readonly name?: string;
 			readonly default?: EnumValue;
-	  }
+	  } & FieldEvolution)
 	| {
 			readonly kind: "inline";
 			readonly fields: Readonly<Record<string, Field>>;
 	  }
 );
 
+/** What a stored row lacking the key gets, and the key that held it before. */
+interface FieldEvolution {
+	readonly fill?: unknown;
+	readonly renamedFrom?: string;
+}
+
 const MODIFIERS = ["optional", "list"];
+const EVOLUTION = ["fill", "renamedFrom"];
+
+/** `fill` and `renamedFrom` of a field object, checked; `undefined` when invalid. */
+function evolutionOf(
+	value: Record<string, unknown>,
+	path: readonly (string | number)[],
+	issues: SpecIssue[],
+): FieldEvolution | undefined {
+	const { fill, renamedFrom } = value;
+	if (fill === undefined && renamedFrom === undefined) return {};
+	let ok = true;
+	if (value.list !== undefined && value.list !== false) {
+		issues.push(
+			issue(
+				path,
+				"invalid_field",
+				'"fill" and "renamedFrom" do not apply to a list field.',
+			),
+		);
+		ok = false;
+	}
+	if (fill === null) {
+		issues.push(
+			issue([...path, "fill"], "invalid_field", '"fill" cannot be null.'),
+		);
+		ok = false;
+	}
+	if (
+		renamedFrom !== undefined &&
+		(typeof renamedFrom !== "string" ||
+			!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(renamedFrom))
+	) {
+		issues.push(
+			issue(
+				[...path, "renamedFrom"],
+				"invalid_field",
+				'"renamedFrom" must be the key the value had before, an identifier.',
+			),
+		);
+		ok = false;
+	}
+	if (!ok) return undefined;
+	return {
+		...(fill === undefined ? {} : { fill }),
+		...(renamedFrom === undefined
+			? {}
+			: { renamedFrom: renamedFrom as string }),
+	};
+}
 
 function checkKeys(
 	value: Record<string, unknown>,
@@ -249,7 +304,12 @@ export function parseField(
 		return { optional: value.optional === true, ...(list ? { list } : {}) };
 	};
 	if (forms[0] === "type") {
-		checkKeys(value, ["type", "with", ...MODIFIERS], path, issues);
+		checkKeys(
+			value,
+			["type", "with", ...MODIFIERS, ...EVOLUTION],
+			path,
+			issues,
+		);
 		if (
 			typeof value.type !== "string" ||
 			!parseShorthand(value.type) ||
@@ -276,21 +336,42 @@ export function parseField(
 			return undefined;
 		}
 		const mods = modifiers();
-		if (!mods) return undefined;
+		const evolution = evolutionOf(value, path, issues);
+		if (!mods || !evolution) return undefined;
 		return {
 			kind: "type",
 			type: value.type,
 			...(value.with ? { with: value.with as WithOptions } : {}),
+			...evolution,
 			...mods,
 		};
 	}
 	if (forms[0] === "enum") {
-		checkKeys(value, ["enum", "name", "default", ...MODIFIERS], path, issues);
+		checkKeys(
+			value,
+			["enum", "name", "default", ...MODIFIERS, ...EVOLUTION],
+			path,
+			issues,
+		);
 		const before = issues.length;
 		if (!checkEnum(value, path, issues) || issues.length > before)
 			return undefined;
 		const mods = modifiers();
-		if (!mods) return undefined;
+		const evolution = evolutionOf(value, path, issues);
+		if (!mods || !evolution) return undefined;
+		if (
+			evolution.fill !== undefined &&
+			!(value.enum as unknown[]).includes(evolution.fill)
+		) {
+			issues.push(
+				issue(
+					[...path, "fill"],
+					"invalid_enum",
+					'"fill" must be one of the enum values.',
+				),
+			);
+			return undefined;
+		}
 		return {
 			kind: "enum",
 			values: value.enum as EnumValue[],
@@ -298,6 +379,7 @@ export function parseField(
 			...(value.default === undefined
 				? {}
 				: { default: value.default as EnumValue }),
+			...evolution,
 			...mods,
 		};
 	}

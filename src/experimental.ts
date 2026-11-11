@@ -20,6 +20,14 @@ export {
 	propertyLineageOf,
 } from "./core/property/lineage";
 export { providerDescriptionOf } from "./core/repository/provider";
+// For providers that filter, order and page rows themselves (document stores):
+// the same rules as `inMemoryProvider`.
+export {
+	matchesQuery,
+	prepareQuery,
+	sameValue,
+	selectRows,
+} from "./core/repository/query";
 export { useCaseOriginOf } from "./core/use-case/plugin";
 export { useCaseTargetOf } from "./core/use-case/target";
 export type { UseCaseOriginInfo } from "./core/use-case/types/plugin.interface";

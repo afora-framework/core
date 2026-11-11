@@ -51,6 +51,7 @@ export class BuyTicket extends useCaseOf({
 	dependencies: { events: Events, tickets: Tickets },
 	errors: [EventNotFound, SoldOut],
 	description: "Sells one seat of an event. The ticket is stored first and the command runs in a transaction, so a ticket past the capacity is rolled back with SoldOut.",
+	strictSteps: true,
 	steps: [
 		{ find: "events.findById", args: ["$input.eventId"], as: "event" },
 		{ ensure: "exists", value: "$event", error: EventNotFound },

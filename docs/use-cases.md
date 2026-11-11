@@ -109,7 +109,7 @@ class Register extends useCaseOf({
 }) {}
 ```
 
-The steps are the same objects in TypeScript and in JSON, except for the class of `build`, the exception class of `ensure.error` and the function of `run`, which the descriptor names or marks `opaque`. TypeScript checks the dependency and action names (`"users.findByEmail"` only exists if `Users` has that read action); the values are checked at execution by the blueprints. Steps run in order, each awaited, and every repository and use case call goes through the same dependency functions as a hand-written `execute`: execution scope, events, trace frames, `UseCaseAlreadyExecuted` and `execute({ ...overrides })` behave identically.
+The steps are the same objects in TypeScript and in JSON, except for the class of `build`, the exception class of `ensure.error` and the function of `run`, which the descriptor names or marks `opaque`. TypeScript checks the dependency and action names (`"users.findByEmail"` only exists if `Users` has that read action); with [`strictSteps: true`](#strict-steps) it also checks the references and values, which are otherwise checked at declaration and at execution by the blueprints. Steps run in order, each awaited, and every repository and use case call goes through the same dependency functions as a hand-written `execute`: execution scope, events, trace frames, `UseCaseAlreadyExecuted` and `execute({ ...overrides })` behave identically.
 
 A _value_ is a reference, a literal or a mapping:
 
@@ -139,7 +139,36 @@ There are no operators or interpolation: anything computed goes through `run`. T
 | `{ run: "<name>", fn, args?, as? }`                    | `await fn(...args, { context, dependencies })`, the dependencies as the call resolved them (overrides included); `name` is unique in the use case                                  | its result    |
 | `{ return: value }`                                    | the response, validated by the response blueprint; required, last, once                                                                                                            | none          |
 
-`useCaseOf` validates the steps at declaration and throws `InvalidUseCaseStep` (`UseCase` layer, `details: { index, reason, code }`) for an unknown or malformed step, a bad or repeated `as`, a reference to an unbound name, a `$context` without a declared context, a first-level `$input.<key>` or `$context.<key>` the blueprint lacks, an unknown repository, action, use case or environment, a `find` of a write action, a `build` that is not a record class, an `ensure.error` missing from `errors`, a `change.key` that is not a change key of the class `build` made, and a missing, repeated or misplaced `return`. A `change` or `invoke` on something that is not a record, or on a member it lacks, throws `InvalidUseCaseStep` with the `index` while the steps run. In an application, the classes of `build` and `ensure.error` must be registered (`UnregisteredApplicationReference`); `describe()` gives `implementation: { kind: "steps", steps }` with them by name (`"User"`, `"UserAlreadyExists"`, or `{ core: "RepositoryUniqueViolation" }` for an exported exception) and `run.fn` as `{ kind: "opaque" }`. A subclass that overrides `execute` is hand-written, so it is `{ kind: "opaque" }`.
+`useCaseOf` validates the steps at declaration and throws `InvalidUseCaseStep` (`UseCase` layer, `details: { index, reason, code }`) for an unknown or malformed step, a bad or repeated `as`, a reference to an unbound name, a `$context` without a declared context, a path of `$input` or `$context` the blueprint lacks at any depth (`$input.address.zipp`, `$input.tags.first`, `$input.name.length` below a string; a list has its indices and its `length`, a number, as in `$input.tags.length`; below a key of a record that its blueprint lacks but its class has, such as a getter, the path is not followed), an unknown repository, action, use case or environment, a `find` of a write action, a `build` that is not a record class, an `ensure.error` missing from `errors`, a `change.key` that is not a change key of the class `build` made, and a missing, repeated or misplaced `return`. A `change` or `invoke` on something that is not a record, or on a member it lacks, throws `InvalidUseCaseStep` with the `index` while the steps run. In an application, the classes of `build` and `ensure.error` must be registered (`UnregisteredApplicationReference`); `describe()` gives `implementation: { kind: "steps", steps }` with them by name (`"User"`, `"UserAlreadyExists"`, or `{ core: "RepositoryUniqueViolation" }` for an exported exception) and `run.fn` as `{ kind: "opaque" }`. A subclass that overrides `execute` is hand-written, so it is `{ kind: "opaque" }`.
+
+### Strict steps
+
+With `strictSteps: true`, TypeScript checks the steps written inline in `useCaseOf` as it checks a hand-written `execute`. The steps are read in order, each against the values in scope: the input, the context, the environments and the results of the earlier steps, typed (`find` gives what the repository method returns, `build` the instance, `change` the record, `invoke` and `run` what the method or function returns, awaited, `call` the response of the use case). An `ensure: "exists"` on a bound name removes `undefined` from it for the steps after.
+
+```ts
+class Register extends useCaseOf({
+	name: "Register",
+	blueprint: RegisterInput,
+	response: UserResponse,
+	dependencies: { users: Users },
+	errors: [UserAlreadyExists],
+	strictSteps: true,
+	steps: [
+		// Type '"$input.emial"' is not assignable to type '"$input.name" | "$input.email" | "$input.plainPassword"'.
+		{ find: "users.findByEmail", args: ["$input.emial"], as: "existing" },
+		// ...
+	],
+}) {}
+```
+
+- every reference must name a value in scope, at any depth (`$input.address.zip`, `$existing.email`, `$env.mail.FROM`); a name bound by a later step is an error;
+- the `args` of `find`, `invoke` and `run` must fit the parameters of the repository method, the record method and the function (for `run`, without the `{ context, dependencies }` the interpreter adds); the `values` of `build` the input of the record class, keys included (a missing key or one it does not declare is an error); the `value` of `change` the change key, and of `create`, `update`, `delete` and `restore` the repository method; the `input` of `call` the input of the use case;
+- `invoke.method` must be a public method of the record, and `change.key` one of its change keys;
+- the values of `ensure`, `details` and `return` are checked as references only.
+
+A reference that does not fit is reported with the references that would (`'"$input.emial"' is not assignable to type '"$input.name" | "$input.email" | ...'`), and the editor offers them inside a `"$"` string. A path through a value that may be `undefined` (the result of `findByEmail`, an optional key) resolves to a possibly `undefined` value, as `followPath` reads it. A list index is typed as the item. Paths are offered three keys deep below their root.
+
+Checking costs the editor about 9,000 more type instantiations per edit (17%) on a use case of five steps (see `bun run test:type-perf`), which is why it is opt-in. It only applies to steps written inline (a tuple); steps built at run time are checked at declaration only. `strictSteps` has no effect at run time and must be a boolean. The code [codegen](../packages/codegen/README.md) generates from `afora.json` declares it.
 
 ## Plugins
 

@@ -4,6 +4,12 @@
  * Part of the compatibility policy in `VERSIONING.md`, like the main entry.
  * Application code needs only `@afora/core`. See `docs/api-tiers.md`.
  */
+
+export {
+	diffSchemas,
+	schemaLockOf,
+	schemaLockProblemsOf,
+} from "./core/application/schema";
 export type {
 	ApplicationDescription,
 	CommandDescription,
@@ -50,6 +56,7 @@ export type {
 	StageDescription,
 } from "./core/output/types/output.interface";
 export { RESERVED_RECORD_KEYS } from "./core/record/abstract-record";
+export { SCHEMA_VERSION_KEY } from "./core/repository/state";
 export type {
 	ProviderCapabilities,
 	ProviderDescription,
@@ -59,9 +66,20 @@ export type {
 	IRepositoryProvider,
 	ProviderIncrementOptions,
 	ProviderKeyset,
+	ProviderMigrationResult,
 	ProviderUpdateOptions,
 	RepositoryContext,
 	RepositoryData,
+	RepositorySchema,
 } from "./core/repository/types/repository.interface";
+export type {
+	SchemaChange,
+	SchemaChangeClass,
+	SchemaChangeKind,
+	SchemaLock,
+	SchemaLockEntity,
+	SchemaLockField,
+	SchemaPlan,
+} from "./core/repository/types/schema.interface";
 export { Demo } from "./core/symbols/demo";
 export { Kind } from "./core/symbols/kind";

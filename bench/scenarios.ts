@@ -9,7 +9,7 @@ import { z } from "zod";
 
 // biome-ignore lint/suspicious/noExplicitAny: the afora module is loaded from source on Bun and from a build on Node
 export async function build(afora: any) {
-	const { blueprintOf, listOf, propertyOf, recordOf } = afora;
+	const { blueprintOf, entityOf, listOf, propertyOf, recordOf } = afora;
 
 	// ---------------------------------------------------------------- inputs
 	// Raw inputs carry the whitespace and the casing the transforms remove.
@@ -184,6 +184,11 @@ export async function build(afora: any) {
 	}));
 	const FlatRecord = recordOf(FlatBlueprint);
 	const NestedRecord = recordOf(NestedBlueprint);
+	// What an application declares: a class of its own, and an entity.
+	class FlatSub extends recordOf(FlatBlueprint) {}
+	class NestedSub extends recordOf(NestedBlueprint) {}
+	class FlatEntity extends entityOf(FlatBlueprint) {}
+	class NestedEntity extends entityOf(NestedBlueprint) {}
 
 	const hasStandard = "~standard" in FlatBlueprint;
 
@@ -210,6 +215,8 @@ export async function build(afora: any) {
 		as: (input: unknown) => unknown,
 		blueprint: { safeParse(v: unknown): unknown },
 		Record: { safeParse(v: unknown): unknown; new (v: never): unknown },
+		Sub: { safeParse(v: unknown): unknown },
+		Entity: { safeParse(v: unknown): unknown },
 	): Contender[] {
 		const list: Contender[] = [
 			{
@@ -242,6 +249,18 @@ export async function build(afora: any) {
 			{
 				name: "afora Record.safeParse",
 				make: (input) => Record.safeParse(input),
+				ok: issuesOf,
+			},
+			{
+				name: "afora Subclass.safeParse",
+				note: "class extends recordOf(...) {}",
+				make: (input) => Sub.safeParse(input),
+				ok: issuesOf,
+			},
+			{
+				name: "afora Entity.safeParse",
+				note: "class extends entityOf(...) {}, makes its id and createdAt",
+				make: (input) => Entity.safeParse(input),
 				ok: issuesOf,
 			},
 			{
@@ -286,6 +305,8 @@ export async function build(afora: any) {
 					aFlat,
 					FlatBlueprint,
 					FlatRecord,
+					FlatSub,
+					FlatEntity,
 				),
 			},
 			{
@@ -299,6 +320,8 @@ export async function build(afora: any) {
 					aNested,
 					NestedBlueprint,
 					NestedRecord,
+					NestedSub,
+					NestedEntity,
 				),
 			},
 		],

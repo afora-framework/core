@@ -59,11 +59,17 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) AuthenticatableRecord_base": [
     "AuthenticatableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ email: import("../index.js").CallableProperty<import("../index.js").PropertyClass<import("typebox").TString, string>>; password: import("../index.js").CallableProperty<typeof Password>; }>, readonly [ "password" ], "email", unknown, never, never>",
   ],
+  "(internal) Below": [
+    "type Below<Value, Prefix extends string, Expected, Depth extends unknown[]> = Depth["length"] extends 3 ? never : DataOf<NonNullable<Value>> extends infer Data ? Data extends Leaf ? never : { [Key in keyof Data & string]-?: PathsFrom<Data[Key] | (Value extends null | undefined ? undefined : never), \`\${Prefix}.\${Key}\`, Expected, [ ...Depth, 0 ]>; }[keyof Data & string] : never;",
+  ],
   "(internal) BlueprintFactoryContext": [
     "export type BlueprintFactoryContext<Sources extends readonly BlueprintSource[]> = Sources extends readonly [ infer Head, ...infer Tail extends readonly BlueprintSource[] ] ? Override<Head extends { readonly factories?: infer Factories; } ? NonNullable<Factories> extends infer Defined extends IBlueprintFactories ? string extends keyof Defined ? Record<never, never> : Defined : Record<never, never> : Record<never, never>, BlueprintFactoryContext<Tail>> : Record<never, never>;",
   ],
   "(internal) ById": [
     "type ById<Repository> = { readonly id: IdField<Repository>; };",
+  ],
+  "(internal) CallStep": [
+    "type CallStep<Step, Method, Scope> = [ { readonly [Key in keyof Step]: Key extends "args" ? CheckArgs<Step[Key], ParametersOf<Method>, Scope> : Step[Key]; }, ResultOf<Method> ];",
   ],
   "(internal) Callable": [
     "Callable: unique symbol",
@@ -79,6 +85,30 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) ChangeKeyOf": [
     "type ChangeKeyOf<Entity> = EntityInstanceOf<Entity> extends { readonly change: infer Change; } ? keyof Change & string : never;",
+  ],
+  "(internal) ChangeOf": [
+    "type ChangeOf<Record> = Record extends { readonly change: infer Change; } ? Change : never;",
+  ],
+  "(internal) ChangeStep": [
+    "type ChangeStep<Step, Record, Scope> = [ Record ] extends [ never ] ? ValueStep<Step, "change", object, unknown, Scope> : [ Step ] extends [ { readonly key: infer Name; } ] ? Name extends keyof ChangeOf<Record> ? ValueStep<Step, "value", FirstParameter<ChangeOf<Record>[Name]>, Record, Scope> : [ { readonly [Key in keyof Step]: Key extends "key" ? keyof ChangeOf<Record> & string : Step[Key]; }, Record ] : [ Step, Record ];",
+  ],
+  "(internal) CheckArgs": [
+    "type CheckArgs<Args, Parameters extends readonly unknown[], Scope> = [ Args ] extends [ \`$\${string}\` ] ? CheckReference<Args, readonly unknown[], Scope> : { readonly [Index in keyof Args]: StepValueCheck<Args[Index], ParameterAt<Parameters, Index>, Scope>; };",
+  ],
+  "(internal) CheckKeys": [
+    "type CheckKeys<Value, Expected, Scope> = Value extends unknown ? { readonly [Key in keyof Value as Key extends KnownKeys<Expected> ? Key : never]: StepValueCheck<Value[Key], ExpectedAt<Expected, Key>, Scope>; } : never;",
+  ],
+  "(internal) CheckMapping": [
+    "type CheckMapping<Value, Expected, Scope> = unknown extends Expected ? { readonly [Key in keyof Value]: StepValueCheck<Value[Key], unknown, Scope>; } : [ Exclude<RequiredKeys<Expected>, keyof Value> ] extends [ never ] ? CheckKeys<Value, Expected, Scope> : CheckKeys<Value, Expected, Scope> & { readonly [Key in Exclude<RequiredKeys<Expected>, keyof Value>]: ExpectedAt<Expected, Key>; };",
+  ],
+  "(internal) CheckReference": [
+    "type CheckReference<Reference, Expected, Scope> = [ StepReferenceType<Scope, Reference> ] extends [ infer Type ] ? [ Type ] extends [ never ] ? StepReferencesOf<Scope, Expected> : [ Type ] extends [ Expected ] ? Reference : StepReferencesOf<Scope, Expected> : never;",
+  ],
+  "(internal) CheckStep": [
+    "type CheckStep<Step, Dependencies, Scope> = [ Step ] extends [ { readonly find: infer Target; } ] ? CallStep<Step, FindMethod<Dependencies, Target>, Scope> : [ Step ] extends [ { readonly run: unknown; readonly fn: infer Run; } ] ? CallStep<Step, Run, Scope> : [ Step ] extends [ { readonly invoke: infer Reference; } ] ? InvokeStep<Step, NonNullable<StepReferenceType<Scope, Reference>>, Scope> : [ Step ] extends [ { readonly change: infer Reference; } ] ? ChangeStep<Step, NonNullable<StepReferenceType<Scope, Reference>>, Scope> : [ Step ] extends [ { readonly build: abstract new (value: infer Input) => infer Built; } ] ? ValueStep<Step, "values", Input, Built, Scope> : [ Step ] extends [ { readonly call: infer Name; } ] ? ValueStep<Step, "input", UseCaseInput<UseCaseOf<Dependencies, Name>>, UseCaseResponse<UseCaseOf<Dependencies, Name>>, Scope> : [ Step ] extends [ { readonly create: infer Repository; } ] ? WriteStep<Step, MemberOf<Dependencies, Repository, "create">, Scope> : [ Step ] extends [ { readonly update: infer Repository; } ] ? WriteStep<Step, MemberOf<Dependencies, Repository, "update">, Scope> : [ Step ] extends [ { readonly delete: infer Repository; } ] ? WriteStep<Step, MemberOf<Dependencies, Repository, "delete">, Scope> : [ Step ] extends [ { readonly restore: infer Repository; } ] ? WriteStep<Step, MemberOf<Dependencies, Repository, "restore">, Scope> : ValueStep<Step, "value" | "other" | "details" | "return", unknown, unknown, Scope>;",
+  ],
+  "(internal) CheckSteps": [
+    "type CheckSteps<Steps extends readonly unknown[], Dependencies, Scope, Checked extends readonly unknown[] = [ ]> = [ Steps ] extends [ readonly [ infer Step, ...infer Rest ] ] ? CheckStep<Step, Dependencies, Scope> extends [ infer Current, infer Result ] ? CheckSteps<Rest, Dependencies, ScopeAfter<Step, Result, Scope>, [ ...Checked, Current ]> : never : readonly [ ...Checked ];",
   ],
   "(internal) CollectionSchema": [
     "type CollectionSchema<Properties extends IBlueprintCollection, Mode extends FieldMode> = TObject<{ [Key in keyof Properties]: FieldSchema<Properties[Key], Mode>; }>;",
@@ -101,6 +131,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) CreatedAt_base": [
     "CreatedAt_base: DateTimeClass<false>",
   ],
+  "(internal) DataOf": [
+    "type DataOf<Value> = Value extends { readonly [Meta]: { readonly blueprint: IBlueprint<infer Properties>; }; } ? BlueprintValue<Properties> : Value;",
+  ],
   "(internal) DateTimeClass": [
     "interface DateTimeClass<Optional extends boolean> extends PropertyClass<Optional extends true ? TOptional<TString> : TString, string> { now<Self>(this: new (value: string) => Self): Self; }",
   ],
@@ -115,6 +148,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) Demo": [
     "Demo: unique symbol",
+  ],
+  "(internal) ElementAt": [
+    "type ElementAt<Expected, Index> = unknown extends Expected ? unknown : Expected extends readonly unknown[] ? Index extends keyof Expected ? Expected[Index] : Expected[number] : never;",
   ],
   "(internal) EntityClassBrand": [
     "EntityClassBrand: unique symbol",
@@ -146,6 +182,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) ExceptionDescription": [
     "export interface ExceptionDescription { readonly from: string; readonly layer: ExceptionLayers; readonly message?: string; }",
   ],
+  "(internal) ExpectedAt": [
+    "type ExpectedAt<Expected, Key> = Expected extends object ? Key extends keyof Expected ? Expected[Key] : never : never;",
+  ],
   "(internal) ExpiresAt_base": [
     "ExpiresAt_base: DateTimeClass<false>",
   ],
@@ -170,6 +209,24 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) FieldsDescription": [
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
   ],
+  "(internal) FindMethod": [
+    "type FindMethod<Dependencies, Target> = Target extends \`\${infer Repository}.\${infer Action}\` ? MemberOf<Dependencies, Repository, Action> : unknown;",
+  ],
+  "(internal) FirstParameter": [
+    "type FirstParameter<Value> = [ Value ] extends [ never ] ? unknown : [ Value ] extends [ Fn ] ? Parameters<Value>[0] : unknown;",
+  ],
+  "(internal) Fn": [
+    "type Fn = (...args: any[]) => unknown;",
+  ],
+  "(internal) ForbiddenMethod": [
+    "type ForbiddenMethod = "set" | "emit" | "constructor" | "toLocaleString" | "valueOf" | "hasOwnProperty" | "isPrototypeOf" | "propertyIsEnumerable";",
+  ],
+  "(internal) Get": [
+    "type Get<Value, Key extends string> = unknown extends Value ? unknown : [ GetDefined<NonNullable<Value>, Key> ] extends [ infer Found ] ? [ Found ] extends [ never ] ? never : Found | (Value extends null | undefined ? undefined : never) : never;",
+  ],
+  "(internal) GetDefined": [
+    "type GetDefined<Value, Key extends string> = Value extends readonly unknown[] ? Key extends \`\${number}\` ? Key extends keyof Value ? Value[Key] : Value[number] : Key extends "length" ? number : never : Key extends keyof Value ? Value[Key] : never;",
+  ],
   "(internal) HoldsEntity": [
     "type HoldsEntity<Field> = Field extends AnyRepositoryEntity ? true : Field extends { readonly record: AnyRepositoryEntity; } ? true : Field extends IBlueprintList<infer Item> ? Item extends AnyRepositoryEntity ? true : false : false;",
   ],
@@ -180,7 +237,7 @@ exports[`exports of the package and their declarations 1`] = `
     "interface Hookable<Repository extends AnyRepository, Input extends IBlueprintCollection, Omitted, Values, Owner, Dependencies extends UseCaseCollection, Loaded extends boolean> { readonly omit?: readonly Omitted[]; readonly values?: Values; readonly owner?: Owner; readonly dependencies?: Dependencies; readonly throws?: readonly AnyExceptionClass[]; readonly before?: NoInfer<HookOptionsOf<Repository, Shape<Omitted, Values, Owner>, Input, Dependencies, Loaded>["before"]>; readonly after?: NoInfer<HookOptionsOf<Repository, Shape<Omitted, Values, Owner>, Input, Dependencies, Loaded>["after"]>; }",
   ],
   "(internal) IRepositoryProvider": [
-    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; }",
+    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; migrate?(context: RepositoryContext<Environment>, plan: SchemaPlan): Promise<void | ProviderMigrationResult>; }",
   ],
   "(internal) IdField": [
     "type IdField<Repository> = FieldAt<Props<Repository>, "id">;",
@@ -190,6 +247,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) InferInput": [
     "type InferInput<Schema extends StandardSchemaV1> = NonNullable<Schema["~standard"]["types"]>["input"];",
+  ],
+  "(internal) InvokeStep": [
+    "type InvokeStep<Step, Record, Scope> = [ Record ] extends [ never ] ? ValueStep<Step, "invoke", object, unknown, Scope> : [ Step ] extends [ { readonly method: infer Method; } ] ? Method extends keyof Record ? CallStep<Step, Record[Method], Scope> : [ { readonly [Key in keyof Step]: Key extends "method" ? StepInvokeMethod<Record> : Step[Key]; }, unknown ] : [ Step, unknown ];",
   ],
   "(internal) Issue": [
     "interface Issue { readonly message: string; readonly path?: ReadonlyArray<PropertyKey | PathSegment> | undefined; }",
@@ -216,6 +276,12 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) Kind": [
     "Kind: unique symbol",
   ],
+  "(internal) KnownKeys": [
+    "type KnownKeys<Expected> = Expected extends object ? keyof Expected : never;",
+  ],
+  "(internal) Leaf": [
+    "type Leaf = string | number | boolean | bigint | symbol | null | undefined | Date | readonly unknown[] | ((...args: any[]) => unknown);",
+  ],
   "(internal) LeftOut": [
     "type LeftOut<Options> = EntityIdentityKey | OwnerKey<Options> | (Options extends { readonly omit: readonly (infer Key)[]; } ? Key : never) | (Options extends { readonly values: infer Values; } ? keyof Values : never);",
   ],
@@ -230,6 +296,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) METHODS": [
     "METHODS: readonly [ "get", "post", "put", "patch", "delete" ]",
+  ],
+  "(internal) MemberOf": [
+    "type MemberOf<Dependencies, Key, Member> = Key extends keyof Dependencies ? Member extends keyof Dependencies[Key] ? Dependencies[Key][Member] : unknown : unknown;",
   ],
   "(internal) MergedCollections": [
     "export type MergedCollections<Own extends ApplicationCollections, Extended extends readonly AnyApplication[]> = { readonly [Key in ApplicationCollectionKey]: Own[Key] & UnionToIntersection<Extended[number][Key]>; };",
@@ -279,11 +348,20 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) OwnerKey": [
     "type OwnerKey<Options> = Options extends { readonly owner: infer Owner; } ? Owner extends { readonly key: infer Key; } ? Key : "ownerId" : never;",
   ],
+  "(internal) ParameterAt": [
+    "type ParameterAt<Parameters extends readonly unknown[], Index> = Index extends keyof Parameters ? Parameters[Index] : number extends Parameters["length"] ? Parameters[number] : undefined;",
+  ],
+  "(internal) ParametersOf": [
+    "type ParametersOf<Value> = [ Value ] extends [ Fn ] ? Parameters<Value> : unknown[];",
+  ],
   "(internal) Password_base": [
     "Password_base: import("../../index.js").PropertyClass<Type.TString, string> & { readonly type: { readonly sensitive: true; }; }",
   ],
   "(internal) PathSegment": [
     "interface PathSegment { readonly key: PropertyKey; }",
+  ],
+  "(internal) PathsFrom": [
+    "type PathsFrom<Value, Path extends string, Expected, Depth extends unknown[]> = Path extends unknown ? ([ Value ] extends [ Expected ] ? Path : never) | Below<Value, Path, Expected, Depth> : never;",
   ],
   "(internal) PlainPassword_base": [
     "PlainPassword_base: import("../../index.js").PropertyClass<Type.TString, string> & { readonly type: { readonly sensitive: true; }; }",
@@ -299,6 +377,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) PluginSensitiveKey": [
     "export type PluginSensitiveKey<Plugins extends readonly AnyRecordPlugin[]> = Plugins[number] extends infer Plugin ? Plugin extends { readonly record: { readonly [RecordSensitiveKeys]?: infer Key; }; } ? Extract<Key, string> : never : never;",
+  ],
+  "(internal) Primitive": [
+    "type Primitive = string | number | boolean | null;",
   ],
   "(internal) PropertiesOf": [
     "type PropertiesOf<Entity> = Entity extends { readonly blueprint: IBlueprint<infer Properties extends IBlueprintCollection>; } ? Properties : never;",
@@ -333,6 +414,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) ProviderKeyset": [
     "export type ProviderKeyset<Provider> = undefined extends Provider ? true : Provider extends { readonly capabilities?: infer Capabilities; } ? [ NonNullable<Capabilities> ] extends [ { readonly keyset?: infer Keyset; } ] ? true extends Keyset ? true : false : false : false;",
+  ],
+  "(internal) ProviderMigrationResult": [
+    "export type ProviderMigrationResult = { readonly deferred: true; };",
   ],
   "(internal) ProviderQuery": [
     "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; readonly index?: string; readonly now?: string; }",
@@ -374,7 +458,7 @@ exports[`exports of the package and their declarations 1`] = `
     "interface RecordDeclaration<Properties extends IBlueprintCollection> { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }",
   ],
   "(internal) RecordDescription": [
-    "export interface RecordDescription { readonly from: string; readonly fields: FieldsDescription; readonly options: { readonly sensitive: readonly string[]; readonly unique: readonly string[]; readonly change: readonly string[]; }; readonly plugins: readonly RecordPluginDescriptor[]; readonly events?: Readonly<Partial<Record<"onCreate" | "onUpdate" | "onDelete", readonly { readonly name: string; readonly handler: boolean; }[]>>>; readonly versioned?: true; readonly expires?: EntityExpires; }",
+    "export interface RecordDescription { readonly from: string; readonly fields: FieldsDescription; readonly options: { readonly sensitive: readonly string[]; readonly unique: readonly string[]; readonly change: readonly string[]; }; readonly plugins: readonly RecordPluginDescriptor[]; readonly events?: Readonly<Partial<Record<"onCreate" | "onUpdate" | "onDelete", readonly { readonly name: string; readonly handler: boolean; }[]>>>; readonly versioned?: true; readonly expires?: EntityExpires; readonly schemaVersion?: number; readonly upgrade?: readonly number[]; readonly previousNames?: readonly string[]; }",
   ],
   "(internal) RecordInput": [
     "type RecordInput<Record extends AnyRecordClass> = ConstructorParameters<Record>[0] extends infer Input ? 0 extends 1 & Input ? object : Input : never;",
@@ -398,7 +482,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type RecordValueOf<Record extends AnyRecordClass, Mode extends FieldMode> = Mode extends "value" ? InstanceType<Record> : Mode extends "input" ? InstanceType<Record> | RecordInput<Record> | AcceptedBy<Record> : Record["blueprint"] extends IBlueprint<infer Properties, boolean> ? CollectionValue<Properties, "data"> : never;",
   ],
   "(internal) RepositoryContext": [
-    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly env: Environment; }",
+    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly schema?: RepositorySchema; readonly env: Environment; }",
   ],
   "(internal) RepositoryData": [
     "export type RepositoryData = Readonly<Record<string, unknown>>;",
@@ -415,17 +499,48 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) RepositoryOfProvider": [
     "type RepositoryOfProvider<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment, Keyset extends boolean> = Keyset extends true ? RepositoryType<Entity, Actions, Environment> : RepositoryType<Entity, Actions, Environment, false>;",
   ],
+  "(internal) RepositorySchema": [
+    "export interface RepositorySchema { readonly version: number; readonly key: string; readonly previousNames: readonly string[]; }",
+  ],
   "(internal) RequiredKeys": [
+    "type RequiredKeys<Expected> = Expected extends { readonly [Meta]: unknown; } ? never : Expected extends object ? { [Key in keyof Expected]-?: undefined extends Expected[Key] ? never : Key; }[keyof Expected] : never;",
     "type RequiredKeys<Schemas> = keyof Omit<Schemas, ReadonlyOptionalKeys<Schemas> | ReadonlyKeys<Schemas> | OptionalKeys<Schemas>>;",
   ],
   "(internal) Result": [
     "type Result<Output> = SuccessResult<Output> | FailureResult;",
+  ],
+  "(internal) ResultOf": [
+    "type ResultOf<Value> = [ Value ] extends [ Fn ] ? Awaited<ReturnType<Value>> : unknown;",
+  ],
+  "(internal) SchemaChange": [
+    "export interface SchemaChange { readonly entity: string; readonly key?: string; readonly change: SchemaChangeKind; readonly class: SchemaChangeClass; readonly satisfied: boolean; readonly destructive: boolean; readonly from?: string; readonly detail?: string; }",
+  ],
+  "(internal) SchemaChangeClass": [
+    "export type SchemaChangeClass = "automatic" | "declared" | "check";",
+  ],
+  "(internal) SchemaChangeKind": [
+    "export type SchemaChangeKind = "added-required" | "added-optional" | "removed" | "renamed" | "type-changed" | "tightened" | "loosened" | "made-optional" | "made-required" | "metadata" | "unique-added" | "unique-removed" | "entity-added" | "entity-removed" | "entity-renamed";",
+  ],
+  "(internal) SchemaLock": [
+    "export interface SchemaLock { readonly lockVersion: 1; readonly entities: Readonly<Record<string, SchemaLockEntity>>; }",
+  ],
+  "(internal) SchemaLockEntity": [
+    "export interface SchemaLockEntity { readonly schemaVersion: number; readonly previousNames: readonly string[]; readonly unique: readonly string[]; readonly fields: Readonly<Record<string, SchemaLockField>>; readonly upgrade?: readonly number[]; }",
+  ],
+  "(internal) SchemaLockField": [
+    "export interface SchemaLockField { readonly schema: Readonly<Record<string, unknown>>; readonly optional: boolean; readonly unique?: boolean; readonly fill?: unknown; readonly renamedFrom?: string; readonly fields?: Readonly<Record<string, SchemaLockField>>; }",
+  ],
+  "(internal) SchemaPlan": [
+    "export interface SchemaPlan { readonly entity: string; readonly changes: readonly SchemaChange[]; readonly destructive: boolean; }",
   ],
   "(internal) SchemaProperty_base": [
     "SchemaProperty_base: import("../../index.js").PropertyClass<Type.TUnsafe<TSchema>, TSchema>",
   ],
   "(internal) SchemaValueType": [
     "type SchemaValueType<SchemaType extends TSchema, Optional extends boolean = false> = Optional extends true ? TOptional<SchemaType> : SchemaType;",
+  ],
+  "(internal) ScopeAfter": [
+    "type ScopeAfter<Step, Result, Scope> = [ Step ] extends [ { readonly as: infer Name extends string; } ] ? Scope & { readonly [Key in Name]: Result; } : [ Step ] extends [ { readonly ensure: "exists"; readonly value: \`$\${infer Name}\`; } ] ? Name extends keyof Scope ? Scope & { readonly [Key in Name]: NonNullable<Scope[Name]>; } : Scope : Scope;",
   ],
   "(internal) SensitiveTypeOf": [
     "export type SensitiveTypeOf<Property> = Property extends { readonly type: { readonly sensitive: true; }; } ? { readonly sensitive: true; } : unknown;",
@@ -442,8 +557,14 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) Slug_base": [
     "Slug_base: import("../../index.js").PropertyClass<Type.TString, string> & { readonly type: { readonly unique: true; }; }",
   ],
+  "(internal) Split": [
+    "type Split<Path extends string> = Path extends \`\${infer Head}.\${infer Tail}\` ? [ Head, ...Split<Tail> ] : [ Path ];",
+  ],
   "(internal) StageDescription": [
     "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; } | { readonly kind: "opaque"; };",
+  ],
+  "(internal) StepInvokeMethod": [
+    "type StepInvokeMethod<Record> = Record extends unknown ? { [Key in keyof Record & string]-?: Record[Key] extends Fn ? Key : never; }[Exclude<keyof Record & string, ForbiddenMethod>] : never;",
   ],
   "(internal) StoredField": [
     "export type StoredField<Field> = Field extends { readonly [Callable]: infer Property; } ? Property : Field;",
@@ -493,6 +614,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) UseCaseKeys": [
     "type UseCaseKeys<Dependencies> = { [Key in keyof Dependencies & string]: Dependencies[Key] extends AnyUseCaseClass ? Key : never; }[keyof Dependencies & string];",
   ],
+  "(internal) UseCaseOf": [
+    "type UseCaseOf<Dependencies, Key> = Key extends keyof Dependencies ? Dependencies[Key] extends AnyUseCaseClass ? Dependencies[Key] : never : never;",
+  ],
   "(internal) UseCasePluginContext": [
     "export type UseCasePluginContext<Catalogs extends readonly IUseCaseCatalog[]> = Catalogs extends readonly [ infer Head extends IUseCaseCatalog, ...infer Tail extends readonly IUseCaseCatalog[] ] ? Omit<Head["context"], keyof UseCasePluginContext<Tail>> & UseCasePluginContext<Tail> : Record<never, never>;",
   ],
@@ -505,11 +629,20 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) ValueAt": [
     "type ValueAt<Entity, Key extends string> = Key extends keyof EntityValueOf<Entity> ? EntityValueOf<Entity>[Key] : never;",
   ],
+  "(internal) ValueStep": [
+    "type ValueStep<Step, Field, Expected, Result, Scope> = [ { readonly [Key in keyof Step]: Key extends Field ? StepValueCheck<Step[Key], Expected, Scope> : Step[Key]; }, Result ];",
+  ],
   "(internal) VersionKey": [
     "type VersionKey<Repository> = Props<Repository> extends { readonly version: typeof EntityVersion; } ? "version" : never;",
   ],
+  "(internal) Walk": [
+    "type Walk<Value, Path extends readonly string[]> = Path extends readonly [ infer Key extends string, ...infer Rest extends string[] ] ? Walk<Get<Value, Key>, Rest> : Value;",
+  ],
   "(internal) WithPluginProperties": [
     "export type WithPluginProperties<Properties extends IBlueprintCollection, Plugins extends readonly AnyRecordPlugin[]> = [ Plugins[number] ] extends [ never ] ? Properties : Properties & UnionToIntersection<PluginProperties<Plugins[number]>> extends infer Merged ? { readonly [Key in keyof Merged]: Merged[Key]; } : never;",
+  ],
+  "(internal) WriteStep": [
+    "type WriteStep<Step, Method, Scope> = ValueStep<Step, "value", FirstParameter<Method>, ResultOf<Method>, Scope>;",
   ],
   "AbstractPropertyConstructor": [
     "export type AbstractPropertyConstructor<SchemaType extends TSchema, Value = Static<SchemaType>> = { new (value: PropertyValue<SchemaType, Value>): AbstractProperty<SchemaType, Value>; readonly type: IPropertyType<SchemaType, Value>; demo(): AbstractProperty<SchemaType, Value>; safeParse(value: unknown): ParseResult<PropertyValue<SchemaType, Value>>; readonly "~standard": StandardSchemaV1.Props<PropertyValue<SchemaType, Value>, PropertyValue<SchemaType, Value>>; };",
@@ -587,7 +720,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface ApplicationSettings<Name extends string, Extended extends readonly AnyApplication[], Collections extends ApplicationCollections> { readonly name: Name; readonly extends?: Extended; readonly properties?: Collections["properties"]; readonly blueprints?: Collections["blueprints"]; readonly records?: Collections["records"]; readonly entities?: Collections["entities"]; readonly environments?: Collections["environments"]; readonly repositories?: Collections["repositories"]; readonly useCases?: Collections["useCases"]; readonly commands?: Collections["commands"]; readonly outputs?: Collections["outputs"]; readonly exceptions?: Collections["exceptions"]; readonly provider?: IRepositoryProvider | ProviderFactory; readonly providers?: ProviderStorage; readonly log?: LogSettings | LogFactory; readonly publishers?: Readonly<Record<string, IEventPublisher>>; }",
   ],
   "ApplicationStartOptions": [
-    "export interface ApplicationStartOptions { readonly register?: boolean; readonly replace?: boolean; }",
+    "export interface ApplicationStartOptions { readonly register?: boolean; readonly replace?: boolean; readonly lock?: SchemaLock; }",
   ],
   "Archivable": [
     "Archivable: import("../index.js").IRecordPlugin<typeof ArchivableRecord, "archivable">",
@@ -642,6 +775,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "CallableProperty": [
     "export type CallableProperty<Property extends { readonly type: IPropertyType<TSchema>; }> = Property & { (options?: OptionsOfProperty<Property>): Property; readonly [Callable]: Property; };",
+  ],
+  "CheckedSteps": [
+    "export type CheckedSteps<Steps, Input extends IBlueprintCollection, Context extends IBlueprintCollection | undefined, Dependencies> = [ Steps ] extends [ readonly [ unknown, ...unknown[] ] ] ? CheckSteps<Steps, Dependencies, StepsInitialScope<Input, Context, Dependencies>> : Steps;",
   ],
   "CommandBuilder": [
     "export type CommandBuilder<Generics> = <const UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined = undefined, Environment extends EnvironmentDependencies | undefined = undefined>(settings: CommandBuilderSettings<UseCases, Context, Environment, Generics>) => CommandOf<UseCases, Context, Environment>;",
@@ -784,6 +920,9 @@ exports[`exports of the package and their declarations 1`] = `
   "EntityKeyOf": [
     "export type EntityKeyOf<Entity> = keyof EntityPropertiesOf<Entity> & string;",
   ],
+  "EntityMigrationReport": [
+    "export interface EntityMigrationReport { readonly scanned: number; readonly upToDate: number; readonly upgraded: number; readonly removalPending: number; readonly invalid: readonly SchemaMigrationInvalidRow[]; readonly movedFromPreviousNames: number; readonly removedKeys: readonly string[]; readonly deferred: boolean; }",
+  ],
   "EntityNonUniqueKeyOf": [
     "export type EntityNonUniqueKeyOf<Entity> = string extends EntityUniqueKeyOf<Entity> ? EntityKeyOf<Entity> : Exclude<EntityKeyOf<Entity>, EntityUniqueKeyOf<Entity>>;",
   ],
@@ -800,10 +939,10 @@ exports[`exports of the package and their declarations 1`] = `
     "EntitySettings: unique symbol",
   ],
   "EntityStorageOptions": [
-    "export interface EntityStorageOptions<Key extends string = string, Expires extends EntityExpires<Key> | undefined = EntityExpires<Key> | undefined> { readonly versioned?: boolean; readonly expires?: Expires; }",
+    "export interface EntityStorageOptions<Key extends string = string, Expires extends EntityExpires<Key> | undefined = EntityExpires<Key> | undefined> { readonly versioned?: boolean; readonly expires?: Expires; readonly schemaVersion?: number; readonly upgrade?: EntityUpgrades; readonly previousNames?: readonly string[]; }",
   ],
   "EntityStorageSettings": [
-    "export interface EntityStorageSettings { readonly versioned: boolean; readonly expires?: EntityExpires; }",
+    "export interface EntityStorageSettings { readonly versioned: boolean; readonly expires?: EntityExpires; readonly schemaVersioned: boolean; readonly schemaVersion: number; readonly upgrade: EntityUpgrades; readonly previousNames: readonly string[]; }",
   ],
   "EntityUniqueKey": [
     "export type EntityUniqueKey<Identity extends IEntityIdentity, Properties extends IBlueprintCollection, Unique extends readonly string[]> = "id" | Unique[number] | MarkedUniqueKey<EntityProperties<Identity, Properties>>;",
@@ -813,6 +952,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "EntityUniqueKeys": [
     "EntityUniqueKeys: unique symbol",
+  ],
+  "EntityUpgrade": [
+    "export type EntityUpgrade = (data: Readonly<Record<string, unknown>>) => Record<string, unknown>;",
+  ],
+  "EntityUpgrades": [
+    "export interface EntityUpgrades { readonly [version: number]: EntityUpgrade; }",
   ],
   "EntityValueOf": [
     "export type EntityValueOf<Entity> = BlueprintValue<EntityPropertiesOf<Entity>>;",
@@ -893,7 +1038,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type GetMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> & StdNoHookOptions = None>(repository: Repository & UseCaseTarget<Repository, "findById">, options?: Options) => EntityUseCase<Repository, Options, ById<Repository>>;",
   ],
   "IApplication": [
-    "export interface IApplication<Name extends string, Collections extends ApplicationCollections> { readonly [Kind]: "application"; readonly name: Name; readonly extends: readonly AnyApplication[]; readonly provider: IRepositoryProvider | undefined; readonly logger: ILogger; readonly context: ApplicationContext; readonly properties: Collections["properties"]; readonly blueprints: Collections["blueprints"]; readonly records: Collections["records"]; readonly entities: Collections["entities"]; readonly environments: Collections["environments"]; readonly repositories: Collections["repositories"]; readonly useCases: Collections["useCases"]; readonly commands: Collections["commands"]; readonly outputs: Collections["outputs"]; readonly exceptions: Collections["exceptions"]; repository<Repository extends AnyRepository>(repository: Repository): Repository; useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; run<UseCase extends AnyUseCaseClass>(useCase: UseCase, ...args: ApplicationRunArgs<UseCase>): Promise<UseCaseResponse<UseCase>>; command<Command extends AnyCommand>(command: Command): Command; output<Output extends AnyOutput>(output: Output): Output; extend<const Others extends readonly AnyApplication[]>(...others: Others): IApplication<Name, MergedCollections<Collections, Others>>; describe(): ApplicationDescription; start(options?: ApplicationStartOptions): Promise<IApplication<Name, Collections>>; stop(): Promise<void>; get<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; get<Command extends AnyCommand>(command: Command): Command; get<Output extends AnyOutput>(output: Output): Output; get<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; get<Repository extends AnyRepository>(repository: Repository): Repository; get(provider: ProviderSlot): IRepositoryProvider; readonly started: boolean; }",
+    "export interface IApplication<Name extends string, Collections extends ApplicationCollections> { readonly [Kind]: "application"; readonly name: Name; readonly extends: readonly AnyApplication[]; readonly provider: IRepositoryProvider | undefined; readonly logger: ILogger; readonly context: ApplicationContext; readonly properties: Collections["properties"]; readonly blueprints: Collections["blueprints"]; readonly records: Collections["records"]; readonly entities: Collections["entities"]; readonly environments: Collections["environments"]; readonly repositories: Collections["repositories"]; readonly useCases: Collections["useCases"]; readonly commands: Collections["commands"]; readonly outputs: Collections["outputs"]; readonly exceptions: Collections["exceptions"]; repository<Repository extends AnyRepository>(repository: Repository): Repository; useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; run<UseCase extends AnyUseCaseClass>(useCase: UseCase, ...args: ApplicationRunArgs<UseCase>): Promise<UseCaseResponse<UseCase>>; command<Command extends AnyCommand>(command: Command): Command; output<Output extends AnyOutput>(output: Output): Output; extend<const Others extends readonly AnyApplication[]>(...others: Others): IApplication<Name, MergedCollections<Collections, Others>>; describe(): ApplicationDescription; start(options?: ApplicationStartOptions): Promise<IApplication<Name, Collections>>; stop(): Promise<void>; migrate(options: SchemaMigrationOptions): Promise<SchemaMigrationReport>; get<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; get<Command extends AnyCommand>(command: Command): Command; get<Output extends AnyOutput>(output: Output): Output; get<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase; get<Repository extends AnyRepository>(repository: Repository): Repository; get(provider: ProviderSlot): IRepositoryProvider; readonly started: boolean; }",
   ],
   "IBlueprint": [
     "export interface IBlueprint<Properties extends IBlueprintCollection, Optional extends boolean = false> { readonly [Kind]: "blueprint"; readonly plugins: readonly IBlueprintPlugin[]; readonly properties: Properties; readonly schema: ISchema<BlueprintSchema<Properties>, BlueprintData<Properties>>; readonly optional: Optional; safeParse(value: unknown): ParseResult<Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; readonly "~standard": StandardSchemaV1.Props<Optional extends true ? BlueprintInput<Properties> | undefined : BlueprintInput<Properties>, Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; join<const Blueprints extends readonly AnyBlueprint[]>(...blueprints: Blueprints): IBlueprint<JoinedProperties<readonly [ { readonly properties: Properties; }, ...Blueprints ]>>; }",
@@ -944,7 +1089,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface IPropertyInput<Value = unknown> { readonly accepts: AnyPropertyConstructor; convert(value: Value): Value | Promise<Value>; }",
   ],
   "IPropertyType": [
-    "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; }",
+    "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; readonly fill?: Value; readonly renamedFrom?: string; }",
   ],
   "IRecord": [
     "export interface IRecord<Properties extends IBlueprintCollection, Sensitive extends string = never> { readonly [Meta]: { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }; toJSON(): RecordJson<Properties, Sensitive>; }",
@@ -1009,6 +1154,9 @@ exports[`exports of the package and their declarations 1`] = `
   "InvalidEntityExpiry": [
     "InvalidEntityExpiry: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
   ],
+  "InvalidEntitySchemaVersion": [
+    "InvalidEntitySchemaVersion: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
   "InvalidEnvironment": [
     "InvalidEnvironment: import("../../index.js").DeclaredExceptionClass<{ readonly keys: readonly string[]; }>",
   ],
@@ -1059,6 +1207,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "InvalidRepositoryQuery": [
     "InvalidRepositoryQuery: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
+  "InvalidSchemaMigration": [
+    "InvalidSchemaMigration: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
+  "InvalidStoredSchemaVersion": [
+    "InvalidStoredSchemaVersion: import("../../index.js").DeclaredExceptionClass<{ readonly id: string; readonly stored: unknown; readonly current: number; readonly reason?: string; }>",
   ],
   "InvalidUseCaseDeclaration": [
     "InvalidUseCaseDeclaration: DeclaredExceptionClass<{ reason: string; }>",
@@ -1238,7 +1392,7 @@ exports[`exports of the package and their declarations 1`] = `
     "PropertyInput: unique symbol",
   ],
   "PropertyMetadata": [
-    "export interface PropertyMetadata<Value> { readonly title?: string; readonly description?: string; readonly examples?: readonly Value[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly default?: Value; }",
+    "export interface PropertyMetadata<Value> { readonly title?: string; readonly description?: string; readonly examples?: readonly Value[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly default?: Value; readonly fill?: Value; readonly renamedFrom?: string; }",
   ],
   "PropertyOptions": [
     "export type PropertyOptions<SchemaType extends TSchema, Value = Static<SchemaType>> = PropertyMetadata<NonNullable<Value>> & (SchemaType extends TString ? StringConstraints : SchemaType extends TNumber | TInteger ? NumberConstraints : unknown);",
@@ -1478,6 +1632,18 @@ exports[`exports of the package and their declarations 1`] = `
   "RuntimeServices": [
     "export interface RuntimeServices { hasher?: PasswordHasher; idGenerator?: IdGenerator; }",
   ],
+  "SchemaLockMismatch": [
+    "SchemaLockMismatch: import("../../index.js").DeclaredExceptionClass<{ readonly problems: readonly string[]; }>",
+  ],
+  "SchemaMigrationInvalidRow": [
+    "export interface SchemaMigrationInvalidRow { readonly id: string; readonly issues: readonly Issue[]; }",
+  ],
+  "SchemaMigrationOptions": [
+    "export interface SchemaMigrationOptions { readonly entities?: readonly string[]; readonly mode: "check" | "apply"; readonly destructive?: boolean; readonly pageSize?: number; readonly lock?: SchemaLock; }",
+  ],
+  "SchemaMigrationReport": [
+    "export interface SchemaMigrationReport { readonly mode: "check" | "apply"; readonly destructive: boolean; readonly entities: Readonly<Record<string, EntityMigrationReport>>; }",
+  ],
   "SchemaProperty": [
     "export declare class SchemaProperty extends SchemaProperty_base { private compiled?; static deserialize(json: string): SchemaProperty; serialize(): string; match(data: unknown): boolean; errors(data: unknown): string[]; private toSchema; }",
   ],
@@ -1581,11 +1747,23 @@ exports[`exports of the package and their declarations 1`] = `
   "StepReference": [
     "export type StepReference = \`$\${string}\`;",
   ],
+  "StepReferenceType": [
+    "export type StepReferenceType<Scope, Reference> = [ Reference ] extends [ \`$\${infer Path}\` ] ? Split<Path> extends [ infer Root extends string, ...infer Rest extends string[] ] ? Root extends "env" ? Rest extends [ string, ...string[] ] ? Walk<Get<Scope, Root>, Rest> : never : Walk<Get<Scope, Root>, Rest> : never : never;",
+  ],
+  "StepReferencesOf": [
+    "export type StepReferencesOf<Scope, Expected = unknown> = Scope extends unknown ? { [Root in keyof Scope & string]-?: Root extends "env" ? Below<Scope[Root], \`$\${Root}\`, Expected, [ 0 ]> : PathsFrom<Scope[Root], \`$\${Root}\`, Expected, [ ]>; }[keyof Scope & string] : never;",
+  ],
   "StepRepositoryWith": [
     "export type StepRepositoryWith<Dependencies, Action extends string> = { [Key in RepositoryKeys<Dependencies>]: Action extends ActionsOf<Dependencies[Key]> ? Key : never; }[RepositoryKeys<Dependencies>];",
   ],
   "StepValue": [
     "export type StepValue = StepReference | string | number | boolean | null | readonly StepValue[] | { readonly [key: string]: StepValue; };",
+  ],
+  "StepValueCheck": [
+    "export type StepValueCheck<Value, Expected, Scope> = [ Value ] extends [ \`$\${string}\` ] ? CheckReference<Value, Expected, Scope> : [ Value ] extends [ Primitive ] ? [ Value ] extends [ Expected ] ? Value : Expected : [ Value ] extends [ { readonly literal: unknown; } ] ? Value : [ Value ] extends [ readonly unknown[] ] ? { readonly [Index in keyof Value]: StepValueCheck<Value[Index], ElementAt<Expected, Index>, Scope>; } : [ Value ] extends [ object ] ? CheckMapping<Value, Expected, Scope> : Value;",
+  ],
+  "StepsInitialScope": [
+    "export type StepsInitialScope<Input extends IBlueprintCollection, Context extends IBlueprintCollection | undefined, Dependencies> = { readonly input: BlueprintValue<Input>; readonly env: { readonly [Key in keyof Dependencies as Dependencies[Key] extends AnyEnvironment ? Key : never]: Dependencies[Key] extends AnyEnvironment ? EnvironmentValue<Dependencies[Key]> : never; }; } & (Context extends IBlueprintCollection ? { readonly context: BlueprintValue<Context>; } : unknown);",
   ],
   "StepsUseCaseConstructor": [
     "export type StepsUseCaseConstructor<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> = (new (input: BlueprintInput<Input>, ...options: OptionsArgs<Context>) => Omit<AbstractUseCase<Input, Output, Dependencies>, "execute"> & UseCaseInstanceContext<Context> & { execute(dependencies?: DependencyOverrides<Dependencies>): Promise<BlueprintValue<Output>>; }) & UseCaseStatics<Input, Output, Dependencies, Context>;",
@@ -1668,6 +1846,9 @@ exports[`exports of the package and their declarations 1`] = `
   "UseCaseContext": [
     "export type UseCaseContext<Class extends { readonly context: unknown; }> = Class["context"] extends IBlueprint<infer Properties> ? Readonly<BlueprintValue<Properties>> : undefined;",
   ],
+  "UseCaseDeclaration": [
+    "export interface UseCaseDeclaration<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined, Steps extends readonly UseCaseStep<Dependencies>[] | undefined = undefined, Strict extends boolean = false> extends UseCaseSettings<Input, Output, Dependencies, Context> { readonly steps?: [ Strict ] extends [ true ] ? CheckedSteps<Steps, NoInfer<Input>, NoInfer<Context>, NoInfer<Dependencies>> : Steps; readonly strictSteps?: Strict; }",
+  ],
   "UseCaseDependencies": [
     "export type UseCaseDependencies<Class extends Declaration> = DependencyFunctions<Class["dependencies"]>;",
   ],
@@ -1717,7 +1898,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type UseCaseStepDescription = { readonly find: string; readonly args?: StepArgs; readonly as?: string; } | { readonly ensure: StepEnsureKind; readonly value: StepValue; readonly other?: StepValue; readonly error: StepErrorDescription; readonly details?: StepValue; } | { readonly build: string; readonly values: StepValue; readonly as: string; } | { readonly change: string; readonly key: string; readonly value: StepValue; readonly ifPresent?: boolean; readonly as?: string; } | { readonly invoke: string; readonly method: string; readonly args?: StepArgs; readonly as?: string; } | { readonly create: string; readonly value: StepValue; readonly as?: string; } | { readonly update: string; readonly value: StepValue; readonly as?: string; } | { readonly delete: string; readonly value: StepValue; readonly as?: string; } | { readonly restore: string; readonly value: StepValue; readonly as?: string; } | { readonly call: string; readonly input: StepValue; readonly as?: string; } | { readonly run: string; readonly fn: { readonly kind: "opaque"; }; readonly args?: StepArgs; readonly as?: string; } | { readonly return: StepValue; };",
   ],
   "UseCaseStepsSettings": [
-    "export interface UseCaseStepsSettings<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> extends UseCaseSettings<Input, Output, Dependencies, Context> { readonly steps: readonly UseCaseStep<NoInfer<Dependencies>>[]; }",
+    "export interface UseCaseStepsSettings<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> extends UseCaseSettings<Input, Output, Dependencies, Context> { readonly steps: readonly UseCaseStep<NoInfer<Dependencies>>[]; readonly strictSteps?: boolean; }",
   ],
   "UseCaseTarget": [
     "export type UseCaseTarget<Repository, Action extends string, Members = unknown, Plugin extends string = never> = [ Action ] extends [ ActionsOf<Repository> ] ? EntityInstanceOf<EntityOfRepository<Repository>> extends Members ? unknown : MissingRecordPlugin<Plugin> : MissingRepositoryAction<Exclude<Action, ActionsOf<Repository>>>;",
@@ -1921,8 +2102,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function useCaseCatalogOf<const Plugins extends readonly AnyUseCasePlugin[]>(...plugins: Plugins): IUseCaseCatalog<UseCasePluginsByName<Plugins>>;",
   ],
   "useCaseOf": [
-    "export declare function useCaseOf<Input extends IBlueprintCollection, Output extends IBlueprintCollection, const Dependencies extends UseCaseCollection = Record<never, never>, Context extends IBlueprintCollection | undefined = undefined>(settings: UseCaseSettings<Input, Output, Dependencies, Context>): UseCaseConstructor<Input, Output, Dependencies, Context>;",
-    "export declare function useCaseOf<Input extends IBlueprintCollection, Output extends IBlueprintCollection, const Dependencies extends UseCaseCollection = Record<never, never>, Context extends IBlueprintCollection | undefined = undefined>(settings: UseCaseStepsSettings<Input, Output, Dependencies, Context>): StepsUseCaseConstructor<Input, Output, Dependencies, Context>;",
+    "export declare function useCaseOf<Input extends IBlueprintCollection, Output extends IBlueprintCollection, const Dependencies extends UseCaseCollection = Record<never, never>, Context extends IBlueprintCollection | undefined = undefined, const Steps extends readonly UseCaseStep<NoInfer<Dependencies>>[] | undefined = undefined, Strict extends boolean = false>(settings: UseCaseDeclaration<Input, Output, Dependencies, Context, Steps, Strict>): [ Steps ] extends [ undefined ] ? UseCaseConstructor<Input, Output, Dependencies, Context> : StepsUseCaseConstructor<Input, Output, Dependencies, Context>;",
   ],
   "useCasePluginOf": [
     "export declare function useCasePluginOf<const Name extends string, Make extends UseCaseMaker = UseCaseMaker>(name: Name, settings: UseCasePluginSettings): IUseCasePlugin<Name, Make>;",
@@ -2110,7 +2290,7 @@ exports[`adapters entry (contract) 1`] = `
     "export interface IProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly definition: AbstractDefineProperty<SchemaType, Value>; readonly value: PropertyValue<SchemaType, Value>; }",
   ],
   "(internal) IPropertyType": [
-    "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; }",
+    "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; readonly fill?: Value; readonly renamedFrom?: string; }",
   ],
   "(internal) IRecord": [
     "export interface IRecord<Properties extends IBlueprintCollection, Sensitive extends string = never> { readonly [Meta]: { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }; toJSON(): RecordJson<Properties, Sensitive>; }",
@@ -2199,7 +2379,7 @@ exports[`adapters entry (contract) 1`] = `
     "interface PathSegment { readonly key: PropertyKey; }",
   ],
   "(internal) PropertyMetadata": [
-    "export interface PropertyMetadata<Value> { readonly title?: string; readonly description?: string; readonly examples?: readonly Value[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly default?: Value; }",
+    "export interface PropertyMetadata<Value> { readonly title?: string; readonly description?: string; readonly examples?: readonly Value[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly default?: Value; readonly fill?: Value; readonly renamedFrom?: string; }",
   ],
   "(internal) PropertyOptions": [
     "export type PropertyOptions<SchemaType extends TSchema, Value = Static<SchemaType>> = PropertyMetadata<NonNullable<Value>> & (SchemaType extends TString ? StringConstraints : SchemaType extends TNumber | TInteger ? NumberConstraints : unknown);",
@@ -2382,7 +2562,7 @@ exports[`adapters entry (contract) 1`] = `
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
   ],
   "IRepositoryProvider": [
-    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; }",
+    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; migrate?(context: RepositoryContext<Environment>, plan: SchemaPlan): Promise<void | ProviderMigrationResult>; }",
   ],
   "Kind": [
     "Kind: unique symbol",
@@ -2429,6 +2609,9 @@ exports[`adapters entry (contract) 1`] = `
   "ProviderKeyset": [
     "export type ProviderKeyset<Provider> = undefined extends Provider ? true : Provider extends { readonly capabilities?: infer Capabilities; } ? [ NonNullable<Capabilities> ] extends [ { readonly keyset?: infer Keyset; } ] ? true extends Keyset ? true : false : false : false;",
   ],
+  "ProviderMigrationResult": [
+    "export type ProviderMigrationResult = { readonly deferred: true; };",
+  ],
   "ProviderQuery": [
     "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; readonly index?: string; readonly now?: string; }",
   ],
@@ -2448,13 +2631,40 @@ exports[`adapters entry (contract) 1`] = `
     "ROUTE_OPTION_KEYS: readonly [ "basePath", "route", "responses", "requestId", "security" ]",
   ],
   "RecordDescription": [
-    "export interface RecordDescription { readonly from: string; readonly fields: FieldsDescription; readonly options: { readonly sensitive: readonly string[]; readonly unique: readonly string[]; readonly change: readonly string[]; }; readonly plugins: readonly RecordPluginDescriptor[]; readonly events?: Readonly<Partial<Record<"onCreate" | "onUpdate" | "onDelete", readonly { readonly name: string; readonly handler: boolean; }[]>>>; readonly versioned?: true; readonly expires?: EntityExpires; }",
+    "export interface RecordDescription { readonly from: string; readonly fields: FieldsDescription; readonly options: { readonly sensitive: readonly string[]; readonly unique: readonly string[]; readonly change: readonly string[]; }; readonly plugins: readonly RecordPluginDescriptor[]; readonly events?: Readonly<Partial<Record<"onCreate" | "onUpdate" | "onDelete", readonly { readonly name: string; readonly handler: boolean; }[]>>>; readonly versioned?: true; readonly expires?: EntityExpires; readonly schemaVersion?: number; readonly upgrade?: readonly number[]; readonly previousNames?: readonly string[]; }",
   ],
   "RepositoryContext": [
-    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly env: Environment; }",
+    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly schema?: RepositorySchema; readonly env: Environment; }",
   ],
   "RepositoryData": [
     "export type RepositoryData = Readonly<Record<string, unknown>>;",
+  ],
+  "RepositorySchema": [
+    "export interface RepositorySchema { readonly version: number; readonly key: string; readonly previousNames: readonly string[]; }",
+  ],
+  "SCHEMA_VERSION_KEY": [
+    "SCHEMA_VERSION_KEY = "$v"",
+  ],
+  "SchemaChange": [
+    "export interface SchemaChange { readonly entity: string; readonly key?: string; readonly change: SchemaChangeKind; readonly class: SchemaChangeClass; readonly satisfied: boolean; readonly destructive: boolean; readonly from?: string; readonly detail?: string; }",
+  ],
+  "SchemaChangeClass": [
+    "export type SchemaChangeClass = "automatic" | "declared" | "check";",
+  ],
+  "SchemaChangeKind": [
+    "export type SchemaChangeKind = "added-required" | "added-optional" | "removed" | "renamed" | "type-changed" | "tightened" | "loosened" | "made-optional" | "made-required" | "metadata" | "unique-added" | "unique-removed" | "entity-added" | "entity-removed" | "entity-renamed";",
+  ],
+  "SchemaLock": [
+    "export interface SchemaLock { readonly lockVersion: 1; readonly entities: Readonly<Record<string, SchemaLockEntity>>; }",
+  ],
+  "SchemaLockEntity": [
+    "export interface SchemaLockEntity { readonly schemaVersion: number; readonly previousNames: readonly string[]; readonly unique: readonly string[]; readonly fields: Readonly<Record<string, SchemaLockField>>; readonly upgrade?: readonly number[]; }",
+  ],
+  "SchemaLockField": [
+    "export interface SchemaLockField { readonly schema: Readonly<Record<string, unknown>>; readonly optional: boolean; readonly unique?: boolean; readonly fill?: unknown; readonly renamedFrom?: string; readonly fields?: Readonly<Record<string, SchemaLockField>>; }",
+  ],
+  "SchemaPlan": [
+    "export interface SchemaPlan { readonly entity: string; readonly changes: readonly SchemaChange[]; readonly destructive: boolean; }",
   ],
   "SinkFactory": [
     "export type SinkFactory<Result = unknown, Options extends object = StageOptions> = (options?: Options) => SinkStage<Result, Options>;",
@@ -2477,6 +2687,9 @@ exports[`adapters entry (contract) 1`] = `
   "coerceTextValues": [
     "export declare function coerceTextValues(blueprint: AnyBlueprint, texts: Readonly<Record<string, string | undefined>>): Record<string, unknown>;",
   ],
+  "diffSchemas": [
+    "export declare function diffSchemas(lock: SchemaLock, current: SchemaLock): readonly SchemaChange[];",
+  ],
   "operationRoutes": [
     "export declare function operationRoutes(operations: readonly OperationDescriptor[], options: RouteOptions, source?: string): ReadonlyMap<string, OperationRoute>;",
   ],
@@ -2491,6 +2704,12 @@ exports[`adapters entry (contract) 1`] = `
   ],
   "routeOptionsIssue": [
     "export declare function routeOptionsIssue(options: RouteOptions, where: string): string | undefined;",
+  ],
+  "schemaLockOf": [
+    "export declare function schemaLockOf(description: ApplicationDescription): SchemaLock;",
+  ],
+  "schemaLockProblemsOf": [
+    "export declare function schemaLockProblemsOf(lock: SchemaLock, current: SchemaLock): readonly string[];",
   ],
   "sinkOf": [
     "export declare function sinkOf<Result, Options extends object = StageOptions>(settings: SinkSettings<Result, Options>): SinkFactory<Result, Options>;",
@@ -2777,7 +2996,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export interface IProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly definition: AbstractDefineProperty<SchemaType, Value>; readonly value: PropertyValue<SchemaType, Value>; }",
   ],
   "(internal) IPropertyType": [
-    "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; }",
+    "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; readonly fill?: Value; readonly renamedFrom?: string; }",
   ],
   "(internal) IRecord": [
     "export interface IRecord<Properties extends IBlueprintCollection, Sensitive extends string = never> { readonly [Meta]: { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }; toJSON(): RecordJson<Properties, Sensitive>; }",
@@ -2786,7 +3005,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export interface IRecordPlugin<Record extends AnyRecordClass = AnyRecordClass, Name extends string = string> { readonly [Kind]: "record-plugin"; readonly name: Name; readonly version: string; readonly description?: string; readonly record: Record; readonly keys: readonly string[]; readonly members: readonly string[]; readonly options: RecordSettings<IBlueprintCollection>; readonly requires: readonly AnyRecordPlugin[]; is(value: unknown): value is InstanceType<Record>; toJSON(): RecordPluginDescriptor; }",
   ],
   "(internal) IRepositoryProvider": [
-    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; }",
+    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; migrate?(context: RepositoryContext<Environment>, plan: SchemaPlan): Promise<void | ProviderMigrationResult>; }",
   ],
   "(internal) ISchema": [
     "export interface ISchema<SchemaType extends TSchema, Value = Static<SchemaType>> { match(value: unknown): value is Value; matchShape(value: unknown): boolean; errors(value: unknown): string[]; toString(): string; get type(): ISchemaType<SchemaType, Value>; }",
@@ -2887,7 +3106,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type PropertiesOf<Blueprint> = Blueprint extends IBlueprint<infer Properties, boolean> ? Properties : never;",
   ],
   "(internal) PropertyMetadata": [
-    "export interface PropertyMetadata<Value> { readonly title?: string; readonly description?: string; readonly examples?: readonly Value[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly default?: Value; }",
+    "export interface PropertyMetadata<Value> { readonly title?: string; readonly description?: string; readonly examples?: readonly Value[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly default?: Value; readonly fill?: Value; readonly renamedFrom?: string; }",
   ],
   "(internal) PropertyOptions": [
     "export type PropertyOptions<SchemaType extends TSchema, Value = Static<SchemaType>> = PropertyMetadata<NonNullable<Value>> & (SchemaType extends TString ? StringConstraints : SchemaType extends TNumber | TInteger ? NumberConstraints : unknown);",
@@ -2909,6 +3128,9 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "(internal) ProviderIncrementOptions": [
     "export interface ProviderIncrementOptions { readonly set?: RepositoryData; readonly create?: RepositoryData; readonly now?: string; }",
+  ],
+  "(internal) ProviderMigrationResult": [
+    "export type ProviderMigrationResult = { readonly deferred: true; };",
   ],
   "(internal) ProviderOption": [
     "export type ProviderOption = null | boolean | number | string | readonly ProviderOption[] | { readonly [key: string]: ProviderOption; };",
@@ -3004,7 +3226,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type RepositoryAction<Entity> = keyof RepositoryFindBy<Entity> | keyof RepositoryFindManyBy<Entity> | "create" | "update" | "delete" | "restore" | "increment" | "count" | "findMany" | "exists" | "findPage" | "findCursor" | "explain" | "forEachPage";",
   ],
   "(internal) RepositoryContext": [
-    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly env: Environment; }",
+    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly schema?: RepositorySchema; readonly env: Environment; }",
   ],
   "(internal) RepositoryData": [
     "export type RepositoryData = Readonly<Record<string, unknown>>;",
@@ -3024,6 +3246,9 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) RepositoryQuery": [
     "export interface RepositoryQuery<Entity = unknown> { readonly where?: RepositoryWhere<Entity>; readonly orderBy?: readonly RepositoryOrder<QueryKey<Entity>>[]; readonly limit?: number; readonly offset?: number; readonly withDeleted?: boolean; readonly withExpired?: boolean; }",
   ],
+  "(internal) RepositorySchema": [
+    "export interface RepositorySchema { readonly version: number; readonly key: string; readonly previousNames: readonly string[]; }",
+  ],
   "(internal) RepositoryWhere": [
     "export type RepositoryWhere<Entity = unknown> = { readonly [Key in QueryKey<Entity>]?: QueryValue<Entity, Key> | { readonly in: readonly QueryValue<Entity, Key>[]; }; };",
   ],
@@ -3032,6 +3257,18 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "(internal) Result": [
     "type Result<Output> = SuccessResult<Output> | FailureResult;",
+  ],
+  "(internal) SchemaChange": [
+    "export interface SchemaChange { readonly entity: string; readonly key?: string; readonly change: SchemaChangeKind; readonly class: SchemaChangeClass; readonly satisfied: boolean; readonly destructive: boolean; readonly from?: string; readonly detail?: string; }",
+  ],
+  "(internal) SchemaChangeClass": [
+    "export type SchemaChangeClass = "automatic" | "declared" | "check";",
+  ],
+  "(internal) SchemaChangeKind": [
+    "export type SchemaChangeKind = "added-required" | "added-optional" | "removed" | "renamed" | "type-changed" | "tightened" | "loosened" | "made-optional" | "made-required" | "metadata" | "unique-added" | "unique-removed" | "entity-added" | "entity-removed" | "entity-renamed";",
+  ],
+  "(internal) SchemaPlan": [
+    "export interface SchemaPlan { readonly entity: string; readonly changes: readonly SchemaChange[]; readonly destructive: boolean; }",
   ],
   "(internal) SinkStage": [
     "export interface SinkStage<Result = unknown, Options extends object = StageOptions> { readonly kind: "sink"; readonly name?: string; readonly options?: Options; build(operations: readonly OperationDescriptor[], context: StageContext): Result; }",
@@ -3135,11 +3372,23 @@ exports[`experimental entry (not contract) 1`] = `
   "eventPolicyDescriptionOf": [
     "export declare function eventPolicyDescriptionOf(handler: unknown): EventPolicyDescription | undefined;",
   ],
+  "matchesQuery": [
+    "export declare function matchesQuery(data: RepositoryData, query: ProviderQuery, expiry?: string, now?: number): boolean;",
+  ],
+  "prepareQuery": [
+    "export declare function prepareQuery(context: RepositoryContext, input?: unknown, map?: (key: string, value: unknown) => unknown, options?: readonly string[]): RepositoryQuery;",
+  ],
   "propertyLineageOf": [
     "export declare function propertyLineageOf(Property: unknown): PropertyLineage | undefined;",
   ],
   "providerDescriptionOf": [
     "export declare function providerDescriptionOf(provider: IRepositoryProvider): ProviderDescription;",
+  ],
+  "sameValue": [
+    "export declare function sameValue(a: unknown, b: unknown): boolean;",
+  ],
+  "selectRows": [
+    "export declare function selectRows(rows: Iterable<RepositoryData>, query: ProviderQuery, expiry?: string): RepositoryData[];",
   ],
   "sliceOf": [
     "sliceOf: { <const Blueprint extends AnyBlueprint, const Selector>(blueprint: Blueprint, selector: ExactMask<Selector, SliceMask<PropertiesOf<Blueprint>>>): NoInfer<SlicedBlueprint<PropertiesOf<Blueprint>, Selector>>; <const Blueprint extends AnyBlueprint, const Selector extends AnyBlueprint | AnyRecordClass>(blueprint: Blueprint, selector: MaskOf<Selector> extends SliceMask<PropertiesOf<Blueprint>> ? Selector : never): NoInfer<SlicedBlueprint<PropertiesOf<Blueprint>, MaskOf<Selector>>>; }",
@@ -3324,13 +3573,13 @@ exports[`testing entry (contract) 1`] = `
     "export interface IProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly definition: AbstractDefineProperty<SchemaType, Value>; readonly value: PropertyValue<SchemaType, Value>; }",
   ],
   "(internal) IPropertyType": [
-    "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; }",
+    "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; readonly fill?: Value; readonly renamedFrom?: string; }",
   ],
   "(internal) IRecord": [
     "export interface IRecord<Properties extends IBlueprintCollection, Sensitive extends string = never> { readonly [Meta]: { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }; toJSON(): RecordJson<Properties, Sensitive>; }",
   ],
   "(internal) IRepositoryProvider": [
-    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; }",
+    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; migrate?(context: RepositoryContext<Environment>, plan: SchemaPlan): Promise<void | ProviderMigrationResult>; }",
   ],
   "(internal) ISchema": [
     "export interface ISchema<SchemaType extends TSchema, Value = Static<SchemaType>> { match(value: unknown): value is Value; matchShape(value: unknown): boolean; errors(value: unknown): string[]; toString(): string; get type(): ISchemaType<SchemaType, Value>; }",
@@ -3398,7 +3647,7 @@ exports[`testing entry (contract) 1`] = `
     "interface PathSegment { readonly key: PropertyKey; }",
   ],
   "(internal) PropertyMetadata": [
-    "export interface PropertyMetadata<Value> { readonly title?: string; readonly description?: string; readonly examples?: readonly Value[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly default?: Value; }",
+    "export interface PropertyMetadata<Value> { readonly title?: string; readonly description?: string; readonly examples?: readonly Value[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly default?: Value; readonly fill?: Value; readonly renamedFrom?: string; }",
   ],
   "(internal) PropertyOptions": [
     "export type PropertyOptions<SchemaType extends TSchema, Value = Static<SchemaType>> = PropertyMetadata<NonNullable<Value>> & (SchemaType extends TString ? StringConstraints : SchemaType extends TNumber | TInteger ? NumberConstraints : unknown);",
@@ -3417,6 +3666,9 @@ exports[`testing entry (contract) 1`] = `
   ],
   "(internal) ProviderIncrementOptions": [
     "export interface ProviderIncrementOptions { readonly set?: RepositoryData; readonly create?: RepositoryData; readonly now?: string; }",
+  ],
+  "(internal) ProviderMigrationResult": [
+    "export type ProviderMigrationResult = { readonly deferred: true; };",
   ],
   "(internal) ProviderQuery": [
     "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; readonly index?: string; readonly now?: string; }",
@@ -3479,7 +3731,7 @@ exports[`testing entry (contract) 1`] = `
     "type RecordValueOf<Record extends AnyRecordClass, Mode extends FieldMode> = Mode extends "value" ? InstanceType<Record> : Mode extends "input" ? InstanceType<Record> | RecordInput<Record> | AcceptedBy<Record> : Record["blueprint"] extends IBlueprint<infer Properties, boolean> ? CollectionValue<Properties, "data"> : never;",
   ],
   "(internal) RepositoryContext": [
-    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly env: Environment; }",
+    "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly schema?: RepositorySchema; readonly env: Environment; }",
   ],
   "(internal) RepositoryData": [
     "export type RepositoryData = Readonly<Record<string, unknown>>;",
@@ -3493,6 +3745,9 @@ exports[`testing entry (contract) 1`] = `
   "(internal) RepositoryQuery": [
     "export interface RepositoryQuery<Entity = unknown> { readonly where?: RepositoryWhere<Entity>; readonly orderBy?: readonly RepositoryOrder<QueryKey<Entity>>[]; readonly limit?: number; readonly offset?: number; readonly withDeleted?: boolean; readonly withExpired?: boolean; }",
   ],
+  "(internal) RepositorySchema": [
+    "export interface RepositorySchema { readonly version: number; readonly key: string; readonly previousNames: readonly string[]; }",
+  ],
   "(internal) RepositoryWhere": [
     "export type RepositoryWhere<Entity = unknown> = { readonly [Key in QueryKey<Entity>]?: QueryValue<Entity, Key> | { readonly in: readonly QueryValue<Entity, Key>[]; }; };",
   ],
@@ -3501,6 +3756,18 @@ exports[`testing entry (contract) 1`] = `
   ],
   "(internal) Result": [
     "type Result<Output> = SuccessResult<Output> | FailureResult;",
+  ],
+  "(internal) SchemaChange": [
+    "export interface SchemaChange { readonly entity: string; readonly key?: string; readonly change: SchemaChangeKind; readonly class: SchemaChangeClass; readonly satisfied: boolean; readonly destructive: boolean; readonly from?: string; readonly detail?: string; }",
+  ],
+  "(internal) SchemaChangeClass": [
+    "export type SchemaChangeClass = "automatic" | "declared" | "check";",
+  ],
+  "(internal) SchemaChangeKind": [
+    "export type SchemaChangeKind = "added-required" | "added-optional" | "removed" | "renamed" | "type-changed" | "tightened" | "loosened" | "made-optional" | "made-required" | "metadata" | "unique-added" | "unique-removed" | "entity-added" | "entity-removed" | "entity-renamed";",
+  ],
+  "(internal) SchemaPlan": [
+    "export interface SchemaPlan { readonly entity: string; readonly changes: readonly SchemaChange[]; readonly destructive: boolean; }",
   ],
   "(internal) StandardSchemaV1": [
     "export interface StandardSchemaV1<Input = unknown, Output = Input> { readonly "~standard": StandardSchemaV1.Props<Input, Output>; }",
@@ -3524,7 +3791,7 @@ exports[`testing entry (contract) 1`] = `
     "export interface MemoryPublisher extends IEventPublisher { readonly published: readonly { readonly topic: string; readonly event: PublishedEvent; }[]; clear(): void; }",
   ],
   "ProviderContractOptions": [
-    "export interface ProviderContractOptions { readonly transactions?: boolean; readonly keyset?: boolean; readonly indexes?: boolean; readonly versioning?: boolean; readonly atomic?: boolean; readonly expiry?: boolean; }",
+    "export interface ProviderContractOptions { readonly transactions?: boolean; readonly keyset?: boolean; readonly indexes?: boolean; readonly versioning?: boolean; readonly atomic?: boolean; readonly expiry?: boolean; readonly schemaEvolution?: boolean; readonly schemaVersionKey?: boolean; }",
   ],
   "memoryPublisher": [
     "export declare function memoryPublisher(): MemoryPublisher;",
@@ -3548,6 +3815,9 @@ exports[`afora.json schema 1`] = `
         {
           "additionalProperties": false,
           "properties": {
+            "fill": {
+              "description": "The value a repository gives the key when a stored row lacks it, on read and in app.migrate; unlike \`default\` (the demo value), it fills real data. Not for list fields.",
+            },
             "list": {
               "anyOf": [
                 {
@@ -3574,6 +3844,11 @@ exports[`afora.json schema 1`] = `
             "optional": {
               "description": "The key may be absent.",
               "type": "boolean",
+            },
+            "renamedFrom": {
+              "description": "The key that held the value in rows stored before the key was renamed: moved on read and in app.migrate. Not for list fields.",
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string",
             },
             "type": {
               "description": "A Std property (lowercase: email, text, integer...) or a declaration of this spec (PascalCase).",
@@ -3621,6 +3896,9 @@ exports[`afora.json schema 1`] = `
               "type": "array",
               "uniqueItems": true,
             },
+            "fill": {
+              "description": "The value a repository gives the key when a stored row lacks it, on read and in app.migrate; unlike \`default\` (the demo value), it fills real data. Not for list fields.",
+            },
             "list": {
               "anyOf": [
                 {
@@ -3650,6 +3928,11 @@ exports[`afora.json schema 1`] = `
             "optional": {
               "description": "The key may be absent.",
               "type": "boolean",
+            },
+            "renamedFrom": {
+              "description": "The key that held the value in rows stored before the key was renamed: moved on read and in app.migrate. Not for list fields.",
+              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+              "type": "string",
             },
           },
           "required": [
@@ -4208,6 +4491,18 @@ exports[`afora.json schema 1`] = `
               },
               "type": "array",
             },
+            "previousNames": {
+              "description": "Entities only: the names the entity had before; app.migrate moves their rows and start({ lock }) accepts the rename.",
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "schemaVersion": {
+              "description": "Entities only: the version of the stored shape (1 when absent). Rows store it under $v; reads bring older rows up through upgrade.",
+              "minimum": 1,
+              "type": "integer",
+            },
             "sensitive": {
               "description": "Keys always masked by toJSON(); \`password\` properties already are.",
               "items": {
@@ -4221,6 +4516,27 @@ exports[`afora.json schema 1`] = `
                 "type": "string",
               },
               "type": "array",
+            },
+            "upgrade": {
+              "additionalProperties": false,
+              "description": "Entities only: the hand-written step that brings a stored row up to each version: { "2": { "import": "./upgrades.ts#toV2" } }, each (data) => data. Keys from 2 to schemaVersion.",
+              "patternProperties": {
+                "^[1-9][0-9]*$": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "import": {
+                      "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                      "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "import",
+                  ],
+                  "type": "object",
+                },
+              },
+              "type": "object",
             },
             "versioned": {
               "description": "Entities only: adds a version identity key that update checks (optimistic concurrency, RepositoryConcurrencyConflict on a stale write) and bumps.",
@@ -5112,6 +5428,18 @@ exports[`afora.json schema 1`] = `
               },
               "type": "array",
             },
+            "previousNames": {
+              "description": "Entities only: the names the entity had before; app.migrate moves their rows and start({ lock }) accepts the rename.",
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "schemaVersion": {
+              "description": "Entities only: the version of the stored shape (1 when absent). Rows store it under $v; reads bring older rows up through upgrade.",
+              "minimum": 1,
+              "type": "integer",
+            },
             "sensitive": {
               "description": "Keys always masked by toJSON(); \`password\` properties already are.",
               "items": {
@@ -5125,6 +5453,27 @@ exports[`afora.json schema 1`] = `
                 "type": "string",
               },
               "type": "array",
+            },
+            "upgrade": {
+              "additionalProperties": false,
+              "description": "Entities only: the hand-written step that brings a stored row up to each version: { "2": { "import": "./upgrades.ts#toV2" } }, each (data) => data. Keys from 2 to schemaVersion.",
+              "patternProperties": {
+                "^[1-9][0-9]*$": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "import": {
+                      "description": "A hand-written export: "./file.ts#name" or "package#name", relative to the output directory. Never evaluated by the validator.",
+                      "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "import",
+                  ],
+                  "type": "object",
+                },
+              },
+              "type": "object",
             },
             "versioned": {
               "description": "Entities only: adds a version identity key that update checks (optimistic concurrency, RepositoryConcurrencyConflict on a stale write) and bumps.",

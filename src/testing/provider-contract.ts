@@ -1,16 +1,19 @@
-import type {
-	IRepositoryProvider,
-	ProviderQuery,
-	RepositoryContext,
-	RepositoryData,
+import {
+	type IRepositoryProvider,
+	type ProviderQuery,
+	type RepositoryContext,
+	type RepositoryData,
+	SCHEMA_VERSION_KEY,
 } from "../adapters";
 import {
+	applicationOf,
 	blueprintOf,
 	entityOf,
 	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 	type RepositoryQuery,
 	RepositoryUniqueViolation,
+	repositoryOf,
 } from "../index";
 
 /** The parts of a test runner the kit uses; `bun:test`, vitest and jest fit. */
@@ -47,6 +50,22 @@ export interface ProviderContractOptions {
 	readonly atomic?: boolean;
 	/** Run the cases of expired records. Defaults to `provider.capabilities?.expiry`. */
 	readonly expiry?: boolean;
+	/**
+	 * Run the cases of schema evolution, through repositories and
+	 * `app.migrate` over the basic methods: an old row read back upgraded,
+	 * the backfill in check and apply, rows moved from a previous name.
+	 * Default `true`. Their entities are named `Accounts` (and `One`, the
+	 * previous name), with the keys of the other cases; `createdAt` and
+	 * `updatedAt` are never written.
+	 */
+	readonly schemaEvolution?: boolean;
+	/**
+	 * Run the schema evolution cases that store the version key
+	 * (`SCHEMA_VERSION_KEY`, `"$v"`) in rows, for an entity declared with
+	 * `schemaVersion`. Default `true`; a provider with a fixed set of
+	 * columns needs one for it (or maps `context.schema.key` to its own).
+	 */
+	readonly schemaVersionKey?: boolean;
 }
 
 type GatedCapability = "versioning" | "atomic" | "expiry";
@@ -71,6 +90,13 @@ function row(overrides: Row = {}): Row {
 	sequence += 1;
 	const id = `id-${String(sequence).padStart(4, "0")}`;
 	return { id, email: `${id}@example.com`, name: id, ...overrides };
+}
+
+/** A row whose id an entity accepts (a UUID v7), ascending as they are made. */
+function evolvedRow(overrides: Row = {}): Row {
+	sequence += 1;
+	const id = `0190a1b2-c3d4-7e5f-8a9b-${String(sequence).padStart(12, "0")}`;
+	return { ...row(), id, email: `${sequence}@example.com`, ...overrides };
 }
 
 async function failure(promise: Promise<unknown>): Promise<unknown> {
@@ -1384,6 +1410,188 @@ export function providerContract(
 					data.id,
 				]);
 				expect(await provider.count(context, { now: NOW })).toBe(1);
+			});
+		});
+
+		describe("schema evolution", () => {
+			const evolving =
+				(key: boolean) => (name: string, body: () => Promise<void>) =>
+					it(name, async () => {
+						if (options.schemaEvolution === false) return;
+						if (key && options.schemaVersionKey === false) return;
+						await body();
+					});
+			const always = evolving(false);
+			const keyed = evolving(true);
+
+			/** The context a repository of `entity` named `name` gives its provider. */
+			const contextFor = (entity: object, name: string) =>
+				({
+					entity,
+					name: `${name}Repository`,
+					unique: ["id", "email"],
+					indexes: {},
+					env: {},
+				}) as unknown as RepositoryContext;
+
+			/** v2 of the accounts: `age` filled, `visits` renamed from `n`. */
+			const accountsOf = (
+				options: {
+					readonly schemaVersion?: number;
+					readonly previousNames?: readonly string[];
+				} = {},
+			) =>
+				class Accounts extends entityOf(
+					blueprintOf((ctx) => ({
+						email: ctx.string,
+						name: ctx.string,
+						age: ctx.integer.with({ fill: 18 }),
+						visits: ctx.integer.with({ renamedFrom: "n" }),
+						active: ctx.optionalOf(ctx.boolean),
+					})),
+					{
+						name: "Accounts",
+						unique: ["email"],
+						...(options.schemaVersion === undefined
+							? {}
+							: {
+									schemaVersion: options.schemaVersion,
+									upgrade: {
+										2: (data) => ({ ...data, active: true }),
+									},
+								}),
+						...(options.previousNames === undefined
+							? {}
+							: { previousNames: options.previousNames }),
+					},
+				) {};
+
+			async function setup(entity: ReturnType<typeof accountsOf>) {
+				const provider = await makeProvider();
+				const Accounts = repositoryOf({
+					entity,
+					actions: ["findMany"],
+					provider,
+				});
+				const app = applicationOf({
+					name: "contract",
+					entities: { Accounts: entity },
+					repositories: { Accounts },
+				} as never) as unknown as {
+					migrate(options: object): Promise<{
+						entities: Record<string, Record<string, unknown>>;
+					}>;
+				};
+				const context = contextFor(entity, "Accounts");
+				const old = [evolvedRow({ n: 3 }), evolvedRow({ n: 5 })];
+				for (const data of old) await provider.insert(context, data);
+				const read = async () =>
+					(await Accounts.findMany()).map((account) => account.toJSON());
+				return { provider, app, context, old, read };
+			}
+
+			always(
+				"reads a row of an older shape back in the current one",
+				async () => {
+					const { old, read } = await setup(accountsOf());
+					const [first] = await read();
+					expect(first?.id).toBe(old[0]?.id);
+					expect([first?.age, first?.visits]).toEqual([18, 3]);
+					expect(Object.hasOwn(first ?? {}, "n")).toBe(false);
+				},
+			);
+
+			keyed("reads a row of an older version through upgrade", async () => {
+				const { read } = await setup(accountsOf({ schemaVersion: 2 }));
+				const [first] = await read();
+				expect([first?.age, first?.visits, first?.active]).toEqual([
+					18,
+					3,
+					true,
+				]);
+			});
+
+			always(
+				"the backfill reports in check and rewrites in apply",
+				async () => {
+					const { provider, app, context, old } = await setup(accountsOf());
+					const check = await app.migrate({ mode: "check", pageSize: 1 });
+					expect([
+						check.entities.Accounts?.scanned,
+						check.entities.Accounts?.upgraded,
+					]).toEqual([2, 2]);
+					const untouched = await provider.findOne(context, {
+						where: { id: old[0]?.id },
+					});
+					expect(untouched?.n).toBe(3);
+
+					await app.migrate({ mode: "apply", pageSize: 1 });
+					const stored = await provider.findOne(context, {
+						where: { id: old[0]?.id },
+					});
+					expect([stored?.age, stored?.visits]).toEqual([18, 3]);
+					expect(stored?.n ?? undefined).toBe(undefined);
+					const again = await app.migrate({ mode: "check" });
+					expect(again.entities.Accounts?.upToDate).toBe(2);
+				},
+			);
+
+			keyed("the backfill stores the schema version", async () => {
+				const { provider, app, context, old } = await setup(
+					accountsOf({ schemaVersion: 2 }),
+				);
+				await app.migrate({ mode: "apply" });
+				const stored = await provider.findOne(context, {
+					where: { id: old[1]?.id },
+				});
+				expect([stored?.[SCHEMA_VERSION_KEY], stored?.active]).toEqual([
+					2,
+					true,
+				]);
+				const again = await app.migrate({ mode: "check" });
+				expect(again.entities.Accounts?.upToDate).toBe(2);
+			});
+
+			always("the backfill moves the rows of a previous name", async () => {
+				const entity = accountsOf({ previousNames: ["One"] });
+				const provider = await makeProvider();
+				const Accounts = repositoryOf({
+					entity,
+					actions: ["findMany"],
+					provider,
+				});
+				const app = applicationOf({
+					name: "contract",
+					entities: { Accounts: entity },
+					repositories: { Accounts },
+				} as never) as unknown as {
+					migrate(options: object): Promise<{
+						entities: Record<string, Record<string, unknown>>;
+					}>;
+				};
+				class One extends entityOf(
+					blueprintOf((ctx) => ({ email: ctx.string, name: ctx.string })),
+					{ name: "One" },
+				) {}
+				const previous = contextFor(One, "One");
+				const current = contextFor(entity, "Accounts");
+				const old = [evolvedRow({ n: 1 }), evolvedRow({ n: 2 })];
+				for (const data of old) await provider.insert(previous, data);
+
+				const check = await app.migrate({ mode: "check" });
+				expect(check.entities.Accounts?.movedFromPreviousNames).toBe(2);
+				expect(await provider.count(current)).toBe(0);
+
+				await app.migrate({ mode: "apply", pageSize: 1 });
+				expect(await provider.count(current)).toBe(2);
+				expect(await provider.count(previous)).toBe(2);
+				expect(
+					(await Accounts.findMany()).map((account) => account.visits),
+				).toEqual([1, 2]);
+
+				await app.migrate({ mode: "apply", destructive: true, pageSize: 1 });
+				expect(await provider.count(previous)).toBe(0);
+				expect(await provider.count(current)).toBe(2);
 			});
 		});
 	});

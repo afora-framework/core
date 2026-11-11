@@ -12,7 +12,9 @@ export {
 	DuplicateApplicationDeclaration,
 	InvalidApplicationDeclaration,
 	InvalidApplicationEnvironment,
+	InvalidSchemaMigration,
 	ProviderNotBound,
+	SchemaLockMismatch,
 	UnregisteredApplicationReference,
 	UnregisteredRepositoryDependency,
 	UnregisteredUseCaseDependency,
@@ -127,6 +129,7 @@ export {
 	DeletedEntity,
 	ImmutableEntityKey,
 	InvalidEntityExpiry,
+	InvalidEntitySchemaVersion,
 	ReservedEntityKey,
 } from "./core/entity/exceptions";
 export type {
@@ -143,6 +146,8 @@ export type {
 	EntityStorageOptions,
 	EntityStorageSettings,
 	EntityUniqueKey,
+	EntityUpgrade,
+	EntityUpgrades,
 	ExpiresAtField,
 	ExpiringIdentity,
 	IEntityIdentity,
@@ -340,6 +345,7 @@ export {
 	InvalidRepositoryEntity,
 	InvalidRepositoryIncrement,
 	InvalidRepositoryQuery,
+	InvalidStoredSchemaVersion,
 	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
@@ -399,6 +405,12 @@ export type {
 	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
 export type {
+	EntityMigrationReport,
+	SchemaMigrationInvalidRow,
+	SchemaMigrationOptions,
+	SchemaMigrationReport,
+} from "./core/repository/types/schema.interface";
+export type {
 	ISchema,
 	ISchemaType,
 } from "./core/schema/types/schema.interface";
@@ -420,6 +432,13 @@ export {
 	isUseCaseCatalog,
 	useCaseCatalogOf,
 } from "./core/use-case/plugin-catalog";
+export type {
+	CheckedSteps,
+	StepReferencesOf,
+	StepReferenceType,
+	StepsInitialScope,
+	StepValueCheck,
+} from "./core/use-case/steps/types/check.interface";
 export type {
 	StepArgs,
 	StepEnsureKind,
@@ -458,6 +477,7 @@ export type {
 	UseCaseCollection,
 	UseCaseConstructor,
 	UseCaseContext,
+	UseCaseDeclaration,
 	UseCaseDependencies,
 	UseCaseDependency,
 	UseCaseInput,
