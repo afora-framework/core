@@ -497,6 +497,48 @@ describe("app.migrate", () => {
 		expect(await provider.count(current)).toBe(3);
 	});
 
+	test("finds the rows already moved with one query per page", async () => {
+		const { provider, ids } = await seeded();
+		class Article extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.text })),
+			{ name: "Article", previousNames: ["Entry"] },
+		) {}
+		const calls: string[] = [];
+		const counting = {
+			...provider,
+			capabilities: provider.capabilities,
+			findOne(...args: Parameters<typeof provider.findOne>) {
+				calls.push(`findOne ${args[0].name}`);
+				return provider.findOne(...args);
+			},
+			findMany(...args: Parameters<typeof provider.findMany>) {
+				calls.push(`findMany ${args[0].name}`);
+				return provider.findMany(...args);
+			},
+		};
+		const app = applicationOf({
+			name: "cms",
+			entities: { Article },
+			repositories: {
+				Articles: repositoryOf({ entity: Article, actions: ["findMany"] }),
+			},
+			provider: counting,
+		});
+		// One row is already there: it is not moved again.
+		await provider.insert(contextOf(Article, "Article"), {
+			id: ids[0] as string,
+			createdAt,
+			title: "moved",
+		});
+		const report = await app.migrate({ mode: "apply", pageSize: 2 });
+		expect(report.entities.Article?.movedFromPreviousNames).toBe(2);
+		expect(calls.filter((call) => call.startsWith("findOne"))).toEqual([]);
+		// Two pages of the previous name, each checked with one query.
+		expect(
+			calls.filter((call) => call === "findMany ArticleRepository"),
+		).toHaveLength(1 + 2);
+	});
+
 	test("a previous name equal to the record name of the class is rejected, and its rows survive", async () => {
 		const provider = inMemoryProvider();
 		// No `name`: the record name is the name of the class, "Post".

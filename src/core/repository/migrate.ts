@@ -270,7 +270,6 @@ export async function migrateRepository(
 	);
 	const needs: (keyof IRepositoryProvider)[] = ["findMany"];
 	if (apply) needs.push("update");
-	if (previousNames.length > 0) needs.push("findOne");
 	if (apply && previousNames.length > 0) needs.push("insert");
 	if (apply && destructive && previousNames.length > 0) needs.push("remove");
 	for (const need of needs) {
@@ -355,6 +354,16 @@ export async function migrateRepository(
 		const old = previousContextOf(context, previous);
 		await walk(provider, old, pageSize, async (rows) => {
 			let removed = 0;
+			// The rows of the page already moved, found in one query.
+			const moved = new Set(
+				(
+					await provider.findMany(context, {
+						where: { id: { in: rows.map((row) => row.id) } },
+						withDeleted: true,
+						...(context.expiry === undefined ? {} : { withExpired: true }),
+					})
+				).map((row) => String(row.id)),
+			);
 			for (const item of await upcastPage(state, plan, rows)) {
 				tally.scanned += 1;
 				if ("invalid" in item) {
@@ -366,13 +375,7 @@ export async function migrateRepository(
 				}
 				for (const key of item.report.removed) tally.removedKeys.add(key);
 				const id = String(item.row.id);
-				const moved =
-					(await provider.findOne(context, {
-						where: { id },
-						withDeleted: true,
-						...(context.expiry === undefined ? {} : { withExpired: true }),
-					})) !== undefined;
-				if (!moved) {
+				if (!moved.has(id)) {
 					tally.movedFromPreviousNames += 1;
 					if (apply) {
 						await provider.insert(
