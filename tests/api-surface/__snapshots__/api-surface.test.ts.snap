@@ -1671,6 +1671,15 @@ exports[`exports of the package and their declarations 1`] = `
   "ReservedRecordKey": [
     "ReservedRecordKey: import("../../index.js").DeclaredExceptionClass<{ readonly key: string; }>",
   ],
+  "ResourceAction": [
+    "export type ResourceAction = "create" | "get" | "list" | "update" | "delete";",
+  ],
+  "ResourceOptions": [
+    "export interface ResourceOptions<Actions extends readonly ResourceAction[] = readonly ResourceAction[]> { readonly path: string; readonly actions?: Actions; readonly access?: AccessDeclaration | { readonly [Action in ResourceAction]?: AccessDeclaration; }; }",
+  ],
+  "ResourceUseCases": [
+    "export interface ResourceUseCases<Repository extends AnyRepository> { readonly create: EntityUseCase<Repository, None, CreateInput<Repository, None>>; readonly get: EntityUseCase<Repository, None, ById<Repository>>; readonly list: StepsUseCaseConstructor<{ readonly limit: OptionalProperty<typeof Integer>; readonly offset: OptionalProperty<typeof Integer>; }, { readonly items: IBlueprintList<EntityOf<Repository>>; readonly total: typeof Integer; readonly limit: typeof Integer; readonly offset: typeof Integer; }, { readonly repository: Repository; }>; readonly update: EntityUseCase<Repository, None, UpdateInput<Repository>>; readonly delete: EntityUseCase<Repository, None, ById<Repository>>; }",
+  ],
   "RestoreMaker": [
     "export type RestoreMaker = <Repository extends AnyRepository, const Options extends StdUseCaseOptions & { readonly as?: string; } = None, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "restore">, options?: Options & Hookable<Repository, ById<Repository>, never, None, undefined, Dependencies, false>) => StepsUseCaseConstructor<ById<Repository>, EntityResponse<Repository, Options>, { readonly repository: Repository; } & Dependencies>;",
   ],
@@ -2145,6 +2154,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "resetRuntime": [
     "export declare function resetRuntime(): void;",
+  ],
+  "resourceOf": [
+    "export declare function resourceOf<Repository extends AnyRepository, const Actions extends readonly ResourceAction[] = readonly [ "create", "get", "list", "update", "delete" ]>(repository: Repository, options: ResourceOptions<Actions>): (ctx: StdUseCaseContext) => Pick<ResourceUseCases<Repository>, Actions[number]>;",
   ],
   "select": [
     "select: import("./types/output.interface.js").TransformFactory<SelectOptions>",

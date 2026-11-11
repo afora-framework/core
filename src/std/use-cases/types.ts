@@ -722,3 +722,49 @@ export type StdUseCasePlugins = {
 		StdUseCaseContext[Name]
 	>;
 };
+
+/** The operations `resourceOf` can give. */
+export type ResourceAction = "create" | "get" | "list" | "update" | "delete";
+
+/** The use cases of `resourceOf`, by operation: the standard ones, with no option but their route and access. */
+export interface ResourceUseCases<Repository extends AnyRepository> {
+	readonly create: EntityUseCase<
+		Repository,
+		None,
+		CreateInput<Repository, None>
+	>;
+	readonly get: EntityUseCase<Repository, None, ById<Repository>>;
+	readonly list: StepsUseCaseConstructor<
+		{
+			readonly limit: OptionalProperty<typeof Integer>;
+			readonly offset: OptionalProperty<typeof Integer>;
+		},
+		{
+			readonly items: IBlueprintList<EntityOf<Repository>>;
+			readonly total: typeof Integer;
+			readonly limit: typeof Integer;
+			readonly offset: typeof Integer;
+		},
+		{ readonly repository: Repository }
+	>;
+	readonly update: EntityUseCase<Repository, None, UpdateInput<Repository>>;
+	readonly delete: EntityUseCase<Repository, None, ById<Repository>>;
+}
+
+/** The options of `resourceOf`. */
+export interface ResourceOptions<
+	Actions extends readonly ResourceAction[] = readonly ResourceAction[],
+> {
+	/** The path of the collection, e.g. `"/posts"`; one entity is at `{path}/{id}`. */
+	readonly path: string;
+	/** The operations to give; all five by default. Each needs its repository action. */
+	readonly actions?: Actions;
+	/**
+	 * Who may call: one declaration for every operation, or one per operation
+	 * (`{ create: { scopes: ["posts:write"] }, get: { public: true } }`; an
+	 * operation left out declares none).
+	 */
+	readonly access?:
+		| AccessDeclaration
+		| { readonly [Action in ResourceAction]?: AccessDeclaration };
+}

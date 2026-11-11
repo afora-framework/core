@@ -59,6 +59,8 @@ afora is not a general-purpose validator. It models a domain on [TypeBox](https:
 - **Exceptions that know their layer.** Each error carries a layer (`Property`, `Record`, `UseCase`, `Output`...) and a `trace` that grows as it goes up.
 - **Standard Schema V1 on every field.** Properties, blueprints, lists and record classes work as is in Hono, tRPC and TanStack Form, and `safeParse` never throws for an invalid value.
 - **Commands and outputs.** `commandOf` groups use cases behind one execution boundary (context, transactions, event policies); `outputOf` turns commands into operations and pipes them to a sink: an HTTP API with `@afora/hono`, WebSocket messages with `@afora/ws`, an OpenAPI 3.1 document, or MCP tools, with problem+json errors and masked responses.
+- **Routes and access on the use case.** A use case says where it is served (`route`, or `@Route("GET", "/posts/{slug}")`) and who may call it (`access`, or `@Access({ scopes: [...] })`), next to its input; the blueprint stays the only description of the input, and every server and transport enforces the access before the use case runs. `resourceOf(Posts, { path: "/posts" })` is a whole CRUD. See the [tutorial](docs/tutorial.md).
+- **Any server.** The same output runs on [Hono](packages/hono/README.md), [Fastify](packages/fastify/README.md), [Express](packages/express/README.md) or [Elysia](packages/elysia/README.md), with that server's own middlewares: they share one compiled route table and one contract test suite ([HTTP providers](docs/providers.md)).
 - **Standard use cases.** `commandOf({ useCases: (ctx) => ({ create: ctx.create(Posts), publish: ctx.publish(Posts) }) })` picks ready-made use cases that follow the repository and its entity: the actions it declares, its record plugins and the properties of its keys ([docs](docs/std-use-cases.md)).
 - **The whole application in JSON.** An `afora.json` generates the code (`@afora/codegen`), use cases included, as data (steps), and `extractSpec(app)` gives back the `afora.json` of an application written by hand.
 - **Repositories on any store.** A provider contract with typed queries, soft deletion and transactions, a runner-agnostic kit to test one (`@afora/core/testing`), in memory by default, on Drizzle ORM with `@afora/drizzle` and on DynamoDB with `@afora/dynamodb`.
@@ -86,7 +88,7 @@ configure({ hasher, idGenerator: () => myUuidV7() }); // both optional; `resetRu
 
 ## Quick start
 
-A `User` entity with a sensitive key and a unique key, a repository, a use case written as steps, a command that wraps it in a transaction, and an output that serves the command as an HTTP API with an OpenAPI document. Install what it uses:
+A `User` entity with a sensitive key and a unique key, a repository, a use case written as steps that says where it is served, a command that wraps it in a transaction, and an output that serves the command as an HTTP API with an OpenAPI document. Install what it uses:
 
 ```bash
 bun add @afora/core @afora/hono hono typebox
@@ -134,9 +136,10 @@ async function hashPassword(plain: string) {
 	return (await Password.hash(plain)).value;
 }
 
-// Use case: the steps are data, so they can also live in an afora.json
+// Use case: the steps and the route are data, so they can also live in an afora.json
 class Register extends useCaseOf({
 	name: "Register",
+	route: { method: "post", path: "/users", status: 201 }, // where it is served
 	blueprint: blueprintOf((ctx) => ({
 		name: ctx.text,
 		email: ctx.email,
@@ -195,8 +198,8 @@ if (import.meta.main) Bun.serve({ fetch: api.fetch });
 What it does:
 
 ```
-POST /api/accounts/register  { "name": "Ana", "email": "  Ana@Example.COM ", "plainPassword": "Str0ng!Pass" }
--> 200 { "user": { "id": "...", "name": "Ana", "email": "ana@example.com", "password": "********", ... } }
+POST /api/users  { "name": "Ana", "email": "  Ana@Example.COM ", "plainPassword": "Str0ng!Pass" }
+-> 201 { "user": { "id": "...", "name": "Ana", "email": "ana@example.com", "password": "********", ... } }
 
 the same email again
 -> 409 application/problem+json  { "title": "UserAlreadyExists", "layer": "use-case", ... }
@@ -234,6 +237,7 @@ Everything above, except the hashing function, is data, so it can be written as 
 	},
 	"useCases": {
 		"Register": {
+			"route": { "method": "post", "path": "/users", "status": 201 },
 			"input": {
 				"fields": {
 					"name": "text",

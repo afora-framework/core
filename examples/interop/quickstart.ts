@@ -37,9 +37,10 @@ async function hashPassword(plain: string) {
 	return (await Password.hash(plain)).value;
 }
 
-// Use case: the steps are data, so they can also live in an afora.json
+// Use case: the steps and the route are data, so they can also live in an afora.json
 class Register extends useCaseOf({
 	name: "Register",
+	route: { method: "post", path: "/users", status: 201 }, // where it is served
 	blueprint: blueprintOf((ctx) => ({
 		name: ctx.text,
 		email: ctx.email,

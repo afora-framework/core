@@ -551,6 +551,7 @@ export {
 	StdRecordPlugins,
 	Taggable,
 } from "./std/record-plugins";
+export { resourceOf } from "./std/resource";
 export type {
 	IdGenerator,
 	PasswordHasher,
@@ -573,6 +574,9 @@ export type {
 	LoginMaker,
 	PublishMaker,
 	RegisterMaker,
+	ResourceAction,
+	ResourceOptions,
+	ResourceUseCases,
 	RestoreMaker,
 	StdCreateOptions,
 	StdEntityOptions,

@@ -40,6 +40,42 @@ await Blog.run("update", { id: post.id, title: "Hello again" }); // status is le
 
 Each `ctx.<name>(repository, options?)` gives a use case class, the same as `useCaseOf({ steps })` would: its input and response are typed and validated, `describe()` reports its steps, scope, events, transactions and overrides work as for any use case, and an output exposes it like any other operation. They are [use case plugins](use-cases.md#plugins) in the catalog `StdUseCases`; `StdUseCases.context` is the same `ctx` outside a command, e.g. to depend on one from a use case written by hand (`dependencies: { register: StdUseCases.context.register(Users) }`). The same repository and equal options give the same class, wherever the call is written.
 
+## A resource in one line
+
+`resourceOf(repository, { path })` gives the `useCases` of a command the standard `create`, `get`, `list`, `update` and `delete`, each with the [route](use-cases.md#routes) of a REST resource:
+
+```ts
+import { commandOf, resourceOf } from "@afora/core";
+
+const Blog = commandOf({
+	name: "Blog",
+	useCases: resourceOf(Posts, { path: "/posts" }),
+});
+// create: POST /posts (201)        list:   GET /posts
+// get:    GET /posts/{id}          update: PATCH /posts/{id}        delete: DELETE /posts/{id}
+```
+
+It is only a shortcut for `(ctx) => ({ create: ctx.create(Posts, { route: { method: "post", path: "/posts", status: 201 } }), ... })`. The command is an ordinary one: its operations are typed by the repository, `describe()` shows the same standard use cases with their routes, and `afora.json` round-trips them.
+
+| Option    | Does                                                                                                                                                                             |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`    | the path of the collection; one entity is at `{path}/{id}`                                                                                                                       |
+| `actions` | the operations to give, all five by default: `actions: ["get", "list"]` gives a read-only resource, and the type of the command has only those                                   |
+| `access`  | who may call them, see [Access](auth.md): one declaration for every operation, or one per operation (`{ create: { scopes: ["posts:write"] } }`; one left out declares no access) |
+
+Each operation needs its repository actions (`create`; `findById` for `get`; `findPage` for `list`; `findById` and `update`; `findById` and `delete`), and a repository that lacks one throws `UseCaseUnavailable` when the command is declared. For anything more an operation needs (`omit`, `owner`, hooks, another name), write that one with `ctx` and spread the rest, since the result is a function of `ctx`:
+
+```ts
+useCases: (ctx) => ({
+	...resourceOf(Posts, { path: "/posts", actions: ["get", "list", "delete"] })(ctx),
+	create: ctx.create(Posts, {
+		values: { status: "draft" },
+		route: { method: "post", path: "/posts", status: 201 },
+	}),
+	publish: PublishPost, // a use case written by hand
+}),
+```
+
 ## The use cases
 
 `id` is the `id` field of the entity, and `<as>` the response key (`item` by default).
