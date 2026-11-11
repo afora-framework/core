@@ -5963,6 +5963,71 @@ exports[`afora.json schema 1`] = `
             {
               "additionalProperties": false,
               "properties": {
+                "access": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "description": "Anyone may call.",
+                      "properties": {
+                        "public": {
+                          "const": true,
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "public",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "additionalProperties": false,
+                      "description": "An authenticated caller ({} asks for nothing more), with these scopes, that is the owner, and whose values fill the context.",
+                      "properties": {
+                        "context": {
+                          "description": "Context keys filled from the caller, over what the request sent: "subject", "scopes" or "claims.<name>".",
+                          "patternProperties": {
+                            "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                              "pattern": "^(subject|scopes|claims\\.[^.]+)$",
+                              "type": "string",
+                            },
+                          },
+                          "type": "object",
+                        },
+                        "owner": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "claim": {
+                              "description": "Compare with this claim of the caller instead of its subject.",
+                              "type": "string",
+                            },
+                            "input": {
+                              "description": "A scalar input key that must equal the subject of the caller.",
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "input",
+                          ],
+                          "type": "object",
+                        },
+                        "public": {
+                          "const": false,
+                          "type": "boolean",
+                        },
+                        "scopes": {
+                          "description": "Scopes the caller must have, all of them.",
+                          "items": {
+                            "type": "string",
+                          },
+                          "type": "array",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  ],
+                  "description": "Who may call the use case through an output, enforced before it runs: a caller without it gets a 401 or a 403. Without access, nothing is checked.",
+                },
                 "context": {
                   "anyOf": [
                     {
@@ -6460,6 +6525,169 @@ exports[`afora.json schema 1`] = `
                   ],
                   "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
                 },
+                "route": {
+                  "additionalProperties": false,
+                  "description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status.",
+                  "properties": {
+                    "cookie": {
+                      "description": "Scalar input keys read from cookies: { "session": "sid" }.",
+                      "patternProperties": {
+                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "headers": {
+                      "description": "Scalar input keys read from request headers: { "locale": "accept-language" }.",
+                      "patternProperties": {
+                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "method": {
+                      "anyOf": [
+                        {
+                          "const": "get",
+                          "type": "string",
+                        },
+                        {
+                          "const": "post",
+                          "type": "string",
+                        },
+                        {
+                          "const": "put",
+                          "type": "string",
+                        },
+                        {
+                          "const": "patch",
+                          "type": "string",
+                        },
+                        {
+                          "const": "delete",
+                          "type": "string",
+                        },
+                        {
+                          "const": "GET",
+                          "type": "string",
+                        },
+                        {
+                          "const": "POST",
+                          "type": "string",
+                        },
+                        {
+                          "const": "PUT",
+                          "type": "string",
+                        },
+                        {
+                          "const": "PATCH",
+                          "type": "string",
+                        },
+                        {
+                          "const": "DELETE",
+                          "type": "string",
+                        },
+                      ],
+                      "description": "The HTTP method, in either case.",
+                    },
+                    "path": {
+                      "description": "After the basePath of the sink, e.g. "/posts/{slug}": a {name} segment fills the scalar input key "name". Without it, the default of the sink: /{command}/{operation}.",
+                      "pattern": "^/",
+                      "type": "string",
+                    },
+                    "query": {
+                      "description": "Scalar input keys read from the query string. A get or delete already reads from the query every key with no other place.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "setCookie": {
+                      "description": "Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie.",
+                      "patternProperties": {
+                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "domain": {
+                              "type": "string",
+                            },
+                            "httpOnly": {
+                              "default": true,
+                              "type": "boolean",
+                            },
+                            "maxAge": {
+                              "description": "Seconds the cookie lives.",
+                              "minimum": 0,
+                              "type": "integer",
+                            },
+                            "name": {
+                              "description": "The name of the cookie.",
+                              "type": "string",
+                            },
+                            "path": {
+                              "default": "/",
+                              "type": "string",
+                            },
+                            "sameSite": {
+                              "anyOf": [
+                                {
+                                  "const": "strict",
+                                  "type": "string",
+                                },
+                                {
+                                  "const": "lax",
+                                  "type": "string",
+                                },
+                                {
+                                  "const": "none",
+                                  "type": "string",
+                                },
+                              ],
+                              "default": "lax",
+                            },
+                            "secure": {
+                              "default": true,
+                              "type": "boolean",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "status": {
+                      "anyOf": [
+                        {
+                          "const": 200,
+                          "type": "number",
+                        },
+                        {
+                          "const": 201,
+                          "type": "number",
+                        },
+                        {
+                          "const": 202,
+                          "type": "number",
+                        },
+                        {
+                          "const": 204,
+                          "type": "number",
+                        },
+                      ],
+                      "default": 200,
+                      "description": "The status of a success.",
+                    },
+                  },
+                  "required": [
+                    "method",
+                  ],
+                  "type": "object",
+                },
                 "tags": {
                   "description": "Tags, for documentation.",
                   "items": {
@@ -6479,6 +6707,71 @@ exports[`afora.json schema 1`] = `
               "additionalProperties": false,
               "description": "A standard use case made for a repository: its input, response, dependencies and steps follow the repository and its entity.",
               "properties": {
+                "access": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "description": "Anyone may call.",
+                      "properties": {
+                        "public": {
+                          "const": true,
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "public",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "additionalProperties": false,
+                      "description": "An authenticated caller ({} asks for nothing more), with these scopes, that is the owner, and whose values fill the context.",
+                      "properties": {
+                        "context": {
+                          "description": "Context keys filled from the caller, over what the request sent: "subject", "scopes" or "claims.<name>".",
+                          "patternProperties": {
+                            "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                              "pattern": "^(subject|scopes|claims\\.[^.]+)$",
+                              "type": "string",
+                            },
+                          },
+                          "type": "object",
+                        },
+                        "owner": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "claim": {
+                              "description": "Compare with this claim of the caller instead of its subject.",
+                              "type": "string",
+                            },
+                            "input": {
+                              "description": "A scalar input key that must equal the subject of the caller.",
+                              "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "input",
+                          ],
+                          "type": "object",
+                        },
+                        "public": {
+                          "const": false,
+                          "type": "boolean",
+                        },
+                        "scopes": {
+                          "description": "Scopes the caller must have, all of them.",
+                          "items": {
+                            "type": "string",
+                          },
+                          "type": "array",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  ],
+                  "description": "Who may call the use case through an output, enforced before it runs: a caller without it gets a 401 or a 403. Without access, nothing is checked.",
+                },
                 "deprecated": {
                   "default": false,
                   "type": "boolean",
@@ -6487,11 +6780,11 @@ exports[`afora.json schema 1`] = `
                   "type": "string",
                 },
                 "generic": {
-                  "description": "A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register or login.",
+                  "description": "A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register, login, refresh or logout.",
                   "type": "string",
                 },
                 "options": {
-                  "description": "Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy"; those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").",
+                  "description": "Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy", and "token" for login and refresh ({ "secret": { "env": "NAME" }, "issuer"?, "audience"?, "expiresIn"?, "algorithm"?, "refresh"?: { "expiresIn" }, "scopes"?, "scopesFrom"?, "claims"? }: login then answers a token); those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").",
                   "patternProperties": {
                     "^[A-Za-z_$][A-Za-z0-9_$]*$": {},
                   },
@@ -6501,6 +6794,169 @@ exports[`afora.json schema 1`] = `
                   "description": "The declared repository it is made for: it must have the actions, and its entity the plugins, the use case needs.",
                   "pattern": "^[A-Z][A-Za-z0-9]*$",
                   "type": "string",
+                },
+                "route": {
+                  "additionalProperties": false,
+                  "description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status.",
+                  "properties": {
+                    "cookie": {
+                      "description": "Scalar input keys read from cookies: { "session": "sid" }.",
+                      "patternProperties": {
+                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "headers": {
+                      "description": "Scalar input keys read from request headers: { "locale": "accept-language" }.",
+                      "patternProperties": {
+                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "method": {
+                      "anyOf": [
+                        {
+                          "const": "get",
+                          "type": "string",
+                        },
+                        {
+                          "const": "post",
+                          "type": "string",
+                        },
+                        {
+                          "const": "put",
+                          "type": "string",
+                        },
+                        {
+                          "const": "patch",
+                          "type": "string",
+                        },
+                        {
+                          "const": "delete",
+                          "type": "string",
+                        },
+                        {
+                          "const": "GET",
+                          "type": "string",
+                        },
+                        {
+                          "const": "POST",
+                          "type": "string",
+                        },
+                        {
+                          "const": "PUT",
+                          "type": "string",
+                        },
+                        {
+                          "const": "PATCH",
+                          "type": "string",
+                        },
+                        {
+                          "const": "DELETE",
+                          "type": "string",
+                        },
+                      ],
+                      "description": "The HTTP method, in either case.",
+                    },
+                    "path": {
+                      "description": "After the basePath of the sink, e.g. "/posts/{slug}": a {name} segment fills the scalar input key "name". Without it, the default of the sink: /{command}/{operation}.",
+                      "pattern": "^/",
+                      "type": "string",
+                    },
+                    "query": {
+                      "description": "Scalar input keys read from the query string. A get or delete already reads from the query every key with no other place.",
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                    "setCookie": {
+                      "description": "Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie.",
+                      "patternProperties": {
+                        "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "domain": {
+                              "type": "string",
+                            },
+                            "httpOnly": {
+                              "default": true,
+                              "type": "boolean",
+                            },
+                            "maxAge": {
+                              "description": "Seconds the cookie lives.",
+                              "minimum": 0,
+                              "type": "integer",
+                            },
+                            "name": {
+                              "description": "The name of the cookie.",
+                              "type": "string",
+                            },
+                            "path": {
+                              "default": "/",
+                              "type": "string",
+                            },
+                            "sameSite": {
+                              "anyOf": [
+                                {
+                                  "const": "strict",
+                                  "type": "string",
+                                },
+                                {
+                                  "const": "lax",
+                                  "type": "string",
+                                },
+                                {
+                                  "const": "none",
+                                  "type": "string",
+                                },
+                              ],
+                              "default": "lax",
+                            },
+                            "secure": {
+                              "default": true,
+                              "type": "boolean",
+                            },
+                          },
+                          "required": [
+                            "name",
+                          ],
+                          "type": "object",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "status": {
+                      "anyOf": [
+                        {
+                          "const": 200,
+                          "type": "number",
+                        },
+                        {
+                          "const": 201,
+                          "type": "number",
+                        },
+                        {
+                          "const": 202,
+                          "type": "number",
+                        },
+                        {
+                          "const": 204,
+                          "type": "number",
+                        },
+                      ],
+                      "default": 200,
+                      "description": "The status of a success.",
+                    },
+                  },
+                  "required": [
+                    "method",
+                  ],
+                  "type": "object",
                 },
                 "tags": {
                   "description": "Tags, for documentation.",

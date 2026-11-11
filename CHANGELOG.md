@@ -22,6 +22,8 @@
 
 ### Added
 
+- `@afora/codegen`: `route` and `access` in the `useCases` of `afora.json`, generated as settings and kept by the round trip (#75, #60); see `docs/afora-json.md#routes-and-access`.
+- `@Route` and `@Access` accept the declaration the class already has, so a hand-written class may repeat what its generated base carries; a different one still throws `InvalidUseCaseDeclaration`.
 - Three new packages, sinks that serve an output on other servers (#75): `@afora/fastify`, `@afora/express` and `@afora/elysia`. Each takes the options of `@afora/hono` (the `HttpOptions`) and the hooks `authenticator`, `middlewares` (of its server) and `app`, and is built on `compileRoutes`. See `docs/providers.md`.
 - `httpProviderContract(name, { sink, fetch, close? }, runner)` in `@afora/core/testing`: the cases every sink that serves HTTP must pass, on real requests (declared routes, input from each place, context, problems, statuses, masking, access, cookies, request id, the document), with the type `HttpProviderContractSettings`. The four HTTP packages run it.
 - Tokens and sessions, **experimental** (#60, #75), see `docs/auth.md#tokens-and-sessions`:

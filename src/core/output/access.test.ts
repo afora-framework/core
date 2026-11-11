@@ -148,7 +148,12 @@ describe("access declaration", () => {
 			expect(declare(access)).toThrow(InvalidUseCaseDeclaration);
 		}
 		expect(() => Access({})(class {})).toThrow(InvalidUseCaseDeclaration);
-		expect(() => Access({})(SignedIn)).toThrow(InvalidUseCaseDeclaration);
+		expect(() => Access({ scopes: ["x"] })(SignedIn)).toThrow(
+			InvalidUseCaseDeclaration,
+		);
+		// The same access again is one declaration.
+		Access({})(SignedIn);
+		expect(SignedIn.access).toEqual({});
 	});
 
 	test("a context key the operation lacks is rejected when it becomes one", () => {

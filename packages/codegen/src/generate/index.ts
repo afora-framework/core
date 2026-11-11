@@ -826,6 +826,8 @@ function genericUseCaseDoc(
 		props.push(["tags", literal(spec.tags)]);
 	}
 	if (spec.deprecated === true) props.push(["deprecated", "true"]);
+	if (spec.route !== undefined) props.push(["route", literal(spec.route)]);
+	if (spec.access !== undefined) props.push(["access", literal(spec.access)]);
 	return [
 		"export const ",
 		decl.name,
@@ -889,6 +891,8 @@ function useCaseDoc(
 		props.push(["tags", literal(spec.tags)]);
 	}
 	if (spec.deprecated === true) props.push(["deprecated", "true"]);
+	if (spec.route !== undefined) props.push(["route", literal(spec.route)]);
+	if (spec.access !== undefined) props.push(["access", literal(spec.access)]);
 	const implementation = spec.implementation as {
 		steps?: Record<string, unknown>[];
 	};

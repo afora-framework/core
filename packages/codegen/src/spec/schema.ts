@@ -634,11 +634,151 @@ const Step = Type.Union(
 	},
 );
 
+const RouteCookie = Type.Object(
+	{
+		name: Type.String({ description: "The name of the cookie." }),
+		httpOnly: Type.Optional(Type.Boolean({ default: true })),
+		secure: Type.Optional(Type.Boolean({ default: true })),
+		sameSite: Type.Optional(
+			Type.Union(
+				[Type.Literal("strict"), Type.Literal("lax"), Type.Literal("none")],
+				{ default: "lax" },
+			),
+		),
+		path: Type.Optional(Type.String({ default: "/" })),
+		domain: Type.Optional(Type.String()),
+		maxAge: Type.Optional(
+			Type.Integer({ minimum: 0, description: "Seconds the cookie lives." }),
+		),
+	},
+	{ additionalProperties: false },
+);
+
+const UseCaseRoute = Type.Object(
+	{
+		method: Type.Union(
+			[
+				"get",
+				"post",
+				"put",
+				"patch",
+				"delete",
+				"GET",
+				"POST",
+				"PUT",
+				"PATCH",
+				"DELETE",
+			].map((method) => Type.Literal(method)),
+			{ description: "The HTTP method, in either case." },
+		),
+		path: Type.Optional(
+			Type.String({
+				pattern: "^/",
+				description:
+					'After the basePath of the sink, e.g. "/posts/{slug}": a {name} segment fills the scalar input key "name". Without it, the default of the sink: /{command}/{operation}.',
+			}),
+		),
+		status: Type.Optional(
+			Type.Union(
+				[
+					Type.Literal(200),
+					Type.Literal(201),
+					Type.Literal(202),
+					Type.Literal(204),
+				],
+				{ default: 200, description: "The status of a success." },
+			),
+		),
+		query: Type.Optional(
+			StringList(
+				"Scalar input keys read from the query string. A get or delete already reads from the query every key with no other place.",
+			),
+		),
+		headers: Type.Optional(
+			Type.Record(Type.String({ pattern: KEY }), Type.String(), {
+				description:
+					'Scalar input keys read from request headers: { "locale": "accept-language" }.',
+			}),
+		),
+		cookie: Type.Optional(
+			Type.Record(Type.String({ pattern: KEY }), Type.String(), {
+				description:
+					'Scalar input keys read from cookies: { "session": "sid" }.',
+			}),
+		),
+		setCookie: Type.Optional(
+			Type.Record(Type.String({ pattern: KEY }), RouteCookie, {
+				description:
+					"Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie.",
+			}),
+		),
+	},
+	{
+		additionalProperties: false,
+		description:
+			"Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status.",
+	},
+);
+
+const UseCaseAccess = Type.Union(
+	[
+		Type.Object(
+			{ public: Type.Literal(true) },
+			{ additionalProperties: false, description: "Anyone may call." },
+		),
+		Type.Object(
+			{
+				public: Type.Optional(Type.Literal(false)),
+				scopes: Type.Optional(
+					StringList("Scopes the caller must have, all of them."),
+				),
+				owner: Type.Optional(
+					Type.Object(
+						{
+							input: Type.String({
+								pattern: KEY,
+								description:
+									"A scalar input key that must equal the subject of the caller.",
+							}),
+							claim: Type.Optional(
+								Type.String({
+									description:
+										"Compare with this claim of the caller instead of its subject.",
+								}),
+							),
+						},
+						{ additionalProperties: false },
+					),
+				),
+				context: Type.Optional(
+					Type.Record(
+						Type.String({ pattern: KEY }),
+						Type.String({ pattern: "^(subject|scopes|claims\\.[^.]+)$" }),
+						{
+							description:
+								'Context keys filled from the caller, over what the request sent: "subject", "scopes" or "claims.<name>".',
+						},
+					),
+				),
+			},
+			{
+				additionalProperties: false,
+				description:
+					"An authenticated caller ({} asks for nothing more), with these scopes, that is the owner, and whose values fill the context.",
+			},
+		),
+	],
+	{
+		description:
+			"Who may call the use case through an output, enforced before it runs: a caller without it gets a 401 or a 403. Without access, nothing is checked.",
+	},
+);
+
 const GenericUseCaseDeclaration = Type.Object(
 	{
 		generic: Type.String({
 			description:
-				"A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register or login.",
+				"A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register, login, refresh or logout.",
 		}),
 		repository: Type.String({
 			pattern: NAME,
@@ -648,12 +788,14 @@ const GenericUseCaseDeclaration = Type.Object(
 		options: Type.Optional(
 			Type.Record(Type.String({ pattern: KEY }), Type.Unknown(), {
 				description:
-					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy"; those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").',
+					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy", and "token" for login and refresh ({ "secret": { "env": "NAME" }, "issuer"?, "audience"?, "expiresIn"?, "algorithm"?, "refresh"?: { "expiresIn" }, "scopes"?, "scopesFrom"?, "claims"? }: login then answers a token); those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").',
 			}),
 		),
 		description: Type.Optional(Type.String()),
 		tags: Type.Optional(StringList("Tags, for documentation.")),
 		deprecated: Type.Optional(Type.Boolean({ default: false })),
+		route: Type.Optional(UseCaseRoute),
+		access: Type.Optional(UseCaseAccess),
 	},
 	{
 		additionalProperties: false,
@@ -667,6 +809,8 @@ const WrittenUseCaseDeclaration = Type.Object(
 		description: Type.Optional(Type.String()),
 		tags: Type.Optional(StringList("Tags, for documentation.")),
 		deprecated: Type.Optional(Type.Boolean({ default: false })),
+		route: Type.Optional(UseCaseRoute),
+		access: Type.Optional(UseCaseAccess),
 		input: BlueprintRef,
 		response: BlueprintRef,
 		context: Type.Optional(BlueprintRef),

@@ -24,6 +24,7 @@ export {
 export { compactSpec, normalizeSpec } from "./normalize";
 export { declarationSchemas, fieldDefinition, specSchema } from "./spec/schema";
 export type {
+	AccessSpec,
 	BlueprintRefSpec,
 	BlueprintSpec,
 	CodegenOptions,
@@ -57,6 +58,7 @@ export type {
 	RepositoryIndexSpec,
 	RepositorySpec,
 	ResolvedSpec,
+	RouteSpec,
 	Spec,
 	SpecIssue,
 	StageCatalogEntry,

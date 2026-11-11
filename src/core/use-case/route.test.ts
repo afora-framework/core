@@ -166,9 +166,12 @@ describe("route declaration", () => {
 
 	test("@Route rejects other classes and a second route", () => {
 		expect(() => Route("GET")(class {})).toThrow(InvalidUseCaseDeclaration);
-		expect(reasonOf(() => Route("GET")(Declared))).toContain(
-			"already has a route",
+		expect(reasonOf(() => Route("POST")(Declared))).toContain(
+			"already has another route",
 		);
+		// The same route again is one declaration (a generated base carries it).
+		Route("get", "/items/{id}")(Declared);
+		expect(Declared.route).toEqual({ method: "get", path: "/items/{id}" });
 		expect(reasonOf(() => Route("GET", "/x/{nope}")(Plain))).toContain(
 			"not a scalar key",
 		);

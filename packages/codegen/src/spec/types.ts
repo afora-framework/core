@@ -331,10 +331,35 @@ export type UseCaseImplementationSpec =
 	| { readonly steps: readonly StepSpec[] }
 	| ImportRef;
 
+/** Where a use case is served over HTTP: the `route` of `useCaseOf`. */
+export interface RouteSpec {
+	readonly method: string;
+	readonly path?: string;
+	readonly status?: 200 | 201 | 202 | 204;
+	readonly query?: readonly string[];
+	readonly headers?: Readonly<Record<string, string>>;
+	readonly cookie?: Readonly<Record<string, string>>;
+	readonly setCookie?: Readonly<
+		Record<string, Readonly<Record<string, unknown>>>
+	>;
+}
+
+/** Who may call a use case: the `access` of `useCaseOf`. */
+export type AccessSpec =
+	| { readonly public: true }
+	| {
+			readonly public?: false;
+			readonly scopes?: readonly string[];
+			readonly owner?: { readonly input: string; readonly claim?: string };
+			readonly context?: Readonly<Record<string, string>>;
+	  };
+
 export interface UseCaseSpec {
 	readonly description?: string;
 	readonly tags?: readonly string[];
 	readonly deprecated?: boolean;
+	readonly route?: RouteSpec;
+	readonly access?: AccessSpec;
 	readonly input: BlueprintRefSpec;
 	readonly response: BlueprintRefSpec;
 	readonly context?: BlueprintRefSpec;
@@ -363,6 +388,9 @@ export interface GenericUseCaseSpec {
 	readonly description?: string;
 	readonly tags?: readonly string[];
 	readonly deprecated?: boolean;
+	/** Beside `generic`, like the metadata: not in `options`. */
+	readonly route?: RouteSpec;
+	readonly access?: AccessSpec;
 	/** Only a use case written in the spec has them (`UseCaseSpec`). */
 	readonly input?: undefined;
 	readonly response?: undefined;

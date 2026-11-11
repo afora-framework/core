@@ -19,6 +19,32 @@ export type UseCaseDecorator = <
 	context?: ClassContext,
 ) => void;
 
+/** Whether two JSON values hold the same data, whatever the order of their keys. */
+function sameData(a: unknown, b: unknown): boolean {
+	if (a === b) return true;
+	if (
+		typeof a !== "object" ||
+		typeof b !== "object" ||
+		a === null ||
+		b === null ||
+		Array.isArray(a) !== Array.isArray(b)
+	) {
+		return false;
+	}
+	const left = Object.keys(a);
+	return (
+		left.length === Object.keys(b).length &&
+		left.every(
+			(key) =>
+				Object.hasOwn(b, key) &&
+				sameData(
+					(a as Record<string, unknown>)[key],
+					(b as Record<string, unknown>)[key],
+				),
+		)
+	);
+}
+
 /** The use case class a decorator was put on, or a throw naming the decorator. */
 function decoratedUseCase(value: unknown, decorator: string): AnyUseCaseClass {
 	if (
@@ -46,8 +72,9 @@ function decoratedUseCase(value: unknown, decorator: string): AnyUseCaseClass {
  * The same as the `route` setting of `useCaseOf` (see `RouteDeclaration`), so
  * `describe()`, the sinks and `afora.json` see one declaration. It names no
  * server: the sink of an output does. Throws `InvalidUseCaseDeclaration` on
- * a class that is not a use case, on one that already has a route, and for a
- * route that does not fit the input of the use case.
+ * a class that is not a use case, on one that already has another route
+ * (the same one again is accepted), and for a route that does not fit the
+ * input of the use case.
  */
 export function Route(
 	method: RouteSettings["method"],
@@ -75,17 +102,20 @@ export function Route(
 				details: { reason },
 			});
 		};
-		if (UseCase.route !== undefined) {
-			invalid(
-				"The use case already has a route: declare it once, with the route setting or with @Route.",
-			);
-		}
 		const declared = routeDeclarationOf(
 			settings,
 			UseCase.blueprint,
 			UseCase.response,
 		);
-		if (typeof declared === "string") invalid(declared);
+		if (typeof declared === "string") return invalid(declared);
+		if (UseCase.route !== undefined) {
+			// The same route twice is one declaration: a base generated from
+			// `afora.json` carries what the decorator of its class says.
+			if (sameData(UseCase.route, declared)) return;
+			invalid(
+				"The use case already has another route: declare it once, with the route setting or with @Route.",
+			);
+		}
 		Object.defineProperty(UseCase, "route", { value: declared });
 	};
 }
@@ -100,8 +130,8 @@ export function Route(
  *
  * The same as the `access` setting of `useCaseOf` (see `AccessDeclaration`).
  * Throws `InvalidUseCaseDeclaration` on a class that is not a use case, on
- * one that already declares its access, and for a declaration that does not
- * fit the input of the use case.
+ * one that already declares another access (the same one again is accepted),
+ * and for a declaration that does not fit the input of the use case.
  */
 export function Access(access: AccessDeclaration): UseCaseDecorator {
 	return (value) => {
@@ -112,13 +142,14 @@ export function Access(access: AccessDeclaration): UseCaseDecorator {
 				details: { reason },
 			});
 		};
+		const declared = accessDeclarationOf(access, UseCase.blueprint);
+		if (typeof declared === "string") return invalid(declared);
 		if (UseCase.access !== undefined) {
+			if (sameData(UseCase.access, declared)) return;
 			invalid(
-				"The use case already declares its access: declare it once, with the access setting or with @Access.",
+				"The use case already declares another access: declare it once, with the access setting or with @Access.",
 			);
 		}
-		const declared = accessDeclarationOf(access, UseCase.blueprint);
-		if (typeof declared === "string") invalid(declared);
 		Object.defineProperty(UseCase, "access", { value: declared });
 	};
 }

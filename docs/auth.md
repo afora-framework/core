@@ -42,7 +42,7 @@ class PublishPost extends useCaseOf({
 | `{ owner: { input, claim } }` | A caller whose claim `claim` equals that input key (a tenant, say).      |
 | `{ context: { key: … } }`     | Any authenticated caller; the context key is filled from it (see below). |
 
-The options combine, and all of them must hold. `public: true` takes no other option. A declaration that does not fit the input throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class with both the setting and `@Access`. `PublishPost.access` is the frozen declaration, `app.describe().useCases.PublishPost.access` and `afora.json` carry it.
+The options combine, and all of them must hold. `public: true` takes no other option. A declaration that does not fit the input throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class whose `@Access` says something else than the access it already has. `PublishPost.access` is the frozen declaration, `app.describe().useCases.PublishPost.access` and `afora.json` carry it.
 
 **The caller** is a `Principal`: `{ subject, scopes, claims? }`. The sink that receives a request makes it from the credentials (a bearer token, a cookie) and passes it with the call; see the package of each sink for how it authenticates. A call with no principal is an anonymous one.
 

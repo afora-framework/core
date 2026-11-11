@@ -1363,6 +1363,226 @@
 									"type": "boolean",
 									"default": false
 								},
+								"route": {
+									"type": "object",
+									"required": ["method"],
+									"properties": {
+										"method": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "get"
+												},
+												{
+													"type": "string",
+													"const": "post"
+												},
+												{
+													"type": "string",
+													"const": "put"
+												},
+												{
+													"type": "string",
+													"const": "patch"
+												},
+												{
+													"type": "string",
+													"const": "delete"
+												},
+												{
+													"type": "string",
+													"const": "GET"
+												},
+												{
+													"type": "string",
+													"const": "POST"
+												},
+												{
+													"type": "string",
+													"const": "PUT"
+												},
+												{
+													"type": "string",
+													"const": "PATCH"
+												},
+												{
+													"type": "string",
+													"const": "DELETE"
+												}
+											],
+											"description": "The HTTP method, in either case."
+										},
+										"path": {
+											"type": "string",
+											"pattern": "^/",
+											"description": "After the basePath of the sink, e.g. \"/posts/{slug}\": a {name} segment fills the scalar input key \"name\". Without it, the default of the sink: /{command}/{operation}."
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "number",
+													"const": 200
+												},
+												{
+													"type": "number",
+													"const": 201
+												},
+												{
+													"type": "number",
+													"const": 202
+												},
+												{
+													"type": "number",
+													"const": 204
+												}
+											],
+											"default": 200,
+											"description": "The status of a success."
+										},
+										"query": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"description": "Scalar input keys read from the query string. A get or delete already reads from the query every key with no other place."
+										},
+										"headers": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"type": "string"
+												}
+											},
+											"description": "Scalar input keys read from request headers: { \"locale\": \"accept-language\" }."
+										},
+										"cookie": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"type": "string"
+												}
+											},
+											"description": "Scalar input keys read from cookies: { \"session\": \"sid\" }."
+										},
+										"setCookie": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"type": "object",
+													"required": ["name"],
+													"properties": {
+														"name": {
+															"type": "string",
+															"description": "The name of the cookie."
+														},
+														"httpOnly": {
+															"type": "boolean",
+															"default": true
+														},
+														"secure": {
+															"type": "boolean",
+															"default": true
+														},
+														"sameSite": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "strict"
+																},
+																{
+																	"type": "string",
+																	"const": "lax"
+																},
+																{
+																	"type": "string",
+																	"const": "none"
+																}
+															],
+															"default": "lax"
+														},
+														"path": {
+															"type": "string",
+															"default": "/"
+														},
+														"domain": {
+															"type": "string"
+														},
+														"maxAge": {
+															"type": "integer",
+															"minimum": 0,
+															"description": "Seconds the cookie lives."
+														}
+													},
+													"additionalProperties": false
+												}
+											},
+											"description": "Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie."
+										}
+									},
+									"additionalProperties": false,
+									"description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status."
+								},
+								"access": {
+									"anyOf": [
+										{
+											"type": "object",
+											"required": ["public"],
+											"properties": {
+												"public": {
+													"type": "boolean",
+													"const": true
+												}
+											},
+											"additionalProperties": false,
+											"description": "Anyone may call."
+										},
+										{
+											"type": "object",
+											"properties": {
+												"public": {
+													"type": "boolean",
+													"const": false
+												},
+												"scopes": {
+													"type": "array",
+													"items": {
+														"type": "string"
+													},
+													"description": "Scopes the caller must have, all of them."
+												},
+												"owner": {
+													"type": "object",
+													"required": ["input"],
+													"properties": {
+														"input": {
+															"type": "string",
+															"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+															"description": "A scalar input key that must equal the subject of the caller."
+														},
+														"claim": {
+															"type": "string",
+															"description": "Compare with this claim of the caller instead of its subject."
+														}
+													},
+													"additionalProperties": false
+												},
+												"context": {
+													"type": "object",
+													"patternProperties": {
+														"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+															"type": "string",
+															"pattern": "^(subject|scopes|claims\\.[^.]+)$"
+														}
+													},
+													"description": "Context keys filled from the caller, over what the request sent: \"subject\", \"scopes\" or \"claims.<name>\"."
+												}
+											},
+											"additionalProperties": false,
+											"description": "An authenticated caller ({} asks for nothing more), with these scopes, that is the owner, and whose values fill the context."
+										}
+									],
+									"description": "Who may call the use case through an output, enforced before it runs: a caller without it gets a 401 or a 403. Without access, nothing is checked."
+								},
 								"input": {
 									"anyOf": [
 										{
@@ -1811,7 +2031,7 @@
 							"properties": {
 								"generic": {
 									"type": "string",
-									"description": "A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register or login."
+									"description": "A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register, login, refresh or logout."
 								},
 								"repository": {
 									"type": "string",
@@ -1823,7 +2043,7 @@
 									"patternProperties": {
 										"^[A-Za-z_$][A-Za-z0-9_$]*$": {}
 									},
-									"description": "Its options: \"as\" (the response key), \"owner\" ({ \"key\"?, \"context\" }), \"errors\" ({ \"notFound\" | \"conflict\" | \"invalid\" | \"owner\": an exception name }), and per use case \"omit\", \"values\", \"set\", \"orderBy\"; those that write also take \"before\" and \"after\" ({ \"import\": \"./file.ts#function\" }, run before and after the write), \"dependencies\" (key -> name of a use case, repository or environment, for them) and \"throws\" (the exceptions they throw, as in \"errors\")."
+									"description": "Its options: \"as\" (the response key), \"owner\" ({ \"key\"?, \"context\" }), \"errors\" ({ \"notFound\" | \"conflict\" | \"invalid\" | \"owner\": an exception name }), and per use case \"omit\", \"values\", \"set\", \"orderBy\", and \"token\" for login and refresh ({ \"secret\": { \"env\": \"NAME\" }, \"issuer\"?, \"audience\"?, \"expiresIn\"?, \"algorithm\"?, \"refresh\"?: { \"expiresIn\" }, \"scopes\"?, \"scopesFrom\"?, \"claims\"? }: login then answers a token); those that write also take \"before\" and \"after\" ({ \"import\": \"./file.ts#function\" }, run before and after the write), \"dependencies\" (key -> name of a use case, repository or environment, for them) and \"throws\" (the exceptions they throw, as in \"errors\")."
 								},
 								"description": {
 									"type": "string"
@@ -1838,6 +2058,226 @@
 								"deprecated": {
 									"type": "boolean",
 									"default": false
+								},
+								"route": {
+									"type": "object",
+									"required": ["method"],
+									"properties": {
+										"method": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "get"
+												},
+												{
+													"type": "string",
+													"const": "post"
+												},
+												{
+													"type": "string",
+													"const": "put"
+												},
+												{
+													"type": "string",
+													"const": "patch"
+												},
+												{
+													"type": "string",
+													"const": "delete"
+												},
+												{
+													"type": "string",
+													"const": "GET"
+												},
+												{
+													"type": "string",
+													"const": "POST"
+												},
+												{
+													"type": "string",
+													"const": "PUT"
+												},
+												{
+													"type": "string",
+													"const": "PATCH"
+												},
+												{
+													"type": "string",
+													"const": "DELETE"
+												}
+											],
+											"description": "The HTTP method, in either case."
+										},
+										"path": {
+											"type": "string",
+											"pattern": "^/",
+											"description": "After the basePath of the sink, e.g. \"/posts/{slug}\": a {name} segment fills the scalar input key \"name\". Without it, the default of the sink: /{command}/{operation}."
+										},
+										"status": {
+											"anyOf": [
+												{
+													"type": "number",
+													"const": 200
+												},
+												{
+													"type": "number",
+													"const": 201
+												},
+												{
+													"type": "number",
+													"const": 202
+												},
+												{
+													"type": "number",
+													"const": 204
+												}
+											],
+											"default": 200,
+											"description": "The status of a success."
+										},
+										"query": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											},
+											"description": "Scalar input keys read from the query string. A get or delete already reads from the query every key with no other place."
+										},
+										"headers": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"type": "string"
+												}
+											},
+											"description": "Scalar input keys read from request headers: { \"locale\": \"accept-language\" }."
+										},
+										"cookie": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"type": "string"
+												}
+											},
+											"description": "Scalar input keys read from cookies: { \"session\": \"sid\" }."
+										},
+										"setCookie": {
+											"type": "object",
+											"patternProperties": {
+												"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+													"type": "object",
+													"required": ["name"],
+													"properties": {
+														"name": {
+															"type": "string",
+															"description": "The name of the cookie."
+														},
+														"httpOnly": {
+															"type": "boolean",
+															"default": true
+														},
+														"secure": {
+															"type": "boolean",
+															"default": true
+														},
+														"sameSite": {
+															"anyOf": [
+																{
+																	"type": "string",
+																	"const": "strict"
+																},
+																{
+																	"type": "string",
+																	"const": "lax"
+																},
+																{
+																	"type": "string",
+																	"const": "none"
+																}
+															],
+															"default": "lax"
+														},
+														"path": {
+															"type": "string",
+															"default": "/"
+														},
+														"domain": {
+															"type": "string"
+														},
+														"maxAge": {
+															"type": "integer",
+															"minimum": 0,
+															"description": "Seconds the cookie lives."
+														}
+													},
+													"additionalProperties": false
+												}
+											},
+											"description": "Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie."
+										}
+									},
+									"additionalProperties": false,
+									"description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status."
+								},
+								"access": {
+									"anyOf": [
+										{
+											"type": "object",
+											"required": ["public"],
+											"properties": {
+												"public": {
+													"type": "boolean",
+													"const": true
+												}
+											},
+											"additionalProperties": false,
+											"description": "Anyone may call."
+										},
+										{
+											"type": "object",
+											"properties": {
+												"public": {
+													"type": "boolean",
+													"const": false
+												},
+												"scopes": {
+													"type": "array",
+													"items": {
+														"type": "string"
+													},
+													"description": "Scopes the caller must have, all of them."
+												},
+												"owner": {
+													"type": "object",
+													"required": ["input"],
+													"properties": {
+														"input": {
+															"type": "string",
+															"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+															"description": "A scalar input key that must equal the subject of the caller."
+														},
+														"claim": {
+															"type": "string",
+															"description": "Compare with this claim of the caller instead of its subject."
+														}
+													},
+													"additionalProperties": false
+												},
+												"context": {
+													"type": "object",
+													"patternProperties": {
+														"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+															"type": "string",
+															"pattern": "^(subject|scopes|claims\\.[^.]+)$"
+														}
+													},
+													"description": "Context keys filled from the caller, over what the request sent: \"subject\", \"scopes\" or \"claims.<name>\"."
+												}
+											},
+											"additionalProperties": false,
+											"description": "An authenticated caller ({} asks for nothing more), with these scopes, that is the owner, and whose values fill the context."
+										}
+									],
+									"description": "Who may call the use case through an output, enforced before it runs: a caller without it gets a 401 or a 403. Without access, nothing is checked."
 								}
 							},
 							"additionalProperties": false,
