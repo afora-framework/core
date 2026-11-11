@@ -231,6 +231,45 @@ test("the issues of one failing field share one cause, built once", () => {
 	expect(issues[2]?.cause).toBe(issues[0]?.cause);
 });
 
+test("a value a discriminated union rejects is told by its variant alone", () => {
+	const Event = propertyOf({
+		name: "event",
+		schema: Type.Union([
+			Type.Object({
+				type: Type.Literal("click"),
+				x: Type.Integer({ minimum: 0 }),
+			}),
+			Type.Object({
+				type: Type.Literal("view"),
+				url: Type.String({ minLength: 1 }),
+			}),
+		]),
+	});
+	const Feed = blueprintOf(() => ({ events: listOf(Event) }));
+	const { issues } = Feed.safeParse({
+		events: [
+			{ type: "click", x: 1 },
+			{ type: "click", x: -1 },
+			{ type: "scroll" },
+		],
+	});
+
+	expect(issues).toEqual([
+		{
+			message: "must be >= 0",
+			path: ["events", 1, "x"],
+			code: "invalid_value",
+			source: "event",
+		},
+		{
+			message: "must be equal to one of the allowed values",
+			path: ["events", 2, "type"],
+			code: "invalid_value",
+			source: "event",
+		},
+	] as never);
+});
+
 test("a lazy issue moved to another path keeps its cause, off its keys", () => {
 	const [issue] = Trimmed.safeParse("a").issues as readonly Issue[];
 	const moved = movedIssue(issue as Issue, ["a", 0]);
