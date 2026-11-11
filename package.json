@@ -84,7 +84,7 @@
 		"docs:links": "bun scripts/check-doc-links.ts",
 		"test:interop": "cd examples/interop && bun install && bun test",
 		"test:blog": "cd examples/blog && bun install && bun test",
-		"test:agent-built": "cd examples/agent-built && bun install && bun test",
+		"test:agent-built": "cd examples/agent-built && bun install && bun check && bun test",
 		"eval:agent-built": "cd examples/agent-built && bun install && bun run eval:all",
 		"prepare": "husky",
 		"prepublishOnly": "bun run typecheck && bun test && bun run smoke",
