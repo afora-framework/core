@@ -30,7 +30,11 @@
 				"title": "text",
 				"slug": "slug",
 				"capacity": "Capacity"
-			}
+			},
+			"change": [
+				"title",
+				"capacity"
+			]
 		},
 		"Ticket": {
 			"fields": {
@@ -52,7 +56,8 @@
 			"entity": "Event",
 			"actions": [
 				"findById",
-				"create"
+				"create",
+				"update"
 			],
 			"relations": [
 				"Organizers"
@@ -96,6 +101,9 @@
 			"generic": "register",
 			"repository": "Organizers",
 			"description": "Signs an organizer up.",
+			"access": {
+				"public": true
+			},
 			"options": {
 				"as": "organizer",
 				"errors": {
@@ -106,9 +114,18 @@
 		"LoginOrganizer": {
 			"generic": "login",
 			"repository": "Organizers",
-			"description": "Checks the email and password of an organizer.",
+			"description": "Checks the email and password of an organizer and gives a token.",
+			"access": {
+				"public": true
+			},
 			"options": {
 				"as": "organizer",
+				"token": {
+					"secret": {
+						"env": "JWT_SECRET"
+					},
+					"issuer": "ticketing"
+				},
 				"errors": {
 					"invalid": "InvalidCredentials"
 				}
@@ -117,9 +134,18 @@
 		"CreateEvent": {
 			"generic": "create",
 			"repository": "Events",
-			"description": "Creates an event of an organizer.",
+			"description": "Creates an event of the signed-in organizer.",
+			"access": {
+				"context": {
+					"organizerId": "subject"
+				}
+			},
 			"options": {
 				"as": "event",
+				"owner": {
+					"key": "organizer",
+					"context": "organizerId"
+				},
 				"errors": {
 					"notFound": "OrganizerNotFound"
 				}
@@ -128,9 +154,38 @@
 		"GetEvent": {
 			"generic": "get",
 			"repository": "Events",
-			"description": "Gives an event.",
+			"description": "Gives an event of the signed-in organizer.",
+			"access": {
+				"context": {
+					"organizerId": "subject"
+				}
+			},
 			"options": {
 				"as": "event",
+				"owner": {
+					"key": "organizer",
+					"context": "organizerId"
+				},
+				"errors": {
+					"notFound": "EventNotFound"
+				}
+			}
+		},
+		"UpdateEvent": {
+			"generic": "update",
+			"repository": "Events",
+			"description": "Changes the title or the capacity of an event of the signed-in organizer.",
+			"access": {
+				"context": {
+					"organizerId": "subject"
+				}
+			},
+			"options": {
+				"as": "event",
+				"owner": {
+					"key": "organizer",
+					"context": "organizerId"
+				},
 				"errors": {
 					"notFound": "EventNotFound"
 				}
@@ -207,6 +262,9 @@
 						}
 					}
 				]
+			},
+			"access": {
+				"public": true
 			}
 		}
 	},
@@ -224,6 +282,7 @@
 			"useCases": {
 				"createEvent": "CreateEvent",
 				"getEvent": "GetEvent",
+				"updateEvent": "UpdateEvent",
 				"buyTicket": "BuyTicket"
 			},
 			"transaction": true
@@ -246,6 +305,14 @@
 					"sink": "hono",
 					"options": {
 						"basePath": "/api",
+						"auth": {
+							"jwt": {
+								"secret": {
+									"env": "JWT_SECRET"
+								},
+								"issuer": "ticketing"
+							}
+						},
 						"route": {
 							"Accounts.register": {
 								"method": "post",
@@ -265,6 +332,10 @@
 								"method": "get",
 								"path": "/events/{id}"
 							},
+							"BoxOffice.updateEvent": {
+								"method": "patch",
+								"path": "/events/{id}"
+							},
 							"BoxOffice.buyTicket": {
 								"method": "post",
 								"path": "/events/{eventId}/tickets",
@@ -275,7 +346,7 @@
 							"path": "/openapi.json",
 							"info": {
 								"title": "Ticketing",
-								"version": "1.0.0"
+								"version": "2.0.0"
 							}
 						}
 					}

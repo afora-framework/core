@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Docs
+
+- `examples/agent-built` checks ownership (#60). Its brief is now version 2 (`BRIEF.md`): logging in gives a JWT, and only its organizer can read or change an event (`PATCH /api/events/{id}` is new). The evaluation gains a fifth invariant, "only its organizer reads or changes an event": 401 without a token or with a malformed or forged one, 404 or 403 for another organizer, and an event cannot be created for someone else. A new afora run, `runs/claude-code-2`, declares it with `access` and the `owner` option of the standard use cases, without code, and a new Hono + Zod baseline writes it by hand. Both pass all five. Each run names in `run.json` the version of the brief it is evaluated against, so the brief 1 runs (`BRIEF.v1.md`) keep their results.
+
 ## 0.0.11 — 2026-11-11
 
 The `@afora/core` 0.0.10 was not released: these changes ship in 0.0.11. `@afora/otel` 0.0.10, published by hand to create the package on npm, requires `@afora/core` >= 0.0.11; use `@afora/otel` 0.0.11.

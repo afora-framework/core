@@ -16,6 +16,7 @@ export const Api = outputOf({
 	pipe: [
 		hono({
 			basePath: "/api",
+			auth: { jwt: { secret: { env: "JWT_SECRET" }, issuer: "ticketing" } },
 			route: {
 				"Accounts.register": {
 					method: "post",
@@ -29,6 +30,7 @@ export const Api = outputOf({
 					status: 201,
 				},
 				"BoxOffice.getEvent": { method: "get", path: "/events/{id}" },
+				"BoxOffice.updateEvent": { method: "patch", path: "/events/{id}" },
 				"BoxOffice.buyTicket": {
 					method: "post",
 					path: "/events/{eventId}/tickets",
@@ -37,7 +39,7 @@ export const Api = outputOf({
 			},
 			docs: {
 				path: "/openapi.json",
-				info: { title: "Ticketing", version: "1.0.0" },
+				info: { title: "Ticketing", version: "2.0.0" },
 			},
 		}),
 	],

@@ -19,6 +19,7 @@ import {
 	GetEvent,
 	LoginOrganizer,
 	RegisterOrganizer,
+	UpdateEvent,
 } from "./use-cases";
 
 export const App = applicationOf({
@@ -40,6 +41,7 @@ export const App = applicationOf({
 		GetEvent,
 		LoginOrganizer,
 		RegisterOrganizer,
+		UpdateEvent,
 	},
 	commands: { Accounts, BoxOffice },
 	outputs: { Api },
