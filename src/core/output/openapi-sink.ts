@@ -630,6 +630,8 @@ const problemContent = {
 
 const STATUS_TEXT: Readonly<Record<number, string>> = {
 	400: "Invalid input or context.",
+	401: "Authentication is required.",
+	403: "The caller may not do this.",
 	404: "Not found.",
 	409: "Conflict.",
 	422: "Declared error of the operation.",
@@ -654,6 +656,12 @@ function responsesOf(
 		[400, []],
 		[500, []],
 	]);
+	// What the check of `access` answers, before the use case runs.
+	const access = operation.access;
+	if (access && access.public !== true) {
+		names.set(401, []);
+		if ((access.scopes?.length ?? 0) > 0 || access.owner) names.set(403, []);
+	}
 	for (const Declared of operation.errors) {
 		const synthetic = new Exception({
 			layer: ExceptionLayers.UseCase,
@@ -886,7 +894,28 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 				...placed(route.requestHeaders, "header"),
 				...placed(route.cookies, "cookie"),
 			];
-			const requirement = security?.operations?.[operation.id];
+			const explicit = security?.operations?.[operation.id];
+			const access = operation.access;
+			const guarded = access !== undefined && access.public !== true;
+			if (guarded && explicit === false) {
+				invalid(
+					`openapi.security.operations["${operation.id}"] is false, but ${operation.useCase} declares an access that the output enforces.`,
+				);
+			}
+			// The scheme the declared access is documented under: the default
+			// one, else the only one.
+			const schemeNames = Object.keys(security?.schemes ?? {});
+			const scheme =
+				security?.default?.scheme ??
+				(schemeNames.length === 1 ? schemeNames[0] : undefined);
+			const requirement =
+				explicit !== undefined
+					? explicit
+					: guarded && scheme !== undefined
+						? { scheme, scopes: access.scopes ?? [] }
+						: access?.public === true && security?.default
+							? false
+							: undefined;
 			slot[method] = {
 				operationId,
 				summary: operation.id,

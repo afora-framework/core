@@ -44,7 +44,7 @@ export function raisedOf(error: Exception): Exception {
  * name; 400 for invalid input or context (and any exception whose
  * `details.issues` is a list, except `InvalidCommandEnvironment`, a 500); 404 for a missing entity or operation; 409 for
  * a unique violation, a concurrency conflict or an entity that already exists; 401 for
- * `UseCaseInvalidCredentials`; 422 for a class in `operation.errors`; 500 for the
+ * `UseCaseInvalidCredentials` and `Unauthenticated`; 403 for `Forbidden`; 422 for a class in `operation.errors`; 500 for the
  * rest, errors that are not exceptions included. Exceptions match by name,
  * or by class for `operation.errors`.
  */
@@ -68,7 +68,10 @@ export function statusOf(
 	}
 	if (NOT_FOUND.has(name)) return 404;
 	if (CONFLICT.has(name)) return 409;
-	if (name === "UseCaseInvalidCredentials") return 401;
+	if (name === "UseCaseInvalidCredentials" || name === "Unauthenticated") {
+		return 401;
+	}
+	if (name === "Forbidden") return 403;
 	if (
 		operation?.errors.some(
 			(Declared) => error.is(Declared) || Declared.name === name,

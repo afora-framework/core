@@ -14,6 +14,7 @@ The [README](../README.md) has the install, a quick start and an overview. These
 | [Commands](commands.md)                 | Operations, use case plugins by catalog, transactions, event policies and `publishEvents`.                |
 | [Standard use cases](std-use-cases.md)  | `ctx.create(Posts)` and the others: what each needs, takes and does, their options, ownership.            |
 | [Outputs](outputs.md)                   | Stages, the `select` and `openapi` ones, `statusOf` and `problemOf`, catalogs of stages.                  |
+| [Access](auth.md)                       | `access` and `@Access`: scopes, owner, context from the caller; `Unauthenticated` and `Forbidden`.        |
 | [Applications](applications.md)         | The manifest of declarations, composition, bound providers, `describe()`.                                 |
 | [Exceptions](exceptions.md)             | Layers, `trace`, `guard`.                                                                                 |
 | [Logging](logging.md)                   | `log` and log providers, the `Logger` dependency, `logFrom`; what afora logs.                             |

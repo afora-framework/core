@@ -2,10 +2,12 @@ import { isCommand } from "../command/command";
 import type { AnyCommand } from "../command/types/command.interface";
 import { Kind } from "../symbols/kind";
 import type { AnyUseCaseClass } from "../use-case/use-case";
+import { accessGuardOf } from "./access";
 import { DuplicateOperation, InvalidOutputStage } from "./exceptions";
 import { isStage } from "./stage";
 import type {
 	AnyOutput,
+	OperationCallOptions,
 	OperationDescriptor,
 	OperationPatch,
 	OutputOf,
@@ -99,10 +101,21 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 		const UseCase = command.useCases[name] as AnyUseCaseClass;
 		const context = command.context ?? UseCase.context;
 		const description = UseCase.description ?? command.description;
+		const id = `${command.commandName}.${name}`;
+		const run = command.run as (
+			op: string,
+			input: unknown,
+			options?: { context?: unknown },
+		) => Promise<unknown>;
+		// Made once: a call only compares the caller with what was declared.
+		const guard =
+			UseCase.access === undefined
+				? undefined
+				: accessGuardOf(id, UseCase.access, context);
 		return Object.freeze({
 			kind: "operation" as const,
 			version: 1 as const,
-			id: `${command.commandName}.${name}`,
+			id,
 			command: command.commandName,
 			name,
 			useCase: UseCase.useCaseName,
@@ -116,15 +129,19 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 			...(context ? { context } : {}),
 			errors: UseCase.errors,
 			...(UseCase.route === undefined ? {} : { route: UseCase.route }),
+			...(UseCase.access === undefined ? {} : { access: UseCase.access }),
 			meta: Object.freeze({}),
-			invoke: (input: unknown, options?: { context?: unknown }) =>
-				(
-					command.run as (
-						op: string,
-						input: unknown,
-						options?: { context?: unknown },
-					) => Promise<unknown>
-				)(name, input, options),
+			invoke: guard
+				? async (input: unknown, options?: OperationCallOptions) =>
+						run(name, input, guard(input, options))
+				: (input: unknown, options?: OperationCallOptions) =>
+						run(
+							name,
+							input,
+							options && "principal" in options
+								? { context: options.context }
+								: options,
+						),
 		});
 	});
 }

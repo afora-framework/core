@@ -36,6 +36,7 @@ import type {
 } from "../../repository/types/schema.interface";
 import type { Kind } from "../../symbols/kind";
 import type { UseCaseStepDescription } from "../../use-case/steps/types/steps.interface";
+import type { AccessDeclaration } from "../../use-case/types/access.interface";
 import type { RouteDeclaration } from "../../use-case/types/route.interface";
 import type {
 	AnyExceptionClass,
@@ -452,6 +453,8 @@ export interface UseCaseDescription {
 	readonly deprecated: boolean;
 	/** Where it is served over HTTP, from the `route` setting or `@Route`. */
 	readonly route?: RouteDeclaration;
+	/** Who may call it, from the `access` setting or `@Access`. */
+	readonly access?: AccessDeclaration;
 	readonly input: FieldsDescription;
 	readonly response: FieldsDescription;
 	readonly context?: FieldsDescription;

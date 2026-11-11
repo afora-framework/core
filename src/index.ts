@@ -225,7 +225,9 @@ export type {
 } from "./core/openapi/types/openapi.interface";
 export {
 	DuplicateOperation,
+	Forbidden,
 	InvalidOutputStage,
+	Unauthenticated,
 } from "./core/output/exceptions";
 export type {
 	OpenAPIDocument,
@@ -417,7 +419,7 @@ export type {
 export type { StandardSchemaV1 } from "./core/standard/standard-schema";
 export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
-export { Route } from "./core/use-case/decorators";
+export { Access, Route } from "./core/use-case/decorators";
 export {
 	IncompatibleUseCasePlugin,
 	InvalidUseCasePlugin,
@@ -452,6 +454,10 @@ export type {
 	UseCaseStep,
 	UseCaseStepDescription,
 } from "./core/use-case/steps/types/steps.interface";
+export type {
+	AccessDeclaration,
+	Principal,
+} from "./core/use-case/types/access.interface";
 export type {
 	AnyUseCasePlugin,
 	EntityOfRepository,

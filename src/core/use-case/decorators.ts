@@ -1,5 +1,7 @@
 import { Kind } from "../symbols/kind";
+import { accessDeclarationOf } from "./access";
 import { routeDeclarationOf } from "./route";
+import type { AccessDeclaration } from "./types/access.interface";
 import type { RouteSettings } from "./types/route.interface";
 import { type AnyUseCaseClass, InvalidUseCaseDeclaration } from "./use-case";
 
@@ -18,10 +20,7 @@ export type UseCaseDecorator = <
 ) => void;
 
 /** The use case class a decorator was put on, or a throw naming the decorator. */
-function decoratedUseCase(
-	value: unknown,
-	decorator: string,
-): AnyUseCaseClass {
+function decoratedUseCase(value: unknown, decorator: string): AnyUseCaseClass {
 	if (
 		typeof value !== "function" ||
 		(value as { [Kind]?: unknown })[Kind] !== "use-case"
@@ -84,5 +83,38 @@ export function Route(
 		const declared = routeDeclarationOf(settings, UseCase.blueprint);
 		if (typeof declared === "string") invalid(declared);
 		Object.defineProperty(UseCase, "route", { value: declared });
+	};
+}
+
+/**
+ * Says who may call a use case, on the class itself:
+ *
+ * ```ts
+ * @Access({ scopes: ["posts:write"], context: { userId: "subject" } })
+ * class PublishPost extends useCaseOf({ name: "PublishPost", blueprint, response, context }) {}
+ * ```
+ *
+ * The same as the `access` setting of `useCaseOf` (see `AccessDeclaration`).
+ * Throws `InvalidUseCaseDeclaration` on a class that is not a use case, on
+ * one that already declares its access, and for a declaration that does not
+ * fit the input of the use case.
+ */
+export function Access(access: AccessDeclaration): UseCaseDecorator {
+	return (value) => {
+		const UseCase = decoratedUseCase(value, "@Access");
+		const invalid = (reason: string): never => {
+			throw new InvalidUseCaseDeclaration({
+				source: UseCase.useCaseName,
+				details: { reason },
+			});
+		};
+		if (UseCase.access !== undefined) {
+			invalid(
+				"The use case already declares its access: declare it once, with the access setting or with @Access.",
+			);
+		}
+		const declared = accessDeclarationOf(access, UseCase.blueprint);
+		if (typeof declared === "string") invalid(declared);
+		Object.defineProperty(UseCase, "access", { value: declared });
 	};
 }
