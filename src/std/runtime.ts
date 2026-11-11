@@ -242,14 +242,35 @@ export function defaultHasherOf(
 let lastTimestamp = 0;
 let sequence = 0;
 
+/** The two hexadecimal digits of each byte. */
+const HEX: readonly string[] = Array.from({ length: 256 }, (_, byte) =>
+	byte.toString(16).padStart(2, "0"),
+);
+
+/** Random bytes each id takes: two for the start of its sequence, eight for its tail. */
+const RANDOM_PER_ID = 10;
+/**
+ * Random bytes for the next ids, filled by one call of `getRandomValues`
+ * every 64 ids instead of one call per id; `randomAt` is where the next id
+ * starts, the end of the pool when it has to be filled.
+ */
+const randomPool = new Uint8Array(RANDOM_PER_ID * 64);
+let randomAt = randomPool.length;
+
 /**
  * A UUID v7 (RFC 9562): 48-bit unix milliseconds, version 7, variant 10.
  * Ids made in the same millisecond count up in the 12-bit `rand_a` field,
  * so they sort in creation order.
  */
 export function uuidv7(now: number = Date.now()): string {
-	const random = globalThis.crypto.getRandomValues(new Uint8Array(10));
-	const start = ((random[8] as number) << 8) | (random[9] as number);
+	if (randomAt === randomPool.length) {
+		globalThis.crypto.getRandomValues(randomPool);
+		randomAt = 0;
+	}
+	const at = randomAt;
+	randomAt += RANDOM_PER_ID;
+	const random = randomPool;
+	const start = ((random[at + 8] as number) << 8) | (random[at + 9] as number);
 
 	if (now > lastTimestamp) {
 		lastTimestamp = now;
@@ -261,28 +282,37 @@ export function uuidv7(now: number = Date.now()): string {
 		sequence = start & 0x7ff;
 	}
 
-	const bytes = new Uint8Array(16);
-	const view = new DataView(bytes.buffer);
-	view.setUint16(0, Math.floor(lastTimestamp / 2 ** 32));
-	view.setUint32(2, lastTimestamp % 2 ** 32);
-	view.setUint16(6, 0x7000 | sequence);
-	bytes.set(random.subarray(0, 8), 8);
-	bytes[8] = ((bytes[8] as number) & 0x3f) | 0x80;
-
-	const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
-	return [
-		hex.slice(0, 4),
-		hex.slice(4, 6),
-		hex.slice(6, 8),
-		hex.slice(8, 10),
-		hex.slice(10),
-	]
-		.map((part) => part.join(""))
-		.join("-");
+	// The timestamp is over 32 bits, so its two halves are taken apart by division.
+	const high = Math.floor(lastTimestamp / 2 ** 32);
+	const low = lastTimestamp % 2 ** 32;
+	const hex = (byte: number) => HEX[byte & 0xff] as string;
+	return (
+		hex(high >>> 8) +
+		hex(high) +
+		hex(low >>> 24) +
+		hex(low >>> 16) +
+		"-" +
+		hex(low >>> 8) +
+		hex(low) +
+		"-" +
+		hex(0x70 | (sequence >>> 8)) +
+		hex(sequence) +
+		"-" +
+		hex(((random[at] as number) & 0x3f) | 0x80) +
+		hex(random[at + 1] as number) +
+		"-" +
+		hex(random[at + 2] as number) +
+		hex(random[at + 3] as number) +
+		hex(random[at + 4] as number) +
+		hex(random[at + 5] as number) +
+		hex(random[at + 6] as number) +
+		hex(random[at + 7] as number)
+	);
 }
 
 let hasher: PasswordHasher | undefined;
-let idGenerator: IdGenerator = () => uuidv7();
+const defaultIdGenerator: IdGenerator = () => uuidv7();
+let idGenerator: IdGenerator = defaultIdGenerator;
 
 /** Replaces the password hasher and/or the id generator. */
 export function configure(services: RuntimeServices): void {
@@ -293,7 +323,7 @@ export function configure(services: RuntimeServices): void {
 /** Puts both services back to their defaults and restarts the id clock. */
 export function resetRuntime(): void {
 	hasher = undefined;
-	idGenerator = () => uuidv7();
+	idGenerator = defaultIdGenerator;
 	lastTimestamp = 0;
 	sequence = 0;
 }
@@ -322,6 +352,15 @@ export function currentHasher(): PasswordHasher {
 		crypto: nodeCryptoOf(),
 	});
 	return hasher;
+}
+
+/**
+ * Whether the generator in use is the default one, whose ids `Id` accepts as
+ * they are; one that `configure` put in its place is checked as any value.
+ * @internal
+ */
+export function makesDefaultIds(): boolean {
+	return idGenerator === defaultIdGenerator;
 }
 
 /** Makes an id with the generator in use. */

@@ -77,6 +77,7 @@
 		"postbuild": "bun scripts/add-dts-extensions.ts",
 		"bench": "cd bench && bun install && bun run.ts",
 		"bench:guard": "cd bench && bun install && bun run.ts --guard",
+		"bench:check": "cd bench && bun install && bun run.ts --check",
 		"smoke": "bun run build && node scripts/smoke.mjs",
 		"test:types": "bun run build && bun tests/types-compat/run.ts",
 		"test:type-perf": "bun run build && bun test ./tests/type-perf",

@@ -1,6 +1,7 @@
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import { recordFieldOf } from "../blueprint/record-field";
+import { isBlueprintVariant } from "../blueprint/variant";
 import { InvalidRepositoryQuery } from "./exceptions";
 import type {
 	ProviderQuery,
@@ -105,7 +106,12 @@ export function prepareQuery(
 			)
 				fail("Expected order direction asc or desc.");
 			const field = properties[order.key];
-			if (isBlueprint(field) || isBlueprintList(field) || recordFieldOf(field))
+			if (
+				isBlueprint(field) ||
+				isBlueprintList(field) ||
+				isBlueprintVariant(field) ||
+				recordFieldOf(field)
+			)
 				fail("Only scalar fields may be ordered.");
 		}
 	}

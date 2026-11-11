@@ -9,6 +9,19 @@ export const ReservedBlueprintKey = exceptionOf({
 		`"${key}" is reserved and cannot be a plugin property.`,
 });
 
+/** `variantOf` was given something it cannot make a field of; `reason` says what. */
+export const InvalidBlueprintVariant = exceptionOf({
+	layer: ExceptionLayers.Blueprint,
+	name: "InvalidBlueprintVariant",
+	message: ({
+		key,
+		reason,
+	}: {
+		readonly key: string;
+		readonly reason: string;
+	}) => `The variant field of key "${key}" cannot be declared: ${reason}.`,
+});
+
 /** A blueprint picks a key that no plugin provides. */
 export const UndeclaredBlueprintProperty = exceptionOf({
 	layer: ExceptionLayers.Blueprint,

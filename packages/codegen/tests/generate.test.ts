@@ -25,6 +25,7 @@ import {
 	quickstartSpec,
 } from "./fixtures";
 import { BIOME, makeProject, removeProject, run } from "./project";
+import { variantSpec } from "./roundtrip/fixtures/variant";
 
 const projects: string[] = [];
 afterAll(async () => {
@@ -47,6 +48,7 @@ const fixtures = {
 	blog: generate(blogSpec),
 	auth: generate(authSpec),
 	journal: generate(extendsSpec, extendsContext),
+	variant: generate(variantSpec),
 };
 
 describe("snapshots", () => {
@@ -174,6 +176,7 @@ describe("generated code", () => {
 				...prefixed(fixtures.blog, "blog"),
 				...prefixed(fixtures.auth, "auth"),
 				...prefixed(fixtures.journal, "journal"),
+				...prefixed(fixtures.variant, "variant"),
 			],
 			{},
 			["**/*.ts"],
@@ -190,7 +193,7 @@ describe("generated code", () => {
 			BIOME,
 			"check",
 			`--config-path=${dir}`,
-			...["quickstart", "blog", "auth", "journal"].map((name) =>
+			...["quickstart", "blog", "auth", "journal", "variant"].map((name) =>
 				join(dir, name),
 			),
 		);

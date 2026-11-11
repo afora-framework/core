@@ -394,6 +394,13 @@ export type FieldDescription =
 			readonly kind: "record" | "entity";
 			readonly ref: string;
 			readonly optional: boolean;
+	  }
+	| {
+			/** One of several blueprints, told apart by the value of `key`, the name of the variant. */
+			readonly kind: "variant";
+			readonly key: string;
+			readonly optional: boolean;
+			readonly variants: Readonly<Record<string, FieldDescription>>;
 	  };
 
 export type FieldsDescription = Readonly<Record<string, FieldDescription>>;

@@ -4,10 +4,13 @@ import { recordFieldOf } from "../blueprint/record-field";
 import type {
 	AnyBlueprint,
 	AnyBlueprintList,
+	AnyBlueprintVariant,
 	AnyRecordClass,
 	BlueprintField,
+	BlueprintVariants,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant } from "../blueprint/variant";
 import {
 	AbstractProperty,
 	parsingDefinitionOf,
@@ -60,12 +63,14 @@ const LIST = 1;
 const BLUEPRINT = 2;
 const RECORD = 3;
 const UNDECLARED_FIELD = 4;
+const VARIANT = 5;
 type Kind =
 	| typeof PROPERTY
 	| typeof LIST
 	| typeof BLUEPRINT
 	| typeof RECORD
-	| typeof UNDECLARED_FIELD;
+	| typeof UNDECLARED_FIELD
+	| typeof VARIANT;
 
 /**
  * How a field handles a value, worked out once: what it is, and what it is
@@ -88,6 +93,12 @@ interface Step {
 	collection: Collection | undefined;
 	readonly record: AnyRecordClass | undefined;
 	readonly optionalRecord: boolean;
+	readonly variant: AnyBlueprintVariant | undefined;
+	/**
+	 * Each variant of `variant`, by its name: the collection of a blueprint, or
+	 * a record class. Made on its first value.
+	 */
+	variants: Map<string, Collection | AnyRecordClass> | undefined;
 }
 
 /** The fields of a collection of properties, in order: the name and the step of each. */
@@ -103,11 +114,13 @@ function stepOf(field: BlueprintField | undefined): Step {
 		? LIST
 		: isBlueprint(field)
 			? BLUEPRINT
-			: record
-				? RECORD
-				: isProperty(field)
-					? PROPERTY
-					: UNDECLARED_FIELD;
+			: isBlueprintVariant(field)
+				? VARIANT
+				: record
+					? RECORD
+					: isProperty(field)
+						? PROPERTY
+						: UNDECLARED_FIELD;
 
 	return {
 		kind,
@@ -119,6 +132,8 @@ function stepOf(field: BlueprintField | undefined): Step {
 		collection: undefined,
 		record: kind === RECORD ? record?.record : undefined,
 		optionalRecord: kind === RECORD && record?.optional === true,
+		variant: kind === VARIANT ? (field as AnyBlueprintVariant) : undefined,
+		variants: undefined,
 	};
 }
 
@@ -133,6 +148,8 @@ const UNDECLARED: Step = {
 	collection: undefined,
 	record: undefined,
 	optionalRecord: false,
+	variant: undefined,
+	variants: undefined,
 };
 
 /** The step of each field, made once. */
@@ -234,15 +251,44 @@ export function parseCollection(
 	return resultOf(run, collectionAt(collectionOf(properties), value, run, 0));
 }
 
+/** Where a parse that starts at the value itself is: nowhere. Shared, so never changed. */
+const ROOT: Path = Object.freeze([]) as unknown as Path;
+
+/**
+ * `parseCollection` at the root, as a function of the value alone: what it
+ * needs of `properties` is looked up on the first value and kept, instead of
+ * on every one. For what parses many values of one shape, a blueprint or a
+ * record class. The values of the keys in `vouched` are kept as they are,
+ * unchecked: for what the caller made itself and knows to be valid.
+ * @internal
+ */
+export function collectionParserOf(
+	properties: IBlueprintCollection,
+	source: string,
+): (
+	value: unknown,
+	vouched?: readonly string[],
+) => ParseResult<Readonly<Record<string, unknown>>> {
+	let collection: Collection | undefined;
+	return (value, vouched) => {
+		collection ??= collectionOf(properties);
+		const run = runOf(ROOT, source);
+		return resultOf(run, collectionAt(collection, value, run, 0, vouched));
+	};
+}
+
 /**
  * `parseCollection` for the value `run` is handling at `depth`: the handled
- * value, or `REJECTED` with its issues in `run`.
+ * value, or `REJECTED` with its issues in `run`. With `tag`, the value is a
+ * variant: it also has the key `tag`, which is kept, first, as it is.
  */
 function collectionAt(
 	collection: Collection,
 	value: unknown,
 	run: Run,
 	depth: number,
+	vouched?: readonly string[],
+	tag?: string,
 ): unknown {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		return reject(run, "invalid_type", "must be an object", pathOf(run, depth));
@@ -255,7 +301,13 @@ function collectionAt(
 	for (let index = 0; index < keys.length; index++) {
 		const name = keys[index] as string;
 		// A value written in the order of the blueprint has each key in its place.
-		if (name === names[index] || Object.hasOwn(properties, name)) continue;
+		if (
+			name === names[index] ||
+			name === tag ||
+			Object.hasOwn(properties, name)
+		) {
+			continue;
+		}
 		rejected = true;
 		reject(run, "undeclared_key", "is not declared", [
 			...pathOf(run, depth),
@@ -263,9 +315,15 @@ function collectionAt(
 		]);
 	}
 
-	const handled: Record<string, unknown> = {};
+	// The key of a variant goes first, with the name that chose this collection.
+	const handled: Record<string, unknown> =
+		tag === undefined ? {} : { [tag]: (value as Record<string, unknown>)[tag] };
 	for (let index = 0; index < names.length; index++) {
 		const name = names[index] as string;
+		if (vouched?.includes(name)) {
+			handled[name] = (value as Record<string, unknown>)[name];
+			continue;
+		}
 		run.keys[depth] = name;
 		const item = fieldAt(
 			steps[index] as Step,
@@ -367,6 +425,66 @@ function fieldAt(step: Step, value: unknown, run: Run, depth: number): unknown {
 			}
 			step.collection ??= collectionOf(blueprint.properties);
 			return collectionAt(step.collection, value, run, depth);
+		}
+
+		case VARIANT: {
+			const variant = step.variant as AnyBlueprintVariant;
+			if (value === undefined) {
+				return variant.optional ? value : required(run, depth);
+			}
+			if (typeof value !== "object" || value === null || Array.isArray(value)) {
+				return reject(
+					run,
+					"invalid_type",
+					"must be an object",
+					pathOf(run, depth),
+				);
+			}
+
+			let { variants } = step;
+			if (variants === undefined) {
+				variants = new Map();
+				const declared: BlueprintVariants = variant.variants;
+				for (const tag of Object.keys(declared)) {
+					const one = declared[tag] as BlueprintVariants[string];
+					variants.set(
+						tag,
+						isBlueprint(one) ? collectionOf(one.properties) : one,
+					);
+				}
+				step.variants = variants;
+			}
+			// A record of one of its classes is kept, as a record field keeps one.
+			if (!isPlainObject(value)) {
+				for (const one of variants.values()) {
+					if (typeof one === "function" && value instanceof one) return value;
+				}
+			}
+			const { key } = variant;
+			const tag = (value as Record<string, unknown>)[key];
+			const named = typeof tag === "string" ? variants.get(tag) : undefined;
+			if (named === undefined) {
+				return reject(
+					run,
+					"invalid_value",
+					"must be equal to one of the allowed values",
+					[...pathOf(run, depth), key],
+				);
+			}
+			if (typeof named !== "function") {
+				return collectionAt(named, value, run, depth, undefined, key);
+			}
+
+			// A record class builds its record from the value without the key.
+			const { [key]: _name, ...input } = value as Record<string, unknown>;
+			const result = named.safeParse(input);
+			if (!result.issues) return result.value;
+			const path = pathOf(run, depth);
+			run.issues ??= [];
+			for (const issue of result.issues) {
+				run.issues.push(movedIssue(issue, [...path, ...issue.path]));
+			}
+			return REJECTED;
 		}
 
 		case RECORD: {

@@ -130,6 +130,29 @@ function lockFieldOf(
 				fields: fieldsOf(fields, description) ?? {},
 			};
 		}
+		case "variant":
+			// Each variant is locked as a key of its own, by its name; optional,
+			// since a value holds one of them. So a change inside a variant is told
+			// at `<key>.<variant>.<its key>`, and a variant added or removed as a
+			// key added or removed.
+			return {
+				schema: { discriminator: field.key, type: "object" },
+				optional: field.optional,
+				fields: Object.fromEntries(
+					Object.keys(field.variants)
+						.sort()
+						.map((tag) => [
+							tag,
+							{
+								...lockFieldOf(
+									field.variants[tag] as FieldDescription,
+									description,
+								),
+								optional: true,
+							},
+						]),
+				),
+			};
 		case "entity":
 			// Stored as the id of the entity it holds.
 			return {

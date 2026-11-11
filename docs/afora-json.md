@@ -71,6 +71,37 @@ An entity takes `schemaVersion`, `previousNames` and `upgrade` (each step an imp
 
 They are generated as `.with({ fill, renamedFrom })` and the options of `entityOf`, and extracted back (`entities.<Name>.upgrade.<n>` in `imports` for a step). `afora-codegen schema lock src/app.ts#App [--out afora.lock.json]` writes the [schema lock](schema-evolution.md#the-lock), and `afora-codegen schema check src/app.ts#App [--lock afora.lock.json]` fails in CI when the lock is stale, a change lacks its declaration or a version was not bumped, printing an `upgrade` stub for each missing step.
 
+## Variant fields
+
+A field that holds one of several objects, told apart by the value of one key ([`variantOf`](blueprints.md#one-of-several-blueprints)), is `{ "variant": { "key", "of" } }`, next to the `type`, `enum` and `fields` forms. `of` maps the value of the key to each variant: the name of a declared blueprint, record or entity, or a blueprint declared in place (`{ "fields": {...} }`). `optional` and `list` apply as to the other forms; `with`, `fill` and `renamedFrom` do not.
+
+```json
+{
+	"entities": {
+		"Payment": {
+			"fields": {
+				"method": {
+					"variant": { "key": "method", "of": { "card": "Card", "pix": "Pix" } }
+				},
+				"events": {
+					"variant": {
+						"key": "type",
+						"of": {
+							"click": "Click",
+							"visit": { "fields": { "path": "string" } }
+						}
+					},
+					"list": { "maxItems": 10 },
+					"optional": true
+				}
+			}
+		}
+	}
+}
+```
+
+It is generated as `ctx.variantOf("method", { card: Card, pix: Pix })`, wrapped in `listOf` and `optionalOf`, and extracted back from `describe()`. The validator checks that `key` is a string that is not empty and that `of` has at least one variant (`invalid_variant`), that each name is declared (`unknown_type`) and is a blueprint, a record or an entity (`wrong_kind`), that no variant declares the key, which the field adds (`invalid_variant`, an entity's identity keys and a plugin's keys included), and that a record or an entity is not two variants (`invalid_variant`: an instance is told apart by its class). An entity among the variants needs its repository in the `relations` of the holder's repository, as for any entity field (`missing_relation`). A variant field cannot be an environment variable (`invalid_environment_field`) nor the `orderBy` of an index (`invalid_index`), and `$input.<field>.<key>` in a step is checked against the key and the keys of every variant.
+
 ## Round trip
 
 `extractSpec(app)` reads `app.describe()` and is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec, and `normalizeSpec` makes the shorthand and object forms of a field compare equal. This holds for code that was generated, and for code written by hand, as long as everything the core cannot describe is mapped to an export (next section). An unmapped piece makes extraction throw an `ExtractionError` naming the key, instead of guessing. `examples/blog` extracts its own spec back in its tests, and `bun run test:roundtrip` proves both directions on complete applications.

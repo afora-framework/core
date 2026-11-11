@@ -65,6 +65,8 @@ jobs:
       - run: bun run test:blog
       - run: bun run test:agent-built
       - run: bun run docs:links
+      # bench/RESULTS.md, the chart and the block of the README are what bench/results/latest.json gives
+      - run: bun run bench:check
 
   bench:
     name: Validation speed against Zod 4
@@ -78,7 +80,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: bench
-      # fails when blueprint.safeParse is over 1.15x Zod 4 safeParse in any of the four cases (GUARD_RATIO in bench/run.ts)
+      # fails when blueprint.safeParse is over the limit of a case against Zod 4 safeParse (bench/guard.limits.ts)
       - run: bun run bench:guard
 
   api-surface:

@@ -61,6 +61,37 @@ const Post = blueprintOf((ctx) => ({
 }));
 ```
 
+## Unions
+
+A property can hold one of several shapes: give it a union as its schema. When the shapes are objects with properties of their own (to trim, to mask, to report by key), use a [variant field](blueprints.md#one-of-several-blueprints) instead, whose variants are blueprints.
+
+```ts
+import { blueprintOf, listOf, propertyOf } from "@afora/core";
+import { Type } from "typebox";
+
+const Event = propertyOf({
+	name: "event",
+	schema: Type.Union([
+		Type.Object({
+			type: Type.Literal("click"),
+			x: Type.Integer({ minimum: 0 }),
+		}),
+		Type.Object({
+			type: Type.Literal("view"),
+			url: Type.String({ minLength: 1 }),
+		}),
+	]),
+});
+
+const Feed = blueprintOf(() => ({ events: listOf(Event) }));
+Feed.safeParse({ events: [{ type: "click", x: -1 }, { type: "scroll" }] })
+	.issues;
+// [{ path: ["events", 0, "x"], message: "must be >= 0", ... },
+//  { path: ["events", 1, "type"], message: "must be equal to one of the allowed values", ... }]
+```
+
+When every variant is an object that requires one same key with a literal, a different one in each (`type` above), the union is discriminated, and a rejected object is told by the variant its key names, and by that one alone: the issues of `{ type: "click", x: -1 }` are those of a click. An object whose key names no variant, or has none, gets one issue, at the key. Any other union (variants that are not objects, no such key, two variants with the same literal) and any value that is not an object are told as TypeBox tells them, with the errors of every variant.
+
 ## JSON
 
 `ctx.json` (`JsonProperty`) holds any JSON value: `null`, a boolean, a finite number, a string, or a list or plain object of them, at any depth, typed `JsonValue`. It rejects what `JSON.stringify` would lose or change: `undefined` (in a list or an object too), functions, `NaN` and `Infinity`, class instances such as `Date`, and cycles, with `InvalidPropertyValue` and the path of the value (`/a/1: is not JSON (undefined)`).

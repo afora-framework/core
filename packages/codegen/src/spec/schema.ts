@@ -98,6 +98,48 @@ export const fieldDefinition = Type.Union(
 				description: "A nested object, declared in place.",
 			},
 		),
+		Type.Object(
+			{
+				variant: Type.Object(
+					{
+						key: Type.String({
+							minLength: 1,
+							description:
+								"The key whose value names the variant. No variant declares it: the field adds it.",
+						}),
+						of: Type.Record(
+							Type.String(),
+							Type.Union([
+								Type.String({
+									pattern: NAME,
+									description:
+										"The name of a declared blueprint, record or entity.",
+								}),
+								Type.Object(
+									{ fields: FieldsOf },
+									{
+										additionalProperties: false,
+										description: "A blueprint declared in place.",
+									},
+								),
+							]),
+							{
+								minProperties: 1,
+								description:
+									'The variants, by the value the key has for each: { "card": "Card", "pix": "Pix" }.',
+							},
+						),
+					},
+					{ additionalProperties: false },
+				),
+				...Modifiers,
+			},
+			{
+				additionalProperties: false,
+				description:
+					'One of several objects, told apart by the value of "key" (variantOf): { "variant": { "key": "type", "of": { "click": "Click", "signup": "Signup" } } }.',
+			},
+		),
 	],
 	{ description: "A field of a blueprint, record, entity or environment." },
 );

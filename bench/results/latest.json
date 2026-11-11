@@ -1,0 +1,4726 @@
+{
+	"schema": 1,
+	"generatedAt": "2026-11-11T04:32:35.940Z",
+	"afora": {
+		"version": "0.0.8",
+		"commit": "8c4395e"
+	},
+	"libraries": {
+		"afora": "0.0.8",
+		"typebox": "1.4.3",
+		"ajv": "8.20.0",
+		"typia": "15.3.1",
+		"zod": "4.6.7",
+		"valibot": "1.5.0",
+		"arktype": "2.2.9",
+		"effect": "4.1.3",
+		"yup": "1.7.1",
+		"joi": "18.3.2"
+	},
+	"runs": [
+		{
+			"runtime": "bun",
+			"version": "Bun 1.4.4",
+			"cpu": "AMD EPYC 9V45 96-Core Processor",
+			"os": "linux x64",
+			"tables": [
+				{
+					"scenario": "flat",
+					"title": "Small flat object",
+					"shape": "`{ name: string (minLength 3, trimmed), email: email (trimmed, lowercased), age: integer >= 0 }`. 3 rules broken in the invalid input.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 29.550973594841214,
+							"min": 28.737060546875,
+							"p50": 29.12841796875,
+							"p75": 29.433837890625,
+							"p99": 34.01611328125,
+							"margin": 0.0012456684763506338
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 35.98769347905508,
+							"min": 32.253173828125,
+							"p50": 34.238525390625,
+							"p75": 35.18505859375,
+							"p99": 66.484619140625,
+							"margin": 0.012915007822668212
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 32.415132186737566,
+							"min": 28.82470703125,
+							"p50": 30.78564453125,
+							"p75": 31.788330078125,
+							"p99": 67.61083984375,
+							"margin": 0.010073671631474464
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 319.8786197378616,
+							"min": 270.0615234375,
+							"p50": 286.448486328125,
+							"p75": 300.661376953125,
+							"p99": 561.087158203125,
+							"margin": 0.02079094851788594
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 185.75767582797548,
+							"min": 157.47607421875,
+							"p50": 167.67724609375,
+							"p75": 175.166259765625,
+							"p99": 450.623046875,
+							"margin": 0.022656172908106398
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 2141.9638318048005,
+							"min": 2005.082275390625,
+							"p50": 2105.339111328125,
+							"p75": 2234.386962890625,
+							"p99": 2378.4462890625,
+							"margin": 0.011515678069588158
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 505.3423794283725,
+							"min": 428.403564453125,
+							"p50": 457.267333984375,
+							"p75": 509.655029296875,
+							"p99": 882.104248046875,
+							"margin": 0.026246969200148806
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 4358.957229614258,
+							"min": 4004.156494140625,
+							"p50": 4293.41162109375,
+							"p75": 4442.595458984375,
+							"p99": 4883.316162109375,
+							"margin": 0.020100993789935562
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 2042.365258110894,
+							"min": 1821.744140625,
+							"p50": 2065.149658203125,
+							"p75": 2138.948974609375,
+							"p99": 2360.378173828125,
+							"margin": 0.016815188235338837
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 195.70123736864375,
+							"min": 178.20556640625,
+							"p50": 184.944091796875,
+							"p75": 190.091064453125,
+							"p99": 380.817626953125,
+							"margin": 0.01292564374756511
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 196.73580832179587,
+							"min": 175.420654296875,
+							"p50": 184.7216796875,
+							"p75": 194.369873046875,
+							"p99": 382.008544921875,
+							"margin": 0.013380023221005536
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 296.27614186310814,
+							"min": 219.443115234375,
+							"p50": 232.72607421875,
+							"p75": 270.170654296875,
+							"p99": 1243.270751953125,
+							"margin": 0.05851299122430038
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 300.6250476837158,
+							"min": 220.231689453125,
+							"p50": 241.357177734375,
+							"p75": 278.099609375,
+							"p99": 1198.600341796875,
+							"margin": 0.054474225859171506
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 1514.2094848632812,
+							"min": 1386.355224609375,
+							"p50": 1453.374267578125,
+							"p75": 1514.175537109375,
+							"p99": 1948.41064453125,
+							"margin": 0.019510614993027683
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 276.8497338647241,
+							"min": 200.367919921875,
+							"p50": 224.89697265625,
+							"p75": 253.915283203125,
+							"p99": 1319.099853515625,
+							"margin": 0.06023257521577178
+						}
+					]
+				},
+				{
+					"scenario": "flat",
+					"title": "Small flat object",
+					"shape": "`{ name: string (minLength 3, trimmed), email: email (trimmed, lowercased), age: integer >= 0 }`. 3 rules broken in the invalid input.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 3354.0777900163516,
+							"min": 3112.468505859375,
+							"p50": 3381.434814453125,
+							"p75": 3439.749267578125,
+							"p99": 3542.730224609375,
+							"margin": 0.010936562539148662
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 90.28119514964534,
+							"min": 71.973876953125,
+							"p50": 80.05712890625,
+							"p75": 82.754150390625,
+							"p99": 246.91748046875,
+							"margin": 0.019441750091864867
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 536.5870348568162,
+							"min": 470.993896484375,
+							"p50": 494.11181640625,
+							"p75": 534.465087890625,
+							"p99": 892.22607421875,
+							"margin": 0.019491642468278517
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 690.1954099372898,
+							"min": 606.8046875,
+							"p50": 637.52197265625,
+							"p75": 695.27685546875,
+							"p99": 905.916259765625,
+							"margin": 0.019561686167427938
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 411.38314212222315,
+							"min": 345.755859375,
+							"p50": 360.834228515625,
+							"p75": 413.83349609375,
+							"p99": 611.467529296875,
+							"margin": 0.022206331918128028
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 6878.492059004934,
+							"min": 6799.128173828125,
+							"p50": 6853.4873046875,
+							"p75": 6860.47802734375,
+							"p99": 7106.972412109375,
+							"margin": 0.006886544228565858
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 1063.3247782389324,
+							"min": 963.986083984375,
+							"p50": 997.591064453125,
+							"p75": 1174.791748046875,
+							"p99": 1262.733154296875,
+							"margin": 0.0157345142289428
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 16646.670450846355,
+							"min": 15956.45849609375,
+							"p50": 16213.111328125,
+							"p75": 17150.396728515625,
+							"p99": 17401.780029296875,
+							"margin": 0.025042991060824204
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 3458.9918212890625,
+							"min": 3158.1572265625,
+							"p50": 3394.36767578125,
+							"p75": 3484.87646484375,
+							"p99": 3922.87109375,
+							"margin": 0.016796056835586284
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 426.11829992036843,
+							"min": 357.665283203125,
+							"p50": 384.36572265625,
+							"p75": 411.8681640625,
+							"p99": 632.307861328125,
+							"margin": 0.021433209714319564
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 442.33570385252506,
+							"min": 376.450927734375,
+							"p50": 399.657470703125,
+							"p75": 431.62451171875,
+							"p99": 649.504150390625,
+							"margin": 0.020535717918316435
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 891.933473821272,
+							"min": 800.0556640625,
+							"p50": 829.220947265625,
+							"p75": 994.94921875,
+							"p99": 1157.144287109375,
+							"margin": 0.018189173089661156
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 906.4426702916975,
+							"min": 820.843994140625,
+							"p50": 847.666748046875,
+							"p75": 999.115478515625,
+							"p99": 1176.0498046875,
+							"margin": 0.01710296965404043
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 2226.775295883862,
+							"min": 2059.625,
+							"p50": 2238.94873046875,
+							"p75": 2314.617919921875,
+							"p99": 2571.05029296875,
+							"margin": 0.015101441643678883
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 2696.1627739800347,
+							"min": 2532.013671875,
+							"p50": 2645.73486328125,
+							"p75": 2759.88134765625,
+							"p99": 3054.1943359375,
+							"margin": 0.013428244963016596
+						}
+					]
+				},
+				{
+					"scenario": "nested",
+					"title": "Nested user (address, 5 tags max, 10 addresses)",
+					"shape": "The flat user plus `address: { street (trimmed), zip (minLength 5) }`, `tags: string[]` (`maxItems 5`) and `addresses: Address[]` with 10 items. 7 rules broken in the invalid input, in different places.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 163.5489755838859,
+							"min": 157.546875,
+							"p50": 160.246337890625,
+							"p75": 161.66943359375,
+							"p99": 275.094970703125,
+							"margin": 0.007665954922528695
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 237.83398474830372,
+							"min": 222.19775390625,
+							"p50": 235.997802734375,
+							"p75": 237.694580078125,
+							"p99": 320.206787109375,
+							"margin": 0.00638760603895719
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 94.13240904102153,
+							"min": 82.076904296875,
+							"p50": 87.015869140625,
+							"p75": 89.013427734375,
+							"p99": 291.9755859375,
+							"margin": 0.01632121586043349
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 2933.4442138671875,
+							"min": 2743.74853515625,
+							"p50": 2955.921142578125,
+							"p75": 2996.793212890625,
+							"p99": 3094.1689453125,
+							"margin": 0.009270311105957763
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 1277.7491711528362,
+							"min": 1181.207275390625,
+							"p50": 1220.715087890625,
+							"p75": 1389.4384765625,
+							"p99": 1445.357666015625,
+							"margin": 0.013307423331792865
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 14903.648620605469,
+							"min": 14384.84228515625,
+							"p50": 14929.324951171875,
+							"p75": 15027.507568359375,
+							"p99": 15275.6328125,
+							"margin": 0.011536615535834474
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 4267.352613044508,
+							"min": 4048.409912109375,
+							"p50": 4280.70556640625,
+							"p75": 4412.694091796875,
+							"p99": 4475.171142578125,
+							"margin": 0.011703951495265295
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 52549.0371500651,
+							"min": 48262.101318359375,
+							"p50": 51992.739990234375,
+							"p75": 54018.38525390625,
+							"p99": 54850.429931640625,
+							"margin": 0.04116210343548612
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 12025.571606445312,
+							"min": 11714.94775390625,
+							"p50": 11960.91162109375,
+							"p75": 12075.03369140625,
+							"p99": 12250.13623046875,
+							"margin": 0.010147591267780634
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 3154.115420134171,
+							"min": 3024.33935546875,
+							"p50": 3111.93701171875,
+							"p75": 3229.384521484375,
+							"p99": 3349.093505859375,
+							"margin": 0.009668175177641899
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 3242.3827020554318,
+							"min": 3019.40771484375,
+							"p50": 3174.223388671875,
+							"p75": 3299.081787109375,
+							"p99": 3660.83056640625,
+							"margin": 0.023525834098329493
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 3300.7101606889205,
+							"min": 3118.9794921875,
+							"p50": 3253.711181640625,
+							"p75": 3420.251220703125,
+							"p99": 3600.916259765625,
+							"margin": 0.013025097942506156
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 3315.1900579279118,
+							"min": 3143.91455078125,
+							"p50": 3242.011474609375,
+							"p75": 3448.046875,
+							"p99": 3590.4462890625,
+							"margin": 0.012964884368045394
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 4781.772023168103,
+							"min": 4542.42236328125,
+							"p50": 4773.363525390625,
+							"p75": 4919.50390625,
+							"p99": 5014.40283203125,
+							"margin": 0.012967930410053972
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 3236.371875,
+							"min": 3077.806884765625,
+							"p50": 3155.3134765625,
+							"p75": 3405.08203125,
+							"p99": 3494.799560546875,
+							"margin": 0.01403406195066619
+						}
+					]
+				},
+				{
+					"scenario": "nested",
+					"title": "Nested user (address, 5 tags max, 10 addresses)",
+					"shape": "The flat user plus `address: { street (trimmed), zip (minLength 5) }`, `tags: string[]` (`maxItems 5`) and `addresses: Address[]` with 10 items. 7 rules broken in the invalid input, in different places.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 18419.247701009113,
+							"min": 17762.669677734375,
+							"p50": 18211.7958984375,
+							"p75": 18553.65380859375,
+							"p99": 19355.752685546875,
+							"margin": 0.018300322110146365
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 361.8585020123106,
+							"min": 320.16259765625,
+							"p50": 338.64013671875,
+							"p75": 347.207763671875,
+							"p99": 566.586181640625,
+							"margin": 0.016581764152589582
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 2246.104236949574,
+							"min": 2020.176513671875,
+							"p50": 2289.009033203125,
+							"p75": 2318.43310546875,
+							"p99": 2475.803955078125,
+							"margin": 0.012719367676183063
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 3706.4709973457534,
+							"min": 3479.35888671875,
+							"p50": 3737.26416015625,
+							"p75": 3772.043212890625,
+							"p99": 3920.465087890625,
+							"margin": 0.010597680148371435
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 2055.0405407213184,
+							"min": 1857.125732421875,
+							"p50": 2079.684326171875,
+							"p75": 2110.419677734375,
+							"p99": 2205.616943359375,
+							"margin": 0.010315365438841618
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 30662.56435139974,
+							"min": 29866.433349609375,
+							"p50": 30543.331787109375,
+							"p75": 30712.96484375,
+							"p99": 31255.4150390625,
+							"margin": 0.01214569222946621
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 5420.579482421875,
+							"min": 5225.34033203125,
+							"p50": 5391.6845703125,
+							"p75": 5462.809814453125,
+							"p99": 5651.31396484375,
+							"margin": 0.00910971804003658
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 88496.75546637144,
+							"min": 70937,
+							"p50": 78758,
+							"p75": 85759,
+							"p99": 148974,
+							"margin": 0.02029552535463685
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 15560.574035644531,
+							"min": 15085.483154296875,
+							"p50": 15528.24951171875,
+							"p75": 15652.66552734375,
+							"p99": 16118.435302734375,
+							"margin": 0.013858730774105174
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 2260.072228633996,
+							"min": 2082.611083984375,
+							"p50": 2200.447265625,
+							"p75": 2387.609130859375,
+							"p99": 2471.412353515625,
+							"margin": 0.015094623409193498
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 2230.705392548532,
+							"min": 2064.859375,
+							"p50": 2285.62890625,
+							"p75": 2348.010498046875,
+							"p99": 2486.578857421875,
+							"margin": 0.014578159452911544
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 2613.1263602120534,
+							"min": 2435.65576171875,
+							"p50": 2635.397705078125,
+							"p75": 2699.882080078125,
+							"p99": 2791.900634765625,
+							"margin": 0.011877698411110521
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 2606.8373674665177,
+							"min": 2443.35791015625,
+							"p50": 2636.317138671875,
+							"p75": 2690.387939453125,
+							"p99": 2841.14208984375,
+							"margin": 0.012220714035085675
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 4141.024528952206,
+							"min": 3899.310302734375,
+							"p50": 4152.299072265625,
+							"p75": 4213.626708984375,
+							"p99": 4414.969970703125,
+							"margin": 0.011115958411127655
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 5025.236633300781,
+							"min": 4764.00634765625,
+							"p50": 5038.044677734375,
+							"p75": 5133.49365234375,
+							"p99": 5188.840576171875,
+							"margin": 0.009310554880887289
+						}
+					]
+				},
+				{
+					"scenario": "api-payload",
+					"title": "API request body (an order with 5 items)",
+					"shape": "An order: `cartId` (uuid), `status` (one of four), `customer { name, email, phone? }`, `shipping { street, city, zip, country }`, `items[5] { sku, name, quantity, price }`, optional `coupon` and `notes`, `placedAt` (date-time). Names, street and city are trimmed, the email is trimmed and lowercased. 8 rules broken in the invalid input.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 448.27867020008176,
+							"min": 412.906982421875,
+							"p50": 433.687744140625,
+							"p75": 439.60498046875,
+							"p99": 676.97900390625,
+							"margin": 0.015014612697033174
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 492.24810907643314,
+							"min": 465.481689453125,
+							"p50": 478.298828125,
+							"p75": 484.299072265625,
+							"p99": 723.834716796875,
+							"margin": 0.01164916178735559
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 753.0819043926164,
+							"min": 649.0419921875,
+							"p50": 683.662109375,
+							"p75": 905.422119140625,
+							"p99": 958.580810546875,
+							"margin": 0.021066556717714617
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 3146.948035198709,
+							"min": 3011.72412109375,
+							"p50": 3092.2216796875,
+							"p75": 3270.025390625,
+							"p99": 3336.2529296875,
+							"margin": 0.010712399106238248
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 1602.7341620262632,
+							"min": 1509.24609375,
+							"p50": 1548.14501953125,
+							"p75": 1672.773681640625,
+							"p99": 1862.5224609375,
+							"margin": 0.013045484127721664
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 11954.488696289063,
+							"min": 11809.921875,
+							"p50": 11930.97802734375,
+							"p75": 11977.738037109375,
+							"p99": 12128.5048828125,
+							"margin": 0.005754409853406233
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 4313.928466796875,
+							"min": 4155.955322265625,
+							"p50": 4218.70361328125,
+							"p75": 4261.04541015625,
+							"p99": 5119.0517578125,
+							"margin": 0.021200237377744364
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 49535.825134277344,
+							"min": 47833.746337890625,
+							"p50": 48434.67578125,
+							"p75": 49626.46142578125,
+							"p99": 52442.118896484375,
+							"margin": 0.024760563110033326
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 11708.806494140625,
+							"min": 11437.2177734375,
+							"p50": 11632.6513671875,
+							"p75": 11704.502685546875,
+							"p99": 12013.490966796875,
+							"margin": 0.011569278728321818
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 2354.853767516121,
+							"min": 2249.59228515625,
+							"p50": 2316.343017578125,
+							"p75": 2389.299560546875,
+							"p99": 2591.608642578125,
+							"margin": 0.010651682961942632
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 2417.3211289702867,
+							"min": 2279.228271484375,
+							"p50": 2385.68505859375,
+							"p75": 2466.63232421875,
+							"p99": 2647.109375,
+							"margin": 0.011252193964767865
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 2547.4443191002156,
+							"min": 2397.02587890625,
+							"p50": 2489.440673828125,
+							"p75": 2552.663330078125,
+							"p99": 2915.111083984375,
+							"margin": 0.015803247938191597
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 2528.925225619612,
+							"min": 2370.30126953125,
+							"p50": 2460.295166015625,
+							"p75": 2521.960205078125,
+							"p99": 2944.972900390625,
+							"margin": 0.016721866347539648
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 3855.824172561233,
+							"min": 3639.011474609375,
+							"p50": 3796.07177734375,
+							"p75": 3977.869140625,
+							"p99": 4204.291748046875,
+							"margin": 0.01505938645043463
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 2538.9003401131467,
+							"min": 2340.54931640625,
+							"p50": 2483.014892578125,
+							"p75": 2530.586669921875,
+							"p99": 2953.32763671875,
+							"margin": 0.016717318944038505
+						}
+					]
+				},
+				{
+					"scenario": "api-payload",
+					"title": "API request body (an order with 5 items)",
+					"shape": "An order: `cartId` (uuid), `status` (one of four), `customer { name, email, phone? }`, `shipping { street, city, zip, country }`, `items[5] { sku, name, quantity, price }`, optional `coupon` and `notes`, `placedAt` (date-time). Names, street and city are trimmed, the email is trimmed and lowercased. 8 rules broken in the invalid input.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 13092.556986490885,
+							"min": 12849.43603515625,
+							"p50": 13113.757568359375,
+							"p75": 13156.46826171875,
+							"p99": 13216.165283203125,
+							"margin": 0.007252570776323058
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 327.880910881461,
+							"min": 290.7919921875,
+							"p50": 301.572265625,
+							"p75": 312.787841796875,
+							"p99": 525.263916015625,
+							"margin": 0.017978279355880006
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 2767.8805553508255,
+							"min": 2493.66259765625,
+							"p50": 2795.247314453125,
+							"p75": 2862.11328125,
+							"p99": 2954.7626953125,
+							"margin": 0.012989480685771555
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 5063.363074669471,
+							"min": 4575.1806640625,
+							"p50": 4973.080078125,
+							"p75": 5206.899169921875,
+							"p99": 5628.765380859375,
+							"margin": 0.028147566463458916
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 2392.1058861517135,
+							"min": 2117.39208984375,
+							"p50": 2398.802490234375,
+							"p75": 2510.288818359375,
+							"p99": 2608.146240234375,
+							"margin": 0.014174964564811496
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 27948.981180826824,
+							"min": 27279.85107421875,
+							"p50": 27920.917236328125,
+							"p75": 28076.454345703125,
+							"p99": 28650.4541015625,
+							"margin": 0.009062571965630746
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 5498.55287109375,
+							"min": 5318.9619140625,
+							"p50": 5546.599853515625,
+							"p75": 5601.47998046875,
+							"p99": 5676.2021484375,
+							"margin": 0.00974964505649271
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 94168.7822687712,
+							"min": 72509,
+							"p50": 83926,
+							"p75": 90827,
+							"p99": 177868,
+							"margin": 0.021550624652931633
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 19192.94443766276,
+							"min": 18167.765380859375,
+							"p50": 18963.549560546875,
+							"p75": 19501.694580078125,
+							"p99": 20144.46484375,
+							"margin": 0.020225952223333742
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 2456.0501993815105,
+							"min": 2255.4619140625,
+							"p50": 2354.0673828125,
+							"p75": 2601.576416015625,
+							"p99": 2708.4931640625,
+							"margin": 0.01651953542269553
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 2441.1697177574283,
+							"min": 2258.83349609375,
+							"p50": 2445.05908203125,
+							"p75": 2555.6796875,
+							"p99": 2663.774658203125,
+							"margin": 0.012433497155306858
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 2956.7808115433672,
+							"min": 2738.06640625,
+							"p50": 2940.490478515625,
+							"p75": 3075.127197265625,
+							"p99": 3180.532470703125,
+							"margin": 0.013890970964973522
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 2926.009599609375,
+							"min": 2715.76708984375,
+							"p50": 2944.256103515625,
+							"p75": 3050.901123046875,
+							"p99": 3132.56982421875,
+							"margin": 0.013457277742239744
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 4646.269718424479,
+							"min": 4315.8984375,
+							"p50": 4659.328369140625,
+							"p75": 4739.635009765625,
+							"p99": 4918.823486328125,
+							"margin": 0.013927370998251075
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 5316.13516000601,
+							"min": 4979.432373046875,
+							"p50": 5338.96337890625,
+							"p75": 5414.0546875,
+							"p99": 5511.62353515625,
+							"margin": 0.011890334014253169
+						}
+					]
+				},
+				{
+					"scenario": "large-list",
+					"title": "List of 1,000 items",
+					"shape": "`{ items: Array<{ position: integer >= 0, label: string (minLength 1, trimmed), active: boolean }> }` with 1,000 items. In the invalid input 10 of them break 2 rules each.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 3178.627351180367,
+							"min": 3121.05322265625,
+							"p50": 3173.7646484375,
+							"p75": 3202.1103515625,
+							"p99": 3275.015869140625,
+							"margin": 0.003908630361098762
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 9683.677020733174,
+							"min": 9529.2236328125,
+							"p50": 9678.244384765625,
+							"p75": 9764.89599609375,
+							"p99": 9808.103271484375,
+							"margin": 0.005903291628970317
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 2315.36083984375,
+							"min": 2279.037353515625,
+							"p50": 2311.2685546875,
+							"p75": 2318.906982421875,
+							"p99": 2439.305908203125,
+							"margin": 0.0034627929349125243
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 194127.7276040085,
+							"min": 146351,
+							"p50": 163567,
+							"p75": 170387,
+							"p99": 1086187,
+							"margin": 0.02736774380322606
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 84190.26974291365,
+							"min": 71627,
+							"p50": 76826,
+							"p75": 81593,
+							"p99": 134142,
+							"margin": 0.017336383678825885
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 1412862.6347438754,
+							"min": 1261972,
+							"p50": 1315382,
+							"p75": 1364466,
+							"p99": 2665507,
+							"margin": 0.019324914599348653
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 285048.0642570281,
+							"min": 227133,
+							"p50": 257829,
+							"p75": 273192,
+							"p99": 1172448,
+							"margin": 0.020965436258995336
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 5452467.385964912,
+							"min": 4592590,
+							"p50": 5288179,
+							"p75": 6019461,
+							"p99": 6363369,
+							"margin": 0.020664971005945013
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 941344.449704142,
+							"min": 702358,
+							"p50": 836020,
+							"p75": 912906,
+							"p99": 2064090,
+							"margin": 0.026576455094438553
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 185707.13426329556,
+							"min": 170587,
+							"p50": 178188,
+							"p75": 183938,
+							"p99": 265620,
+							"margin": 0.011751368395583377
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 184968.63368055556,
+							"min": 171318,
+							"p50": 179651,
+							"p75": 184818,
+							"p99": 221283,
+							"margin": 0.010699508707675663
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 189168.12818235642,
+							"min": 171348,
+							"p50": 182014,
+							"p75": 188664,
+							"p99": 256046,
+							"margin": 0.011502666867383254
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 184401.6526255049,
+							"min": 171158,
+							"p50": 177648,
+							"p75": 183016,
+							"p99": 236106,
+							"margin": 0.011486810724296333
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 203325.84914067472,
+							"min": 187743,
+							"p50": 194734,
+							"p75": 201224,
+							"p99": 284629,
+							"margin": 0.012382065032866877
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 188134.95937591992,
+							"min": 174964,
+							"p50": 181264,
+							"p75": 187112,
+							"p99": 228465,
+							"margin": 0.011881076023302814
+						}
+					]
+				},
+				{
+					"scenario": "large-list",
+					"title": "List of 1,000 items",
+					"shape": "`{ items: Array<{ position: integer >= 0, label: string (minLength 1, trimmed), active: boolean }> }` with 1,000 items. In the invalid input 10 of them break 2 rules each.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 2189209.1660899655,
+							"min": 2012100,
+							"p50": 2105181,
+							"p75": 2151470,
+							"p99": 3372165,
+							"margin": 0.015338000575000597
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 11139.773770419035,
+							"min": 10899.43994140625,
+							"p50": 11118.43505859375,
+							"p75": 11300.161376953125,
+							"p99": 11349.40576171875,
+							"margin": 0.009722894920773502
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 42052.86256917318,
+							"min": 40855.885009765625,
+							"p50": 41800.283935546875,
+							"p75": 42001.81591796875,
+							"p99": 42357.390625,
+							"margin": 0.018655123472118167
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 208811.27824951013,
+							"min": 152910,
+							"p50": 177748,
+							"p75": 186151,
+							"p99": 1112305,
+							"margin": 0.02626488024389047
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 89338.37837082577,
+							"min": 76225,
+							"p50": 81593,
+							"p75": 87211,
+							"p99": 144397,
+							"margin": 0.016923611130714295
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 2172569.439862543,
+							"min": 1869437,
+							"p50": 2004650,
+							"p75": 2128046,
+							"p99": 3825163,
+							"margin": 0.023443396751336373
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 277587.22632493486,
+							"min": 224689,
+							"p50": 247463,
+							"p75": 257788,
+							"p99": 1075871,
+							"margin": 0.01992549596674062
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 6076585.323529412,
+							"min": 4726431,
+							"p50": 6331302,
+							"p75": 6956155,
+							"p99": 7871366,
+							"margin": 0.029995180945045732
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 1037842.704730832,
+							"min": 760575,
+							"p50": 922650,
+							"p75": 978053,
+							"p99": 2293665,
+							"margin": 0.028458336803264588
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 92652.0066608746,
+							"min": 82865,
+							"p50": 87482,
+							"p75": 91397,
+							"p99": 146411,
+							"margin": 0.012010685998724995
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 96780.92767438342,
+							"min": 87071,
+							"p50": 91608,
+							"p75": 95404,
+							"p99": 127713,
+							"margin": 0.013059153278232101
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 95040.70710674992,
+							"min": 84407,
+							"p50": 89274,
+							"p75": 93721,
+							"p99": 144758,
+							"margin": 0.013555291604626514
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 95416.50119331742,
+							"min": 84097,
+							"p50": 90627,
+							"p75": 93891,
+							"p99": 114363,
+							"margin": 0.013389322337500424
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 101922.3250996016,
+							"min": 92008,
+							"p50": 96415,
+							"p75": 100461,
+							"p99": 145229,
+							"margin": 0.01343215388575533
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 100183.18408271973,
+							"min": 87502,
+							"p50": 93661,
+							"p75": 98739,
+							"p99": 170657,
+							"margin": 0.013530194616282819
+						}
+					]
+				},
+				{
+					"scenario": "union",
+					"title": "Union of 4 variants (12 events)",
+					"shape": "`{ events: Event[] }` with 12 events, where `Event` is `click { x, y }`, `view { url, durationMs }`, `purchase { orderId, amount, currency }` or `signup { email, plan }`, told apart by `type`. No transforms. 3 events broken in the invalid input.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"avg": 173.53862212148132,
+							"min": 157.4541015625,
+							"p50": 165.44189453125,
+							"p75": 170.302978515625,
+							"p99": 411.711669921875,
+							"margin": 0.01287622798760464
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"avg": 225.1910547016326,
+							"min": 213.2900390625,
+							"p50": 221.530029296875,
+							"p75": 228.4375,
+							"p99": 250.82470703125,
+							"margin": 0.004917657949472695
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"avg": 324.4421105803805,
+							"min": 269.0263671875,
+							"p50": 286.8095703125,
+							"p75": 297.951904296875,
+							"p99": 525.480224609375,
+							"margin": 0.02315612756820984
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 2974.9213020169004,
+							"min": 2720.340576171875,
+							"p50": 2946.8720703125,
+							"p75": 3072.47021484375,
+							"p99": 3239.9150390625,
+							"margin": 0.014506940391736523
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 3201.7691297743054,
+							"min": 2867.66845703125,
+							"p50": 3159.6806640625,
+							"p75": 3303.385986328125,
+							"p99": 3592.063232421875,
+							"margin": 0.01597367195900216
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 415.7132968697497,
+							"min": 393.97509765625,
+							"p50": 403.229736328125,
+							"p75": 407.50146484375,
+							"p99": 643.68017578125,
+							"margin": 0.012641638964244592
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 3347.2844522165697,
+							"min": 3190.03173828125,
+							"p50": 3346.71533203125,
+							"p75": 3391.206298828125,
+							"p99": 3507.07421875,
+							"margin": 0.007571062139056359
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 63739.0922954251,
+							"min": 48323,
+							"p50": 55914,
+							"p75": 61883,
+							"p99": 119060,
+							"margin": 0.019904676663665594
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 44398.20566813151,
+							"min": 42349.934326171875,
+							"p50": 43407.1962890625,
+							"p75": 43693.736328125,
+							"p99": 48207.833251953125,
+							"margin": 0.028393822912374467
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 1627.2086982316869,
+							"min": 1551.72607421875,
+							"p50": 1577.812744140625,
+							"p75": 1662.229736328125,
+							"p99": 1872.272705078125,
+							"margin": 0.011485018731665034
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 1619.384784001176,
+							"min": 1531.691162109375,
+							"p50": 1583.639404296875,
+							"p75": 1660.0458984375,
+							"p99": 1831.9140625,
+							"margin": 0.010447325505176854
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 1690.4013671875,
+							"min": 1577.494873046875,
+							"p50": 1628.988525390625,
+							"p75": 1671.5673828125,
+							"p99": 2215.7275390625,
+							"margin": 0.020574777719733782
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 1734.3541969476744,
+							"min": 1596.347412109375,
+							"p50": 1677.4189453125,
+							"p75": 1746.514404296875,
+							"p99": 2256.411865234375,
+							"margin": 0.02021297160667915
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 3069.379342586436,
+							"min": 2935.660400390625,
+							"p50": 2985.997314453125,
+							"p75": 3034.42724609375,
+							"p99": 3456.343017578125,
+							"margin": 0.016125028599047193
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 1846.0014769000773,
+							"min": 1709.056640625,
+							"p50": 1772.65087890625,
+							"p75": 1845.546142578125,
+							"p99": 2462.393310546875,
+							"margin": 0.022492747529469403
+						}
+					]
+				},
+				{
+					"scenario": "union",
+					"title": "Union of 4 variants (12 events)",
+					"shape": "`{ events: Event[] }` with 12 events, where `Event` is `click { x, y }`, `view { url, durationMs }`, `purchase { orderId, amount, currency }` or `signup { email, plan }`, told apart by `type`. No transforms. 3 events broken in the invalid input.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"avg": 26929.658121744793,
+							"min": 26061.262939453125,
+							"p50": 26987.274658203125,
+							"p75": 27419.226806640625,
+							"p99": 27580.749267578125,
+							"margin": 0.012917025126271051
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"avg": 278.1851881020385,
+							"min": 251.712158203125,
+							"p50": 259.783447265625,
+							"p75": 267.984130859375,
+							"p99": 509.035888671875,
+							"margin": 0.017029060246368924
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"avg": 1808.3336431664156,
+							"min": 1630.320068359375,
+							"p50": 1838.947265625,
+							"p75": 1861.896728515625,
+							"p99": 1990.241943359375,
+							"margin": 0.011400853638365537
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 3980.8411322699653,
+							"min": 3657.536376953125,
+							"p50": 3975.138916015625,
+							"p75": 4068.83984375,
+							"p99": 4468.94970703125,
+							"margin": 0.01651794453963072
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 4472.827014553932,
+							"min": 4250.786376953125,
+							"p50": 4429.60546875,
+							"p75": 4547.556884765625,
+							"p99": 4688.249755859375,
+							"margin": 0.01043309553522232
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 8927.802995954242,
+							"min": 8700.691162109375,
+							"p50": 8923.952392578125,
+							"p75": 9046.891845703125,
+							"p99": 9116.317626953125,
+							"margin": 0.008849065219345434
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 4685.74912109375,
+							"min": 4329.3779296875,
+							"p50": 4688.210693359375,
+							"p75": 4816.030517578125,
+							"p99": 4958.68896484375,
+							"margin": 0.01435586264351503
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 75567.96645100911,
+							"min": 70168.81005859375,
+							"p50": 74733.21044921875,
+							"p75": 78945.15551757812,
+							"p99": 79827.08349609375,
+							"margin": 0.02773822346850564
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 84278.95586879199,
+							"min": 58128,
+							"p50": 75554,
+							"p75": 82173,
+							"p99": 135063,
+							"margin": 0.020270717586033635
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 41847.31498209635,
+							"min": 38953.445068359375,
+							"p50": 40394.785888671875,
+							"p75": 41982.361083984375,
+							"p99": 48605.9345703125,
+							"margin": 0.0473674394582248
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 39341.21850599447,
+							"min": 32438,
+							"p50": 36615,
+							"p75": 38788,
+							"p99": 57827,
+							"margin": 0.01287262923041369
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 40542.43772379557,
+							"min": 39539.62109375,
+							"p50": 40084.87841796875,
+							"p75": 40694.363525390625,
+							"p99": 41273.888671875,
+							"margin": 0.015998750395228002
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 44748.94617861142,
+							"min": 35293,
+							"p50": 40821,
+							"p75": 43105,
+							"p99": 75033,
+							"margin": 0.01388849009666112
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 46885.24501546224,
+							"min": 45157.914794921875,
+							"p50": 46543.361572265625,
+							"p75": 47626.741943359375,
+							"p99": 47859.36279296875,
+							"margin": 0.017534318593451195
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 50332.25376383463,
+							"min": 46567.357666015625,
+							"p50": 48559.31640625,
+							"p75": 51518.129638671875,
+							"p99": 55789.530517578125,
+							"margin": 0.04362684664269024
+						}
+					]
+				},
+				{
+					"scenario": "deep",
+					"title": "6 levels of nesting",
+					"shape": "`{ name: string (minLength 1, trimmed), count: integer >= 0, child: { ...the same, 6 levels deep } }`. 4 rules broken in the invalid input, at levels 1, 3 and 6.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 11.32278615690335,
+							"min": 10.62890625,
+							"p50": 10.91259765625,
+							"p75": 11.088623046875,
+							"p99": 21.66357421875,
+							"margin": 0.004003667291615086
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 51.3478273495418,
+							"min": 46.505615234375,
+							"p50": 48.85791015625,
+							"p75": 50.160888671875,
+							"p99": 97.7939453125,
+							"margin": 0.011986396724355652
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 32.17413483609858,
+							"min": 27.062255859375,
+							"p50": 28.888671875,
+							"p75": 30.20166015625,
+							"p99": 164.982421875,
+							"margin": 0.0165489816626101
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 1043.2119040293237,
+							"min": 893.506591796875,
+							"p50": 1084.059814453125,
+							"p75": 1098.615234375,
+							"p99": 1147.607666015625,
+							"margin": 0.013207841473017585
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 812.6034623815658,
+							"min": 750.004150390625,
+							"p50": 782.78076171875,
+							"p75": 803.8818359375,
+							"p99": 1035.68359375,
+							"margin": 0.013781125399335481
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 6305.450346447173,
+							"min": 6062.6748046875,
+							"p50": 6278.715576171875,
+							"p75": 6416.140625,
+							"p99": 6568.859619140625,
+							"margin": 0.012188568655465273
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 1517.3719506835937,
+							"min": 1323.13134765625,
+							"p50": 1528.909912109375,
+							"p75": 1614.90869140625,
+							"p99": 1737.5712890625,
+							"margin": 0.013735241457104143
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 20893.08103434245,
+							"min": 19639.689697265625,
+							"p50": 21013.37451171875,
+							"p75": 21225.22314453125,
+							"p99": 21751.264404296875,
+							"margin": 0.019323173912147582
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 4032.0374441964286,
+							"min": 3874.102783203125,
+							"p50": 4026.250732421875,
+							"p75": 4054.07373046875,
+							"p99": 4181.125244140625,
+							"margin": 0.005245838961249696
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 528.1606395146619,
+							"min": 487.65283203125,
+							"p50": 501.2451171875,
+							"p75": 514.45361328125,
+							"p99": 752.459228515625,
+							"margin": 0.015191429535639744
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 512.2564863540802,
+							"min": 472.556640625,
+							"p50": 481.57421875,
+							"p75": 495.455078125,
+							"p99": 748.556884765625,
+							"margin": 0.017103208913458397
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 630.0033209128458,
+							"min": 518.6162109375,
+							"p50": 561.201416015625,
+							"p75": 608.778076171875,
+							"p99": 1195.73828125,
+							"margin": 0.03711373301039144
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 645.0620075982331,
+							"min": 544.40673828125,
+							"p50": 585.767822265625,
+							"p75": 623.53466796875,
+							"p99": 1151.984375,
+							"margin": 0.03271562629741603
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 1864.9916778564452,
+							"min": 1736.470947265625,
+							"p50": 1780.915283203125,
+							"p75": 1903.61474609375,
+							"p99": 2190.103515625,
+							"margin": 0.017979535907204948
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 597.969259262085,
+							"min": 499.558837890625,
+							"p50": 533.650634765625,
+							"p75": 565.759521484375,
+							"p99": 1173.853515625,
+							"margin": 0.036157769546037256
+						}
+					]
+				},
+				{
+					"scenario": "deep",
+					"title": "6 levels of nesting",
+					"shape": "`{ name: string (minLength 1, trimmed), count: integer >= 0, child: { ...the same, 6 levels deep } }`. 4 rules broken in the invalid input, at levels 1, 3 and 6.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 14982.972941080729,
+							"min": 14445.255126953125,
+							"p50": 14795.956787109375,
+							"p75": 14901.7509765625,
+							"p99": 15982.893798828125,
+							"margin": 0.02103116765799547
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 76.3140960469514,
+							"min": 65.687255859375,
+							"p50": 68.795166015625,
+							"p75": 70.552978515625,
+							"p99": 213.90625,
+							"margin": 0.016805756971862273
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 1338.5642999822444,
+							"min": 1127.279296875,
+							"p50": 1214.11181640625,
+							"p75": 1376.392333984375,
+							"p99": 2627.451904296875,
+							"margin": 0.05067843052390594
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 1456.2385958158052,
+							"min": 1278.0048828125,
+							"p50": 1452.45703125,
+							"p75": 1490.116455078125,
+							"p99": 1574.545166015625,
+							"margin": 0.00820988970214751
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 1332.9469560895648,
+							"min": 1198.500244140625,
+							"p50": 1272.439697265625,
+							"p75": 1441.947998046875,
+							"p99": 1512.77978515625,
+							"margin": 0.015469336959317308
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 15210.325988769531,
+							"min": 14703.26513671875,
+							"p50": 15065.106689453125,
+							"p75": 15166.56103515625,
+							"p99": 15459.724853515625,
+							"margin": 0.023853197555760444
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 2589.027519359923,
+							"min": 2449.643310546875,
+							"p50": 2578.169677734375,
+							"p75": 2647.932861328125,
+							"p99": 2860.25244140625,
+							"margin": 0.010528913549900005
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 44497.26597086588,
+							"min": 41981.251953125,
+							"p50": 45347.7783203125,
+							"p75": 45638.01318359375,
+							"p99": 45813.032958984375,
+							"margin": 0.01992326312886492
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 6639.7174072265625,
+							"min": 6212.197509765625,
+							"p50": 6494.17578125,
+							"p75": 6796.073974609375,
+							"p99": 7238.997802734375,
+							"margin": 0.022507349695509882
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 838.8699924343235,
+							"min": 734.066162109375,
+							"p50": 778.82373046875,
+							"p75": 945.83349609375,
+							"p99": 1193.939697265625,
+							"margin": 0.020114230959854526
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 814.6418924534574,
+							"min": 697.748046875,
+							"p50": 748.06298828125,
+							"p75": 946.274169921875,
+							"p99": 1144.920654296875,
+							"margin": 0.021695795841110803
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 1334.5736426637884,
+							"min": 1206.657470703125,
+							"p50": 1266.81884765625,
+							"p75": 1470.996337890625,
+							"p99": 1566.8486328125,
+							"margin": 0.017225392148792467
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 1288.8132531117585,
+							"min": 1154.99462890625,
+							"p50": 1221.1513671875,
+							"p75": 1430.766357421875,
+							"p99": 1508.05322265625,
+							"margin": 0.01682596670498565
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 2633.8009817940847,
+							"min": 2433.58837890625,
+							"p50": 2619.253662109375,
+							"p75": 2750.78271484375,
+							"p99": 2910.71826171875,
+							"margin": 0.013459507388357612
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 3019.5245157877603,
+							"min": 2817.90283203125,
+							"p50": 2959.18994140625,
+							"p75": 3112.159423828125,
+							"p99": 3327.94140625,
+							"margin": 0.014568485806352763
+						}
+					]
+				},
+				{
+					"scenario": "no-transform",
+					"title": "Small flat object, checks only",
+					"shape": "The flat object with no trim and no lowercase: `{ name: string (minLength 3), email: email, age: integer >= 0 }`. Nothing is transformed, so every library runs its fastest path.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"avg": 31.072230249323887,
+							"min": 29.45849609375,
+							"p50": 30.316650390625,
+							"p75": 30.77392578125,
+							"p99": 60.05859375,
+							"margin": 0.0036163494018561673
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"avg": 38.4670528618573,
+							"min": 35.08203125,
+							"p50": 36.456298828125,
+							"p75": 37.5712890625,
+							"p99": 73.443115234375,
+							"margin": 0.012904111338981058
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"avg": 32.20274561745667,
+							"min": 28.969482421875,
+							"p50": 30.38037109375,
+							"p75": 31.35107421875,
+							"p99": 55.254150390625,
+							"margin": 0.012838122419928473
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 201.7660866822714,
+							"min": 160.226806640625,
+							"p50": 174.5478515625,
+							"p75": 183.44287109375,
+							"p99": 388.03076171875,
+							"margin": 0.02303661064768559
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 101.31232645234324,
+							"min": 91.446533203125,
+							"p50": 95.453857421875,
+							"p75": 97.46875,
+							"p99": 248.43603515625,
+							"margin": 0.012835702587335183
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 37.08377083889779,
+							"min": 34.451904296875,
+							"p50": 35.694091796875,
+							"p75": 36.525390625,
+							"p99": 72.825927734375,
+							"margin": 0.006994842388973786
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 210.72092840923526,
+							"min": 177.08642578125,
+							"p50": 191.2705078125,
+							"p75": 199.1025390625,
+							"p99": 386.534423828125,
+							"margin": 0.018387871143443472
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 3723.553531044408,
+							"min": 3486.654296875,
+							"p50": 3691.711669921875,
+							"p75": 3802.349609375,
+							"p99": 4057.842041015625,
+							"margin": 0.014320155940023576
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 1668.1865920163273,
+							"min": 1447.37060546875,
+							"p50": 1669.025390625,
+							"p75": 1769.28125,
+							"p99": 2050.136474609375,
+							"margin": 0.01890574299822819
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 110.09189308295815,
+							"min": 99.722900390625,
+							"p50": 102.896728515625,
+							"p75": 104.097412109375,
+							"p99": 310.3603515625,
+							"margin": 0.015840672392923114
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 110.78276984913602,
+							"min": 100.69677734375,
+							"p50": 104.019775390625,
+							"p75": 105.50634765625,
+							"p99": 309.8095703125,
+							"margin": 0.015237004554193767
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 181.0931337672591,
+							"min": 122.223388671875,
+							"p50": 133.796142578125,
+							"p75": 148.268798828125,
+							"p99": 1194.2607421875,
+							"margin": 0.06896164232374928
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 189.28233466904982,
+							"min": 126.922119140625,
+							"p50": 141.375244140625,
+							"p75": 150.64208984375,
+							"p99": 1173.56982421875,
+							"margin": 0.06881628284400171
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 1463.8174562917172,
+							"min": 1269.069091796875,
+							"p50": 1411.801513671875,
+							"p75": 1441.428466796875,
+							"p99": 1900.208740234375,
+							"margin": 0.02211471849619136
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 188.03902040678878,
+							"min": 124.18359375,
+							"p50": 135.347900390625,
+							"p75": 145.292236328125,
+							"p99": 1519.833984375,
+							"margin": 0.07906184647213828
+						}
+					]
+				},
+				{
+					"scenario": "no-transform",
+					"title": "Small flat object, checks only",
+					"shape": "The flat object with no trim and no lowercase: `{ name: string (minLength 3), email: email, age: integer >= 0 }`. Nothing is transformed, so every library runs its fastest path.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"avg": 3211.024479166667,
+							"min": 2963.4833984375,
+							"p50": 3207.69189453125,
+							"p75": 3303.786376953125,
+							"p99": 3438.91650390625,
+							"margin": 0.01203497098459152
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"avg": 87.43924141785489,
+							"min": 71.132568359375,
+							"p50": 76.998291015625,
+							"p75": 79.35546875,
+							"p99": 239.56005859375,
+							"margin": 0.019921209657555925
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"avg": 518.6106746172665,
+							"min": 454.566650390625,
+							"p50": 475.252197265625,
+							"p75": 510.08251953125,
+							"p99": 793.651611328125,
+							"margin": 0.01951687468641936
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 630.8903738553407,
+							"min": 549.3310546875,
+							"p50": 577.195556640625,
+							"p75": 613.95458984375,
+							"p99": 893.631591796875,
+							"margin": 0.02078730508299173
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 356.3310642286279,
+							"min": 293.3525390625,
+							"p50": 310.47314453125,
+							"p75": 351.43798828125,
+							"p99": 537.82275390625,
+							"margin": 0.02231478295522976
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 4825.196617389547,
+							"min": 4619.338623046875,
+							"p50": 4831.6875,
+							"p75": 4859.739990234375,
+							"p99": 4894.523681640625,
+							"margin": 0.004553302900490709
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 853.7691629931913,
+							"min": 747.57421875,
+							"p50": 798.620361328125,
+							"p75": 965.553955078125,
+							"p99": 1040.63037109375,
+							"margin": 0.017886756039973323
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 16585.004048665363,
+							"min": 15708.333251953125,
+							"p50": 16595.0625,
+							"p75": 16816.543701171875,
+							"p99": 17473.1435546875,
+							"margin": 0.021541357726777222
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 3150.4829600941052,
+							"min": 2805.4677734375,
+							"p50": 3079.530517578125,
+							"p75": 3168.3388671875,
+							"p99": 3639.62255859375,
+							"margin": 0.039201584497922264
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 414.71765234898623,
+							"min": 358.000244140625,
+							"p50": 372.849365234375,
+							"p75": 401.723388671875,
+							"p99": 596.174072265625,
+							"margin": 0.01975271229648451
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 434.16469117939977,
+							"min": 357.069091796875,
+							"p50": 381.918701171875,
+							"p75": 479.380126953125,
+							"p99": 770.514892578125,
+							"margin": 0.025522893746536483
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 859.3969356236832,
+							"min": 764.012451171875,
+							"p50": 814.0244140625,
+							"p75": 957.07177734375,
+							"p99": 1097.177978515625,
+							"margin": 0.017424670596236286
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 900.7457658214682,
+							"min": 806.65234375,
+							"p50": 847.13330078125,
+							"p75": 1000.78515625,
+							"p99": 1135.17333984375,
+							"margin": 0.017237960012514507
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 2336.049552796379,
+							"min": 2130.820068359375,
+							"p50": 2307.650634765625,
+							"p75": 2457.069580078125,
+							"p99": 2613.39306640625,
+							"margin": 0.01460299208413543
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 2662.457151100852,
+							"min": 2525.586181640625,
+							"p50": 2606.1884765625,
+							"p75": 2776.966064453125,
+							"p99": 2873.195068359375,
+							"margin": 0.011625311675173
+						}
+					]
+				}
+			]
+		},
+		{
+			"runtime": "node",
+			"version": "Node v24.22.2",
+			"cpu": "AMD EPYC 9V45 96-Core Processor",
+			"os": "linux x64",
+			"tables": [
+				{
+					"scenario": "flat",
+					"title": "Small flat object",
+					"shape": "`{ name: string (minLength 3, trimmed), email: email (trimmed, lowercased), age: integer >= 0 }`. 3 rules broken in the invalid input.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 40.20103057680378,
+							"min": 37.52001953125,
+							"p50": 39.54443359375,
+							"p75": 40.378173828125,
+							"p99": 53.0439453125,
+							"margin": 0.004425355047838733
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 42.142640479835144,
+							"min": 38.023681640654104,
+							"p50": 41.22900390625,
+							"p75": 42.44189453125,
+							"p99": 83.186767578125,
+							"margin": 0.0044846026485930056
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 46.17724060990832,
+							"min": 42.813476562470896,
+							"p50": 45.32470703125,
+							"p75": 45.901611328125,
+							"p99": 63.8583984375,
+							"margin": 0.003895458266597721
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 367.84663144766523,
+							"min": 334.60400390625,
+							"p50": 341.237548828125,
+							"p75": 348.20849609375,
+							"p99": 791.80029296875,
+							"margin": 0.025541406023771987
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 591.3985961439081,
+							"min": 440.15771484375,
+							"p50": 580.232177734375,
+							"p75": 607.34326171875,
+							"p99": 988.782470703125,
+							"margin": 0.02645025887836061
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 3084.5255262586797,
+							"min": 2901.670166015625,
+							"p50": 2989.135009765625,
+							"p75": 3021.85986328125,
+							"p99": 4309.009521484375,
+							"margin": 0.03555769339005728
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 820.6932171832068,
+							"min": 767.33349609375,
+							"p50": 779.055419921875,
+							"p75": 793.750732421875,
+							"p99": 1447.855712890625,
+							"margin": 0.024553552004791916
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 3726.9239976670992,
+							"min": 3592.42041015625,
+							"p50": 3637.87255859375,
+							"p75": 3668.774169921875,
+							"p99": 3735.6845703125,
+							"margin": 0.042813881221668446
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 2471.270015321928,
+							"min": 2196.422119140625,
+							"p50": 2292.162109375,
+							"p75": 2584.328369140625,
+							"p99": 3846.958251953125,
+							"margin": 0.041660639542243416
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 299.5267718589469,
+							"min": 264.9353027343459,
+							"p50": 282.219482421875,
+							"p75": 287.068115234375,
+							"p99": 535.895263671875,
+							"margin": 0.019103653723547102
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 298.0144105941533,
+							"min": 274.140869140625,
+							"p50": 281.803955078125,
+							"p75": 284.59375,
+							"p99": 495.6391601561918,
+							"margin": 0.01543811659777425
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 693.3841121897976,
+							"min": 496.20654296875,
+							"p50": 512.0751953125,
+							"p75": 520.14404296875,
+							"p99": 5869.29736328125,
+							"margin": 0.1819025717920448
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 728.7535950655757,
+							"min": 485.661865234375,
+							"p50": 513.33056640625,
+							"p75": 527.06689453125,
+							"p99": 6370.66162109375,
+							"margin": 0.20371892213026174
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 2361.028059895833,
+							"min": 1947.45166015625,
+							"p50": 2043.057373046875,
+							"p75": 2135.856201171875,
+							"p99": 4155.643310546846,
+							"margin": 0.07814069265369186
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 645.1658052365344,
+							"min": 433.515380859375,
+							"p50": 455.12255859375,
+							"p75": 466.1767578125,
+							"p99": 6393.93896484375,
+							"margin": 0.20647905745000888
+						}
+					]
+				},
+				{
+					"scenario": "flat",
+					"title": "Small flat object",
+					"shape": "`{ name: string (minLength 3, trimmed), email: email (trimmed, lowercased), age: integer >= 0 }`. 3 rules broken in the invalid input.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 4506.467537715516,
+							"min": 4314.850830078125,
+							"p50": 4393.893310546875,
+							"p75": 4424.002197265625,
+							"p99": 5117.003173828125,
+							"margin": 0.038458567442730504
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 62.431214917607804,
+							"min": 54.782470703125,
+							"p50": 58.572265625,
+							"p75": 60.271484374970896,
+							"p99": 180.046630859375,
+							"margin": 0.014413262268948858
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 276.01229348838905,
+							"min": 250.39697265625,
+							"p50": 259.51220703125,
+							"p75": 266.67138671875,
+							"p99": 796.556640625,
+							"margin": 0.02482040644256375
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 1526.5101099917754,
+							"min": 997.599853515625,
+							"p50": 1045.30126953125,
+							"p75": 1281.340576171875,
+							"p99": 3939.265380859375,
+							"margin": 0.12237091235926834
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 1287.3478083024938,
+							"min": 1007.901123046875,
+							"p50": 1133.547119140625,
+							"p75": 1394.96875,
+							"p99": 2081.504150390625,
+							"margin": 0.04307994868087256
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 13083.706197102865,
+							"min": 12070.975830078125,
+							"p50": 12105.246337890625,
+							"p75": 12196.19384765625,
+							"p99": 15292.927734375,
+							"margin": 0.1067711616324607
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 1917.2026822916675,
+							"min": 1782.290527343779,
+							"p50": 1845.256103515625,
+							"p75": 1867.447998046875,
+							"p99": 3362.8291015625,
+							"margin": 0.03631628800963483
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 32473.9614461263,
+							"min": 30361.1630859375,
+							"p50": 31592.399169921875,
+							"p75": 32290.212646484375,
+							"p99": 33148.5947265625,
+							"margin": 0.06244116321829342
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 3632.9723857157933,
+							"min": 3469.59716796875,
+							"p50": 3517.2861328125,
+							"p75": 3590.377197265625,
+							"p99": 5012.627197265625,
+							"margin": 0.03273115979978626
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 474.5698437187999,
+							"min": 432.989013671875,
+							"p50": 445.916015625,
+							"p75": 454.3271484375,
+							"p99": 1475.3603515625,
+							"margin": 0.035471211230819574
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 448.2304897591339,
+							"min": 399.33056640625,
+							"p50": 412.39208984375,
+							"p75": 428.7324218750291,
+							"p99": 1466.942626953125,
+							"margin": 0.03984111131208718
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 1701.4164981617637,
+							"min": 1605.927734375,
+							"p50": 1631.779541015625,
+							"p75": 1652.731689453125,
+							"p99": 2735.654541015625,
+							"margin": 0.02916660977161164
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 1812.651391601564,
+							"min": 1685.77734375,
+							"p50": 1733.698486328125,
+							"p75": 1753.437744140625,
+							"p99": 2855.092529296875,
+							"margin": 0.03234644840330414
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 3527.8539600861377,
+							"min": 3343.913330078125,
+							"p50": 3399.813232421875,
+							"p75": 3440.372314453125,
+							"p99": 4753.453369140625,
+							"margin": 0.032121205239626305
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 5508.910227457681,
+							"min": 5187.894287109375,
+							"p50": 5241.295166015625,
+							"p75": 5317.36181640625,
+							"p99": 7143.012939453125,
+							"margin": 0.045097295685616906
+						}
+					]
+				},
+				{
+					"scenario": "nested",
+					"title": "Nested user (address, 5 tags max, 10 addresses)",
+					"shape": "The flat user plus `address: { street (trimmed), zip (minLength 5) }`, `tags: string[]` (`maxItems 5`) and `addresses: Address[]` with 10 items. 7 rules broken in the invalid input, in different places.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 235.18703698749027,
+							"min": 216.15283203125,
+							"p50": 230.825927734375,
+							"p75": 235.730712890625,
+							"p99": 383.60205078125,
+							"margin": 0.010160103937139075
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 342.0204996563544,
+							"min": 321.8837890625,
+							"p50": 340.298095703125,
+							"p75": 349.3203125,
+							"p99": 389.282958984375,
+							"margin": 0.007482177264174464
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 265.5780817126555,
+							"min": 240.06591796875,
+							"p50": 251.653076171875,
+							"p75": 254.3623046875,
+							"p99": 628.06884765625,
+							"margin": 0.019643940376765787
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 2583.701935944733,
+							"min": 2433.6669921875,
+							"p50": 2521.841796875,
+							"p75": 2539.05517578125,
+							"p99": 2952.231201171875,
+							"margin": 0.04119895244071737
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 2080.941512398097,
+							"min": 1951.260498046875,
+							"p50": 2002.015380859375,
+							"p75": 2028.170654296875,
+							"p99": 3607.2001953125,
+							"margin": 0.037807342012882425
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 30238.389628092453,
+							"min": 28928.54980468756,
+							"p50": 29230.47900390625,
+							"p75": 29403.00927734375,
+							"p99": 30659.052978515625,
+							"margin": 0.05916087598792713
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 6596.6701388888905,
+							"min": 6510.453125,
+							"p50": 6538.7744140625,
+							"p75": 6574.651123046875,
+							"p99": 6827.5205078125,
+							"margin": 0.008104627469486342
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 45850.569986979164,
+							"min": 44627.05322265625,
+							"p50": 45092.656982421875,
+							"p75": 45178.1640625,
+							"p99": 45370.974365234375,
+							"margin": 0.03776435955880769
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 13586.638041178385,
+							"min": 12315.971435546875,
+							"p50": 12469.42529296875,
+							"p75": 12774.61669921875,
+							"p99": 12957.250244140625,
+							"margin": 0.14972747912353446
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 2036.1548339843762,
+							"min": 1905.831787109375,
+							"p50": 1940.2294921875,
+							"p75": 1976.16015625,
+							"p99": 3090.226318359375,
+							"margin": 0.03355197276974848
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 2016.9863212477985,
+							"min": 1852.8984375,
+							"p50": 1955.06396484375,
+							"p75": 1979.498046875,
+							"p99": 2944.186035156221,
+							"margin": 0.03036806835384816
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 3066.2413595448356,
+							"min": 2182.980712890625,
+							"p50": 2264.13330078125,
+							"p75": 2533.261718749942,
+							"p99": 5924.759765625,
+							"margin": 0.13586874420570477
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 3068.8698305876333,
+							"min": 2200.32177734375,
+							"p50": 2269.899169921875,
+							"p75": 2376.263427734375,
+							"p99": 5867.82763671875,
+							"margin": 0.1368527390072594
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 4535.295857747394,
+							"min": 3702.897216796875,
+							"p50": 3836.628662109375,
+							"p75": 5725.3310546875,
+							"p99": 5888.5185546875,
+							"margin": 0.07641449160060315
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 3049.3352050781227,
+							"min": 2167.6767578125,
+							"p50": 2285.83349609375,
+							"p75": 2561.84228515625,
+							"p99": 5829.997802734375,
+							"margin": 0.13394944239337064
+						}
+					]
+				},
+				{
+					"scenario": "nested",
+					"title": "Nested user (address, 5 tags max, 10 addresses)",
+					"shape": "The flat user plus `address: { street (trimmed), zip (minLength 5) }`, `tags: string[]` (`maxItems 5`) and `addresses: Address[]` with 10 items. 7 rules broken in the invalid input, in different places.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 26410.50673421223,
+							"min": 24929.306640625,
+							"p50": 25204.274658203125,
+							"p75": 25555.637451171875,
+							"p99": 26489.785888671875,
+							"margin": 0.07977919900313833
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 392.83035732498394,
+							"min": 354.631103515625,
+							"p50": 376.00341796875,
+							"p75": 385.3071289062209,
+							"p99": 788.399658203125,
+							"margin": 0.019860954262556813
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 2227.324512481689,
+							"min": 2108.953857421875,
+							"p50": 2136.715087890625,
+							"p75": 2152.495849609375,
+							"p99": 3545.710693359375,
+							"margin": 0.038863543320804717
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 4944.204671223958,
+							"min": 3936.10205078125,
+							"p50": 5032.06201171875,
+							"p75": 5211.49755859375,
+							"p99": 5348.243896484375,
+							"margin": 0.028235706223369524
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 3251.3172433035743,
+							"min": 3041.498779296875,
+							"p50": 3117.968994140625,
+							"p75": 3135.681396484375,
+							"p99": 5751.7197265625,
+							"margin": 0.054473846962690385
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 57606.95945231119,
+							"min": 55333.58349609369,
+							"p50": 56833.964111328125,
+							"p75": 57308.34106445307,
+							"p99": 58736.8212890625,
+							"margin": 0.03186710220048798
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 9300.425923665365,
+							"min": 9016.30419921875,
+							"p50": 9241.6435546875,
+							"p75": 9332.129150390625,
+							"p99": 9671.96728515625,
+							"margin": 0.013247255694480415
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 103457.19683368652,
+							"min": 90517,
+							"p50": 95684,
+							"p75": 97486,
+							"p99": 225540,
+							"margin": 0.007401997322636098
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 18373.79923502604,
+							"min": 16799.1728515625,
+							"p50": 17288.87548828125,
+							"p75": 17393.49853515625,
+							"p99": 17693.05371093747,
+							"margin": 0.11979154449736051
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 2687.937481219951,
+							"min": 2549.161376953125,
+							"p50": 2582.859619140625,
+							"p75": 2612.660400390625,
+							"p99": 3826.1806640625,
+							"margin": 0.041761594490570646
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 2693.3729811448334,
+							"min": 2493.33349609375,
+							"p50": 2578.417724609404,
+							"p75": 2648.50390625,
+							"p99": 4240.31103515625,
+							"margin": 0.03998655846247286
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 4020.590159696692,
+							"min": 3760.479248046875,
+							"p50": 3832.83935546875,
+							"p75": 3883.540771484375,
+							"p99": 5429.548828125,
+							"margin": 0.04369002027779647
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 4008.785737879135,
+							"min": 3745.226806640625,
+							"p50": 3846.10400390625,
+							"p75": 3921.79638671875,
+							"p99": 5271.542236328125,
+							"margin": 0.0360982129161547
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 5821.372980291189,
+							"min": 5586.939208984375,
+							"p50": 5659.533935546875,
+							"p75": 5722.712646484375,
+							"p99": 6401.232421875,
+							"margin": 0.04040997670708317
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 8067.6689453125,
+							"min": 7672.838134765625,
+							"p50": 7822.255126953125,
+							"p75": 7901.71337890625,
+							"p99": 9080.4892578125,
+							"margin": 0.04659429721234961
+						}
+					]
+				},
+				{
+					"scenario": "api-payload",
+					"title": "API request body (an order with 5 items)",
+					"shape": "An order: `cartId` (uuid), `status` (one of four), `customer { name, email, phone? }`, `shipping { street, city, zip, country }`, `items[5] { sku, name, quantity, price }`, optional `coupon` and `notes`, `placedAt` (date-time). Names, street and city are trimmed, the email is trimmed and lowercased. 8 rules broken in the invalid input.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 869.7555954773295,
+							"min": 809.265869140625,
+							"p50": 821.73583984375,
+							"p75": 832.567626953125,
+							"p99": 1476.99072265625,
+							"margin": 0.02725216461988151
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 881.3465476812327,
+							"min": 824.369873046875,
+							"p50": 835.661376953125,
+							"p75": 861.011962890625,
+							"p99": 1152.611328125,
+							"margin": 0.01716533003533198
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 610.3136311192667,
+							"min": 559.952392578125,
+							"p50": 575.0654296875,
+							"p75": 587.6259765625,
+							"p99": 1491.38232421875,
+							"margin": 0.031133525001675256
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 3036.3291937934027,
+							"min": 2869.55712890625,
+							"p50": 2945.77294921875,
+							"p75": 2975.00390625,
+							"p99": 3618.585693359375,
+							"margin": 0.039529091229513084
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 2911.396001180013,
+							"min": 2724.734375,
+							"p50": 2772.0615234375,
+							"p75": 2814.54736328125,
+							"p99": 4309.12060546875,
+							"margin": 0.037602219525529765
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 24054.68522135417,
+							"min": 22618.134033203125,
+							"p50": 22893.957275390625,
+							"p75": 23264.64746093756,
+							"p99": 26941.788330078125,
+							"margin": 0.0651416078912337
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 6191.7501464843735,
+							"min": 5963.444091796875,
+							"p50": 6020.11376953125,
+							"p75": 6091.498291015625,
+							"p99": 6492.674072265625,
+							"margin": 0.03768871676964709
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 42972.75919596354,
+							"min": 41357.46630859375,
+							"p50": 41528.216552734375,
+							"p75": 42481.698974609375,
+							"p99": 42993.33642578125,
+							"margin": 0.051950536177857415
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 14181.331258138021,
+							"min": 13119.751953125,
+							"p50": 13186.45166015625,
+							"p75": 13211.0322265625,
+							"p99": 13412.358154296904,
+							"margin": 0.1356959370206272
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 2518.2126639229905,
+							"min": 2392.77197265625,
+							"p50": 2406.64794921875,
+							"p75": 2443.95751953125,
+							"p99": 3494.697998046875,
+							"margin": 0.03042010642787787
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 2567.5307972301143,
+							"min": 2354.06787109375,
+							"p50": 2458.53466796875,
+							"p75": 2526.603271484375,
+							"p99": 3587.056884765654,
+							"margin": 0.03365300230635194
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 3322.8507835751525,
+							"min": 2655.09326171875,
+							"p50": 2689.341552734375,
+							"p75": 2798.505859375,
+							"p99": 5959.08935546875,
+							"margin": 0.11565244942178615
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 3604.62062474301,
+							"min": 2844.2236328125,
+							"p50": 2918.921142578125,
+							"p75": 3042.05517578125,
+							"p99": 6169.890625,
+							"margin": 0.11725221254612672
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 4949.13038917824,
+							"min": 4197.776611328125,
+							"p50": 4370.6201171875,
+							"p75": 6136.12060546875,
+							"p99": 6424.33642578125,
+							"margin": 0.07066438063379286
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 3366.8269340701227,
+							"min": 2668.6376953125,
+							"p50": 2788.327392578125,
+							"p75": 2880.6123046875,
+							"p99": 5709.62841796875,
+							"margin": 0.10478116085781165
+						}
+					]
+				},
+				{
+					"scenario": "api-payload",
+					"title": "API request body (an order with 5 items)",
+					"shape": "An order: `cartId` (uuid), `status` (one of four), `customer { name, email, phone? }`, `shipping { street, city, zip, country }`, `items[5] { sku, name, quantity, price }`, optional `coupon` and `notes`, `placedAt` (date-time). Names, street and city are trimmed, the email is trimmed and lowercased. 8 rules broken in the invalid input.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 18296.94551595052,
+							"min": 17127.602783203125,
+							"p50": 17212.00244140625,
+							"p75": 17296.438720703125,
+							"p99": 18399.382568359375,
+							"margin": 0.104720680017045
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 431.4792549826874,
+							"min": 388.656982421875,
+							"p50": 402.1611328125,
+							"p75": 418.369873046875,
+							"p99": 1026.662109375,
+							"margin": 0.029273863633242768
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 3037.7192328559026,
+							"min": 2894.394775390625,
+							"p50": 2949.294189453125,
+							"p75": 2984.56201171875,
+							"p99": 3765.310546875,
+							"margin": 0.03796420541658393
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 6739.424419202301,
+							"min": 6275.689453125,
+							"p50": 6807.65478515625,
+							"p75": 6893.69775390625,
+							"p99": 7236.508544921875,
+							"margin": 0.023891524501492564
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 3907.4657296316964,
+							"min": 3674.728515625,
+							"p50": 3795.518310546875,
+							"p75": 3834.070068359375,
+							"p99": 5158.599853515625,
+							"margin": 0.04657613014756217
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 51927.09059651693,
+							"min": 50100.166015625,
+							"p50": 50414.401611328125,
+							"p75": 50694.89013671875,
+							"p99": 51467.80517578125,
+							"margin": 0.051074643101692616
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 8842.890380859375,
+							"min": 8688.979736328125,
+							"p50": 8773.74072265625,
+							"p75": 8823.334228515625,
+							"p99": 9193.019287109375,
+							"margin": 0.013593311296787728
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 108447.38454964965,
+							"min": 92058,
+							"p50": 101132,
+							"p75": 104027,
+							"p99": 224817,
+							"margin": 0.006434469240334167
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 18074.882222493485,
+							"min": 16698.108642578125,
+							"p50": 17122.514892578096,
+							"p75": 17344.055908203125,
+							"p99": 17763.60546875,
+							"margin": 0.10503869416965084
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 3540.120785361841,
+							"min": 3393.738525390625,
+							"p50": 3465.455322265625,
+							"p75": 3487.65185546875,
+							"p99": 4333.711669921846,
+							"margin": 0.033493420777893045
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 3599.595874683278,
+							"min": 3369.83544921875,
+							"p50": 3485.392822265625,
+							"p75": 3545.84765625,
+							"p99": 5071.420166015625,
+							"margin": 0.038330493923367896
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 4757.995526994977,
+							"min": 4580.0947265625,
+							"p50": 4644.39599609375,
+							"p75": 4680.218994140625,
+							"p99": 5213.701416015596,
+							"margin": 0.036863838222171236
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 4846.1142035590265,
+							"min": 4642.76904296875,
+							"p50": 4714.3125,
+							"p75": 4759.959716796875,
+							"p99": 5369.721191406221,
+							"margin": 0.0415981850506557
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 6537.795564350327,
+							"min": 6263.303466796875,
+							"p50": 6363.205078125,
+							"p75": 6474.61083984375,
+							"p99": 7142.330810546846,
+							"margin": 0.04008005035094341
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 8716.392996651786,
+							"min": 8338.6064453125,
+							"p50": 8580.74609375,
+							"p75": 8668.544677734375,
+							"p99": 8720.761962890625,
+							"margin": 0.034804957673802234
+						}
+					]
+				},
+				{
+					"scenario": "large-list",
+					"title": "List of 1,000 items",
+					"shape": "`{ items: Array<{ position: integer >= 0, label: string (minLength 1, trimmed), active: boolean }> }` with 1,000 items. In the invalid input 10 of them break 2 rules each.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 8933.287841796875,
+							"min": 8790.984375,
+							"p50": 8943.147216796875,
+							"p75": 8988.418212890625,
+							"p99": 9010.947021484375,
+							"margin": 0.006589464997492947
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 14685.544494628906,
+							"min": 13892.564697265625,
+							"p50": 14170.896484375,
+							"p75": 14584.61083984375,
+							"p99": 14907.57568359375,
+							"margin": 0.05321913345996869
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 9646.94100674716,
+							"min": 9561.303466796875,
+							"p50": 9650.331787109375,
+							"p75": 9659.2294921875,
+							"p99": 9717.63037109375,
+							"margin": 0.004155215893942757
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 102424.37100144579,
+							"min": 93441,
+							"p50": 97477,
+							"p75": 99019,
+							"p99": 246702,
+							"margin": 0.006698163084654979
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 357199.6870786525,
+							"min": 288323.9999998808,
+							"p50": 314674,
+							"p75": 336056,
+							"p99": 714306,
+							"margin": 0.014039615284403563
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 3141080.6275510206,
+							"min": 3034834,
+							"p50": 3113854,
+							"p75": 3146323,
+							"p99": 3650493,
+							"margin": 0.004886392053841172
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 603642.1115384621,
+							"min": 549869,
+							"p50": 570560,
+							"p75": 577701,
+							"p99": 1185027,
+							"margin": 0.013189315869550968
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 4232710.335664336,
+							"min": 3910966,
+							"p50": 4165748,
+							"p75": 4387214,
+							"p99": 5011314,
+							"margin": 0.00980819052310355
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 1127562.8666666667,
+							"min": 1065066,
+							"p50": 1095551,
+							"p75": 1114900,
+							"p99": 1423706,
+							"margin": 0.011716198664995991
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 152434.5146987957,
+							"min": 136606,
+							"p50": 142975,
+							"p75": 150758,
+							"p99": 285280,
+							"margin": 0.006443097577993467
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 154871.71303074688,
+							"min": 138499,
+							"p50": 146301,
+							"p75": 149574.9999998808,
+							"p99": 324589,
+							"margin": 0.0062796429610165695
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 166329.75998948383,
+							"min": 136936,
+							"p50": 140210.9999998808,
+							"p75": 143095,
+							"p99": 349827,
+							"margin": 0.06960923291567377
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 168052.23415682063,
+							"min": 137317,
+							"p50": 143906,
+							"p75": 146841,
+							"p99": 344179,
+							"margin": 0.06855483534204891
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 178620.17875354068,
+							"min": 146050,
+							"p50": 152680,
+							"p75": 155294,
+							"p99": 369246,
+							"margin": 0.06653068788813833
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 171448.7999452649,
+							"min": 140922,
+							"p50": 146060,
+							"p75": 147602,
+							"p99": 355175,
+							"margin": 0.06979195891692196
+						}
+					]
+				},
+				{
+					"scenario": "large-list",
+					"title": "List of 1,000 items",
+					"shape": "`{ items: Array<{ position: integer >= 0, label: string (minLength 1, trimmed), active: boolean }> }` with 1,000 items. In the invalid input 10 of them break 2 rules each.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 3199793.6683937823,
+							"min": 2982503,
+							"p50": 3025848,
+							"p75": 3067751,
+							"p99": 4953041,
+							"margin": 0.022050678528451655
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 15795.43505859375,
+							"min": 13800.909423828125,
+							"p50": 14920.424560546875,
+							"p75": 15229.484130859375,
+							"p99": 15464.841064453125,
+							"margin": 0.12438980496508485
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 27626.58396402995,
+							"min": 24796.512451171875,
+							"p50": 25589.96630859381,
+							"p75": 27693.91308593744,
+							"p99": 30880.2724609375,
+							"margin": 0.0921229111930298
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 112159.02903907085,
+							"min": 100742,
+							"p50": 106280,
+							"p75": 107812,
+							"p99": 280833,
+							"margin": 0.011407288499515743
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 365093.34398174606,
+							"min": 306251,
+							"p50": 338660,
+							"p75": 355495,
+							"p99": 705984,
+							"margin": 0.01095273340042007
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 4139849.5234899335,
+							"min": 3868289,
+							"p50": 4006537,
+							"p75": 4078385,
+							"p99": 6168936,
+							"margin": 0.01905842202393993
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 574908.9123287674,
+							"min": 517290,
+							"p50": 543839,
+							"p75": 550499,
+							"p99": 1171525,
+							"margin": 0.013492924331893943
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 4481195.764705882,
+							"min": 4090594,
+							"p50": 4458619,
+							"p75": 4622355,
+							"p99": 5026745,
+							"margin": 0.009103069208515443
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 1156031.236598891,
+							"min": 1088070,
+							"p50": 1115240,
+							"p75": 1149012,
+							"p99": 1476755,
+							"margin": 0.010517917325659617
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 155513.1666258263,
+							"min": 140112,
+							"p50": 145069,
+							"p75": 149195,
+							"p99": 318710,
+							"margin": 0.006516191997149379
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 159506.45772521367,
+							"min": 139610,
+							"p50": 146060,
+							"p75": 150476,
+							"p99": 399943.0000001192,
+							"margin": 0.009488179873084245
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 156006.04669452034,
+							"min": 140582,
+							"p50": 144938,
+							"p75": 152099,
+							"p99": 338410,
+							"margin": 0.006293813798451345
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 162750.01462663626,
+							"min": 141843,
+							"p50": 153151,
+							"p75": 155774,
+							"p99": 374072.9999998808,
+							"margin": 0.00688556678308954
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 161643.5550446993,
+							"min": 145700,
+							"p50": 150447,
+							"p75": 154863,
+							"p99": 316867,
+							"margin": 0.006627317721491313
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 170825.64091520885,
+							"min": 153430.9999998808,
+							"p50": 160312,
+							"p75": 163717,
+							"p99": 324219.0000001192,
+							"margin": 0.006239584167238286
+						}
+					]
+				},
+				{
+					"scenario": "union",
+					"title": "Union of 4 variants (12 events)",
+					"shape": "`{ events: Event[] }` with 12 events, where `Event` is `click { x, y }`, `view { url, durationMs }`, `purchase { orderId, amount, currency }` or `signup { email, plan }`, told apart by `type`. No transforms. 3 events broken in the invalid input.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"avg": 274.20553768382376,
+							"min": 250.546142578125,
+							"p50": 259.571044921875,
+							"p75": 262.221435546875,
+							"p99": 609.035888671875,
+							"margin": 0.019689137672086493
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"avg": 339.6390448227087,
+							"min": 316.646728515625,
+							"p50": 334.44921875,
+							"p75": 349.56982421875,
+							"p99": 424.920166015625,
+							"margin": 0.008714557725093282
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"avg": 292.8783221244808,
+							"min": 262.3291015625,
+							"p50": 279.750244140625,
+							"p75": 289.222412109375,
+							"p99": 579.449951171875,
+							"margin": 0.025001471092163018
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 2257.885592552922,
+							"min": 2123.341552734375,
+							"p50": 2177.030517578125,
+							"p75": 2238.34619140625,
+							"p99": 3613.43115234375,
+							"margin": 0.0364464776581222
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 8430.378557477681,
+							"min": 7452.208251953125,
+							"p50": 8121.852539062529,
+							"p75": 8793.768310546875,
+							"p99": 9591.171142578125,
+							"margin": 0.05256580217592686
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 892.3126849112434,
+							"min": 835.09619140625,
+							"p50": 845.79833984375,
+							"p75": 865.2197265625,
+							"p99": 1488.365478515625,
+							"margin": 0.02530436790750653
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 7781.167952473957,
+							"min": 7569.627197265625,
+							"p50": 7655.379150390625,
+							"p75": 7768.40576171875,
+							"p99": 8141.364990234375,
+							"margin": 0.016883984133974298
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 52775.552612304695,
+							"min": 50789.4697265625,
+							"p50": 51508.1650390625,
+							"p75": 51708.002197265625,
+							"p99": 52760.422607421875,
+							"margin": 0.0434739335199203
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 54552.908671061195,
+							"min": 52568.01513671875,
+							"p50": 53308.584228515625,
+							"p75": 54251.6533203125,
+							"p99": 55202.65185546875,
+							"margin": 0.03706431885750541
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 579.6857835609499,
+							"min": 538.16455078125,
+							"p50": 544.76611328125,
+							"p75": 565.3955078125,
+							"p99": 1157.241943359375,
+							"margin": 0.02500470654084736
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 554.7651850103018,
+							"min": 513.60107421875,
+							"p50": 519.7724609375,
+							"p75": 536.465087890625,
+							"p99": 1135.75927734375,
+							"margin": 0.02771013353051648
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 1082.1136043233096,
+							"min": 812.651611328125,
+							"p50": 837.75537109375,
+							"p75": 871.712890625,
+							"p99": 3223.12841796875,
+							"margin": 0.107446756027151
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 1107.7443570223725,
+							"min": 783.788330078125,
+							"p50": 837.21142578125,
+							"p75": 913.4443359375,
+							"p99": 3549.60205078125,
+							"margin": 0.11747230568988054
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 2728.7759305513823,
+							"min": 2270.46923828125,
+							"p50": 2420.00341796875,
+							"p75": 2571.56982421875,
+							"p99": 4110.6845703125,
+							"margin": 0.06399859859369779
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 1091.4719780815983,
+							"min": 788.76416015625,
+							"p50": 830.328369140625,
+							"p75": 877.09326171875,
+							"p99": 3654.787109375,
+							"margin": 0.11852226270508306
+						}
+					]
+				},
+				{
+					"scenario": "union",
+					"title": "Union of 4 variants (12 events)",
+					"shape": "`{ events: Event[] }` with 12 events, where `Event` is `click { x, y }`, `view { url, durationMs }`, `purchase { orderId, amount, currency }` or `signup { email, plan }`, told apart by `type`. No transforms. 3 events broken in the invalid input.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"avg": 35267.773193359375,
+							"min": 33449.417724609375,
+							"p50": 34509.051513671875,
+							"p75": 34796.8798828125,
+							"p99": 35373.190185546875,
+							"margin": 0.05530172992410732
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"avg": 344.1545292565582,
+							"min": 316.776123046875,
+							"p50": 327.34619140625,
+							"p75": 332.4931640625,
+							"p99": 615.793701171875,
+							"margin": 0.016958388776050097
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"avg": 1781.7773101806645,
+							"min": 1654.130859375,
+							"p50": 1710.020751953125,
+							"p75": 1767.9326171875,
+							"p99": 3223.497802734375,
+							"margin": 0.034533582875872854
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 4767.323158001075,
+							"min": 3832.403564453125,
+							"p50": 4810.43017578125,
+							"p75": 5084.307373046875,
+							"p99": 5648.592529296875,
+							"margin": 0.045325479586213586
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 10257.700594815344,
+							"min": 9481.722412109375,
+							"p50": 9971.723388671904,
+							"p75": 11027.990478515625,
+							"p99": 11230.13818359375,
+							"margin": 0.04346552961948715
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 18720.038350423176,
+							"min": 17304.03515625,
+							"p50": 17587.4248046875,
+							"p75": 18132.37548828125,
+							"p99": 21377.585693359375,
+							"margin": 0.07976944442764163
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 9245.668273925781,
+							"min": 9001.173095703125,
+							"p50": 9117.216064453125,
+							"p75": 9383.68017578125,
+							"p99": 9549.053466796875,
+							"margin": 0.01598175231695486
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 79314.13726226322,
+							"min": 69885,
+							"p50": 73571,
+							"p75": 74703,
+							"p99": 176857,
+							"margin": 0.0068652386600546135
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 92831.60120358142,
+							"min": 81443,
+							"p50": 85709,
+							"p75": 87232,
+							"p99": 218199,
+							"margin": 0.007815730468561124
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 54952.639485677086,
+							"min": 52091.785888671875,
+							"p50": 54094.322509765625,
+							"p75": 54416.175537109375,
+							"p99": 55505.303466796875,
+							"margin": 0.040730692767877025
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 53835.44565836588,
+							"min": 52027.21435546875,
+							"p50": 52709.832275390625,
+							"p75": 53208.224853515625,
+							"p99": 54189.34716796875,
+							"margin": 0.0386678702425245
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 54617.69297281901,
+							"min": 52875.04931640625,
+							"p50": 53216.1298828125,
+							"p75": 53497.767578125,
+							"p99": 55647.985595703125,
+							"margin": 0.04199910322654778
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 54244.316467285156,
+							"min": 52429.95849609375,
+							"p50": 52989.00878906256,
+							"p75": 53292.39306640619,
+							"p99": 54136.93505859375,
+							"margin": 0.043149563547098896
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 56140.69702148438,
+							"min": 53955.809814453125,
+							"p50": 54832.088623046875,
+							"p75": 55571.35961914068,
+							"p99": 57787.210693359375,
+							"margin": 0.03482051067584314
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 58372.28000895182,
+							"min": 56546.8759765625,
+							"p50": 56975.852294921875,
+							"p75": 57648.230224609375,
+							"p99": 58847.361083984375,
+							"margin": 0.03704071673216163
+						}
+					]
+				},
+				{
+					"scenario": "deep",
+					"title": "6 levels of nesting",
+					"shape": "`{ name: string (minLength 1, trimmed), count: integer >= 0, child: { ...the same, 6 levels deep } }`. 4 rules broken in the invalid input, at levels 1, 3 and 6.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 47.47587313973837,
+							"min": 43.028564453125,
+							"p50": 45.1337890625,
+							"p75": 45.808837890625,
+							"p99": 161.564453125,
+							"margin": 0.011795823476610281
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 70.58507681022613,
+							"min": 58.613525390625,
+							"p50": 70.526123046875,
+							"p75": 71.455322265625,
+							"p99": 102.872314453125,
+							"margin": 0.004660496837631694
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 52.715378577842706,
+							"min": 47.745361328125,
+							"p50": 49.175537109375,
+							"p75": 50.772216796875,
+							"p99": 195.878662109375,
+							"margin": 0.013817802035247097
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 650.5468286974683,
+							"min": 604.7900390625,
+							"p50": 615.465087890625,
+							"p75": 623.235595703125,
+							"p99": 1471.319580078125,
+							"margin": 0.029425429037966907
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 933.3404947916665,
+							"min": 875.17138671875,
+							"p50": 893.09130859375,
+							"p75": 903.45849609375,
+							"p99": 1597.95751953125,
+							"margin": 0.02497220296673361
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 11741.955864800344,
+							"min": 11407.9443359375,
+							"p50": 11584.03759765625,
+							"p75": 11629.4990234375,
+							"p99": 11740.080810546875,
+							"margin": 0.03493389203736078
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 3420.5509948730455,
+							"min": 3214.494628906221,
+							"p50": 3329.17919921875,
+							"p75": 3406.48828125,
+							"p99": 4296.611083984375,
+							"margin": 0.03596712424818743
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 16011.65586344401,
+							"min": 14547.922607421875,
+							"p50": 15102.408203125,
+							"p75": 15434.779052734375,
+							"p99": 15475.35791015625,
+							"margin": 0.11524468643559418
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 4686.599193431713,
+							"min": 4625.065185546875,
+							"p50": 4663.859130859375,
+							"p75": 4678.866943359404,
+							"p99": 4814.78466796875,
+							"margin": 0.00678224001920562
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 829.3410322587569,
+							"min": 740.48828125,
+							"p50": 780.2626953125,
+							"p75": 799.882080078125,
+							"p99": 1290.9189453125,
+							"margin": 0.029271314711494127
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 755.3651550292967,
+							"min": 692.253662109375,
+							"p50": 713.27197265625,
+							"p75": 729.253173828125,
+							"p99": 1302.56005859375,
+							"margin": 0.02438071477007892
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 1209.0105472853202,
+							"min": 880.4501953125,
+							"p50": 893.10107421875,
+							"p75": 953.142822265625,
+							"p99": 4013.007812499971,
+							"margin": 0.13299556071228846
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 1195.9364393890876,
+							"min": 857.35400390625,
+							"p50": 867.217529296875,
+							"p75": 895.97412109375,
+							"p99": 4027.4677734375,
+							"margin": 0.13706067234202796
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 2980.6693868434186,
+							"min": 2422.852294921875,
+							"p50": 2505.300537109375,
+							"p75": 2551.488525390625,
+							"p99": 4817.8232421875,
+							"margin": 0.0885005540220475
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 1261.5562444318803,
+							"min": 880.83642578125,
+							"p50": 924.234375,
+							"p75": 992.30078125,
+							"p99": 4880.8037109375,
+							"margin": 0.15216868560267738
+						}
+					]
+				},
+				{
+					"scenario": "deep",
+					"title": "6 levels of nesting",
+					"shape": "`{ name: string (minLength 1, trimmed), count: integer >= 0, child: { ...the same, 6 levels deep } }`. 4 rules broken in the invalid input, at levels 1, 3 and 6.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"note": "no transforms",
+							"avg": 20929.86755371094,
+							"min": 19121.62353515625,
+							"p50": 19734.859375,
+							"p75": 20609.86669921878,
+							"p99": 21471.59716796875,
+							"margin": 0.09536956180354232
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"note": "no transforms",
+							"avg": 93.32251685929927,
+							"min": 78.218505859375,
+							"p50": 86.53173828125,
+							"p75": 87.949951171875,
+							"p99": 288.889892578125,
+							"margin": 0.01874058621707735
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"note": "no transforms",
+							"avg": 1645.7220116090239,
+							"min": 1502.20458984375,
+							"p50": 1536.13427734375,
+							"p75": 1578.484374999971,
+							"p99": 2993.05712890625,
+							"margin": 0.04234624032325901
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 1937.180687156885,
+							"min": 1354.648681640625,
+							"p50": 2179.993896484375,
+							"p75": 2226.57763671875,
+							"p99": 2697.86181640625,
+							"margin": 0.05338296109859566
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 1670.8849898937124,
+							"min": 1552.7705078125,
+							"p50": 1606.794921875,
+							"p75": 1661.455078125,
+							"p99": 2862.765625,
+							"margin": 0.03384301120811993
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 26713.039306640614,
+							"min": 25097.594482421875,
+							"p50": 25472.43896484375,
+							"p75": 26485.567138671817,
+							"p99": 26590.156005859375,
+							"margin": 0.0705763533929272
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 5198.5770703125,
+							"min": 5030.70703125,
+							"p50": 5083.59912109375,
+							"p75": 5133.67236328125,
+							"p99": 5377.96142578125,
+							"margin": 0.03517911613871572
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 50962.38252766927,
+							"min": 48298.092529296875,
+							"p50": 49952.9609375,
+							"p75": 51694.198486328125,
+							"p99": 52712.6279296875,
+							"margin": 0.03711060453360628
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 7159.544605928312,
+							"min": 6971.47412109375,
+							"p50": 7139.00927734375,
+							"p75": 7220.169189453125,
+							"p99": 7420.908447265625,
+							"margin": 0.012330916004053534
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 971.3802158785167,
+							"min": 891.21337890625,
+							"p50": 925.13916015625,
+							"p75": 940.64599609375,
+							"p99": 2232.091552734375,
+							"margin": 0.03826012925592898
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 1030.8726978570644,
+							"min": 949.35302734375,
+							"p50": 977.447021484375,
+							"p75": 997.10791015625,
+							"p99": 2379.47900390625,
+							"margin": 0.037151925046407096
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 2316.0241069178414,
+							"min": 2134.488525390625,
+							"p50": 2228.653564453125,
+							"p75": 2262.659912109375,
+							"p99": 3567.649658203125,
+							"margin": 0.03386269306704599
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 2303.633556928792,
+							"min": 2101.914794921904,
+							"p50": 2168.55810546875,
+							"p75": 2217.144775390625,
+							"p99": 3641.375732421875,
+							"margin": 0.04306545679879151
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 4206.851654052734,
+							"min": 3939.572021484375,
+							"p50": 4081.993408203125,
+							"p75": 4158.84765625,
+							"p99": 4897.2861328125,
+							"margin": 0.03173694786451717
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 6237.26088169643,
+							"min": 5931.0009765625,
+							"p50": 6077.24658203125,
+							"p75": 6197.821044921875,
+							"p99": 7050.623779296904,
+							"margin": 0.032349385860292436
+						}
+					]
+				},
+				{
+					"scenario": "no-transform",
+					"title": "Small flat object, checks only",
+					"shape": "The flat object with no trim and no lowercase: `{ name: string (minLength 3), email: email, age: integer >= 0 }`. Nothing is transformed, so every library runs its fastest path.",
+					"case": "valid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"avg": 41.72153939334296,
+							"min": 39.33642578125,
+							"p50": 40.639892578125,
+							"p75": 41.56640625,
+							"p99": 69.679931640625,
+							"margin": 0.004746221922911565
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"avg": 43.148848954726375,
+							"min": 39.480712890625,
+							"p50": 42.101806640625,
+							"p75": 43.24853515625,
+							"p99": 72.667724609375,
+							"margin": 0.004419596021437298
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"avg": 45.039719921197,
+							"min": 40.4638671875,
+							"p50": 44.390625,
+							"p75": 45.292724609375,
+							"p99": 61.447509765625,
+							"margin": 0.003360134027785512
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 146.05797089028388,
+							"min": 131.462646484375,
+							"p50": 136.46044921875,
+							"p75": 139.6318359375,
+							"p99": 311.910400390625,
+							"margin": 0.015753259139520314
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 476.76159173603014,
+							"min": 339.114501953125,
+							"p50": 469.415771484375,
+							"p75": 488.247802734375,
+							"p99": 680.654296875,
+							"margin": 0.01807746940684773
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 77.58275880609295,
+							"min": 71.144775390625,
+							"p50": 77.191650390625,
+							"p75": 78.38232421875,
+							"p99": 148.338623046875,
+							"margin": 0.006306424080134961
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 416.15359865964155,
+							"min": 384.0087890625,
+							"p50": 393.0654296875,
+							"p75": 403.46923828125,
+							"p99": 1020.441162109375,
+							"margin": 0.026810673048265076
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 3214.893006859756,
+							"min": 3140.724365234375,
+							"p50": 3202.841796875,
+							"p75": 3225.133544921875,
+							"p99": 3378.890625,
+							"margin": 0.00830553720612736
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 2261.2122163318463,
+							"min": 1998.735595703125,
+							"p50": 2093.155029296875,
+							"p75": 2343.365966796875,
+							"p99": 3813.1533203125,
+							"margin": 0.04289906114347501
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 177.6189007327614,
+							"min": 162.95751953125,
+							"p50": 166.336669921875,
+							"p75": 168.6962890625,
+							"p99": 376.939208984375,
+							"margin": 0.015970054322588082
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 197.74670472917384,
+							"min": 177.936279296875,
+							"p50": 185.833984375,
+							"p75": 187.587158203125,
+							"p99": 368.306396484375,
+							"margin": 0.01769476210374012
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 560.8197451448641,
+							"min": 370.177001953125,
+							"p50": 402.019287109375,
+							"p75": 420.100830078125,
+							"p99": 5458.381103515625,
+							"margin": 0.18762350062423794
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 523.2467838301425,
+							"min": 353.435546875,
+							"p50": 382.9331054687791,
+							"p75": 394.838134765625,
+							"p99": 4828.27880859375,
+							"margin": 0.17333061527741225
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 2169.5797288161048,
+							"min": 1841.048095703125,
+							"p50": 1896.23876953125,
+							"p75": 2006.546630859375,
+							"p99": 3853.58984375,
+							"margin": 0.07123898769204609
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 534.7211423820283,
+							"min": 357.916748046875,
+							"p50": 377.47998046875,
+							"p75": 390.913330078125,
+							"p99": 6272.4365234375,
+							"margin": 0.2113398225422884
+						}
+					]
+				},
+				{
+					"scenario": "no-transform",
+					"title": "Small flat object, checks only",
+					"shape": "The flat object with no trim and no lowercase: `{ name: string (minLength 3), email: email, age: integer >= 0 }`. Nothing is transformed, so every library runs its fastest path.",
+					"case": "invalid",
+					"rows": [
+						{
+							"contender": "TypeBox compiled (Check, then Errors on failure)",
+							"library": "typebox",
+							"avg": 4445.942309570313,
+							"min": 4209.425048828125,
+							"p50": 4302.73193359375,
+							"p75": 4376.333984375,
+							"p99": 5313.28466796875,
+							"margin": 0.0391230957042813
+						},
+						{
+							"contender": "Ajv compiled (allErrors)",
+							"library": "ajv",
+							"avg": 62.66552784838127,
+							"min": 56.077880859375,
+							"p50": 59.42333984375,
+							"p75": 60.506347656279104,
+							"p99": 128.40625,
+							"margin": 0.013784907895081659
+						},
+						{
+							"contender": "Typia validateEquals (generated at build time)",
+							"library": "typia",
+							"avg": 289.0702454901933,
+							"min": 259.39501953125,
+							"p50": 274.696533203125,
+							"p75": 280.01708984375,
+							"p99": 798.23046875,
+							"margin": 0.02464383072107862
+						},
+						{
+							"contender": "Zod 4 safeParse",
+							"library": "zod",
+							"avg": 1248.8388212807163,
+							"min": 793.173828125,
+							"p50": 845.26904296875,
+							"p75": 980.751708984375,
+							"p99": 3884.6044921875,
+							"margin": 0.13722446665723154
+						},
+						{
+							"contender": "Valibot safeParse",
+							"library": "valibot",
+							"avg": 1207.639624618902,
+							"min": 1010.92431640625,
+							"p50": 1067.078125,
+							"p75": 1321.399658203125,
+							"p99": 2263.39453125,
+							"margin": 0.03773795641733543
+						},
+						{
+							"contender": "ArkType",
+							"library": "arktype",
+							"avg": 9674.583984374998,
+							"min": 9170.98388671875,
+							"p50": 9344.883544921875,
+							"p75": 9672.268798828125,
+							"p99": 9766.575927734375,
+							"margin": 0.0517137661246221
+						},
+						{
+							"contender": "Effect Schema decodeUnknownResult",
+							"library": "effect",
+							"avg": 1663.072265624999,
+							"min": 1534.432373046875,
+							"p50": 1581.744873046875,
+							"p75": 1624.174560546875,
+							"p99": 3029.838623046875,
+							"margin": 0.03649687919030043
+						},
+						{
+							"contender": "Yup validateSync (abortEarly: false)",
+							"library": "yup",
+							"avg": 31788.9365234375,
+							"min": 29397.705078125,
+							"p50": 30989.35498046875,
+							"p75": 31350.176025390625,
+							"p99": 31999.9736328125,
+							"margin": 0.059281420903862014
+						},
+						{
+							"contender": "Joi validate (abortEarly: false)",
+							"library": "joi",
+							"avg": 3558.996042351977,
+							"min": 3370.63623046875,
+							"p50": 3459.295410156279,
+							"p75": 3526.618896484375,
+							"p99": 4251.649658203125,
+							"margin": 0.03524145602114667
+						},
+						{
+							"contender": "afora blueprint.safeParse",
+							"library": "afora",
+							"avg": 424.31920563772854,
+							"min": 376.9169921875,
+							"p50": 398.120849609375,
+							"p75": 407.070068359375,
+							"p99": 1511.465576171875,
+							"margin": 0.03815374085620954
+						},
+						{
+							"contender": "afora blueprint[\"~standard\"].validate",
+							"library": "afora",
+							"avg": 440.231206154337,
+							"min": 395.40283203125,
+							"p50": 411.87060546875,
+							"p75": 422.62158203125,
+							"p99": 1526.51123046875,
+							"margin": 0.038387646691780276
+						},
+						{
+							"contender": "afora Record.safeParse",
+							"library": "afora",
+							"note": "also creates the instance",
+							"avg": 1713.7395920526403,
+							"min": 1573.54296875,
+							"p50": 1637.8583984375,
+							"p75": 1666.226318359375,
+							"p99": 2841.387939453125,
+							"margin": 0.03186939384704165
+						},
+						{
+							"contender": "afora Subclass.safeParse",
+							"library": "afora",
+							"note": "class extends recordOf(...) {}",
+							"avg": 1745.6133224303464,
+							"min": 1599.1328125,
+							"p50": 1682.7333984375,
+							"p75": 1708.86669921875,
+							"p99": 2765.910888671875,
+							"margin": 0.02854705210863002
+						},
+						{
+							"contender": "afora Entity.safeParse",
+							"library": "afora",
+							"note": "class extends entityOf(...) {}, makes its id and createdAt",
+							"avg": 3483.109301757812,
+							"min": 3296.48828125,
+							"p50": 3347.2265625,
+							"p75": 3403.421875,
+							"p99": 4614.1611328125,
+							"margin": 0.03270432151566791
+						},
+						{
+							"contender": "afora new Record(value) (in try/catch)",
+							"library": "afora",
+							"note": "throws on invalid input",
+							"avg": 5489.945231119789,
+							"min": 5151.756103515625,
+							"p50": 5246.22216796875,
+							"p75": 5381.621826171875,
+							"p99": 6939.6884765625,
+							"margin": 0.04220985992432125
+						}
+					]
+				}
+			]
+		}
+	],
+	"footprints": [
+		{
+			"library": "afora",
+			"min": 397262,
+			"gzip": 102398,
+			"cold": {
+				"bun": 84.818754,
+				"node": 40.30427400000001
+			}
+		},
+		{
+			"library": "typebox",
+			"min": 124423,
+			"gzip": 34627,
+			"cold": {
+				"bun": 8.332064,
+				"node": 7.935374999999999
+			}
+		},
+		{
+			"library": "ajv",
+			"min": 134377,
+			"gzip": 41595,
+			"cold": {
+				"bun": 46.596398,
+				"node": 25.968505
+			}
+		},
+		{
+			"library": "typia",
+			"min": 4025,
+			"gzip": 1755,
+			"cold": {
+				"bun": 1.1540609999999998,
+				"node": 0.7749790000000001
+			}
+		},
+		{
+			"library": "zod",
+			"min": 87049,
+			"gzip": 24851,
+			"cold": {
+				"bun": 7.672708,
+				"node": 7.371374999999999
+			}
+		},
+		{
+			"library": "valibot",
+			"min": 4820,
+			"gzip": 1731,
+			"cold": {
+				"bun": 1.0004279999999999,
+				"node": 0.8333870000000001
+			}
+		},
+		{
+			"library": "arktype",
+			"min": 160060,
+			"gzip": 48632,
+			"cold": {
+				"bun": 137.852534,
+				"node": 94.907279
+			}
+		},
+		{
+			"library": "effect",
+			"min": 76608,
+			"gzip": 25572,
+			"cold": {
+				"bun": 8.470397,
+				"node": 5.9932739999999995
+			}
+		},
+		{
+			"library": "yup",
+			"min": 45785,
+			"gzip": 14371,
+			"cold": {
+				"bun": 5.186508,
+				"node": 3.870383999999998
+			}
+		},
+		{
+			"library": "joi",
+			"min": 199605,
+			"gzip": 62515,
+			"cold": {
+				"bun": 28.820432,
+				"node": 19.731512000000002
+			}
+		}
+	]
+}

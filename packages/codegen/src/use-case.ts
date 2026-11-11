@@ -838,7 +838,19 @@ function missingIn(
 	return missingInField(field, rest, scope, false);
 }
 
-/** `missingIn` for the value of one field: a list, inline fields, a declaration or a property. */
+/** The keys of a record or entity besides its fields: identity keys and those of its plugins. */
+function followedKeysOf(decl: Decl): string[] {
+	return [
+		...(decl.kind === "entity" ? identityKeysOf(decl.spec) : []),
+		...(Array.isArray(decl.spec.plugins)
+			? decl.spec.plugins.flatMap((name) =>
+					typeof name === "string" ? (recordPlugin(name)?.keys ?? []) : [],
+				)
+			: []),
+	];
+}
+
+/** `missingIn` for the value of one field: a list, inline fields, a variant, a declaration or a property. */
 function missingInField(
 	field: Field,
 	path: readonly string[],
@@ -855,21 +867,32 @@ function missingInField(
 			: segment;
 	}
 	if (field.kind === "inline") return missingIn(field.fields, [], path, scope);
+	if (field.kind === "variant") {
+		// Its key, or a key of any of its variants: which one a value is, is
+		// only known when it runs.
+		if (segment === field.key) return undefined;
+		for (const target of Object.values(field.variants)) {
+			if ("fields" in target) {
+				if (Object.hasOwn(target.fields, segment))
+					return missingIn(target.fields, [], path, scope);
+				continue;
+			}
+			const decl = scope.decls.get(target.type);
+			const fields = decl ? fieldsOfDecl(decl) : undefined;
+			if (!decl || !fields) continue;
+			const followed = followedKeysOf(decl);
+			if (Object.hasOwn(fields, segment) || followed.includes(segment))
+				return missingIn(fields, followed, path, scope);
+		}
+		return segment;
+	}
 	if (field.kind === "enum") return segment;
 	const decl = scope.decls.get(field.type);
 	if (decl) {
 		const fields = fieldsOfDecl(decl);
 		if (!fields || (decl.kind !== "record" && decl.kind !== "entity"))
 			return fields ? missingIn(fields, [], path, scope) : undefined;
-		const followed = [
-			...(decl.kind === "entity" ? identityKeysOf(decl.spec) : []),
-			...(Array.isArray(decl.spec.plugins)
-				? decl.spec.plugins.flatMap((name) =>
-						typeof name === "string" ? (recordPlugin(name)?.keys ?? []) : [],
-					)
-				: []),
-		];
-		return missingIn(fields, followed, path, scope);
+		return missingIn(fields, followedKeysOf(decl), path, scope);
 	}
 	const schema = stdProperty(field.type)?.schemaType;
 	return schema !== undefined && PRIMITIVE_SCHEMAS.has(schema)

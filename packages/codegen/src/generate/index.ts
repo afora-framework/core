@@ -9,7 +9,7 @@ import {
 } from "../entity-events";
 import { canonicalExpires } from "../entity-expires";
 import { canonicalEntitySchema } from "../entity-schema";
-import { fieldsOfDecl, orderOf } from "../graph";
+import { fieldsOfDecl, orderOf, typesIn } from "../graph";
 import { type Field, parseFields } from "../model";
 import { defaultMessageOf, normalizeSpec } from "../normalize";
 import { pipeKindOf } from "../output";
@@ -29,6 +29,7 @@ import {
 import { errorNameOf, isGeneric, isImported } from "../use-case";
 import { validateSpec } from "../validate";
 import {
+	choice,
 	type Doc,
 	group,
 	hardline,
@@ -188,6 +189,31 @@ function call(callee: string, args: readonly Doc[]): Doc {
 	]);
 }
 
+/**
+ * A call whose last argument is an object, as Biome prints it: on one line
+ * when it fits, else with the object broken and hugging the parentheses when
+ * the line up to its `{` fits, else with every argument on its own line.
+ */
+function callHuggingLast(
+	callee: string,
+	args: readonly Doc[],
+	props: readonly (readonly [key: string, value: Doc])[],
+): Doc {
+	const hugged = (expand: boolean): Doc => [
+		callee,
+		"(",
+		join(", ", args),
+		args.length > 0 ? ", " : "",
+		objectDoc(props, expand),
+		")",
+	];
+	return choice([
+		hugged(false),
+		hugged(true),
+		call(callee, [...args, objectDoc(props)]),
+	]);
+}
+
 /** A call whose only argument is an object, which hugs the parentheses. */
 function callWithObject(callee: string, object: Doc): Doc {
 	return [callee, "(", object, ")"];
@@ -257,7 +283,7 @@ function withOptions(options: unknown): Doc | undefined {
 
 /** `fill` and `renamedFrom` of a field, as options of `with`. */
 function evolutionOptions(field: Field): Record<string, unknown> {
-	if (field.kind === "inline") return {};
+	if (field.kind === "inline" || field.kind === "variant") return {};
 	return {
 		...(field.fill === undefined ? {} : { fill: field.fill }),
 		...(field.renamedFrom === undefined
@@ -283,6 +309,19 @@ function itemDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 		return evolution ? [made, ".with(", evolution, ")"] : made;
 	}
 	if (field.kind === "inline") return blueprintDoc(field.fields, e, false);
+	if (field.kind === "variant") {
+		ctx.used = true;
+		return callHuggingLast(
+			"ctx.variantOf",
+			[literal(field.key)],
+			Object.entries(field.variants).map(([tag, target]) => [
+				tag,
+				"type" in target
+					? e.ref(target.type)
+					: blueprintDoc(target.fields, e, false),
+			]),
+		);
+	}
 	const options = withOptions({ ...field.with, ...evolutionOptions(field) });
 	if (/^[a-z]/.test(field.type)) {
 		ctx.used = true;
@@ -314,18 +353,13 @@ function fieldDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 	}
 	let doc = itemDoc(field, e, ctx);
 	if (field.list) {
-		doc = call(e.use("listOf"), [
-			doc,
-			...(bounded
-				? [
-						objectDoc(
-							Object.entries(field.list).map(
-								([k, v]) => [k, literal(v)] as const,
-							),
-						),
-					]
-				: []),
-		]);
+		doc = bounded
+			? callHuggingLast(
+					e.use("listOf"),
+					[doc],
+					Object.entries(field.list).map(([k, v]) => [k, literal(v)] as const),
+				)
+			: call(e.use("listOf"), [doc]);
 	}
 	if (field.optional) doc = call(e.use("optionalOf"), [doc]);
 	return doc;
@@ -1203,7 +1237,7 @@ export function generate(
 			];
 		}
 		const fields = fieldsOfDecl(decl);
-		return fields ? typesUsed(fields) : [];
+		return fields ? typesIn(fields) : [];
 	};
 	let merged = true;
 	while (merged) {
@@ -1532,16 +1566,6 @@ export function generate(
 		]),
 	});
 	return out;
-}
-
-function typesUsed(fields: Readonly<Record<string, Field>>): string[] {
-	const found: string[] = [];
-	for (const field of Object.values(fields)) {
-		if (field.kind === "type" && /^[A-Z]/.test(field.type))
-			found.push(field.type);
-		if (field.kind === "inline") found.push(...typesUsed(field.fields));
-	}
-	return found;
 }
 
 function importsFor(

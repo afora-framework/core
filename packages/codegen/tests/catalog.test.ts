@@ -121,7 +121,7 @@ describe("specSchema", () => {
 	test("is a JSON Schema with the definition of a field", () => {
 		const schema = JSON.parse(JSON.stringify(specSchema));
 		expect(schema.type).toBe("object");
-		expect(schema.$defs.Field.anyOf).toHaveLength(4);
+		expect(schema.$defs.Field.anyOf).toHaveLength(5);
 		expect(Object.keys(schema.properties)).toEqual(
 			expect.arrayContaining([
 				"version",

@@ -8,7 +8,7 @@ import type {
 	ProviderReference,
 } from "@afora/core/adapters";
 import { genericUseCase, stdProperty } from "./catalog";
-import type { Field } from "./model";
+import type { Field, VariantTarget } from "./model";
 import { canonicalField, compactSpec } from "./normalize";
 import { DEFAULT_OUTPUT_DIR, type Spec } from "./spec/types";
 
@@ -278,9 +278,36 @@ class Extraction {
 							optional: field.optional,
 							fields: this.fields(field.fields),
 						};
+			case "variant":
+				return {
+					kind: "variant",
+					key: field.key,
+					optional: field.optional,
+					variants: Object.fromEntries(
+						Object.entries(field.variants).map(([tag, variant]) => [
+							tag,
+							this.variant(field.key, tag, variant),
+						]),
+					),
+				};
 			default:
 				return { kind: "type", type: field.ref, optional: field.optional };
 		}
+	}
+
+	/** A variant of a variant field: a blueprint, record or entity by name, or a blueprint in place. */
+	variant(key: string, tag: string, variant: FieldDescription): VariantTarget {
+		if (variant.kind === "blueprint") {
+			return "ref" in variant
+				? { type: variant.ref }
+				: { fields: this.fields(variant.fields) };
+		}
+		if (variant.kind === "record" || variant.kind === "entity") {
+			return { type: variant.ref };
+		}
+		throw new ExtractionError(
+			`The variant "${tag}" of a field made with variantOf (key "${key}") is not a blueprint, a record or an entity, so this application cannot be described.`,
+		);
 	}
 
 	fields(
