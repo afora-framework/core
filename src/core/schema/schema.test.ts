@@ -185,3 +185,170 @@ test("the checks of a schema answer as its methods do", () => {
 		}
 	}
 });
+
+// ------------------------------------------------- discriminated unions
+const strict = { additionalProperties: false };
+const Events = Type.Union([
+	Type.Object(
+		{ type: Type.Literal("click"), x: Type.Integer({ minimum: 0 }) },
+		strict,
+	),
+	Type.Object(
+		{ type: Type.Literal("view"), url: Type.String({ minLength: 1 }) },
+		strict,
+	),
+]);
+
+/** `errorsOfSchema` of `value`, and how many times TypeBox was asked about the whole union. */
+function explained(type: TSchema, value: unknown) {
+	const schema = schemaFor(type);
+	const validator = schema.type as { Errors(value: unknown): unknown };
+	const errors = validator.Errors.bind(validator);
+	let asked = 0;
+	validator.Errors = (candidate) => {
+		asked++;
+		return errors(candidate);
+	};
+	return {
+		errors: errorsOfSchema(schema, value),
+		asked,
+		typebox: errors(value) as readonly { message: string }[],
+	};
+}
+
+test("a discriminated union tells the errors of the variant its key names, and of that one alone", () => {
+	const { errors, asked, typebox } = explained(Events, {
+		type: "click",
+		x: -1,
+	});
+
+	expect(errors).toEqual([
+		{
+			keyword: "minimum",
+			schemaPath: "#/anyOf/0/properties/x",
+			instancePath: "/x",
+			params: { comparison: ">=", limit: 0 },
+			message: "must be >= 0",
+		},
+	]);
+	expect(asked).toBe(0);
+	// TypeBox also tells what the value lacks to be a view.
+	expect(typebox.length).toBeGreaterThan(errors.length);
+	// What it says of the variant is what TypeBox says of it.
+	expect(typebox).toContainEqual(errors[0] as never);
+});
+
+test("a discriminated union tells every error of the variant, in the order of TypeBox", () => {
+	const { errors } = explained(Events, { type: "view", extra: 1 });
+
+	expect(
+		errors.map(({ keyword, schemaPath, instancePath }) => [
+			keyword,
+			schemaPath,
+			instancePath,
+		]),
+	).toEqual([
+		["required", "#/anyOf/1", ""],
+		["boolean", "#/anyOf/1/additionalProperties", "/extra"],
+		["additionalProperties", "#/anyOf/1", ""],
+	]);
+});
+
+test.each([
+	["names no variant", { type: "scroll", x: 1 }],
+	["is missing", { x: 1 }],
+	["is not a literal", { type: { click: true }, x: 1 }],
+])("a discriminated union tells one error when its key %s", (_, value) => {
+	const { errors, asked } = explained(Events, value);
+
+	expect(errors).toEqual([
+		{
+			keyword: "enum",
+			schemaPath: "#/anyOf",
+			instancePath: "/type",
+			params: { allowedValues: ["click", "view"] },
+			message: "must be equal to one of the allowed values",
+		},
+	]);
+	expect(asked).toBe(0);
+});
+
+test("a discriminated union follows the locale and the limit of TypeBox", () => {
+	Locale.Set(Locale.pt_BR);
+	const [unknown] = explained(Events, { type: "scroll" }).errors;
+	expect(unknown?.message).not.toBe(
+		"must be equal to one of the allowed values",
+	);
+
+	Settings.Set({ maxErrors: 1 });
+	expect(explained(Events, { type: "view", extra: 1 }).errors).toHaveLength(1);
+});
+
+test("a key with a slash is written as TypeBox writes it in a path", () => {
+	const Slashed = Type.Union([
+		Type.Object({ "a/b": Type.Literal("x") }),
+		Type.Object({ "a/b": Type.Literal("y") }),
+	]);
+
+	expect(explained(Slashed, { "a/b": "z" }).errors[0]?.instancePath).toBe(
+		"/a~1b",
+	);
+});
+
+test.each<[string, TSchema, unknown]>([
+	["a value that is not an object", Events, "click"],
+	["an array", Events, [{ type: "click" }]],
+	[
+		"variants that share a literal",
+		Type.Union([
+			Type.Object({ type: Type.Literal("a"), x: Type.Number() }),
+			Type.Object({ type: Type.Literal("a"), y: Type.Number() }),
+		]),
+		{ type: "a" },
+	],
+	[
+		"a key that is optional in a variant",
+		Type.Union([
+			Type.Object({ type: Type.Literal("a") }),
+			Type.Object({ type: Type.Optional(Type.Literal("b")) }),
+		]),
+		{ type: "c" },
+	],
+	[
+		"a variant that is not an object",
+		Type.Union([Type.Object({ type: Type.Literal("a") }), Type.String()]),
+		{ type: "c" },
+	],
+	[
+		"a union with a keyword of its own",
+		Type.Unsafe({
+			not: { required: ["never"] },
+			anyOf: [
+				Type.Object({ type: Type.Literal("a"), x: Type.Number() }),
+				Type.Object({ type: Type.Literal("b"), x: Type.Number() }),
+			],
+		}),
+		{ type: "a", x: "1" },
+	],
+])("TypeBox tells the errors of %s", (_, type, value) => {
+	const { errors, asked, typebox } = explained(type, value);
+
+	expect(errors).toEqual(typebox as never);
+	expect(asked).toBe(1);
+});
+
+test("a union inside a variant is told by TypeBox, under the variant", () => {
+	const Nested = Type.Union([
+		Type.Object({
+			type: Type.Literal("a"),
+			inner: Type.Union([Type.String(), Type.Number()]),
+		}),
+		Type.Object({ type: Type.Literal("b") }),
+	]);
+	const { errors } = explained(Nested, { type: "a", inner: true });
+
+	expect(
+		errors.every((error) => error.schemaPath.startsWith("#/anyOf/0")),
+	).toBe(true);
+	expect(errors.at(-1)?.keyword).toBe("anyOf");
+});

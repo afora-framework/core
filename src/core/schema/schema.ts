@@ -207,9 +207,132 @@ const { Locale, Settings } = System as Partial<typeof System>;
 /** The leaf checks of each schema, `null` when it is not a leaf; made on its first rejected value. */
 const leafChecks = new WeakMap<object, readonly LeafCheck[] | null>();
 
+/** One variant of a discriminated union: where it is in `anyOf`, and its own validator. */
+interface Variant {
+	readonly index: number;
+	Errors(value: unknown): readonly SchemaError[];
+}
+
+/** A union whose variants are objects told apart by the value of one key. */
+interface DiscriminatedUnion {
+	/** The key, as it is and as a segment of an instance path. */
+	readonly key: string;
+	readonly segment: string;
+	/** The value of the key in each variant, in the order of the variants. */
+	readonly allowedValues: readonly unknown[];
+	readonly variants: ReadonlyMap<unknown, Variant>;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+	typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The value `key` must have in the object schema `variant`, when it is a required literal. */
+function literalOf(
+	variant: unknown,
+	key: string,
+): { value: unknown } | undefined {
+	if (!isRecord(variant) || variant.type !== "object") return undefined;
+	const { properties, required } = variant;
+	if (!isRecord(properties) || !Array.isArray(required)) return undefined;
+	if (!required.includes(key) || !Object.hasOwn(properties, key)) {
+		return undefined;
+	}
+	const property = properties[key];
+	if (!isRecord(property) || !Object.hasOwn(property, "const"))
+		return undefined;
+	const value = property.const;
+	return typeof value === "string" ||
+		typeof value === "number" ||
+		typeof value === "boolean"
+		? { value }
+		: undefined;
+}
+
 /**
- * The errors of `value`, which `schema` rejects, as `schema.type.Errors(value)`
- * gives them: same errors, same order, same messages.
+ * `schema` as a discriminated union: nothing but an `anyOf` (and annotations)
+ * whose variants are all object schemas that require one same key with a
+ * literal, a different one in each. `undefined` for any other schema, a union
+ * of other things included.
+ */
+function discriminatedUnionOf(schema: unknown): DiscriminatedUnion | undefined {
+	if (!isRecord(schema) || !Array.isArray(schema.anyOf)) return undefined;
+	for (const key of Reflect.ownKeys(schema)) {
+		if (key !== "anyOf" && !INERT_KEYWORDS.has(key)) return undefined;
+	}
+	const options: readonly unknown[] = schema.anyOf;
+	const [first] = options;
+	if (options.length < 2 || !isRecord(first) || !isRecord(first.properties)) {
+		return undefined;
+	}
+
+	for (const key of Object.keys(first.properties)) {
+		const variants = new Map<unknown, Variant>();
+		for (const [index, option] of options.entries()) {
+			const literal = literalOf(option, key);
+			if (!literal || variants.has(literal.value)) break;
+			const validator = Compile(option as TSchema);
+			variants.set(literal.value, {
+				index,
+				Errors: (value) => validator.Errors(value) as readonly SchemaError[],
+			});
+		}
+		if (variants.size !== options.length) continue;
+		return {
+			key,
+			// As TypeBox writes a key in an instance path.
+			segment: key.replaceAll("~", "~0").replaceAll("/", "~1"),
+			allowedValues: [...variants.keys()],
+			variants,
+		};
+	}
+	return undefined;
+}
+
+/** The discriminated union of each schema, `null` when it is not one; found on its first rejected value. */
+const discriminatedUnions = new WeakMap<object, DiscriminatedUnion | null>();
+
+/**
+ * The errors of the object `value`, which the discriminated union rejects:
+ * those of the variant its key names, and of that variant alone, or the one
+ * error of a key that names none. TypeBox gives the errors of every variant,
+ * most of them about variants the value was never meant to be. `undefined`
+ * when only TypeBox can answer.
+ */
+function errorsOfVariant(
+	union: DiscriminatedUnion,
+	value: Record<string, unknown>,
+): readonly SchemaError[] | undefined {
+	const variant = union.variants.get(value[union.key]);
+	if (variant) {
+		const errors = variant.Errors(value);
+		if (errors.length === 0) return undefined;
+		const at = `#/anyOf/${variant.index}`;
+		return errors.map((error) => ({
+			...error,
+			schemaPath: at + error.schemaPath.slice(1),
+		}));
+	}
+
+	const maxErrors = Settings?.Get?.().maxErrors;
+	const locale = Locale?.Get?.();
+	if (typeof maxErrors !== "number" || typeof locale !== "function") {
+		return undefined;
+	}
+	if (maxErrors < 1) return [];
+	const error = {
+		keyword: "enum",
+		schemaPath: "#/anyOf",
+		instancePath: `/${union.segment}`,
+		params: { allowedValues: union.allowedValues },
+	};
+	return [{ ...error, message: locale(error as never) }];
+}
+
+/**
+ * The errors of `value`, which `schema` rejects. For every schema but one
+ * they are what `schema.type.Errors(value)` gives: same errors, same order,
+ * same messages. The one is a discriminated union given an object, told by
+ * the variant its key names (see `errorsOfVariant`).
  * @internal
  */
 export function errorsOfSchema(
@@ -238,6 +361,15 @@ export function errorsOfSchema(
 		}
 		// A leaf that rejects a value has an error for it; if not, TypeBox answers.
 		if (errors.length > 0) return errors;
+	}
+	if (checks === null && isRecord(value)) {
+		let union = discriminatedUnions.get(schema);
+		if (union === undefined) {
+			union = discriminatedUnionOf(schema.type.Type()) ?? null;
+			discriminatedUnions.set(schema, union);
+		}
+		const errors = union && errorsOfVariant(union, value);
+		if (errors) return errors;
 	}
 	return schema.type.Errors(value) as readonly SchemaError[];
 }
