@@ -2,11 +2,22 @@
  * Evaluates one implementation in its own process and prints the evaluation
  * as JSON, so runs never share module state:
  *
- *   bun eval/check.ts afora <project dir>      # imports <dir>/src/domain, starts App, builds its Hono output
- *   bun eval/check.ts baseline <app.ts>        # imports the app (default export or `app`)
+ *   bun eval/check.ts afora <project dir> [brief]   # imports <dir>/src/domain, starts App, builds its Hono output
+ *   bun eval/check.ts baseline <app.ts> [brief]     # imports the app (default export or `app`)
+ *
+ * `brief` is the version of the brief the run is checked against (2 by default).
+ * JWT_SECRET is set before the implementation loads, as the brief asks for.
  */
 import { join, resolve } from "node:path";
-import { evaluate, type Handler } from "./invariants.ts";
+import {
+	type BriefVersion,
+	CURRENT_BRIEF,
+	EVAL_JWT_SECRET,
+	evaluate,
+	type Handler,
+} from "./invariants.ts";
+
+process.env.JWT_SECRET = EVAL_JWT_SECRET;
 
 interface Fetcher {
 	fetch: Handler;
@@ -38,12 +49,14 @@ async function baselineHandler(file: string): Promise<Handler> {
 	throw new Error(`${file} exports no app with a fetch method.`);
 }
 
-const [kind, target] = Bun.argv.slice(2);
+const [kind, target, version] = Bun.argv.slice(2);
 if ((kind !== "afora" && kind !== "baseline") || !target) {
-	throw new Error("Usage: bun eval/check.ts afora|baseline <path>");
+	throw new Error("Usage: bun eval/check.ts afora|baseline <path> [brief]");
 }
+const brief = (version ? Number(version) : CURRENT_BRIEF) as BriefVersion;
+if (brief !== 1 && brief !== 2) throw new Error("brief must be 1 or 2");
 const handler =
 	kind === "afora" ? await aforaHandler(target) : await baselineHandler(target);
-console.log(JSON.stringify(await evaluate(handler)));
+console.log(JSON.stringify(await evaluate(handler, brief)));
 // an app may keep timers or handles open
 process.exit(0);

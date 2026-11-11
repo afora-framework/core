@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`@afora/core` (the Standard Schema vendor is still `"afora"`) is a TypeScript library published on npm for domain modeling on TypeBox: properties → blueprints → records → entities, plus repositories, use cases, environments and layered exceptions, with Standard Schema V1 on every field. `README.md` is the entry point (intro, install, a tested quick start, overview) and `docs/` holds the user-facing spec of behavior, one file per concept (`docs/README.md` is the index; `docs/afora-json.md` is the JSON-first guide). A change in behavior goes into the matching `docs/*.md`, and the quick start code in `README.md` must stay equal to `examples/interop/quickstart.ts` and `quickstart.afora.json`, which `bun run test:interop` checks. `CHANGELOG.md` (`## Unreleased`) records every public change and should be updated alongside features.
+`@afora/core` (the Standard Schema vendor is still `"afora"`) is a TypeScript library published on npm for domain modeling on TypeBox: properties → blueprints → records → entities, plus repositories, use cases, environments and layered exceptions, with Standard Schema V1 on every field. `README.md` is the entry point (the line, why afora, install, a tested quick start, packages; kept short: details go to `docs/`) and `docs/brand.md` holds the line, the descriptions, the voice and the palette and `docs/` holds the user-facing spec of behavior, one file per concept (`docs/README.md` is the index; `docs/afora-json.md` is the JSON-first guide). A change in behavior goes into the matching `docs/*.md`, and the quick start code in `README.md` must stay equal to `examples/interop/quickstart.ts` and `quickstart.afora.json` (the latter inside a `<details>`), which `bun run test:interop` checks. `CHANGELOG.md` (`## Unreleased`) records every public change and should be updated alongside features.
 
 ## Tooling
 
@@ -26,7 +26,7 @@ bun run test:type-perf                   # tests/type-perf: per-edit type instan
 bun run smoke                            # build, then run scripts/smoke.mjs on plain Node
 bun run bench                            # bench/: 7 scenarios vs TypeBox, Ajv, Typia, Zod, Valibot, ArkType, Effect, Yup, Joi; writes bench/results/latest.json and bench/RESULTS.md (-- --only <ids> writes nothing)
 bun run bench:guard                      # blueprint.safeParse vs Zod 4 on the 14 cases, limits in bench/guard.limits.ts (what CI runs)
-bun run bench:check                      # README block, bench/RESULTS.md and the chart are what bench/results/latest.json gives; regenerate with `bun run bench -- --render`
+bun run bench:check                      # the blocks of README.md (chart) and docs/performance.md (tables), bench/RESULTS.md and the chart are what bench/results/latest.json gives; regenerate with `bun run bench -- --render`
 ```
 
 `packages/*` (`codegen`, `mcp`, `hono`, `ws`, `drizzle`, `dynamodb`) are workspaces with their own build and tests (`bun run build:packages`). Releases are published by `.github/workflows/release.yml` through npm trusted publishing (OIDC) when a version bump is merged to `main`; a new package under `packages/` must be added to `DIRS` in `scripts/release-setup.sh` and the script run once by hand (`bash scripts/release-setup.sh`), since npm cannot create a package through OIDC. `examples/interop`, `tests/types-compat` and `bench` have their own `package.json`/lockfiles and are excluded from the root `tsconfig.json` and `bun test`; use their scripts above.
@@ -59,3 +59,7 @@ The library ships to Bun **and** Node >= 22 (and must load in browsers/Workers).
 
 - File layout per module: implementation, `exceptions.ts`, `types/*.interface.ts`, colocated `*.test.ts`, and optional `*.sandbox.ts` scratch scripts (run with `bun <file>`; excluded from the build and the layering test).
 - Conventional commits with optional scope: `feat(repository): …`, `fix(use-case): …`, `chore: …`.
+
+## Brand
+
+The line is **Simple to write. Built to hold.**; `docs/brand.md` holds it with the descriptions, the voice (calm, precise, honest, no hype) and the palette. For any public-facing text or visual (README, docs intros, release notes, posts, banners, charts), use the `afora-brand` subagent (`.claude/agents/afora-brand.md`): give it the subject as the prompt and it answers with afora's position, the piece and the files that back each claim.

@@ -5,19 +5,32 @@ import { extractSpec, generate, loadSpec, normalizeSpec } from "@afora/codegen";
 import { Hono } from "hono";
 import { z } from "zod";
 import { stages } from "./catalogs.ts";
-import { evaluate, type Handler, INVARIANT_IDS } from "./eval/invariants.ts";
+import {
+	EVAL_JWT_SECRET,
+	evaluate,
+	type Handler,
+	invariantsOf,
+} from "./eval/invariants.ts";
 import { resultsMarkdown, runEval } from "./eval/run.ts";
 import { readCalls, replay } from "./scripts/replay.ts";
 import { App } from "./src/domain";
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper reading JSON bodies
 const body = (response: Response): Promise<any> => response.json();
-const json = (value: unknown) => ({
-	method: "POST",
-	headers: { "content-type": "application/json" },
+const json = (value: unknown, token?: string, method = "POST") => ({
+	method,
+	headers: {
+		"content-type": "application/json",
+		...(token ? { authorization: `Bearer ${token}` } : {}),
+	},
 	body: JSON.stringify(value),
 });
+const bearer = (token: string) => ({
+	headers: { authorization: `Bearer ${token}` },
+});
 
+// the brief has the signing secret read from JWT_SECRET
+process.env.JWT_SECRET = EVAL_JWT_SECRET;
 await App.start();
 const api = App.outputs.Api.build();
 
@@ -55,9 +68,9 @@ describe("the committed app", () => {
 		expect(normalizeSpec(extractSpec(App))).toEqual(normalizeSpec(spec));
 	});
 
-	test("replaying runs/claude-code-1 through the MCP server gives the same afora.json and src/domain", async () => {
+	test("replaying runs/claude-code-2 through the MCP server gives the same afora.json and src/domain", async () => {
 		const dir = ".tmp/test-replay";
-		await replay(await readCalls("runs/claude-code-1/tool-calls.json"), dir);
+		await replay(await readCalls("runs/claude-code-2/tool-calls.json"), dir);
 		await sameFiles(dir);
 	}, 60_000);
 });
@@ -66,6 +79,7 @@ describe("the API", () => {
 	const password = "Str0ng!pass";
 	let organizerId = "";
 	let eventId = "";
+	let token = "";
 
 	test("sign up answers 201 with the password masked; a taken email is a 409", async () => {
 		const ana = { name: "Ana", email: "ana@example.com", password };
@@ -83,12 +97,14 @@ describe("the API", () => {
 		expect((await body(again)).title).toBe("EmailTaken");
 	});
 
-	test("log in: 200, or 401 for a wrong password", async () => {
+	test("log in: 200 with a token, or 401 for a wrong password", async () => {
 		const ok = await api.request(
 			"/api/sessions",
 			json({ email: "ana@example.com", password }),
 		);
 		expect(ok.status).toBe(200);
+		token = (await body(ok)).token;
+		expect(token.split(".")).toHaveLength(3);
 		const bad = await api.request(
 			"/api/sessions",
 			json({ email: "ana@example.com", password: "Wr0ng!pass" }),
@@ -97,33 +113,73 @@ describe("the API", () => {
 		expect((await body(bad)).title).toBe("InvalidCredentials");
 	});
 
-	test("an event: 201, 409 for a taken slug, 404 for an unknown organizer, 400 for an undeclared key", async () => {
-		const party = { organizerId, title: "Party", slug: "party", capacity: 2 };
-		const created = await api.request("/api/events", json(party));
+	test("an event: 201 for the organizer of the token, 401 without one, 409 for a taken slug, 400 for an undeclared key", async () => {
+		const party = { title: "Party", slug: "party", capacity: 2 };
+		const anonymous = await api.request("/api/events", json(party));
+		expect(anonymous.status).toBe(401);
+		expect((await body(anonymous)).title).toBe("Unauthenticated");
+
+		const created = await api.request("/api/events", json(party, token));
 		expect(created.status).toBe(201);
 		const { event } = await body(created);
 		expect(event.organizer.id).toBe(organizerId);
 		expect(event.organizer.password).toBe("********");
 		eventId = event.id;
 
-		expect((await api.request("/api/events", json(party))).status).toBe(409);
-		const orphan = await api.request(
-			"/api/events",
-			json({ ...party, slug: "orphan", organizerId: eventId }),
+		expect((await api.request("/api/events", json(party, token))).status).toBe(
+			409,
 		);
-		expect(orphan.status).toBe(404);
-		expect((await body(orphan)).title).toBe("OrganizerNotFound");
-		const extra = await api.request(
+		const spoofed = await api.request(
 			"/api/events",
-			json({ ...party, slug: "extra", price: 10 }),
+			json({ ...party, slug: "spoofed", organizerId }, token),
 		);
-		expect(extra.status).toBe(400);
-		expect((await body(extra)).issues[0].code).toBe("undeclared_key");
+		expect(spoofed.status).toBe(400);
+		expect((await body(spoofed)).issues[0].code).toBe("undeclared_key");
 
-		const read = await api.request(`/api/events/${eventId}`);
+		const read = await api.request(`/api/events/${eventId}`, bearer(token));
 		expect(read.status).toBe(200);
 		expect((await body(read)).event.slug).toBe("party");
-		expect((await api.request(`/api/events/${organizerId}`)).status).toBe(404);
+		expect(
+			(await api.request(`/api/events/${organizerId}`, bearer(token))).status,
+		).toBe(404);
+	});
+
+	test("only its organizer reads or changes an event: another one gets a 404, as if it did not exist", async () => {
+		const bo = { name: "Bo", email: "bo@example.com", password };
+		expect((await api.request("/api/organizers", json(bo))).status).toBe(201);
+		const login = await api.request(
+			"/api/sessions",
+			json({ email: bo.email, password }),
+		);
+		const other = (await body(login)).token;
+
+		const read = await api.request(`/api/events/${eventId}`, bearer(other));
+		expect(read.status).toBe(404);
+		expect((await body(read)).title).toBe("EventNotFound");
+		const change = await api.request(
+			`/api/events/${eventId}`,
+			json({ title: "Taken over" }, other, "PATCH"),
+		);
+		expect(change.status).toBe(404);
+
+		const renamed = await api.request(
+			`/api/events/${eventId}`,
+			json({ title: "Party night" }, token, "PATCH"),
+		);
+		expect(renamed.status).toBe(200);
+		expect((await body(renamed)).event.title).toBe("Party night");
+		expect(
+			(
+				await api.request(
+					`/api/events/${eventId}`,
+					json({ slug: "renamed" }, token, "PATCH"),
+				)
+			).status,
+		).toBe(400);
+		expect(
+			(await api.request(`/api/events/${eventId}`, bearer("not-a-token")))
+				.status,
+		).toBe(401);
 	});
 
 	test("tickets sell up to the capacity, then SoldOut is a 422 and rolls the extra ticket back", async () => {
@@ -146,7 +202,7 @@ describe("the API", () => {
 		expect((await body(unknown)).title).toBe("EventNotFound");
 	});
 
-	test("/openapi.json documents the routes of the brief", async () => {
+	test("/openapi.json documents the routes of the brief, and which need a token", async () => {
 		const document = await body(await api.request("/openapi.json"));
 		expect(Object.keys(document.paths).sort()).toEqual([
 			"/api/events",
@@ -155,13 +211,25 @@ describe("the API", () => {
 			"/api/organizers",
 			"/api/sessions",
 		]);
+		expect(Object.keys(document.paths["/api/events/{id}"]).sort()).toEqual([
+			"get",
+			"patch",
+		]);
+		const secured = (path: string, method: string) =>
+			(document.paths[path][method].security ?? []).length > 0;
+		expect(secured("/api/events", "post")).toBe(true);
+		expect(secured("/api/events/{id}", "get")).toBe(true);
+		expect(secured("/api/events/{id}", "patch")).toBe(true);
+		expect(secured("/api/organizers", "post")).toBe(false);
+		expect(secured("/api/events/{eventId}/tickets", "post")).toBe(false);
 	});
 });
 
 /**
  * An API that answers the routes of the brief and breaks each invariant: it
- * returns the hash, ignores unknown keys, lets duplicates in and throws on
- * business errors. The checks must catch all of it.
+ * returns the hash, ignores unknown keys, lets duplicates in, throws on
+ * business errors and hands out a token it never checks. The checks must
+ * catch all of it.
  */
 function careless(): Handler {
 	const app = new Hono().basePath("/api");
@@ -186,7 +254,7 @@ function careless(): Handler {
 		const { email } = await c.req.json();
 		const organizer = organizers.find((o) => o.email === email);
 		if (!organizer) throw new Error("no such organizer");
-		return c.json({ organizer });
+		return c.json({ organizer, token: `token-${organizer.id}` });
 	});
 	app.post("/events", async (c) => {
 		const event = { id: crypto.randomUUID(), ...(await c.req.json()) };
@@ -196,6 +264,12 @@ function careless(): Handler {
 	app.get("/events/:id", (c) => {
 		const event = events.find((e) => e.id === c.req.param("id"));
 		if (!event) throw new Error("no such event");
+		return c.json({ event });
+	});
+	app.patch("/events/:id", async (c) => {
+		const event = events.find((e) => e.id === c.req.param("id"));
+		if (!event) throw new Error("no such event");
+		Object.assign(event, await c.req.json());
 		return c.json({ event });
 	});
 	app.post("/events/:id/tickets", async (c) => {
@@ -214,6 +288,7 @@ describe("the evaluation", () => {
 			undeclared: false,
 			problems: false,
 			unique: false,
+			ownership: false,
 		});
 		expect(checks.filter((c) => !c.ok).length).toBeGreaterThan(10);
 	});
@@ -227,7 +302,7 @@ describe("the evaluation", () => {
 				run: result.run,
 				error: undefined,
 			});
-			for (const id of INVARIANT_IDS) {
+			for (const id of invariantsOf(result.brief)) {
 				expect({
 					run: result.run,
 					invariant: id,

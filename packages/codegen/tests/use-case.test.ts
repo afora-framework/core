@@ -131,6 +131,7 @@ const accounts: Spec = {
 						run: "verify",
 						fn: { import: "../hash#verify" },
 						args: ["$user", "$input.plainPassword"],
+						params: { fields: { user: "User", plain: "string" } },
 						as: "ok",
 					},
 					{ ensure: "true", value: "$ok", error: "InvalidCredentials" },
@@ -433,6 +434,19 @@ describe("validation", () => {
 			"run.params of another length than args",
 			(c) => (steps(c)[2].params = { fields: { a: "string", b: "string" } }),
 			"invalid_args@useCases.Register.implementation.steps.2.params",
+		],
+		[
+			"run with args and no params",
+			(c) => delete steps(c)[2].params,
+			"run_without_params@useCases.Register.implementation.steps.2.args",
+		],
+		[
+			"run with a reference as args and no params",
+			(c) => {
+				delete steps(c)[2].params;
+				steps(c)[2].args = "$input.tags";
+			},
+			"run_without_params@useCases.Register.implementation.steps.2.args",
 		],
 		[
 			"run.params names no blueprint",
@@ -828,6 +842,7 @@ describe("hand-written application -> extract -> generate", () => {
 				run: "hashPassword",
 				fn: hashPassword,
 				args: ["$input.plainPassword"],
+				params: blueprintOf((ctx) => ({ plain: ctx.string })),
 				as: "hash",
 			},
 			{
@@ -861,6 +876,7 @@ describe("hand-written application -> extract -> generate", () => {
 				run: "verify",
 				fn: verify,
 				args: ["$user", "$input.plainPassword"],
+				params: blueprintOf((ctx) => ({ user: User, plain: ctx.string })),
 				as: "ok",
 			},
 			{ ensure: "true", value: "$ok", error: InvalidCredentials },

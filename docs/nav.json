@@ -282,6 +282,7 @@
 					"path": "CONTRIBUTING.md",
 					"type": "project"
 				},
+				{ "title": "Brand", "path": "docs/brand.md", "type": "project" },
 				{
 					"title": "About these docs",
 					"path": "docs/site.md",

@@ -197,13 +197,24 @@ function summaryTable(run: RuntimeReport): string[] {
 	return out;
 }
 
-/** The block of README.md between `<!-- bench:start -->` and `<!-- bench:end -->`. */
+/** The block of README.md between `<!-- bench:start -->` and `<!-- bench:end -->`: the chart and where the numbers are. */
 export function renderSummary(report: Report): string {
+	const lead = leadRun(report);
+	if (!lead) return "";
+	return [
+		`![Validations per second on the body of an API request, ${lead.version}](bench/results/chart.svg)`,
+		"",
+		`afora ${report.afora.version} on ${listed(report.runs.map((run) => run.version))}, ${lead.cpu}; generated from \`bench/results/latest.json\`. Every case, runtime and library, and how it is measured: [Performance](docs/performance.md).`,
+	].join("\n");
+}
+
+/** The block of docs/performance.md: the time of each library as a multiple of afora, on every case and runtime. */
+export function renderTables(report: Report): string {
 	const lead = leadRun(report);
 	if (!lead) return "";
 	const others = report.runs.filter((run) => run !== lead);
 	return [
-		`![Validations per second on the body of an API request, ${lead.version}](bench/results/chart.svg)`,
+		`![Validations per second on the body of an API request, ${lead.version}](../bench/results/chart.svg)`,
 		"",
 		`Time of each library as a multiple of afora \`blueprint.safeParse\` on the same case: above 1.00x it is slower than afora, below it is faster. TypeBox, Ajv and Typia only check, they do not transform. afora ${report.afora.version}, ${listed(report.runs.map((run) => run.version))}, ${lead.cpu}; generated from \`bench/results/latest.json\`.`,
 		"",
@@ -215,7 +226,49 @@ export function renderSummary(report: Report): string {
 const escapeXml = (text: string) =>
 	text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** Horizontal bars of validations per second, one per library, afora in the accent. */
+/** The symbol of afora (`.github/assets/brand/afora-symbol-fluid-*.svg`): rows of lines, the darkest one the horizon. Coordinates of its 256 box. */
+const SYMBOL: Array<[x: number, y: number, width: number, faded?: true]> = [
+	[111, 58.5, 18],
+	[95, 69.5, 47.2],
+	[87, 80.5, 35.5],
+	[128.5, 80.5, 35.8, true],
+	[71, 91.5, 47.8],
+	[124.8, 91.5, 46.4, true],
+	[71, 102.5, 53.8],
+	[130.8, 102.5, 56.9, true],
+	[63, 113.5, 126.7],
+	[63, 135.5, 55.1],
+	[124.1, 135.5, 65.6, true],
+	[71, 146.5, 64.5],
+	[141.5, 146.5, 46.2, true],
+	[79, 157.5, 100.2],
+	[87, 168.5, 39],
+	[132, 168.5, 32.3, true],
+	[95, 179.5, 47.2],
+	[111, 190.5, 18],
+];
+
+/** A band of waves across `width`, from `y`, `amplitude` high, shifted by `phase` (0 to 1). */
+function wave(
+	width: number,
+	y: number,
+	amplitude: number,
+	phase: number,
+	bottom: number,
+) {
+	const period = 260;
+	let d = `M0,${bottom} L0,${y}`;
+	for (let x = -period * phase; x < width; x += period) {
+		const c = period / 4;
+		d += ` C${x + c},${y - amplitude} ${x + period / 2 - c},${y - amplitude} ${x + period / 2},${y}`;
+		d += ` C${x + period / 2 + c},${y + amplitude} ${x + period - c},${y + amplitude} ${x + period},${y}`;
+	}
+	return `${d} L${width + period},${bottom} L0,${bottom} Z`;
+}
+
+const round = (value: number) => Math.round(value * 10) / 10;
+
+/** Horizontal bars of validations per second, one per library, afora in the colors of its banner. */
 export function renderChart(report: Report): string {
 	const run = leadRun(report);
 	const table = run?.tables.find(
@@ -228,56 +281,104 @@ export function renderChart(report: Report): string {
 		.sort((a, b) => b.ops - a.ops);
 	const max = Math.max(...rows.map((entry) => entry.ops));
 
-	const width = 760;
-	const labelWidth = 150;
-	const valueWidth = 190;
-	const barMax = width - labelWidth - valueWidth;
-	const barHeight = 18;
+	const width = 800;
+	const pad = 32;
+	const labelWidth = 120;
+	const valueWidth = 180;
+	const left = pad + labelWidth;
+	const barMax = width - left - valueWidth - pad;
+	const barHeight = 16;
 	const step = 30;
-	const top = 56;
-	const height = top + rows.length * step + 34;
+	const top = 104;
+	const rowsEnd = top + rows.length * step;
+	const footY = rowsEnd + 18;
+	const waveTop = footY + 22;
+	const height = waveTop + 44;
 
 	const bars = rows.map(({ library, row, ops }, index) => {
 		const y = top + index * step;
-		const length = Math.max(2, (ops / max) * barMax);
-		const radius = Math.min(4, length / 2);
+		const length = round(Math.max(3, (ops / max) * barMax));
+		const radius = Math.min(barHeight / 2, length / 2);
 		const checksOnly = row.note?.includes("no transforms");
+		const isAfora = library === "afora";
 		const name = LIBRARIES[library]?.label ?? library;
 		// A bar with a square start on the baseline and a rounded data-end.
-		const path = `M${labelWidth},${y} h${length - radius} a${radius},${radius} 0 0 1 ${radius},${radius} v${barHeight - 2 * radius} a${radius},${radius} 0 0 1 -${radius},${radius} h-${length - radius} z`;
+		const path = `M${left},${y} h${round(length - radius)} a${radius},${radius} 0 0 1 ${radius},${radius} a${radius},${radius} 0 0 1 -${radius},${radius} h-${round(length - radius)} z`;
 		return [
-			`<text class="${library === "afora" ? "name strong" : "name"}" x="${labelWidth - 10}" y="${y + 13}" text-anchor="end">${escapeXml(name)}</text>`,
-			`<path class="${library === "afora" ? "bar accent" : "bar"}" d="${path}"/>`,
-			`<text class="value" x="${labelWidth + length + 8}" y="${y + 13}">${fmtOps(row.avg)} ops/s${checksOnly ? '<tspan class="muted"> · checks only</tspan>' : ""}</text>`,
+			`<text class="${isAfora ? "name strong" : "name"}" x="${left - 14}" y="${y + 12.5}" text-anchor="end">${escapeXml(name)}</text>`,
+			`<path class="${isAfora ? "bar" : checksOnly ? "bar other checks" : "bar other"}"${isAfora ? ' fill="url(#afora)"' : ""} d="${path}"/>`,
+			`<text class="${isAfora ? "value strong" : "value"}" x="${round(left + length + 10)}" y="${y + 12.5}">${fmtOps(row.avg)}/s${checksOnly ? '<tspan class="muted"> · checks only</tspan>' : ""}</text>`,
 		].join("\n");
 	});
 
-	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-labelledby="title desc" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+	const symbolScale = 0.3;
+	const symbol = SYMBOL.map(
+		([x, y, w, faded]) =>
+			`<rect x="${x}" y="${y}" width="${w}" height="7" rx="3.5" fill="url(#sun)"${faded ? ' opacity=".42"' : ""}/>`,
+	);
+	symbol.splice(
+		9,
+		0,
+		'<rect class="horizon" x="63" y="124.5" width="130" height="7" rx="3.5"/>',
+	);
+
+	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-labelledby="title desc" font-family="'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
 <title id="title">Validations per second: ${escapeXml(table.title)}, ${table.case} input</title>
 <desc id="desc">${rows.map(({ library, row }) => `${LIBRARIES[library]?.label ?? library}: ${fmtOps(row.avg)} per second`).join("; ")}.</desc>
 <style>
-	.title { font-size: 15px; font-weight: 600; fill: #0b0b0b; }
-	.subtitle, .foot { font-size: 12px; fill: #52514e; }
-	.name { font-size: 13px; fill: #52514e; }
-	.name.strong { font-weight: 600; fill: #0b0b0b; }
-	.value { font-size: 12px; fill: #0b0b0b; font-variant-numeric: tabular-nums; }
-	.muted { fill: #52514e; }
-	.bar { fill: #a3a29c; }
-	.bar.accent { fill: #2a78d6; }
-	.axis { stroke: #a3a29c; stroke-width: 1; }
+	.paper { fill: #f4f1ea; }
+	.ink, .title, .name.strong, .value { fill: #131512; }
+	.subtitle, .foot, .name, .muted { fill: #5e5a50; }
+	.mono { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+	.title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+	.subtitle { font-size: 12px; }
+	.name { font-size: 13px; }
+	.name.strong, .value.strong { font-weight: 600; }
+	.value { font-size: 12px; font-variant-numeric: tabular-nums; }
+	.foot { font-size: 11px; }
+	.other { fill: #d9d3c5; }
+	.checks { opacity: 0.6; }
+	.axis { stroke: #c9c2b2; stroke-width: 1; }
+	.horizon { fill: #131512; }
+	.s1 { stop-color: #f0b44c; } .s2 { stop-color: #ee8b4e; } .s3 { stop-color: #e4572e; } .s4 { stop-color: #4e7c5b; } .s5 { stop-color: #21504f; }
+	.a1 { stop-color: #4e7c5b; } .a2 { stop-color: #f0b44c; } .a3 { stop-color: #e4572e; }
+	.w1 { fill: #f0b44c; } .w2 { fill: #e4572e; } .w3 { fill: #4e7c5b; } .w4 { fill: #21504f; }
+	.grain { opacity: 0.07; }
 	@media (prefers-color-scheme: dark) {
-		.title, .name.strong, .value { fill: #f0efec; }
-		.subtitle, .foot, .name, .muted { fill: #c3c2b7; }
-		.bar { fill: #6b6a65; }
-		.bar.accent { fill: #3987e5; }
-		.axis { stroke: #6b6a65; }
+		.paper { fill: #131512; }
+		.ink, .title, .name.strong, .value { fill: #f1efe8; }
+		.subtitle, .foot, .name, .muted { fill: #b8b2a5; }
+		.other { fill: #3a3631; }
+		.axis { stroke: #3a3631; }
+		.horizon { fill: #f1efe8; }
+		.s1 { stop-color: #ffd68a; } .s2 { stop-color: #f5965f; } .s3 { stop-color: #ff6b3d; } .s4 { stop-color: #6fa580; } .s5 { stop-color: #3e8481; }
+		.a1 { stop-color: #6fa580; } .a2 { stop-color: #ffd68a; } .a3 { stop-color: #ff6b3d; }
+		.w1 { fill: #ffd68a; } .w2 { fill: #ff6b3d; } .w3 { fill: #6fa580; } .w4 { fill: #3e8481; }
+		.grain { opacity: 0.09; }
 	}
 </style>
-<text class="title" x="0" y="18">Validations per second, ${escapeXml(table.title.replace(/^API/, "API"))}</text>
-<text class="subtitle" x="0" y="38">Valid input, every rule and transform applied; longer is faster. ${escapeXml(run.version)}, ${escapeXml(run.cpu)}.</text>
-<line class="axis" x1="${labelWidth}" y1="${top - 6}" x2="${labelWidth}" y2="${top + rows.length * step - 6}"/>
+<defs>
+	<clipPath id="card"><rect width="${width}" height="${height}" rx="14"/></clipPath>
+	<linearGradient id="afora" x1="0" y1="0" x2="1" y2="0"><stop class="a1" offset="0"/><stop class="a2" offset=".6"/><stop class="a3" offset="1"/></linearGradient>
+	<linearGradient id="sun" x1="128" y1="58" x2="128" y2="198" gradientUnits="userSpaceOnUse"><stop class="s1" offset="0"/><stop class="s2" offset=".28"/><stop class="s3" offset=".5"/><stop class="s4" offset=".72"/><stop class="s5" offset="1"/></linearGradient>
+	<filter id="noise" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.5  0 0 0 0 0.45  0 0 0 0 0.35  0 0 0 1.4 -0.4"/></filter>
+</defs>
+<g clip-path="url(#card)">
+<rect class="paper" width="${width}" height="${height}"/>
+<path class="w1" d="${wave(width, waveTop + 6, 6, 0.1, height)}"/>
+<path class="w2" d="${wave(width, waveTop + 14, 7, 0.55, height)}"/>
+<path class="w3" d="${wave(width, waveTop + 24, 6, 0.3, height)}"/>
+<path class="w4" d="${wave(width, waveTop + 33, 5, 0.8, height)}"/>
+<rect class="grain" width="${width}" height="${height}" filter="url(#noise)"/>
+</g>
+<g transform="translate(${width - pad - round(130 * symbolScale)} ${pad - 4}) scale(${symbolScale}) translate(-63 -58.5)">
+${symbol.join("\n")}
+</g>
+<text class="title" x="${pad}" y="${pad + 18}">Validations per second · ${escapeXml(table.title)}</text>
+<text class="subtitle mono" x="${pad}" y="${pad + 42}">valid input, every rule and transform applied; longer is faster · ${escapeXml(run.version)}</text>
+<line class="axis" x1="${left}" y1="${top - 8}" x2="${left}" y2="${rowsEnd - 6}"/>
 ${bars.join("\n")}
-<text class="foot" x="0" y="${height - 8}">afora ${escapeXml(report.afora.version)} blueprint.safeParse. "Checks only": the library has no transforms and gets the already-clean value.</text>
+<text class="foot mono" x="${pad}" y="${footY}">afora ${escapeXml(report.afora.version)} blueprint.safeParse · "checks only": no transforms, given the already-clean value</text>
 </svg>
 `;
 }
@@ -285,15 +386,23 @@ ${bars.join("\n")}
 const START = "<!-- bench:start -->";
 const END = "<!-- bench:end -->";
 
-/** `readme` with its generated block replaced. */
-export function withSummary(readme: string, report: Report): string {
-	const start = readme.indexOf(START);
-	const end = readme.indexOf(END);
+/** `markdown` with its generated block replaced by `block`. */
+function withBlock(markdown: string, block: string, file: string): string {
+	const start = markdown.indexOf(START);
+	const end = markdown.indexOf(END);
 	if (start === -1 || end === -1) {
-		throw new Error(`README.md has no ${START} ... ${END} block.`);
+		throw new Error(`${file} has no ${START} ... ${END} block.`);
 	}
-	return `${readme.slice(0, start + START.length)}\n\n${renderSummary(report)}\n\n${readme.slice(end)}`;
+	return `${markdown.slice(0, start + START.length)}\n\n${block}\n\n${markdown.slice(end)}`;
 }
+
+/** `readme` with its generated block replaced. */
+export const withSummary = (readme: string, report: Report) =>
+	withBlock(readme, renderSummary(report), "README.md");
+
+/** `docs/performance.md` with its generated block replaced. */
+export const withTables = (page: string, report: Report) =>
+	withBlock(page, renderTables(report), "docs/performance.md");
 
 /** What a formatter may change in Markdown: the padding of a table and the length of its rules. */
 export const normalized = (markdown: string) =>
