@@ -16,9 +16,17 @@ export interface JwtOptions {
 	readonly issuer?: string;
 	/** The `aud` claim: set when signing, required when verifying. */
 	readonly audience?: string;
-	/** The seconds a token lives: 900 (15 minutes) by default. */
+	/**
+	 * The seconds a token lives.
+	 *
+	 * @default 900
+	 */
 	readonly expiresIn?: number;
-	/** `"HS256"` by default. */
+	/**
+	 * The algorithm the tokens are signed and verified with.
+	 *
+	 * @default "HS256"
+	 */
 	readonly algorithm?: JwtAlgorithm;
 }
 

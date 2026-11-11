@@ -97,10 +97,16 @@ export interface SchemaMigrationOptions {
 	readonly mode: "check" | "apply";
 	/**
 	 * Remove the keys the blueprints no longer declare from the stored rows,
-	 * and the rows under `previousNames` once moved. Default `false`.
+	 * and the rows under `previousNames` once moved.
+	 *
+	 * @default false
 	 */
 	readonly destructive?: boolean;
-	/** Rows read per page. Default 100. */
+	/**
+	 * Rows read per page.
+	 *
+	 * @default 100
+	 */
 	readonly pageSize?: number;
 	/**
 	 * The committed lock (`afora.lock.json`): in `apply`, the changes of each

@@ -1100,9 +1100,29 @@ function indexesOf(
  * `create`, `update`, `delete`, `restore` (soft deletion only), `increment`, `count`, and the queries `findMany`,
  * `exists`, `findPage` and `findCursor`, and `forEachPage`, which walks the
  * pages of a cursor query, resumably. Every method is async and reads and writes through `provider`
- * (a new `inMemoryProvider()` by default), which gets the variables of
+ * (a new {@link inMemoryProvider} by default), which gets the variables of
  * `environmentDependencies` as `context.env`. The repository can be a
- * dependency of a use case, and `RepositoryOf` extends it with a class.
+ * dependency of a use case, and {@link RepositoryOf} extends it with a class.
+ *
+ * @throws {@link InvalidRepositoryDeclaration} when `entity` is not an entity class made by `entityOf`, or a setting (`actions`, `deletion`, `scans`, `indexes`...) is not valid.
+ *
+ * @example
+ * ```ts
+ * import { blueprintOf, entityOf, repositoryOf } from "@afora/core";
+ *
+ * class User extends entityOf(
+ * 	blueprintOf((ctx) => ({ name: ctx.string, email: ctx.email })),
+ * 	{ unique: ["email"] },
+ * ) {}
+ *
+ * const Users = repositoryOf({
+ * 	entity: User,
+ * 	actions: ["findByEmail", "create"],
+ * });
+ *
+ * await Users.create({ name: "Ana", email: "ana@example.com" });
+ * const ana = await Users.findByEmail("ana@example.com"); // User | undefined
+ * ```
  */
 export function repositoryOf<
 	Entity extends AnyRepositoryEntity,

@@ -24,7 +24,26 @@ const Identity = blueprintBuilderOf()(() => ({
  * As a record, the class can be a field of another blueprint, e.g.
  * `{ author: User }`, with `optionalOf` and `listOf`. `options.plugins` picks
  * from the standard plugins, as `(ctx) => [ctx.publishable]`, or takes any
- * plugin made by `recordPluginOf`.
+ * plugin made by {@link recordPluginOf}.
+ *
+ * @throws {@link ReservedEntityKey} when the blueprint declares an identity key or a member of an entity.
+ * @throws {@link ReservedRecordKey} when a key of the blueprint is a member of the record.
+ *
+ * @example
+ * ```ts
+ * import { blueprintOf, entityOf } from "@afora/core";
+ *
+ * class User extends entityOf(
+ * 	blueprintOf((ctx) => ({ name: ctx.string })),
+ * 	{ change: ["name"] },
+ * ) {}
+ *
+ * const user = new User({ name: "Jane" });
+ * user.id; // a UUID v7
+ * user.updatedAt; // undefined until the first change
+ * user.change.name("Ann").updatedAt; // now
+ * user.destroy().isDeleted; // true
+ * ```
  */
 export const entityOf = entityBuilderOf(
 	vouching(

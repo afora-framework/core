@@ -1,6 +1,7 @@
 import { Type } from "typebox";
 import { propertyOf } from "../../core/property/property";
 
+/** An email address of up to 254 characters, trimmed and lowercased. */
 export const Email = propertyOf({
 	name: "email",
 	schema: Type.String({ format: "email", maxLength: 254 }),
@@ -16,6 +17,7 @@ export const Phone = propertyOf({
 	preHandle: (value) => value.replace(/[\s().-]/g, ""),
 });
 
+/** A URL of up to 2048 characters, trimmed. */
 export const Url = propertyOf({
 	name: "url",
 	schema: Type.String({ format: "url", maxLength: 2048 }),
@@ -23,6 +25,7 @@ export const Url = propertyOf({
 	preHandle: (value) => value.trim(),
 });
 
+/** An IPv4 or IPv6 address, trimmed. */
 export const Ip = propertyOf({
 	name: "ip",
 	schema: Type.Union([

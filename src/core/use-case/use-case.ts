@@ -94,6 +94,10 @@ export type UseCaseDependency =
 	| AnyEnvironment
 	| LoggerDeclaration;
 
+/**
+ * The `dependencies` of a use case, by name: use case classes, repositories,
+ * environments or the {@link Logger}.
+ */
 export type UseCaseCollection = Readonly<Record<string, UseCaseDependency>>;
 
 type Declaration = {
@@ -102,12 +106,25 @@ type Declaration = {
 	readonly dependencies: UseCaseCollection;
 };
 
+/**
+ * The input of a use case class, as its constructor takes it: the input of its
+ * `blueprint`.
+ */
 export type UseCaseInput<Class extends Declaration> = BlueprintInput<
 	Class["blueprint"]["properties"]
 >;
+/**
+ * The value `execute` of a use case class resolves with: the value of its
+ * `response` blueprint.
+ */
 export type UseCaseResponse<Class extends Declaration> = BlueprintValue<
 	Class["response"]["properties"]
 >;
+/**
+ * The dependencies of a use case class as `this.dependencies` gives them: a
+ * function for a use case, the repository itself, the variables of an
+ * environment or an {@link ILogger} (see {@link DependencyOf}).
+ */
 export type UseCaseDependencies<Class extends Declaration> =
 	DependencyFunctions<Class["dependencies"]>;
 /** The context of a use case class, as `this.context` gives it; `undefined` without one. */
@@ -144,6 +161,10 @@ export type DependencyOf<Dependency> = Dependency extends AnyUseCaseClass
 			? ILogger
 			: Dependency;
 
+/**
+ * A collection of dependencies as a use case receives them: each one as {@link
+ * DependencyOf} gives it.
+ */
 export type DependencyFunctions<Dependencies extends UseCaseCollection> = {
 	readonly [Key in keyof Dependencies]: DependencyOf<Dependencies[Key]>;
 };
@@ -158,6 +179,12 @@ export type DependencyOverrides<Dependencies extends UseCaseCollection> = {
 		: DependencyOf<Dependencies[Key]>;
 };
 
+/**
+ * What {@link useCaseOf} takes: the `name`, the `blueprint` of the input, the
+ * `response` blueprint, the `dependencies` and the `context`, with the
+ * documentation of the operation (`description`, `tags`, `deprecated`,
+ * `errors`) and where it is served and who may call it (`route`, `access`).
+ */
 export interface UseCaseSettings<
 	Input extends IBlueprintCollection,
 	Output extends IBlueprintCollection,
@@ -246,16 +273,26 @@ export interface UseCaseDeclaration<
 	readonly strictSteps?: Strict;
 }
 
+/**
+ * A use case, or a decorator of one, is declared with what it cannot use;
+ * `reason` says what.
+ */
 export const InvalidUseCaseDeclaration = exceptionOf({
 	layer: ExceptionLayers.UseCase,
 	name: "InvalidUseCaseDeclaration",
 	message: ({ reason }: { reason: string }) => reason,
 });
+/** `execute` was called twice on one instance of a use case, which runs only once. */
 export const UseCaseAlreadyExecuted = exceptionOf({
 	layer: ExceptionLayers.UseCase,
 	name: "UseCaseAlreadyExecuted",
 	message: "A UseCase instance can execute only once.",
 });
+/**
+ * The overrides given to `execute` name a dependency the use case does not
+ * declare, or give the wrong kind of value for one; or a dependency was called
+ * after `execute` ended.
+ */
 export const InvalidUseCaseDependencies = exceptionOf({
 	layer: ExceptionLayers.UseCase,
 	name: "InvalidUseCaseDependencies",
@@ -679,6 +716,14 @@ export abstract class AbstractUseCase<
 			state?.dependencies) as DependencyFunctions<Dependencies>;
 	}
 
+	/**
+	 * Runs the operation and gives its response. `dependencies` replace the
+	 * declared ones for this call: a function for a use case, some methods of a
+	 * repository, the variables of an environment.
+	 *
+	 * @throws {@link UseCaseAlreadyExecuted} when this instance already executed.
+	 * @throws {@link InvalidUseCaseDependencies} when an override names an undeclared dependency or is of the wrong kind.
+	 */
 	abstract execute(
 		dependencies?: DependencyOverrides<Dependencies>,
 	): Promise<BlueprintValue<Output>>;
@@ -725,6 +770,11 @@ type UseCaseInstanceContext<Context extends IBlueprintCollection | undefined> =
 			: undefined;
 	};
 
+/**
+ * What {@link useCaseOf} gives without `steps`: an abstract class to extend,
+ * implementing an async `execute`. Its constructor takes the input and, when
+ * the use case declares a context, `{ context }`.
+ */
 export type UseCaseConstructor<
 	Input extends IBlueprintCollection,
 	Output extends IBlueprintCollection,
@@ -761,6 +811,25 @@ export type StepsUseCaseConstructor<
  * Declares an operation. With `steps` the class is concrete: its `execute`
  * interprets them. Without, it is abstract: extend it and implement an async
  * execute method.
+ *
+ * @throws {@link InvalidUseCaseDeclaration} when the name, the blueprints or the dependencies are missing or of the wrong kind, or a setting is not valid.
+ *
+ * @example
+ * ```ts
+ * import { blueprintOf, useCaseOf } from "@afora/core";
+ *
+ * class Greet extends useCaseOf({
+ * 	name: "Greet",
+ * 	blueprint: blueprintOf((ctx) => ({ name: ctx.text })),
+ * 	response: blueprintOf((ctx) => ({ message: ctx.string })),
+ * }) {
+ * 	override async execute() {
+ * 		return { message: `Hello, ${this.input.name}!` };
+ * 	}
+ * }
+ *
+ * const { message } = await new Greet({ name: "Ana" }).execute();
+ * ```
  */
 export function useCaseOf<
 	Input extends IBlueprintCollection,
@@ -923,6 +992,10 @@ function isDependency(value: unknown): value is UseCaseDependency {
 	);
 }
 
+/**
+ * Whether `value` is a use case class made by {@link useCaseOf}, abstract or
+ * concrete, or a subclass of one.
+ */
 export function isUseCaseClass(value: unknown): value is AnyUseCaseClass {
 	return (
 		typeof value === "function" &&
@@ -932,6 +1005,7 @@ export function isUseCaseClass(value: unknown): value is AnyUseCaseClass {
 	);
 }
 
+/** Whether `value` is an instance of a use case class. */
 export function isUseCase(
 	value: unknown,
 ): value is AbstractUseCase<

@@ -96,6 +96,33 @@ export interface PropertyClass<
 	): Self;
 }
 
+/**
+ * Declares a property: a class that holds one value, run through
+ * `preHandle`, the validation against the TypeBox `schema` and
+ * `afterHandle`. `optional`, `sensitive` and `unique` flag it for the
+ * blueprints and records that hold it, and `default` is its `demo()` value.
+ * Extend the class to add behavior, or narrow it with `.with(options)`. A
+ * value its schema rejects makes the constructor throw
+ * {@link InvalidPropertyValue}, and `undefined` for a required one
+ * {@link PropertyRequired}.
+ *
+ * @example
+ * ```ts
+ * import { propertyOf } from "@afora/core";
+ * import { Type } from "typebox";
+ *
+ * const Name = propertyOf({
+ * 	name: "name",
+ * 	schema: Type.String({ minLength: 3 }),
+ * 	preHandle: (value) => value.trim(),
+ * 	default: "Jane", // used by Name.demo()
+ * });
+ *
+ * new Name("  Alice ").value; // "Alice"
+ * Name.demo().value; // "Jane"
+ * // new Name("a") throws InvalidPropertyValue
+ * ```
+ */
 export function propertyOf<
 	SchemaType extends TSchema,
 	Optional extends boolean = false,

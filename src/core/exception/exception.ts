@@ -201,6 +201,21 @@ export function declaredMessageOf(
  * Declares an exception of `layer`, e.g.
  * `throw new PropertyRequired({ source: "email" })`. Its `details` are typed
  * by the parameter of `message`, when it is a function.
+ *
+ * @example
+ * ```ts
+ * import { ExceptionLayers, exceptionOf } from "@afora/core";
+ *
+ * const UserNotFound = exceptionOf({
+ * 	layer: ExceptionLayers.UseCase,
+ * 	name: "UserNotFound",
+ * 	message: ({ id }: { id: string }) => `There is no user ${id}.`,
+ * });
+ *
+ * const error = new UserNotFound({ source: "FindUser", details: { id: "42" } });
+ * error.message; // "There is no user 42."
+ * error.layer; // ExceptionLayers.UseCase
+ * ```
  */
 export function exceptionOf<Details = undefined>({
 	layer,

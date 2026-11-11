@@ -14,6 +14,10 @@ export interface ExceptionFrame<Details = unknown> extends ExceptionScope {
 	readonly details: Details;
 }
 
+/**
+ * What the {@link Exception} constructor takes: the scope (`layer` and
+ * `source`), the `name` and `message`, optional `details` and the `cause`.
+ */
 export interface ExceptionInit<Details = unknown> extends ExceptionScope {
 	readonly name: string;
 	readonly message: string;
@@ -36,10 +40,19 @@ export type ExceptionClass<Instance = any> = abstract new (
 	...args: never[]
 ) => Instance;
 
+/**
+ * The `message` of an exception declared with {@link exceptionOf}: a string, or
+ * a function of the `details` and the `source` that gives it.
+ */
 export type ExceptionMessage<Details> =
 	| string
 	| ((details: Details, source: string) => string);
 
+/**
+ * What {@link exceptionOf} takes: the `layer` of the exception, its `name` and
+ * its `message`. `Details` is the type of the `details` it carries, taken from
+ * the parameter of `message` when that is a function.
+ */
 export interface ExceptionDeclaration<Details> {
 	readonly layer: ExceptionLayers;
 	readonly name: string;
