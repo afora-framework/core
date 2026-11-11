@@ -174,12 +174,17 @@ function withIdentity(
 	if (id !== undefined && createdAt !== undefined && !expiring && !unversioned)
 		return value;
 	const created = createdAt === undefined ? clock.now() : createdAt;
+	// `id` and `createdAt` come first, as in the blueprint of an entity, whose
+	// keys the record then finds in their places; the spread may bring either
+	// one as `undefined`, so both are set after it.
 	const identity: Record<string, unknown> = {
+		id: undefined,
+		createdAt: undefined,
 		...value,
-		id: id === undefined ? clock.generateId() : id,
-		createdAt: created,
-		...(unversioned ? { [ENTITY_VERSION_KEY]: 1 } : {}),
 	};
+	identity.id = id === undefined ? clock.generateId() : id;
+	identity.createdAt = created;
+	if (unversioned) identity[ENTITY_VERSION_KEY] = 1;
 	if (expiring) {
 		const start = typeof created === "string" ? Date.parse(created) : NaN;
 		if (!Number.isNaN(start)) {
