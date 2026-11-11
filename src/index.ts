@@ -150,7 +150,6 @@ export type {
 	EntityOptions,
 	EntityProperties,
 	EntityStorageOptions,
-	EntityStorageSettings,
 	EntityUniqueKey,
 	EntityUpgrade,
 	EntityUpgrades,
@@ -218,7 +217,6 @@ export {
 	consoleLogProvider,
 	jsonLogProvider,
 	Logger,
-	LogLevels,
 	logProviderOf,
 	memoryLogProvider,
 } from "./core/logger/logger";
@@ -282,14 +280,10 @@ export type { IPropertyInput } from "./core/property/input";
 export { PropertyInput, propertyInputOf } from "./core/property/input";
 export type { DeclaredProperty, PropertyClass } from "./core/property/property";
 export { propertyOf } from "./core/property/property";
-export type { AbstractPropertyConstructor } from "./core/property/types/abstract-property-constructor.type";
 export type { IDefineProperty } from "./core/property/types/define-property.interface";
 export type { OptionalProperty } from "./core/property/types/optional-property.type";
 export type { IProperty } from "./core/property/types/property.interface";
-export type {
-	AnyPropertyConstructor,
-	IPropertyCollection,
-} from "./core/property/types/property-collection.type";
+export type { AnyPropertyConstructor } from "./core/property/types/property-collection.type";
 export type { PropertyValue } from "./core/property/types/property-constructor.type";
 export type {
 	CallableProperty,
@@ -372,12 +366,6 @@ export type {
 	ProviderSettings,
 	RepositoryCursorPage,
 	RepositoryCursorQuery,
-	RepositoryExists,
-	RepositoryExplain,
-	RepositoryFindCursor,
-	RepositoryFindMany,
-	RepositoryFindPage,
-	RepositoryForEachPage,
 	RepositoryIndex,
 	RepositoryOrder,
 	RepositoryPage,
@@ -400,17 +388,11 @@ export type {
 	EntityValueOf,
 	QueryValueOf,
 	RepositoryAction,
-	RepositoryCount,
-	RepositoryCreate,
 	RepositoryCreateInput,
-	RepositoryDelete,
 	RepositoryFindBy,
 	RepositoryFindManyBy,
-	RepositoryIncrement,
 	RepositoryIncrementDeltas,
 	RepositoryIncrementOptions,
-	RepositoryRestore,
-	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
 export type {
 	EntityMigrationReport,
@@ -549,14 +531,7 @@ export {
 	UpdatedAt,
 } from "./std/properties/time";
 export { recordOf } from "./std/record";
-export {
-	Archivable,
-	Authenticatable,
-	Ownable,
-	Publishable,
-	StdRecordPlugins,
-	Taggable,
-} from "./std/record-plugins";
+export { Authenticatable, StdRecordPlugins } from "./std/record-plugins";
 export { resourceOf } from "./std/resource";
 export type {
 	IdGenerator,

@@ -508,8 +508,38 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) RepositoryContext": [
     "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly schema?: RepositorySchema; readonly env: Environment; }",
   ],
+  "(internal) RepositoryCount": [
+    "export interface RepositoryCount<Entity = unknown> { count(query?: RepositoryQuery<Entity>): Promise<number>; }",
+  ],
+  "(internal) RepositoryCreate": [
+    "export interface RepositoryCreate<Entity> { create(entity: RepositoryCreateInput<Entity>): Promise<EntityInstanceOf<Entity>>; }",
+  ],
   "(internal) RepositoryData": [
     "export type RepositoryData = Readonly<Record<string, unknown>>;",
+  ],
+  "(internal) RepositoryDelete": [
+    "export interface RepositoryDelete<Entity> { delete(entity: EntityInstanceOf<Entity> | string): Promise<EntityInstanceOf<Entity>>; }",
+  ],
+  "(internal) RepositoryExists": [
+    "export interface RepositoryExists<Entity> { exists(query?: RepositoryQuery<Entity>): Promise<boolean>; }",
+  ],
+  "(internal) RepositoryExplain": [
+    "export interface RepositoryExplain<Entity> { explain(query?: RepositoryQuery<Entity> | RepositoryCursorQuery<Entity>): Promise<RepositoryPlan>; }",
+  ],
+  "(internal) RepositoryFindCursor": [
+    "export interface RepositoryFindCursor<Entity> { findCursor(query?: RepositoryCursorQuery<Entity>): Promise<RepositoryCursorPage<Entity>>; }",
+  ],
+  "(internal) RepositoryFindMany": [
+    "export interface RepositoryFindMany<Entity> { findMany(query?: RepositoryQuery<Entity>): Promise<EntityInstanceOf<Entity>[]>; }",
+  ],
+  "(internal) RepositoryFindPage": [
+    "export interface RepositoryFindPage<Entity> { findPage(query?: RepositoryQuery<Entity>): Promise<RepositoryPage<Entity>>; }",
+  ],
+  "(internal) RepositoryForEachPage": [
+    "export interface RepositoryForEachPage<Entity> { forEachPage(query: RepositoryCursorQuery<Entity>, fn: (items: EntityInstanceOf<Entity>[], page: RepositoryWalkPage) => unknown, options?: RepositoryWalkOptions): Promise<RepositoryWalkResult>; }",
+  ],
+  "(internal) RepositoryIncrement": [
+    "export interface RepositoryIncrement<Entity> { increment(entity: EntityInstanceOf<Entity> | string, deltas: RepositoryIncrementDeltas<Entity>, options?: RepositoryIncrementOptions<Entity>): Promise<EntityInstanceOf<Entity>>; }",
   ],
   "(internal) RepositoryKeys": [
     "type RepositoryKeys<Dependencies> = { [Key in keyof Dependencies & string]: Dependencies[Key] extends AnyRepository ? Key : never; }[keyof Dependencies & string];",
@@ -523,8 +553,14 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) RepositoryOfProvider": [
     "type RepositoryOfProvider<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment, Keyset extends boolean> = Keyset extends true ? RepositoryType<Entity, Actions, Environment> : RepositoryType<Entity, Actions, Environment, false>;",
   ],
+  "(internal) RepositoryRestore": [
+    "export interface RepositoryRestore<Entity> { restore(entity: EntityInstanceOf<Entity> | string): Promise<EntityInstanceOf<Entity>>; }",
+  ],
   "(internal) RepositorySchema": [
     "export interface RepositorySchema { readonly version: number; readonly key: string; readonly previousNames: readonly string[]; }",
+  ],
+  "(internal) RepositoryUpdate": [
+    "export interface RepositoryUpdate<Entity> { update(entity: EntityInstanceOf<Entity>): Promise<EntityInstanceOf<Entity>>; }",
   ],
   "(internal) RequiredKeys": [
     "type RequiredKeys<Expected> = Expected extends { readonly [Meta]: unknown; } ? never : Expected extends object ? { [Key in keyof Expected]-?: undefined extends Expected[Key] ? never : Key; }[keyof Expected] : never;",
@@ -698,9 +734,6 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) WriteStep": [
     "type WriteStep<Step, Method, Scope> = ValueStep<Step, "value", FirstParameter<Method>, ResultOf<Method>, Scope>;",
   ],
-  "AbstractPropertyConstructor": [
-    "export type AbstractPropertyConstructor<SchemaType extends TSchema, Value = Static<SchemaType>> = { new (value: PropertyValue<SchemaType, Value>): AbstractProperty<SchemaType, Value>; readonly type: IPropertyType<SchemaType, Value>; demo(): AbstractProperty<SchemaType, Value>; safeParse(value: unknown): ParseResult<PropertyValue<SchemaType, Value>>; readonly "~standard": StandardSchemaV1.Props<PropertyValue<SchemaType, Value>, PropertyValue<SchemaType, Value>>; };",
-  ],
   "Access": [
     "export declare function Access(access: AccessDeclaration): UseCaseDecorator;",
   ],
@@ -784,9 +817,6 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "ApplicationStartOptions": [
     "export interface ApplicationStartOptions { readonly register?: boolean; readonly replace?: boolean; readonly lock?: SchemaLock; }",
-  ],
-  "Archivable": [
-    "Archivable: import("../index.js").IRecordPlugin<typeof ArchivableRecord, "archivable">",
   ],
   "ArchiveMaker": [
     "export type ArchiveMaker = <Repository extends AnyRepository, const Options extends StdLifecycleOptions<Repository> = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", { archive(at?: string): unknown; readonly isArchived: boolean; }, "archivable">, options?: Options & Hookable<Repository, ById<Repository>, never, None, Owner, Dependencies, true>) => EntityUseCase<Repository, Options, ById<Repository>, Dependencies>;",
@@ -1007,9 +1037,6 @@ exports[`exports of the package and their declarations 1`] = `
   "EntityStorageOptions": [
     "export interface EntityStorageOptions<Key extends string = string, Expires extends EntityExpires<Key> | undefined = EntityExpires<Key> | undefined> { readonly versioned?: boolean; readonly expires?: Expires; readonly schemaVersion?: number; readonly upgrade?: EntityUpgrades; readonly previousNames?: readonly string[]; }",
   ],
-  "EntityStorageSettings": [
-    "export interface EntityStorageSettings { readonly versioned: boolean; readonly expires?: EntityExpires; readonly schemaVersioned: boolean; readonly schemaVersion: number; readonly upgrade: EntityUpgrades; readonly previousNames: readonly string[]; }",
-  ],
   "EntityUniqueKey": [
     "export type EntityUniqueKey<Identity extends IEntityIdentity, Properties extends IBlueprintCollection, Unique extends readonly string[]> = "id" | Unique[number] | MarkedUniqueKey<EntityProperties<Identity, Properties>>;",
   ],
@@ -1153,9 +1180,6 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "IProperty": [
     "export interface IProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly definition: AbstractDefineProperty<SchemaType, Value>; readonly value: PropertyValue<SchemaType, Value>; }",
-  ],
-  "IPropertyCollection": [
-    "export type IPropertyCollection = Record<string, AnyPropertyConstructor>;",
   ],
   "IPropertyInput": [
     "export interface IPropertyInput<Value = unknown> { readonly accepts: AnyPropertyConstructor; convert(value: Value): Value | Promise<Value>; }",
@@ -1334,9 +1358,6 @@ exports[`exports of the package and their declarations 1`] = `
   "LogLevel": [
     "export type LogLevel = "debug" | "info" | "warn" | "error";",
   ],
-  "LogLevels": [
-    "LogLevels: readonly LogLevel[]",
-  ],
   "LogProviderSettings": [
     "export interface LogProviderSettings<Provider extends ILogProvider> { readonly name?: string; readonly write: Provider["write"]; readonly flush?: Provider["flush"]; }",
   ],
@@ -1436,9 +1457,6 @@ exports[`exports of the package and their declarations 1`] = `
   "OutputStatuses": [
     "export type OutputStatuses = Readonly<Record<string, number>>;",
   ],
-  "Ownable": [
-    "Ownable: import("../index.js").IRecordPlugin<typeof OwnableRecord, "ownable">",
-  ],
   "ParseResult": [
     "export type ParseResult<Output> = { readonly value: Output; readonly issues?: undefined; } | { readonly issues: readonly Issue[]; };",
   ],
@@ -1510,9 +1528,6 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "PublishMaker": [
     "export type PublishMaker = <Repository extends AnyRepository, const Options extends StdLifecycleOptions<Repository> = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", { publish(at?: string): unknown; unpublish(): unknown; }, "publishable">, options?: Options & Hookable<Repository, ById<Repository>, never, None, Owner, Dependencies, true>) => EntityUseCase<Repository, Options, ById<Repository>, Dependencies>;",
-  ],
-  "Publishable": [
-    "Publishable: import("../index.js").IRecordPlugin<typeof PublishableRecord, "publishable">",
   ],
   "PublishedEvent": [
     "export interface PublishedEvent { readonly name: string; readonly command: string; readonly operation: string; readonly entity: JsonValue; }",
@@ -1589,12 +1604,6 @@ exports[`exports of the package and their declarations 1`] = `
   "RepositoryConcurrencyConflict": [
     "RepositoryConcurrencyConflict: import("../../index.js").DeclaredExceptionClass<{ readonly id: string; readonly expected: number; readonly actual?: number; }>",
   ],
-  "RepositoryCount": [
-    "export interface RepositoryCount<Entity = unknown> { count(query?: RepositoryQuery<Entity>): Promise<number>; }",
-  ],
-  "RepositoryCreate": [
-    "export interface RepositoryCreate<Entity> { create(entity: RepositoryCreateInput<Entity>): Promise<EntityInstanceOf<Entity>>; }",
-  ],
   "RepositoryCreateInput": [
     "export type RepositoryCreateInput<Entity> = EntityInstanceOf<Entity> | (Entity extends new (value: infer Input) => unknown ? Input : never);",
   ],
@@ -1604,38 +1613,14 @@ exports[`exports of the package and their declarations 1`] = `
   "RepositoryCursorQuery": [
     "export interface RepositoryCursorQuery<Entity = unknown> extends Omit<RepositoryQuery<Entity>, "offset" | "limit"> { readonly limit?: number; readonly after?: string; }",
   ],
-  "RepositoryDelete": [
-    "export interface RepositoryDelete<Entity> { delete(entity: EntityInstanceOf<Entity> | string): Promise<EntityInstanceOf<Entity>>; }",
-  ],
   "RepositoryEntityNotFound": [
     "RepositoryEntityNotFound: import("../../index.js").DeclaredExceptionClass<{ readonly id: string; }>",
-  ],
-  "RepositoryExists": [
-    "export interface RepositoryExists<Entity> { exists(query?: RepositoryQuery<Entity>): Promise<boolean>; }",
-  ],
-  "RepositoryExplain": [
-    "export interface RepositoryExplain<Entity> { explain(query?: RepositoryQuery<Entity> | RepositoryCursorQuery<Entity>): Promise<RepositoryPlan>; }",
   ],
   "RepositoryFindBy": [
     "export type RepositoryFindBy<Entity, Actions extends string = string> = { readonly [Key in EntityUniqueKeyOf<Entity> as \`findBy\${Capitalize<Key>}\` extends Actions ? \`findBy\${Capitalize<Key>}\` : never]: (value: QueryValueOf<NonNullable<ValueAt<Entity, Key>>>) => Promise<EntityInstanceOf<Entity> | undefined>; };",
   ],
-  "RepositoryFindCursor": [
-    "export interface RepositoryFindCursor<Entity> { findCursor(query?: RepositoryCursorQuery<Entity>): Promise<RepositoryCursorPage<Entity>>; }",
-  ],
-  "RepositoryFindMany": [
-    "export interface RepositoryFindMany<Entity> { findMany(query?: RepositoryQuery<Entity>): Promise<EntityInstanceOf<Entity>[]>; }",
-  ],
   "RepositoryFindManyBy": [
     "export type RepositoryFindManyBy<Entity, Actions extends string = string> = { readonly [Key in EntityNonUniqueKeyOf<Entity> as \`findManyBy\${Capitalize<Key>}\` extends Actions ? \`findManyBy\${Capitalize<Key>}\` : never]: (value: QueryValueOf<ValueAt<Entity, Key>>) => Promise<EntityInstanceOf<Entity>[]>; };",
-  ],
-  "RepositoryFindPage": [
-    "export interface RepositoryFindPage<Entity> { findPage(query?: RepositoryQuery<Entity>): Promise<RepositoryPage<Entity>>; }",
-  ],
-  "RepositoryForEachPage": [
-    "export interface RepositoryForEachPage<Entity> { forEachPage(query: RepositoryCursorQuery<Entity>, fn: (items: EntityInstanceOf<Entity>[], page: RepositoryWalkPage) => unknown, options?: RepositoryWalkOptions): Promise<RepositoryWalkResult>; }",
-  ],
-  "RepositoryIncrement": [
-    "export interface RepositoryIncrement<Entity> { increment(entity: EntityInstanceOf<Entity> | string, deltas: RepositoryIncrementDeltas<Entity>, options?: RepositoryIncrementOptions<Entity>): Promise<EntityInstanceOf<Entity>>; }",
   ],
   "RepositoryIncrementDeltas": [
     "export type RepositoryIncrementDeltas<Entity> = { readonly [Key in EntityIncrementKeyOf<Entity>]?: number; };",
@@ -1662,9 +1647,6 @@ exports[`exports of the package and their declarations 1`] = `
   "RepositoryQuery": [
     "export interface RepositoryQuery<Entity = unknown> { readonly where?: RepositoryWhere<Entity>; readonly orderBy?: readonly RepositoryOrder<QueryKey<Entity>>[]; readonly limit?: number; readonly offset?: number; readonly withDeleted?: boolean; readonly withExpired?: boolean; }",
   ],
-  "RepositoryRestore": [
-    "export interface RepositoryRestore<Entity> { restore(entity: EntityInstanceOf<Entity> | string): Promise<EntityInstanceOf<Entity>>; }",
-  ],
   "RepositoryScans": [
     "export type RepositoryScans = "allow" | "warn" | "reject";",
   ],
@@ -1673,9 +1655,6 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "RepositoryUniqueViolation": [
     "RepositoryUniqueViolation: import("../../index.js").DeclaredExceptionClass<{ readonly key: string; }>",
-  ],
-  "RepositoryUpdate": [
-    "export interface RepositoryUpdate<Entity> { update(entity: EntityInstanceOf<Entity>): Promise<EntityInstanceOf<Entity>>; }",
   ],
   "RepositoryUsedOutsideApplication": [
     "RepositoryUsedOutsideApplication: import("../../index.js").DeclaredExceptionClass<{ readonly application: string; readonly repository: string; }>",
@@ -1879,9 +1858,6 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "TagMaker": [
     "export type TagMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", { tag(...tags: string[]): unknown; untag(...tags: string[]): unknown; }, "taggable">, options?: Options & Hookable<Repository, TagInput<Repository>, never, None, Owner, Dependencies, true>) => EntityUseCase<Repository, Options, TagInput<Repository>, Dependencies>;",
-  ],
-  "Taggable": [
-    "Taggable: import("../index.js").IRecordPlugin<typeof TaggableRecord, "taggable">",
   ],
   "Text": [
     "Text: import("../../index.js").PropertyClass<Type.TString, string>",
@@ -2988,6 +2964,12 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) AnyUseCasePlugin": [
     "export type AnyUseCasePlugin = IUseCasePlugin<string, any>;",
   ],
+  "(internal) ArchivableRecord": [
+    "export declare class ArchivableRecord extends ArchivableRecord_base { get isArchived(): boolean; archive(at?: string): this; restore(): this; }",
+  ],
+  "(internal) ArchivableRecord_base": [
+    "ArchivableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ archivedAt: import("../index.js").CallableProperty<Omit<typeof import("../index.js").DateTime, "prototype" | "safeParse" | "type" | "~standard" | typeof import("../core/property/types/property-options.interface.js").Callable> & { new (value: string | undefined): import("../core/property/abstract-property.js").AbstractProperty<import("typebox").TOptional<import("typebox").TString>, string> & Omit<import("../index.js").DateTime, keyof import("../core/property/abstract-property.js").AbstractProperty<import("typebox").TSchema, unknown>>; readonly type: import("../index.js").IPropertyType<import("typebox").TOptional<import("typebox").TString>, string>; safeParse(value: unknown): import("../index.js").ParseResult<string | undefined>; readonly "~standard": import("../index.js").StandardSchemaV1.Props<string | undefined, string | undefined>; }>; }>, [ ], never, unknown, never, never>",
+  ],
   "(internal) AsBlueprint": [
     "type AsBlueprint<Properties, Optional extends boolean> = IBlueprint<Extract<Properties, IBlueprintCollection>, Optional>;",
   ],
@@ -3020,6 +3002,15 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "(internal) BlueprintValue": [
     "export type BlueprintValue<Properties extends IBlueprintCollection> = CollectionValue<Properties, "value">;",
+  ],
+  "(internal) Callable": [
+    "Callable: unique symbol",
+  ],
+  "(internal) CallableProperty": [
+    "export type CallableProperty<Property extends { readonly type: IPropertyType<TSchema>; }> = Property & { (options?: OptionsOfProperty<Property>): Property; readonly [Callable]: Property; };",
+  ],
+  "(internal) ChangeKeyOf": [
+    "type ChangeKeyOf<Entity> = EntityInstanceOf<Entity> extends { readonly change: infer Change; } ? keyof Change & string : never;",
   ],
   "(internal) CollectionSchema": [
     "type CollectionSchema<Properties extends IBlueprintCollection, Mode extends FieldMode> = TObject<{ [Key in keyof Properties]: FieldSchema<Properties[Key], Mode>; }>;",
@@ -3054,11 +3045,23 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) CommandUseCases": [
     "export type CommandUseCases = Readonly<Record<string, AnyUseCaseClass>>;",
   ],
+  "(internal) DateTime": [
+    "export declare class DateTime extends DateTime_base { }",
+  ],
+  "(internal) DateTimeClass": [
+    "interface DateTimeClass<Optional extends boolean> extends PropertyClass<Optional extends true ? TOptional<TString> : TString, string> { now<Self>(this: new (value: string) => Self): Self; }",
+  ],
+  "(internal) DateTime_base": [
+    "DateTime_base: DateTimeClass<false>",
+  ],
   "(internal) Declaration": [
     "type Declaration = { readonly blueprint: AnyBlueprint; readonly response: AnyBlueprint; readonly dependencies: UseCaseCollection; };",
   ],
   "(internal) DeclaredExceptionClass": [
     "export interface DeclaredExceptionClass<Details = undefined> { new (args: ExceptionArgs<Details>): Exception<Details>; readonly prototype: Exception<Details>; readonly layer: ExceptionLayers; from: typeof Exception.from; }",
+  ],
+  "(internal) DeclaredProperty": [
+    "export declare class DeclaredProperty<SchemaType extends TSchema, Value = Static<SchemaType>> extends AbstractProperty<SchemaType, Value> { protected createDefinition(): AbstractDefineProperty<SchemaType, Value>; }",
   ],
   "(internal) DeclaredRecordInstance": [
     "export type DeclaredRecordInstance<Properties extends IBlueprintCollection, Change extends readonly string[], Members = unknown, Sensitive extends string = never> = AbstractRecord<Properties, Sensitive> & Readonly<BlueprintValue<Properties>> & RecordChanges<Properties, Change> & Members;",
@@ -3069,8 +3072,17 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) EntityClassBrand": [
     "EntityClassBrand: unique symbol",
   ],
+  "(internal) EntityDuration": [
+    "export interface EntityDuration { readonly days?: number; readonly hours?: number; readonly minutes?: number; readonly seconds?: number; }",
+  ],
   "(internal) EntityEvent": [
     "export interface EntityEvent<Entity = object> { readonly name: string; readonly entity: Entity; handle(context?: Partial<EventHandlerContext>): Promise<void>; }",
+  ],
+  "(internal) EntityExpires": [
+    "export type EntityExpires<Key extends string = string> = { readonly after: EntityDuration; } | { readonly at: Key; };",
+  ],
+  "(internal) EntityIncrementKeyOf": [
+    "export type EntityIncrementKeyOf<Entity> = { [Key in ChangeKeyOf<Entity>]: NonNullable<ValueAt<Entity, Key>> extends number ? Key : never; }[ChangeKeyOf<Entity>];",
   ],
   "(internal) EntityInstanceOf": [
     "export type EntityInstanceOf<Entity> = Entity extends abstract new (...args: any) => infer Instance ? Instance : never;",
@@ -3089,6 +3101,12 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "(internal) EntityUniqueKeys": [
     "EntityUniqueKeys: unique symbol",
+  ],
+  "(internal) EntityUpgrade": [
+    "export type EntityUpgrade = (data: Readonly<Record<string, unknown>>) => Record<string, unknown>;",
+  ],
+  "(internal) EntityUpgrades": [
+    "export interface EntityUpgrades { readonly [version: number]: EntityUpgrade; }",
   ],
   "(internal) EntityValueOf": [
     "export type EntityValueOf<Entity> = BlueprintValue<EntityPropertiesOf<Entity>>;",
@@ -3219,6 +3237,12 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) IUseCasePlugin": [
     "export interface IUseCasePlugin<Name extends string = string, Make extends UseCaseMaker = UseCaseMaker> { readonly [Kind]: "use-case-plugin"; readonly name: Name; readonly version: string; readonly description?: string; readonly requires: Required<UseCasePluginRequirements>; readonly make: Make; toJSON(): UseCasePluginDescriptor; }",
   ],
+  "(internal) Id": [
+    "export declare class Id extends Id_base { static generate(): Id; }",
+  ],
+  "(internal) Id_base": [
+    "Id_base: import("../../index.js").PropertyClass<Type.TString, string>",
+  ],
   "(internal) InferInput": [
     "type InferInput<Schema extends StandardSchemaV1> = NonNullable<Schema["~standard"]["types"]>["input"];",
   ],
@@ -3266,6 +3290,9 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) LogFields": [
     "export type LogFields = Readonly<Record<string, unknown>>;",
   ],
+  "(internal) LogLevel": [
+    "export type LogLevel = "debug" | "info" | "warn" | "error";",
+  ],
   "(internal) LoggerDeclaration": [
     "export interface LoggerDeclaration { readonly [Kind]: "logger"; }",
   ],
@@ -3296,11 +3323,20 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) OptionalRecord": [
     "export interface OptionalRecord<Record extends AnyRecordClass> { readonly [Kind]: "record"; readonly record: Record; readonly optional: true; readonly "~standard": StandardSchemaV1.Props<StandardSchemaV1.InferInput<Record> | undefined, InstanceType<Record> | undefined>; }",
   ],
+  "(internal) OptionsOfProperty": [
+    "type OptionsOfProperty<Property> = Property extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? PropertyOptions<SchemaType, Value> : PropertyOptions<TSchema>;",
+  ],
   "(internal) OutputStatuses": [
     "export type OutputStatuses = Readonly<Record<string, number>>;",
   ],
   "(internal) Override": [
     "type Override<Base, Overrides> = { [Key in keyof Base | keyof Overrides]: Key extends keyof Overrides ? Overrides[Key] : Key extends keyof Base ? Base[Key] : never; };",
+  ],
+  "(internal) OwnableRecord": [
+    "export declare class OwnableRecord extends OwnableRecord_base { isOwnedBy(id: string): boolean; transferTo(id: string): this; }",
+  ],
+  "(internal) OwnableRecord_base": [
+    "OwnableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ ownerId: import("../index.js").CallableProperty<typeof import("../index.js").Id>; }>, [ ], never, unknown, never, never>",
   ],
   "(internal) ParseResult": [
     "export type ParseResult<Output> = { readonly value: Output; readonly issues?: undefined; } | { readonly issues: readonly Issue[]; };",
@@ -3316,6 +3352,9 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "(internal) PropertiesOf": [
     "export type PropertiesOf<Blueprint> = Blueprint extends IBlueprint<infer Properties, boolean> ? Properties : never;",
+  ],
+  "(internal) PropertyClass": [
+    "export interface PropertyClass<SchemaType extends TSchema, Value = Static<SchemaType>> { new (value: PropertyValue<SchemaType, Value>): DeclaredProperty<SchemaType, Value>; readonly type: IPropertyType<SchemaType, Value>; safeParse(value: unknown): ParseResult<PropertyValue<SchemaType, Value>>; readonly "~standard": StandardSchemaV1.Props<PropertyValue<SchemaType, Value>, PropertyValue<SchemaType, Value>>; with<Self extends AnyPropertyConstructor>(this: Self, options: PropertyOptions<SchemaType, Value>): Self; demo<Self extends AbstractProperty<any>>(this: new (value: never) => Self): Self; }",
   ],
   "(internal) PropertyMetadata": [
     "export interface PropertyMetadata<Value> { readonly title?: string; readonly description?: string; readonly examples?: readonly Value[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly default?: Value; readonly fill?: Value; readonly renamedFrom?: string; }",
@@ -3355,6 +3394,12 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "(internal) ProviderUpdateOptions": [
     "export interface ProviderUpdateOptions { readonly expectedVersion?: number; }",
+  ],
+  "(internal) PublishableRecord": [
+    "export declare class PublishableRecord extends PublishableRecord_base { get isPublished(): boolean; publish(at?: string): this; unpublish(): this; }",
+  ],
+  "(internal) PublishableRecord_base": [
+    "PublishableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ publishedAt: import("../index.js").CallableProperty<Omit<typeof import("../index.js").DateTime, "prototype" | "safeParse" | "type" | "~standard" | typeof import("../core/property/types/property-options.interface.js").Callable> & { new (value: string | undefined): import("../core/property/abstract-property.js").AbstractProperty<import("typebox").TOptional<import("typebox").TString>, string> & Omit<import("../index.js").DateTime, keyof import("../core/property/abstract-property.js").AbstractProperty<import("typebox").TSchema, unknown>>; readonly type: import("../index.js").IPropertyType<import("typebox").TOptional<import("typebox").TString>, string>; safeParse(value: unknown): import("../index.js").ParseResult<string | undefined>; readonly "~standard": import("../index.js").StandardSchemaV1.Props<string | undefined, string | undefined>; }>; }>, [ ], never, unknown, never, never>",
   ],
   "(internal) PublishedEvent": [
     "export interface PublishedEvent { readonly name: string; readonly command: string; readonly operation: string; readonly entity: JsonValue; }",
@@ -3440,6 +3485,15 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) RepositoryContext": [
     "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly schema?: RepositorySchema; readonly env: Environment; }",
   ],
+  "(internal) RepositoryCreateInput": [
+    "export type RepositoryCreateInput<Entity> = EntityInstanceOf<Entity> | (Entity extends new (value: infer Input) => unknown ? Input : never);",
+  ],
+  "(internal) RepositoryCursorPage": [
+    "export interface RepositoryCursorPage<Entity> { readonly items: readonly EntityInstanceOf<Entity>[]; readonly limit: number; readonly next: string | undefined; }",
+  ],
+  "(internal) RepositoryCursorQuery": [
+    "export interface RepositoryCursorQuery<Entity = unknown> extends Omit<RepositoryQuery<Entity>, "offset" | "limit"> { readonly limit?: number; readonly after?: string; }",
+  ],
   "(internal) RepositoryData": [
     "export type RepositoryData = Readonly<Record<string, unknown>>;",
   ],
@@ -3449,17 +3503,38 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) RepositoryFindManyBy": [
     "export type RepositoryFindManyBy<Entity, Actions extends string = string> = { readonly [Key in EntityNonUniqueKeyOf<Entity> as \`findManyBy\${Capitalize<Key>}\` extends Actions ? \`findManyBy\${Capitalize<Key>}\` : never]: (value: QueryValueOf<ValueAt<Entity, Key>>) => Promise<EntityInstanceOf<Entity>[]>; };",
   ],
+  "(internal) RepositoryIncrementDeltas": [
+    "export type RepositoryIncrementDeltas<Entity> = { readonly [Key in EntityIncrementKeyOf<Entity>]?: number; };",
+  ],
+  "(internal) RepositoryIncrementOptions": [
+    "export interface RepositoryIncrementOptions<Entity> { readonly create?: Omit<Entity extends new (value: infer Input) => unknown ? Input : never, "id" | EntityIncrementKeyOf<Entity>> & { readonly [Key in EntityIncrementKeyOf<Entity>]?: number; }; }",
+  ],
   "(internal) RepositoryIndex": [
     "export interface RepositoryIndex<Key extends string = string> { readonly where: readonly Key[]; readonly orderBy?: Key; }",
   ],
   "(internal) RepositoryOrder": [
     "export interface RepositoryOrder<Key extends string = string> { readonly key: Key; readonly direction?: "asc" | "desc"; }",
   ],
+  "(internal) RepositoryPage": [
+    "export interface RepositoryPage<Entity> { readonly items: readonly EntityInstanceOf<Entity>[]; readonly total: number; readonly limit: number; readonly offset: number; }",
+  ],
+  "(internal) RepositoryPlan": [
+    "export interface RepositoryPlan { readonly access: "id" | "unique" | "index" | "scan"; readonly index?: string; }",
+  ],
   "(internal) RepositoryQuery": [
     "export interface RepositoryQuery<Entity = unknown> { readonly where?: RepositoryWhere<Entity>; readonly orderBy?: readonly RepositoryOrder<QueryKey<Entity>>[]; readonly limit?: number; readonly offset?: number; readonly withDeleted?: boolean; readonly withExpired?: boolean; }",
   ],
   "(internal) RepositorySchema": [
     "export interface RepositorySchema { readonly version: number; readonly key: string; readonly previousNames: readonly string[]; }",
+  ],
+  "(internal) RepositoryWalkOptions": [
+    "export interface RepositoryWalkOptions { readonly until?: Date | number | (() => boolean); }",
+  ],
+  "(internal) RepositoryWalkPage": [
+    "export interface RepositoryWalkPage { readonly index: number; readonly next?: string; }",
+  ],
+  "(internal) RepositoryWalkResult": [
+    "export interface RepositoryWalkResult { readonly done: boolean; readonly next?: string; readonly pages: number; readonly items: number; }",
   ],
   "(internal) RepositoryWhere": [
     "export type RepositoryWhere<Entity = unknown> = { readonly [Key in QueryKey<Entity>]?: QueryValue<Entity, Key> | { readonly in: readonly QueryValue<Entity, Key>[]; }; };",
@@ -3524,11 +3599,23 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) State": [
     "State: unique symbol",
   ],
+  "(internal) StoredField": [
+    "export type StoredField<Field> = Field extends { readonly [Callable]: infer Property; } ? Property : Field;",
+  ],
+  "(internal) StoredFields": [
+    "export type StoredFields<Fields> = { [Key in keyof Fields]: StoredField<Fields[Key]>; };",
+  ],
   "(internal) StringConstraints": [
     "export interface StringConstraints { readonly min?: number; readonly max?: number; readonly pattern?: string | RegExp; }",
   ],
   "(internal) SuccessResult": [
     "interface SuccessResult<Output> { readonly value: Output; readonly issues?: undefined; }",
+  ],
+  "(internal) TaggableRecord": [
+    "export declare class TaggableRecord extends TaggableRecord_base { hasTag(tag: string): boolean; tag(...tags: string[]): this; untag(...tags: string[]): this; }",
+  ],
+  "(internal) TaggableRecord_base": [
+    "TaggableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ tags: import("../index.js").IBlueprintList<import("../index.js").PropertyClass<import("typebox").TString, string>, true>; }>, [ ], never, unknown, never, never>",
   ],
   "(internal) TransformStage": [
     "export interface TransformStage<Options extends object = StageOptions> { readonly kind: "transform"; readonly name?: string; readonly options?: Options; apply(operation: OperationDescriptor, context: StageContext): OperationDescriptor | null; }",
@@ -3581,8 +3668,20 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) VariantValue": [
     "type VariantValue<Key extends string, Variants, Mode extends FieldMode> = 0 extends 1 & Variants ? any : { [Tag in keyof Variants & string]: VariantMember<Key, Tag, Variants[Tag], Mode>; }[keyof Variants & string];",
   ],
+  "AbstractPropertyConstructor": [
+    "export type AbstractPropertyConstructor<SchemaType extends TSchema, Value = Static<SchemaType>> = { new (value: PropertyValue<SchemaType, Value>): AbstractProperty<SchemaType, Value>; readonly type: IPropertyType<SchemaType, Value>; demo(): AbstractProperty<SchemaType, Value>; safeParse(value: unknown): ParseResult<PropertyValue<SchemaType, Value>>; readonly "~standard": StandardSchemaV1.Props<PropertyValue<SchemaType, Value>, PropertyValue<SchemaType, Value>>; };",
+  ],
+  "Archivable": [
+    "Archivable: import("../index.js").IRecordPlugin<typeof ArchivableRecord, "archivable">",
+  ],
   "DescribedJwtOptions": [
     "export interface DescribedJwtOptions extends Omit<JwtOptions, "secret"> { readonly secret: { readonly env: string; }; }",
+  ],
+  "EntityStorageSettings": [
+    "export interface EntityStorageSettings { readonly versioned: boolean; readonly expires?: EntityExpires; readonly schemaVersioned: boolean; readonly schemaVersion: number; readonly upgrade: EntityUpgrades; readonly previousNames: readonly string[]; }",
+  ],
+  "IPropertyCollection": [
+    "export type IPropertyCollection = Record<string, AnyPropertyConstructor>;",
   ],
   "InvalidJwtOptions": [
     "InvalidJwtOptions: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
@@ -3602,8 +3701,53 @@ exports[`experimental entry (not contract) 1`] = `
   "JwtTokenOptions": [
     "export interface JwtTokenOptions { readonly expiresIn?: number; readonly use?: string; }",
   ],
+  "LogLevels": [
+    "LogLevels: readonly LogLevel[]",
+  ],
+  "Ownable": [
+    "Ownable: import("../index.js").IRecordPlugin<typeof OwnableRecord, "ownable">",
+  ],
   "PropertyLineage": [
     "export type PropertyLineage = { readonly kind: "refined"; readonly base: AnyPropertyConstructor; readonly options: Readonly<Record<string, unknown>>; } | { readonly kind: "optional"; readonly base: AnyPropertyConstructor; } | { readonly kind: "factory"; readonly factory: string; readonly args: Readonly<Record<string, unknown>>; };",
+  ],
+  "Publishable": [
+    "Publishable: import("../index.js").IRecordPlugin<typeof PublishableRecord, "publishable">",
+  ],
+  "RepositoryCount": [
+    "export interface RepositoryCount<Entity = unknown> { count(query?: RepositoryQuery<Entity>): Promise<number>; }",
+  ],
+  "RepositoryCreate": [
+    "export interface RepositoryCreate<Entity> { create(entity: RepositoryCreateInput<Entity>): Promise<EntityInstanceOf<Entity>>; }",
+  ],
+  "RepositoryDelete": [
+    "export interface RepositoryDelete<Entity> { delete(entity: EntityInstanceOf<Entity> | string): Promise<EntityInstanceOf<Entity>>; }",
+  ],
+  "RepositoryExists": [
+    "export interface RepositoryExists<Entity> { exists(query?: RepositoryQuery<Entity>): Promise<boolean>; }",
+  ],
+  "RepositoryExplain": [
+    "export interface RepositoryExplain<Entity> { explain(query?: RepositoryQuery<Entity> | RepositoryCursorQuery<Entity>): Promise<RepositoryPlan>; }",
+  ],
+  "RepositoryFindCursor": [
+    "export interface RepositoryFindCursor<Entity> { findCursor(query?: RepositoryCursorQuery<Entity>): Promise<RepositoryCursorPage<Entity>>; }",
+  ],
+  "RepositoryFindMany": [
+    "export interface RepositoryFindMany<Entity> { findMany(query?: RepositoryQuery<Entity>): Promise<EntityInstanceOf<Entity>[]>; }",
+  ],
+  "RepositoryFindPage": [
+    "export interface RepositoryFindPage<Entity> { findPage(query?: RepositoryQuery<Entity>): Promise<RepositoryPage<Entity>>; }",
+  ],
+  "RepositoryForEachPage": [
+    "export interface RepositoryForEachPage<Entity> { forEachPage(query: RepositoryCursorQuery<Entity>, fn: (items: EntityInstanceOf<Entity>[], page: RepositoryWalkPage) => unknown, options?: RepositoryWalkOptions): Promise<RepositoryWalkResult>; }",
+  ],
+  "RepositoryIncrement": [
+    "export interface RepositoryIncrement<Entity> { increment(entity: EntityInstanceOf<Entity> | string, deltas: RepositoryIncrementDeltas<Entity>, options?: RepositoryIncrementOptions<Entity>): Promise<EntityInstanceOf<Entity>>; }",
+  ],
+  "RepositoryRestore": [
+    "export interface RepositoryRestore<Entity> { restore(entity: EntityInstanceOf<Entity> | string): Promise<EntityInstanceOf<Entity>>; }",
+  ],
+  "RepositoryUpdate": [
+    "export interface RepositoryUpdate<Entity> { update(entity: EntityInstanceOf<Entity>): Promise<EntityInstanceOf<Entity>>; }",
   ],
   "SliceMask": [
     "export type SliceMask<Properties> = { readonly [Key in keyof Properties]?: true | FieldMask<Properties[Key]>; };",
@@ -3616,6 +3760,9 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "StdTokenOptions": [
     "export interface StdTokenOptions extends DescribedJwtOptions { readonly refresh?: { readonly expiresIn: number; }; readonly scopes?: readonly string[]; readonly scopesFrom?: string; readonly claims?: { readonly [claim: string]: string; }; }",
+  ],
+  "Taggable": [
+    "Taggable: import("../index.js").IRecordPlugin<typeof TaggableRecord, "taggable">",
   ],
   "UseCaseOriginInfo": [
     "export interface UseCaseOriginInfo { readonly plugin: AnyUseCasePlugin; readonly repository: AnyRepository; readonly options: Readonly<Record<string, unknown>>; }",
