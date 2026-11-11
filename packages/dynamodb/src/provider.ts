@@ -349,6 +349,73 @@ export function dynamoDbProvider(
 		return rows;
 	}
 
+	/** Whether `query` reads the partition in the order of its sort key, `id` ascending. */
+	function inIdOrder(query: ProviderQuery): boolean {
+		const orders = query.orderBy ?? [];
+		if (orders.length === 0) return query.after === undefined;
+		const [order] = orders;
+		return (
+			orders.length === 1 &&
+			order?.key === "id" &&
+			(order.direction ?? "asc") === "asc"
+		);
+	}
+
+	/**
+	 * The rows of a page of the partition read in the order of the sort key,
+	 * as the walk of `app.migrate` and cursors by id read them: a `Query` from
+	 * the `after` id (`sk > after`) with `Limit`, filtered in memory
+	 * (`withDeleted`, `withExpired`, `where`) and continued until `limit` rows
+	 * match or the partition ends, so a walk reads each item once instead of
+	 * the whole partition per page. `undefined` when `query` needs the whole
+	 * partition: another order, an `offset`, no `limit`, or a `where` on `id`
+	 * or a unique key (read by key instead).
+	 */
+	async function pageInIdOrder(
+		context: RepositoryContext,
+		query: ProviderQuery,
+	): Promise<RepositoryData[] | undefined> {
+		const { limit, after } = query;
+		if (limit === undefined || (query.offset ?? 0) !== 0) return undefined;
+		if (!inIdOrder(query)) return undefined;
+		const where = query.where ?? {};
+		if (where.id !== undefined) return undefined;
+		if (markedKeys(context).some((key) => where[key] !== undefined))
+			return undefined;
+		const from = after?.[0];
+		if (
+			after !== undefined &&
+			(typeof from !== "string" || byteLength(from) > MAX_SORT_KEY_BYTES)
+		)
+			return undefined;
+		const rows: RepositoryData[] = [];
+		if (limit <= 0) return rows;
+		const expiry = expiryKeyOf(context);
+		let ExclusiveStartKey: Record<string, unknown> | undefined;
+		do {
+			const page = await db.send(
+				new QueryCommand({
+					TableName,
+					KeyConditionExpression:
+						from === undefined ? "pk = :pk" : "pk = :pk AND sk > :after",
+					ExpressionAttributeValues: {
+						":pk": entityPk(context.name),
+						...(from === undefined ? {} : { ":after": from }),
+					},
+					ConsistentRead: true,
+					Limit: limit - rows.length,
+					ExclusiveStartKey,
+				}),
+			);
+			for (const item of page.Items ?? []) {
+				const { data } = item as EntityItem;
+				if (matchesQuery(data, query, expiry)) rows.push(data);
+			}
+			ExclusiveStartKey = page.LastEvaluatedKey;
+		} while (ExclusiveStartKey && rows.length < limit);
+		return rows;
+	}
+
 	/**
 	 * Rows that may match `query`, read the cheapest way: by id, through the
 	 * markers of a unique key, or the whole partition. The caller filters them.
@@ -559,8 +626,15 @@ export function dynamoDbProvider(
 			return first;
 		}),
 
-		findMany: logged("findMany", async (context, query: ProviderQuery = {}) =>
-			selectRows(await candidates(context, query), query, expiryKeyOf(context)),
+		findMany: logged(
+			"findMany",
+			async (context, query: ProviderQuery = {}) =>
+				(await pageInIdOrder(context, query)) ??
+				selectRows(
+					await candidates(context, query),
+					query,
+					expiryKeyOf(context),
+				),
 		),
 
 		count: logged("count", async (context, query: ProviderQuery = {}) => {
