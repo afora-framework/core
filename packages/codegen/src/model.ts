@@ -1,5 +1,10 @@
 import { type Decl, issue, type Scope } from "./scope";
-import { boundsOf, isObject, parseShorthand } from "./spec/field";
+import {
+	boundsOf,
+	isDeclarationName,
+	isObject,
+	parseShorthand,
+} from "./spec/field";
 import type {
 	EnumValue,
 	ListBounds,
@@ -28,7 +33,17 @@ export type Field = {
 			readonly kind: "inline";
 			readonly fields: Readonly<Record<string, Field>>;
 	  }
+	| {
+			readonly kind: "variant";
+			readonly key: string;
+			readonly variants: Readonly<Record<string, VariantTarget>>;
+	  }
 );
+
+/** A variant of a variant field: a declaration by name, or a blueprint declared in place. */
+export type VariantTarget =
+	| { readonly type: string }
+	| { readonly fields: Readonly<Record<string, Field>> };
 
 /** What a stored row lacking the key gets, and the key that held it before. */
 interface FieldEvolution {
@@ -261,7 +276,7 @@ export function parseField(
 			issue(
 				path,
 				"invalid_field",
-				'A field is a string ("email", "Age?", "User[]") or an object ({ "type": ... }, { "enum": [...] } or { "fields": {...} }).',
+				'A field is a string ("email", "Age?", "User[]") or an object ({ "type": ... }, { "enum": [...] }, { "fields": {...} } or { "variant": {...} }).',
 			),
 		);
 		return undefined;
@@ -276,13 +291,15 @@ export function parseField(
 		);
 		return undefined;
 	}
-	const forms = ["type", "enum", "fields"].filter((key) => key in value);
+	const forms = ["type", "enum", "fields", "variant"].filter(
+		(key) => key in value,
+	);
 	if (forms.length !== 1) {
 		issues.push(
 			issue(
 				path,
 				"invalid_field",
-				'A field object has exactly one of "type", "enum" or "fields".',
+				'A field object has exactly one of "type", "enum", "fields" or "variant".',
 			),
 		);
 		return undefined;
@@ -383,11 +400,92 @@ export function parseField(
 			...mods,
 		};
 	}
+	if (forms[0] === "variant") {
+		checkKeys(value, ["variant", ...MODIFIERS], path, issues);
+		const variant = parseVariant(value.variant, [...path, "variant"], issues);
+		const mods = modifiers();
+		if (!variant || !mods) return undefined;
+		return { kind: "variant", ...variant, ...mods };
+	}
 	checkKeys(value, ["fields", ...MODIFIERS], path, issues);
 	const fields = parseFields(value.fields, [...path, "fields"], issues);
 	const mods = modifiers();
 	if (!fields || !mods) return undefined;
 	return { kind: "inline", fields, ...mods };
+}
+
+/** The `variant` of a variant field, parsed: its key and its variants. */
+function parseVariant(
+	value: unknown,
+	path: readonly (string | number)[],
+	issues: SpecIssue[],
+): { key: string; variants: Record<string, VariantTarget> } | undefined {
+	if (!isObject(value)) {
+		issues.push(
+			issue(
+				path,
+				"invalid_variant",
+				'"variant" must be an object { "key": "type", "of": { "click": "Click" } }.',
+			),
+		);
+		return undefined;
+	}
+	checkKeys(value, ["key", "of"], path, issues);
+	let ok = true;
+	if (typeof value.key !== "string" || value.key === "") {
+		issues.push(
+			issue(
+				[...path, "key"],
+				"invalid_variant",
+				'"key" must be a string that is not empty: the key whose value names the variant.',
+			),
+		);
+		ok = false;
+	}
+	if (!isObject(value.of) || Object.keys(value.of).length === 0) {
+		issues.push(
+			issue(
+				[...path, "of"],
+				"invalid_variant",
+				'"of" must be an object with at least one variant, by the value the key has for it: { "click": "Click" }.',
+			),
+		);
+		return undefined;
+	}
+	const variants: Record<string, VariantTarget> = {};
+	for (const [tag, target] of Object.entries(value.of)) {
+		const here = [...path, "of", tag];
+		if (typeof target === "string") {
+			if (isDeclarationName(target)) variants[tag] = { type: target };
+			else {
+				issues.push(
+					issue(
+						here,
+						"invalid_variant",
+						`"${target}" is not the name of a declaration. A variant is a declared blueprint, record or entity (PascalCase), or a blueprint declared in place ({ "fields": {...} }).`,
+					),
+				);
+				ok = false;
+			}
+			continue;
+		}
+		if (isObject(target) && "fields" in target) {
+			checkKeys(target, ["fields"], here, issues);
+			const fields = parseFields(target.fields, [...here, "fields"], issues);
+			if (fields) variants[tag] = { fields };
+			else ok = false;
+			continue;
+		}
+		issues.push(
+			issue(
+				here,
+				"invalid_variant",
+				'A variant is the name of a declared blueprint, record or entity, or a blueprint declared in place ({ "fields": {...} }).',
+			),
+		);
+		ok = false;
+	}
+	return ok ? { key: value.key as string, variants } : undefined;
 }
 
 /** The fields of a blueprint, record, entity or environment, parsed. */

@@ -33,6 +33,7 @@ import {
 	quickstartSpec,
 } from "./fixtures";
 import { makeProject, removeProject } from "./project";
+import { variantSpec } from "./roundtrip/fixtures/variant";
 
 const projects: string[] = [];
 afterAll(async () => {
@@ -108,6 +109,7 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 		["quickstart", quickstartSpec],
 		["blog", blogSpec],
 		["kitchen sink", kitchenSpec],
+		["variant", variantSpec],
 	];
 	for (const [name, spec] of cases) {
 		test(name, async () => {

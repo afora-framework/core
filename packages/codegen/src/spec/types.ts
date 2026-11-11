@@ -44,9 +44,30 @@ export interface InlineField extends FieldModifiers {
 }
 
 /**
+ * A variant of a variant field: the name of a declared blueprint, record or
+ * entity, or a blueprint declared in place.
+ */
+export type VariantSpec = string | { readonly fields: FieldsSpec };
+
+/** A field holding one of several objects, told apart by the value of `key` (`variantOf`). */
+export interface VariantField extends FieldModifiers {
+	readonly variant: {
+		/** The key whose value names the variant; no variant declares it. */
+		readonly key: string;
+		/** The variants, by the value the key has for each. */
+		readonly of: Readonly<Record<string, VariantSpec>>;
+	};
+}
+
+/**
  * A field: `"email"`, `"Age?"`, `"string[]"`, `"User[]?"`, or the object form.
  */
-export type FieldSpec = string | TypeField | EnumField | InlineField;
+export type FieldSpec =
+	| string
+	| TypeField
+	| EnumField
+	| InlineField
+	| VariantField;
 
 export type FieldsSpec = Readonly<Record<string, FieldSpec>>;
 

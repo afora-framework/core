@@ -256,6 +256,171 @@ describe("fields", () => {
 	});
 });
 
+describe("variant fields", () => {
+	const variant = (value: unknown, more: Loose = {}) =>
+		entity({}, { name: "text", by: { variant: value, ...more } });
+	const at = "entities.Thing.fields.by";
+
+	test("a variant of blueprints, records, entities and blueprints in place is valid", () => {
+		expect(
+			codes(
+				blog({
+					entities: {
+						...blogSpec.entities,
+						Thing: {
+							fields: {
+								by: {
+									variant: {
+										key: "type",
+										of: {
+											address: "Address",
+											user: "User",
+											note: { fields: { body: "text" } },
+										},
+									},
+									list: true,
+									optional: true,
+								},
+							},
+						},
+					},
+					repositories: {
+						...blogSpec.repositories,
+						Things: {
+							entity: "Thing",
+							actions: ["create"],
+							relations: ["Users"],
+						},
+					},
+				}),
+			),
+		).toEqual([]);
+	});
+	test("a key that is a string, not empty, and at least one variant", () => {
+		expectIssue(
+			variant({ key: "", of: { a: "Address" } }),
+			"invalid_variant",
+			`${at}.variant.key`,
+		);
+		expectIssue(
+			variant({ key: "type", of: {} }),
+			"invalid_variant",
+			`${at}.variant.of`,
+		);
+		expectIssue(variant("Address"), "invalid_variant", `${at}.variant`);
+		expectIssue(
+			variant({ key: "type", of: { a: "Address" }, other: 1 }),
+			"unknown_key",
+			`${at}.variant.other`,
+		);
+	});
+	test("each variant is a declared blueprint, record or entity, or fields in place", () => {
+		expectIssue(
+			variant({ key: "type", of: { a: "Missing" } }),
+			"unknown_type",
+			`${at}.variant.of.a`,
+		);
+		expectIssue(
+			variant({ key: "type", of: { a: "Status" } }),
+			"wrong_kind",
+			`${at}.variant.of.a`,
+		);
+		expectIssue(
+			variant({ key: "type", of: { a: "Users" } }),
+			"wrong_kind",
+			`${at}.variant.of.a`,
+		);
+		expectIssue(
+			variant({ key: "type", of: { a: "text" } }),
+			"invalid_variant",
+			`${at}.variant.of.a`,
+		);
+		expectIssue(
+			variant({ key: "type", of: { a: { fields: { b: "emial" } } } }),
+			"unknown_type",
+			`${at}.variant.of.a.fields.b.type`,
+		);
+	});
+	test("no variant declares the key", () => {
+		expectIssue(
+			variant({ key: "street", of: { a: "Address" } }),
+			"invalid_variant",
+			`${at}.variant.key`,
+		);
+		expectIssue(
+			variant({ key: "id", of: { a: "User" } }),
+			"invalid_variant",
+			`${at}.variant.key`,
+		);
+		expectIssue(
+			variant({ key: "body", of: { a: { fields: { body: "text" } } } }),
+			"invalid_variant",
+			`${at}.variant.key`,
+		);
+	});
+	test("a record or an entity names one variant only", () => {
+		expectIssue(
+			variant({ key: "type", of: { a: "User", b: "User" } }),
+			"invalid_variant",
+			`${at}.variant.of.b`,
+		);
+	});
+	test("an entity among the variants needs a relation", () => {
+		expectIssue(
+			blog({
+				entities: {
+					...blogSpec.entities,
+					Thing: {
+						fields: { by: { variant: { key: "type", of: { user: "User" } } } },
+					},
+				},
+				repositories: {
+					...blogSpec.repositories,
+					Things: { entity: "Thing", actions: ["create"] },
+				},
+			}),
+			"missing_relation",
+			"repositories.Things.relations",
+		);
+	});
+	test("not an environment variable", () => {
+		expectIssue(
+			blog({
+				environments: {
+					E: { fields: { A: { variant: { key: "t", of: { a: "Address" } } } } },
+				},
+			}),
+			"invalid_environment_field",
+			"environments.E.fields.A",
+		);
+	});
+	test("not a scalar an index orders by", () => {
+		expectIssue(
+			blog({
+				entities: {
+					...blogSpec.entities,
+					Thing: {
+						fields: {
+							name: "text",
+							by: { variant: { key: "type", of: { a: "Address" } } },
+						},
+					},
+				},
+				repositories: {
+					...blogSpec.repositories,
+					Things: {
+						entity: "Thing",
+						actions: ["create"],
+						indexes: { byName: { where: ["name"], orderBy: "by" } },
+					},
+				},
+			}),
+			"invalid_index",
+			"repositories.Things.indexes.byName.orderBy",
+		);
+	});
+});
+
 describe("reserved keys", () => {
 	test("a record member", () => {
 		expectIssue(entity({}, { toJSON: "text" }), "reserved_key");

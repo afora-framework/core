@@ -2250,6 +2250,87 @@
 					},
 					"additionalProperties": false,
 					"description": "A nested object, declared in place."
+				},
+				{
+					"type": "object",
+					"required": ["variant"],
+					"properties": {
+						"variant": {
+							"type": "object",
+							"required": ["key", "of"],
+							"properties": {
+								"key": {
+									"type": "string",
+									"minLength": 1,
+									"description": "The key whose value names the variant. No variant declares it: the field adds it."
+								},
+								"of": {
+									"type": "object",
+									"patternProperties": {
+										"^.*$": {
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[A-Z][A-Za-z0-9]*$",
+													"description": "The name of a declared blueprint, record or entity."
+												},
+												{
+													"type": "object",
+													"required": ["fields"],
+													"properties": {
+														"fields": {
+															"type": "object",
+															"patternProperties": {
+																"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+																	"$ref": "#/$defs/Field"
+																}
+															},
+															"additionalProperties": false,
+															"description": "Fields by key."
+														}
+													},
+													"additionalProperties": false,
+													"description": "A blueprint declared in place."
+												}
+											]
+										}
+									},
+									"minProperties": 1,
+									"description": "The variants, by the value the key has for each: { \"card\": \"Card\", \"pix\": \"Pix\" }."
+								}
+							},
+							"additionalProperties": false
+						},
+						"optional": {
+							"type": "boolean",
+							"description": "The key may be absent."
+						},
+						"list": {
+							"anyOf": [
+								{
+									"type": "boolean"
+								},
+								{
+									"type": "object",
+									"properties": {
+										"minItems": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"maxItems": {
+											"type": "integer",
+											"minimum": 0
+										}
+									},
+									"additionalProperties": false,
+									"description": "Bounds of a list."
+								}
+							],
+							"description": "A list of the type (the options in `with` apply to each item). `true` or { minItems, maxItems }."
+						}
+					},
+					"additionalProperties": false,
+					"description": "One of several objects, told apart by the value of \"key\" (variantOf): { \"variant\": { \"key\": \"type\", \"of\": { \"click\": \"Click\", \"signup\": \"Signup\" } } }."
 				}
 			],
 			"description": "A field of a blueprint, record, entity or environment."

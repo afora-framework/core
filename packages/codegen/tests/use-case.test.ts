@@ -568,6 +568,12 @@ describe("validation", () => {
 						list: true,
 					};
 					c.useCases.Register.input.fields.owner = "User";
+					c.useCases.Register.input.fields.by = {
+						variant: {
+							key: "type",
+							of: { user: "User", note: { fields: { body: "text" } } },
+						},
+					};
 					steps(c)[1].details = { at: path };
 				}),
 			);
@@ -577,6 +583,10 @@ describe("validation", () => {
 			"$input.tags.length",
 			"$input.owner.name",
 			"$input.owner.id",
+			"$input.by.type",
+			"$input.by.name",
+			"$input.by.id",
+			"$input.by.body",
 		]) {
 			expect(reference(valid)).toEqual([]);
 		}
@@ -586,6 +596,8 @@ describe("validation", () => {
 			"$input.tags.first",
 			"$input.tags.length.x",
 			"$input.owner.nope",
+			"$input.by.nope",
+			"$input.by.body.x",
 		]) {
 			expect(reference(invalid)).toEqual([
 				"unknown_key@useCases.Register.implementation.steps.1.details",

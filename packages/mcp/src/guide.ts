@@ -51,6 +51,9 @@ a file of your own.
   \`with\` applies to each item of a list and only takes options valid for the type (min/max/pattern for strings,
   min/max/exclusiveMin/exclusiveMax/multipleOf for numbers, plus title/description/examples/deprecated/readOnly/writeOnly/default).
 - Enum: \`{ "enum": ["a", "b"] }\`. Nested object in place: \`{ "fields": { "lat": "number", "lng": "number" } }\`.
+- One of several objects (variantOf): \`{ "variant": { "key": "type", "of": { "click": "Click", "visit": { "fields": { "path": "string" } } } } }\`.
+  Each value of \`of\` is a declared blueprint, record or entity, or fields in place; none declares \`key\`, which the field
+  adds with the name of the variant (\`{ "type": "click", ... }\`). \`optional\` and \`list\` apply; an entity among them needs a relation.
 - A property of your own: \`{ "base": "integer", "with": {...} }\`, \`{ "enum": [...] }\`, or
   \`{ "opaque": true, "import": "./my-property" }\` for a hand-written one (imported as it is).
 
