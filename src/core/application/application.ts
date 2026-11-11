@@ -1102,6 +1102,7 @@ function describeRegistry(
 					: { description: UseCase.description }),
 				tags: UseCase.tags,
 				deprecated: UseCase.deprecated,
+				...(UseCase.route === undefined ? {} : { route: UseCase.route }),
 				input: fieldsDescriptionOf(UseCase.blueprint.properties, scope),
 				response: fieldsDescriptionOf(UseCase.response.properties, scope),
 				...(UseCase.context === undefined

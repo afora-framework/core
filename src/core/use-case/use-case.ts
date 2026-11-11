@@ -41,12 +41,14 @@ import { recordNameOf } from "../record/name";
 import { AbstractRepository, isRepository } from "../repository/repository";
 import type { AnyRepository } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import { routeDeclarationOf } from "./route";
 import { type ExecutionScope, ScopeKey } from "./scope";
 import { freezeData } from "./steps/references";
 import { executeSteps } from "./steps/run";
 import type { CheckedSteps } from "./steps/types/check.interface";
 import type { UseCaseStep } from "./steps/types/steps.interface";
 import { validateSteps } from "./steps/validate";
+import type { RouteDeclaration, RouteSettings } from "./types/route.interface";
 
 /** A concrete UseCase declaration, usable as a dependency. */
 export interface AnyUseCaseClass {
@@ -60,6 +62,8 @@ export interface AnyUseCaseClass {
 	readonly tags: readonly string[];
 	readonly deprecated: boolean;
 	readonly errors: readonly AnyExceptionClass[];
+	/** Where it is served over HTTP, if it says so (see `RouteDeclaration`). */
+	readonly route: RouteDeclaration | undefined;
 	new (
 		// biome-ignore lint/suspicious/noExplicitAny: heterogeneous concrete UseCase constructors
 		input: any,
@@ -166,6 +170,13 @@ export interface UseCaseSettings<
 	readonly deprecated?: boolean;
 	/** The exceptions (made by `exceptionOf`) a caller should expect; documentation only. */
 	readonly errors?: readonly AnyExceptionClass[];
+	/**
+	 * Where the use case is served over HTTP: method, path and where each
+	 * input key is read from (see `RouteDeclaration`). A decorated class says
+	 * the same with `@Route`. Read by the sinks that serve or document HTTP;
+	 * the `route` option of a sink overrides the method, path and status.
+	 */
+	readonly route?: RouteSettings;
 }
 
 /** `UseCaseSettings` with the `steps` that are its `execute`. */
@@ -679,6 +690,8 @@ type UseCaseStatics<
 	readonly deprecated: boolean;
 	/** The exceptions a caller should expect. */
 	readonly errors: readonly AnyExceptionClass[];
+	/** Where it is served over HTTP, from the `route` setting or `@Route`. */
+	readonly route: RouteDeclaration | undefined;
 };
 
 /** What a use case instance carries beyond `AbstractUseCase`. */
@@ -824,6 +837,11 @@ export function useCaseOf(
 			"Expected errors to be distinct classes made by exceptionOf.",
 		);
 	}
+	let route: RouteDeclaration | undefined;
+	if (settings.route !== undefined) {
+		const declared = routeDeclarationOf(settings.route, blueprint);
+		route = typeof declared === "string" ? invalidSetting(declared) : declared;
+	}
 	if (settings.steps !== undefined) {
 		validateSteps(
 			{ name, blueprint, context, dependencies, errors },
@@ -851,6 +869,7 @@ export function useCaseOf(
 		static readonly errors = Object.freeze([
 			...errors,
 		]) as readonly AnyExceptionClass[];
+		static readonly route = route;
 	}
 	Object.defineProperty(DeclaredUseCase, "name", { value: name });
 	if (settings.steps !== undefined) {

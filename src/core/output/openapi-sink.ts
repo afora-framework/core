@@ -12,6 +12,13 @@ import { toOpenAPI } from "../openapi/openapi";
 import type { OpenAPISchema } from "../openapi/types/openapi.interface";
 import { isProperty } from "../property/is-property";
 import { recordNameOf } from "../record/name";
+import {
+	HEADER_NAME,
+	isRoutePath as isPath,
+	isScalarKey as isScalarInputKey,
+	isScalarSchema,
+	parametersOfPath,
+} from "../use-case/route";
 import { InvalidOutputStage } from "./exceptions";
 import { PROBLEM_MEDIA_TYPE } from "./problem";
 import { sinkOf } from "./stage";
@@ -152,30 +159,7 @@ function onlyKeys(value: Obj, allowed: readonly string[], where: string) {
 	return undefined;
 }
 
-const PARAMETER = /^\{([A-Za-z_][A-Za-z0-9_]*)\}$/;
-const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
 const COMPONENT_NAME = /^[A-Za-z0-9._-]+$/;
-
-/** A path such as `/entries/{slug}`: `{name}` only as a whole segment, no `:`, `*`, query or spaces. */
-function isPath(value: unknown, parameters = true): value is string {
-	if (typeof value !== "string" || !value.startsWith("/")) return false;
-	return value
-		.split("/")
-		.every(
-			(segment) =>
-				(parameters && PARAMETER.test(segment)) || !/[{}?#\s:*]/.test(segment),
-		);
-}
-
-/** The names of the `{name}` segments of `path`, in order. */
-function parametersOfPath(path: string): string[] {
-	const names: string[] = [];
-	for (const segment of path.split("/")) {
-		const name = PARAMETER.exec(segment)?.[1];
-		if (name) names.push(name);
-	}
-	return names;
-}
 
 /** A header value: text without control characters other than tab. */
 function isHeaderValue(value: unknown): value is string {
@@ -478,23 +462,28 @@ export interface OperationRoute {
 	readonly status: RouteStatus;
 	/** The static headers of a success, from `responses`. */
 	readonly headers: { readonly [name: string]: string };
-}
-
-function isScalarSchema(schema: OpenAPISchema): boolean {
-	const types = [schema.type ?? []].flat();
-	return !types.some((type) => type === "object" || type === "array");
+	/**
+	 * Whether the input keys with no other place are a JSON body (`post`,
+	 * `put`, `patch`); otherwise they are read from the query.
+	 */
+	readonly body: boolean;
+	/** The input keys the use case route reads from the query, whatever the method. */
+	readonly query: readonly string[];
+	/** The input keys read from request headers, with the header of each (lower case). */
+	readonly requestHeaders: { readonly [inputKey: string]: string };
+	/** The input keys read from cookies, with the cookie of each. */
+	readonly cookies: { readonly [inputKey: string]: string };
 }
 
 /** Whether `name` is an input key that is a scalar property (no object, no list). */
 function isScalarKey(operation: OperationDescriptor, name: string): boolean {
-	if (!Object.hasOwn(operation.input.properties, name)) return false;
-	const field = operation.input.properties[name];
-	return isProperty(field) && isScalarSchema(toOpenAPI(field) as OpenAPISchema);
+	return isScalarInputKey(operation.input, name);
 }
 
 /**
  * The route of every operation, by id: `POST {basePath}/{kebab(command)}/{kebab(operation)}`
- * with `200`, changed per operation id with `route` and `responses`. Throws
+ * with `200`, changed by the route the use case declares (`operation.route`)
+ * and, over it, per operation id with `route` and `responses`. Throws
  * `InvalidOutputStage` (with `source`) when `route`, `responses` or
  * `security.operations` name an unknown operation, a path parameter is not a
  * scalar key of the input, or two operations share a method and path. The
@@ -524,14 +513,20 @@ export function operationRoutes(
 		}
 	}
 	const routes = new Map<string, OperationRoute>();
-	const taken = new Set<string>();
+	const taken = new Map<string, string>();
 	for (const operation of operations) {
 		const chosen = route[operation.id] ?? {};
-		const method: OpenAPIMethod = chosen.method ?? "post";
+		const declared = operation.route;
+		const method: OpenAPIMethod = chosen.method ?? declared?.method ?? "post";
 		const path =
 			base +
-			(chosen.path ?? `/${kebab(operation.command)}/${kebab(operation.name)}`);
+			(chosen.path ??
+				declared?.path ??
+				`/${kebab(operation.command)}/${kebab(operation.name)}`);
 		const parameters = parametersOfPath(path);
+		const query = declared?.query ?? [];
+		const requestHeaders = declared?.headers ?? {};
+		const cookies = declared?.cookie ?? {};
 		for (const name of parameters) {
 			if (!isScalarKey(operation, name)) {
 				invalid(
@@ -539,22 +534,37 @@ export function operationRoutes(
 					source,
 				);
 			}
+			if (
+				query.includes(name) ||
+				Object.hasOwn(requestHeaders, name) ||
+				Object.hasOwn(cookies, name)
+			) {
+				invalid(
+					`${source}.route["${operation.id}"].path has the parameter "{${name}}", which the route of ${operation.useCase} reads from another place.`,
+					source,
+				);
+			}
 		}
 		// `/a/{x}` and `/a/{y}` match the same requests.
 		const key = `${method} ${path.replace(/\{[^}]*\}/g, "{}")}`;
-		if (taken.has(key)) {
+		const other = taken.get(key);
+		if (other !== undefined) {
 			invalid(
-				`Two operations are routed to ${method.toUpperCase()} ${path}.`,
+				`Two operations are routed to ${method.toUpperCase()} ${path}: ${other} and ${operation.id}. Give one another route, on its use case or in ${source}.route["${operation.id}"].`,
 				source,
 			);
 		}
-		taken.add(key);
+		taken.set(key, operation.id);
 		routes.set(operation.id, {
 			method,
 			path,
 			parameters,
-			status: chosen.status ?? 200,
+			status: chosen.status ?? declared?.status ?? 200,
 			headers: { ...(responses[operation.id]?.headers ?? {}) },
+			body: method !== "get" && method !== "delete",
+			query,
+			requestHeaders,
+			cookies,
 		});
 	}
 	return routes;
@@ -695,11 +705,11 @@ function responsesOf(
 	return responses;
 }
 
-/** The parameter of the input key `name` (its schema in `schema`), in the path or the query. */
+/** The parameter `name` of an input key (its schema in `property`): in the path, the query, a header or a cookie. */
 function parameterOf(
 	name: string,
 	property: OpenAPISchema,
-	where: "path" | "query",
+	where: "path" | "query" | "header" | "cookie",
 	required: boolean,
 ): Obj {
 	const { description, ...rest } = property;
@@ -831,10 +841,29 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 			paths[path] = slot;
 
 			const full = schemas[`${operation.id}#input`] as OpenAPISchema;
-			const input = withoutKeys(full, route.parameters);
+			const required = new Set(full.required ?? []);
+			const hasBody = route.body;
+			// What is left for the body, or for the query of a get or delete.
+			const input = withoutKeys(full, [
+				...route.parameters,
+				...(hasBody ? route.query : []),
+				...Object.keys(route.requestHeaders),
+				...Object.keys(route.cookies),
+			]);
 			const response = schemas[`${operation.id}#response`] as OpenAPISchema;
-			const hasBody = method !== "get" && method !== "delete";
 			const hasInput = Object.keys(input.properties ?? {}).length > 0;
+			const placed = (
+				keys: Readonly<Record<string, string>>,
+				where: "header" | "cookie",
+			) =>
+				Object.entries(keys).map(([key, name]) =>
+					parameterOf(
+						name,
+						full.properties?.[key] as OpenAPISchema,
+						where,
+						required.has(key),
+					),
+				);
 			const parameters = [
 				...route.parameters.map((name) =>
 					parameterOf(
@@ -844,7 +873,18 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 						true,
 					),
 				),
-				...(hasBody ? [] : queryParametersOf(operation, input)),
+				...(hasBody
+					? route.query.map((name) =>
+							parameterOf(
+								name,
+								full.properties?.[name] as OpenAPISchema,
+								"query",
+								required.has(name),
+							),
+						)
+					: queryParametersOf(operation, input)),
+				...placed(route.requestHeaders, "header"),
+				...placed(route.cookies, "cookie"),
 			];
 			const requirement = security?.operations?.[operation.id];
 			slot[method] = {

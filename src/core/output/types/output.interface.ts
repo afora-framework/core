@@ -2,6 +2,7 @@ import type { AnyBlueprint } from "../../blueprint/types/blueprint.interface";
 import type { AnyCommand } from "../../command/types/command.interface";
 import type { JsonValue } from "../../json";
 import type { Kind } from "../../symbols/kind";
+import type { RouteDeclaration } from "../../use-case/types/route.interface";
 import type { AnyExceptionClass } from "../../use-case/use-case";
 
 /** The options of a stage: a JSON object. */
@@ -41,6 +42,8 @@ export interface OperationDescriptor {
 	readonly context?: AnyBlueprint;
 	/** The `errors` of the use case. */
 	readonly errors: readonly AnyExceptionClass[];
+	/** The route the use case declares (`route` or `@Route`), if any. */
+	readonly route?: RouteDeclaration;
 	/** Set by transforms; `{}` initially. */
 	readonly meta: Readonly<Record<string, unknown>>;
 	/** `command.run(name, input, options)`. */

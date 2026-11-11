@@ -115,6 +115,7 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 			response: UseCase.response,
 			...(context ? { context } : {}),
 			errors: UseCase.errors,
+			...(UseCase.route === undefined ? {} : { route: UseCase.route }),
 			meta: Object.freeze({}),
 			invoke: (input: unknown, options?: { context?: unknown }) =>
 				(

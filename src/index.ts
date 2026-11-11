@@ -417,6 +417,7 @@ export type {
 export type { StandardSchemaV1 } from "./core/standard/standard-schema";
 export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
+export { Route } from "./core/use-case/decorators";
 export {
 	IncompatibleUseCasePlugin,
 	InvalidUseCasePlugin,
@@ -467,6 +468,10 @@ export type {
 	UseCaseTarget,
 	UseCaseTargetInfo,
 } from "./core/use-case/types/plugin.interface";
+export type {
+	RouteDeclaration,
+	RouteSettings,
+} from "./core/use-case/types/route.interface";
 export type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
