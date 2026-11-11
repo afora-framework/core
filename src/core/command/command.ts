@@ -24,6 +24,13 @@ import { isRepository } from "../repository/repository";
 import { findState, type RepositoryState } from "../repository/state";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import {
+	endSpan,
+	failSpan,
+	resolveTracer,
+	runInSpan,
+	startSpan,
+} from "../tracing/tracing";
 import { isUseCaseCatalog } from "../use-case/plugin-catalog";
 import { type ExecutionScope, ScopeKey } from "../use-case/scope";
 import type {
@@ -407,6 +414,18 @@ function declareCommand<
 		// The application that bound the use case logs the call, and every use
 		// case it runs, bound or not, gets its logger through the scope.
 		const logger = resolveLogger(undefined, UseCase);
+		// Its tracer, the same way: the span of the call is the parent of the
+		// span of the use case, which its scope carries.
+		const tracer = resolveTracer(undefined, UseCase);
+		const span =
+			tracer === undefined
+				? undefined
+				: startSpan(
+						tracer,
+						`command ${where}`,
+						{ "afora.command": where, "afora.operation": op },
+						undefined,
+					);
 		const withEnvironments = (
 			scope: ExecutionScope | undefined,
 		): ExecutionScope | undefined => {
@@ -414,11 +433,12 @@ function declareCommand<
 				overrides === undefined || overrides.byEnvironment.size === 0
 					? scope?.environments
 					: overrides.byEnvironment;
-			if (!environmentsOfCall && !logger) return scope;
+			if (!environmentsOfCall && !logger && !tracer) return scope;
 			return {
 				providers: scope?.providers ?? new Map(),
 				...(environmentsOfCall ? { environments: environmentsOfCall } : {}),
 				...(logger ? { logger } : {}),
+				...(tracer ? { tracer, ...(span ? { span } : {}) } : {}),
 			};
 		};
 		const run = async (declared: ExecutionScope | undefined) => {
@@ -429,14 +449,17 @@ function declareCommand<
 		};
 		const provider = providerOfCall();
 		const started = clock();
+		const call = () =>
+			provider?.transaction
+				? provider.transaction((scoped) =>
+						run({ providers: new Map([[provider, scoped]]) }),
+					)
+				: run(undefined);
 		const outcome = await guard(
 			{ layer: ExceptionLayers.Command, source: where },
-			() =>
-				provider?.transaction
-					? provider.transaction((scoped) =>
-							run({ providers: new Map([[provider, scoped]]) }),
-						)
-					: run(undefined),
+			span === undefined || tracer === undefined
+				? call
+				: () => runInSpan(tracer, span, call),
 		).catch((error: unknown) => {
 			// Logged once: a use case that failed inside has logged it already.
 			logFailure(
@@ -445,12 +468,14 @@ function declareCommand<
 				{ command: where, ms: elapsed(started) },
 				error,
 			);
+			failSpan(span, error, ExceptionLayers.Command);
 			throw error;
 		});
 		writeLog(logger, "debug", "command", {
 			command: where,
 			ms: elapsed(started),
 		});
+		endSpan(span);
 		return {
 			...outcome,
 			context: callContext,

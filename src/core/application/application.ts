@@ -75,6 +75,11 @@ import type { ProviderDescription } from "../repository/types/query.interface";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import type { SchemaMigrationOptions } from "../repository/types/schema.interface";
 import { Kind } from "../symbols/kind";
+import {
+	ApplicationTracerKey,
+	checkTracer,
+	type ITracer,
+} from "../tracing/tracing";
 import { useCaseOriginOf } from "../use-case/plugin";
 import { describeSteps } from "../use-case/steps/describe";
 import { interpretedStepsOf } from "../use-case/steps/run";
@@ -161,6 +166,8 @@ type Registry = Record<ApplicationCollectionKey, Map<string, Entry>>;
 const internals = new WeakMap<object, Registry>();
 /** The `log` each application was declared with (or inherited), for `extends`. */
 const logSettings = new WeakMap<object, LogSettings | LogFactory>();
+/** The `trace` each application was declared with (or inherited), for `extends`. */
+const traceSettings = new WeakMap<object, ITracer>();
 
 /** A provider of `providersOf` an application registers, by key. */
 interface NamedProvider {
@@ -918,6 +925,7 @@ function describeRegistry(
 	named: ReadonlyMap<string, NamedProvider>,
 	log: Required<LogSettings> | "opaque" | undefined,
 	publishers: Readonly<Record<string, string>>,
+	traced: boolean,
 ): ApplicationDescription {
 	const scope: Scope = {
 		properties: referencesOf(registry, "properties"),
@@ -1063,6 +1071,7 @@ function describeRegistry(
 							}),
 						},
 					}),
+		...(traced ? { trace: { kind: "opaque" as const } } : {}),
 		...(Object.keys(publishers).length === 0
 			? {}
 			: {
@@ -1475,6 +1484,14 @@ export function applicationOf<
 		log?.set(checkLogSettings(declaredLog));
 	}
 	const logger = log?.logger;
+	// The tracer, the same way: its own, else the one of the last extended one.
+	const tracer: ITracer | undefined =
+		settings.trace === undefined
+			? [...extended]
+					.reverse()
+					.map((other) => traceSettings.get(other))
+					.find((found) => found !== undefined)
+			: checkTracer(settings.trace);
 	const { publishers, origins } = publishersOf(
 		name,
 		settings.publishers,
@@ -1499,7 +1516,11 @@ export function applicationOf<
 	// Use cases, commands and outputs are rebound for a provider, a logger or
 	// publishers. Repositories are bound for a provider, its own or one of `providersOf`.
 	const bindsProviders = provider !== undefined || instances.size > 0;
-	const rebinds = bindsProviders || logger !== undefined || hasPublishers;
+	const rebinds =
+		bindsProviders ||
+		logger !== undefined ||
+		tracer !== undefined ||
+		hasPublishers;
 
 	const collection = (key: ApplicationCollectionKey) =>
 		Object.freeze(
@@ -1552,6 +1573,8 @@ export function applicationOf<
 		});
 		if (logger)
 			Object.defineProperty(Bound, ApplicationLoggerKey, { value: logger });
+		if (tracer)
+			Object.defineProperty(Bound, ApplicationTracerKey, { value: tracer });
 		return Bound as unknown as AnyUseCaseClass;
 	};
 	const useCases: Record<string, unknown> = {};
@@ -1717,6 +1740,7 @@ export function applicationOf<
 		logger: logger ?? silentLogger,
 		context,
 		...(logger ? { [ApplicationLoggerKey]: logger } : {}),
+		...(tracer ? { [ApplicationTracerKey]: tracer } : {}),
 		...(hasPublishers ? { [ApplicationPublishersKey]: publishers } : {}),
 		properties: collection("properties"),
 		blueprints: collection("blueprints"),
@@ -1776,6 +1800,7 @@ export function applicationOf<
 					? {}
 					: { provider: defaultSlot ?? provider }),
 				...(declaredLog === undefined ? {} : { log: declaredLog }),
+				...(tracer === undefined ? {} : { trace: tracer }),
 			} as never);
 		},
 		describe: () =>
@@ -1791,6 +1816,7 @@ export function applicationOf<
 				named,
 				isLogFactory(declaredLog) ? "opaque" : log?.settings,
 				origins,
+				tracer !== undefined,
 			),
 		get started() {
 			return started;
@@ -1890,6 +1916,7 @@ export function applicationOf<
 	namedProviders.set(application, named);
 	if (defaultSlot !== undefined) defaultSlots.set(application, defaultSlot);
 	if (declaredLog !== undefined) logSettings.set(application, declaredLog);
+	if (tracer !== undefined) traceSettings.set(application, tracer);
 	publisherOrigins.set(application, Object.freeze(origins));
 	return application as never;
 }
