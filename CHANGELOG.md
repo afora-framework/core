@@ -22,6 +22,8 @@
 
 ### Added
 
+- Three new packages, sinks that serve an output on other servers (#75): `@afora/fastify`, `@afora/express` and `@afora/elysia`. Each takes the options of `@afora/hono` (the `HttpOptions`) and the hooks `authenticator`, `middlewares` (of its server) and `app`, and is built on `compileRoutes`. See `docs/providers.md`.
+- `httpProviderContract(name, { sink, fetch, close? }, runner)` in `@afora/core/testing`: the cases every sink that serves HTTP must pass, on real requests (declared routes, input from each place, context, problems, statuses, masking, access, cookies, request id, the document), with the type `HttpProviderContractSettings`. The four HTTP packages run it.
 - Tokens and sessions, **experimental** (#60, #75), see `docs/auth.md#tokens-and-sessions`:
   - `jwtOf(options)` in `@afora/core/experimental`: JSON Web Tokens signed with a shared secret (HS256, HS384, HS512) on Web Crypto, with `sign`, `verify` (a `Principal`, or `Unauthenticated`) and `authenticator({ header?, cookie? })`; `InvalidJwtOptions` and the types `Jwt`, `JwtOptions`, `DescribedJwtOptions`, `JwtAlgorithm`, `JwtSubject`, `JwtTokenOptions` and `StdTokenOptions`.
   - The option `auth: { jwt: { secret: { env }, issuer?, audience?, algorithm?, header?, cookie? } }` of the sinks that serve HTTP (`HttpOptions`) authenticates callers from such a token and gives the OpenAPI document its security scheme.

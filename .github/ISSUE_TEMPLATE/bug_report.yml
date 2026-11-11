@@ -11,6 +11,9 @@ body:
         - "@afora/codegen"
         - "@afora/mcp"
         - "@afora/hono"
+        - "@afora/fastify"
+        - "@afora/express"
+        - "@afora/elysia"
         - "@afora/drizzle"
     validations:
       required: true

@@ -61,6 +61,7 @@ All options are JSON, so the stage can live in an `afora.json` (`{ "sink": "hono
 | `docs`      | `{ path, info: { title, version, description? }, servers? }`: serves the `openapi` document of the same operations, routes and `basePath` at `path` (not under `basePath`). A `path` that is also a GET route throws `InvalidOutputStage`. |
 | `debug`     | `true` adds the `trace` to problems and the real `detail` to 5xx ones. Off by default.                                                                                                                                                     |
 | `context`   | `{ headers?: { [contextKey]: headerName }, variables?: { [contextKey]: variableName } }`: the context of an operation from request headers and from what a middleware set with `c.set`.                                                    |
+| `auth`      | `{ jwt: { secret: { env }, issuer?, audience?, algorithm?, header?, cookie? } }`: authenticates callers from a JSON Web Token. Experimental: see [Tokens and sessions](../../docs/auth.md#tokens-and-sessions).                            |
 | `webhooks`  | `{ [operationId]: { scheme, secret, ... } }`: verifies the signature of each request to these operations before parsing it. See [Webhooks](#webhooks).                                                                                     |
 
 What JSON cannot hold goes in a second argument, the hooks: `hono(options, { authenticator, middlewares, app })`.

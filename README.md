@@ -367,6 +367,9 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 | [`@afora/codegen`](packages/codegen/README.md)             | Generates afora code from an `afora.json`, and extracts the `afora.json` of an `Application` back.                                                            |
 | [`@afora/mcp`](packages/mcp/README.md)                     | An MCP server that lets an agent build a domain with `@afora/codegen`.                                                                                        |
 | [`@afora/hono`](packages/hono/README.md)                   | A `hono` sink for outputs: serves the operations as a Hono app, with problem+json errors, masked responses, signed webhooks and an optional OpenAPI document. |
+| [`@afora/fastify`](packages/fastify/README.md)             | A `fastify` sink: the same operations, options and behavior on Fastify.                                                                                       |
+| [`@afora/express`](packages/express/README.md)             | An `express` sink: the same on Express 5.                                                                                                                     |
+| [`@afora/elysia`](packages/elysia/README.md)               | An `elysia` sink: the same on Elysia.                                                                                                                         |
 | [`@afora/ws`](packages/ws/README.md)                       | A `websocket` sink: operations over JSON messages on any runtime, with topic subscriptions that `publishEvents` feeds with domain events.                     |
 | [`@afora/drizzle`](packages/drizzle/README.md)             | A repository provider on Drizzle ORM (SQLite and Postgres) that passes the provider contract kit.                                                             |
 | [`@afora/dynamodb`](packages/dynamodb/README.md)           | A repository provider on one DynamoDB table (single-table layout, unique keys as marker items) that passes the provider contract kit on DynamoDB Local.       |
@@ -434,10 +437,11 @@ bun run build         # build dist/ (ESM + .d.ts)
 bun run test:codegen  # tests of packages/codegen
 bun run test:mcp      # tests of packages/mcp
 bun run test:hono     # tests of packages/hono
+bun run test:fastify  # tests of packages/fastify (also test:express, test:elysia)
 bun run test:ws       # tests of packages/ws
 bun run test:drizzle  # tests of packages/drizzle (SQLite and PGlite)
 bun run test:dynamodb # tests of packages/dynamodb (DynamoDB Local, with DYNAMODB_ENDPOINT)
-bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/ws, packages/drizzle and packages/dynamodb
+bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/fastify, packages/express, packages/elysia, packages/ws, packages/drizzle and packages/dynamodb
 ```
 
 ## Versioning

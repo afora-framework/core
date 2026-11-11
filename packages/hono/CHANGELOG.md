@@ -4,6 +4,8 @@
 
 ### Added
 
+- The package passes `httpProviderContract` of `@afora/core/testing`, with `@afora/fastify`, `@afora/express` and `@afora/elysia`.
+- The option `auth: { jwt: ... }` (experimental) authenticates callers from a JSON Web Token.
 - Hooks, the second argument of `hono(options, hooks)`, for what JSON cannot hold: `authenticator` (who calls, from the request: a `Principal` or `null`), `middlewares` (Hono middlewares run before every route) and `app` (a Hono app to add the routes to). The type `HonoHooks` is exported.
 - An operation whose use case declares an `access` is enforced: it asks the `authenticator` and answers a 401 or a 403 problem; without the hook it answers 401.
 - The route a use case declares (`route` or `@Route`) is served, with the input keys it reads from the query, headers and cookies.

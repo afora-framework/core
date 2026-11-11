@@ -1,0 +1,137 @@
+# @afora/elysia
+
+An [Elysia](https://elysiajs.com) sink for [`@afora/core`](../../README.md) outputs. It turns the operations of an output into an Elysia app: the route each use case declares, validated input (from the body, the query, the path, headers and cookies), the access each use case declares, the response with its status (sensitive values masked), RFC 9457 `application/problem+json` errors, and an OpenAPI document of the same routes.
+
+```bash
+bun add @afora/core @afora/elysia elysia typebox
+# or: npm install @afora/core @afora/elysia elysia typebox
+```
+
+`@afora/core`, `elysia` (`^2.0.0-rc.4`, the version npm installs as `latest`) and TypeBox (`^1`) are peer dependencies. It runs wherever Elysia does: Bun, and Node >= 22.18 through its adapter.
+
+## Example
+
+```ts
+import {
+	blueprintOf,
+	commandOf,
+	outputOf,
+	Route,
+	useCaseOf,
+} from "@afora/core";
+import { elysia } from "@afora/elysia";
+
+@Route("GET", "/posts/{slug}")
+class GetPost extends useCaseOf({
+	name: "GetPost",
+	blueprint: blueprintOf((ctx) => ({ slug: ctx.slug })),
+	response: blueprintOf(() => ({ post: Post })),
+	dependencies: { posts: Posts },
+}) {
+	override async execute() {
+		return { post: await this.dependencies.posts.findBySlug(this.input.slug) };
+	}
+}
+
+const Blog = commandOf({ name: "Blog", useCases: { getPost: GetPost } });
+
+const Api = outputOf({
+	name: "Api",
+	commands: [Blog],
+	pipe: [
+		elysia({
+			basePath: "/api",
+			docs: {
+				path: "/openapi.json",
+				info: { title: "Blog", version: "1.0.0" },
+			},
+		}),
+	],
+});
+
+const app = Api.build(); // an Elysia app
+app.listen(3000);
+```
+
+```
+GET /api/posts/hello          -> 200 { "post": { "slug": "hello", ... } }
+GET /api/posts/Not%20A%20Slug -> 400 application/problem+json, with "issues"
+GET /openapi.json             -> the OpenAPI 3.1 document of the same routes
+```
+
+## Options
+
+All options are JSON, so the stage can live in an `afora.json` (`{ "sink": "elysia", "options": { ... } }`). They are the options of every afora sink that serves HTTP, so moving an output from one server to another changes one import.
+
+| Option      | Meaning                                                                                                                                                                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `basePath`  | Prefix of every route, e.g. `"/api"`.                                                                                                                                                                                                               |
+| `route`     | `{ [operationId]: { method?, path?, status? } }`: overrides the route a use case declares, or the default `POST /{command}/{operation}`.                                                                                                            |
+| `responses` | `{ [operationId]: { headers: { name: value } } }`: static headers of the success responses, such as `cache-control`.                                                                                                                                |
+| `requestId` | `true` (`x-request-id`) or a header name: every response of the sink carries the request's id, or a new one.                                                                                                                                        |
+| `security`  | `{ schemes, operations?, default? }`: the security schemes of the OpenAPI document.                                                                                                                                                                 |
+| `docs`      | `{ path, info: { title, version, description? }, servers? }`: serves the OpenAPI document of the same operations at `path` (not under `basePath`).                                                                                                  |
+| `debug`     | `true` adds the `trace` to problems and the real `detail` to 5xx ones. Off by default.                                                                                                                                                              |
+| `context`   | `{ headers?: { [contextKey]: headerName }, variables?: { [contextKey]: name } }`: the context of an operation from request headers and from what a plugin put in the context of the request (`derive`, `resolve`, `decorate`), else in the `store`. |
+| `auth`      | `{ jwt: { secret: { env }, issuer?, audience?, algorithm?, header?, cookie? } }`: authenticates callers from a JSON Web Token. Experimental: see [Tokens and sessions](../../docs/auth.md#tokens-and-sessions).                                     |
+
+What JSON cannot hold goes in a second argument, the hooks: `elysia(options, { authenticator, middlewares, app })`. The type `ElysiaHooks` is exported.
+
+| Hook            | Meaning                                                                                                                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `authenticator` | `(request) => Principal \| null`: who calls, from the credentials of the request. `request` has `header(name)`, `cookie(name)`, the `operation` and `native`, the Elysia context. |
+| `middlewares`   | Elysia plugins: an instance, or `(app) => app`, run in order before the routes of the sink.                                                                                       |
+| `app`           | The Elysia app to add the routes to, instead of a new one.                                                                                                                        |
+
+Invalid options throw `InvalidOutputStage` when the stage is made, and unknown operation ids in `route` or two operations on one method and path when the output is built.
+
+## Behavior
+
+The requests are handled by the route table of the core (`compileRoutes` of `@afora/core/adapters`), shared by every afora sink that serves HTTP, so they all answer the same way. This package only routes and sends. The behavior is described once, in [Outputs](../../docs/outputs.md); in short:
+
+- **Input.** `post`, `put` and `patch` read a JSON body, `get` and `delete` the query string. Over it come the keys the [route of the use case](../../docs/use-cases.md#routes) places: `{name}` segments of the path, and the query keys, headers and cookies it declares. Text is converted to the numbers and booleans the input takes, and the blueprint of the use case validates it: a 400 problem with `issues`.
+- **Access.** An operation whose use case declares an [`access`](../../docs/auth.md) asks the `authenticator` hook (or `auth`) who calls, and answers a 401 or a 403 problem before the input is validated. With neither, such an operation always answers 401.
+- **Success.** The status of the route (`200` by default) with the response as JSON; records go through `toJSON`, so sensitive values are masked. A `204` has no body. The keys a route sends with `setCookie` leave the body and become `set-cookie` headers.
+- **Errors.** `application/problem+json`, with the status of `statusOf`: the `statuses` of the output first, then 400, 401, 403, 404, 409, 422 for a declared error, else 500, whose detail is `"Internal error."` unless `debug` is on.
+- **Unknown routes** are a 404 problem and anything thrown outside an operation is a problem too, unless you gave the `app`.
+- **The body.** The routes carry no Elysia schema: the blueprint of each use case validates the input, once. The body reaches the route table as the text that was sent (`parse: "text"`).
+
+## Middlewares and your own app
+
+```ts
+import { cors } from "@elysiajs/cors";
+
+elysia(
+	{ context: { variables: { tenant: "tenant" } } },
+	{
+		middlewares: [
+			cors(),
+			(app) =>
+				app.derive("global", ({ request }) => ({
+					tenant: tenantOf(request.headers.get("host")),
+				})),
+		],
+	},
+);
+```
+
+A value a middleware sets reaches the use case through `context.variables`, for the operations whose `context` blueprint declares the key.
+
+`app` takes an Elysia app you made; its plugins and `onError` are kept, and the sink adds no error handler. Elysia types every route of an app, and the routes of the sink come from data, so the built app is typed `AnyElysia`: for an Eden client, describe the API with the OpenAPI document instead.
+
+## Catalog
+
+`ElysiaStages` is `stageCatalogOf(elysia)` (from `@afora/core/adapters`), and `stages` are the entries codegen reads to resolve `{ "sink": "elysia" }` in an `afora.json`:
+
+```ts
+// stages.ts
+export { stages } from "@afora/elysia";
+```
+
+```bash
+bunx afora-codegen generate --stages ./stages.ts
+```
+
+## Testing a sink
+
+This package passes `httpProviderContract` of `@afora/core/testing`, the cases every afora sink that serves HTTP must pass. A sink for another server is tested the same way; see [Outputs](../../docs/outputs.md).
