@@ -6,7 +6,7 @@
 //   --jobs 3             that many rows at a time, to iterate: the times are off by 1.4x and more, and nothing is written
 //   --guard              afora against Zod 4, fails over a limit (what CI runs)
 //   --compare <base>    afora here against afora in another checkout (or built module)
-//   --check             fails when RESULTS.md, the chart or the block of the README are not what results/latest.json gives
+//   --check             fails when RESULTS.md, the chart or the blocks of the README and docs/performance.md are not what results/latest.json gives
 //   --render             RESULTS.md again from results/latest.json, no timing
 import { writeFileSync } from "node:fs";
 import { delimiter } from "node:path";
@@ -28,6 +28,7 @@ import {
 	renderChart,
 	renderResults,
 	withSummary,
+	withTables,
 } from "./render.ts";
 
 const args = process.argv.slice(2);
@@ -54,6 +55,7 @@ const generated = {
 	results: `${here}RESULTS.md`,
 	chart: `${here}results/chart.svg`,
 	readme: `${here}../README.md`,
+	performance: `${here}../docs/performance.md`,
 };
 
 /** Everything that is generated from a report. */
@@ -62,6 +64,10 @@ async function rendered(report: Report) {
 		results: renderResults(report),
 		chart: renderChart(report),
 		readme: withSummary(await Bun.file(generated.readme).text(), report),
+		performance: withTables(
+			await Bun.file(generated.performance).text(),
+			report,
+		),
 	};
 }
 
@@ -71,7 +77,7 @@ async function writeGenerated(report: Report) {
 		await Bun.write(generated[key], files[key]);
 	}
 	// The repository formats its Markdown with Biome; what is written is what a commit would hold.
-	await Bun.$`bunx biome format --write ${generated.results} ${generated.readme}`
+	await Bun.$`bunx biome format --write ${generated.results} ${generated.readme} ${generated.performance}`
 		.cwd(`${here}..`)
 		.nothrow()
 		.quiet();
@@ -256,7 +262,7 @@ if (process.env.BENCH_CHILD === "1") {
 		process.exit(1);
 	}
 	console.log(
-		"RESULTS.md, the chart and the block of README.md match results/latest.json.",
+		"RESULTS.md, the chart and the blocks of README.md and docs/performance.md match results/latest.json.",
 	);
 } else {
 	// Only Bun gets here: the Node leg is the `BENCH_CHILD` branch above.
