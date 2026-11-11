@@ -479,6 +479,7 @@ export type {
 	IRepositoryProvider,
 	ProviderIncrementOptions,
 	ProviderKeyset,
+	ProviderMigrationResult,
 	ProviderUpdateOptions,
 	QueryValueOf,
 	RepositoryAction,

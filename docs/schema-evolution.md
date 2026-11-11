@@ -98,11 +98,11 @@ const report = await app.migrate({
 	lock, // the committed afora.lock.json, for the plan of provider.migrate
 });
 report.entities.Entry;
-// { scanned, upToDate, upgraded, removalPending, invalid: [{ id, issues }], movedFromPreviousNames, removedKeys }
+// { scanned, upToDate, upgraded, removalPending, invalid: [{ id, issues }], movedFromPreviousNames, removedKeys, deferred }
 ```
 
 - `check` only reads: it counts what `apply` would do and lists in `invalid` the rows the entity rejects once brought up (a tightened constraint, a duplicate the upgrade cannot fix, a missing reference), each with its issues.
-- `apply` first gives each provider the plan of its entity (`provider.migrate(context, plan)`, see below), then rewrites the rows below `schemaVersion` or with a `fill` or `renamedFrom` pending. It writes the brought-up data as it is (`updatedAt` and `version` are left alone), with `$v`. Invalid rows are left as they are.
+- `apply` first gives each provider the plan of its entity (`provider.migrate(context, plan)`, see below), then rewrites the rows below `schemaVersion` or with a `fill` or `renamedFrom` pending. It writes the brought-up data as it is (`updatedAt` and `version` are left alone), with `$v`. Invalid rows are left as they are. When the provider defers the plan (`{ deferred: true }`, see below), the rows of that entity are not walked: its report has `deferred: true` and every count at 0; run `app.migrate` again once the plan is applied.
 - Keys the blueprint no longer declares stay in the rows unless `destructive: true`: such a row counts in `removalPending`, and `removedKeys` lists their paths (`meta.old`, `blocks[].stale`).
 - With `previousNames`, the rows stored under each previous name are read with a context made for it (`context.name` is `<Old>Repository`, `context.entity` a subclass whose record name is `Old`) and inserted under the current name, unless a row with the id is already there. They are removed from the old name only with `destructive: true`.
 - It is idempotent and resumable: a row already brought up counts as `upToDate`, a row already moved is not moved again, so a run stopped halfway is run again.
@@ -129,6 +129,6 @@ The `@afora/codegen` CLI writes and checks the lock: `afora-codegen schema lock`
 A provider needs nothing new to support schema evolution: the core brings rows up, and the backfill uses `findMany`, `update`, `findOne`, `insert` and `remove`. A provider that stores rows as documents keeps `$v` as any key; one with a fixed set of columns needs a column for it, or maps `context.schema.key` to one of its own.
 
 - `context.schema` (`RepositorySchema`), for an entity with `schemaVersion`: `{ version, key, previousNames }`.
-- `provider.migrate?(context, plan)` is optional. `app.migrate({ mode: "apply" })` calls it before the backfill of each entity, with `{ entity, changes, destructive }`: the changes of `diffSchemas` from the given `lock`, or none without one. A provider with a structural schema (SQL) turns them into DDL; it applies destructive changes only when `plan.destructive`. Document stores leave it out.
+- `provider.migrate?(context, plan)` is optional. `app.migrate({ mode: "apply" })` calls it before the backfill of each entity, with `{ entity, changes, destructive }`: the changes of `diffSchemas` from the given `lock`, or none without one. A provider with a structural schema (SQL) turns them into DDL; it applies destructive changes only when `plan.destructive`. Document stores leave it out. It gives nothing once the plan is applied, or `{ deferred: true }` (`ProviderMigrationResult`) when it only wrote it for later (`@afora/drizzle` with `migrations: { file }`): the store does not have the new shape yet, so `app.migrate` skips the backfill of the entity instead of writing rows a column is missing for.
 - `inMemoryProvider` keys the table of an entity that declares a name (`name`, or a `static recordName`) by that name, as a database names its tables, so a context made for a previous name reads its old rows; the table of an entity without one stays keyed by its class.
 - The [provider contract](repositories.md#testing-a-provider) has schema evolution cases.

@@ -9,6 +9,7 @@ import {
 	InvalidStoredSchemaVersion,
 	inMemoryProvider,
 	listOf,
+	providersOf,
 	type RepositoryContext,
 	type RepositoryData,
 	ReservedEntityKey,
@@ -392,6 +393,7 @@ describe("app.migrate", () => {
 					invalid: [],
 					movedFromPreviousNames: 0,
 					removedKeys: ["draft"],
+					deferred: false,
 				},
 			},
 		});
@@ -573,6 +575,40 @@ describe("app.migrate", () => {
 			destructive: false,
 			changes: [],
 		});
+	});
+
+	test("skips the backfill of an entity whose provider deferred its migration", async () => {
+		const { provider, raw, ids } = await seeded();
+		const deferring = {
+			...provider,
+			capabilities: provider.capabilities,
+			async update(): Promise<void> {
+				throw new Error("no such column: $v");
+			},
+			async migrate() {
+				return { deferred: true } as const;
+			},
+		};
+		const Providers = providersOf({ main: deferring });
+		const app = applicationOf({
+			name: "cms",
+			entities: { Entry },
+			repositories: { Entries },
+			providers: Providers,
+			provider: Providers.main,
+		});
+		const report = await app.migrate({ mode: "apply" });
+		expect(report.entities.Entry).toMatchObject({
+			deferred: true,
+			scanned: 0,
+			upgraded: 0,
+		});
+		const [first] = await provider.findMany(raw, { where: { id: ids[0] } });
+		expect(first).not.toHaveProperty(SCHEMA_VERSION_KEY);
+		// check never calls migrate, so it is never deferred.
+		const check = await app.migrate({ mode: "check" });
+		expect(check.entities.Entry?.deferred).toBe(false);
+		expect(check.entities.Entry?.upgraded).toBe(3);
 	});
 
 	test("rewrites a versioned entity at the version it read, which it keeps", async () => {

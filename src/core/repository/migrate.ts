@@ -291,7 +291,18 @@ export async function migrateRepository(
 		invalid: [],
 		removedKeys: new Set(),
 	};
-	if (apply) await provider.migrate?.(context, options.plan);
+	if (apply) {
+		const migrated = await provider.migrate?.(context, options.plan);
+		// The plan was written for later: the store does not have the new
+		// shape (a column, the version key), so no row can be written in it.
+		if (
+			typeof migrated === "object" &&
+			migrated !== null &&
+			migrated.deferred === true
+		) {
+			return { ...reportOf(tally), deferred: true };
+		}
+	}
 
 	await walk(provider, context, pageSize, async (rows) => {
 		for (const item of await upcastPage(state, plan, rows)) {
@@ -379,6 +390,11 @@ export async function migrateRepository(
 		});
 	}
 
+	return { ...reportOf(tally), deferred: false };
+}
+
+/** The counts of `tally`. */
+function reportOf(tally: Tally): Omit<EntityMigrationReport, "deferred"> {
 	return {
 		scanned: tally.scanned,
 		upToDate: tally.upToDate,

@@ -215,7 +215,7 @@ export function deferredProvider(
 	) => {
 		const { provider } = state;
 		if (!provider) real("migrate");
-		await provider?.migrate?.(...args);
+		return provider?.migrate?.(...args);
 	};
 	Object.defineProperty(proxy, "capabilities", {
 		get: () => state.provider?.capabilities,

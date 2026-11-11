@@ -136,6 +136,12 @@ export interface EntityMigrationReport {
 	readonly movedFromPreviousNames: number;
 	/** Paths of the stored keys the blueprint no longer declares, sorted. */
 	readonly removedKeys: readonly string[];
+	/**
+	 * Whether `provider.migrate` deferred the plan (`{ deferred: true }`, it
+	 * wrote it to be run later): the rows were then not walked, and every
+	 * count is 0. Run `app.migrate` again once the plan is applied.
+	 */
+	readonly deferred: boolean;
 }
 
 /** What `app.migrate` gives. */
