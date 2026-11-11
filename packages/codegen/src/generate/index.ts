@@ -776,6 +776,9 @@ function stepDoc(
 			) as { module: string; name: string };
 			return [key, e.bind(module, name, providers.taken)];
 		}
+		if (key === "params" && Object.hasOwn(step, "run")) {
+			return [key, blueprintRefDoc(value, e)];
+		}
 		return [key, literal(value)];
 	});
 	return objectDoc(props);
@@ -1476,6 +1479,9 @@ export function generate(
 	}
 	if (spec.log !== undefined) {
 		props.push(["log", logDoc(spec.log, app, providers)]);
+	}
+	if (spec.trace !== undefined) {
+		props.push(["trace", importedDoc(spec.trace, app, providers)]);
 	}
 	const publishers = (spec as { publishers?: Record<string, unknown> })
 		.publishers;

@@ -101,6 +101,7 @@
 					"type": "concept"
 				},
 				{ "title": "Logging", "path": "docs/logging.md", "type": "concept" },
+				{ "title": "Tracing", "path": "docs/tracing.md", "type": "concept" },
 				{
 					"title": "Standard Schema",
 					"path": "docs/standard-schema.md",
@@ -195,6 +196,11 @@
 				{
 					"title": "@afora/ws",
 					"path": "packages/ws/README.md",
+					"type": "reference"
+				},
+				{
+					"title": "@afora/otel",
+					"path": "packages/otel/README.md",
 					"type": "reference"
 				},
 				{

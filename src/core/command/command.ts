@@ -24,6 +24,15 @@ import { isRepository } from "../repository/repository";
 import { findState, type RepositoryState } from "../repository/state";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import {
+	endSpan,
+	failSpan,
+	type ITracer,
+	type ITraceSpan,
+	resolveTracer,
+	runInSpan,
+	startSpan,
+} from "../tracing/tracing";
 import { isUseCaseCatalog } from "../use-case/plugin-catalog";
 import { type ExecutionScope, ScopeKey } from "../use-case/scope";
 import type {
@@ -366,17 +375,25 @@ function declareCommand<
 	const operations = Object.freeze(Object.keys(useCases));
 	const frozenUseCases = Object.freeze({ ...useCases });
 
-	/** Steps 1 to 5: validates, runs (in a transaction if declared) and drains the events. */
+	/**
+	 * Steps 1 to 5: validates, runs (in a transaction if declared) and drains
+	 * the events. With a tracer, the span of the call starts before the
+	 * validation; `keepSpan` leaves it open on success for `run`, which ends it
+	 * after the policy.
+	 */
 	const perform = async (
 		op: string,
 		input: unknown,
 		options: { context?: unknown; env?: unknown } | undefined,
+		keepSpan: boolean,
 	): Promise<{
 		value: unknown;
 		events: EntityEvent[];
 		context: unknown;
 		env: () => Readonly<Record<string, unknown>>;
 		logger: ILogger;
+		tracer: ITracer | undefined;
+		span: ITraceSpan | undefined;
 	}> => {
 		if (typeof op !== "string" || !Object.hasOwn(frozenUseCases, op)) {
 			throw new UnknownCommandOperation({
@@ -386,24 +403,43 @@ function declareCommand<
 		}
 		const where = `${source}.${op}`;
 		const UseCase = frozenUseCases[op] as AnyUseCaseClass;
+		// The tracer of the application that bound the use case: the span of
+		// the call is the parent of the span of the use case, which its scope
+		// carries. It starts before the checks, so that their failures show.
+		const tracer = resolveTracer(undefined, UseCase);
+		const span =
+			tracer === undefined
+				? undefined
+				: startSpan(
+						tracer,
+						`command ${where}`,
+						{ "afora.command": where, "afora.operation": op },
+						undefined,
+					);
 		let callContext: unknown = options?.context;
 		let given: unknown = callContext;
-		if (context) {
-			const checked = context.safeParse(callContext);
-			if (checked.issues) {
-				throw new InvalidCommandContext({
-					source: where,
-					details: { issues: checked.issues },
-					cause: checked.issues.find((issue) => issue.cause)?.cause,
-				});
+		let overrides: ReturnType<typeof callEnvironment> | undefined;
+		try {
+			if (context) {
+				const checked = context.safeParse(callContext);
+				if (checked.issues) {
+					throw new InvalidCommandContext({
+						source: where,
+						details: { issues: checked.issues },
+						cause: checked.issues.find((issue) => issue.cause)?.cause,
+					});
+				}
+				callContext = checked.value;
+				given = narrowed(UseCase, callContext);
 			}
-			callContext = checked.value;
-			given = narrowed(UseCase, callContext);
+			overrides =
+				options?.env === undefined
+					? undefined
+					: callEnvironment(where, environments, options.env);
+		} catch (error) {
+			failSpan(span, error, ExceptionLayers.Command);
+			throw error;
 		}
-		const overrides =
-			options?.env === undefined
-				? undefined
-				: callEnvironment(where, environments, options.env);
 		// The application that bound the use case logs the call, and every use
 		// case it runs, bound or not, gets its logger through the scope.
 		const logger = resolveLogger(undefined, UseCase);
@@ -414,11 +450,13 @@ function declareCommand<
 				overrides === undefined || overrides.byEnvironment.size === 0
 					? scope?.environments
 					: overrides.byEnvironment;
-			if (!environmentsOfCall && !logger) return scope;
+			if (!environmentsOfCall && !logger && !tracer) return scope;
 			return {
+				...scope,
 				providers: scope?.providers ?? new Map(),
 				...(environmentsOfCall ? { environments: environmentsOfCall } : {}),
 				...(logger ? { logger } : {}),
+				...(tracer ? { tracer, ...(span ? { span } : {}) } : {}),
 			};
 		};
 		const run = async (declared: ExecutionScope | undefined) => {
@@ -431,12 +469,21 @@ function declareCommand<
 		const started = clock();
 		const outcome = await guard(
 			{ layer: ExceptionLayers.Command, source: where },
-			() =>
-				provider?.transaction
-					? provider.transaction((scoped) =>
-							run({ providers: new Map([[provider, scoped]]) }),
-						)
-					: run(undefined),
+			span === undefined || tracer === undefined
+				? () =>
+						provider?.transaction
+							? provider.transaction((scoped) =>
+									run({ providers: new Map([[provider, scoped]]) }),
+								)
+							: run(undefined)
+				: () =>
+						runInSpan(tracer, span, () =>
+							provider?.transaction
+								? provider.transaction((scoped) =>
+										run({ providers: new Map([[provider, scoped]]) }),
+									)
+								: run(undefined),
+						),
 		).catch((error: unknown) => {
 			// Logged once: a use case that failed inside has logged it already.
 			logFailure(
@@ -445,17 +492,21 @@ function declareCommand<
 				{ command: where, ms: elapsed(started) },
 				error,
 			);
+			failSpan(span, error, ExceptionLayers.Command);
 			throw error;
 		});
 		writeLog(logger, "debug", "command", {
 			command: where,
 			ms: elapsed(started),
 		});
+		if (!keepSpan) endSpan(span);
 		return {
 			...outcome,
 			context: callContext,
 			env: () => overrides?.merged ?? loadEnvironments(environments),
 			logger: logger ?? silentLogger,
+			tracer,
+			span,
 		};
 	};
 
@@ -479,7 +530,7 @@ function declareCommand<
 			input: unknown,
 			options?: { context?: unknown; env?: unknown },
 		) {
-			const { value, events } = await perform(op, input, options);
+			const { value, events } = await perform(op, input, options, false);
 			return { value, events } satisfies CommandExecution<unknown>;
 		},
 		async run(
@@ -493,19 +544,42 @@ function declareCommand<
 				context: callContext,
 				env,
 				logger,
-			} = await perform(op, input, options);
-			await applyPolicy(
-				command as unknown as AnyCommand,
-				events,
-				onEventError,
-				{
-					operation: op,
-					raised,
-					context: callContext,
-					env,
-					logger,
-				},
-			);
+				tracer,
+				span,
+			} = await perform(op, input, options, true);
+			const call = {
+				operation: op,
+				raised,
+				context: callContext,
+				env,
+				logger,
+			};
+			if (span === undefined || tracer === undefined) {
+				await applyPolicy(
+					command as unknown as AnyCommand,
+					events,
+					onEventError,
+					call,
+				);
+				return value;
+			}
+			// The span of the call covers its policy: a handler or a publisher
+			// that fails fails it, and what the policy runs nests in it when the
+			// tracer has a current span (`withSpan`).
+			try {
+				await runInSpan(tracer, span, () =>
+					applyPolicy(
+						command as unknown as AnyCommand,
+						events,
+						onEventError,
+						call,
+					),
+				);
+			} catch (error) {
+				failSpan(span, error, ExceptionLayers.Command);
+				throw error;
+			}
+			endSpan(span);
 			return value;
 		},
 	};

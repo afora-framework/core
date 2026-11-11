@@ -3,7 +3,7 @@
 An entity is a record with identity, ready to persist. `entityOf` takes a blueprint and the options of `recordOf` (`name` included, which keeps the name of the entity [stable when the code is minified](records.md)), and adds four keys to it, from `std`:
 
 - `id`: an `Id` (UUID v7), generated when the value has none and always listed in `options.unique`.
-- `createdAt`: generated as now when the value has none.
+- `createdAt`: generated as now when the value has none. The `id` and `createdAt` that `entityOf` makes by default (and the `expiresAt` of an entity that expires) are made only after the rest of the value is known to be valid, so invalid input makes none of them; an entity that nests others gets its id after theirs. A generator set with `configure({ idGenerator })` still makes its id first, and the id is checked.
 - `updatedAt`: absent until the first change, then set to now by each `set` or `change.<key>`, before `onSetAll` and `onSet` run.
 - `deletedAt`: set by `destroy()`, which then runs `onDestroy`. A destroyed entity (`isDeleted`) no longer changes: `set`, `change.<key>` and `destroy` throw `DeletedEntity`.
 

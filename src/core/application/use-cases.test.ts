@@ -8,12 +8,15 @@ import {
 	environmentOf,
 	exceptionOf,
 	InvalidApplicationDeclaration,
+	InvalidJsonData,
+	InvalidJsonSchema,
 	inMemoryProvider,
 	PasswordHasherRequired,
 	RepositoryUniqueViolation,
 	RepositoryUsedOutsideApplication,
 	recordOf,
 	repositoryOf,
+	SyncVerifyUnsupported,
 	UnregisteredApplicationReference,
 	UnregisteredUseCaseDependency,
 	useCaseOf,
@@ -241,6 +244,27 @@ describe("applicationOf useCases and exceptions", () => {
 		).toBeDefined();
 		expect(isExportedException(RepositoryUniqueViolation)).toBe(true);
 		expect(isExportedException(Taken)).toBe(false);
+	});
+
+	test("the exceptions std exports count as exported without being registered", () => {
+		// They are marked by the module that declares them, so a bundler that
+		// drops unused modules ("sideEffects": false) keeps the mark with the class.
+		const Std = concrete(
+			useCaseOf({
+				name: "Std",
+				blueprint: Empty,
+				response: Empty,
+				errors: [
+					PasswordHasherRequired,
+					SyncVerifyUnsupported,
+					InvalidJsonData,
+					InvalidJsonSchema,
+				],
+			}),
+		);
+		expect(
+			applicationOf({ name: "std", useCases: { Std } } as never),
+		).toBeDefined();
 	});
 
 	test("every exception the package exports counts as exported", () => {

@@ -146,6 +146,29 @@ test("ctx.list mirrors every field as a list, and ctx.list.optional as an option
 	};
 });
 
+test("ctx.optional, ctx.list and ctx.list.optional make a field when it is read, once, and stay frozen", () => {
+	blueprintOf((ctx) => {
+		for (const mirror of [ctx.optional, ctx.list, ctx.list.optional]) {
+			expect(Object.isFrozen(mirror)).toBe(true);
+			const descriptor = Object.getOwnPropertyDescriptor(mirror, "string");
+			expect(descriptor?.enumerable).toBe(true);
+			expect(typeof descriptor?.get).toBe("function");
+		}
+		expect(Object.keys(ctx.optional)).toEqual(Object.keys(Std.properties));
+		expect(ctx.optional.string).toBe(ctx.optional.string);
+		expect(ctx.list.string).toBe(ctx.list.string);
+		expect(ctx.list.optional.email).toBe(ctx.list.optional.email);
+		expect(ctx.list.optional.email).toBe(optionalOf(ctx.list.email));
+		expect(() => {
+			(ctx.list as Record<string, unknown>).string = 1;
+		}).toThrow(TypeError);
+		const spread: Record<string, unknown> = { ...ctx.list.optional };
+		expect(Object.keys(spread)).toEqual(Object.keys(Std.properties));
+		expect(spread.email).toBe(ctx.list.optional.email);
+		return {};
+	});
+});
+
 test('"list" cannot be a plugin property', () => {
 	const Broken = blueprintPluginOf("broken", { list: Std.properties.string });
 

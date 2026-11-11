@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 502 exports.
+Tier: stable. 510 exports.
 
 ### AbstractPropertyConstructor
 
@@ -340,7 +340,8 @@ called, as `ctx.number({ min: 1 })`, for the subclass `Property.with` makes.
 *type* · tier: stable · `import type { CheckedSteps } from "@afora/core"`
 
 What `useCaseOf` takes as `steps`: the steps, inferred as a tuple, each
-checked against the values in scope. Steps that are not a tuple (built at
+checked against the values in scope, and the `return` against what the
+response blueprint (the collection `Response`) takes. Steps that are not a tuple (built at
 run time) are checked only when the use case is declared.
 
 ### CommandBuilder
@@ -1072,6 +1073,20 @@ on every check.
 
 Stage factories by name.
 
+### ITraceSpan
+
+*interface* · tier: stable · `import type { ITraceSpan } from "@afora/core"`
+
+A span afora started; it ends it once, with the attributes of the outcome.
+
+### ITracer
+
+*interface* · tier: stable · `import type { ITracer } from "@afora/core"`
+
+What traces an application: a span per command operation, use case and
+repository call made through a use case. `@afora/otel` adapts an
+OpenTelemetry `Tracer` to it; `memoryTracer()` keeps the spans for tests.
+
 ### IUseCaseCatalog
 
 *interface* · tier: stable · `import type { IUseCaseCatalog } from "@afora/core"`
@@ -1319,6 +1334,12 @@ was written by newer code), or an `upgrade` step did not give an object.
 `source` is the repository name; reads throw it as the cause of
 `InvalidRepositoryData`.
 
+### InvalidTraceDeclaration
+
+*const* · tier: stable · `import { InvalidTraceDeclaration } from "@afora/core"`
+
+The `trace` of an application is not a tracer (`ITracer`).
+
 ### InvalidUseCaseDeclaration
 
 *const* · tier: stable · `import { InvalidUseCaseDeclaration } from "@afora/core"`
@@ -1349,7 +1370,8 @@ or with options that are not a plain object. `source` is the plugin name.
 
 A step of a use case is invalid: at declaration (`useCaseOf({ steps })`),
 or while the steps run (a `change` or `invoke` on something that is not a
-record or has no such member). `details.index` is the position of the step.
+record or has no such member, or `args` that a `run`'s `params` reject).
+`details.index` is the position of the step.
 
 ### Ip
 
@@ -1484,6 +1506,18 @@ bigint) is the string `MASK`; lists and objects keep their shape, and
 *interface* · tier: stable · `import type { MemoryLogProvider } from "@afora/core"`
 
 A provider that keeps the lines, for tests.
+
+### MemorySpan
+
+*interface* · tier: stable · `import type { MemorySpan } from "@afora/core"`
+
+A span as `memoryTracer` keeps it.
+
+### MemoryTracer
+
+*interface* · tier: stable · `import type { MemoryTracer } from "@afora/core"`
+
+A tracer that keeps the spans, for tests.
 
 ### Meta
 
@@ -2644,6 +2678,19 @@ The hasher in use cannot verify without waiting; use `verify` instead.
 
 A string that is not blank once trimmed.
 
+### TraceAttributes
+
+*type* · tier: stable · `import type { TraceAttributes } from "@afora/core"`
+
+What a span carries: names and outcomes only, never an input, an argument,
+a response or any value of a record.
+
+### TraceStatus
+
+*type* · tier: stable · `import type { TraceStatus } from "@afora/core"`
+
+How a span ended.
+
 ### TransformFactory
 
 *type* · tier: stable · `import type { TransformFactory } from "@afora/core"`
@@ -3378,6 +3425,12 @@ A log provider, checked, and named for `describe()` when `name` is given.
 *function* · tier: stable · `import { memoryLogProvider } from "@afora/core"`
 
 Keeps every line in `entries`, for tests.
+
+### memoryTracer
+
+*function* · tier: stable · `import { memoryTracer } from "@afora/core"`
+
+Keeps every span in `spans`, with its parent, for tests.
 
 ### openapi
 

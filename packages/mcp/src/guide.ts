@@ -114,7 +114,7 @@ a file of your own.
       "implementation": { "steps": [
         { "find": "users.findByEmail", "args": ["$input.email"], "as": "existing" },
         { "ensure": "absent", "value": "$existing", "error": "UserAlreadyExists" },
-        { "run": "hashPassword", "fn": { "import": "../hash#hashPassword" }, "args": ["$input.plainPassword"], "as": "hash" },
+        { "run": "hashPassword", "fn": { "import": "../hash#hashPassword" }, "args": ["$input.plainPassword"], "params": { "fields": { "plain": "string" } }, "as": "hash" },
         { "build": "User", "values": { "name": "$input.name", "email": "$input.email", "password": "$hash" }, "as": "user" },
         { "create": "users", "value": "$user", "as": "saved" },
         { "return": { "user": "$saved" } }
@@ -231,6 +231,8 @@ reference, and the rule round-trips as data. Use steps when the rule reads as "f
 
 - One value computed from others (a hash, a total, a slug): keep the steps and add a \`run\` step with an imported function,
   \`{ "run": "total", "fn": { "import": "./pricing.ts#total" }, "args": ["$cart.items"], "as": "total" }\`. The function is code; the flow stays data.
+  Declare \`"params"\` (fields matching the args by position) whenever the function relies on what it gets: the args are then checked before it
+  runs, and a wrong one is an \`InvalidUseCaseStep\` naming the field, instead of the function running on a value of the wrong type.
 - A rule that **branches** (if the stock is short, back-order, else reserve), **loops** over a list with effects, needs several \`run\` steps
   in a row, or reads better as five lines of code than as fifteen steps: write it in code,
   \`"implementation": { "import": "../handlers/reserve#Reserve" }\`. The spec still declares its input, response, context, dependencies,

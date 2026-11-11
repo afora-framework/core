@@ -343,6 +343,8 @@ export type StepSpec =
 			/** The function, imported as it is. */
 			readonly fn: ImportRef;
 			readonly args?: readonly StepValueSpec[] | string;
+			/** Checks the `args` when the step runs: each against the field at its position. */
+			readonly params?: BlueprintRefSpec;
 			readonly as?: string;
 	  }
 	| { readonly return: StepValueSpec };
@@ -478,6 +480,8 @@ export interface Spec {
 	readonly providers?: Readonly<Record<string, ProviderSpec>>;
 	/** How the application logs. */
 	readonly log?: LogSpec;
+	/** What traces the application (`applicationOf({ trace })`): a tracer written by hand, e.g. `otelTracer()`. */
+	readonly trace?: ImportRef;
 	/** Where event policies publish (`applicationOf({ publishers })`), by camelCase key: a publisher written by hand. */
 	readonly publishers?: Readonly<Record<string, ImportRef>>;
 	readonly properties?: Readonly<Record<string, PropertySpec>>;

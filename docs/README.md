@@ -94,6 +94,7 @@ One page per concept, the spec of its behavior. Reading them in this order works
 | [Environments](environments.md)                      | Validated environment variables.                                                                           |
 | [Exceptions](exceptions.md)                          | Layers, `trace`, `guard`.                                                                                  |
 | [Logging](logging.md)                                | `log` and log providers, the `Logger` dependency, `logFrom`; what afora logs.                              |
+| [Tracing](tracing.md)                                | `trace` and `@afora/otel`: the spans afora makes, their attributes, no value in any span.                  |
 | [Standard Schema](standard-schema.md)                | Hono, tRPC, TanStack Form, `safeParse`, `stripUndeclared`.                                                 |
 | [OpenAPI](openapi.md)                                | `toOpenAPI` for models; the `openapi` sink is in [Outputs](outputs.md).                                    |
 
@@ -112,7 +113,7 @@ Short answers to common tasks, each with code that `bun run test:interop` runs.
 
 ## Packages
 
-Each package has its own README: [codegen](../packages/codegen/README.md) and [mcp](../packages/mcp/README.md) (with the [command line](cli.md) reference of both), the HTTP providers [hono](../packages/hono/README.md), [fastify](../packages/fastify/README.md), [express](../packages/express/README.md) and [elysia](../packages/elysia/README.md), the [ws](../packages/ws/README.md) sink, and the storage providers [drizzle](../packages/drizzle/README.md) and [dynamodb](../packages/dynamodb/README.md).
+Each package has its own README: [codegen](../packages/codegen/README.md) and [mcp](../packages/mcp/README.md) (with the [command line](cli.md) reference of both), the HTTP providers [hono](../packages/hono/README.md), [fastify](../packages/fastify/README.md), [express](../packages/express/README.md) and [elysia](../packages/elysia/README.md), the [ws](../packages/ws/README.md) sink, the [otel](../packages/otel/README.md) tracer, and the storage providers [drizzle](../packages/drizzle/README.md) and [dynamodb](../packages/dynamodb/README.md).
 
 ## Runtime and deployment
 

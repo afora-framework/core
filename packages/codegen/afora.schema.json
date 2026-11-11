@@ -270,6 +270,19 @@
 			],
 			"description": "How the application logs: { \"level\", \"providers\" }, or { \"import\": \"./file.ts#log\" } for a log made by hand (logFrom)."
 		},
+		"trace": {
+			"type": "object",
+			"required": ["import"],
+			"properties": {
+				"import": {
+					"type": "string",
+					"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+					"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+				}
+			},
+			"additionalProperties": false,
+			"description": "What traces the application (applicationOf({ trace })): a tracer written by hand, { \"import\": \"./trace.ts#tracer\" }, e.g. otelTracer() of @afora/otel."
+		},
 		"publishers": {
 			"type": "object",
 			"patternProperties": {
@@ -1981,6 +1994,33 @@
 																			}
 																		],
 																		"description": "The arguments: a list of values, or one \"$reference\" to a list, which is spread."
+																	},
+																	"params": {
+																		"anyOf": [
+																			{
+																				"type": "string",
+																				"pattern": "^[A-Z][A-Za-z0-9]*$",
+																				"description": "The name of a declared blueprint."
+																			},
+																			{
+																				"type": "object",
+																				"required": ["fields"],
+																				"properties": {
+																					"fields": {
+																						"type": "object",
+																						"patternProperties": {
+																							"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+																								"$ref": "#/$defs/Field"
+																							}
+																						},
+																						"additionalProperties": false,
+																						"description": "Fields by key."
+																					}
+																				},
+																				"additionalProperties": false
+																			}
+																		],
+																		"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
 																	},
 																	"as": {
 																		"type": "string",

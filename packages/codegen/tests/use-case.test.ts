@@ -99,6 +99,7 @@ const accounts: Spec = {
 						run: "hashPassword",
 						fn: { import: "../hash#hashPassword" },
 						args: ["$input.plainPassword"],
+						params: { fields: { plain: "string" } },
 						as: "hash",
 					},
 					{
@@ -427,6 +428,16 @@ describe("validation", () => {
 			"run.fn must be an import",
 			(c) => (steps(c)[2].fn = "hashPassword"),
 			"invalid_import@useCases.Register.implementation.steps.2.fn",
+		],
+		[
+			"run.params of another length than args",
+			(c) => (steps(c)[2].params = { fields: { a: "string", b: "string" } }),
+			"invalid_args@useCases.Register.implementation.steps.2.params",
+		],
+		[
+			"run.params names no blueprint",
+			(c) => (steps(c)[2].params = "Nope"),
+			"unknown_blueprint@useCases.Register.implementation.steps.2.params",
 		],
 		[
 			"run.fn import shape",
