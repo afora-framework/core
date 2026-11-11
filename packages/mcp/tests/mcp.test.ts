@@ -320,6 +320,75 @@ describe("catalog -> upsert -> validate -> generate", () => {
 			reason: "The project has no tsconfig.json.",
 		});
 	});
+
+	test("authors a variant field, refuses an invalid one and generates code that type-checks", async () => {
+		const { dir, client } = await setup();
+		const { tools } = await client.client.listTools();
+		const upsert = tools.find((tool) => tool.name === "afora_spec_upsert");
+		expect(JSON.stringify(upsert?.inputSchema)).toContain('"variant"');
+		const guide = (
+			await client.client.readResource({ uri: "afora://spec/guide" })
+		).contents[0] as { text: string };
+		expect(guide.text).toContain('{ "variant": { "key": "type"');
+
+		await client.call("afora_spec_write", {
+			spec: {
+				version: 1,
+				blueprints: {
+					Click: { fields: { target: "string" } },
+					Signup: { fields: { email: "email" } },
+				},
+			},
+		});
+		const event = (of: Record<string, unknown>) => ({
+			kind: "entity",
+			name: "Event",
+			declaration: {
+				fields: {
+					at: "dateTime",
+					what: { variant: { key: "type", of }, list: true },
+				},
+			},
+		});
+		const invalid = await client.call(
+			"afora_spec_upsert",
+			event({ click: "Click", signup: "Missing" }),
+		);
+		expect(invalid.data.written).toBe(false);
+		expect(invalid.data.issues).toContainEqual(
+			expect.objectContaining({
+				code: "unknown_type",
+				path: [
+					"entities",
+					"Event",
+					"fields",
+					"what",
+					"variant",
+					"of",
+					"signup",
+				],
+			}),
+		);
+		const valid = await client.call(
+			"afora_spec_upsert",
+			event({ click: "Click", signup: "Signup" }),
+		);
+		expect(valid.data.written, JSON.stringify(valid.data)).toBe(true);
+
+		const generated = await client.call("afora_generate");
+		expect(generated.data.typecheck).toMatchObject({
+			ran: true,
+			ok: true,
+			diagnostics: [],
+		});
+		const entities = await readFile(
+			join(dir, "src/domain/entities.ts"),
+			"utf8",
+		);
+		expect(entities).toContain(
+			'what: listOf(ctx.variantOf("type", { click: Click, signup: Signup })),',
+		);
+	}, 120_000);
 });
 
 describe("safety", () => {

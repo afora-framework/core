@@ -65,6 +65,8 @@ export type {
 	TypeField,
 	UseCaseImplementationSpec,
 	UseCaseSpec,
+	VariantField,
+	VariantSpec,
 	WithOptions,
 } from "./spec/types";
 export { COLLECTIONS as COLLECTION_KEYS } from "./spec/types";

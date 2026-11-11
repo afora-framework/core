@@ -4066,6 +4066,94 @@ exports[`afora.json schema 1`] = `
           ],
           "type": "object",
         },
+        {
+          "additionalProperties": false,
+          "description": "One of several objects, told apart by the value of "key" (variantOf): { "variant": { "key": "type", "of": { "click": "Click", "signup": "Signup" } } }.",
+          "properties": {
+            "list": {
+              "anyOf": [
+                {
+                  "type": "boolean",
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Bounds of a list.",
+                  "properties": {
+                    "maxItems": {
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "minItems": {
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                  },
+                  "type": "object",
+                },
+              ],
+              "description": "A list of the type (the options in \`with\` apply to each item). \`true\` or { minItems, maxItems }.",
+            },
+            "optional": {
+              "description": "The key may be absent.",
+              "type": "boolean",
+            },
+            "variant": {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "description": "The key whose value names the variant. No variant declares it: the field adds it.",
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "of": {
+                  "description": "The variants, by the value the key has for each: { "card": "Card", "pix": "Pix" }.",
+                  "minProperties": 1,
+                  "patternProperties": {
+                    "^.*$": {
+                      "anyOf": [
+                        {
+                          "description": "The name of a declared blueprint, record or entity.",
+                          "pattern": "^[A-Z][A-Za-z0-9]*$",
+                          "type": "string",
+                        },
+                        {
+                          "additionalProperties": false,
+                          "description": "A blueprint declared in place.",
+                          "properties": {
+                            "fields": {
+                              "additionalProperties": false,
+                              "description": "Fields by key.",
+                              "patternProperties": {
+                                "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                                  "$ref": "#/$defs/Field",
+                                },
+                              },
+                              "type": "object",
+                            },
+                          },
+                          "required": [
+                            "fields",
+                          ],
+                          "type": "object",
+                        },
+                      ],
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+              "required": [
+                "key",
+                "of",
+              ],
+              "type": "object",
+            },
+          },
+          "required": [
+            "variant",
+          ],
+          "type": "object",
+        },
       ],
       "description": "A field of a blueprint, record, entity or environment.",
     },

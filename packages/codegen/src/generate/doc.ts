@@ -9,7 +9,8 @@ export type Doc =
 	| { readonly t: "group"; readonly d: Doc; readonly expand: boolean }
 	| { readonly t: "indent"; readonly d: Doc }
 	| { readonly t: "line" | "soft" | "hard" }
-	| { readonly t: "ifbreak"; readonly broken: Doc; readonly flat: Doc };
+	| { readonly t: "ifbreak"; readonly broken: Doc; readonly flat: Doc }
+	| { readonly t: "choice"; readonly options: readonly Doc[] };
 
 export const line: Doc = { t: "line" };
 export const softline: Doc = { t: "soft" };
@@ -26,6 +27,16 @@ export const ifBreak = (broken: Doc, flat: Doc = ""): Doc => ({
 	t: "ifbreak",
 	broken,
 	flat,
+});
+
+/**
+ * The first of `options` whose first line fits, printed flat (a group in it
+ * made with `expand` still breaks); the last one, broken, when none does.
+ * Prettier's `conditionalGroup`, for a call whose last argument hugs.
+ */
+export const choice = (options: readonly Doc[]): Doc => ({
+	t: "choice",
+	options,
 });
 
 export const join = (separator: Doc, docs: readonly Doc[]): Doc =>
@@ -62,6 +73,9 @@ function fits(rest: Command[], width: number): boolean {
 					break;
 				case "ifbreak":
 					stack.push([level, mode, mode === "break" ? node.broken : node.flat]);
+					break;
+				case "choice":
+					stack.push([level, mode, node.options[0] as Doc]);
 					break;
 				case "line":
 					if (mode === "break") return true;
@@ -112,6 +126,21 @@ export function print(doc: Doc): string {
 				case "ifbreak":
 					stack.push([level, mode, mode === "break" ? node.broken : node.flat]);
 					break;
+				case "choice": {
+					const tried = node.options.slice(0, -1);
+					const chosen =
+						mode === "flat"
+							? tried[0]
+							: tried.find((option) =>
+									fits([...stack, [level, "flat", option]], WIDTH - column),
+								);
+					stack.push(
+						chosen === undefined
+							? [level, "break", node.options.at(-1) as Doc]
+							: [level, "flat", chosen],
+					);
+					break;
+				}
 				case "line":
 				case "soft":
 				case "hard":

@@ -36,9 +36,11 @@ export function canonicalField(field: Field): Json {
 						...(field.name === undefined ? {} : { name: field.name }),
 						...(field.default === undefined ? {} : { default: field.default }),
 					}
-				: { fields: canonicalFields(field.fields) };
+				: field.kind === "variant"
+					? { variant: canonicalVariant(field) }
+					: { fields: canonicalFields(field.fields) };
 	const evolution =
-		field.kind === "inline"
+		field.kind === "inline" || field.kind === "variant"
 			? {}
 			: {
 					...(field.fill === undefined ? {} : { fill: field.fill }),
@@ -51,6 +53,21 @@ export function canonicalField(field: Field): Json {
 		...evolution,
 		...(field.optional ? { optional: true } : {}),
 		...(field.list ? { list: { ...field.list } } : {}),
+	};
+}
+
+/** The `variant` of a variant field: its key, and each variant by name or with canonical fields. */
+function canonicalVariant(field: Extract<Field, { kind: "variant" }>): Json {
+	return {
+		key: field.key,
+		of: Object.fromEntries(
+			Object.entries(field.variants).map(([tag, target]) => [
+				tag,
+				"type" in target
+					? target.type
+					: { fields: canonicalFields(target.fields) },
+			]),
+		),
 	};
 }
 
@@ -480,13 +497,26 @@ function compactField(field: Json): FieldSpec {
 	if (typeof type === "string" && Object.keys(rest).length === 0 && !bounded) {
 		return `${type}${list ? "[]" : ""}${optional ? "?" : ""}`;
 	}
-	if (isObject(rest.fields)) {
-		rest.fields = Object.fromEntries(
-			Object.entries(rest.fields).map(([key, inner]) => [
+	const compactFields = (fields: Json): Json =>
+		Object.fromEntries(
+			Object.entries(fields).map(([key, inner]) => [
 				key,
 				compactField(inner as Json),
 			]),
 		);
+	if (isObject(rest.fields)) rest.fields = compactFields(rest.fields);
+	if (isObject(rest.variant) && isObject(rest.variant.of)) {
+		rest.variant = {
+			...rest.variant,
+			of: Object.fromEntries(
+				Object.entries(rest.variant.of).map(([tag, target]) => [
+					tag,
+					isObject(target) && isObject(target.fields)
+						? { fields: compactFields(target.fields) }
+						: target,
+				]),
+			),
+		};
 	}
 	return {
 		...(type === undefined ? {} : { type }),
