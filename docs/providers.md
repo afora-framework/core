@@ -10,8 +10,28 @@ A use case says where it is served ([`route`](use-cases.md#routes)) and who may 
 | [`@afora/elysia`](../packages/elysia/README.md)   | Elysia  | an Elysia app       |
 
 ```ts
-import { applicationOf, outputOf } from "@afora/core";
+import {
+	applicationOf,
+	blueprintOf,
+	commandOf,
+	entityOf,
+	outputOf,
+	repositoryOf,
+	resourceOf,
+} from "@afora/core";
 import { fastify } from "@afora/fastify"; // or hono, express, elysia
+import type { onRequestHookHandler } from "fastify";
+
+class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+const Posts = repositoryOf({
+	entity: Post,
+	actions: ["findById", "findPage", "create", "update", "delete"],
+});
+const Blog = commandOf({
+	name: "Blog",
+	useCases: resourceOf(Posts, { path: "/posts" }),
+});
+declare const rateLimit: onRequestHookHandler; // a Fastify plugin's hook
 
 const Api = outputOf({
 	name: "Api",
@@ -32,7 +52,8 @@ const Api = outputOf({
 
 export const App = applicationOf({
 	name: "blog",
-	// ...
+	entities: { Post },
+	repositories: { Posts },
 	commands: { Blog },
 	outputs: { Api },
 });
@@ -73,12 +94,26 @@ A provider for another server is a sink of about a hundred lines:
 
 ```ts
 import {
+	type Authenticator,
 	compileRoutes,
 	HTTP_OPTION_KEYS,
 	type HttpOptions,
+	type HttpRequest,
+	type HttpResult,
 	httpOptionsIssue,
 	sinkOf,
 } from "@afora/core/adapters";
+
+// The server you adapt, and its request:
+declare class MyApp {
+	on(method: string, path: string, handler: (native: Request) => unknown): void;
+}
+interface MyHooks {
+	readonly authenticator?: Authenticator;
+	readonly app?: MyApp;
+}
+declare function requestOf(native: Request): HttpRequest;
+declare function send(native: Request, result: HttpResult): void;
 
 export const myServer = sinkOf<MyApp, HttpOptions, MyHooks>({
 	name: "myServer",
@@ -95,9 +130,10 @@ export const myServer = sinkOf<MyApp, HttpOptions, MyHooks>({
 				send(native, await route.handle(requestOf(native))),
 			);
 		}
-		if (table.docs)
-			app.on("get", table.docs.path, (native) =>
-				send(native, table.docs.handle(requestOf(native))),
+		const { docs } = table;
+		if (docs)
+			app.on("get", docs.path, (native) =>
+				send(native, docs.handle(requestOf(native))),
 			);
 		return app;
 	},

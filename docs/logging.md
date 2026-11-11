@@ -26,26 +26,46 @@ export const App = applicationOf({
 Your own implements `write(entry)`, and `flush()` if it buffers. `logProviderOf` checks it and, with a `name`, lets `describe()` name it:
 
 ```ts
-import { logProviderOf } from "@afora/core";
+import { type LogEntry, logProviderOf } from "@afora/core";
 
+declare function send(entries: LogEntry[]): Promise<void>; // your log service
+
+const buffer: LogEntry[] = [];
 const datadog = logProviderOf({
 	name: "datadog",
-	write: (entry) => buffer.push(entry),
+	write: (entry) => {
+		buffer.push(entry);
+	},
 	flush: () => send(buffer.splice(0)),
 });
 ```
+
+A provider without a `write` function, a `flush` that is not a function or a `name` that is not a non-empty string throws `InvalidLogDeclaration` (`Application` layer, `details.reason`), as do a `log` of an application and a `logFrom` it cannot use.
 
 Each line is a `LogEntry`: `at` (ISO 8601), `level`, `event`, `fields` and `application` (the name of the application that wrote it). Each provider gets every line at or above the level. A provider that throws, or whose `write` rejects, breaks neither the call it logs nor the other providers. `app.stop()` awaits the `flush()` of each.
 
 ## The logger
 
-`ILogger` has `debug`, `info`, `warn` and `error`, each `(event, fields?)`. Where you get it:
+`ILogger` has `debug`, `info`, `warn` and `error`, each `(event, fields?)`; `LogLevels` lists the levels in that order, from the least severe, for a variable or an option that takes one. Where you get it:
 
 - `app.logger`, and `app.context.logger` (see [Applications](applications.md#the-context-of-an-application)).
 - A use case that declares `Logger` as a dependency:
 
   ```ts
-  import { Logger, useCaseOf } from "@afora/core";
+  import {
+  	applicationOf,
+  	blueprintOf,
+  	entityOf,
+  	type ILogger,
+  	Logger,
+  	repositoryOf,
+  	useCaseOf,
+  } from "@afora/core";
+
+  class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+  const Posts = repositoryOf({ entity: Post, actions: ["create"] });
+  const ImportInput = blueprintOf((ctx) => ({ rows: ctx.list.text }));
+  const ImportResponse = blueprintOf((ctx) => ({ imported: ctx.integer }));
 
   class ImportPosts extends useCaseOf({
   	name: "ImportPosts",
@@ -59,11 +79,22 @@ Each line is a `LogEntry`: `at` (ISO 8601), `level`, `event`, `fields` and `appl
   	} = {}) {
   		logger.info("import-started", { rows: this.input.rows.length });
   		// ...
+  		return { imported: this.input.rows.length };
   	}
   }
 
+  const App = applicationOf({
+  	name: "blog",
+  	entities: { Post },
+  	repositories: { Posts },
+  	useCases: { ImportPosts },
+  });
+
   // In a test: any ILogger
-  await new App.useCases.ImportPosts(input).execute({ logger: fakeLogger });
+  const fakeLogger: ILogger = { debug() {}, info() {}, warn() {}, error() {} };
+  await new App.useCases.ImportPosts({ rows: ["Hello"] }).execute({
+  	logger: fakeLogger,
+  });
   ```
 
   `Logger` needs no registration in the application. In an `afora.json` it is `"dependencies": { "logger": "Logger" }`.
@@ -92,12 +123,17 @@ Repository calls are logged only through a use case: calling a repository direct
 `logFrom((ctx) => log)` makes the `log` on `app.start()`, from the [context](applications.md#the-context-of-an-application) of the application, e.g. to take the level from a variable:
 
 ```ts
-import { environmentOf, jsonLogProvider, logFrom } from "@afora/core";
+import {
+	applicationOf,
+	blueprintOf,
+	environmentOf,
+	jsonLogProvider,
+	LogLevels,
+	logFrom,
+} from "@afora/core";
 
 const Logging = environmentOf(
-	blueprintOf((ctx) => ({
-		LOG_LEVEL: ctx.enumOf(["debug", "info", "warn", "error"]),
-	})),
+	blueprintOf((ctx) => ({ LOG_LEVEL: ctx.enumOf([...LogLevels]) })),
 );
 
 export const App = applicationOf({

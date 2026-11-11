@@ -1,0 +1,287 @@
+{
+	"$comment": "The navigation of the documentation site: sections in order, pages in reading order. Paths are relative to the repository root. docs/site.md explains it; `bun run docs:links` checks that every path exists and that every page of docs/ is listed.",
+	"sections": [
+		{
+			"title": "Getting started",
+			"pages": [
+				{ "title": "Introduction", "path": "README.md", "type": "guide" },
+				{ "title": "Overview", "path": "docs/README.md", "type": "guide" }
+			]
+		},
+		{
+			"title": "Tutorial and guides",
+			"pages": [
+				{ "title": "Tutorial", "path": "docs/tutorial.md", "type": "guide" },
+				{
+					"title": "Coming from Hono + Zod",
+					"path": "docs/coming-from-hono-zod.md",
+					"type": "guide"
+				},
+				{
+					"title": "afora.json",
+					"path": "docs/afora-json.md",
+					"type": "guide"
+				},
+				{
+					"title": "Testing an application",
+					"path": "docs/testing.md",
+					"type": "guide"
+				}
+			]
+		},
+		{
+			"title": "Concepts",
+			"pages": [
+				{
+					"title": "Properties",
+					"path": "docs/properties.md",
+					"type": "concept"
+				},
+				{
+					"title": "Standard properties and plugins",
+					"path": "docs/std-properties.md",
+					"type": "concept"
+				},
+				{
+					"title": "Blueprints",
+					"path": "docs/blueprints.md",
+					"type": "concept"
+				},
+				{ "title": "Records", "path": "docs/records.md", "type": "concept" },
+				{
+					"title": "Entities",
+					"path": "docs/entities.md",
+					"type": "concept"
+				},
+				{
+					"title": "Repositories",
+					"path": "docs/repositories.md",
+					"type": "concept"
+				},
+				{
+					"title": "Schema evolution",
+					"path": "docs/schema-evolution.md",
+					"type": "concept"
+				},
+				{
+					"title": "Use cases",
+					"path": "docs/use-cases.md",
+					"type": "concept"
+				},
+				{
+					"title": "Commands",
+					"path": "docs/commands.md",
+					"type": "concept"
+				},
+				{
+					"title": "Standard use cases",
+					"path": "docs/std-use-cases.md",
+					"type": "concept"
+				},
+				{ "title": "Outputs", "path": "docs/outputs.md", "type": "concept" },
+				{
+					"title": "HTTP providers",
+					"path": "docs/providers.md",
+					"type": "concept"
+				},
+				{ "title": "Access", "path": "docs/auth.md", "type": "concept" },
+				{
+					"title": "Applications",
+					"path": "docs/applications.md",
+					"type": "concept"
+				},
+				{
+					"title": "Environments",
+					"path": "docs/environments.md",
+					"type": "concept"
+				},
+				{
+					"title": "Exceptions",
+					"path": "docs/exceptions.md",
+					"type": "concept"
+				},
+				{ "title": "Logging", "path": "docs/logging.md", "type": "concept" },
+				{
+					"title": "Standard Schema",
+					"path": "docs/standard-schema.md",
+					"type": "concept"
+				},
+				{ "title": "OpenAPI", "path": "docs/openapi.md", "type": "concept" }
+			]
+		},
+		{
+			"title": "Recipes",
+			"pages": [
+				{
+					"title": "Soft delete and restore",
+					"path": "docs/recipes/soft-delete.md",
+					"type": "recipe"
+				},
+				{
+					"title": "Pagination with a cursor",
+					"path": "docs/recipes/cursor-pagination.md",
+					"type": "recipe"
+				},
+				{
+					"title": "Uniqueness across tenants",
+					"path": "docs/recipes/tenant-uniqueness.md",
+					"type": "recipe"
+				},
+				{
+					"title": "Publishing domain events",
+					"path": "docs/recipes/domain-events.md",
+					"type": "recipe"
+				},
+				{
+					"title": "A custom property",
+					"path": "docs/recipes/custom-property.md",
+					"type": "recipe"
+				},
+				{
+					"title": "A custom provider",
+					"path": "docs/recipes/custom-provider.md",
+					"type": "recipe"
+				},
+				{
+					"title": "A custom stage and sink",
+					"path": "docs/recipes/custom-sink-or-stage.md",
+					"type": "recipe"
+				},
+				{
+					"title": "Overriding a repository method in a test",
+					"path": "docs/recipes/override-repository-method.md",
+					"type": "recipe"
+				}
+			]
+		},
+		{
+			"title": "Packages",
+			"pages": [
+				{
+					"title": "@afora/codegen",
+					"path": "packages/codegen/README.md",
+					"type": "reference"
+				},
+				{
+					"title": "@afora/mcp",
+					"path": "packages/mcp/README.md",
+					"type": "reference"
+				},
+				{
+					"title": "Command line",
+					"path": "docs/cli.md",
+					"type": "reference"
+				},
+				{
+					"title": "@afora/hono",
+					"path": "packages/hono/README.md",
+					"type": "reference"
+				},
+				{
+					"title": "@afora/fastify",
+					"path": "packages/fastify/README.md",
+					"type": "reference"
+				},
+				{
+					"title": "@afora/express",
+					"path": "packages/express/README.md",
+					"type": "reference"
+				},
+				{
+					"title": "@afora/elysia",
+					"path": "packages/elysia/README.md",
+					"type": "reference"
+				},
+				{
+					"title": "@afora/ws",
+					"path": "packages/ws/README.md",
+					"type": "reference"
+				},
+				{
+					"title": "@afora/drizzle",
+					"path": "packages/drizzle/README.md",
+					"type": "reference"
+				},
+				{
+					"title": "@afora/dynamodb",
+					"path": "packages/dynamodb/README.md",
+					"type": "reference"
+				}
+			]
+		},
+		{
+			"title": "Runtime and deployment",
+			"pages": [
+				{ "title": "Runtime", "path": "docs/runtime.md", "type": "guide" }
+			]
+		},
+		{
+			"title": "Reference",
+			"pages": [
+				{
+					"title": "API reference",
+					"path": "docs/reference/api.md",
+					"type": "reference"
+				},
+				{
+					"title": "Exceptions",
+					"path": "docs/reference/exceptions.md",
+					"type": "reference"
+				},
+				{
+					"title": "Issue codes",
+					"path": "docs/reference/issue-codes.md",
+					"type": "reference"
+				},
+				{
+					"title": "afora.json schema",
+					"path": "packages/codegen/afora.schema.json",
+					"type": "reference"
+				},
+				{
+					"title": "API tiers",
+					"path": "docs/api-tiers.md",
+					"type": "reference"
+				}
+			]
+		},
+		{
+			"title": "Project",
+			"pages": [
+				{
+					"title": "Versioning and stability",
+					"path": "VERSIONING.md",
+					"type": "project"
+				},
+				{ "title": "Changelog", "path": "CHANGELOG.md", "type": "project" },
+				{
+					"title": "Performance",
+					"path": "docs/performance.md",
+					"type": "project"
+				},
+				{
+					"title": "Benchmark results",
+					"path": "bench/RESULTS.md",
+					"type": "project"
+				},
+				{ "title": "FAQ", "path": "docs/faq.md", "type": "project" },
+				{
+					"title": "Troubleshooting",
+					"path": "docs/troubleshooting.md",
+					"type": "project"
+				},
+				{ "title": "Glossary", "path": "docs/glossary.md", "type": "project" },
+				{
+					"title": "Contributing",
+					"path": "CONTRIBUTING.md",
+					"type": "project"
+				},
+				{
+					"title": "About these docs",
+					"path": "docs/site.md",
+					"type": "project"
+				}
+			]
+		}
+	]
+}

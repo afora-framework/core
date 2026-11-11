@@ -234,6 +234,7 @@ Then the rule changes: when the stock is short, leave it as it is and answer `ba
 
 `generate` now writes `export abstract class ReserveBase extends useCaseOf({...}) {}` in `src/domain/reserve.use-case.ts` (the file is named after the use case in kebab case), with the declaration above. The class is written once, at the path the spec names (relative to the output directory), and `application.ts` registers it:
 
+<!-- docs:code skip: src/handlers/reserve.ts imports the files afora-codegen generates from the spec above -->
 ```ts
 // src/handlers/reserve.ts
 import { ItemNotFound } from "../domain/exceptions";

@@ -75,6 +75,7 @@ Requirements: [Bun](https://bun.sh) >= 1.4.4 or Node.js >= 22. TypeBox (`typebox
 
 `Password` hashes with argon2id: with `Bun.password` on Bun, with native `node:crypto` argon2 on a Node that has it (24.7+), and otherwise it throws `PasswordHasherRequired` until you call `configure({ hasher })`. `Id.generate()` makes a portable, monotonic UUID v7 on any runtime. afora imports no `node:crypto` (or `Buffer`) at load, so it loads in browsers and Workers; the native hasher is looked up on first use through `process.getBuiltinModule` (Node 22.3+). The native hasher derives argon2 version 19 only; a hash of another version throws `UnsupportedPasswordHash` (verify it with `Bun.password`, or `configure({ hasher })`).
 
+<!-- docs:code skip: myArgon2 and myUuidV7 stand for your own libraries -->
 ```ts
 import { configure, type PasswordHasher } from "@afora/core";
 
@@ -328,6 +329,7 @@ bunx afora-codegen generate afora.json --stages ./stages.ts   # writes src/domai
 
 and serve the application from `src/server.ts` (`bun src/server.ts`):
 
+<!-- docs:code skip: src/server.ts of examples/interop/from-json; ./domain is what afora-codegen generates from the afora.json above -->
 ```ts
 import { App } from "./domain/index.ts";
 

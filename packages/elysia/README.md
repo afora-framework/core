@@ -15,11 +15,19 @@ bun add @afora/core @afora/elysia elysia typebox
 import {
 	blueprintOf,
 	commandOf,
+	entityOf,
 	outputOf,
+	RepositoryEntityNotFound,
+	repositoryOf,
 	Route,
 	useCaseOf,
 } from "@afora/core";
 import { elysia } from "@afora/elysia";
+
+class Post extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.text, slug: ctx.slug })),
+) {}
+const Posts = repositoryOf({ entity: Post, actions: ["findBySlug", "create"] });
 
 @Route("GET", "/posts/{slug}")
 class GetPost extends useCaseOf({
@@ -29,7 +37,14 @@ class GetPost extends useCaseOf({
 	dependencies: { posts: Posts },
 }) {
 	override async execute() {
-		return { post: await this.dependencies.posts.findBySlug(this.input.slug) };
+		const post = await this.dependencies.posts.findBySlug(this.input.slug);
+		if (!post) {
+			throw new RepositoryEntityNotFound({
+				source: "GetPost",
+				details: { id: this.input.slug },
+			}); // a 404
+		}
+		return { post };
 	}
 }
 
@@ -98,6 +113,7 @@ The requests are handled by the route table of the core (`compileRoutes` of `@af
 
 ## Middlewares and your own app
 
+<!-- docs:code skip: fragment: the second argument of the stage; @elysiajs/cors is not a dependency of this repo and tenantOf stands for your code -->
 ```ts
 import { cors } from "@elysiajs/cors";
 

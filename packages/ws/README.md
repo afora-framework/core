@@ -10,6 +10,7 @@ bun add @afora/core @afora/ws typebox
 
 ## Example
 
+<!-- docs:code skip: two files in one block, and CreatePost and ListPosts stand for your use cases -->
 ```ts
 // realtime.ts
 import { wsHub } from "@afora/ws";
@@ -66,6 +67,7 @@ Build the endpoint once (`App.outputs.Live.build()`), then give each socket a se
 
 **Bun**
 
+<!-- docs:code skip: fragment: App is the application above, WsSession the session type of @afora/ws -->
 ```ts
 const endpoint = App.outputs.Live.build();
 
@@ -91,6 +93,7 @@ Bun.serve<{ values: Record<string, string | undefined>; session?: WsSession }>({
 
 **Hono** (`upgradeWebSocket` from `hono/bun` or `hono/cloudflare-workers`; on Node, `@hono/node-ws`)
 
+<!-- docs:code skip: fragment: app is your Hono app and upgradeWebSocket comes from hono/bun, hono/cloudflare-workers or @hono/node-ws -->
 ```ts
 app.get(
 	"/ws",
@@ -112,6 +115,7 @@ app.get(
 
 **Workers**
 
+<!-- docs:code skip: fragment: the body of a Cloudflare Workers fetch handler, whose WebSocketPair type is not in this repo -->
 ```ts
 const [client, server] = Object.values(new WebSocketPair());
 server.accept();

@@ -4,7 +4,26 @@
 
 ### Changed
 
-- No change in the packages. This release republishes every `@afora` package through npm trusted publishing (OIDC): `@afora/fastify`, `@afora/express`, `@afora/elysia` and `@afora/dynamodb` 0.0.9 went out through a token, without provenance, and their trusted publisher stayed pending validation. The Release workflow no longer passes a token, so every package is published with provenance or the release fails.
+- This release republishes every `@afora` package through npm trusted publishing (OIDC): `@afora/fastify`, `@afora/express`, `@afora/elysia` and `@afora/dynamodb` 0.0.9 went out through a token, without provenance, and their trusted publisher stayed pending validation. The Release workflow no longer passes a token, so every package is published with provenance or the release fails.
+- **Breaking** (`@afora/codegen`). A use case implemented by `{ "import" }` can be a dependency of another use case and be `call`ed by its steps (#64); the `import_dependency` issue is gone. To make this possible, each use case that hand-written code needs (the `<Name>Base` of every `import` use case, and every steps use case such a class depends on) is generated in its own `<kebab-name>.use-case.ts` in `output.dir`, and `use-cases.ts` re-exports it. New issues: `import_cycle` (a hand-written module that would import itself back through the generated files) and `file_collision` (two use cases that would get the same file name). `writeGenerated` removes stale generated `*.use-case.ts` files. See Migration below.
+- Every export of `@afora/core`, `/adapters`, `/experimental` and `/testing` has JSDoc (#92). The main builders (`propertyOf`, `blueprintOf`, `recordOf`, `entityOf`, `eventOf`, `repositoryOf`, `useCaseOf`, `environmentOf`, `exceptionOf`, `guard`, `applicationOf`) have an `@example` that is type-checked; functions that throw name the exception with `@throws`, and settings with a default carry `@default`. The block of `IRepositoryProvider` was attached to the wrong declaration.
+
+### Docs
+
+- `docs/use-cases.md` states what steps are for and what they will never have (branching, loops, expressions), and `docs/afora-json.md` shows a use case that outgrows its steps and moves to `import` (#64).
+- The content of the documentation site (#93, #67): `docs/nav.json` and `docs/site.md` give its sections, order and page types; new pages `std-properties.md`, `runtime.md`, `testing.md`, `cli.md`, `performance.md`, `faq.md`, `troubleshooting.md`, `glossary.md`, eight recipes in `docs/recipes/` (their code is run by `examples/interop/recipes.test.ts`), and the references `reference/api.md` (from the JSDoc), `reference/exceptions.md` (every exception, its layer, status and handling) and `reference/issue-codes.md`. Code examples that no longer matched the API were fixed.
+- New checks, run in CI: `tests/api-surface/jsdoc.test.ts` (in `test:api`) fails on an export without JSDoc or an `@example` that does not compile; `docs:code` type-checks every ts block of `README.md`, `docs/` and the package READMEs (`<!-- docs:code skip: reason -->` and `<!-- docs:code continue -->` markers); `docs:coverage` fails when a stable, adapters or testing export is on no page; `docs:api:check` keeps the generated references up to date; `docs:links` checks that `docs/nav.json` lists every page.
+
+### Migration
+
+`@afora/codegen`: a handler of an `import` use case imports its base from the new file. Importing it from `use-cases.ts` keeps working as long as no generated use case depends on that handler.
+
+```ts
+// before
+import { RegisterBase } from "../domain/use-cases";
+// after
+import { RegisterBase } from "../domain/register.use-case";
+```
 
 ## 0.0.9 — 2026-11-11
 

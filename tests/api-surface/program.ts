@@ -190,12 +190,16 @@ export interface ModuleDiagnostics {
  * Type-checks many modules in one program. `paths` maps bare specifiers to
  * files. Virtual files live under `<root>/__virtual__/` so bare imports
  * resolve from the repository's `node_modules`. Each is a module (top-level
- * await allowed). Returns only the modules with diagnostics.
+ * await allowed). A bare import that does not resolve from there is looked up
+ * again from each directory of `fallbackRoots`, in order (as if imported from
+ * a file in it, so `node_modules` and package `exports` apply). Returns only
+ * the modules with diagnostics.
  */
 export function checkVirtualModules(
 	modules: VirtualModule[],
 	paths: Record<string, string[]>,
 	options: ts.CompilerOptions = projectOptions,
+	fallbackRoots: string[] = [],
 ): ModuleDiagnostics[] {
 	const dir = join(root, "__virtual__");
 	const files = new Map<string, string>();
@@ -228,6 +232,35 @@ export function checkVirtualModules(
 			? real.getSourceFile(file, languageVersion, ...rest)
 			: ts.createSourceFile(file, text, languageVersion, true);
 	};
+	if (fallbackRoots.length > 0) {
+		const cache = ts.createModuleResolutionCache(
+			root,
+			(name) => name,
+			compilerOptions,
+		);
+		const resolve = (name: string, from: string, mode: ts.ResolutionMode) =>
+			ts.resolveModuleName(
+				name,
+				from,
+				compilerOptions,
+				host,
+				cache,
+				undefined,
+				mode,
+			).resolvedModule;
+		host.resolveModuleNameLiterals = (literals, containingFile, _, __, file) =>
+			literals.map((literal) => {
+				const name = literal.text;
+				const mode = ts.getModeForUsageLocation(file, literal, compilerOptions);
+				let resolved = resolve(name, containingFile, mode);
+				if (!resolved && !name.startsWith(".") && !name.startsWith("/"))
+					for (const dir of fallbackRoots) {
+						resolved = resolve(name, join(dir, "__resolve__.ts"), mode);
+						if (resolved) break;
+					}
+				return { resolvedModule: resolved };
+			});
+	}
 
 	const program = ts.createProgram([...files.keys()], compilerOptions, host);
 	const failures: ModuleDiagnostics[] = [];

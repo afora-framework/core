@@ -3,7 +3,12 @@
 A record implements a blueprint: it keeps the blueprint and a value of its shape, each key handled by its field (at any depth) and read as a member of the record (`user.name`). Its constructor takes the value inferred from the blueprint (and throws on an invalid one), the protected `set` changes one key, and `onSet` declares the side effect of a change to each key:
 
 ```ts
-import { recordOf, type RecordEffects } from "@afora/core";
+import { blueprintOf, recordOf, type RecordEffects } from "@afora/core";
+
+const UserBlueprint = blueprintOf((ctx) => ({
+	name: ctx.text,
+	address: blueprintOf((ctx) => ({ street: ctx.text, zip: ctx.string })),
+}));
 
 class User extends recordOf(UserBlueprint) {
 	protected override onSet(): RecordEffects<User> {
@@ -18,12 +23,21 @@ const user = new User({
 	address: { street: "Main St", zip: "01310-100" },
 });
 user.name; // "Jane"
-user.blueprint; // UserBlueprint
+User.blueprint; // UserBlueprint, also user[Meta].blueprint
 ```
 
 A second argument describes the keys:
 
+<!-- docs:code continue -->
 ```ts
+import { Password } from "@afora/core";
+
+const AccountBlueprint = blueprintOf((ctx) => ({
+	email: ctx.email,
+	token: ctx.string,
+	password: ctx.password,
+}));
+
 class Account extends recordOf(AccountBlueprint, {
 	sensitive: ["token"], // masked in toJSON; a sensitive property (Password) always is, at any depth
 	unique: ["email"], // listed for repositories to enforce; a unique property (Slug) key always is
@@ -31,7 +45,13 @@ class Account extends recordOf(AccountBlueprint, {
 }) {}
 
 Account.options; // { sensitive: ["token", "password"], unique: ["email"], change: ["password"] }
-new Account(value).change.password(hash); // same as set("password", hash), returns the record
+const hash = (await Password.hash("Jane@1234")).value;
+const account = new Account({
+	email: "jane@example.com",
+	token: "t0k3n",
+	password: hash,
+});
+account.change.password(hash); // same as set("password", hash), returns the record
 ```
 
 Keys are resolved in the order of the blueprint.
@@ -44,7 +64,7 @@ Keys are resolved in the order of the blueprint.
 
 **Changes.** The keys are read-only and only change through `set`, which only the record itself (or a `change.<key>` method) can call. `set` validates the value, stores it, then runs `onSetAll(change)` and then the effect of the key in `onSet`. `change` is `{ key, value, previous }`, and checking `change.key` narrows the rest (annotate it as `RecordChange<User>`).
 
-**Rejections.** An invalid value throws in the `Record` layer, naming the key in `details` (e.g. `{ key: "address.zip" }`). So does a key the blueprint does not declare, at any depth, with `UndeclaredRecordProperty` (e.g. `{ key: "addresses.0.extra" }`): the value is rejected, never trimmed. A key cannot take the name of a member of the record (`set`, `toJSON`, `onSet`, `onSetAll` or, when the record has `change` keys, `change`), nor of one every object inherits (`toString`, `valueOf`, `hasOwnProperty`, `__proto__`... all of `Object.prototype`, listed in `RESERVED_RECORD_KEYS`): `recordOf` throws `ReservedRecordKey`. Nor can a class extending the record declare a member with the name of a key, which would hide it: its first record throws `ReservedRecordKey`.
+**Rejections.** An invalid value throws in the `Record` layer, naming the key in `details` (e.g. `{ key: "address.zip" }`), with every issue found in `details.issues`: the exception of the property that rejected it, passed up a layer (`InvalidPropertyValue`, `PropertyRequired`), or `InvalidRecordValue` for an issue no property raised (a record field given something that is not a record, a list too short). So does a key the blueprint does not declare, at any depth, with `UndeclaredRecordProperty` (e.g. `{ key: "addresses.0.extra" }`): the value is rejected, never trimmed. A key cannot take the name of a member of the record (`set`, `toJSON`, `onSet`, `onSetAll` or, when the record has `change` keys, `change`), nor of one every object inherits (`toString`, `valueOf`, `hasOwnProperty`, `__proto__`... all of `Object.prototype`, listed in `RESERVED_RECORD_KEYS`): `recordOf` throws `ReservedRecordKey`. Nor can a class extending the record declare a member with the name of a key, which would hide it: its first record throws `ReservedRecordKey`.
 
 **Name.** A record is named after its class: the name is the `source` of its exceptions, the name of its schema in OpenAPI and, for an entity, what a repository gives its provider. A bundler that minifies renames classes, so anything keyed by that name (a table, a collection) stops matching. `recordOf(blueprint, { name: "User" })` (and `entityOf`) declares the name instead: an identifier (`InvalidRecordDeclaration` otherwise), kept by the class and its subclasses whatever they are renamed to. `recordNameOf(User)`, or `User.recordName`, gives the declared name, or the name of the class without one; a subclass gives its own with `static override readonly recordName = "Admin"`. Use it instead of `User.name` wherever the name is a key. An application registers a record or entity that declares a name under that name (`entities: { User }`); another key throws `InvalidApplicationDeclaration`, so the record has one name everywhere. Without a declared name the key stays free.
 
@@ -98,8 +118,9 @@ hasPlugin(post, Slugged); // true, and narrows post to the plugin's record
 - **Composition.** A plugin's class can declare plugins itself: they are applied with it, each once, and listed in `plugin.requires`. `Post.plugins` lists them all.
 - **Tracking.** `hasPlugin(value, plugin)` (or `plugin.is(value)`) tells a record, an entity or a class of them having the plugin, through `requires` and subclasses too. `hasPlugin(value, "slugged")` checks by name. `pluginsOf(value)` lists them.
 
-**Standard plugins.** `recordOf` and `entityOf` pick from the plugins of `StdRecordPlugins` when `options.plugins` is a function, the way `blueprintOf` picks from `Std`:
+**Standard plugins.** afora ships five plugins, `Publishable`, `Archivable`, `Taggable`, `Ownable` and `Authenticatable`, each described with an example in [Std properties](std-properties.md#record-plugins). They can be listed as they are (`plugins: [Publishable]`), and `recordOf` and `entityOf` pick from them, as the catalog `StdRecordPlugins`, when `options.plugins` is a function, the way `blueprintOf` picks from `Std`:
 
+<!-- docs:code continue -->
 ```ts
 class Article extends entityOf(
 	blueprintOf((ctx) => ({ title: ctx.string })),
@@ -121,7 +142,13 @@ Your own catalog is `recordPluginCatalogOf(Slugged, ...StdRecordPlugins.list)`, 
 
 **Serialization.** A plugin is a descriptor in JSON (`plugin.toJSON()`): its name, version, keys, `sensitive`, `unique` and `change` keys, member names and requirements. Methods are listed by name, never serialized as code, so a catalog resolves a descriptor back to the plugin that implements it:
 
+<!-- docs:code continue -->
 ```ts
+import { recordPluginCatalogOf, StdRecordPlugins } from "@afora/core";
+
+const catalog = recordPluginCatalogOf(Slugged, ...StdRecordPlugins.list);
+const PostBlueprint = blueprintOf((ctx) => ({ title: ctx.string }));
+
 const json = JSON.stringify(Post.plugins);
 // [{"kind":"record-plugin","name":"slugged","version":"1.0.0","keys":["slug"],...}]
 
@@ -141,7 +168,15 @@ Slicing is experimental: it lives in `@afora/core/experimental`, may change in a
 `sliceOf(blueprint, selector)` gives a new blueprint with only the fields `selector` names, recursively into nested blueprints, records and lists. Optional fields stay optional and lists stay lists. A property is kept with its flags (`sensitive`, `unique`, ...); a nested record stays a record, with the `sensitive`, `unique` and `change` keys it declares among the keys kept, so it still masks its sensitive keys and is still `writeOnly` in `toOpenAPI`. The selector is a mask, `true` keeping a field whole and an object keeping only its keys, or a blueprint or record class, whose keys, at any depth, are the mask.
 
 ```ts
+import { blueprintOf } from "@afora/core";
 import { sliceOf, sliceValue } from "@afora/core/experimental";
+
+const Person = blueprintOf((ctx) => ({
+	name: ctx.text,
+	email: ctx.email,
+	address: blueprintOf((ctx) => ({ street: ctx.text, city: ctx.text })),
+}));
+const CardBlueprint = blueprintOf((ctx) => ({ name: ctx.text }));
 
 const Card = sliceOf(Person, { name: true, address: { city: true } });
 const Same = sliceOf(Person, CardBlueprint); // keys of another blueprint or record class
@@ -153,6 +188,12 @@ A key the blueprint does not have is a type error and throws `UndeclaredBlueprin
 
 `sliceValue(value, selector)` does the same to data: it strips the keys the selector does not name, through objects and lists, and does not validate. A record instance is read by its `toJSON`, so what is sensitive stays masked; a plain object is copied as it is. A key missing from the value is left out.
 
+<!-- docs:code continue -->
 ```ts
+const post = {
+	title: "Hi",
+	body: "...",
+	author: { name: "Jane", email: "jane@example.com" },
+};
 sliceValue(post, { title: true, author: { name: true } }); // { title, author: { name } }
 ```

@@ -3,12 +3,16 @@
 A use case says who may call it, as data, and every output enforces it before the use case runs. What the OpenAPI document says about an operation is derived from the same declaration, so the two cannot disagree.
 
 ```ts
-import { Access, blueprintOf, useCaseOf } from "@afora/core";
+import { Access, blueprintOf, entityOf, useCaseOf } from "@afora/core";
+
+const blueprint = blueprintOf((ctx) => ({ authorId: ctx.id, title: ctx.text }));
+class Post extends entityOf(blueprint) {}
+const response = blueprintOf(() => ({ post: Post }));
 
 class PublishPost extends useCaseOf({
 	name: "PublishPost",
-	blueprint: blueprintOf((ctx) => ({ authorId: ctx.id, title: ctx.text })),
-	response: blueprintOf(() => ({ post: Post })),
+	blueprint,
+	response,
 	context: blueprintOf((ctx) => ({ userId: ctx.id })),
 	access: {
 		scopes: ["posts:write"],
@@ -16,17 +20,25 @@ class PublishPost extends useCaseOf({
 		context: { userId: "subject" },
 	},
 }) {
-	// ...
+	override async execute() {
+		return { post: new Post(this.input) };
+	}
 }
+```
 
-// The same declaration, as a decorator of the class:
+The same declaration, as a decorator of the class:
+
+<!-- docs:code continue -->
+```ts
 @Access({ scopes: ["posts:write"] })
-class PublishPost extends useCaseOf({
+class PublishPostByDecorator extends useCaseOf({
 	name: "PublishPost",
 	blueprint,
 	response,
 }) {
-	// ...
+	override async execute() {
+		return { post: new Post(this.input) };
+	}
 }
 ```
 
@@ -77,8 +89,34 @@ With `security.schemes` in the options of the sink, an operation with an `access
 afora ships one ready-made way to authenticate: JSON Web Tokens signed with a shared secret (HMAC), on Web Crypto, so the same code runs on Bun, Node and Workers. It is three pieces that share one set of options.
 
 ```ts
-import { commandOf, outputOf } from "@afora/core";
+import {
+	blueprintOf,
+	commandOf,
+	entityOf,
+	outputOf,
+	repositoryOf,
+	resourceOf,
+} from "@afora/core";
 import { hono } from "@afora/hono";
+
+class User extends entityOf(
+	blueprintOf((ctx) => ({ roles: ctx.list.string })),
+	{
+		plugins: (ctx) => [ctx.authenticatable],
+	},
+) {}
+const Users = repositoryOf({
+	entity: User,
+	actions: ["findById", "findByEmail", "create"],
+});
+class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+const Posts = commandOf({
+	name: "Posts",
+	useCases: resourceOf(
+		repositoryOf({ entity: Post, actions: ["findById", "findPage", "create"] }),
+		{ path: "/posts", actions: ["get", "list", "create"] },
+	),
+});
 
 const token = {
 	secret: { env: "JWT_SECRET" }, // at least 32 characters
@@ -123,6 +161,7 @@ A token is refused, with a 401, when it is malformed, signed with another secret
 
 **Sessions in cookies.** The route of a use case can send keys of its response as cookies, with [`setCookie`](use-cases.md#routes), and read input keys from cookies, with `cookie`. So a browser session is the same three use cases with other routes:
 
+<!-- docs:code skip: entries of the useCases of the command above, and the sink call of its output -->
 ```ts
 const sid = { name: "sid" }; // HttpOnly; Secure; SameSite=Lax; Path=/
 const rid = { name: "rid", path: "/refresh", maxAge: 60 * 60 * 24 * 30 };
@@ -156,8 +195,14 @@ The tokens then never reach the body, and `logout`, which answers empty tokens, 
 
 ```ts
 import { jwtOf } from "@afora/core/experimental";
+import { hono } from "@afora/hono";
 
-const jwt = jwtOf({ secret: process.env.JWT_SECRET, issuer: "blog" });
+declare const user: { id: string }; // the signed-in entity
+
+const secret = process.env.JWT_SECRET;
+if (!secret) throw new Error("JWT_SECRET is not set");
+
+const jwt = jwtOf({ secret, issuer: "blog" });
 const token = await jwt.sign({ subject: user.id, scopes: ["posts:write"] });
-hono(options, { authenticator: jwt.authenticator() });
+hono({}, { authenticator: jwt.authenticator() });
 ```

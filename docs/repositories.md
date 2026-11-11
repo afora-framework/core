@@ -16,6 +16,8 @@ class User extends entityOf(
 		name: ctx.string,
 		email: ctx.email,
 		slug: ctx.slug,
+		age: ctx.optional.integer,
+		active: ctx.optional.boolean,
 	})),
 	{ unique: ["email"] },
 ) {}
@@ -27,6 +29,10 @@ const Users = repositoryOf({
 		"findByEmail",
 		"findBySlug",
 		"findManyByName",
+		"findMany",
+		"exists",
+		"findPage",
+		"findCursor",
 		"create",
 		"update",
 		"delete",
@@ -46,6 +52,7 @@ await Users.findManyByName("Ana"); // User[]
 
 **Queries.** `findMany`, `exists`, `findPage` and `count` take a typed `RepositoryQuery<Entity>`: `where`, `orderBy`, `limit`, `offset`, `withDeleted` and `withExpired` (see [Records that expire](#records-that-expire)). `where` maps entity keys to a value (equality) or to `{ in: [...] }` (membership, an empty list matches nothing); conditions on several keys are ANDed. Values are normalized before they reach the provider: a record becomes its plain data and an entity its id, also inside `in`. `orderBy` is a list of `{ key, direction?: "asc" | "desc" }` on scalar fields (default `asc`): missing values come first when ascending and last when descending, strings sort by code point, numbers numerically, ties keep their order. Declared [indexes](#indexes) make some of them cheap, and [Query cost](#query-cost) says how each is read. A query with unknown keys or options, an invalid direction, an unorderable field or a negative, fractional or nonfinite `limit`/`offset` throws `InvalidRepositoryQuery` before the provider is called.
 
+<!-- docs:code continue -->
 ```ts
 const adults = await Users.findMany({
 	where: { age: { in: [18, 21] } },
@@ -64,14 +71,20 @@ await Users.count({ where: { name: "Ana" } }); // ignores orderBy, limit and off
 
 **Cursors.** `findCursor` pages by position instead of by `offset`: it gives `{ items, limit, next }`, and the `next` of a page is the `after` of the following one, `undefined` on the last.
 
+<!-- docs:code continue -->
 ```ts
-const page = await Users.findCursor({
+const first = await Users.findCursor({
 	where: { active: true },
 	orderBy: [{ key: "name" }],
 	limit: 50, // 20 by default, at least 1
-	after, // the next of the page before; the first page when left out
 });
-// page.items: User[], page.next: string | undefined
+const second = await Users.findCursor({
+	where: { active: true },
+	orderBy: [{ key: "name" }],
+	limit: 50,
+	after: first.next, // the next of the page before; the first page when left out
+});
+// second.items: User[], second.next: string | undefined
 ```
 
 It reads a page with one provider call and no count, costs the same on the last page as on the first, and a row added or removed between two pages never repeats or skips another, which `offset` cannot promise. The query takes `where`, `orderBy`, `limit`, `withDeleted` and `withExpired`, which must stay the same from one page to the next; `offset` is rejected, and there is no `total` (use `count`). The `id` is added as the last order, so every row has one position even when the others tie.
@@ -80,9 +93,20 @@ A cursor is opaque text (base64url) that holds the values of the order keys of t
 
 **Walking every page.** `forEachPage(query, fn, { until? })` reads the pages of a `findCursor` query one after the other and awaits `fn(items, { index, next })` on each, for bulk work: deleting a content type with its entries, rewriting rows after a rename, a cleanup, a migration. It gives `{ done, next?, pages, items }`: the pages `fn` ran on and their items, and `done: true` once the last page is done.
 
+<!-- docs:code continue -->
 ```ts
+class Entry extends entityOf(
+	blueprintOf((ctx) => ({ type: ctx.id, title: ctx.text })),
+) {}
+const Entries = repositoryOf({
+	entity: Entry,
+	actions: ["findMany", "forEachPage", "delete"],
+});
+declare const typeId: string; // the content type whose entries go
+declare const checkpoint: string | undefined; // the next saved by a run before
+
 const result = await Entries.forEachPage(
-	{ where: { type: type.id }, limit: 100, after: checkpoint },
+	{ where: { type: typeId }, limit: 100, after: checkpoint },
 	async (items) => {
 		await Promise.all(items.map((entry) => Entries.delete(entry)));
 	},
@@ -92,7 +116,17 @@ const result = await Entries.forEachPage(
 
 `until` stops the walk before the end: a deadline (a `Date` or epoch milliseconds) or a function that says when to stop. It is checked before each page is read, never while `fn` runs, so a page is never left half done by it. When it stops the walk, the result has `done: false` and `next`, the `after` to resume from: the `next` of the last page done, or the `after` it was given when it ran none (an `until` already passed runs no page; `next` is then `undefined` if the query had no `after`, which resumes from the start). Save it and call again with `after: next`; as with `findCursor`, rows added or removed between pages, or between two calls, are neither repeated nor skipped, and `fn` may delete or change the items it gets (only a change of the keys of `orderBy` moves a row). In a Lambda, leave a margin for the longest page:
 
+<!-- docs:code continue -->
 ```ts
+// Where you keep the checkpoint and how the job runs again are yours:
+declare function loadCheckpoint(): Promise<string | undefined>;
+declare function saveCheckpoint(next: string): Promise<void>;
+declare function clearCheckpoint(): Promise<void>;
+declare function scheduleAgain(): Promise<void>;
+interface Context {
+	getRemainingTimeInMillis(): number; // as in @types/aws-lambda
+}
+
 export async function handler(_event: unknown, context: Context) {
 	const checkpoint = await loadCheckpoint(); // undefined the first time
 	const result = await Entries.forEachPage(
@@ -112,7 +146,7 @@ export async function handler(_event: unknown, context: Context) {
 
 `findPage` reads the items and the total with two provider calls, so they are not an atomic snapshot unless the provider runs them in a transaction. `findBy<Key>`, `findManyBy<Key>` and `count` are queries too. By default reads leave out deleted rows when `deletion` is `"soft"`; with `"hard"` (the default) they see every row that exists, as before. `withDeleted: true` includes soft-deleted rows, and never makes a deleted entity mutable again.
 
-`create` takes an entity or the input that builds one. `delete` takes an entity or an id, calls `destroy()` (so `onDelete` is queued) and gives the entity. Entities read back are rebuilt from their stored value, with their identity, so they do not queue `onCreate` again.
+`create` takes an entity or the input that builds one. `delete` takes an entity or an id, calls `destroy()` (so `onDelete` is queued) and gives the entity. Entities read back are rebuilt from their stored value, with their identity, so they do not queue `onCreate` again. `update` and `delete` check that the entity they get is an instance of the repository's entity: `Posts.update(user)` throws `InvalidRepositoryEntity` (Repository layer) before the provider is called.
 
 `repositoryOf({ entity, actions, deletion: "hard" | "soft" })` defaults to `"hard"`: deletion physically removes the stored row. With `"soft"`, deletion persists `deletedAt` through the provider's `update`. Finds and counts exclude these rows; unique values remain occupied. A relation pointing to a soft-deleted entity still loads it, deleted (`isDeleted` is true and it no longer changes): an order keeps its deleted product. Soft reads send `withDeleted: false` to the provider, and soft `delete` requires `update` instead of `remove`. `app.describe()` includes each repository's resolved `deletion` mode.
 
@@ -120,6 +154,7 @@ The `restore` action brings a soft-deleted entity back: `await Posts.restore(pos
 
 **Concurrency.** `update` reads nothing: it writes the value the entity holds, so when two use cases load the same entity, change it and save it, the second write silently replaces the first. An entity declared with `versioned: true` (see [Entities](entities.md#versioned-entities)) prevents that with optimistic concurrency: it has a `version`, 1 when created, and `update` writes only when the stored `version` is still the one the entity was read with, storing the next one and moving the entity's `version` to it. When someone else wrote the entity in between, `update` throws `RepositoryConcurrencyConflict` (Repository layer, `details: { id, expected, actual? }`), which an output answers with 409; read the entity again and retry, or report the conflict.
 
+<!-- docs:code continue -->
 ```ts
 class Doc extends entityOf(
 	blueprintOf((ctx) => ({ title: ctx.string })),
@@ -128,18 +163,23 @@ class Doc extends entityOf(
 		versioned: true,
 	},
 ) {}
-const Docs = repositoryOf({ entity: Doc, actions: ["findById", "update"] });
+const Docs = repositoryOf({
+	entity: Doc,
+	actions: ["findById", "create", "update"],
+});
 
+const { id } = await Docs.create({ title: "Draft" });
 const a = await Docs.findById(id); // version 1
 const b = await Docs.findById(id); // version 1
-await Docs.update(a.change.title("A")); // stored as version 2; a.version is 2
-await Docs.update(b.change.title("B")); // throws RepositoryConcurrencyConflict
+await Docs.update(a!.change.title("A")); // stored as version 2; a.version is 2
+await Docs.update(b!.change.title("B")); // throws RepositoryConcurrencyConflict
 ```
 
 A soft `delete` and `restore` write through `update`, so they check and bump the version too, and so does `increment`. The provider must check versions, `capabilities.versioning` (`inMemoryProvider` and `@afora/drizzle` do): it gets `{ expectedVersion }` as the third argument of `update` and compares it in the same atomic step as the write. A versioned entity whose provider does not throws `InvalidRepositoryDeclaration` on its first write, not when declared, since the provider of an application may only be known once it starts. The check covers the time between the read and the write of one process; a version a client sends back (an HTTP `If-Match`) is up to the use case, which can compare it with the one it loads.
 
 **Increment.** `increment(idOrEntity, deltas, options?)` adds numbers to keys of the stored entity in one atomic write, so concurrent calls lose nothing (an `update` would read, add and write, and two calls would lose one increment). It takes only keys of the entity's `change` list that hold a number, checked by type and at runtime (`InvalidRepositoryIncrement`, with an issue for each key, answered with 400), stamps `updatedAt`, bumps the `version` of a versioned entity, queues `onUpdate` and gives the entity as stored.
 
+<!-- docs:code continue -->
 ```ts
 class Counter extends entityOf(
 	blueprintOf((ctx) => ({
@@ -154,10 +194,12 @@ const Counters = repositoryOf({
 	actions: ["increment", "findById"],
 });
 
-await Counters.increment(id, { views: 1, reads: 1 }); // Counter
+declare const counterId: string;
+
+await Counters.increment(counterId, { views: 1, reads: 1 }); // Counter
 // creates the counter when the id holds none: { entry: "home", views: 1, reads: 0 }
 await Counters.increment(
-	id,
+	counterId,
 	{ views: 1 },
 	{ create: { entry: "home", reads: 0 } },
 );
@@ -167,6 +209,7 @@ Without `create`, an id that holds no entity (or a soft-deleted one) throws `Rep
 
 **Providers.** A repository reads and writes through an `IRepositoryProvider` (v2), on plain unmasked values, each call getting a `context` with the `entity`, the repository `name`, its `unique` keys, `env` and, for an entity that expires, `expiry` (`{ key }`). Writing a provider is adapter work: `IRepositoryProvider`, `RepositoryContext`, `RepositoryData`, `ProviderQuery` and `ProviderCapabilities` are imported from `@afora/core/adapters` (see [API tiers](api-tiers.md)).
 
+<!-- docs:code skip: the shape of the interface, its parameters left untyped to read; import the real one from @afora/core/adapters -->
 ```ts
 import type {
 	IRepositoryProvider,
@@ -216,7 +259,13 @@ The bare `RepositoryQuery` uses string keys and stored values. Equality and `in`
 
 **Environments.** `environmentOf(blueprint)` reads the declared variables from `process.env` (or `{ source }`), validates them on the first `load()` and keeps the value; a missing or rejected variable throws `InvalidEnvironment`. Pass one, or a list (merged in order), as `environmentDependencies`: the provider gets them as `context.env`, read on the first call, not on declaration.
 
+<!-- docs:code continue -->
 ```ts
+import type { IRepositoryProvider } from "@afora/core/adapters";
+
+class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+declare const postgres: IRepositoryProvider; // a provider of yours
+
 const Database = environmentOf(
 	blueprintOf((ctx) => ({ DATABASE_URL: ctx.url })),
 );
@@ -232,6 +281,7 @@ A variable is converted when its property does not take a string: to `true` or `
 
 **References.** An entity a record holds (as a field, in a list, in a blueprint, or in a record that is not an entity) is stored as its id, not as a copy, and loaded back when the record is read, so it is always current. List the repositories that load them in `relations`: one for each entity class held, at any depth (the class itself, or a subclass). A missing, extra, duplicated or invalid relation throws `InvalidRepositoryDeclaration`. A stored id with no entity throws `InvalidRepositoryData`, caused by `RepositoryEntityNotFound`, even in an optional field. Reads load by batch (one `findMany` with `in` for each relation, under the deletion policy of the related repository), and the same id is the same instance within a read. Writes do not cascade: the entity is not checked or saved, so persist it through its own repository. Entities loaded this way do not queue `onCreate` again, and a use case collects the events of an entity only when it goes through that entity's own repository. `findBy<Key>` and `findManyBy<Key>` take the entity or its id (a list of them for a list field).
 
+<!-- docs:code continue -->
 ```ts
 class PasswordRecovery extends entityOf(
 	blueprintOf((ctx) => ({ user: User, token: ctx.string })),
@@ -249,14 +299,24 @@ await Recoveries.findManyByUser(user); // or findManyByUser(user.id)
 
 **In applications.** An application with a `provider` (or a provider of `providersOf`) binds each repository it registers: `app.repositories.X`, and the use cases and commands of the application, read and write through it. From then on, the repository declared at module level throws `RepositoryUsedOutsideApplication` (layer `repository`) on every method, instead of reading another store: use `app.repositories.X`, run its use cases with `app.run` (or `app.useCase`), or give the repository of the application to `execute`. What it exposes besides its methods (`entity`, `actions`) still works, and so does a repository that no application with a provider registered, as in tests and scripts.
 
+<!-- docs:code continue -->
 ```ts
-const app = applicationOf({ name: "blog", repositories: { Users }, provider });
-await app.repositories.Users.findById(id); // through the provider of the application
-await Users.findById(id); // throws RepositoryUsedOutsideApplication
+import { applicationOf, inMemoryProvider } from "@afora/core";
+
+const provider = inMemoryProvider();
+const app = applicationOf({
+	name: "blog",
+	entities: { User },
+	repositories: { Users },
+	provider,
+});
+await app.repositories.Users.findById(user.id); // through the provider of the application
+await Users.findById(user.id); // throws RepositoryUsedOutsideApplication
 ```
 
 **Extending.** `RepositoryOf(repository)` is the class of a repository, to extend. Its instances share the entity, actions, provider and environment of the repository, and can use the protected `provider`, `context`, `env`, `dataOf(entity)`, and the async `hydrate(data)` and `hydrateMany(list)`, which also load the entities a stored value holds. `create`, `update`, `delete` and `count` are overridden as methods. `findBy<Key>` and `findManyBy<Key>` are named after the entity's keys, so TypeScript types them as properties: override them with a field, which can still call `super`.
 
+<!-- docs:code continue -->
 ```ts
 class UsersRepository extends RepositoryOf(Users) {
 	override findByEmail = async (email: string) =>
@@ -278,7 +338,17 @@ As a type, `RepositoryOf<typeof User, ["findById", "create"]>` is the repository
 
 **In use cases.** A repository (or an instance of a class extending one) and an environment are dependencies of a use case, next to other use cases. The use case gets the repository's methods, usable only during execution; the events of the entities they take and give move to the use case. In a class extending a repository, the methods call each other through the use case too (`this.create` inside `revokeAllOf`): their events move to it, and what `execute` replaces is replaced there as well. Only the events of entities of the repository's own class move; the entities it holds (`post.author`) leave theirs to their own repository. Two limits: `#private` members do not work in the methods the use case calls, and an arrow field calling `this.other` does not go through the use case (`super.other` does); a repository used by importing it is not tracked. It gets an environment's variables. `execute` replaces some methods of a repository with an object, and an environment with variables its blueprint accepts.
 
+<!-- docs:code continue -->
 ```ts
+import { useCaseOf } from "@afora/core";
+
+const UserInput = blueprintOf((ctx) => ({
+	name: ctx.string,
+	email: ctx.email,
+	slug: ctx.slug,
+}));
+const UserResponse = blueprintOf(() => ({ user: User }));
+
 class Register extends useCaseOf({
 	name: "Register",
 	blueprint: UserInput,
@@ -296,6 +366,18 @@ class Register extends useCaseOf({
 `indexes` declares the access patterns of a repository, by name: the keys a query matches by equality (`where`, at least one) and, optionally, the key it reads in order of (`orderBy`). The keys are typed by the entity.
 
 ```ts
+import { blueprintOf, entityOf, repositoryOf } from "@afora/core";
+
+class Entry extends entityOf(
+	blueprintOf((ctx) => ({
+		type: ctx.slug,
+		status: ctx.enumOf(["draft", "published"]),
+		publishedAt: ctx.optional.dateTime,
+		ownerSub: ctx.string,
+		title: ctx.text,
+	})),
+) {}
+
 const Entries = repositoryOf({
 	entity: Entry,
 	actions: ["findMany", "findCursor", "explain"],
@@ -320,6 +402,7 @@ The provider gets every index, normalized and frozen, as `context.indexes` (to c
 
 Every read is planned before the provider is called: `{ access: "id" | "unique" | "index" | "scan", index? }`. A condition on `id` or on another unique key, by equality or `in` (a batch of key lookups), is `id` or `unique`; a query an index serves is `index`; the rest, a query with no conditions included, is a `scan`, which reads every row of the entity. The `explain` action gives the plan of a query without reading anything; it takes the query of `findMany` or of `findCursor`:
 
+<!-- docs:code continue -->
 ```ts
 await Entries.explain({ where: { ownerSub: "a" } }); // { access: "index", index: "byOwner" }
 await Entries.explain({ where: { title: "Hello" } }); // { access: "scan" }
@@ -327,15 +410,16 @@ await Entries.explain({ where: { title: "Hello" } }); // { access: "scan" }
 
 `scans` says what a repository does with a scan: `"allow"` (the default) runs it, `"warn"` logs `repository-scan` (`warn`, with `repository`, `method`, `where` and `orderBy`, the keys of the query) on the logger of the application that bound it, or of the call, and runs it, and `"reject"` throws `InvalidRepositoryQuery` before the provider is called, with `details` `{ reason, scan: true, repository, method, where, orderBy }`. It applies to `findMany`, `findManyBy<Key>`, `exists`, `findPage`, `findCursor` and `count` (whose order is ignored). The plan is made by the core, so the in-memory provider of the tests rejects the same queries as the provider of production: a test that runs a query a strict repository would reject fails.
 
+<!-- docs:code continue -->
 ```ts
-const Entries = repositoryOf({
+const StrictEntries = repositoryOf({
 	entity: Entry,
 	actions: ["findMany"],
 	indexes: { byOwner: { where: ["ownerSub"] } },
 	scans: "reject",
 });
-await Entries.findMany({ where: { ownerSub: "a" } }); // reads through byOwner
-await Entries.findMany({ where: { title: "Hello" } }); // throws InvalidRepositoryQuery
+await StrictEntries.findMany({ where: { ownerSub: "a" } }); // reads through byOwner
+await StrictEntries.findMany({ where: { title: "Hello" } }); // throws InvalidRepositoryQuery
 ```
 
 `app.describe()` gives `scans` for each repository.
@@ -344,9 +428,14 @@ await Entries.findMany({ where: { title: "Hello" } }); // throws InvalidReposito
 
 For an entity declared with [`expires`](entities.md#records-that-expire), every read (`findMany`, `count`, `exists`, `findPage`, `findCursor`, `findBy<Key>`, `findManyBy<Key>`, and the read of `delete` and `restore` given an id) leaves out the records whose date (`expiresAt`, or the key of `at`) is at or before now, by the clock of the entity; a record without a date never expires. `withExpired: true` includes them.
 
+<!-- docs:code continue -->
 ```ts
+class AuditEvent extends entityOf(
+	blueprintOf((ctx) => ({ action: ctx.string })),
+	{ expires: { after: { days: 400 } } },
+) {}
 const AuditEvents = repositoryOf({
-	entity: AuditEvent, // expires: { after: { days: 400 } }
+	entity: AuditEvent,
 	actions: ["create", "findMany", "count"],
 });
 await AuditEvents.count(); // the events of the last 400 days
@@ -369,8 +458,10 @@ Every read parses the stored rows against the current blueprint. For an entity t
 
 ```ts
 import { describe, expect, it } from "bun:test"; // or vitest, jest
+import type { IRepositoryProvider } from "@afora/core/adapters";
 import { providerContract } from "@afora/core/testing";
-import { myProvider } from "./my-provider";
+
+declare function myProvider(): IRepositoryProvider; // the provider under test
 
 providerContract({ describe, it, expect }, () => myProvider());
 ```

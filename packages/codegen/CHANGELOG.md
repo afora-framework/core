@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Imported use cases as dependencies (#64)
+
+- **Breaking.** A use case implemented by `{ "import" }` can be a dependency of another use case, and a steps use case can `call` it; the `import_dependency` issue is gone. Each use case that hand-written code needs (the `<Name>Base` of every `import` use case, and every steps use case such a class depends on) is generated in its own `<kebab-name>.use-case.ts` in `output.dir`, which never imports `use-cases.ts`; `use-cases.ts` re-exports it. A handler imports its base from that file (`import { RegisterBase } from "../domain/register.use-case"`); importing it from `use-cases.ts` keeps working as long as no generated use case depends on that handler.
+- New issues: `import_cycle`, a hand-written module that would import itself back through the generated files, and `file_collision`, two use cases that would get the same file name (compared without case). `writeGenerated` removes stale `*.use-case.ts` files that carry the generated banner.
+
 ### Project boundary (#69)
 
 - `projectBoundaryIssues(spec, root)`: the places where a spec reaches outside a project directory, as issues `outside_project`: an `{ "import": "<module>#<name>" }` whose module is a file outside it (resolved from `output.dir`), an absolute path or a URL, and an `extends` outside it. For tools that take a spec from someone they do not trust; `validateSpec` does not run it, since a spec has no directory of its own. `@afora/mcp` runs it on every spec.

@@ -22,6 +22,7 @@ user.change.name("Ann").updatedAt; // now
 user.destroy().isDeleted; // true
 
 // Loaded from a database: the identity given is validated and kept
+const { id, createdAt, updatedAt, deletedAt } = user;
 new User({ id, createdAt, updatedAt, deletedAt, name: "Jane" });
 
 // As any record, an entity is a field of a record or of another entity
@@ -38,7 +39,7 @@ new Post({ title: "Hi", author: { name: "Jane" }, coauthors: [user] }); // autho
 
 An entity declared with `expires: { after }` gets a fifth one, `expiresAt` (see [Records that expire](#records-that-expire)), and a versioned entity one more, `version` (see [Versioned entities](#versioned-entities)).
 
-The identity keys are read-only: `set` throws `ImmutableEntityKey` for them, and they get no `change.<key>` method. The blueprint cannot declare them, nor the members of an entity (`destroy`, `isDeleted`, `equals`, `onDestroy`, `emit`, `pullEvents`): `entityOf` throws `ReservedEntityKey`. `user.equals(other)` compares entities of the same declaration by `id`. `isEntityClass` and `isEntity` tell entities apart from records. `entityBuilderOf({ identity, generateId, now, expiresAt })` makes an `entityOf` with your own identity fields and clock (`expiresAt`, a date and time property, is the field entities expiring `after` a duration get; without it such a declaration throws `InvalidEntityExpiry`).
+The identity keys are read-only: `set` throws `ImmutableEntityKey` for them, and they get no `change.<key>` method. The blueprint cannot declare them, nor the members of an entity (`destroy`, `isDeleted`, `equals`, `onDestroy`, `emit`, `pullEvents`): `entityOf` throws `ReservedEntityKey`. Code that handles entities without knowing their class reads both lists from `@afora/core/adapters`: `ENTITY_IDENTITY_KEYS` (`id`, `createdAt`, `updatedAt`, `deletedAt`) and `RESERVED_ENTITY_KEYS` (those and the members above). An entity class also keeps its unique keys, as `options.unique` lists them, under the `EntityUniqueKeys` symbol: `repositoryOf` reads it to accept only classes made by `entityOf` and to generate a `findBy<Key>` for each unique key (and a `findManyBy<Key>` for the others). `user.equals(other)` compares entities of the same declaration by `id`. `isEntityClass` and `isEntity` tell entities apart from records. `entityBuilderOf({ identity, generateId, now, expiresAt })` makes an `entityOf` with your own identity fields and clock (`expiresAt`, a date and time property, is the field entities expiring `after` a duration get; without it such a declaration throws `InvalidEntityExpiry`).
 
 Entities can queue domain events for an external consumer. `eventOf` accepts an entity class (including subclasses) and an optional async handler returning `Promise<void>`, called with the entity and `{ logger }` (the logger of the application whose command raised the event; see [Logging](logging.md)); `event.handle({ logger })` can give another. Definitions are immutable; incompatible entity instances are rejected when emitting. An event without a handler (`eventOf("created", Post)`) only carries the entity, for a policy such as [`publishEvents`](commands.md#event-policies); its `handle()` does nothing. `app.describe().entities.<Name>.events` gives the lifecycle events of an entity by cycle, each `{ name, handler }` (whether it has one).
 
@@ -136,6 +137,8 @@ class Window extends entityOf(
 `entityOf(blueprint, { versioned: true })` adds a `version` identity key: a positive integer (`EntityVersion`), 1 when the entity is built without one, kept as given when it is loaded. Like the other identity keys it is read-only (no `change.version`, `set` throws `ImmutableEntityKey`) and the blueprint cannot declare it (`ReservedEntityKey`); only the repository moves it. On an entity that is not versioned, `version` is an ordinary key, and the instance type has `version: number` only when `versioned` is `true`.
 
 ```ts
+import { blueprintOf, entityOf } from "@afora/core";
+
 class Doc extends entityOf(
 	blueprintOf((ctx) => ({ title: ctx.string })),
 	{
@@ -158,6 +161,8 @@ Three options describe how the stored shape of an entity changed, so that a repo
 - `previousNames`: the `name`s the entity had, whose rows `app.migrate` moves.
 
 ```ts
+import { blueprintOf, entityOf } from "@afora/core";
+
 class Article extends entityOf(
 	blueprintOf((ctx) => ({
 		title: ctx.text,
