@@ -107,12 +107,13 @@ function verify(scenario: Scenario) {
 const WARM_UP_MS = Number(process.env.BENCH_WARM_UP_MS ?? 400);
 
 /**
- * Runs `call` until the engine has had the time to optimize it. mitata's own
- * warm-up is two samples, after which Node at times is still running the
- * unoptimized code, and stays twice as slow for the whole measurement.
+ * Runs `call` for `ms` milliseconds, so that the engine has had the time to
+ * optimize it before it is timed. mitata's own warm-up is two samples, after
+ * which Node at times is still running the unoptimized code, and stays twice
+ * as slow for the whole measurement.
  */
-function warmUp(call: () => unknown) {
-	const end = performance.now() + WARM_UP_MS;
+export function warmUp(call: () => unknown, ms = WARM_UP_MS) {
+	const end = performance.now() + ms;
 	while (performance.now() < end) {
 		for (let index = 0; index < 100; index++) call();
 	}

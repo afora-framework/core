@@ -1,6 +1,6 @@
-// `bun run.ts` times every contender on every scenario, on Bun and (if there
-// is a `node`) on Node, measures bundle size and cold start, and writes
-// results/latest.json and RESULTS.md.
+// `bun run.ts` times every contender on every scenario, on Bun and on Node
+// (the `node` on the PATH, or each binary of `BENCH_NODE_BINS`), measures
+// bundle size and cold start, and writes results/latest.json and RESULTS.md.
 //   --only flat,nested   only these scenarios; nothing is written
 //   --rounds 3           times each row is timed, in turns; the best counts (default 3)
 //   --jobs 3             that many rows at a time, to iterate: the times are off by 1.4x and more, and nothing is written
@@ -9,6 +9,7 @@
 //   --check             fails when RESULTS.md, the chart or the block of the README are not what results/latest.json gives
 //   --render             RESULTS.md again from results/latest.json, no timing
 import { writeFileSync } from "node:fs";
+import { delimiter } from "node:path";
 import type { Scenario } from "./contenders.ts";
 import { fmtNs, guard } from "./guard.ts";
 import {
@@ -85,30 +86,56 @@ async function installRoot() {
 	}
 }
 
-type Runtime = { name: "bun" | "node"; command: string[] };
+type Runtime = {
+	/** What its report states as `version` ("Node v24.11.0"), which tells two Node legs apart. */
+	label: string;
+	command: string[];
+};
 
-/** Bun, and Node when there is one that can run the benchmark against a build of afora. */
+/**
+ * The Node binaries to run the benchmark on: those of `BENCH_NODE_BINS`
+ * (paths separated by the delimiter of the platform, `:` or `;`), or else the
+ * `node` on the PATH.
+ */
+const nodeBinaries = () =>
+	(process.env.BENCH_NODE_BINS ?? "node").split(delimiter).filter(Boolean);
+
+/** Bun, and each Node that can run the benchmark against a build of afora. */
 async function runtimes(): Promise<Runtime[]> {
-	const list: Runtime[] = [{ name: "bun", command: ["bun"] }];
-	const found = await Bun.$`node --version`.nothrow().quiet();
-	if (found.exitCode !== 0) {
-		console.log("No `node` found; the results are Bun-only.");
-		return list;
+	const list: Runtime[] = [{ label: `Bun ${Bun.version}`, command: ["bun"] }];
+	let built: boolean | undefined;
+	for (const binary of nodeBinaries()) {
+		const found = await Bun.$`${binary} --version`.nothrow().quiet();
+		if (found.exitCode !== 0) {
+			console.log(`No Node at \`${binary}\`; it is left out.`);
+			continue;
+		}
+		const version = found.text().trim();
+		const label = `Node ${version}`;
+		if (list.some((runtime) => runtime.label === label)) {
+			console.log(
+				`${label} is already in the list; \`${binary}\` is left out.`,
+			);
+			continue;
+		}
+		const major = Number.parseInt(version.slice(1), 10);
+		built ??=
+			(
+				await Bun.$`bun build ../src/index.ts --outfile .dist/afora.js --target node --format esm --packages external`
+					.cwd(here)
+					.nothrow()
+					.quiet()
+			).exitCode === 0;
+		if (major < 22 || !built) {
+			console.log(`${label} cannot run the benchmark; it is left out.`);
+			continue;
+		}
+		const flags =
+			major >= 23 ? [] : ["--experimental-strip-types", "--no-warnings"];
+		list.push({ label, command: [binary, ...flags] });
 	}
-	const version = found.text().trim();
-	const major = Number.parseInt(version.slice(1), 10);
-	const build =
-		await Bun.$`bun build ../src/index.ts --outfile .dist/afora.js --target node --format esm --packages external`
-			.cwd(here)
-			.nothrow()
-			.quiet();
-	if (major < 22 || build.exitCode !== 0) {
-		console.log(`Node ${version} cannot run the benchmark; Bun-only.`);
-		return list;
-	}
-	const flags =
-		major >= 23 ? [] : ["--experimental-strip-types", "--no-warnings"];
-	list.push({ name: "node", command: ["node", ...flags] });
+	if (list.length === 1)
+		console.log("No Node to run; the results are Bun-only.");
 	return list;
 }
 
@@ -136,7 +163,7 @@ async function leg(
 	let next = 0;
 	let failed = false;
 	const worker = async (slot: number) => {
-		const out = `${here}.dist/row-${runtime.name}-${slot}.json`;
+		const out = `${here}.dist/row-${runtime.label.replace(/\W+/g, "-")}-${slot}.json`;
 		while (!failed && next < rows.length) {
 			const position = next++;
 			const { scenario, kind, contender, index } = rows[
@@ -156,7 +183,7 @@ async function leg(
 			if (child.exitCode !== 0) {
 				failed = true;
 				console.log(child.stderr.toString());
-				console.log(`The ${runtime.name} run failed at ${scenario.id}.`);
+				console.log(`The ${runtime.label} run failed at ${scenario.id}.`);
 				return;
 			}
 			const part = (await Bun.file(out).json()) as RuntimeReport;
@@ -164,7 +191,7 @@ async function leg(
 			const best = parts[position]?.tables[0]?.rows[0];
 			if (!best || (row && row.avg < best.avg)) parts[position] = part;
 			console.log(
-				`${runtime.name.padEnd(4)}  ${`${scenario.id} ${kind}`.padEnd(22)} ${fmtNs(row?.avg ?? 0).padStart(9)} ns  ${contender.name}`,
+				`${runtime.label.padEnd(14)}  ${`${scenario.id} ${kind}`.padEnd(22)} ${fmtNs(row?.avg ?? 0).padStart(9)} ns  ${contender.name}`,
 			);
 		}
 	};
@@ -172,7 +199,7 @@ async function leg(
 	// drifts over the minutes a run takes (heat, power, other programs); taking
 	// turns spreads that over every row instead of the rows of one moment.
 	for (let round = 1; round <= rounds && !failed; round++) {
-		console.log(`\n${runtime.name}: round ${round} of ${rounds}`);
+		console.log(`\n${runtime.label}: round ${round} of ${rounds}`);
 		next = 0;
 		await Promise.all(Array.from({ length: jobs }, (_, slot) => worker(slot)));
 	}
@@ -238,12 +265,18 @@ if (process.env.BENCH_CHILD === "1") {
 
 	const scenarios = await loadScenarios(only);
 	const runs: RuntimeReport[] = [];
+	/** The binary of each run, for its cold start, under the version its report states. */
+	const binaries: Array<{ label: string; command: string }> = [];
 	for (const runtime of await runtimes()) {
 		const report = await leg(runtime, scenarios, jobs);
-		if (report) runs.push(report);
+		if (!report) continue;
+		runs.push(report);
+		binaries.push({
+			label: report.version,
+			command: runtime.command[0] as string,
+		});
 	}
 	if (runs.length === 0) throw new Error("Nothing was measured.");
-	const node = runs.some((run) => run.runtime === "node");
 
 	if (only.length > 0 || jobs > 1) {
 		const file = `${here}.dist/partial.json`;
@@ -259,12 +292,12 @@ if (process.env.BENCH_CHILD === "1") {
 			.nothrow()
 			.text();
 		const report: Report = {
-			schema: 1,
+			schema: 2,
 			generatedAt: new Date().toISOString(),
 			afora: { version: root.version, commit: commit.trim() || "unknown" },
 			libraries: libraryVersions(),
 			runs,
-			footprints: await footprints(node ? ["bun", "node"] : ["bun"]),
+			footprints: await footprints(binaries),
 		};
 		await Bun.write(latest, `${JSON.stringify(report, null, "\t")}\n`);
 		// A release keeps its report, for the history of each row over the versions.

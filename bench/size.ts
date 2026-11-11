@@ -14,9 +14,16 @@ export type Footprint = {
 	/** Bytes of the minified bundle, and of it gzipped. */
 	min: number;
 	gzip: number;
-	/** Milliseconds to import the bundle in a new process: load, build the schema, validate once. */
+	/**
+	 * Milliseconds to import the bundle in a new process: load, build the
+	 * schema, validate once. By the version of the runtime, as its run states
+	 * it ("Bun 1.4.4", "Node v24.11.0"); by `bun` and `node` in schema 1.
+	 */
 	cold: Record<string, number>;
 };
+
+/** A runtime to start: its binary, and the name its cold start is kept under. */
+export type ColdRuntime = { label: string; command: string };
 
 const median = (values: number[]) =>
 	[...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] as number;
@@ -36,7 +43,9 @@ async function coldOf(command: string, file: string): Promise<number> {
 	return median(times);
 }
 
-export async function footprints(runtimes: string[]): Promise<Footprint[]> {
+export async function footprints(
+	runtimes: ColdRuntime[],
+): Promise<Footprint[]> {
 	const rows: Footprint[] = [];
 	for (const library of Object.keys(LIBRARIES)) {
 		const built = await Bun.build({
@@ -53,7 +62,9 @@ export async function footprints(runtimes: string[]): Promise<Footprint[]> {
 		const file = `${out}/${library}.mjs`;
 		const bytes = await Bun.file(file).bytes();
 		const cold: Record<string, number> = {};
-		for (const runtime of runtimes) cold[runtime] = await coldOf(runtime, file);
+		for (const { label, command } of runtimes) {
+			cold[label] = await coldOf(command, file);
+		}
 		rows.push({
 			library,
 			min: bytes.length,
@@ -65,5 +76,10 @@ export async function footprints(runtimes: string[]): Promise<Footprint[]> {
 }
 
 if (import.meta.main) {
-	console.table(await footprints(["bun", "node"]));
+	console.table(
+		await footprints([
+			{ label: "bun", command: "bun" },
+			{ label: "node", command: "node" },
+		]),
+	);
 }

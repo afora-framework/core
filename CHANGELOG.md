@@ -51,6 +51,8 @@
 - `bench/RESULTS.md`, the table and the chart of the README are those of a GitHub runner (AMD EPYC, Linux, Bun 1.4.4 and Node 24), measured by the `Benchmark results` workflow instead of on a laptop, and kept as `bench/results/history/0.0.8.json`.
 - The `Benchmark results` workflow, run by hand or after a release, measures everything on a GitHub runner and opens a pull request with the results, kept per version in `bench/results/history/`.
 - `bun run bench:guard` covers the fourteen cases of the seven scenarios, each with its limit against Zod 4 in `bench/guard.limits.ts` (1.15x unless stated, with the reason).
+- The benchmark runs on several versions of Node: `BENCH_NODE_BINS` lists the Node binaries (paths separated by `:`, or `;` on Windows), one run per binary, and the `Benchmark results` workflow measures Node 22 and Node 24. `bench/RESULTS.md` names each run by its version, the cold start has a column per version, and the block of the README leads with the newest Node. `bench/results/latest.json` is now `schema: 2` (a run per Node version; the cold start keyed by the version of the runtime instead of `bun` and `node`); `bench/render.ts` still reads schema 1.
+- `bun run bench:guard` and `bun run bench -- --compare` warm each contender up for 400 ms before its first round, as a row of the benchmark is, so that no ratio is taken on code the engine has not optimized yet.
 
 ### Fixed
 

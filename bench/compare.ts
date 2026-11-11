@@ -60,7 +60,7 @@ export async function compare(base: string, only: string[]): Promise<boolean> {
 	const lines = [
 		"### afora against its base",
 		"",
-		`Best of 9 rounds of each side, taking turns in one process. A \`${GUARDED.replace("afora ", "")}\` row over ${COMPARE_LIMIT}x its base fails the check.`,
+		`Best of 9 rounds of each side after a warm-up, taking turns in one process. A \`${GUARDED.replace("afora ", "")}\` row over ${COMPARE_LIMIT}x its base fails the check.`,
 		"",
 		"| Case | Row | Base | Head | Head / base | |",
 		"| --- | --- | ---: | ---: | ---: | --- |",
