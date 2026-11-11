@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Tracing (#65)
+
+- `"trace": { "import": "./trace.ts#tracer" }` at the top level of a spec is the tracer of the application (`otelTracer()` of `@afora/otel`, say), generated as `applicationOf({ trace })`. Anything but an import is `invalid_trace`. `extractSpec` needs `imports.trace` for an application with a tracer, which `describe()` gives as opaque. `afora.schema.json` describes it.
+
 ### `params` on a `run` step
 
 - A `run` step of `afora.json` may declare `"params"`, a blueprint by name or `{ "fields": {...} }` whose fields match its `args` by position, so the args are checked before the function runs (see `docs/use-cases.md#steps` of `@afora/core`). `validateSpec` and `afora-codegen check` resolve it like the `input` of a use case and report `invalid_args` when a list of args has another length; `generate` emits it as a blueprint; `extractSpec` gives it back by its fields, and `normalizeSpec` compacts them. `afora.schema.json` has it. Needs the `@afora/core` that reads `params`.

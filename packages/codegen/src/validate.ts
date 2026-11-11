@@ -12,6 +12,7 @@ import {
 	checkLog,
 	checkProvider,
 	checkProviders,
+	checkTrace,
 } from "./provider";
 import {
 	checkEnvironmentNames,
@@ -43,6 +44,7 @@ const TOP_LEVEL_KEYS = [
 	"provider",
 	"providers",
 	"log",
+	"trace",
 	"publishers",
 	...COLLECTIONS,
 ];
@@ -1282,6 +1284,7 @@ function check(
 	checkPublishers(input.publishers, issues);
 	checkProviders(input.providers, providers, issues);
 	if (input.log !== undefined) checkLog(input.log, ["log"], issues);
+	if (input.trace !== undefined) checkTrace(input.trace, ["trace"], issues);
 	for (const key of Object.keys(input)) {
 		if (!TOP_LEVEL_KEYS.includes(key)) {
 			issues.push(

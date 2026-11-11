@@ -480,6 +480,8 @@ export interface Spec {
 	readonly providers?: Readonly<Record<string, ProviderSpec>>;
 	/** How the application logs. */
 	readonly log?: LogSpec;
+	/** What traces the application (`applicationOf({ trace })`): a tracer written by hand, e.g. `otelTracer()`. */
+	readonly trace?: ImportRef;
 	/** Where event policies publish (`applicationOf({ publishers })`), by camelCase key: a publisher written by hand. */
 	readonly publishers?: Readonly<Record<string, ImportRef>>;
 	readonly properties?: Readonly<Record<string, PropertySpec>>;

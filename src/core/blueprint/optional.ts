@@ -4,7 +4,7 @@ import { derivePropertyOf } from "../property/refine";
 import type { OptionalProperty } from "../property/types/optional-property.type";
 import type { AnyPropertyConstructor } from "../property/types/property-collection.type";
 import type { IPropertyType } from "../property/types/property-type.interface";
-import { schemaOf } from "../schema/schema";
+import { rawTypeOf, schemaOf } from "../schema/schema";
 import { withStandard } from "../standard/standard";
 import { Kind } from "../symbols/kind";
 import { fieldOf } from "./callable";
@@ -113,7 +113,7 @@ export function optionalOf(given: BlueprintField): unknown {
 	const base = Property.type;
 	const SchemaConstructor = schemaOf(
 		base.name,
-		Type.Optional(base.schema.type.Type()),
+		Type.Optional(rawTypeOf(base.schema)),
 	);
 	const type: IPropertyType<TSchema> = {
 		...base,

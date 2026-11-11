@@ -22,7 +22,7 @@ The library ships to Bun **and** Node >= 22 and must load in browsers and Worker
 - `src/std/`: concrete properties (`Id`, `Email`, `Password`…), `blueprintOf`, `entityOf` and the standard use cases.
 - `src/index.ts`: the single public entry. Anything exported goes through it.
 - `docs/`: the spec of behavior, one file per concept ([index](docs/README.md)).
-- `packages/*`: `@afora/codegen`, `@afora/mcp`, `@afora/hono`, `@afora/drizzle` and `@afora/dynamodb`, each with its own build and tests.
+- `packages/*`: `@afora/codegen`, `@afora/mcp`, `@afora/hono`, `@afora/fastify`, `@afora/express`, `@afora/elysia`, `@afora/ws`, `@afora/drizzle`, `@afora/dynamodb` and `@afora/otel`, each with its own build and tests.
 - `examples/`, `tests/types-compat`, `tests/type-perf`, `bench/`: interop, type compatibility, editor performance and benchmarks, each with its own scripts.
 
 ## Making a change

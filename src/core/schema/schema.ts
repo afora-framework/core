@@ -1,6 +1,6 @@
 import type { Static, TSchema } from "typebox";
 import Compile from "typebox/compile";
-import * as System from "typebox/system";
+import { Locale, Settings } from "typebox/system";
 import type { ISchema, ISchemaType } from "./types/schema.interface";
 
 /** Keywords kept as they are: the types, and the references between schemas. */
@@ -197,12 +197,6 @@ function leafChecksOf(schema: unknown): readonly LeafCheck[] | undefined {
 	}
 	return checks;
 }
-
-/**
- * The settings and the messages of TypeBox, read as they are on each value;
- * a version of TypeBox without them leaves every error to `Errors`.
- */
-const { Locale, Settings } = System as Partial<typeof System>;
 
 /** The leaf checks of each schema, `null` when it is not a leaf; made on its first rejected value. */
 const leafChecks = new WeakMap<object, readonly LeafCheck[] | null>();
@@ -506,8 +500,8 @@ const explainers = new WeakMap<object, Explain | null>();
 
 /** A sink with the limit, the messages and the settings TypeBox has now; `undefined` without them. */
 function sinkOf(): Sink | undefined {
-	const settings = Settings?.Get?.();
-	const locale = Locale?.Get?.();
+	const settings = Settings.Get();
+	const locale = Locale.Get();
 	if (typeof settings?.maxErrors !== "number" || typeof locale !== "function") {
 		return undefined;
 	}
@@ -636,8 +630,8 @@ function errorsOfVariant(
 		}));
 	}
 
-	const maxErrors = Settings?.Get?.().maxErrors;
-	const locale = Locale?.Get?.();
+	const maxErrors = Settings.Get().maxErrors;
+	const locale = Locale.Get();
 	if (typeof maxErrors !== "number" || typeof locale !== "function") {
 		return undefined;
 	}
@@ -665,11 +659,11 @@ export function errorsOfSchema(
 ): readonly SchemaError[] {
 	let checks = leafChecks.get(schema);
 	if (checks === undefined) {
-		checks = leafChecksOf(schema.type.Type()) ?? null;
+		checks = leafChecksOf(rawTypeOf(schema)) ?? null;
 		leafChecks.set(schema, checks);
 	}
-	const maxErrors = Settings?.Get?.().maxErrors;
-	const locale = Locale?.Get?.();
+	const maxErrors = Settings.Get().maxErrors;
+	const locale = Locale.Get();
 	// Without the limit and the messages of TypeBox, only TypeBox can answer.
 	if (
 		checks !== null &&
@@ -689,7 +683,7 @@ export function errorsOfSchema(
 	if (checks === null && isRecord(value)) {
 		let union = discriminatedUnions.get(schema);
 		if (union === undefined) {
-			union = discriminatedUnionOf(schema.type.Type()) ?? null;
+			union = discriminatedUnionOf(rawTypeOf(schema)) ?? null;
 			discriminatedUnions.set(schema, union);
 		}
 		const errors = union && errorsOfVariant(union, value);
@@ -698,7 +692,7 @@ export function errorsOfSchema(
 	if (checks === null) {
 		let explain = explainers.get(schema);
 		if (explain === undefined) {
-			explain = explainerOf(schema.type.Type()) ?? null;
+			explain = explainerOf(rawTypeOf(schema)) ?? null;
 			explainers.set(schema, explain);
 		}
 		const sink = explain && sinkOf();
@@ -782,6 +776,22 @@ export function checksOfSchema(schema: ISchema<TSchema>): SchemaChecks {
 				match: (value) => schema.match(value),
 				matchShape: (value) => schema.matchShape(value),
 			};
+}
+
+/**
+ * The TypeBox schema of `schema`, as it was given, without compiling it:
+ * `schema.type.Type()` gives the same schema but compiles it first, which is
+ * most of the time spent at import when only the schema is read (the
+ * meta-schema of `ctx.schema` alone takes milliseconds). A schema not made
+ * by `schemaOf` is asked through `type`.
+ * @internal
+ */
+export function rawTypeOf<SchemaType extends TSchema>(
+	schema: ISchema<SchemaType>,
+): SchemaType {
+	return schema instanceof AbstractSchema
+		? (schema as unknown as { readonly _type: SchemaType })._type
+		: (schema.type.Type() as SchemaType);
 }
 
 /** A schema class declared with `schemaOf`. */

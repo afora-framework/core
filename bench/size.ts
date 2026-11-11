@@ -53,8 +53,10 @@ async function coldOf(command: string, file: string): Promise<number> {
 
 /**
  * afora's entry imports `typebox` to declare its schemas, and afora itself
- * imports it from the root install: two copies on disk, both of which went
- * into its bundle. An application has one, so the entry gets afora's.
+ * imports it from the root install: two copies on disk (`bench/package.json`
+ * pins its own), both of which went into its bundle. An application has one,
+ * so every entry resolves `typebox` to the copy afora uses, TypeBox's own
+ * included: the two are measured on the same version.
  */
 const oneTypeBox: Bun.BunPlugin = {
 	name: "one-typebox",
@@ -77,7 +79,7 @@ export async function footprints(
 			format: "esm",
 			minify: true,
 			naming: `${library}.mjs`,
-			plugins: library === "afora" ? [oneTypeBox] : [],
+			plugins: [oneTypeBox],
 		});
 		if (!built.success) {
 			throw new Error(`${library}: ${built.logs.join("\n")}`);

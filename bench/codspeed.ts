@@ -5,13 +5,13 @@
 // plain tinybench run.
 import { withCodSpeed } from "@codspeed/tinybench-plugin";
 import { Bench } from "tinybench";
-import { GUARDED, REFERENCE, WATCHED } from "./contenders.ts";
+import { ENTITY, GUARDED, REFERENCE, WATCHED } from "./contenders.ts";
 import { inputOf, KINDS, loadScenarios } from "./harness.ts";
 
 const bench = withCodSpeed(new Bench());
 for (const scenario of await loadScenarios()) {
 	for (const kind of KINDS) {
-		for (const name of [GUARDED, WATCHED, REFERENCE]) {
+		for (const name of [GUARDED, WATCHED, ENTITY, REFERENCE]) {
 			const contender = scenario.contenders.find(
 				(candidate) => candidate.name === name,
 			);

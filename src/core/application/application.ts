@@ -1,3 +1,4 @@
+import type { TSchema } from "typebox";
 import { fieldOf } from "../blueprint/callable";
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
@@ -74,7 +75,14 @@ import {
 import type { ProviderDescription } from "../repository/types/query.interface";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import type { SchemaMigrationOptions } from "../repository/types/schema.interface";
+import { rawTypeOf } from "../schema/schema";
+import type { ISchema } from "../schema/types/schema.interface";
 import { Kind } from "../symbols/kind";
+import {
+	ApplicationTracerKey,
+	checkTracer,
+	type ITracer,
+} from "../tracing/tracing";
 import { useCaseOriginOf } from "../use-case/plugin";
 import { describeSteps } from "../use-case/steps/describe";
 import { interpretedStepsOf } from "../use-case/steps/run";
@@ -161,6 +169,20 @@ type Registry = Record<ApplicationCollectionKey, Map<string, Entry>>;
 const internals = new WeakMap<object, Registry>();
 /** The `log` each application was declared with (or inherited), for `extends`. */
 const logSettings = new WeakMap<object, LogSettings | LogFactory>();
+/** The `trace` each application was declared with (or inherited), for `extends`. */
+const traceSettings = new WeakMap<object, ITracer>();
+
+/** What `settings` holds for the last of `extended` that has something there. */
+function inherited<Value>(
+	extended: readonly object[],
+	settings: WeakMap<object, Value>,
+): Value | undefined {
+	for (let index = extended.length - 1; index >= 0; index--) {
+		const value = settings.get(extended[index] as object);
+		if (value !== undefined) return value;
+	}
+	return undefined;
+}
 
 /** A provider of `providersOf` an application registers, by key. */
 interface NamedProvider {
@@ -756,7 +778,7 @@ function propertyDescriptionOf(
 			readonly optional?: boolean;
 			readonly sensitive?: boolean;
 			readonly unique?: boolean;
-			readonly schema: { readonly type: { Type(): unknown } };
+			readonly schema: ISchema<TSchema>;
 		};
 	};
 	const lineage = propertyLineageOf(Property);
@@ -765,7 +787,7 @@ function propertyDescriptionOf(
 		optional: type.optional === true,
 		sensitive: type.sensitive === true,
 		unique: type.unique === true,
-		schema: plainOf(type.schema.type.Type()) as Record<string, unknown>,
+		schema: plainOf(rawTypeOf(type.schema)) as Record<string, unknown>,
 		...(lineage ? { lineage: lineageDescriptionOf(lineage, scope) } : {}),
 	};
 }
@@ -918,6 +940,7 @@ function describeRegistry(
 	named: ReadonlyMap<string, NamedProvider>,
 	log: Required<LogSettings> | "opaque" | undefined,
 	publishers: Readonly<Record<string, string>>,
+	traced: boolean,
 ): ApplicationDescription {
 	const scope: Scope = {
 		properties: referencesOf(registry, "properties"),
@@ -1068,6 +1091,7 @@ function describeRegistry(
 							}),
 						},
 					}),
+		...(traced ? { trace: { kind: "opaque" as const } } : {}),
 		...(Object.keys(publishers).length === 0
 			? {}
 			: {
@@ -1469,17 +1493,18 @@ export function applicationOf<
 
 	// The log: its own, else the one of the last extended application with one.
 	const declaredLog: LogSettings | LogFactory | undefined =
-		settings.log ??
-		[...extended]
-			.reverse()
-			.map((other) => logSettings.get(other))
-			.find((log) => log !== undefined);
+		settings.log ?? inherited(extended, logSettings);
 	const log = declaredLog === undefined ? undefined : applicationLogger(name);
 	// A `log` of `logFrom` is made on start; until then nothing is written.
 	if (declaredLog !== undefined && !isLogFactory(declaredLog)) {
 		log?.set(checkLogSettings(declaredLog));
 	}
 	const logger = log?.logger;
+	// The tracer, the same way: its own, else the one of the last extended one.
+	const tracer: ITracer | undefined =
+		settings.trace === undefined
+			? inherited(extended, traceSettings)
+			: checkTracer(settings.trace);
 	const { publishers, origins } = publishersOf(
 		name,
 		settings.publishers,
@@ -1504,7 +1529,11 @@ export function applicationOf<
 	// Use cases, commands and outputs are rebound for a provider, a logger or
 	// publishers. Repositories are bound for a provider, its own or one of `providersOf`.
 	const bindsProviders = provider !== undefined || instances.size > 0;
-	const rebinds = bindsProviders || logger !== undefined || hasPublishers;
+	const rebinds =
+		bindsProviders ||
+		logger !== undefined ||
+		tracer !== undefined ||
+		hasPublishers;
 
 	const collection = (key: ApplicationCollectionKey) =>
 		Object.freeze(
@@ -1557,6 +1586,8 @@ export function applicationOf<
 		});
 		if (logger)
 			Object.defineProperty(Bound, ApplicationLoggerKey, { value: logger });
+		if (tracer)
+			Object.defineProperty(Bound, ApplicationTracerKey, { value: tracer });
 		return Bound as unknown as AnyUseCaseClass;
 	};
 	const useCases: Record<string, unknown> = {};
@@ -1722,6 +1753,7 @@ export function applicationOf<
 		logger: logger ?? silentLogger,
 		context,
 		...(logger ? { [ApplicationLoggerKey]: logger } : {}),
+		...(tracer ? { [ApplicationTracerKey]: tracer } : {}),
 		...(hasPublishers ? { [ApplicationPublishersKey]: publishers } : {}),
 		properties: collection("properties"),
 		blueprints: collection("blueprints"),
@@ -1781,6 +1813,7 @@ export function applicationOf<
 					? {}
 					: { provider: defaultSlot ?? provider }),
 				...(declaredLog === undefined ? {} : { log: declaredLog }),
+				...(tracer === undefined ? {} : { trace: tracer }),
 			} as never);
 		},
 		describe: () =>
@@ -1796,6 +1829,7 @@ export function applicationOf<
 				named,
 				isLogFactory(declaredLog) ? "opaque" : log?.settings,
 				origins,
+				tracer !== undefined,
 			),
 		get started() {
 			return started;
@@ -1895,6 +1929,7 @@ export function applicationOf<
 	namedProviders.set(application, named);
 	if (defaultSlot !== undefined) defaultSlots.set(application, defaultSlot);
 	if (declaredLog !== undefined) logSettings.set(application, declaredLog);
+	if (tracer !== undefined) traceSettings.set(application, tracer);
 	publisherOrigins.set(application, Object.freeze(origins));
 	return application as never;
 }

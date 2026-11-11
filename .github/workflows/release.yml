@@ -124,6 +124,7 @@ jobs:
           publish packages/ws
           publish packages/drizzle
           publish packages/dynamodb
+          publish packages/otel
       - name: Create the tag and the GitHub release
         run: |
           prerelease=""

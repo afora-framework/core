@@ -223,3 +223,6 @@ export const GUARDED = "afora blueprint.safeParse";
 export const REFERENCE = "Zod 4 safeParse";
 /** Timed and shown by the guard, but not held to a limit. */
 export const WATCHED = "afora Record.safeParse";
+
+/** Timed by the guard against Zod 4 as well, with the limits of `ENTITY_LIMITS`. */
+export const ENTITY = "afora Entity.safeParse";

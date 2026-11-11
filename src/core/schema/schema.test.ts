@@ -1,7 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 import { type TSchema, Type } from "typebox";
 import { Locale, Settings } from "typebox/system";
-import { checksOfSchema, errorsOfSchema, schemaOf } from "./schema";
+import { checksOfSchema, errorsOfSchema, rawTypeOf, schemaOf } from "./schema";
+import type { ISchema } from "./types/schema.interface";
 
 afterEach(() => {
 	Locale.Reset();
@@ -573,4 +574,26 @@ test("inherited keys, own hidden keys and holes are read as TypeBox reads them",
 	expect(
 		errorsOfSchema(schema, hidden).map((error) => error.instancePath),
 	).toEqual(["/secret", "", "/a", "/list/2"]);
+});
+
+test("rawTypeOf gives the schema as it was given, without compiling it", () => {
+	const type = Type.Object({ name: Type.String({ minLength: 3 }) });
+	const Schema = schemaOf("Named", type);
+	const schema = new Schema();
+	expect(rawTypeOf(schema)).toBe(type);
+	expect(
+		(schema as unknown as { validator?: unknown }).validator,
+	).toBeUndefined();
+	expect(rawTypeOf(schema)).toEqual(schema.type.Type());
+	// A schema not made by `schemaOf` is asked through `type`.
+	const other: ISchema<typeof type> = {
+		match: (value): value is { name: string } => value !== undefined,
+		matchShape: () => true,
+		errors: () => [],
+		toString: () => "",
+		get type() {
+			return schema.type;
+		},
+	};
+	expect(rawTypeOf(other)).toBe(schema.type.Type());
 });

@@ -14,6 +14,24 @@ const Identity = blueprintBuilderOf()(() => ({
 	deletedAt: DeletedAt,
 }));
 
+/** The last millisecond `now` formatted, and how it came out. */
+let lastMillisecond = Number.NaN;
+let lastTimestamp = "";
+
+/**
+ * The current time as an ISO 8601 string. Formatting it is most of the cost of
+ * a time stamp, and a loop that builds entities makes many in one millisecond,
+ * so the last one is kept.
+ */
+function now(): string {
+	const millisecond = Date.now();
+	if (millisecond !== lastMillisecond) {
+		lastTimestamp = new Date(millisecond).toISOString();
+		lastMillisecond = millisecond;
+	}
+	return lastTimestamp;
+}
+
 /**
  * An entity of `blueprint`: a record with an `id` (a UUID v7, in
  * `options.unique`) and a `createdAt`, both made when missing from its value,
@@ -31,7 +49,7 @@ export const entityOf = entityBuilderOf(
 		{
 			identity: Identity,
 			generateId,
-			now: () => new Date().toISOString(),
+			now,
 			expiresAt: ExpiresAt,
 			plugins: [StdRecordPlugins],
 		},

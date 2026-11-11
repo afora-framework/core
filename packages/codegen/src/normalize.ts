@@ -473,6 +473,7 @@ export function normalizeSpec(
 						: [],
 				};
 	}
+	if (isObject(spec.trace)) out.trace = { ...spec.trace };
 	// Publishers by key in order.
 	if (isObject(spec.publishers) && Object.keys(spec.publishers).length > 0) {
 		out.publishers = Object.fromEntries(

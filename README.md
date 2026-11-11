@@ -378,6 +378,7 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 | [`@afora/ws`](packages/ws/README.md)                       | A `websocket` sink: operations over JSON messages on any runtime, with topic subscriptions that `publishEvents` feeds with domain events.                     |
 | [`@afora/drizzle`](packages/drizzle/README.md)             | A repository provider on Drizzle ORM (SQLite and Postgres) that passes the provider contract kit.                                                             |
 | [`@afora/dynamodb`](packages/dynamodb/README.md)           | A repository provider on one DynamoDB table (single-table layout, unique keys as marker items) that passes the provider contract kit on DynamoDB Local.       |
+| [`@afora/otel`](packages/otel/README.md)                   | OpenTelemetry tracing: `otelTracer()` gives an application a span per command, use case and repository call, with no value in any span.                       |
 
 ## Example
 
@@ -511,7 +512,8 @@ bun run test:fastify  # tests of packages/fastify (also test:express, test:elysi
 bun run test:ws       # tests of packages/ws
 bun run test:drizzle  # tests of packages/drizzle (SQLite and PGlite)
 bun run test:dynamodb # tests of packages/dynamodb (DynamoDB Local, with DYNAMODB_ENDPOINT)
-bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/fastify, packages/express, packages/elysia, packages/ws, packages/drizzle and packages/dynamodb
+bun run test:otel     # tests of packages/otel
+bun run build:packages # build the core, then packages/codegen, packages/mcp, packages/hono, packages/fastify, packages/express, packages/elysia, packages/ws, packages/drizzle, packages/dynamodb and packages/otel
 ```
 
 ## Versioning
