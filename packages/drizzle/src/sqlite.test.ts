@@ -531,6 +531,172 @@ describe("migrate", () => {
 		expect((write as Error).message).toContain("schema_version");
 	});
 
+	it("returns nothing in apply mode, { deferred: true } in file mode", async () => {
+		const apply = drizzleProvider({
+			db: drizzle(notesDatabase()),
+			tables: { Note: notes },
+			migrations: "apply",
+		});
+		expect(await apply.migrate?.(context, plan())).toBeUndefined();
+		const file = join(
+			await mkdtemp(join(tmpdir(), "afora-drizzle-")),
+			"0001_afora.sql",
+		);
+		const written = drizzleProvider({
+			db: drizzle(notesDatabase()),
+			tables: { Note: notes },
+			migrations: { file },
+		});
+		expect((await written.migrate?.(context, plan())) as unknown).toEqual({
+			deferred: true,
+		});
+		// Nothing to write (the file was applied): the backfill can run.
+		expect(
+			await written.migrate?.(
+				{ ...context, schema: undefined } as RepositoryContext,
+				{ entity: "Other", destructive: false, changes: [] },
+			),
+		).toBeUndefined();
+	});
+
+	describe("a renamed key whose column has another SQL name", () => {
+		const people = sqliteTable("people", {
+			id: text("id").primaryKey(),
+			displayName: text("display_name"),
+		});
+		const rename: SchemaPlan = {
+			entity: "Note",
+			destructive: false,
+			changes: [
+				change({
+					key: "displayName",
+					change: "renamed",
+					from: "fullName",
+					class: "declared",
+				}),
+			],
+		};
+		const bare = { ...context, schema: undefined } as RepositoryContext;
+		const peopleDatabase = (column: string) => {
+			const sqlite = new Database(":memory:");
+			sqlite.run(`CREATE TABLE people (id TEXT PRIMARY KEY, ${column} TEXT)`);
+			sqlite.run(`INSERT INTO people VALUES ('p1', 'Ada')`);
+			return sqlite;
+		};
+		const peopleColumns = (sqlite: Database) =>
+			(
+				sqlite.query("PRAGMA table_info(people)").all() as { name: string }[]
+			).map((column) => column.name);
+
+		it("renames the snake_case column of the old key", async () => {
+			const sqlite = peopleDatabase("full_name");
+			const provider = drizzleProvider({
+				db: drizzle(sqlite),
+				tables: { Note: people },
+				migrations: "apply",
+			});
+			await provider.migrate?.(bare, rename);
+			expect(peopleColumns(sqlite)).toEqual(["id", "display_name"]);
+			expect(sqlite.query("SELECT display_name FROM people").all()).toEqual([
+				{ display_name: "Ada" },
+			]);
+		});
+
+		it("renames the column named as the old key", async () => {
+			const sqlite = peopleDatabase("fullName");
+			const provider = drizzleProvider({
+				db: drizzle(sqlite),
+				tables: { Note: people },
+				migrations: "apply",
+			});
+			await provider.migrate?.(bare, rename);
+			expect(peopleColumns(sqlite)).toEqual(["id", "display_name"]);
+		});
+
+		it("refuses in apply mode when no source column is found", async () => {
+			const sqlite = peopleDatabase("nickname");
+			const provider = drizzleProvider({
+				db: drizzle(sqlite),
+				tables: { Note: people },
+				migrations: "apply",
+			});
+			const error = await provider
+				.migrate?.(bare, rename)
+				.catch((error: Error) => error);
+			expect((error as Error).message).toContain('"fullName"');
+			expect(peopleColumns(sqlite)).toEqual(["id", "nickname"]);
+		});
+
+		it("adds the column with a note in file mode when no source column is found", async () => {
+			const file = join(
+				await mkdtemp(join(tmpdir(), "afora-drizzle-")),
+				"0001_afora.sql",
+			);
+			const provider = drizzleProvider({
+				db: drizzle(peopleDatabase("nickname")),
+				tables: { Note: people },
+				migrations: { file },
+			});
+			await provider.migrate?.(bare, rename);
+			const written = await readFile(file, "utf8");
+			expect(written).toContain(
+				'-- Note: renamed "displayName" from "fullName"',
+			);
+			expect(written).toEndWith(
+				'ALTER TABLE "people" ADD COLUMN "display_name" text;\n',
+			);
+		});
+	});
+
+	it("starts the file again on the next run of app.migrate", async () => {
+		const sqlite = notesDatabase();
+		const file = join(
+			await mkdtemp(join(tmpdir(), "afora-drizzle-")),
+			"0001_afora.sql",
+		);
+		const tags = sqliteTable("tags", {
+			id: text("id").primaryKey(),
+			label: text("label"),
+		});
+		sqlite.run(`CREATE TABLE tags (id TEXT PRIMARY KEY)`);
+		const provider = drizzleProvider({
+			db: drizzle(sqlite),
+			tables: { Note: notes, Tag: tags },
+			migrations: { file },
+		});
+		class Tag extends entityOf(
+			blueprintOf((ctx) => ({ label: ctx.string })),
+			{ name: "Tag" },
+		) {}
+		const tagContext = {
+			...context,
+			entity: Tag,
+			name: "TagRepository",
+			schema: undefined,
+		} as unknown as RepositoryContext;
+		const tagPlan: SchemaPlan = {
+			entity: "Tag",
+			destructive: false,
+			changes: [
+				{
+					...change({ key: "label", change: "added-optional" }),
+					entity: "Tag",
+				},
+			],
+		};
+		// One run: every entity once, the file gathers them.
+		await provider.migrate?.(context, plan());
+		await provider.migrate?.(tagContext, tagPlan);
+		const first = await readFile(file, "utf8");
+		expect(first).toContain('ALTER TABLE "notes" ADD COLUMN "locale"');
+		expect(first).toEndWith('ALTER TABLE "tags" ADD COLUMN "label" text;\n');
+
+		// The next run (Note again) starts the file over instead of appending.
+		await provider.migrate?.(context, plan());
+		await provider.migrate?.(tagContext, tagPlan);
+		expect(await readFile(file, "utf8")).toBe(first);
+	});
+
 	it("writes a drizzle-kit migration file instead, one per provider", async () => {
 		const sqlite = notesDatabase();
 		const file = join(
@@ -562,11 +728,11 @@ describe("migrate", () => {
 		for (const statement of parts) sqlite.run(statement);
 		expect(columnsOf(sqlite)).toContain("schema_version");
 
-		// The next plan of the same provider adds to the file.
+		// The plan of another entity in the same run adds to the file.
 		await provider.migrate?.(
 			{ ...context, schema: undefined } as RepositoryContext,
 			{
-				entity: "Note",
+				entity: "Other",
 				destructive: true,
 				changes: [
 					change({ key: "legacy", change: "removed", destructive: true }),

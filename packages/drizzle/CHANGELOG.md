@@ -5,6 +5,9 @@
 ### Schema evolution (#28, phase 4)
 
 - `migrations?: "apply" | { file }`, opt-in: with it the provider has `migrate(context, plan)`, which turns the structural changes of a `SchemaPlan` into DDL for SQLite and Postgres from the Drizzle table (`ADD COLUMN` of an added key, nullable unless its column is `notNull` with a plain default; `RENAME COLUMN` of a renamed one; `DROP COLUMN` of a removed one only when `plan.destructive`; a unique index of a new unique key; the schema version column) against the columns the table has, so it can run again. `"apply"` runs it in a transaction; `{ file }` writes a drizzle-kit compatible SQL migration file instead. Without the option there is no `migrate`, as before.
+- With `{ file }`, `migrate` returns `{ deferred: true }` when it wrote statements, so `app.migrate` skips the backfill until the file is applied and `app.migrate` runs again; with `"apply"`, or nothing to write, it returns nothing. A plan for an entity the current run has seen already starts the file over, so a second `app.migrate` in the same process no longer adds to the first run's file.
+- A renamed key whose column has another SQL name (`fullName` stored in `full_name`) is renamed from the column named as the old key or as its snake_case; with neither, `"apply"` throws `InvalidRepositoryDeclaration` instead of skipping the rename, and a file adds the new column with a comment.
+- A removed unique key on Postgres also drops the constraint drizzle-kit creates for `.unique()` (`DROP CONSTRAINT IF EXISTS`, then `DROP INDEX IF EXISTS`).
 - The `$v` key of an entity with `schemaVersion` (`context.schema.key`) is mapped to a `schema_version` column (`schemaVersionColumn` to name another) when the table has one, so rows round-trip it.
 
 ### Optimistic concurrency and atomic increment (#44, #34)

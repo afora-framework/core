@@ -10,6 +10,7 @@
 - `update` and `remove` condition on the markers the item holds and retry when another write came first; a failed existence condition is `RepositoryEntityNotFound`, a failed marker condition `RepositoryUniqueViolation`.
 - A write of more than 100 items is rejected with `DynamoDbLimitExceeded`; keys left unprocessed by `BatchGetItem` and conflicting transactions are retried with exponential backoff, up to `retry.attempts` (`DynamoDbRetriesExhausted`).
 - Filtering, ordering and paging with `selectRows` of `@afora/core/experimental`, so expiry and dates order as in `inMemoryProvider`.
+- `findMany` ordered by `id` ascending with a `limit` (the walk of `app.migrate`, cursors by `id`) queries the partition from the `after` id with `Limit` and goes on until `limit` rows match, instead of reading the whole partition for every page.
 - `capabilities`: `keyset`, `versioning` (a conditional `Put` on `data.version`), `atomic` (one `UpdateItem`; inserts or replaces an expired item with `create`) and `expiry`. No `transactions`.
 - `migrate` is a no-op: `$v` and any other key are stored in the item data as they are.
 - `providers`, the `@afora/codegen` catalog entry `{ name: "dynamodb", module: "@afora/dynamodb", export: "dynamoDbProvider" }`.

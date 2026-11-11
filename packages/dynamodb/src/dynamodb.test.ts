@@ -12,7 +12,11 @@ import {
 	DeleteTableCommand,
 	DynamoDBClient,
 } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import {
+	DynamoDBDocumentClient,
+	GetCommand,
+	QueryCommand,
+} from "@aws-sdk/lib-dynamodb";
 import { dynamoDbProvider } from "./index";
 
 /*
@@ -161,6 +165,74 @@ describe.skipIf(!endpoint)("DynamoDB provider", () => {
 	test("migrate is a no-op", async () => {
 		const provider = dynamoDbProvider({ table: await freshTable(), client });
 		await provider.migrate();
+	});
+
+	test("pages by id with Query limits, not one partition read per page", async () => {
+		const db = DynamoDBDocumentClient.from(client, {
+			marshallOptions: { removeUndefinedValues: true },
+		});
+		const send = db.send.bind(db) as (command: unknown) => Promise<unknown>;
+		let queries = 0;
+		let scanned = 0;
+		(db as unknown as { send: typeof send }).send = async (command) => {
+			const result = await send(command);
+			if (command instanceof QueryCommand) {
+				queries += 1;
+				scanned += (result as { ScannedCount?: number }).ScannedCount ?? 0;
+			}
+			return result;
+		};
+		const provider = dynamoDbProvider({
+			table: await freshTable(),
+			client: db,
+		});
+		const items = context("ItemRepository", ["id"]);
+		const ids = Array.from(
+			{ length: 25 },
+			(_, index) => `i${String(index).padStart(2, "0")}`,
+		);
+		for (const id of ids) {
+			await provider.insert(items, {
+				id,
+				email: "",
+				...(id === "i05" ? { deletedAt: "2026-01-01T00:00:00.000Z" } : {}),
+			});
+		}
+		// The walk of app.migrate: by id, deleted rows too, 10 at a time.
+		const walk = async (withDeleted: boolean) => {
+			const pages: string[][] = [];
+			let after: unknown[] | undefined;
+			for (;;) {
+				const rows = await provider.findMany(items, {
+					orderBy: [{ key: "id", direction: "asc" }],
+					withDeleted,
+					limit: 10,
+					...(after === undefined ? {} : { after }),
+				});
+				if (rows.length === 0) break;
+				pages.push(rows.map((row) => String(row.id)));
+				after = [rows.at(-1)?.id];
+				if (rows.length < 10) break;
+			}
+			return pages;
+		};
+		queries = 0;
+		scanned = 0;
+		const pages = await walk(true);
+		expect(pages.map((page) => page.length)).toEqual([10, 10, 5]);
+		expect(pages.flat()).toEqual(ids);
+		// Each item is read once: not the 75 of reading the partition per page.
+		expect(scanned).toBeLessThanOrEqual(25);
+		expect(queries).toBeLessThanOrEqual(4);
+
+		// The deleted row is left out, and the page filled from the next items.
+		const alive = await walk(false);
+		expect(alive.map((page) => page.length)).toEqual([10, 10, 4]);
+		expect(alive.flat()).toEqual(ids.filter((id) => id !== "i05"));
+		// Without an order, a page of the partition is the same.
+		expect(
+			(await provider.findMany(items, { limit: 3 })).map((row) => row.id),
+		).toEqual(["i00", "i01", "i02"]);
 	});
 
 	test("works under repositoryOf: unique keys, cursor, versions, increment", async () => {

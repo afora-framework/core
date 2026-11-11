@@ -70,7 +70,9 @@ One table, with two string keys, `pk` (partition) and `sk` (sort), holds every r
 
 A read gets its candidates the cheapest way: by `id` (`BatchGetItem`), through the markers of a unique key in `where`, or by querying the partition of the repository (`Query` on `pk`, every page). Then `where`, `withDeleted`, expiry, `orderBy`, `after`, `offset` and `limit` apply in memory with the same rules as `inMemoryProvider` (`selectRows` of `@afora/core/experimental`): numbers numerically, strings by code point, dates as dates, missing values first when ascending. Reads are strongly consistent. `BatchGetItem` keys left unprocessed are asked for again with backoff, up to `retry.attempts` times (then `DynamoDbRetriesExhausted`).
 
-This suits repositories of thousands of items, not millions: every read without an id or a unique key reads the whole partition. Declared `indexes` are accepted and ignored for now (`capabilities.indexes` is unset); they will become GSIs.
+One read pages in DynamoDB instead: `findMany` with a `limit`, ordered by `id` ascending (or not ordered, without `after`), with no `offset` and no `where` on `id` or a unique key, which is how the backfill of `app.migrate` and a cursor by `id` read. It queries the partition from the `after` id (`sk > :after`) with `Limit`, applies `withDeleted`, expiry and `where` in memory, and queries on (`ExclusiveStartKey`) until `limit` rows match or the partition ends, so a walk reads each item once instead of the whole partition per page.
+
+This suits repositories of thousands of items, not millions: every other read without an id or a unique key reads the whole partition. Declared `indexes` are accepted and ignored for now (`capabilities.indexes` is unset); they will become GSIs.
 
 ### Capabilities
 
@@ -159,4 +161,4 @@ DYNAMODB_ENDPOINT=http://localhost:8000 bun run test:dynamodb
 
 - The declared `indexes` as GSIs (`capabilities.indexes`), so reads by them stop scanning the partition.
 - The expiry of records as DynamoDB TTL (a number attribute in seconds), so expired items are purged.
-- Paging the partition query by `limit` when no filter or order needs every item.
+- Paging the partition query by `limit` for orders other than `id` (it needs a GSI on the order key).
