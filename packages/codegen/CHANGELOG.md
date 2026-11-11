@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Project boundary (#69)
+
+- `projectBoundaryIssues(spec, root)`: the places where a spec reaches outside a project directory, as issues `outside_project`: an `{ "import": "<module>#<name>" }` whose module is a file outside it (resolved from `output.dir`), an absolute path or a URL, and an `extends` outside it. For tools that take a spec from someone they do not trust; `validateSpec` does not run it, since a spec has no directory of its own. `@afora/mcp` runs it on every spec.
+
 ### Routes and access (#75, #60)
 
 - A use case takes `"route"` (`{ method, path?, status?, query?, headers?, cookie?, setCookie? }`) and `"access"` (`{ public: true }` or `{ scopes?, owner?, context? }`), in a written use case and beside `"generic"` in a standard one. They are generated as the `route` and `access` settings of `useCaseOf` (options of a standard use case; no decorators are written) and extracted back from `describe()`, whether the class used the settings or `@Route` and `@Access`. `afora.schema.json` describes both.

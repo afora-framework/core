@@ -186,4 +186,98 @@ a file of your own.
   \`pipe\` is transforms and, last, at most one sink, each \`{ "transform" | "sink": name, "options"?: {...JSON} }\` with a name from the \`stages\` of
   \`afora_catalog\` (\`select\`, \`openapi\`, plus the ones given to the server with \`--stages\`), or \`{ "import": "./stages.ts#auth" }\` for a stage written by hand.
 - \`afora_extract\` needs \`imports\` for \`publishers.<key>\`, \`commands.<Name>.events\` (a handler, not a policy), \`commands.<Name>.onEventError\` and \`outputs.<Name>.pipe.<index>\` (hand-written ones).
+
+## Routes and access
+
+A use case says where it is served and who may call it, next to its input (not in the options of a sink):
+
+\`\`\`json
+"GetPost": {
+  "route": { "method": "get", "path": "/posts/{slug}" },
+  "access": { "scopes": ["posts:read"] },
+  "input": { "fields": { "slug": "slug" } }, "response": { "fields": { "post": "Post" } },
+  "dependencies": { "posts": "Posts" },
+  "implementation": { "steps": [ ... ] }
+}
+\`\`\`
+
+- \`route\`: \`method\` (get, post, put, patch, delete), \`path\` (a \`{name}\` segment fills the input key \`name\`), \`status\` (200, 201, 202, 204),
+  \`query\` (input keys read from the query; a get or delete already reads the rest from it), \`headers\` and \`cookie\` (\`{ inputKey: name }\`),
+  \`setCookie\` (\`{ responseKey: { "name": "sid" } }\`: sent as a cookie, left out of the body). The input stays the only description of what
+  the use case takes: a route adds no fields. A key read from the path, the query, a header or a cookie must be a scalar and has one place.
+- \`access\`: \`{ "public": true }\`, or an authenticated caller (\`{}\`) with \`scopes\` (all of them), that is the \`owner\` (\`{ "input": "userId" }\`:
+  that input key equals the caller), and whose values fill the \`context\` (\`{ "userId": "subject" }\`, also \`"scopes"\` and \`"claims.<name>"\`; the
+  key must be in the context of the use case). It is enforced before the use case runs: 401 without a caller, 403 without the scope or for another owner.
+  No \`access\` means nothing is checked: decide for every operation, and say \`{ "public": true }\` where anyone may call.
+- A standard use case takes both beside \`generic\`: \`{ "generic": "delete", "repository": "Posts", "route": { "method": "delete", "path": "/posts/{id}", "status": 204 }, "access": { "scopes": ["posts:write"] } }\`.
+- Who the caller is comes from the sink: \`"auth": { "jwt": { "secret": { "env": "JWT_SECRET" } } }\` in the options of an HTTP sink reads a bearer token,
+  and \`login\` with \`"options": { "token": { "secret": { "env": "JWT_SECRET" } } }\` issues one. A secret is always the name of an environment variable.
+- \`afora_project\` shows the route and the access of every operation as each output serves them, and notes the ones left open.
+
+## Steps or code
+
+A use case is implemented by \`steps\` or by code, and both keep the same declared input, response, context and errors.
+
+**Steps are for a rule that is a sequence.** They read, check, build, change, store and return, in order: \`find\`, \`ensure\`, \`build\`, \`change\`,
+\`invoke\`, \`create\`, \`update\`, \`delete\`, \`restore\`, \`call\`, \`run\`, \`return\`. The spec then governs the whole rule: the validator checks every
+reference, and the rule round-trips as data. Use steps when the rule reads as "find this, make sure of that, write, return".
+
+**Steps have no branching, no loops and no expressions, and never will**: a rule that is data must stay readable as a list. So:
+
+- One value computed from others (a hash, a total, a slug): keep the steps and add a \`run\` step with an imported function,
+  \`{ "run": "total", "fn": { "import": "./pricing.ts#total" }, "args": ["$cart.items"], "as": "total" }\`. The function is code; the flow stays data.
+- A rule that **branches** (if the stock is short, back-order, else reserve), **loops** over a list with effects, needs several \`run\` steps
+  in a row, or reads better as five lines of code than as fifteen steps: write it in code,
+  \`"implementation": { "import": "../handlers/reserve#Reserve" }\`. The spec still declares its input, response, context, dependencies,
+  errors, route and access; only \`execute\` is hand-written.
+
+Do not bend a rule into steps with flags and \`ensure\` tricks to avoid code: an \`import\` use case is the supported way out, not a failure.
+With \`import\`, \`afora_generate\` writes \`export abstract class <Name>Base extends useCaseOf({...})\` and you write the class once, in the file named:
+
+\`\`\`ts
+import { ReserveBase } from "../domain/use-cases";
+
+export class Reserve extends ReserveBase {
+  override async execute() {
+    const item = await this.dependencies.items.findById(this.input.itemId);
+    if (!item) throw new ItemNotFound({ source: "Reserve" });
+    if (item.stock < this.input.quantity) return { status: "back-ordered" };
+    item.change.stock(item.stock - this.input.quantity);
+    return { status: "reserved", item: await this.dependencies.items.update(item) };
+  }
+}
+\`\`\`
+
+\`this.input\`, \`this.context\` and \`this.dependencies\` are typed from the spec. A dependency that is another use case is a function:
+\`await this.dependencies.charge(input)\`. Throw only exceptions the spec lists in \`errors\`.
+
+## A project written in code
+
+A project may have no afora.json at all: its declarations are TypeScript. The server still works on it when started with
+\`--app src/app.ts#App\` (or with \`app\` given to the tool):
+
+- \`afora_project\` reads the running application and shows its entities, operations, routes and access. It needs no mapping.
+- To add to such a project, write TypeScript, in its style, not a spec. A use case with its route and access:
+
+\`\`\`ts
+import { Access, blueprintOf, Route, useCaseOf } from "@afora/core";
+
+@Route("POST", "/posts/{slug}/publish")
+@Access({ scopes: ["posts:write"], context: { userId: "subject" } })
+export class PublishPost extends useCaseOf({
+  name: "PublishPost",
+  blueprint: blueprintOf((ctx) => ({ slug: ctx.slug })),
+  response: blueprintOf(() => ({ post: Post })),
+  context: blueprintOf((ctx) => ({ userId: ctx.id })),
+  dependencies: { posts: Posts },
+  errors: [PostNotFound],
+}) {
+  override async execute() { /* ... */ }
+}
+\`\`\`
+
+  The same without decorators is \`route: { method: "post", path: "..." }\` and \`access: { ... }\` in the settings of \`useCaseOf\`; use the form
+  the project already uses. Then add the class to a command (\`commandOf({ name, useCases: { publish: PublishPost } })\`) and register the
+  use case and the command in the application. Call \`afora_project\` again: the operation must be listed, with its route and access.
+- \`afora_extract\` turns such an application into a spec, when the project wants to move to afora.json; it needs \`imports\` for what is hand-written.
 `;

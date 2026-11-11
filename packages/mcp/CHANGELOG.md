@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Code first, access and the project boundary (#75, #60, #64, #69)
+
+- New tool `afora_project` (read-only): entities, repositories, every operation with how it is implemented and its declared route and access, and each output with the route every operation is served at (and whether the sink, the use case or the default decided it) and who may call it, plus notes on operations left open or that will answer 401. It reads a TypeScript application directly (`--app` or `app`), from `app.describe()`, with no `afora.json` and no `imports`; else the file. `projectViewOfSpec`, `projectViewOfDescription` and the types `ProjectView` and `RouteView` are exported.
+- The guide has "Routes and access", "Steps or code" (what steps are for, that they have no branching, loops or expressions, when a `run` step is enough and when to move to an `import` use case) and "A project written in code".
+- The `mcpTools` sink enforces the `access` of use cases: the caller is `extra.principal`, else the `authenticator` hook (`mcpTools(options, hooks)`, type `McpToolsHooks`), else the token of the new `auth` option; without one such a tool answers a 401 problem. A tool description says what it requires, and `annotations` carry `readOnlyHint` and `destructiveHint` from the route of the use case.
+- **Security.** An `{ "import": ... }` or an `extends` that names a file outside the project (a relative path that leaves it, an absolute path, a URL) is rejected with `outside_project` by every tool that validates, writes or generates, and an `extends` outside the project is not read. The trust model is in the README.
+
 ### Optimistic concurrency and atomic increment (#44, #34)
 
 - The guide teaches `"versioned": true` on entities (the `version` identity key, `RepositoryConcurrencyConflict`) and the `increment` action.

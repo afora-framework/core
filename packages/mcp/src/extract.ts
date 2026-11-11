@@ -46,6 +46,24 @@ export async function extractFromApp(
 	outputDir?: string,
 	imports?: Readonly<Record<string, string>>,
 ): Promise<Spec> {
+	return (await importApp(root, reference, outputDir, imports)) as Spec;
+}
+
+/**
+ * What the application `reference` says of itself (`app.describe()`), read
+ * the same way. Unlike a spec, it needs no `imports`: hand-written code is
+ * described as opaque.
+ */
+export function describeApp(root: string, reference: string): Promise<unknown> {
+	return importApp(root, reference, "--describe");
+}
+
+async function importApp(
+	root: string,
+	reference: string,
+	outputDir?: string,
+	imports?: Readonly<Record<string, string>>,
+): Promise<unknown> {
 	const { file, name } = parseAppReference(reference);
 	const confined = await confinePath(root, file);
 	if (!confined.ok) {
@@ -81,5 +99,5 @@ export async function extractFromApp(
 			`Could not extract the application:\n${result.output.trim().slice(-2000)}`,
 		);
 	}
-	return JSON.parse(result.output.slice(start + START.length, end)) as Spec;
+	return JSON.parse(result.output.slice(start + START.length, end));
 }

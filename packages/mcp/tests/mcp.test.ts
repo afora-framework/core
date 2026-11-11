@@ -87,6 +87,7 @@ describe("the server", () => {
 			"afora_catalog",
 			"afora_extract",
 			"afora_generate",
+			"afora_project",
 			"afora_spec_read",
 			"afora_spec_remove",
 			"afora_spec_upsert",

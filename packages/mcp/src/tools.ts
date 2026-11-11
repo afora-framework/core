@@ -11,7 +11,8 @@ import {
 	writeGenerated,
 } from "@afora/codegen";
 import { type TSchema, Type } from "typebox";
-import { extractFromApp, ToolError } from "./extract";
+import { describeApp, extractFromApp, ToolError } from "./extract";
+import { projectViewOfDescription, projectViewOfSpec } from "./project-view";
 import {
 	codegenOptionsOf,
 	type Project,
@@ -200,6 +201,42 @@ export const tools: readonly ToolDefinition[] = [
 				spec: null,
 				note: 'There is no afora.json yet. Start with afora_spec_upsert (it creates one) or afora_spec_write with { "version": 1, ... }.',
 			};
+		},
+	},
+	{
+		name: "afora_project",
+		description:
+			"The project as a map, without writing anything: its entities and repositories, every operation (command, use case, how it is implemented: steps, code or a standard use case, its declared route and access), and each output with the route every operation is served at (method, path, status, and whether the sink, the use case or the default decided it) and who may call it (public, open, authenticated, scopes, owner). `notes` point at what deserves a look: operations left open beside protected ones, operations that will answer 401 for lack of an authenticator, commands no output serves. Read from the running application when the server was started with --app or `app` is given (this imports the module in a Bun subprocess, and works on code written by hand, with no afora.json); from afora.json otherwise. Call it before adding a use case or a route, to see what exists and which paths are taken.",
+		inputSchema: json(
+			Type.Object(
+				{
+					app: Type.Optional(
+						Type.String({
+							description:
+								'An application to read, as a path inside the project and an export name: "src/app.ts#App". Defaults to the --app the server was started with, else afora.json.',
+						}),
+					),
+				},
+				{ additionalProperties: false },
+			),
+		),
+		readOnly: true,
+		async handle(args, project) {
+			const app = typeof args.app === "string" ? args.app : project.app;
+			if (app) {
+				return {
+					source: "app",
+					app,
+					...projectViewOfDescription(await describeApp(project.root, app)),
+				};
+			}
+			const spec = await readSpec(project);
+			if (!spec) {
+				throw new ToolError(
+					'There is no afora.json and no application was given. Pass `app` ("src/app.ts#App"), start the server with --app, or create a spec with afora_spec_upsert.',
+				);
+			}
+			return { source: "file", ...projectViewOfSpec(spec) };
 		},
 	},
 	{

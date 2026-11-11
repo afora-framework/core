@@ -7,6 +7,7 @@ import {
 	confinePath,
 	type EventPolicyCatalogEntry,
 	type ProviderCatalogEntry,
+	projectBoundaryIssues,
 	type ResolvedSpec,
 	resolveExtended,
 	type Spec,
@@ -149,11 +150,20 @@ export async function validateInProject(
 	project: Project,
 	spec: unknown,
 ): Promise<{ issues: SpecIssue[]; extended: Record<string, ResolvedSpec> }> {
+	// A spec that extends a file outside the project is not followed there.
+	const leaves = projectBoundaryIssues(spec, project.root).some(
+		(issue) => issue.path[0] === "extends",
+	);
 	const loaded =
-		typeof spec === "object" && spec !== null
+		typeof spec === "object" && spec !== null && !leaves
 			? await extendedOf(project, spec as Spec)
 			: { extended: {}, issues: [] };
-	const issues = validateSpec(spec, loaded.extended, codegenOptionsOf(project));
+	// The spec comes from an agent: nothing it names may leave the project.
+	const boundary = projectBoundaryIssues(spec, project.root);
+	const issues = [
+		...boundary,
+		...validateSpec(spec, loaded.extended, codegenOptionsOf(project)),
+	];
 	const known = new Set(
 		issues.map((issue) => `${issue.code}@${issue.path.join(".")}`),
 	);

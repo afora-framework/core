@@ -22,6 +22,7 @@
 
 ### Added
 
+- `@afora/mcp` (#75, #64, #69): the tool `afora_project` maps a project (operations, routes, access, entities), reading a TypeScript application with no `afora.json`; the guide says when a use case is steps and when it is code; the `mcpTools` sink enforces access; and what a spec names (`import`, `extends`) may not leave the project. `@afora/ws` enforces access too, from the principal of a session or an authenticator hook. `SECURITY.md` states the trust model of `@afora/mcp` and `@afora/codegen`.
 - `@afora/codegen`: `route` and `access` in the `useCases` of `afora.json`, generated as settings and kept by the round trip (#75, #60); see `docs/afora-json.md#routes-and-access`.
 - `@Route` and `@Access` accept the declaration the class already has, so a hand-written class may repeat what its generated base carries; a different one still throws `InvalidUseCaseDeclaration`.
 - Three new packages, sinks that serve an output on other servers (#75): `@afora/fastify`, `@afora/express` and `@afora/elysia`. Each takes the options of `@afora/hono` (the `HttpOptions`) and the hooks `authenticator`, `middlewares` (of its server) and `app`, and is built on `compileRoutes`. See `docs/providers.md`.

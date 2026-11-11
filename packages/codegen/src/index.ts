@@ -1,3 +1,4 @@
+export { projectBoundaryIssues } from "./boundary";
 export {
 	type Catalog,
 	catalog,
