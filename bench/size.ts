@@ -1,6 +1,7 @@
 // What a library adds to a bundle, and how long a new process takes to load
 // it: each file of entries/ is bundled by itself (minified, for Node), its
-// size is taken, and the bundle is imported in new processes of Bun and Node.
+// size is taken, and the bundle is imported in new processes of Bun and Node,
+// each running a file that does nothing else.
 import { gzipSync } from "node:zlib";
 import { LIBRARIES } from "./contenders.ts";
 
@@ -28,13 +29,20 @@ export type ColdRuntime = { label: string; command: string };
 const median = (values: number[]) =>
 	[...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] as number;
 
+/**
+ * The script each process runs: it imports the bundle it is given and prints
+ * how long that took. It is a file, not `-e`: Bun runs what it gets from `-e`
+ * 1.5x to 4x slower than the same code from a file, which made every library
+ * that works at import look slower on Bun than it is.
+ */
+const IMPORTER = `${out}/import.mjs`;
+const IMPORTER_SOURCE =
+	"const s=performance.now();await import(process.argv[2]);console.log(performance.now()-s);\n";
+
 async function coldOf(command: string, file: string): Promise<number> {
-	const script = `const s=performance.now();await import(${JSON.stringify(file)});console.log(performance.now()-s)`;
 	const times: number[] = [];
 	for (let run = 0; run < COLD_RUNS; run++) {
-		const text = await Bun.$`${command} --input-type=module -e ${script}`
-			.nothrow()
-			.text();
+		const text = await Bun.$`${command} ${IMPORTER} ${file}`.nothrow().text();
 		const time = Number.parseFloat(text);
 		if (!Number.isNaN(time)) times.push(time);
 	}
@@ -42,6 +50,20 @@ async function coldOf(command: string, file: string): Promise<number> {
 		throw new Error(`${command} could not import ${file}`);
 	return median(times);
 }
+
+/**
+ * afora's entry imports `typebox` to declare its schemas, and afora itself
+ * imports it from the root install: two copies on disk, both of which went
+ * into its bundle. An application has one, so the entry gets afora's.
+ */
+const oneTypeBox: Bun.BunPlugin = {
+	name: "one-typebox",
+	setup(build) {
+		build.onResolve({ filter: /^typebox(\/|$)/ }, ({ path }) => ({
+			path: Bun.resolveSync(path, `${here}..`),
+		}));
+	},
+};
 
 export async function footprints(
 	runtimes: ColdRuntime[],
@@ -55,10 +77,12 @@ export async function footprints(
 			format: "esm",
 			minify: true,
 			naming: `${library}.mjs`,
+			plugins: library === "afora" ? [oneTypeBox] : [],
 		});
 		if (!built.success) {
 			throw new Error(`${library}: ${built.logs.join("\n")}`);
 		}
+		await Bun.write(IMPORTER, IMPORTER_SOURCE);
 		const file = `${out}/${library}.mjs`;
 		const bytes = await Bun.file(file).bytes();
 		const cold: Record<string, number> = {};
