@@ -57,19 +57,30 @@ All options are JSON, so the stage can live in an `afora.json` (`{ "sink": "hono
 | `route`     | `{ [operationId]: { method?, path?, status? } }`, as in the `openapi` sink: `path` may hold `{name}` parameters, `status` is `200` (default), `201`, `202` or `204`. See [Routes, statuses and headers](#routes-statuses-and-headers).     |
 | `responses` | `{ [operationId]: { headers: { name: value } } }`: static headers of the success responses, such as `cache-control`.                                                                                                                       |
 | `requestId` | `true` (`x-request-id`) or a header name: every response carries the request's id, or a new one.                                                                                                                                           |
-| `security`  | `{ schemes, operations?, default? }`: security schemes and requirements for the OpenAPI document. Not enforced: see [Authentication and custom context](#authentication-and-custom-context).                                               |
+| `security`  | `{ schemes, operations?, default? }`: security schemes and requirements for the OpenAPI document. What is enforced is the `access` of each use case: see [Authentication](#authentication).                                                |
 | `docs`      | `{ path, info: { title, version, description? }, servers? }`: serves the `openapi` document of the same operations, routes and `basePath` at `path` (not under `basePath`). A `path` that is also a GET route throws `InvalidOutputStage`. |
 | `debug`     | `true` adds the `trace` to problems and the real `detail` to 5xx ones. Off by default.                                                                                                                                                     |
 | `context`   | `{ headers?: { [contextKey]: headerName }, variables?: { [contextKey]: variableName } }`: the context of an operation from request headers and from what a middleware set with `c.set`.                                                    |
 | `webhooks`  | `{ [operationId]: { scheme, secret, ... } }`: verifies the signature of each request to these operations before parsing it. See [Webhooks](#webhooks).                                                                                     |
 
+What JSON cannot hold goes in a second argument, the hooks: `hono(options, { authenticator, middlewares, app })`.
+
+| Hook            | Meaning                                                                                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `authenticator` | `(request) => Principal \| null`: who calls, from the credentials of the request. See [Authentication](#authentication).                                            |
+| `middlewares`   | Hono middlewares (`cors()`, a rate limiter, your own), run in order before every route of the sink.                                                                 |
+| `app`           | A Hono app to add the routes to, instead of a new one. Its own middlewares, `notFound` and `onError` are kept, so the sink does not replace them with problem ones. |
+
+Hooks are not part of the description of the stage (`describe()`, `afora.json`).
+
 Invalid options throw `InvalidOutputStage` when the stage is made, and unknown operation ids in `route` or two operations on one method and path when the app is built.
 
 ## Behavior
 
-- **Routes.** `POST {basePath}/{kebab(command)}/{kebab(operation)}` (`/users/change-password`); `route` changes the method, path and status. It is the routing of the `openapi` sink (`operationRoutes` of `@afora/core/adapters`), so the served routes and the document agree.
-- **Input.** `post`, `put` and `patch` read a JSON body (an empty body is `{}`; invalid JSON is a 400 `InvalidRequestBody` problem). `get` and `delete` read the query string, converting a value to a number or boolean when the input field takes one rather than a string; anything else is kept for the blueprint to reject. A `{name}` segment of the path fills the input key `name`, decoded and converted the same way, and wins over a `name` in the body or the query. The operation validates the input: a 400 problem with `issues` (`path`, `code`, `message`, no values).
+- **Routes.** `POST {basePath}/{kebab(command)}/{kebab(operation)}` (`/users/change-password`), or the [route the use case declares](../../docs/use-cases.md#routes) with `route` or `@Route`, after the `basePath`; the `route` option changes the method, path and status over both. It is the routing of the `openapi` sink (`operationRoutes` of `@afora/core/adapters`), so the served routes and the document agree.
+- **Input.** `post`, `put` and `patch` read a JSON body (an empty body is `{}`; invalid JSON is a 400 `InvalidRequestBody` problem). `get` and `delete` read the query string, converting a value to a number or boolean when the input field takes one rather than a string; anything else is kept for the blueprint to reject. A `{name}` segment of the path fills the input key `name`, decoded and converted the same way, and wins over a `name` in the body or the query. So do the keys a use case route reads from the query (on a route with a body), from a header or from a cookie. The operation validates the input: a 400 problem with `issues` (`path`, `code`, `message`, no values).
 - **Context.** For an operation whose command or use case declares a `context`, each key listed in `context.headers` is read from its header, and each key in `context.variables` from the variable a middleware set (`c.get(name)`); a missing one leaves the key out (so an optional key is `undefined`, a required one a 400 problem). Header values are converted like query values; variables are passed as they are (objects too), and the `context` blueprint validates both. A key cannot come from both.
+- **Access.** An operation whose use case declares an [`access`](../../docs/auth.md) asks the `authenticator` hook who calls, and answers a 401 (`Unauthenticated`) or a 403 (`Forbidden`) problem before the input is validated. Without the hook, such an operation always answers 401.
 - **Success.** The `route` status (`200` by default) with `outputValueOf(response)`: records go through `toJSON`, so sensitive values (a `Password`) are `"********"`. A `204` has no body. The `responses` headers of the operation are added.
 - **Errors.** Status from `statusOf(error, operation, output.statuses)`: the output `statuses` first, then 400 for invalid input or context, 404 for a missing entity, 409 for a unique violation, 422 for an error the use case declares, else 500. The body is `problemOf` with `application/problem+json`; a 5xx says `"Internal error."` unless `debug` is on.
 - **Request id.** With `requestId`, every response of the app (successes, problems, unknown routes, the docs) carries the id in that header: the one the request sent, if it is 1 to 200 visible ASCII characters, else a new `crypto.randomUUID()`.
@@ -156,93 +167,69 @@ hono({
 
 `verifyWebhook(options, secrets, { header, body, now? })` is the check on its own, for a route you write by hand: it resolves to `undefined` when the request is signed, or to why not (`"missing_signature"`, `"malformed_signature"`, `"expired"`, `"mismatch"`).
 
-## Authentication and custom context
+## Authentication
 
-Options are JSON, so there is no callback for the context. The sink does not authenticate, and `security` does not change that: it only describes the schemes and scopes in the OpenAPI document. Two places enforce them.
-
-**A Hono middleware** resolves the caller once and sets it as a variable, which `context.variables` passes to the operation as it is. Mount the sink's app under the app that has the middleware, so it runs first:
+Who may call an operation is declared on its use case, with [`access`](../../docs/auth.md), and the core enforces it. The sink only has to say **who is calling**, which is the `authenticator` hook: it gets the request and gives a `Principal` (`{ subject, scopes, claims? }`), or `null` for an anonymous caller.
 
 ```ts
-import { Hono } from "hono";
+import { Access, outputOf, Route, useCaseOf } from "@afora/core";
+import { hono } from "@afora/hono";
+
+@Route("PATCH", "/entries/{slug}")
+@Access({ scopes: ["entries:write"], context: { userId: "subject" } })
+class UpdateEntry extends useCaseOf({
+	name: "UpdateEntry",
+	blueprint: EntryChanges,
+	response: EntryResponse,
+	context: blueprintOf((ctx) => ({ userId: ctx.id })),
+}) {
+	// this.context.userId is the authenticated caller
+}
 
 const api = outputOf({
 	name: "Cms",
 	commands: [Entries],
-	statuses: { Forbidden: 403 },
 	pipe: [
-		hono({
-			route: { "Entries.update": { method: "patch", path: "/entries/{slug}" } },
-			context: { variables: { caller: "caller" } },
-			security: {
-				schemes: { bearer: { type: "http", scheme: "bearer" } },
-				operations: {
-					"Entries.update": { scheme: "bearer", scopes: ["write"] },
+		hono(
+			{ security: { schemes: { bearer: { type: "http", scheme: "bearer" } } } },
+			{
+				authenticator: async (request) => {
+					const token = request
+						.header("authorization")
+						?.replace(/^Bearer /, "");
+					const session = token ? await sessions.find(token) : undefined; // your check
+					return session
+						? { subject: session.userId, scopes: session.scopes }
+						: null;
 				},
 			},
-		}),
+		),
 	],
 }).build();
-
-const app = new Hono<{ Variables: { caller: Caller } }>();
-app.use(async (c, next) => {
-	const caller = await callerOf(c.req.header("authorization")); // your session or token check
-	if (caller) c.set("caller", caller);
-	await next();
-});
-app.route("/", api);
 ```
 
-The operation's `context` blueprint declares `caller` (`ctx.optionalOf(blueprintOf((c) => ({ id: c.string, scopes: c.list.string })))`, say) and validates what the middleware set; the use case checks the scopes.
+- **`request`** has `header(name)` (lower case), `cookie(name)`, the `operation` being called and `native`, the Hono `Context`.
+- **It is asked only for operations with an `access`** other than `{ public: true }`, once per request.
+- **It may throw `Unauthenticated`** (from `@afora/core`) to refuse credentials it does not accept; `null` and a throw are both a 401.
+- **The document** gets the `security` of each such operation from its `access`, under the scheme of `security.schemes`, with its `401` and `403` responses.
 
-**A `transform` stage** wraps `invoke`: it sees the context the sink built from headers and variables and can reject the call, which then goes through `statuses` like any other error.
+A value that is not about access (a tenant resolved from the host, a feature flag) still reaches the context through a middleware and `context.variables`:
 
 ```ts
-import {
-	ExceptionLayers,
-	exceptionOf,
-	operationOf,
-	outputOf,
-	transformOf,
-} from "@afora/core";
-import { hono } from "@afora/hono";
-
-const Unauthorized = exceptionOf({
-	layer: ExceptionLayers.UseCase,
-	name: "Unauthorized",
-	message: "Sign in first.",
-});
-
-// the operation's use case (or command) declares `context: blueprintOf((ctx) => ({ authorization: ctx.optional.string }))`
-export const requireAuth = transformOf({
-	name: "requireAuth",
-	apply: (operation) =>
-		operation.tags.includes("public")
-			? operation
-			: operationOf(operation, {
-					invoke: async (input, call) => {
-						const { authorization } = (call?.context ?? {}) as {
-							authorization?: string;
-						};
-						if (!authorization)
-							throw new Unauthorized({ source: operation.id });
-						// verify the token and put the user into the call, if the context declares it
-						return operation.invoke(input, call);
-					},
-				}),
-});
-
-outputOf({
-	name: "Blog",
-	commands: [Users, Posts],
-	statuses: { Unauthorized: 401 },
-	pipe: [
-		requireAuth(),
-		hono({ context: { headers: { authorization: "authorization" } } }),
-	],
-});
+hono(
+	{ context: { variables: { tenant: "tenant" } } },
+	{
+		middlewares: [
+			async (c, next) => {
+				c.set("tenant", tenantOf(c.req.header("host")));
+				await next();
+			},
+		],
+	},
+);
 ```
 
-The context only reaches `invoke` for operations that declare one, so the key (`authorization` here) must be in the `context` blueprint of the command or use case.
+The context only reaches the use case for operations that declare one, so the key (`tenant` here) must be in the `context` blueprint of the command or use case.
 
 ## Catalog
 

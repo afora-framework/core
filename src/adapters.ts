@@ -33,6 +33,11 @@ export {
 export type { EventPolicyDescription } from "./core/event-policy/types/event-policy.interface";
 export { coerceTextValues } from "./core/output/coerce";
 export {
+	compileRoutes,
+	HTTP_OPTION_KEYS,
+	httpOptionsIssue,
+} from "./core/output/http";
+export {
 	type OperationRoute,
 	operationRoutes,
 	ROUTE_OPTION_KEYS,
@@ -46,6 +51,16 @@ export {
 } from "./core/output/problem";
 export { sinkOf, stageCatalogOf, stageKindOf } from "./core/output/stage";
 export { statusOf } from "./core/output/status";
+export type {
+	Authenticator,
+	AuthRequest,
+	CompiledRoute,
+	CompileRoutesSettings,
+	HttpOptions,
+	HttpRequest,
+	HttpResult,
+	RouteTable,
+} from "./core/output/types/http.interface";
 export type {
 	OperationDescriptor,
 	Problem,

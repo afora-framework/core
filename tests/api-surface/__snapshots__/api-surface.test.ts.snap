@@ -561,7 +561,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type Shape<Omitted, Values, Owner> = { readonly omit: readonly Omitted[]; readonly values: Values; } & ([ Owner ] extends [ undefined ] ? unknown : { readonly owner: Owner; });",
   ],
   "(internal) SinkFactory": [
-    "export type SinkFactory<Result = unknown, Options extends object = StageOptions> = (options?: Options) => SinkStage<Result, Options>;",
+    "export type SinkFactory<Result = unknown, Options extends object = StageOptions, Hooks = never> = (options?: Options, hooks?: Hooks) => SinkStage<Result, Options>;",
   ],
   "(internal) SinkStage": [
     "export interface SinkStage<Result = unknown, Options extends object = StageOptions> { readonly kind: "sink"; readonly name?: string; readonly options?: Options; build(operations: readonly OperationDescriptor[], context: StageContext): Result; }",
@@ -2061,7 +2061,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function memoryLogProvider(): MemoryLogProvider;",
   ],
   "openapi": [
-    "openapi: import("./types/output.interface.js").SinkFactory<OpenAPIDocument, OpenAPISinkOptions>",
+    "openapi: import("./types/output.interface.js").SinkFactory<OpenAPIDocument, OpenAPISinkOptions, never>",
   ],
   "operationOf": [
     "export declare function operationOf(operation: OperationDescriptor, patch: OperationPatch): OperationDescriptor;",
@@ -2400,6 +2400,9 @@ exports[`adapters entry (contract) 1`] = `
   "(internal) OpenAPISecurityScheme": [
     "export type OpenAPISecurityScheme = { readonly type: "http"; readonly scheme: string; readonly bearerFormat?: string; readonly description?: string; } | { readonly type: "apiKey"; readonly name: string; readonly in: "header" | "query" | "cookie"; readonly description?: string; } | { readonly type: "oauth2"; readonly flows: { readonly [flow: string]: unknown; }; readonly description?: string; } | { readonly type: "openIdConnect"; readonly openIdConnectUrl: string; readonly description?: string; } | { readonly type: "mutualTLS"; readonly description?: string; };",
   ],
+  "(internal) OpenAPISinkOptions": [
+    "export interface OpenAPISinkOptions extends RouteOptions { readonly info: { readonly title: string; readonly version: string; readonly description?: string; }; readonly servers?: readonly { readonly url: string; readonly description?: string; }[]; }",
+  ],
   "(internal) OperationCallOptions": [
     "export interface OperationCallOptions { readonly context?: unknown; readonly principal?: Principal | null; }",
   ],
@@ -2598,8 +2601,20 @@ exports[`adapters entry (contract) 1`] = `
   "ApplicationDescription": [
     "export interface ApplicationDescription { readonly name: string; readonly extends: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; readonly providers?: Readonly<Record<string, ProviderDescription & { readonly from: string; }>>; readonly log?: LogDescription | { readonly kind: "opaque"; }; readonly publishers?: Readonly<Record<string, { readonly from: string; }>>; readonly properties: Readonly<Record<string, PropertyDescription & { readonly from: string; }>>; readonly blueprints: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly records: Readonly<Record<string, RecordDescription>>; readonly entities: Readonly<Record<string, RecordDescription>>; readonly environments: Readonly<Record<string, { readonly from: string; readonly fields: FieldsDescription; }>>; readonly repositories: Readonly<Record<string, { readonly from: string; readonly entity: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly indexes: Readonly<Record<string, RepositoryIndex>>; readonly scans: RepositoryScans; readonly relations: readonly string[]; readonly environments: readonly string[]; readonly provider?: ProviderDescription | ProviderReference; }>>; readonly useCases: Readonly<Record<string, UseCaseDescription>>; readonly commands: Readonly<Record<string, CommandDescription>>; readonly outputs: Readonly<Record<string, OutputDescription>>; readonly exceptions: Readonly<Record<string, ExceptionDescription>>; }",
   ],
+  "AuthRequest": [
+    "export interface AuthRequest { header(name: string): string | undefined; cookie(name: string): string | undefined; readonly operation: OperationDescriptor; readonly native?: unknown; }",
+  ],
+  "Authenticator": [
+    "export type Authenticator = (request: AuthRequest) => Principal | null | Promise<Principal | null>;",
+  ],
   "CommandDescription": [
     "export interface CommandDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly context?: FieldsDescription; readonly refs?: { readonly context?: string; }; readonly operations: Readonly<Record<string, { readonly ref: string; }>>; readonly transaction: boolean; readonly environments?: readonly string[]; readonly events: "after-commit" | "manual" | EventPolicyDescription | { readonly kind: "opaque"; }; readonly onEventError?: { readonly kind: "opaque"; }; }",
+  ],
+  "CompileRoutesSettings": [
+    "export interface CompileRoutesSettings { readonly source: string; readonly authenticator?: Authenticator; readonly document?: (document: unknown) => unknown; }",
+  ],
+  "CompiledRoute": [
+    "export interface CompiledRoute { readonly operation: OperationDescriptor; readonly method: OpenAPIMethod; readonly path: string; readonly parameters: readonly string[]; handle(request: HttpRequest): Promise<HttpResult>; }",
   ],
   "Demo": [
     "Demo: unique symbol",
@@ -2618,6 +2633,18 @@ exports[`adapters entry (contract) 1`] = `
   ],
   "FieldsDescription": [
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
+  ],
+  "HTTP_OPTION_KEYS": [
+    "HTTP_OPTION_KEYS: readonly [ "basePath", "route", "responses", "requestId", "security", "docs", "debug", "context" ]",
+  ],
+  "HttpOptions": [
+    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; }",
+  ],
+  "HttpRequest": [
+    "export interface HttpRequest { param(name: string): string | undefined; query(): Readonly<Record<string, string | undefined>>; header(name: string): string | undefined; text(): string | Promise<string>; variable?(name: string): unknown; readonly native?: unknown; }",
+  ],
+  "HttpResult": [
+    "export interface HttpResult { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly cookies: readonly string[]; readonly body: string | null; }",
   ],
   "IRepositoryProvider": [
     "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; migrate?(context: RepositoryContext<Environment>, plan: SchemaPlan): Promise<void | ProviderMigrationResult>; }",
@@ -2700,6 +2727,9 @@ exports[`adapters entry (contract) 1`] = `
   "RepositorySchema": [
     "export interface RepositorySchema { readonly version: number; readonly key: string; readonly previousNames: readonly string[]; }",
   ],
+  "RouteTable": [
+    "export interface RouteTable { readonly routes: readonly CompiledRoute[]; readonly docs?: { readonly path: string; handle(request?: Pick<HttpRequest, "header">): HttpResult; }; notFound(request?: Pick<HttpRequest, "header">): HttpResult; failure(error: unknown, options?: { readonly operation?: OperationDescriptor; readonly status?: number; readonly request?: Pick<HttpRequest, "header">; }): HttpResult; }",
+  ],
   "SCHEMA_VERSION_KEY": [
     "SCHEMA_VERSION_KEY = "$v"",
   ],
@@ -2725,10 +2755,10 @@ exports[`adapters entry (contract) 1`] = `
     "export interface SchemaPlan { readonly entity: string; readonly changes: readonly SchemaChange[]; readonly destructive: boolean; }",
   ],
   "SinkFactory": [
-    "export type SinkFactory<Result = unknown, Options extends object = StageOptions> = (options?: Options) => SinkStage<Result, Options>;",
+    "export type SinkFactory<Result = unknown, Options extends object = StageOptions, Hooks = never> = (options?: Options, hooks?: Hooks) => SinkStage<Result, Options>;",
   ],
   "SinkSettings": [
-    "export interface SinkSettings<Result, Options extends object> { readonly name: string; readonly build: (operations: readonly OperationDescriptor[], options: Options, context: StageContext) => Result; readonly validate?: (options: Options) => string | undefined; }",
+    "export interface SinkSettings<Result, Options extends object, Hooks = never> { readonly name: string; readonly build: (operations: readonly OperationDescriptor[], options: Options, context: StageContext, hooks: Hooks | undefined) => Result; readonly validate?: (options: Options) => string | undefined; }",
   ],
   "SinkStage": [
     "export interface SinkStage<Result = unknown, Options extends object = StageOptions> { readonly kind: "sink"; readonly name?: string; readonly options?: Options; build(operations: readonly OperationDescriptor[], context: StageContext): Result; }",
@@ -2745,8 +2775,14 @@ exports[`adapters entry (contract) 1`] = `
   "coerceTextValues": [
     "export declare function coerceTextValues(blueprint: AnyBlueprint, texts: Readonly<Record<string, string | undefined>>): Record<string, unknown>;",
   ],
+  "compileRoutes": [
+    "export declare function compileRoutes(operations: readonly OperationDescriptor[], options: HttpOptions, context: StageContext, settings: CompileRoutesSettings): RouteTable;",
+  ],
   "diffSchemas": [
     "export declare function diffSchemas(lock: SchemaLock, current: SchemaLock): readonly SchemaChange[];",
+  ],
+  "httpOptionsIssue": [
+    "export declare function httpOptionsIssue(options: HttpOptions, where: string): string | undefined;",
   ],
   "operationRoutes": [
     "export declare function operationRoutes(operations: readonly OperationDescriptor[], options: RouteOptions, source?: string): ReadonlyMap<string, OperationRoute>;",
@@ -2770,7 +2806,7 @@ exports[`adapters entry (contract) 1`] = `
     "export declare function schemaLockProblemsOf(lock: SchemaLock, current: SchemaLock): readonly string[];",
   ],
   "sinkOf": [
-    "export declare function sinkOf<Result, Options extends object = StageOptions>(settings: SinkSettings<Result, Options>): SinkFactory<Result, Options>;",
+    "export declare function sinkOf<Result, Options extends object = StageOptions, Hooks = never>(settings: SinkSettings<Result, Options, Hooks>): SinkFactory<Result, Options, Hooks>;",
   ],
   "stageCatalogOf": [
     "export declare function stageCatalogOf<const Factories extends readonly StageFactory[]>(...stages: Factories): IStageCatalog;",

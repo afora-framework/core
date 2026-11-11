@@ -137,12 +137,18 @@ export interface TransformSettings<Options extends object> {
 	readonly validate?: (options: Options) => string | undefined;
 }
 
-export interface SinkSettings<Result, Options extends object> {
+export interface SinkSettings<Result, Options extends object, Hooks = never> {
 	readonly name: string;
+	/**
+	 * `hooks` is the second argument the stage was made with: what cannot be
+	 * JSON (functions, an instance of a server). It is not part of the
+	 * description of the stage.
+	 */
 	readonly build: (
 		operations: readonly OperationDescriptor[],
 		options: Options,
 		context: StageContext,
+		hooks: Hooks | undefined,
 	) => Result;
 	/** Why `options` cannot be used, or `undefined`. Checked when the stage is made. */
 	readonly validate?: (options: Options) => string | undefined;
@@ -155,7 +161,8 @@ export type TransformFactory<Options extends object = StageOptions> = (
 export type SinkFactory<
 	Result = unknown,
 	Options extends object = StageOptions,
-> = (options?: Options) => SinkStage<Result, Options>;
+	Hooks = never,
+> = (options?: Options, hooks?: Hooks) => SinkStage<Result, Options>;
 /** Any stage factory. */
 // biome-ignore lint/suspicious/noExplicitAny: factories of any options and result
 export type StageFactory = TransformFactory<any> | SinkFactory<any, any>;
