@@ -81,6 +81,7 @@ The [README](../README.md) has the install, a quick start and an overview. These
 | [Applications](applications.md)         | The manifest of declarations, composition, bound providers, `describe()`.                                 |
 | [Exceptions](exceptions.md)             | Layers, `trace`, `guard`.                                                                                 |
 | [Logging](logging.md)                   | `log` and log providers, the `Logger` dependency, `logFrom`; what afora logs.                             |
+| [Tracing](tracing.md)                   | `trace` and `@afora/otel`: the spans afora makes, their attributes, no value in any span.                 |
 | [Environments](environments.md)         | Validated environment variables.                                                                          |
 | [Standard Schema](standard-schema.md)   | Hono, tRPC, TanStack Form, `safeParse`, issue codes.                                                      |
 | [OpenAPI](openapi.md)                   | `toOpenAPI` for models; the `openapi` sink is in [Outputs](outputs.md).                                   |
@@ -100,4 +101,4 @@ Every export belongs to a tier, and the tier says where to import it from. [API 
 
 Only stable, adapters and testing are the contract of [VERSIONING.md](../VERSIONING.md): before 1.0 a break there is marked **Breaking.** in the CHANGELOG with a Migration block (before and after), and from 1.0 on it waits for a major. Experimental exports may change in any release, and internal code is not the API. Application code needs only `@afora/core`.
 
-Other documents: [VERSIONING.md](../VERSIONING.md) says what is stable, [CHANGELOG.md](../CHANGELOG.md) lists every change, and each package has its own README: [codegen](../packages/codegen/README.md), [mcp](../packages/mcp/README.md), [hono](../packages/hono/README.md), [fastify](../packages/fastify/README.md), [express](../packages/express/README.md), [elysia](../packages/elysia/README.md), [ws](../packages/ws/README.md), [drizzle](../packages/drizzle/README.md) and [dynamodb](../packages/dynamodb/README.md).
+Other documents: [VERSIONING.md](../VERSIONING.md) says what is stable, [CHANGELOG.md](../CHANGELOG.md) lists every change, and each package has its own README: [codegen](../packages/codegen/README.md), [mcp](../packages/mcp/README.md), [hono](../packages/hono/README.md), [fastify](../packages/fastify/README.md), [express](../packages/express/README.md), [elysia](../packages/elysia/README.md), [ws](../packages/ws/README.md), [drizzle](../packages/drizzle/README.md), [dynamodb](../packages/dynamodb/README.md) and [otel](../packages/otel/README.md).

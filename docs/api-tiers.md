@@ -602,6 +602,10 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `TagMaker`                         | type  | stable       | `@afora/core`              | Standard use cases ([Standard use cases](std-use-cases.md)).                                                           |
 | `UpdateMaker`                      | type  | stable       | `@afora/core`              | Standard use cases ([Standard use cases](std-use-cases.md)).                                                           |
 
+## Added after 0.0.9
+
+- **`@afora/core`** (#65): `memoryTracer`, `InvalidTraceDeclaration` and the types `ITracer`, `ITraceSpan`, `TraceAttributes`, `TraceStatus`, `MemoryTracer` and `MemorySpan`: the `trace` of an application, shown to application code in [Tracing](tracing.md) as `log` is in [Logging](logging.md) (`memoryTracer` is stable like `memoryLogProvider`). `ApplicationDescription` (`@afora/core/adapters`) gains `trace`, `{ kind: "opaque" }` when the application has one.
+
 ## Added in 0.0.9
 
 Exports that are new since the audit, with their tier:

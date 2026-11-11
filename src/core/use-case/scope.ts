@@ -1,5 +1,6 @@
 import type { ILogger } from "../logger/logger";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
+import type { ITracer, ITraceSpan } from "../tracing/tracing";
 
 /**
  * What a call carries to its repositories, internal: the providers that
@@ -18,6 +19,10 @@ export interface ExecutionScope {
 	>;
 	/** The logger of the application running the call, given by its command. */
 	readonly logger?: ILogger;
+	/** The tracer of the application running the call, given by its command. */
+	readonly tracer?: ITracer;
+	/** The span of the caller (a command, a use case): the parent of the next. */
+	readonly span?: ITraceSpan;
 }
 
 /**

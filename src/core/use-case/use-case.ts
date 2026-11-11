@@ -42,6 +42,15 @@ import { recordNameOf } from "../record/name";
 import { AbstractRepository, isRepository } from "../repository/repository";
 import type { AnyRepository } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
+import {
+	endSpan,
+	failSpan,
+	type ITracer,
+	type ITraceSpan,
+	resolveTracer,
+	runInSpan,
+	startSpan,
+} from "../tracing/tracing";
 import { accessDeclarationOf } from "./access";
 import { routeDeclarationOf } from "./route";
 import { type ExecutionScope, ScopeKey } from "./scope";
@@ -277,6 +286,11 @@ interface ExecutionState {
 	resolved?: Record<string, unknown>;
 	/** The class the use case was made from (bound by an application, maybe). */
 	readonly owner: object;
+	/** While it executes with a tracer: the tracer and its span. */
+	tracer?: ITracer;
+	span?: ITraceSpan;
+	/** The scope its children get: `scope`, with its span as their parent when traced. */
+	childScope?: ExecutionScope;
 }
 
 /** The logger a call writes to, if any (see `resolveLogger`). */
@@ -375,6 +389,67 @@ function methodNamesOf(repository: object): string[] {
 }
 
 /**
+ * Starts the span of a use case, child of the span of its caller, and keeps
+ * it on `state` for the repository calls and the use cases it runs.
+ */
+function traceUseCase(
+	tracer: ITracer,
+	state: ExecutionState,
+	source: string,
+): ITraceSpan | undefined {
+	const span = startSpan(
+		tracer,
+		`use-case ${source}`,
+		{ "afora.use_case": source },
+		state.scope?.span,
+	);
+	if (span === undefined) return undefined;
+	state.tracer = tracer;
+	state.span = span;
+	state.childScope = {
+		providers: state.scope?.providers ?? new Map(),
+		...(state.scope?.environments
+			? { environments: state.scope.environments }
+			: {}),
+		...(state.scope?.logger ? { logger: state.scope.logger } : {}),
+		tracer,
+		span,
+	};
+	return span;
+}
+
+/** A repository call in a span of its own, child of the span of its use case. */
+async function tracedRepositoryCall(
+	tracer: ITracer,
+	parent: ITraceSpan,
+	repository: string,
+	method: string,
+	useCase: string,
+	run: () => unknown,
+): Promise<unknown> {
+	const span = startSpan(
+		tracer,
+		`repository ${repository}.${method}`,
+		{
+			"afora.repository": repository,
+			"afora.method": method,
+			"afora.use_case": useCase,
+		},
+		parent,
+	);
+	try {
+		const result = await (span === undefined
+			? run()
+			: runInSpan(tracer, span, run));
+		endSpan(span);
+		return result;
+	} catch (error) {
+		failSpan(span, error, ExceptionLayers.Repository);
+		throw error;
+	}
+}
+
+/**
  * The methods of `repository`, with those of `overrides` in their place, that
  * run only while the use case executes, and hand the events of the entities
  * of the repository they take and give to it. The methods of the repository
@@ -418,7 +493,18 @@ function bindRepository(
 		bound[name] = async (...args: unknown[]) => {
 			if (!state.active) throw new InvalidUseCaseDependencies({ source });
 			const started = clock();
-			const result = await method.apply(receiver, args);
+			// Traced only when the use case is: its span is the parent.
+			const result =
+				state.span === undefined
+					? await method.apply(receiver, args)
+					: await tracedRepositoryCall(
+							state.tracer as ITracer,
+							state.span,
+							repositoryName,
+							name,
+							source,
+							() => method.apply(receiver, args),
+						);
 			writeLog(loggerOfCall(state), "debug", "repository", {
 				repository: repositoryName,
 				method: name,
@@ -558,7 +644,7 @@ export abstract class AbstractUseCase<
 				if (!state.active) throw new InvalidUseCaseDependencies({ source });
 				const child = new Child(value, {
 					context: narrowedContext(Child, state.context),
-					[ScopeKey]: state.scope,
+					[ScopeKey]: state.childScope ?? state.scope,
 				});
 				try {
 					return await child.execute();
@@ -636,16 +722,28 @@ export abstract class AbstractUseCase<
 					};
 				}
 				state.resolved = Object.freeze(dependencies);
+				const tracer = resolveTracer(state.scope?.tracer, state.owner);
+				const span =
+					tracer === undefined
+						? undefined
+						: traceUseCase(tracer, state, source);
 				state.active = true;
 				const started = clock();
 				try {
 					const result = await guard(
 						{ layer: ExceptionLayers.UseCase, source },
 						() =>
-							implementation.call(
-								this,
-								state.resolved as DependencyOverrides<Dependencies>,
-							),
+							span === undefined
+								? implementation.call(
+										this,
+										state.resolved as DependencyOverrides<Dependencies>,
+									)
+								: runInSpan(tracer as ITracer, span, () =>
+										implementation.call(
+											this,
+											state.resolved as DependencyOverrides<Dependencies>,
+										),
+									),
 					);
 					const parsed = declaration.response.safeParse(result);
 					if (parsed.issues) invalidValue(parsed.issues, source, "response");
@@ -655,6 +753,7 @@ export abstract class AbstractUseCase<
 						outcome: "ok",
 						ms: elapsed(started),
 					});
+					endSpan(span);
 					return parsed.value;
 				} catch (error) {
 					logFailure(
@@ -663,10 +762,16 @@ export abstract class AbstractUseCase<
 						{ useCase: source, ms: elapsed(started) },
 						error,
 					);
+					failSpan(span, error, ExceptionLayers.UseCase);
 					throw error;
 				} finally {
 					state.active = false;
 					state.resolved = undefined;
+					if (tracer !== undefined) {
+						state.tracer = undefined;
+						state.span = undefined;
+						state.childScope = undefined;
+					}
 				}
 			},
 		});

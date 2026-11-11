@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Tracing (#65). `applicationOf({ trace })` takes an `ITracer`, a small structural interface of the core (`startSpan(name, attributes, parent)`, optional `withSpan(span, run)`; spans have `end(status, attributes)`), and makes a span per command operation (`command Posts.publish`), use case (`use-case Publish`) and repository call made through a use case (`repository Post.create`), at the points that log, nested as the calls are: a use case run by another nests in it, and the parent is passed explicitly, so nesting holds without a context manager. Attributes are names and outcomes only (`afora.command`, `afora.operation`, `afora.use_case`, `afora.repository`, `afora.method`, `afora.outcome`); a failed span has `afora.exception.layer`, `afora.exception.name` and `afora.exception.unexpected` of the exception where it was first raised, never its message or details, and no span holds an input, argument, response or sensitive value. Without a `trace` the execution path is unchanged (no allocation or closure added). A tracer that throws breaks no call. The `trace` is inherited by `extends` and kept by `app.extend()`; `describe()` gives it as `{ kind: "opaque" }` (`ApplicationDescription.trace`). New exports: `memoryTracer` (keeps the spans with their parent, for tests), `InvalidTraceDeclaration`, and the types `ITracer`, `ITraceSpan`, `TraceAttributes`, `TraceStatus`, `MemoryTracer`, `MemorySpan`. See `docs/tracing.md`.
+- New package `@afora/otel`: `otelTracer(tracer?)` adapts an OpenTelemetry `Tracer` (by default `trace.getTracer("@afora/otel")`) to `ITracer`. A command span is a child of the active span; failures set the status to `ERROR`. `@opentelemetry/api` is a peer dependency.
+- `@afora/codegen`: `"trace": { "import": "./trace.ts#tracer" }` in `afora.json` generates `applicationOf({ trace })`; extraction needs `imports.trace`.
+
 ## 0.0.10 — unreleased (draft: dated when it is published)
 
 ### Changed

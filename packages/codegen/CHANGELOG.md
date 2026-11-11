@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Tracing (#65)
+
+- `"trace": { "import": "./trace.ts#tracer" }` at the top level of a spec is the tracer of the application (`otelTracer()` of `@afora/otel`, say), generated as `applicationOf({ trace })`. Anything but an import is `invalid_trace`. `extractSpec` needs `imports.trace` for an application with a tracer, which `describe()` gives as opaque. `afora.schema.json` describes it.
+
 ### Project boundary (#69)
 
 - `projectBoundaryIssues(spec, root)`: the places where a spec reaches outside a project directory, as issues `outside_project`: an `{ "import": "<module>#<name>" }` whose module is a file outside it (resolved from `output.dir`), an absolute path or a URL, and an `extends` outside it. For tools that take a spec from someone they do not trust; `validateSpec` does not run it, since a spec has no directory of its own. `@afora/mcp` runs it on every spec.

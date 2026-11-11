@@ -29,7 +29,7 @@ export interface ExtractOptions {
 	 * a standard use case `useCases.<Name>.before` and `.after`, a command with a handler
 	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, the handler of
 	 * an entity event `entities.<Name>.events.<event>`, a publisher
-	 * `publishers.<key>`, and a stage
+	 * `publishers.<key>`, a tracer `trace`, and a stage
 	 * written by hand `outputs.<Name>.pipe.<index>`, all `"./file.ts#export"`.
 	 */
 	readonly imports?: Readonly<Record<string, string>>;
@@ -774,6 +774,17 @@ export function extractSpec(
 		...(description.log === undefined
 			? {}
 			: { log: logSpec(description.log, options.imports) }),
+		...(description.trace === undefined
+			? {}
+			: {
+					trace: {
+						import: importFor(
+							options.imports,
+							"trace",
+							"The tracer of the application",
+						),
+					},
+				}),
 		...(Object.keys(publishers).length > 0 ? { publishers } : {}),
 		...(Object.keys(allProperties).length > 0
 			? { properties: allProperties }
