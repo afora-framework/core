@@ -8,7 +8,7 @@ function standardOf<Input, Output>(
 	return Object.freeze({
 		version: 1 as const,
 		vendor: STANDARD_VENDOR,
-		validate: (value: unknown) => parse(value),
+		validate: parse,
 	});
 }
 
