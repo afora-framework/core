@@ -1,6 +1,6 @@
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
-import { recordFieldOf } from "../blueprint/record-field";
+import { isRecordClass, recordFieldOf } from "../blueprint/record-field";
 import type {
 	AnyBlueprint,
 	BlueprintField,
@@ -9,6 +9,7 @@ import type {
 	IBlueprint,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant, variantOfValue } from "../blueprint/variant";
 import { isEntity } from "../entity/entity";
 import type { EntityEvent } from "../entity/event";
 import {
@@ -296,9 +297,15 @@ function collectEvents(
 			for (const item of current as unknown[]) visit(field.item, item);
 			return;
 		}
+		// A variant is walked by the class of the record it holds, or by the
+		// blueprint its key names.
 		const shape = isBlueprint(field)
 			? field
-			: recordFieldOf(field)?.record.blueprint;
+			: isBlueprintVariant(field)
+				? isRecordClass(current.constructor)
+					? current.constructor.blueprint
+					: variantOfValue(field, current)
+				: recordFieldOf(field)?.record.blueprint;
 		if (!shape) return;
 		for (const [key, child] of Object.entries(shape.properties)) {
 			visit(child as BlueprintField, (current as Record<string, unknown>)[key]);

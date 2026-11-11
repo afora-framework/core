@@ -251,10 +251,36 @@ type VariantValue<
 	? // biome-ignore lint/suspicious/noExplicitAny: the value of any variant field
 		any
 	: {
-			[Tag in keyof Variants & string]: Evaluate<
-				{ readonly [Name in Key]: Tag } & FieldValue<Variants[Tag], Mode>
+			[Tag in keyof Variants & string]: VariantMember<
+				Key,
+				Tag,
+				Variants[Tag],
+				Mode
 			>;
 		}[keyof Variants & string];
+
+/**
+ * The value of one variant named `Tag`. A blueprint gives its value with the
+ * key. A record class gives an instance, which has no key and is told apart
+ * by its class; what it takes is an instance or its plain input with the key,
+ * and its plain data has the key.
+ */
+type VariantMember<
+	Key extends string,
+	Tag,
+	Variant,
+	Mode extends FieldMode,
+> = Variant extends AnyRecordClass
+	? Mode extends "value"
+		? InstanceType<Variant>
+		: Mode extends "input"
+			?
+					| InstanceType<Variant>
+					| Evaluate<{ readonly [Name in Key]: Tag } & RecordInput<Variant>>
+			: Evaluate<
+					{ readonly [Name in Key]: Tag } & RecordValueOf<Variant, "data">
+				>
+	: Evaluate<{ readonly [Name in Key]: Tag } & FieldValue<Variant, Mode>>;
 
 /** The value of a record field, as `RecordSchema` describes it. */
 type RecordValueOf<
@@ -603,8 +629,10 @@ type ListShape<
 	? FieldValue<Item, Mode>[] | undefined
 	: FieldValue<Item, Mode>[];
 
-/** The blueprints of a variant field, by the value its key has for each. */
-export type BlueprintVariants = Readonly<Record<string, AnyBlueprint>>;
+/** The variants of a variant field, by the value its key has for each: blueprints, or record classes. */
+export type BlueprintVariants = Readonly<
+	Record<string, AnyBlueprint | AnyRecordClass>
+>;
 
 /**
  * A field holding one of the objects of `Variants`, told apart by the value

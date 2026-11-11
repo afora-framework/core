@@ -30,7 +30,7 @@ import type {
 	IBlueprintFactories,
 	IBlueprintPlugin,
 } from "./types/blueprint-plugin.interface";
-import { isBlueprintVariant, variantOf } from "./variant";
+import { blueprintOfVariant, isBlueprintVariant, variantOf } from "./variant";
 
 /**
  * A `blueprintOf` that builds blueprints from `base`, plugins or blueprints,
@@ -217,7 +217,9 @@ function schemaOfField(
 		const schema = Type.Union(
 			Object.entries(field.variants as BlueprintVariants).map(
 				([tag, variant]) => {
-					const object = variant.schema.type.Type() as TObject;
+					const object = blueprintOfVariant(
+						variant,
+					).schema.type.Type() as TObject;
 					return {
 						...object,
 						properties: {

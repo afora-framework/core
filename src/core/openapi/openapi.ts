@@ -1,6 +1,6 @@
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
-import { recordFieldOf } from "../blueprint/record-field";
+import { isRecordClass, recordFieldOf } from "../blueprint/record-field";
 import type {
 	AnyRecordClass,
 	BlueprintField,
@@ -133,7 +133,12 @@ function schemaOf(field: BlueprintField, scope: Scope): Schema {
 		const variants: BlueprintVariants = field.variants;
 		return {
 			oneOf: Object.entries(variants).map(([tag, variant]) => {
-				const object = objectOf(variant.properties, scope, NO_MARKS) as {
+				// A record class is written out here, not as a `$ref`: it has the key too.
+				const object = (
+					isRecordClass(variant)
+						? recordSchemaOf(variant, scope)
+						: objectOf(variant.properties, scope, NO_MARKS)
+				) as {
 					readonly properties: Record<string, Schema>;
 					readonly required?: readonly string[];
 				};

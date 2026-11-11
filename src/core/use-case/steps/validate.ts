@@ -5,7 +5,10 @@ import type {
 	AnyBlueprint,
 	BlueprintVariants,
 } from "../../blueprint/types/blueprint.interface";
-import { isBlueprintVariant } from "../../blueprint/variant";
+import {
+	blueprintOfVariant,
+	isBlueprintVariant,
+} from "../../blueprint/variant";
 import { isEnvironment } from "../../environment/environment";
 import { isDeclaredException } from "../../exception/exception";
 import { isRepository } from "../../repository/repository";
@@ -128,9 +131,9 @@ function missingSegment(
 			// only known when it runs.
 			if (segment === current.key) return undefined;
 			const variants: BlueprintVariants = current.variants;
-			const holder = Object.values(variants).find((variant) =>
-				Object.hasOwn(variant.properties, segment),
-			);
+			const holder = Object.values(variants)
+				.map(blueprintOfVariant)
+				.find((variant) => Object.hasOwn(variant.properties, segment));
 			if (!holder) return segment;
 			current = holder.properties[segment];
 			continue;

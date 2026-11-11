@@ -60,7 +60,26 @@ A value is handled by the blueprint its key names, exactly as a nested blueprint
 
 `optionalOf` and `listOf` take a variant field, it has a `~standard` of its own, [`toOpenAPI`](openapi.md) gives it as `oneOf` with a `discriminator`, and `describe()` and the [schema lock](schema-evolution.md) hold each variant (a change inside one is told at `by.card.<its key>`).
 
-Not yet: a record class or an entity as a variant, picking keys inside a variant with `sliceOf` (it can be picked whole), and `afora.json`, where `@afora/codegen` refuses to describe an application that has such a field. A union can also be the schema of one property, when its variants need no properties of their own: see [Unions](properties.md#unions). That one is checked by one compiled function for the whole value, so a valid value takes about half the time it takes as a variant field, whose variants are walked key by key like any blueprint (1.2 µs against 2.1 µs for twelve events of four variants, where Zod 4 takes 2.5 µs); rejected values take the same.
+A variant can also be a record class, an entity included:
+
+```ts
+class Card extends recordOf(
+	blueprintOf((ctx) => ({ holder: ctx.text, number: ctx.text })),
+) {}
+
+const Payment = blueprintOf((ctx) => ({
+	by: variantOf("method", { card: Card, pix: Pix }),
+}));
+
+const result = Payment.safeParse({
+	by: { method: "card", holder: "Jane", number: "4111" },
+});
+if (!result.issues && result.value.by instanceof Card) result.value.by.holder;
+```
+
+The value is then an instance of the class, built from the plain value without the key, or the instance that was given. An instance has no key: it is told apart by its class (`instanceof`), so a class can be one variant only. The key is in what is given as a plain value, in `toJSON` (`{ method: "card", ...the record's own JSON }`) and in what is stored. An entity is stored by reference, as `{ [key]: name, id }`, and read back as the entity through the [relations](repositories.md) of the repository, which needs one for each entity class among the variants, as for any entity field; the events of an entity a use case returns inside a variant are collected like any other.
+
+Not yet: picking keys inside a variant with `sliceOf` (it can be picked whole), upgrading the stored value of a variant with the schema evolution options of its own properties (`fill`, `renamedFrom`), and `afora.json`, where `@afora/codegen` refuses to describe an application that has such a field. A union can also be the schema of one property, when its variants need no properties of their own: see [Unions](properties.md#unions). That one is checked by one compiled function for the whole value, so a valid value takes about half the time it takes as a variant field, whose variants are walked key by key like any blueprint (1.2 µs against 2.1 µs for twelve events of four variants, where Zod 4 takes 2.5 µs); rejected values take the same.
 
 `blueprintOf` is `blueprintBuilderOf(Std)`. To build blueprints from other properties, without `Std`, make a builder of your own:
 

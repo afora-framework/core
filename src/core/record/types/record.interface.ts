@@ -198,11 +198,13 @@ type JsonField<Field, Data> = Field extends {
 type JsonVariant<Key extends string, Variants, Data> = Data extends {
 	readonly [Name in Key]: infer Tag extends keyof Variants;
 }
-	? Variants[Tag] extends {
-			readonly properties: infer Properties extends IBlueprintCollection;
-		}
-		? JsonKeys<Properties, Data, never>
-		: Data
+	? Variants[Tag] extends AnyRecordClass
+		? { readonly [Name in Key]: Tag } & JsonOfRecord<Variants[Tag], Data>
+		: Variants[Tag] extends {
+					readonly properties: infer Properties extends IBlueprintCollection;
+				}
+			? JsonKeys<Properties, Data, never>
+			: Data
 	: Data;
 
 /** What the `toJSON` of the records of `Class` gives, in place of their plain value. */
