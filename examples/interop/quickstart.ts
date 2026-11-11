@@ -57,6 +57,7 @@ class Register extends useCaseOf({
 			run: "hashPassword",
 			fn: hashPassword,
 			args: ["$input.plainPassword"],
+			params: blueprintOf((ctx) => ({ plain: ctx.string })),
 			as: "hash",
 		},
 		{

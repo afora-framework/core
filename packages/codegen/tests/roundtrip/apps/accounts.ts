@@ -75,6 +75,7 @@ class Register extends useCaseOf({
 			run: "hashPassword",
 			fn: hashPassword,
 			args: ["$input.plainPassword"],
+			params: blueprintOf((ctx) => ({ plain: ctx.string })),
 			as: "hash",
 		},
 		{
@@ -105,6 +106,7 @@ class Login extends useCaseOf({
 			run: "verify",
 			fn: verify,
 			args: ["$user", "$input.plainPassword"],
+			params: blueprintOf((ctx) => ({ user: User, plain: ctx.string })),
 			as: "ok",
 		},
 		{ ensure: "true", value: "$ok", error: InvalidCredentials },
