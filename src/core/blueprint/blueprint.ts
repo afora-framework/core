@@ -1,5 +1,5 @@
 import { type TSchema, Type } from "typebox";
-import { parseCollection } from "../parse/parse";
+import { collectionParserOf } from "../parse/parse";
 import { isProperty } from "../property/is-property";
 import { propertyOf } from "../property/property";
 import { schemaOf } from "../schema/schema";
@@ -90,14 +90,14 @@ function create(
 		Type.Object(shape) as BlueprintSchema<IBlueprintCollection>,
 	);
 
+	const safeParse = collectionParserOf(properties, "blueprint");
 	const blueprint = {
 		[Kind]: "blueprint" as const,
 		plugins: Object.freeze([...new Set(plugins)]),
 		properties: Object.freeze(properties),
 		schema: new SchemaConstructor(),
 		optional: false,
-		safeParse: (value: unknown) =>
-			parseCollection(properties, value, [], "blueprint"),
+		safeParse,
 		join: ((...others: readonly AnyBlueprint[]) =>
 			create(
 				[blueprint, ...others].flatMap((source) => source.plugins),
@@ -108,9 +108,7 @@ function create(
 			)) as IBlueprint<IBlueprintCollection>["join"],
 	} as IBlueprint<IBlueprintCollection>;
 
-	return Object.freeze(
-		withStandard(blueprint, (value) => blueprint.safeParse(value)),
-	);
+	return Object.freeze(withStandard(blueprint, safeParse));
 }
 
 /** Functions every context has, to make fields inline, as `ctx.listOf(ctx.id)`. */

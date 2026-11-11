@@ -9,7 +9,7 @@ import type {
 } from "../blueprint/types/blueprint.interface";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { Exception } from "../exception/exception";
-import { parseCollection, parseField } from "../parse/parse";
+import { collectionParserOf, parseField } from "../parse/parse";
 import type { Issue, ParseResult } from "../parse/types/parse.interface";
 import { standardOfClass } from "../standard/standard";
 import type { StandardSchemaV1 } from "../standard/standard-schema";
@@ -110,6 +110,38 @@ function checkMembers(record: object, properties: IBlueprintCollection): void {
 		}
 	}
 	checked.add(Class);
+}
+
+/** What building a record of a class needs, the same for each of them. */
+interface Construction {
+	/** The name of the class, the `source` of its issues. */
+	readonly source: string;
+	/** Its values handled by its blueprint. */
+	parse(value: unknown): ParseResult<Readonly<Record<string, unknown>>>;
+}
+
+/** The construction of each record class, made on its first record. */
+const constructions = new WeakMap<object, Construction>();
+
+/**
+ * The construction of the class of `record`: its members checked, its name
+ * read and its blueprint looked up once, not for every record.
+ */
+function constructionOf(record: {
+	readonly [Meta]: {
+		readonly blueprint: { readonly properties: IBlueprintCollection };
+	};
+}): Construction {
+	const Class = record.constructor;
+	let construction = constructions.get(Class);
+	if (!construction) {
+		const { properties } = record[Meta].blueprint;
+		checkMembers(record, properties);
+		const source = recordNameOf(Class);
+		construction = { source, parse: collectionParserOf(properties, source) };
+		constructions.set(Class, construction);
+	}
+	return construction;
 }
 
 /** `details` that also carry `issues`, out of sight when they are logged or compared. */
@@ -450,11 +482,8 @@ export abstract class AbstractRecord<
 			request = undefined;
 		}
 
-		const { properties } = this[Meta].blueprint;
-		checkMembers(this, properties);
-
-		const source = recordNameOf(this.constructor);
-		const result = parseCollection(properties, value, [], source);
+		const { source, parse } = constructionOf(this);
+		const result = parse(value);
 		if (result.issues) {
 			if (asked === undefined) throw exceptionOfIssues(result.issues, source);
 			asked.issues = result.issues;

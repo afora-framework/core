@@ -2,6 +2,7 @@
 // afora as it is in another one (`<base>` is the root of that checkout, or a
 // built module), in one process and taking turns, and fails when a guarded
 // row got slower than the limit. It is how a pull request is held to its base.
+import { resolve } from "node:path";
 import { type Contender, GUARDED, WATCHED } from "./contenders.ts";
 import { fmtNs, timeCases } from "./guard.ts";
 import { here, KINDS, loadAfora, loadScenarios } from "./harness.ts";
@@ -26,9 +27,10 @@ async function build(root: string, name: string): Promise<string> {
 }
 
 export async function compare(base: string, only: string[]): Promise<boolean> {
+	// Relative to where the command runs, not to this file.
 	const baseFile = base.endsWith(".js")
-		? base
-		: await build(base, "afora-base");
+		? resolve(base)
+		: await build(resolve(base), "afora-base");
 	// The head is built the same way, so that both sides are the same kind of module.
 	const headFile = await build(`${here}..`, "afora-head");
 	const [baseScenarios, headScenarios] = await Promise.all([

@@ -234,6 +234,28 @@ export function parseCollection(
 	return resultOf(run, collectionAt(collectionOf(properties), value, run, 0));
 }
 
+/** Where a parse that starts at the value itself is: nowhere. Shared, so never changed. */
+const ROOT: Path = Object.freeze([]) as unknown as Path;
+
+/**
+ * `parseCollection` at the root, as a function of the value alone: what it
+ * needs of `properties` is looked up on the first value and kept, instead of
+ * on every one. For what parses many values of one shape, a blueprint or a
+ * record class.
+ * @internal
+ */
+export function collectionParserOf(
+	properties: IBlueprintCollection,
+	source: string,
+): (value: unknown) => ParseResult<Readonly<Record<string, unknown>>> {
+	let collection: Collection | undefined;
+	return (value) => {
+		collection ??= collectionOf(properties);
+		const run = runOf(ROOT, source);
+		return resultOf(run, collectionAt(collection, value, run, 0));
+	};
+}
+
 /**
  * `parseCollection` for the value `run` is handling at `depth`: the handled
  * value, or `REJECTED` with its issues in `run`.
