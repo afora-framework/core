@@ -1,7 +1,11 @@
 import { isBlueprint } from "../../blueprint/is-blueprint";
 import { isBlueprintList } from "../../blueprint/list";
 import { isRecordClass, recordFieldOf } from "../../blueprint/record-field";
-import type { AnyBlueprint } from "../../blueprint/types/blueprint.interface";
+import type {
+	AnyBlueprint,
+	BlueprintVariants,
+} from "../../blueprint/types/blueprint.interface";
+import { isBlueprintVariant } from "../../blueprint/variant";
 import { isEnvironment } from "../../environment/environment";
 import { isDeclaredException } from "../../exception/exception";
 import { isRepository } from "../../repository/repository";
@@ -117,6 +121,18 @@ function missingSegment(
 			}
 			if (!INDEX.test(segment)) return segment;
 			current = current.item;
+			continue;
+		}
+		if (isBlueprintVariant(current)) {
+			// Its key, or a key of any of its variants: which one a value is, is
+			// only known when it runs.
+			if (segment === current.key) return undefined;
+			const variants: BlueprintVariants = current.variants;
+			const holder = Object.values(variants).find((variant) =>
+				Object.hasOwn(variant.properties, segment),
+			);
+			if (!holder) return segment;
+			current = holder.properties[segment];
 			continue;
 		}
 		const record = recordFieldOf(current)?.record;

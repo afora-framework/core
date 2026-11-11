@@ -187,7 +187,23 @@ type JsonField<Field, Data> = Field extends {
 						? Data extends readonly (infer ItemData)[]
 							? JsonField<Item, ItemData>[]
 							: Data
-						: Data;
+						: Field extends {
+									readonly key: infer Key extends string;
+									readonly variants: infer Variants;
+								}
+							? JsonVariant<Key, Variants, Data>
+							: Data;
+
+/** What `toJSON` gives for the value `Data` of a variant field: each variant by its own blueprint. */
+type JsonVariant<Key extends string, Variants, Data> = Data extends {
+	readonly [Name in Key]: infer Tag extends keyof Variants;
+}
+	? Variants[Tag] extends {
+			readonly properties: infer Properties extends IBlueprintCollection;
+		}
+		? JsonKeys<Properties, Data, never>
+		: Data
+	: Data;
 
 /** What the `toJSON` of the records of `Class` gives, in place of their plain value. */
 type JsonOfRecord<Class extends AnyRecordClass, Data> =

@@ -3,6 +3,7 @@ import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import { recordFieldOf } from "../blueprint/record-field";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant } from "../blueprint/variant";
 import {
 	EntityClock,
 	EntitySettings,
@@ -1069,6 +1070,7 @@ function indexesOf(
 			if (
 				isBlueprint(field) ||
 				isBlueprintList(field) ||
+				isBlueprintVariant(field) ||
 				recordFieldOf(field)
 			) {
 				invalid(

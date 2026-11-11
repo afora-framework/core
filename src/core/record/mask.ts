@@ -5,6 +5,7 @@ import type {
 	BlueprintField,
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
+import { isBlueprintVariant, variantOfValue } from "../blueprint/variant";
 import { isMarked } from "./marks";
 
 /** What a masked value becomes, whatever its length, so none is told apart. */
@@ -35,7 +36,7 @@ function maskAll(value: unknown): unknown {
 /**
  * `value` of `field` with what is sensitive masked: everything when
  * `sensitive`, a property declared `sensitive` always, at any depth of
- * blueprints and lists. A record gives its `toJSON`, masked by its own options.
+ * blueprints, lists and variants. A record gives its `toJSON`, masked by its own options.
  */
 function maskField(
 	field: BlueprintField | undefined,
@@ -58,6 +59,16 @@ function maskField(
 			field.properties,
 			value as Readonly<Record<string, unknown>>,
 		);
+	}
+	if (isBlueprintVariant(field)) {
+		// The key of the variant is kept as it is; the rest is masked by its blueprint.
+		const variant = variantOfValue(field, value);
+		return variant
+			? maskCollection(
+					variant.properties,
+					value as Readonly<Record<string, unknown>>,
+				)
+			: value;
 	}
 	return value;
 }

@@ -278,6 +278,10 @@ class Extraction {
 							optional: field.optional,
 							fields: this.fields(field.fields),
 						};
+			case "variant":
+				throw new ExtractionError(
+					`A field made with variantOf (key "${field.key}") has no form in afora.json yet, so this application cannot be described.`,
+				);
 			default:
 				return { kind: "type", type: field.ref, optional: field.optional };
 		}

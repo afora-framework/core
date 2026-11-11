@@ -24,9 +24,43 @@ const Admin = blueprintOf([User], (ctx) => ({
 const Customer = User.join(Timestamps); // every field of both
 ```
 
-`ctx.optional.*` and `ctx.list.*` mirror every field: `ctx.list.string` is `listOf(ctx.string)` and `ctx.list.optional.string` an optional list of strings. Every context also has `ctx.listOf`, `ctx.optionalOf` and `ctx.propertyOf`, the same functions as the exports, to make fields inline: `ctx.listOf(ctx.string, { maxItems: 5 })`, `ctx.optionalOf(Address)`. `optional`, `list`, `listOf`, `optionalOf` and `propertyOf` are reserved, so no plugin can declare them. Factories such as `ctx.enumOf` are not mirrored under `optional` and `list`, which would lose their literal types; wrap what they return in `ctx.listOf` or `ctx.optionalOf`.
+`ctx.optional.*` and `ctx.list.*` mirror every field: `ctx.list.string` is `listOf(ctx.string)` and `ctx.list.optional.string` an optional list of strings. Every context also has `ctx.listOf`, `ctx.optionalOf`, `ctx.propertyOf` and `ctx.variantOf`, the same functions as the exports, to make fields inline: `ctx.listOf(ctx.string, { maxItems: 5 })`, `ctx.optionalOf(Address)`. `optional`, `list`, `listOf`, `optionalOf`, `propertyOf` and `variantOf` are reserved, so no plugin can declare them. Factories such as `ctx.enumOf` are not mirrored under `optional` and `list`, which would lose their literal types; wrap what they return in `ctx.listOf` or `ctx.optionalOf`.
 
 `join` takes any number of blueprints (`A.join(B, C)` is `A.join(B).join(C)`); a later one replaces a key of an earlier one, like plugins do. `listOf` takes a property, a blueprint or another list, and `optionalOf` makes it an optional key.
+
+## One of several blueprints
+
+`variantOf(key, variants)` is a field that holds one of several objects, told apart by the value of one key:
+
+```ts
+import { blueprintOf, variantOf } from "@afora/core";
+
+const Card = blueprintOf((ctx) => ({ holder: ctx.text, number: ctx.text }));
+const Pix = blueprintOf((ctx) => ({ key: ctx.email }));
+
+const Payment = blueprintOf((ctx) => ({
+	amount: ctx.integer,
+	by: variantOf("method", { card: Card, pix: Pix }),
+	tried: ctx.listOf(ctx.variantOf("method", { card: Card, pix: Pix })),
+}));
+
+const result = Payment.safeParse({
+	amount: 10,
+	by: { method: "pix", key: " Jane@Example.COM " },
+	tried: [],
+});
+if (!result.issues && result.value.by.method === "pix") {
+	result.value.by.key; // "jane@example.com": narrowed by the key
+}
+```
+
+Each variant is a blueprint, named by the value the key has for it. The blueprints do not declare the key: the field adds it, first, so a blueprint can be a variant of several fields and cannot disagree with its name. A blueprint that declares the key, and a field with no variant, throw `InvalidBlueprintVariant` when the field is declared.
+
+A value is handled by the blueprint its key names, exactly as a nested blueprint handles it: its properties run their handlers (the email above is trimmed and lowercased), its issues have their own codes and paths (`required`, `undeclared_key`, `invalid_value` at `by.key`), sensitive properties are masked by `toJSON`, and the result is frozen. A value whose key is missing or names no variant gets one issue at the key (`invalid_value`, `must be equal to one of the allowed values`), and a value that is not an object is `invalid_type`.
+
+`optionalOf` and `listOf` take a variant field, it has a `~standard` of its own, [`toOpenAPI`](openapi.md) gives it as `oneOf` with a `discriminator`, and `describe()` and the [schema lock](schema-evolution.md) hold each variant (a change inside one is told at `by.card.<its key>`).
+
+Not yet: a record class or an entity as a variant, picking keys inside a variant with `sliceOf` (it can be picked whole), and `afora.json`, where `@afora/codegen` refuses to describe an application that has such a field. A union can also be the schema of one property, when its variants need no properties of their own: see [Unions](properties.md#unions). That one is checked by one compiled function for the whole value, so a valid value takes about half the time it takes as a variant field, whose variants are walked key by key like any blueprint (1.2 µs against 2.1 µs for twelve events of four variants, where Zod 4 takes 2.5 µs); rejected values take the same.
 
 `blueprintOf` is `blueprintBuilderOf(Std)`. To build blueprints from other properties, without `Std`, make a builder of your own:
 
