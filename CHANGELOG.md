@@ -2,9 +2,26 @@
 
 ## Unreleased
 
+### Changed
+
+- **Breaking** (`@afora/codegen`, `@afora/mcp`). In an `afora.json`, a `run` step with `args` must declare `params` (#98): `check`, `generate` and the validation of the MCP tools (`afora_spec_validate`, `afora_spec_upsert`, `afora_spec_write`) report the new error `run_without_params` at the `args` of the step. A `run` without `args` needs no `params`. An agent writing the spec has no compile step that knows the parameters of the function, so without `params` the function ran on whatever the args resolved to. In TypeScript `useCaseOf` does not require it (`strictSteps` checks the parameters of `fn` at compile time); a hand-written use case without `params` still extracts, but the spec fails validation until it is declared. The README quick start, the MCP guide and `docs/use-cases.md` and `docs/afora-json.md` declare it. See Migration below.
+
 ### Docs
 
 - `docs/use-cases.md#strict-steps` says how the `"$..."` references of steps behave under an editor rename (#97): with `strictSteps: true` every stale reference is a compile error offering the names in scope; without it the dependency and action names are checked by TypeScript and a stale `$input.<key>` throws `InvalidUseCaseStep` at declaration. It recommends `strictSteps: true` for hand-written steps; no language service plugin or typed references are planned.
+
+### Migration
+
+`@afora/codegen`: give each `run` step with `args` a `params` whose fields match the args by position, as a blueprint by name or inline.
+
+```jsonc
+// before
+{ "run": "hashPassword", "fn": { "import": "../hash#hashPassword" }, "args": ["$input.plainPassword"], "as": "hash" }
+// after
+{ "run": "hashPassword", "fn": { "import": "../hash#hashPassword" }, "args": ["$input.plainPassword"], "params": { "fields": { "plain": "string" } }, "as": "hash" }
+```
+
+In TypeScript, for a use case you extract with `extractSpec`, declare `params: blueprintOf((ctx) => ({ plain: ctx.string }))` on the step.
 
 ## 0.0.11 — 2026-11-11
 

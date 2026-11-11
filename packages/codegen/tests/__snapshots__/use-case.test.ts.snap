@@ -134,6 +134,10 @@ export class Login extends useCaseOf({
 			run: "verify",
 			fn: verify,
 			args: ["$user", "$input.plainPassword"],
+			params: blueprintOf((ctx) => ({
+				user: User,
+				plain: ctx.string,
+			})),
 			as: "ok",
 		},
 		{ ensure: "true", value: "$ok", error: InvalidCredentials },

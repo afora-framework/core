@@ -230,9 +230,10 @@ reference, and the rule round-trips as data. Use steps when the rule reads as "f
 **Steps have no branching, no loops and no expressions, and never will**: a rule that is data must stay readable as a list. So:
 
 - One value computed from others (a hash, a total, a slug): keep the steps and add a \`run\` step with an imported function,
-  \`{ "run": "total", "fn": { "import": "./pricing.ts#total" }, "args": ["$cart.items"], "as": "total" }\`. The function is code; the flow stays data.
-  Declare \`"params"\` (fields matching the args by position) whenever the function relies on what it gets: the args are then checked before it
-  runs, and a wrong one is an \`InvalidUseCaseStep\` naming the field, instead of the function running on a value of the wrong type.
+  \`{ "run": "total", "fn": { "import": "./pricing.ts#total" }, "args": ["$input.price", "$input.quantity"], "params": { "fields": { "price": "integer", "quantity": "integer" } }, "as": "total" }\`.
+  The function is code; the flow stays data. A \`run\` with \`"args"\` must declare \`"params"\` (fields matching the args by position, or a blueprint
+  by name), or validation fails with \`run_without_params\`: the args are checked before the function runs, and a wrong one is an
+  \`InvalidUseCaseStep\` naming the field, instead of the function running on a value of the wrong type. A \`run\` without \`"args"\` needs none.
 - A rule that **branches** (if the stock is short, back-order, else reserve), **loops** over a list with effects, needs several \`run\` steps
   in a row, or reads better as five lines of code than as fifteen steps: write it in code,
   \`"implementation": { "import": "../handlers/reserve#Reserve" }\`. The spec still declares its input, response, context, dependencies,

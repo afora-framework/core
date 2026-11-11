@@ -136,6 +136,10 @@ const Sale = useCaseOf({
 			run: "discounted",
 			fn: discounted,
 			args: ["$product.price", "$input.percent"],
+			params: blueprintOf((ctx) => ({
+				price: ctx.integer,
+				percent: ctx.integer,
+			})),
 			as: "price",
 		},
 		{ return: { price: "$price" } },

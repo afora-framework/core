@@ -1250,6 +1250,17 @@ function checkSteps(steps: unknown, implPath: Path, ctx: StepsContext): void {
 					checkImport(step.fn, [...here, "fn"], issues);
 				}
 				checkArgs(step.args);
+				if (
+					step.params === undefined &&
+					step.args !== undefined &&
+					!(Array.isArray(step.args) && step.args.length === 0)
+				) {
+					fail(
+						"run_without_params",
+						'run with "args" needs "params": a blueprint whose keys match the args by position, so they are checked before the function runs.',
+						"args",
+					);
+				}
 				if (step.params !== undefined) {
 					const ref = checkBlueprintRef(
 						step.params,
