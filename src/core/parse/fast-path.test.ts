@@ -306,7 +306,7 @@ const Titled = blueprintOf((ctx) => ({
 	tags: listOf(ctx.string, { maxItems: 1 }),
 }));
 
-/** Records built from the value as it is: by `recordOf`, and by classes without a constructor. */
+/** Records built from the value as it is: by `recordOf`, and by classes without a constructor of their own. */
 const Declared = recordOf(Titled);
 class Extended extends recordOf(Titled) {
 	readonly built = true;
@@ -378,7 +378,7 @@ test("Record.safeParse answers as the constructor does", () => {
 
 test("a record made by safeParse is one its class built", () => {
 	const input = { title: "Hello", slug: "hello", tags: [] };
-	// The first record of a class goes through its constructor alone.
+	// From the first record of a class on.
 	for (let round = 0; round < 3; round++) {
 		const result = Further.safeParse(input);
 		if (result.issues) throw new Error("expected a record");
@@ -389,7 +389,7 @@ test("a record made by safeParse is one its class built", () => {
 		expect(result.value.title).toBe("Hello");
 	}
 
-	// The value handled for one record is not the value of the next.
+	// What is asked of one record is not asked of the next.
 	const first = Declared.safeParse(input);
 	const second = new Declared({ ...input, title: "Other" });
 	if (first.issues) throw new Error("expected a record");
