@@ -18,6 +18,7 @@ import {
 import { outputValueOf, PROBLEM_MEDIA_TYPE, problemOf } from "./problem";
 import { statusOf } from "./status";
 import type {
+	Authenticator,
 	CompiledRoute,
 	CompileRoutesSettings,
 	HttpOptions,
@@ -280,14 +281,25 @@ export function compileRoutes(
 		cookies: NO_COOKIES,
 		body: JSON.stringify(body),
 	});
-	const failure: RouteTable["failure"] = (error, given = {}) => {
-		const name = error instanceof Exception ? error.name : undefined;
+	const fail = (
+		error: unknown,
+		operation: OperationDescriptor | undefined,
+		request: Pick<HttpRequest, "header"> | undefined,
+		fallback?: number,
+	): HttpResult => {
+		// `statusOf` looks at the output `statuses` first; a fallback only
+		// replaces what it would say for a name they do not list.
 		const status =
-			name !== undefined && Object.hasOwn(output.statuses, name)
-				? (output.statuses[name] as number)
-				: (given.status ?? statusOf(error, given.operation, output.statuses));
-		return problem(problemOf(error, { status, debug }), status, given.request);
+			fallback !== undefined &&
+			!(
+				error instanceof Exception && Object.hasOwn(output.statuses, error.name)
+			)
+				? fallback
+				: statusOf(error, operation, output.statuses);
+		return problem(problemOf(error, { status, debug }), status, request);
 	};
+	const failure: RouteTable["failure"] = (error, given) =>
+		fail(error, given?.operation, given?.request, given?.status);
 
 	const compiled: CompiledRoute[] = operations.map((operation) => {
 		const route = routes.get(operation.id) as OperationRoute;
@@ -321,18 +333,22 @@ export function compileRoutes(
 				: { "content-type": JSON_TYPE, ...route.headers },
 		);
 
+		const readsCookies = cookieKeys.length > 0;
+		const authenticates = guarded && authenticator !== undefined;
+		const hasContext = operation.context !== undefined;
+
 		const handle = async (request: HttpRequest): Promise<HttpResult> => {
 			try {
+				// Nothing is made for a request that the route does not need.
 				let cookies: Map<string, string> | undefined;
-				const cookie = (name: string) => {
-					cookies ??= cookiesOf(request.header("cookie"));
-					return cookies.get(name);
-				};
 				let principal: Principal | null | undefined;
-				if (guarded && authenticator) {
-					principal = await authenticator({
+				if (authenticates) {
+					principal = await (authenticator as Authenticator)({
 						header: (name) => request.header(name),
-						cookie,
+						cookie: (name) => {
+							cookies ??= cookiesOf(request.header("cookie"));
+							return cookies.get(name);
+						},
 						operation,
 						native: request.native,
 					});
@@ -367,31 +383,36 @@ export function compileRoutes(
 					for (const [key, name] of headerKeys) {
 						texts[key] = request.header(name);
 					}
-					for (const [key, name] of cookieKeys) texts[key] = cookie(name);
+					if (readsCookies) {
+						cookies ??= cookiesOf(request.header("cookie"));
+						for (const [key, name] of cookieKeys)
+							texts[key] = cookies.get(name);
+					}
 					for (const name of parameters) texts[name] = request.param(name);
 					// What the route places wins over the body or the query.
 					input = { ...input, ...coerceTextValues(operation.input, texts) };
 				}
 
-				const call: { context?: unknown; principal?: Principal | null } = {};
-				if (operation.context) {
+				let call: OperationCallOptions | undefined;
+				if (hasContext) {
 					const raw: Record<string, string | undefined> = {};
 					for (const [key, name] of contextHeaderKeys) {
 						raw[key as string] = request.header(name as string);
 					}
-					const values = coerceTextValues(operation.context, raw);
+					const values = coerceTextValues(
+						operation.context as NonNullable<typeof operation.context>,
+						raw,
+					);
 					for (const [key, name] of contextVariableKeys) {
 						const value = request.variable?.(name as string);
 						if (value !== undefined) values[key as string] = value;
 					}
-					call.context = values;
-				}
-				if (guarded) call.principal = principal ?? null;
+					call = guarded
+						? { context: values, principal: principal ?? null }
+						: { context: values };
+				} else if (guarded) call = { principal: principal ?? null };
 
-				const response = await operation.invoke(
-					input,
-					call as OperationCallOptions,
-				);
+				const response = await operation.invoke(input, call);
 				if (setCookies.length === 0) {
 					return {
 						status,
@@ -419,7 +440,7 @@ export function compileRoutes(
 					body: status === 204 ? null : (JSON.stringify(value) ?? "null"),
 				};
 			} catch (error) {
-				return failure(error, { operation, request });
+				return fail(error, operation, request);
 			}
 		};
 		return Object.freeze({ operation, method, path, parameters, handle });

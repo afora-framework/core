@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 // The application supplies the TypeBox peer used by these schemas and core.
 import { Type } from "typebox";
 import { outputValueOf, RESERVED_RECORD_KEYS } from "../dist/adapters.js";
-import { sliceOf, sliceValue } from "../dist/experimental.js";
+import { jwtOf, sliceOf, sliceValue } from "../dist/experimental.js";
 import {
 	blueprintOf,
 	DeletedEntity,
@@ -128,5 +128,14 @@ class RoutedGet extends Routed {
 Route("GET", "/posts/{slug}")(RoutedGet, { kind: "class" });
 assert.deepEqual(RoutedGet.route, { method: "get", path: "/posts/{slug}" });
 assert.equal(Routed.route, undefined);
+
+// JSON Web Tokens run on the Web Crypto of Node, with no Buffer and no node:crypto
+const jwt = jwtOf({ secret: "a-secret-of-at-least-thirty-two-characters" });
+const signed = await jwt.sign({ subject: "u1", scopes: ["posts:write"] });
+assert.deepEqual(await jwt.verify(signed), {
+	subject: "u1",
+	scopes: ["posts:write"],
+});
+await assert.rejects(jwt.verify(`${signed}x`));
 
 console.log(`smoke ok on node ${process.version}`);

@@ -248,17 +248,34 @@ function send(result: HttpResult): Response {
 	return new Response(result.body, { status: result.status, headers });
 }
 
-/** A Hono request, as the route table reads it; `text` replaces the body, once read. */
-function requestOf(c: Context, text?: string): HttpRequest {
-	return {
-		param: (name) => c.req.param(name),
-		query: () => c.req.query(),
-		header: (name) => c.req.header(name),
-		text: text === undefined ? () => c.req.text() : () => text,
-		variable: (name) => (c.get as (name: string) => unknown)(name),
-		native: c,
-	};
+/**
+ * A Hono request, as the route table reads it; `body` replaces the body,
+ * once read. A class, so a request costs one object and no closures.
+ */
+class HonoRequest implements HttpRequest {
+	constructor(
+		readonly native: Context,
+		private readonly body?: string,
+	) {}
+	param(name: string) {
+		return this.native.req.param(name);
+	}
+	query() {
+		return this.native.req.query();
+	}
+	header(name: string) {
+		return this.native.req.header(name);
+	}
+	text() {
+		return this.body === undefined ? this.native.req.text() : this.body;
+	}
+	variable(name: string) {
+		return (this.native.get as (name: string) => unknown)(name);
+	}
 }
+
+const requestOf = (c: Context, body?: string): HttpRequest =>
+	new HonoRequest(c, body);
 
 /** A request id worth propagating: visible ASCII, at most 200 characters. */
 const REQUEST_ID = /^[\x21-\x7e]{1,200}$/;
@@ -357,8 +374,8 @@ export const hono = sinkOf<Hono, HonoOptions, HonoHooks>({
 				: undefined;
 			const path = honoPath(route.path);
 			if (!webhook) {
-				app.on(route.method.toUpperCase(), path, async (c) =>
-					send(await route.handle(requestOf(c))),
+				app.on(route.method.toUpperCase(), path, (c) =>
+					route.handle(new HonoRequest(c)).then(send),
 				);
 				continue;
 			}

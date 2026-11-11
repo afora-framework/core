@@ -60,25 +60,34 @@ function first(value: unknown): string | undefined {
 	return typeof value === "string" ? value : undefined;
 }
 
-/** A Fastify request, as the route table reads it. */
-function requestOf(request: FastifyRequest): HttpRequest {
-	return {
-		param: (name) => (request.params as Record<string, string>)[name],
-		query: () => {
-			const query: Record<string, string | undefined> = {};
-			for (const [name, value] of Object.entries(
-				request.query as Record<string, unknown>,
-			)) {
-				query[name] = first(value);
-			}
-			return query;
-		},
-		header: (name) => first(request.headers[name]),
-		text: () => (typeof request.body === "string" ? request.body : ""),
-		variable: (name) => (request as unknown as Record<string, unknown>)[name],
-		native: request,
-	};
+/** A Fastify request, as the route table reads it: one object per request, no closures. */
+class FastifyHttpRequest implements HttpRequest {
+	constructor(readonly native: FastifyRequest) {}
+	param(name: string) {
+		return (this.native.params as Record<string, string>)[name];
+	}
+	query() {
+		const query: Record<string, string | undefined> = {};
+		for (const [name, value] of Object.entries(
+			this.native.query as Record<string, unknown>,
+		)) {
+			query[name] = first(value);
+		}
+		return query;
+	}
+	header(name: string) {
+		return first(this.native.headers[name]);
+	}
+	text() {
+		return typeof this.native.body === "string" ? this.native.body : "";
+	}
+	variable(name: string) {
+		return (this.native as unknown as Record<string, unknown>)[name];
+	}
 }
+
+const requestOf = (request: FastifyRequest): HttpRequest =>
+	new FastifyHttpRequest(request);
 
 /** Sends a result of the route table, as is. */
 function send(reply: FastifyReply, result: HttpResult): FastifyReply {

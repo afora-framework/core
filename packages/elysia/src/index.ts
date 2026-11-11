@@ -85,26 +85,33 @@ function first(value: unknown): string | undefined {
 	return typeof value === "string" ? value : undefined;
 }
 
-/** An Elysia context, as the route table reads it. */
-function requestOf(call: Call): HttpRequest {
-	return {
-		param: (name) => call.params?.[name],
-		query: () => {
-			const query: Record<string, string | undefined> = {};
-			for (const [name, value] of Object.entries(call.query ?? {})) {
-				query[name] = first(value);
-			}
-			return query;
-		},
-		header: (name) => call.request.headers.get(name) ?? undefined,
-		text: () => (typeof call.body === "string" ? call.body : ""),
-		variable: (name) =>
-			Object.hasOwn(call, name)
-				? (call as unknown as Record<string, unknown>)[name]
-				: call.store?.[name],
-		native: call,
-	};
+/** An Elysia context, as the route table reads it: one object per request, no closures. */
+class ElysiaHttpRequest implements HttpRequest {
+	constructor(readonly native: Call) {}
+	param(name: string) {
+		return this.native.params?.[name];
+	}
+	query() {
+		const query: Record<string, string | undefined> = {};
+		for (const [name, value] of Object.entries(this.native.query ?? {})) {
+			query[name] = first(value);
+		}
+		return query;
+	}
+	header(name: string) {
+		return this.native.request.headers.get(name) ?? undefined;
+	}
+	text() {
+		return typeof this.native.body === "string" ? this.native.body : "";
+	}
+	variable(name: string) {
+		return Object.hasOwn(this.native, name)
+			? (this.native as unknown as Record<string, unknown>)[name]
+			: this.native.store?.[name];
+	}
 }
+
+const requestOf = (call: Call): HttpRequest => new ElysiaHttpRequest(call);
 
 /** The response of a result of the route table, as is. */
 function send(result: HttpResult): Response {
@@ -167,7 +174,7 @@ export const elysia = sinkOf<AnyElysia, ElysiaOptions, ElysiaHooks>({
 				route.method.toUpperCase(),
 				elysiaPath(route.path),
 				TEXT_BODY,
-				async (call) => send(await route.handle(requestOf(call))),
+				(call) => route.handle(requestOf(call)).then(send),
 			);
 		}
 		const docs = table.docs;

@@ -89,26 +89,37 @@ function textOf(request: Request): string | Promise<string> {
 	});
 }
 
-/** An Express request, as the route table reads it. */
-function requestOf(request: Request, response: Response): HttpRequest {
-	return {
-		param: (name) => first(request.params[name]),
-		query: () => {
-			const query: Record<string, string | undefined> = {};
-			for (const [name, value] of Object.entries(request.query)) {
-				query[name] = first(value);
-			}
-			return query;
-		},
-		header: (name) => first(request.headers[name]),
-		text: () => textOf(request),
-		variable: (name) =>
-			Object.hasOwn(response.locals, name)
-				? response.locals[name]
-				: (request as unknown as Record<string, unknown>)[name],
-		native: request,
-	};
+/** An Express request, as the route table reads it: one object per request, no closures. */
+class ExpressHttpRequest implements HttpRequest {
+	constructor(
+		readonly native: Request,
+		private readonly response: Response,
+	) {}
+	param(name: string) {
+		return first(this.native.params[name]);
+	}
+	query() {
+		const query: Record<string, string | undefined> = {};
+		for (const [name, value] of Object.entries(this.native.query)) {
+			query[name] = first(value);
+		}
+		return query;
+	}
+	header(name: string) {
+		return first(this.native.headers[name]);
+	}
+	text() {
+		return textOf(this.native);
+	}
+	variable(name: string) {
+		return Object.hasOwn(this.response.locals, name)
+			? this.response.locals[name]
+			: (this.native as unknown as Record<string, unknown>)[name];
+	}
 }
+
+const requestOf = (request: Request, response: Response): HttpRequest =>
+	new ExpressHttpRequest(request, response);
 
 /** Sends a result of the route table, as is. */
 function send(response: Response, result: HttpResult): void {
