@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Docs
+
+- `docs/use-cases.md#strict-steps` says how the `"$..."` references of steps behave under an editor rename (#97): with `strictSteps: true` every stale reference is a compile error offering the names in scope; without it the dependency and action names are checked by TypeScript and a stale `$input.<key>` throws `InvalidUseCaseStep` at declaration. It recommends `strictSteps: true` for hand-written steps; no language service plugin or typed references are planned.
+
 ## 0.0.11 — 2026-11-11
 
 The `@afora/core` 0.0.10 was not released: these changes ship in 0.0.11. `@afora/otel` 0.0.10, published by hand to create the package on npm, requires `@afora/core` >= 0.0.11; use `@afora/otel` 0.0.11.

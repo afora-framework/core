@@ -312,6 +312,15 @@ A reference that does not fit is reported with the references that would (`'"$in
 
 Checking costs the editor about 11,000 more type instantiations per edit (20%) on a use case of five steps (see `bun run test:type-perf`), which is why it is opt-in. It only applies to steps written inline (a tuple); steps built at run time are checked at declaration only. `strictSteps` has no effect at run time and must be a boolean. The code [codegen](../packages/codegen/README.md) generates from `afora.json` declares it.
 
+**Renaming a key or a dependency.** The references are strings, so an editor rename (F2) of a key of a blueprint, of a dependency name or of a repository action does not touch the `"$..."` and `"<repo>.<action>"` strings of the steps. Nothing goes stale silently:
+
+| Mode                  | What a rename leaves behind                                                                                                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `strictSteps: true`   | A compile error at every stale reference, with the references in scope offered in its place; each one is fixed by hand.                                                                                     |
+| without `strictSteps` | TypeScript checks the dependency and action names (`"users.findByEmail"`); a stale `$input.<key>` or `$<name>.<key>` throws `InvalidUseCaseStep` when the module loads (at declaration), not in the editor. |
+
+So write hand-written steps with `strictSteps: true`. The code generated from `afora.json` always declares it, and there the spec is the source: rename the key in `afora.json`, and `afora-codegen check` reports every reference that still names the old key. This is a known cost of steps against a hand-written `execute`, whose property accesses the editor renames; afora does not ship a language service plugin or typed references for it, so that steps stay the same plain data in TypeScript, in `afora.json` and in `describe()`.
+
 ### What steps will never have
 
 Steps are for a rule that is a sequence: read, check, build, change, store, call and return, in order. Each step names declared things (a repository action, a record class, an exception, a dependency) and values that are references or literals, so the whole rule is data that a spec, a reviewer or an agent can govern: `useCaseOf` and the `afora.json` validator check every name and path, `describe()` reports the rule, and [`afora.json`](afora-json.md) generates it and extracts it back unchanged.
