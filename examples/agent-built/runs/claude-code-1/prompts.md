@@ -10,7 +10,7 @@ What differs from a scripted run:
 
 ## Brief
 
-[BRIEF.md](../../BRIEF.md), as committed.
+[BRIEF.v1.md](../../BRIEF.v1.md), version 1 of the brief (see `run.json`).
 
 ## Instructions
 

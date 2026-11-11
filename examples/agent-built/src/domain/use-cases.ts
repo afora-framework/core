@@ -14,22 +14,28 @@ import { Events, Organizers, Tickets } from "./repositories";
 export const CreateEvent = StdUseCases.context.create(Events, {
 	name: "CreateEvent",
 	as: "event",
+	owner: { key: "organizer", context: "organizerId" },
 	errors: { notFound: OrganizerNotFound },
-	description: "Creates an event of an organizer.",
+	description: "Creates an event of the signed-in organizer.",
+	access: { context: { organizerId: "subject" } },
 });
 
 export const GetEvent = StdUseCases.context.get(Events, {
 	name: "GetEvent",
 	as: "event",
+	owner: { key: "organizer", context: "organizerId" },
 	errors: { notFound: EventNotFound },
-	description: "Gives an event.",
+	description: "Gives an event of the signed-in organizer.",
+	access: { context: { organizerId: "subject" } },
 });
 
 export const LoginOrganizer = StdUseCases.context.login(Organizers, {
 	name: "LoginOrganizer",
 	as: "organizer",
+	token: { secret: { env: "JWT_SECRET" }, issuer: "ticketing" },
 	errors: { invalid: InvalidCredentials },
-	description: "Checks the email and password of an organizer.",
+	description: "Checks the email and password of an organizer and gives a token.",
+	access: { public: true },
 });
 
 export const RegisterOrganizer = StdUseCases.context.register(Organizers, {
@@ -37,6 +43,7 @@ export const RegisterOrganizer = StdUseCases.context.register(Organizers, {
 	as: "organizer",
 	errors: { conflict: EmailTaken },
 	description: "Signs an organizer up.",
+	access: { public: true },
 });
 
 export class BuyTicket extends useCaseOf({
@@ -51,6 +58,7 @@ export class BuyTicket extends useCaseOf({
 	dependencies: { events: Events, tickets: Tickets },
 	errors: [EventNotFound, SoldOut],
 	description: "Sells one seat of an event. The ticket is stored first and the command runs in a transaction, so a ticket past the capacity is rolled back with SoldOut.",
+	access: { public: true },
 	strictSteps: true,
 	steps: [
 		{ find: "events.findById", args: ["$input.eventId"], as: "event" },
@@ -70,3 +78,12 @@ export class BuyTicket extends useCaseOf({
 		{ return: { ticket: "$saved" } },
 	],
 }) {}
+
+export const UpdateEvent = StdUseCases.context.update(Events, {
+	name: "UpdateEvent",
+	as: "event",
+	owner: { key: "organizer", context: "organizerId" },
+	errors: { notFound: EventNotFound },
+	description: "Changes the title or the capacity of an event of the signed-in organizer.",
+	access: { context: { organizerId: "subject" } },
+});

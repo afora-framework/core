@@ -20,7 +20,10 @@ export class Event extends entityOf(
 		slug: ctx.slug,
 		capacity: Capacity,
 	})),
-	{ name: "Event" },
+	{
+		name: "Event",
+		change: ["capacity", "title"],
+	},
 ) {}
 
 export class Ticket extends entityOf(

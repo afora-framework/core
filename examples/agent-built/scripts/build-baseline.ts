@@ -9,6 +9,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import Anthropic from "@anthropic-ai/sdk";
+import { CURRENT_BRIEF } from "../eval/invariants.ts";
 import { baseParams, clientOrExit, modelOptions, runNames } from "./claude.ts";
 import { BASELINE_INSTRUCTIONS } from "./prompts.ts";
 
@@ -39,6 +40,10 @@ const brief = await readFile(join(ROOT, "BRIEF.md"), "utf8");
 for (const name of runNames(count)) {
 	const dir = join(ROOT, "baseline/runs", name);
 	await mkdir(dir, { recursive: true });
+	await writeFile(
+		join(dir, "run.json"),
+		`${JSON.stringify({ brief: CURRENT_BRIEF })}\n`,
+	);
 	console.log(
 		`baseline/runs/${name}: asking ${options.model} (${options.effort})...`,
 	);
