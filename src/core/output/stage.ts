@@ -87,17 +87,35 @@ export function transformOf<Options extends object = StageOptions>(
 	return factory;
 }
 
-/** A factory of sink stages: `openapi({ info })`. */
-export function sinkOf<Result, Options extends object = StageOptions>(
-	settings: SinkSettings<Result, Options>,
-): SinkFactory<Result, Options> {
+/**
+ * A factory of sink stages: `openapi({ info })`. A sink that needs what JSON
+ * cannot hold (middlewares, an authenticator) takes it as a second argument,
+ * its `hooks`, which `build` receives and the description of the stage
+ * leaves out.
+ */
+export function sinkOf<
+	Result,
+	Options extends object = StageOptions,
+	Hooks = never,
+>(
+	settings: SinkSettings<Result, Options, Hooks>,
+): SinkFactory<Result, Options, Hooks> {
 	checkName("sinkOf", settings?.name);
 	if (typeof settings.build !== "function") {
 		invalid(settings.name, "Expected build to be a function.");
 	}
 	const { name, build, validate } = settings;
-	const factory = (given?: Options): SinkStage<Result, Options> => {
+	const factory = (
+		given?: Options,
+		hooks?: Hooks,
+	): SinkStage<Result, Options> => {
 		const options = optionsOf(name, given, validate);
+		if (
+			hooks !== undefined &&
+			(typeof hooks !== "object" || hooks === null || Array.isArray(hooks))
+		) {
+			invalid(name, "Stage hooks must be an object.");
+		}
 		const stage: SinkStage<Result, Options> = Object.freeze({
 			kind: "sink" as const,
 			name,
@@ -105,7 +123,7 @@ export function sinkOf<Result, Options extends object = StageOptions>(
 			build: (
 				operations: readonly OperationDescriptor[],
 				context: StageContext,
-			) => build(operations, options, context),
+			) => build(operations, options, context, hooks),
 		});
 		descriptions.set(
 			stage,

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Project boundary (#69)
+
+- `projectBoundaryIssues(spec, root)`: the places where a spec reaches outside a project directory, as issues `outside_project`: an `{ "import": "<module>#<name>" }` whose module is a file outside it (resolved from `output.dir`), an absolute path or a URL, and an `extends` outside it. For tools that take a spec from someone they do not trust; `validateSpec` does not run it, since a spec has no directory of its own. `@afora/mcp` runs it on every spec.
+
+### Routes and access (#75, #60)
+
+- A use case takes `"route"` (`{ method, path?, status?, query?, headers?, cookie?, setCookie? }`) and `"access"` (`{ public: true }` or `{ scopes?, owner?, context? }`), in a written use case and beside `"generic"` in a standard one. They are generated as the `route` and `access` settings of `useCaseOf` (options of a standard use case; no decorators are written) and extracted back from `describe()`, whether the class used the settings or `@Route` and `@Access`. `afora.schema.json` describes both.
+- Validation: `invalid_route` and `invalid_access` for a malformed declaration and, in a written use case, for a key that is not in the input, the response or the context, or that a route reads from two places.
+- The catalog lists the standard `refresh` and `logout`, and `token` among the options of `login`.
+
 ### Schema evolution (#28)
 
 - Fields take `"fill"` and `"renamedFrom"` in the object form of a type or enum field (not a list), generated as options of `with` (`ctx.enumOf([...]).with({ fill })`, `ctx.text({ renamedFrom })`) and extracted back to the field level from `describe()`; an enum refined only with them is no longer opaque. Entities take `"schemaVersion"`, `"upgrade"` (`{ "<n>": { "import": "./upgrades#toV2" } }`, generated as imported bindings; extraction needs `entities.<Name>.upgrade.<n>` in `imports`) and `"previousNames"`, in `afora.schema.json` too. Invalid values are `invalid_option`, `invalid_import`, `invalid_field` or `invalid_enum`. Generated code with them needs the `@afora/core` that has schema evolution.

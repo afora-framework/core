@@ -535,6 +535,18 @@ export function extractSpec(
 			? {}
 			: { message: value.message }),
 	}));
+	/** The route and the access a use case declares, by setting or by decorator. */
+	const routing = (value: {
+		readonly route?: unknown;
+		readonly access?: unknown;
+	}) => ({
+		...(value.route === undefined
+			? {}
+			: { route: structuredClone(value.route) }),
+		...(value.access === undefined
+			? {}
+			: { access: structuredClone(value.access) }),
+	});
 	const useCases = entries(description.useCases, (value, name) => {
 		// A standard use case is given back as it was asked for, not as its steps.
 		// One made by a plugin of another catalog cannot be named in a spec:
@@ -548,6 +560,8 @@ export function extractSpec(
 				description: _description,
 				tags: _tags,
 				deprecated: _deprecated,
+				route: _route,
+				access: _access,
 				...given
 			} = value.generic.options;
 			const generic = structuredClone(given) as Record<string, unknown>;
@@ -572,6 +586,7 @@ export function extractSpec(
 					: { description: value.description }),
 				...(value.tags.length > 0 ? { tags: [...value.tags] } : {}),
 				...(value.deprecated ? { deprecated: true } : {}),
+				...routing(value),
 			};
 		}
 		const steps =
@@ -599,6 +614,7 @@ export function extractSpec(
 				: { description: value.description }),
 			...(value.tags.length > 0 ? { tags: [...value.tags] } : {}),
 			...(value.deprecated ? { deprecated: true } : {}),
+			...routing(value),
 			input: value.refs?.input ?? { fields: extraction.json(value.input) },
 			response: value.refs?.response ?? {
 				fields: extraction.json(value.response),

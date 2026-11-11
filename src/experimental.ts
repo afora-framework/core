@@ -3,6 +3,18 @@
  * covered by the compatibility policy in `VERSIONING.md`. See
  * `docs/api-tiers.md`.
  */
+
+// JSON Web Tokens for the `auth` option of the HTTP sinks and the tokens of
+// the standard `login`; the shape of the session may still change.
+export { InvalidJwtOptions, jwtOf } from "./core/auth/jwt";
+export type {
+	DescribedJwtOptions,
+	Jwt,
+	JwtAlgorithm,
+	JwtOptions,
+	JwtSubject,
+	JwtTokenOptions,
+} from "./core/auth/types/jwt.interface";
 export { sliceOf, sliceValue } from "./core/blueprint/slice";
 export type {
 	SlicedBlueprint,
@@ -31,3 +43,4 @@ export {
 export { useCaseOriginOf } from "./core/use-case/plugin";
 export { useCaseTargetOf } from "./core/use-case/target";
 export type { UseCaseOriginInfo } from "./core/use-case/types/plugin.interface";
+export type { StdTokenOptions } from "./std/use-cases/types";

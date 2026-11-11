@@ -25,7 +25,7 @@ test("from afora.json: the generated app serves the quick start", async () => {
 		plainPassword: "Str0ng!Pass",
 	};
 	const register = () =>
-		api.request("/api/accounts/register", {
+		api.request("/api/users", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify(body),
@@ -33,7 +33,7 @@ test("from afora.json: the generated app serves the quick start", async () => {
 
 	const created = await register();
 	const { user } = (await created.json()) as { user: Record<string, unknown> };
-	expect(created.status).toBe(200);
+	expect(created.status).toBe(201);
 	expect(user.password).toBe("********");
 
 	const again = await register();

@@ -74,7 +74,67 @@ With a declared `context`, the second constructor argument is required by type a
 
 A child called through a dependency function receives its parent's context narrowed to the keys of its own `context` blueprint and validated by it. A child with no context gets none; a child that declares one under a parent without context fails with `InvalidUseCaseContext`. Overrides passed to `execute` keep the signature `(input) => response`.
 
-The class gets the frozen statics `context`, `description`, `tags`, `deprecated` and `errors`, beside `useCaseName`, `blueprint`, `response` and `dependencies`. `context` is a non-optional blueprint, `tags` are distinct non-empty strings, and `errors` are distinct classes made by `exceptionOf`; anything else throws `InvalidUseCaseDeclaration`. `errors` documents what to expect and changes nothing at runtime: an exception that is not listed still propagates.
+The class gets the frozen statics `context`, `description`, `tags`, `deprecated`, `errors`, `route` (see [Routes](#routes)) and `access` (see [Access](auth.md)), beside `useCaseName`, `blueprint`, `response` and `dependencies`. `context` is a non-optional blueprint, `tags` are distinct non-empty strings, and `errors` are distinct classes made by `exceptionOf`; anything else throws `InvalidUseCaseDeclaration`. `errors` documents what to expect and changes nothing at runtime: an exception that is not listed still propagates.
+
+## Routes
+
+A use case can say where it is served over HTTP, next to its input, instead of in the options of a sink:
+
+```ts
+import { blueprintOf, Route, useCaseOf } from "@afora/core";
+
+const ListPostsInput = blueprintOf((ctx) => ({
+	slug: ctx.slug,
+	page: ctx.integer,
+	locale: ctx.optional.text,
+	session: ctx.text,
+}));
+
+class ListPosts extends useCaseOf({
+	name: "ListPosts",
+	blueprint: ListPostsInput,
+	response: PostList,
+	route: {
+		method: "get",
+		path: "/posts/{slug}",
+		headers: { locale: "accept-language" },
+		cookie: { session: "sid" },
+	},
+}) {
+	override async execute() {
+		// this.input: { slug, page, locale?, session }
+	}
+}
+
+// The same declaration, as a decorator of the class:
+@Route("GET", "/posts/{slug}", {
+	headers: { locale: "accept-language" },
+	cookie: { session: "sid" },
+})
+class ListPosts extends useCaseOf({
+	name: "ListPosts",
+	blueprint: ListPostsInput,
+	response: PostList,
+}) {
+	// ...
+}
+```
+
+The blueprint stays the only description of the input: a route adds no schema, it says where each key is read from.
+
+- **`method`** is `get`, `post`, `put`, `patch` or `delete`, in either case; it is stored in lower case.
+- **`path`** starts with `/`, and a `{name}` segment fills the input key `name`. Without a path, the sink uses its default (`/{command}/{operation}`).
+- **`status`** is the status of a success: `200` (the default), `201`, `202` or `204`.
+- **`query`** lists input keys read from the query string. A `get` or `delete` route already reads from the query every key that has no other place, so `query` is for routes with a body.
+- **`headers`** and **`cookie`** map input keys to the header or the cookie each is read from: `{ locale: "accept-language" }`.
+- **What is left** is the JSON body of a `post`, `put` or `patch`, and the query of a `get` or `delete`.
+- **`setCookie`** maps keys of the _response_ to cookies: `{ token: { name: "sid" } }` sends the `token` of the response as the cookie `sid` and leaves it out of the body. A cookie is `{ name, httpOnly?, secure?, sameSite?, path?, domain?, maxAge? }`, by default `HttpOnly; Secure; SameSite=Lax; Path=/`. An empty text removes the cookie, and an absent value sets none. The key must be a scalar key of the response.
+
+A key read from the path, the query, a header or a cookie arrives as text, so it must be a scalar property of the input (a number or a boolean is converted), and each key has one place. Anything else throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class whose decorator says another route than the one it already has (the same route again is accepted, which is what a class over a base generated from `afora.json` does).
+
+The route is data: `ListPosts.route` is the frozen declaration, `app.describe().useCases.ListPosts.route` and `afora.json` carry it, and a subclass inherits it. It names no server. The use case becomes an operation through a [command](commands.md), and the sink of an [output](outputs.md) (`openapi`, `hono`…) serves or documents it; the `route` option of that sink still overrides the method, path and status per operation id.
+
+`@Route(method, path?, options?)` (or `@Route(method, options)`) is a standard class decorator, with no `experimentalDecorators` and no metadata reflection; it also works as a legacy TypeScript decorator. Bun runs it as written. Node has no decorator syntax yet, so there the code goes through a compiler (`tsc` with a `target` of `ES2022` or lower, `tsx`, esbuild), or uses the `route` setting, which needs nothing.
 
 `UseCaseInput`, `UseCaseResponse` and `UseCaseDependencies` extract a declaration's types. `isUseCase` identifies instances; `isUseCaseClass` identifies concrete declarations with a prototype `execute`. UseCases carry their own kind and cannot be used as fields of ordinary data blueprints. Validation errors carry `details.issues`; errors crossing an execution boundary preserve their cause and gain a `UseCase` trace frame using the declared name.
 

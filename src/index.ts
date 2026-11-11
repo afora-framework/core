@@ -231,7 +231,9 @@ export type {
 } from "./core/openapi/types/openapi.interface";
 export {
 	DuplicateOperation,
+	Forbidden,
 	InvalidOutputStage,
+	Unauthenticated,
 } from "./core/output/exceptions";
 export type {
 	OpenAPIDocument,
@@ -423,6 +425,7 @@ export type {
 export type { StandardSchemaV1 } from "./core/standard/standard-schema";
 export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
+export { Access, Route } from "./core/use-case/decorators";
 export {
 	IncompatibleUseCasePlugin,
 	InvalidUseCasePlugin,
@@ -458,6 +461,10 @@ export type {
 	UseCaseStepDescription,
 } from "./core/use-case/steps/types/steps.interface";
 export type {
+	AccessDeclaration,
+	Principal,
+} from "./core/use-case/types/access.interface";
+export type {
 	AnyUseCasePlugin,
 	EntityOfRepository,
 	IUseCaseCatalog,
@@ -473,6 +480,10 @@ export type {
 	UseCaseTarget,
 	UseCaseTargetInfo,
 } from "./core/use-case/types/plugin.interface";
+export type {
+	RouteDeclaration,
+	RouteSettings,
+} from "./core/use-case/types/route.interface";
 export type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
@@ -546,6 +557,7 @@ export {
 	StdRecordPlugins,
 	Taggable,
 } from "./std/record-plugins";
+export { resourceOf } from "./std/resource";
 export type {
 	IdGenerator,
 	PasswordHasher,
@@ -568,6 +580,9 @@ export type {
 	LoginMaker,
 	PublishMaker,
 	RegisterMaker,
+	ResourceAction,
+	ResourceOptions,
+	ResourceUseCases,
 	RestoreMaker,
 	StdCreateOptions,
 	StdEntityOptions,

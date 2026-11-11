@@ -2,6 +2,11 @@ import type { AnyBlueprint } from "../../blueprint/types/blueprint.interface";
 import type { AnyCommand } from "../../command/types/command.interface";
 import type { JsonValue } from "../../json";
 import type { Kind } from "../../symbols/kind";
+import type {
+	AccessDeclaration,
+	Principal,
+} from "../../use-case/types/access.interface";
+import type { RouteDeclaration } from "../../use-case/types/route.interface";
 import type { AnyExceptionClass } from "../../use-case/use-case";
 
 /** The options of a stage: a JSON object. */
@@ -10,9 +15,15 @@ export type StageOptions = { readonly [key: string]: JsonValue };
 /** An HTTP-style status by exception name. */
 export type OutputStatuses = Readonly<Record<string, number>>;
 
-/** The call of an operation: `context` is what the command (or use case) declares. */
+/**
+ * The call of an operation: `context` is what the command (or use case)
+ * declares, and `principal` is who calls, as the sink authenticated it
+ * (`null` or absent for an anonymous caller). An operation with an `access`
+ * checks the principal before it runs.
+ */
 export interface OperationCallOptions {
 	readonly context?: unknown;
+	readonly principal?: Principal | null;
 }
 
 /**
@@ -41,9 +52,16 @@ export interface OperationDescriptor {
 	readonly context?: AnyBlueprint;
 	/** The `errors` of the use case. */
 	readonly errors: readonly AnyExceptionClass[];
+	/** The route the use case declares (`route` or `@Route`), if any. */
+	readonly route?: RouteDeclaration;
+	/** Who may call it, as the use case declares (`access` or `@Access`), if it does. */
+	readonly access?: AccessDeclaration;
 	/** Set by transforms; `{}` initially. */
 	readonly meta: Readonly<Record<string, unknown>>;
-	/** `command.run(name, input, options)`. */
+	/**
+	 * `command.run(name, input, { context })`, after the check of `access`:
+	 * it rejects with `Unauthenticated` or `Forbidden` before anything runs.
+	 */
 	invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>;
 }
 
@@ -119,12 +137,18 @@ export interface TransformSettings<Options extends object> {
 	readonly validate?: (options: Options) => string | undefined;
 }
 
-export interface SinkSettings<Result, Options extends object> {
+export interface SinkSettings<Result, Options extends object, Hooks = never> {
 	readonly name: string;
+	/**
+	 * `hooks` is the second argument the stage was made with: what cannot be
+	 * JSON (functions, an instance of a server). It is not part of the
+	 * description of the stage.
+	 */
 	readonly build: (
 		operations: readonly OperationDescriptor[],
 		options: Options,
 		context: StageContext,
+		hooks: Hooks | undefined,
 	) => Result;
 	/** Why `options` cannot be used, or `undefined`. Checked when the stage is made. */
 	readonly validate?: (options: Options) => string | undefined;
@@ -137,7 +161,8 @@ export type TransformFactory<Options extends object = StageOptions> = (
 export type SinkFactory<
 	Result = unknown,
 	Options extends object = StageOptions,
-> = (options?: Options) => SinkStage<Result, Options>;
+	Hooks = never,
+> = (options?: Options, hooks?: Hooks) => SinkStage<Result, Options>;
 /** Any stage factory. */
 // biome-ignore lint/suspicious/noExplicitAny: factories of any options and result
 export type StageFactory = TransformFactory<any> | SinkFactory<any, any>;

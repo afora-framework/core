@@ -644,3 +644,47 @@ const registered: Equals<ReturnType<typeof useAppOf>, typeof AuthApp> = true;
 void registered;
 const fromAnywhere: typeof AppUsers = useAppOf().get(AppUsers);
 void fromAnywhere;
+
+// A route on the use case: as a setting, and as a standard class decorator.
+import { Route, type RouteDeclaration } from "@afora/core";
+
+const RoutedInput = blueprintOf((ctx) => ({
+	slug: ctx.string,
+	page: ctx.integer,
+	session: ctx.string,
+}));
+const RoutedResponse = blueprintOf((ctx) => ({ total: ctx.integer }));
+class RoutedBySetting extends useCaseOf({
+	name: "RoutedBySetting",
+	blueprint: RoutedInput,
+	response: RoutedResponse,
+	route: { method: "GET", path: "/posts/{slug}", cookie: { session: "sid" } },
+}) {
+	override async execute() {
+		return { total: this.input.page };
+	}
+}
+@Route("PUT", "/posts/{slug}", {
+	query: ["page"],
+	cookie: { session: "sid" },
+})
+class RoutedByDecorator extends useCaseOf({
+	name: "RoutedByDecorator",
+	blueprint: RoutedInput,
+	response: RoutedResponse,
+}) {
+	override async execute() {
+		return { total: this.input.page };
+	}
+}
+export const routes: (RouteDeclaration | undefined)[] = [
+	RoutedBySetting.route,
+	RoutedByDecorator.route,
+];
+useCaseOf({
+	name: "Bad",
+	blueprint: RoutedInput,
+	response: RoutedResponse,
+	// @ts-expect-error a route has no such method
+	route: { method: "head" },
+});

@@ -8,6 +8,7 @@ import {
 import { fieldsOfDecl } from "./graph";
 import type { Field } from "./model";
 import { checkImport, isImportObject } from "./provider";
+import { checkAccess, checkRoute } from "./route";
 import { type Decl, issue, type Scope } from "./scope";
 import { isIdentifier, isObject } from "./spec/field";
 import type { SpecIssue } from "./spec/types";
@@ -290,6 +291,8 @@ function checkGenericUseCase(
 		"description",
 		"tags",
 		"deprecated",
+		"route",
+		"access",
 	];
 	for (const key of Object.keys(spec)) {
 		if (!allowed.includes(key)) {
@@ -303,6 +306,14 @@ function checkGenericUseCase(
 		}
 	}
 	checkMetadata(spec, path, issues);
+	// What a standard use case takes and gives follows its repository: the
+	// keys are checked by the generated code.
+	if (spec.route !== undefined) {
+		checkRoute(spec.route, [...path, "route"], {}, issues);
+	}
+	if (spec.access !== undefined) {
+		checkAccess(spec.access, [...path, "access"], {}, issues);
+	}
 	const names = catalog().useCases.map((useCase) => useCase.name);
 	const info =
 		typeof spec.generic === "string" ? genericUseCase(spec.generic) : undefined;
@@ -647,6 +658,8 @@ export function checkUseCase(
 		"description",
 		"tags",
 		"deprecated",
+		"route",
+		"access",
 		"input",
 		"response",
 		"context",
@@ -683,7 +696,7 @@ export function checkUseCase(
 		return checkBlueprintRef(spec[key], [...path, key], scope, inline, issues);
 	};
 	const input = blueprint("input");
-	blueprint("response");
+	const response = blueprint("response");
 	const context = blueprint("context");
 	const fieldsOf = (
 		ref: BlueprintRef | undefined,
@@ -695,6 +708,22 @@ export function checkUseCase(
 	};
 	const inputFields = fieldsOf(input);
 	const contextFields = fieldsOf(context);
+	const responseFields = fieldsOf(response);
+	const known = {
+		...(inputFields ? { input: Object.keys(inputFields) } : {}),
+		...(responseFields ? { response: Object.keys(responseFields) } : {}),
+		...(context === undefined
+			? { context: [] }
+			: contextFields
+				? { context: Object.keys(contextFields) }
+				: {}),
+	};
+	if (spec.route !== undefined) {
+		checkRoute(spec.route, [...path, "route"], known, issues);
+	}
+	if (spec.access !== undefined) {
+		checkAccess(spec.access, [...path, "access"], known, issues);
+	}
 
 	const dependencies = checkDependencies(
 		decl,

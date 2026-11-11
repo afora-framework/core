@@ -117,6 +117,9 @@ jobs:
           publish packages/codegen
           publish packages/mcp
           publish packages/hono
+          publish packages/fastify
+          publish packages/express
+          publish packages/elysia
           publish packages/ws
           publish packages/drizzle
           publish packages/dynamodb

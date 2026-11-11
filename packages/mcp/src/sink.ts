@@ -1,6 +1,9 @@
-import { InvalidOutputStage, toOpenAPI } from "@afora/core";
+import { InvalidOutputStage, type Principal, toOpenAPI } from "@afora/core";
 import {
+	type Authenticator,
 	coerceTextValues,
+	type HttpOptions,
+	httpOptionsIssue,
 	type OperationDescriptor,
 	outputValueOf,
 	problemOf,
@@ -8,6 +11,7 @@ import {
 	stageCatalogOf,
 	statusOf,
 } from "@afora/core/adapters";
+import { jwtOf } from "@afora/core/experimental";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
 	CallToolRequestSchema,
@@ -30,6 +34,25 @@ export interface McpToolsOptions {
 	 * the call (`extra.values`). A missing value leaves the key out.
 	 */
 	readonly context?: { readonly [contextKey: string]: string };
+	/**
+	 * Who calls, from a JSON Web Token in the values of the call: the
+	 * `auth` of the sinks that serve HTTP (experimental). The token is read
+	 * from the value `authorization` (`Bearer <token>`; another with
+	 * `header`), which `register` fills from the HTTP headers and the
+	 * request `_meta`. An `authenticator` given in the hooks replaces it.
+	 */
+	readonly auth?: HttpOptions["auth"];
+}
+
+/** What the `mcpTools` sink takes that JSON cannot hold: `mcpTools(options, hooks)`. */
+export interface McpToolsHooks {
+	/**
+	 * Who calls a tool: `request.header(name)` reads the values of the call
+	 * (`extra.values`), and `request.native` is the `extra` itself. Asked
+	 * for each operation with an `access` other than `public`; without it
+	 * (and without `auth`) those tools answer a 401 problem.
+	 */
+	readonly authenticator?: Authenticator;
 }
 
 /** One MCP tool: what `tools/list` returns for it. */
@@ -43,6 +66,14 @@ export interface McpToolDefinition {
 	};
 	/** The operation id the tool runs (`"Users.register"`). */
 	readonly operation: string;
+	/**
+	 * Hints for the client, from the route the use case declares: a `get` is
+	 * read-only, a `delete` destructive. Absent without a route.
+	 */
+	readonly annotations?: {
+		readonly readOnlyHint: boolean;
+		readonly destructiveHint: boolean;
+	};
 }
 
 /**
@@ -52,6 +83,11 @@ export interface McpToolDefinition {
  */
 export interface McpCallExtra {
 	readonly values?: Readonly<Record<string, string | undefined>>;
+	/**
+	 * Who calls, when the host already knows: used as is, in place of the
+	 * authenticator. `null` is an anonymous caller.
+	 */
+	readonly principal?: Principal | null;
 }
 
 /** The result of a tool call, as MCP expects it. */
@@ -83,7 +119,9 @@ const isObject = (value: unknown): value is Obj =>
 function validate(options: McpToolsOptions): string | undefined {
 	const given = options as unknown as Obj;
 	for (const key of Object.keys(given)) {
-		if (!["name", "version", "prefix", "include", "context"].includes(key)) {
+		if (
+			!["name", "version", "prefix", "include", "context", "auth"].includes(key)
+		) {
 			return `mcpTools has no option "${key}".`;
 		}
 	}
@@ -114,7 +152,20 @@ function validate(options: McpToolsOptions): string | undefined {
 			}
 		}
 	}
+	if (given.auth !== undefined) {
+		return httpOptionsIssue({ auth: options.auth } as HttpOptions, "mcpTools");
+	}
 	return undefined;
+}
+
+/** What the access of an operation asks of the caller, for the description of its tool. */
+function accessNote(operation: OperationDescriptor): string | undefined {
+	const access = operation.access;
+	if (!access || access.public === true) return undefined;
+	const scopes = access.scopes ?? [];
+	return scopes.length > 0
+		? `Requires an authenticated caller with the scopes: ${scopes.join(", ")}.`
+		: "Requires an authenticated caller.";
 }
 
 const kebab = (text: string) =>
@@ -133,9 +184,12 @@ const text = (value: unknown, isError?: true): McpToolResult => ({
  * `{prefix}{command}_{operation}` in snake case (`users_register`).
  *
  * - `inputSchema` is the JSON Schema of the operation input (inline).
- * - A call runs `operation.invoke(args, { context })`. The context comes from
- *   `extra.values` through the `context` option; richer rules, such as
- *   authentication, are a `transform` stage that wraps `invoke`.
+ * - A call runs `operation.invoke(args, { context, principal })`. The context
+ *   comes from `extra.values` through the `context` option.
+ * - An operation with an `access` asks who calls: `extra.principal`, else
+ *   the `authenticator` hook, else the token of `auth`. The caller is checked
+ *   before the tool runs (a 401 or 403 problem), and with neither such a tool
+ *   always answers 401. Its description says what it requires.
  * - Success is one text content with the response as JSON (`outputValueOf`:
  *   sensitive values masked). An error is `isError: true` with the
  *   `problemOf` JSON as text, whose `status` is the one of `statusOf`
@@ -143,10 +197,18 @@ const text = (value: unknown, isError?: true): McpToolResult => ({
  * - The result has `tools`, `call(name, args, extra)`, `register(server)`
  *   (handlers on a low-level SDK `Server`) and `server()` (a ready one).
  */
-export const mcpTools = sinkOf<McpTools, McpToolsOptions>({
+export const mcpTools = sinkOf<McpTools, McpToolsOptions, McpToolsHooks>({
 	name: "mcpTools",
 	validate,
-	build: (operations, options, { output }) => {
+	build: (operations, options, { output }, hooks) => {
+		let authenticator = hooks?.authenticator;
+		if (!authenticator && options.auth) {
+			const { header, cookie, ...jwt } = options.auth.jwt;
+			authenticator = jwtOf(jwt).authenticator({
+				...(header === undefined ? {} : { header }),
+				...(cookie === undefined ? {} : { cookie }),
+			});
+		}
 		const prefix = options.prefix ?? "";
 		const mapping = options.context ?? {};
 		const include = options.include;
@@ -182,6 +244,7 @@ export const mcpTools = sinkOf<McpTools, McpToolsOptions>({
 			const description = [
 				operation.description ?? `${operation.command}.${operation.name}`,
 				operation.deprecated ? "Deprecated." : undefined,
+				accessNote(operation),
 			]
 				.filter(Boolean)
 				.join(" ");
@@ -195,6 +258,14 @@ export const mcpTools = sinkOf<McpTools, McpToolsOptions>({
 						type: "object",
 					} as McpToolDefinition["inputSchema"],
 					operation: operation.id,
+					...(operation.route
+						? {
+								annotations: {
+									readOnlyHint: operation.route.method === "get",
+									destructiveHint: operation.route.method === "delete",
+								},
+							}
+						: {}),
 				}),
 			});
 		}
@@ -214,7 +285,7 @@ export const mcpTools = sinkOf<McpTools, McpToolsOptions>({
 				);
 			}
 			const { operation } = entry;
-			const options_: { context?: unknown } = {};
+			const options_: { context?: unknown; principal?: Principal | null } = {};
 			if (operation.context) {
 				const raw: Record<string, string | undefined> = {};
 				for (const key of Object.keys(operation.context.properties)) {
@@ -224,6 +295,20 @@ export const mcpTools = sinkOf<McpTools, McpToolsOptions>({
 				options_.context = coerceTextValues(operation.context, raw);
 			}
 			try {
+				if (operation.access && operation.access.public !== true) {
+					const values = extra?.values ?? {};
+					options_.principal =
+						extra?.principal !== undefined
+							? extra.principal
+							: authenticator
+								? await authenticator({
+										header: (name) => values[name],
+										cookie: () => undefined,
+										operation,
+										native: extra,
+									})
+								: null;
+				}
 				const response = await operation.invoke(args ?? {}, options_);
 				return text(outputValueOf(response) ?? null);
 			} catch (error) {
@@ -234,10 +319,11 @@ export const mcpTools = sinkOf<McpTools, McpToolsOptions>({
 
 		const register = (server: Server) => {
 			server.setRequestHandler(ListToolsRequestSchema, async () => ({
-				tools: tools.map(({ name, description, inputSchema }) => ({
+				tools: tools.map(({ name, description, inputSchema, annotations }) => ({
 					name,
 					description,
 					inputSchema,
+					...(annotations ? { annotations } : {}),
 				})),
 			}));
 			server.setRequestHandler(

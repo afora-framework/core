@@ -272,6 +272,51 @@ function canonicalGenericOptions(options: Json): Json {
 	return rest;
 }
 
+/**
+ * The `route` and `access` of a use case as `useCaseOf` keeps them: the
+ * method and the header names in lower case, the keys in one order, and no
+ * `public: false`.
+ */
+function canonicalRouting(value: Json): Json {
+	const out: Json = {};
+	const { route, access } = value;
+	if (isObject(route)) {
+		const headers = isObject(route.headers)
+			? Object.fromEntries(
+					Object.entries(route.headers).map(([key, name]) => [
+						key,
+						typeof name === "string" ? name.toLowerCase() : name,
+					]),
+				)
+			: route.headers;
+		out.route = {
+			method:
+				typeof route.method === "string"
+					? route.method.toLowerCase()
+					: route.method,
+			...(route.path === undefined ? {} : { path: route.path }),
+			...(route.status === undefined ? {} : { status: route.status }),
+			...(route.query === undefined ? {} : { query: route.query }),
+			...(headers === undefined ? {} : { headers }),
+			...(route.cookie === undefined ? {} : { cookie: route.cookie }),
+			...(route.setCookie === undefined ? {} : { setCookie: route.setCookie }),
+		};
+	} else if (route !== undefined) out.route = route;
+	if (isObject(access)) {
+		out.access =
+			access.public === true
+				? { public: true }
+				: {
+						...(access.scopes === undefined ? {} : { scopes: access.scopes }),
+						...(access.owner === undefined ? {} : { owner: access.owner }),
+						...(access.context === undefined
+							? {}
+							: { context: access.context }),
+					};
+	} else if (access !== undefined) out.access = access;
+	return out;
+}
+
 function canonicalUseCase(value: Json): Json {
 	const tags = keep(value.tags);
 	if (typeof value.generic === "string") {
@@ -287,6 +332,7 @@ function canonicalUseCase(value: Json): Json {
 				: {}),
 			...(tags ? { tags } : {}),
 			...(value.deprecated === true ? { deprecated: true } : {}),
+			...canonicalRouting(value),
 		};
 	}
 	const errors = keep(value.errors);
@@ -305,6 +351,7 @@ function canonicalUseCase(value: Json): Json {
 			: {}),
 		...(tags ? { tags } : {}),
 		...(value.deprecated === true ? { deprecated: true } : {}),
+		...canonicalRouting(value),
 		input: canonicalBlueprintRef(value.input),
 		response: canonicalBlueprintRef(value.response),
 		...(value.context === undefined

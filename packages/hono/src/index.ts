@@ -1,26 +1,20 @@
+import { InvalidOutputStage, stripUndeclared } from "@afora/core";
 import {
-	InvalidOutputStage,
-	type OpenAPISinkOptions,
-	openapi,
-	type RouteOptions,
-	stripUndeclared,
-} from "@afora/core";
-import {
-	coerceTextValues,
-	type OperationDescriptor,
+	type Authenticator,
+	compileRoutes,
+	HTTP_OPTION_KEYS,
+	type HttpOptions,
+	type HttpRequest,
+	type HttpResult,
+	httpOptionsIssue,
 	type OperationRoute,
 	operationRoutes,
-	outputValueOf,
 	PROBLEM_MEDIA_TYPE,
-	problemOf,
-	ROUTE_OPTION_KEYS,
 	requestIdHeaderOf,
-	routeOptionsIssue,
 	sinkOf,
 	stageCatalogOf,
-	statusOf,
 } from "@afora/core/adapters";
-import { type Context, Hono } from "hono";
+import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { InvalidWebhookSignature, WebhookSecretMissing } from "./exceptions";
 import {
 	signatureHeadersOf,
@@ -41,34 +35,38 @@ export {
 
 /**
  * The options of the `hono` sink. JSON, so the stage can live in an
- * `afora.json`. The routing options (`basePath`, `route`, `responses`,
- * `requestId`, `security`) are those of the `openapi` sink, so the served
- * routes and the document agree.
+ * `afora.json`: the options of every sink that serves HTTP (`basePath`,
+ * `route`, `responses`, `requestId`, `security`, `docs`, `debug`,
+ * `context`; the `variables` of `context` are what a Hono middleware set
+ * with `c.set`), plus `webhooks`.
  */
-export interface HonoOptions extends RouteOptions {
-	/** Serves the OpenAPI document of the same operations at `path`. */
-	readonly docs?: {
-		readonly path: string;
-		readonly info: OpenAPISinkOptions["info"];
-		readonly servers?: OpenAPISinkOptions["servers"];
-	};
-	/** Adds the `trace` to problems and the real `detail` to 5xx ones. Off by default. */
-	readonly debug?: boolean;
-	/**
-	 * The context of an operation, by context key: from request headers
-	 * (`{ headers: { token: "authorization" } }`) and from variables a Hono
-	 * middleware set with `c.set` (`{ variables: { caller: "caller" } }`).
-	 */
-	readonly context?: {
-		readonly headers?: { readonly [contextKey: string]: string };
-		readonly variables?: { readonly [contextKey: string]: string };
-	};
+export interface HonoOptions extends HttpOptions {
 	/**
 	 * Operations that receive webhooks, by operation id: the signature of each
 	 * request is verified over the raw body before it is parsed (a 401 problem
 	 * otherwise). See {@link WebhookOptions}.
 	 */
 	readonly webhooks?: { readonly [operationId: string]: WebhookOptions };
+}
+
+/**
+ * What the `hono` sink takes that JSON cannot hold, as the second argument
+ * of `hono(options, hooks)`.
+ */
+export interface HonoHooks {
+	/**
+	 * Who calls, from the credentials of a request (`request.native` is the
+	 * Hono `Context`). Asked for each operation with an `access` other than
+	 * `public`; without it those operations answer 401.
+	 */
+	readonly authenticator?: Authenticator;
+	/** Hono middlewares, run in order before every route of the sink. */
+	readonly middlewares?: readonly MiddlewareHandler[];
+	/**
+	 * The Hono app to add the routes to, instead of a new one: its own
+	 * middlewares, `notFound` and `onError` are kept.
+	 */
+	readonly app?: Hono;
 }
 
 type Obj = Record<string, unknown>;
@@ -86,77 +84,11 @@ function onlyKeys(value: Obj, allowed: readonly string[], where: string) {
 
 function validate(options: HonoOptions): string | undefined {
 	const given = options as unknown as Obj;
-	const bad = onlyKeys(
-		given,
-		[...ROUTE_OPTION_KEYS, "docs", "debug", "context", "webhooks"],
-		"hono",
-	);
+	const bad = onlyKeys(given, [...HTTP_OPTION_KEYS, "webhooks"], "hono");
 	if (bad) return bad;
-	const routing = routeOptionsIssue(options, "hono");
-	if (routing) return routing;
-	if (given.debug !== undefined && typeof given.debug !== "boolean") {
-		return "Expected hono.debug to be a boolean.";
-	}
-	const { docs, context, webhooks } = given;
-	if (docs !== undefined) {
-		if (!isObject(docs)) return "Expected hono.docs to be an object.";
-		const docsBad = onlyKeys(docs, ["path", "info", "servers"], "hono.docs");
-		if (docsBad) return docsBad;
-		if (
-			typeof docs.path !== "string" ||
-			!docs.path.startsWith("/") ||
-			/[{}?#\s:*]/.test(docs.path)
-		) {
-			return 'Expected hono.docs.path to be a path such as "/openapi.json".';
-		}
-		// info and servers are checked by the openapi sink, with its messages.
-		try {
-			openapi({
-				info: docs.info,
-				...(docs.servers ? { servers: docs.servers } : {}),
-			} as OpenAPISinkOptions);
-		} catch (error) {
-			const reason = (error as { details?: { reason?: string } }).details
-				?.reason;
-			return (reason ?? "Expected hono.docs to be valid.").replaceAll(
-				"openapi.",
-				"hono.docs.",
-			);
-		}
-	}
-	if (context !== undefined) {
-		if (!isObject(context)) return "Expected hono.context to be an object.";
-		const contextBad = onlyKeys(
-			context,
-			["headers", "variables"],
-			"hono.context",
-		);
-		if (contextBad) return contextBad;
-		const { headers, variables } = context;
-		if (headers !== undefined) {
-			if (!isObject(headers)) {
-				return "Expected hono.context.headers to be an object.";
-			}
-			for (const [key, name] of Object.entries(headers)) {
-				if (typeof name !== "string" || !HEADER_NAME.test(name)) {
-					return `Expected hono.context.headers["${key}"] to be a header name.`;
-				}
-			}
-		}
-		if (variables !== undefined) {
-			if (!isObject(variables)) {
-				return "Expected hono.context.variables to be an object.";
-			}
-			for (const [key, name] of Object.entries(variables)) {
-				if (typeof name !== "string" || name === "") {
-					return `Expected hono.context.variables["${key}"] to be the name of a variable.`;
-				}
-				if (isObject(headers) && Object.hasOwn(headers, key)) {
-					return `hono.context maps "${key}" both from a header and from a variable; keep one.`;
-				}
-			}
-		}
-	}
+	const shared = httpOptionsIssue(options, "hono");
+	if (shared) return shared;
+	const { webhooks } = given;
 	if (webhooks !== undefined) {
 		if (!isObject(webhooks)) return "Expected hono.webhooks to be an object.";
 		for (const [id, entry] of Object.entries(webhooks)) {
@@ -303,19 +235,47 @@ function withWebhooks(
 	return copy;
 }
 
-function problemResponse(body: unknown, status: number): Response {
-	return new Response(JSON.stringify(body), {
-		status,
-		headers: { "content-type": PROBLEM_MEDIA_TYPE },
-	});
+/** The response of a result of the route table, as is. */
+function send(result: HttpResult): Response {
+	if (result.cookies.length === 0) {
+		return new Response(result.body, {
+			status: result.status,
+			headers: result.headers as Record<string, string>,
+		});
+	}
+	const headers = new Headers(result.headers as Record<string, string>);
+	for (const cookie of result.cookies) headers.append("set-cookie", cookie);
+	return new Response(result.body, { status: result.status, headers });
 }
 
-function requestProblem(title: string, detail: string): Response {
-	return problemResponse(
-		{ type: `urn:afora:exception:${title}`, title, status: 400, detail },
-		400,
-	);
+/**
+ * A Hono request, as the route table reads it; `body` replaces the body,
+ * once read. A class, so a request costs one object and no closures.
+ */
+class HonoRequest implements HttpRequest {
+	constructor(
+		readonly native: Context,
+		private readonly body?: string,
+	) {}
+	param(name: string) {
+		return this.native.req.param(name);
+	}
+	query() {
+		return this.native.req.query();
+	}
+	header(name: string) {
+		return this.native.req.header(name);
+	}
+	text() {
+		return this.body === undefined ? this.native.req.text() : this.body;
+	}
+	variable(name: string) {
+		return (this.native.get as (name: string) => unknown)(name);
+	}
 }
+
+const requestOf = (c: Context, body?: string): HttpRequest =>
+	new HonoRequest(c, body);
 
 /** A request id worth propagating: visible ASCII, at most 200 characters. */
 const REQUEST_ID = /^[\x21-\x7e]{1,200}$/;
@@ -327,37 +287,38 @@ function honoPath(path: string): string {
 
 /**
  * A Hono app that serves the operations: `POST {basePath}/{command}/{operation}`
- * per operation (kebab-case; `route` changes the method, path and status as
- * in the `openapi` sink, so the two documents agree).
+ * per operation (kebab-case), or the route its use case declares; `route`
+ * changes the method, path and status as in the `openapi` sink, so the two
+ * agree. The requests are handled by the route table of the core
+ * (`compileRoutes`), as in every sink that serves HTTP:
  *
- * - Body methods read a JSON body, `get` and `delete` the query string, whose
- *   scalars are coerced to numbers and booleans where the input takes them.
- *   A `{name}` segment of the path fills the input key `name` (coerced the
- *   same way), over the body or query. The input is validated by the
- *   operation (a 400 problem with `issues`).
+ * - Body methods read a JSON body, `get` and `delete` the query string, with
+ *   what the route places over it: `{name}` segments of the path, and the
+ *   query keys, headers and cookies a use case route declares. Text is
+ *   coerced to the numbers and booleans the input takes, and the operation
+ *   validates it (a 400 problem with `issues`).
  * - The context comes from `context.headers` (`{ contextKey: headerName }`,
  *   coerced) and `context.variables` (`{ contextKey: variableName }`, what a
  *   middleware set with `c.set`, as is); a missing one leaves the key out.
- *   Anything richer, such as authentication, is a middleware or a `transform`
- *   stage that wraps `invoke`.
- * - Success is the `route` status (`200` by default) with the response as
- *   JSON (`outputValueOf`: sensitive values masked), or no body for `204`,
- *   plus the `responses` headers. Errors are `application/problem+json`, with
- *   the status of `statusOf` (the output `statuses` first). An unknown route
- *   is a 404 problem, and anything thrown outside an operation a 500 one.
+ * - An operation with an `access` asks `hooks.authenticator` who calls, and
+ *   answers 401 or 403 when the caller may not.
+ * - Success is the route status (`200` by default) with the response as
+ *   JSON (sensitive values masked), or no body for `204`, plus the
+ *   `responses` headers. Errors are `application/problem+json`, with the
+ *   status of `statusOf` (the output `statuses` first). An unknown route is
+ *   a 404 problem, and anything thrown outside an operation a 500 one.
  *   `requestId` puts the request id on every response.
- * - `security` only reaches the document: the sink does not enforce it.
  * - `docs.path` serves the `openapi` document of the same operations.
+ *
+ * `hooks` (the second argument) holds what is not JSON: `authenticator`,
+ * `middlewares` and an `app` to add the routes to.
  */
-export const hono = sinkOf<Hono, HonoOptions>({
+export const hono = sinkOf<Hono, HonoOptions, HonoHooks>({
 	name: "hono",
 	validate,
-	build: (operations, options, { output }) => {
-		const routes = operationRoutes(operations, options, "hono");
-		const debug = options.debug === true;
-		const headers = options.context?.headers ?? {};
-		const variables = options.context?.variables ?? {};
+	build: (operations, options, context, hooks) => {
 		const webhooks = options.webhooks ?? {};
+		const routes = operationRoutes(operations, options, "hono");
 		for (const id of Object.keys(webhooks)) {
 			const route = routes.get(id);
 			const reason = !route
@@ -369,182 +330,102 @@ export const hono = sinkOf<Hono, HonoOptions>({
 				throw new InvalidOutputStage({ source: "hono", details: { reason } });
 			}
 		}
-		const app = new Hono();
+		const { webhooks: _, ...shared } = options;
+		const table = compileRoutes(operations, shared, context, {
+			source: "hono",
+			...(hooks?.authenticator ? { authenticator: hooks.authenticator } : {}),
+			...(Object.keys(webhooks).length > 0
+				? {
+						document: (document: unknown) =>
+							withWebhooks(document, webhooks, routes),
+					}
+				: {}),
+		});
 
+		const app = hooks?.app ?? new Hono();
+		if (!hooks?.app) {
+			app.notFound((c) => send(table.notFound(requestOf(c))));
+			app.onError((error, c) =>
+				send(table.failure(error, { request: requestOf(c) })),
+			);
+		}
+		// The results of the table carry the request id; this covers what the
+		// table did not answer (a 404 of a parent app, a middleware response).
 		const requestIdHeader = requestIdHeaderOf(options);
 		if (requestIdHeader) {
 			app.use(async (c, next) => {
+				await next();
+				if (c.res.headers.has(requestIdHeader)) return;
 				const sent = c.req.header(requestIdHeader);
-				const id =
+				c.res.headers.set(
+					requestIdHeader,
 					sent !== undefined && REQUEST_ID.test(sent)
 						? sent
-						: crypto.randomUUID();
-				await next();
-				c.res.headers.set(requestIdHeader, id);
+						: crypto.randomUUID(),
+				);
 			});
 		}
+		for (const middleware of hooks?.middlewares ?? []) app.use(middleware);
 
-		const fail = (error: unknown, operation?: OperationDescriptor) => {
-			const status = statusOf(error, operation, output.statuses);
-			return problemResponse(problemOf(error, { status, debug }), status);
-		};
-		/** A 401 for a bad signature, unless the output `statuses` say otherwise. */
-		const unauthorized = (error: Error & { readonly name: string }) => {
-			const status = Object.hasOwn(output.statuses, error.name)
-				? (output.statuses[error.name] as number)
-				: 401;
-			return problemResponse(problemOf(error, { status, debug }), status);
-		};
-
-		app.notFound(() =>
-			problemResponse(
-				{
-					type: "urn:afora:exception:NotFound",
-					title: "NotFound",
-					status: 404,
-					detail: "No operation is served at this method and path.",
-				},
-				404,
-			),
-		);
-		app.onError((error) => fail(error));
-
-		for (const operation of operations) {
-			const route = routes.get(operation.id) as OperationRoute;
-			const { method, path, parameters, status } = route;
-			const hasBody = method !== "get" && method !== "delete";
-			const declared = operation.context
-				? Object.keys(operation.context.properties)
-				: [];
-			const headerKeys = declared.filter((key) => Object.hasOwn(headers, key));
-			const variableKeys = declared.filter((key) =>
-				Object.hasOwn(variables, key),
-			);
-
+		for (const route of table.routes) {
+			const { operation } = route;
 			const webhook = Object.hasOwn(webhooks, operation.id)
 				? webhooks[operation.id]
 				: undefined;
-
-			app.on(method.toUpperCase(), honoPath(path), async (c) => {
-				let input: unknown;
-				if (webhook) {
-					// The signature covers the bytes as sent: read them before any decoding.
-					const body = new Uint8Array(await c.req.arrayBuffer());
-					const secrets = secretsOf(c, webhook);
-					if (secrets.length === 0) {
-						return fail(
+			const path = honoPath(route.path);
+			if (!webhook) {
+				app.on(route.method.toUpperCase(), path, (c) =>
+					route.handle(new HonoRequest(c)).then(send),
+				);
+				continue;
+			}
+			app.on(route.method.toUpperCase(), path, async (c) => {
+				// The signature covers the bytes as sent: read them before any decoding.
+				const body = new Uint8Array(await c.req.arrayBuffer());
+				const secrets = secretsOf(c, webhook);
+				if (secrets.length === 0) {
+					return send(
+						table.failure(
 							new WebhookSecretMissing({
 								source: "hono",
 								details: { variables: [webhook.secret.env].flat() },
 							}),
-						);
-					}
-					const failure = await verifyWebhook(webhook, secrets, {
-						header: (name) => c.req.header(name) ?? undefined,
-						body,
-					});
-					if (failure) {
-						return unauthorized(
+							{ request: requestOf(c) },
+						),
+					);
+				}
+				const failure = await verifyWebhook(webhook, secrets, {
+					header: (name) => c.req.header(name) ?? undefined,
+					body,
+				});
+				if (failure) {
+					// A 401, unless the output `statuses` say otherwise.
+					return send(
+						table.failure(
 							new InvalidWebhookSignature({
 								source: "hono",
 								details: { scheme: webhook.scheme, reason: failure },
 							}),
-						);
-					}
-					const text = new TextDecoder().decode(body);
+							{ status: 401, request: requestOf(c) },
+						),
+					);
+				}
+				let text = new TextDecoder().decode(body);
+				if (webhook.unknownKeys === "strip" && text.trim() !== "") {
 					try {
-						input = text.trim() === "" ? {} : JSON.parse(text);
+						text = JSON.stringify(
+							stripUndeclared(operation.input, JSON.parse(text)),
+						);
 					} catch {
-						return requestProblem(
-							"InvalidRequestBody",
-							"The request body is not valid JSON.",
-						);
+						// Not JSON: the route answers the 400 of an invalid body.
 					}
-					if (webhook.unknownKeys === "strip") {
-						input = stripUndeclared(operation.input, input);
-					}
-				} else if (hasBody) {
-					const text = await c.req.text();
-					try {
-						input = text.trim() === "" ? {} : JSON.parse(text);
-					} catch {
-						return requestProblem(
-							"InvalidRequestBody",
-							"The request body is not valid JSON.",
-						);
-					}
-				} else {
-					input = coerceTextValues(operation.input, c.req.query());
 				}
-				if (parameters.length > 0 && isObject(input)) {
-					const texts: Record<string, string | undefined> = {};
-					for (const name of parameters) texts[name] = c.req.param(name);
-					// The path wins over the body or the query.
-					input = {
-						...input,
-						...coerceTextValues(operation.input, texts),
-					};
-				}
-
-				const call: { context?: unknown } = {};
-				if (operation.context) {
-					const raw: Record<string, string | undefined> = {};
-					for (const key of headerKeys) {
-						raw[key] = c.req.header(headers[key] as string) ?? undefined;
-					}
-					const context = coerceTextValues(operation.context, raw);
-					for (const key of variableKeys) {
-						const value = (c.get as (name: string) => unknown)(
-							variables[key] as string,
-						);
-						if (value !== undefined) context[key] = value;
-					}
-					call.context = context;
-				}
-
-				try {
-					const response = await operation.invoke(input, call);
-					return status === 204
-						? c.body(null, 204, route.headers)
-						: c.json(
-								(outputValueOf(response) ?? null) as never,
-								status,
-								route.headers,
-							);
-				} catch (error) {
-					return fail(error, operation);
-				}
+				return send(await route.handle(requestOf(c, text)));
 			});
 		}
 
-		if (options.docs) {
-			const { path, info, servers } = options.docs;
-			const taken = [...routes.values()].some(
-				(route) => route.method === "get" && route.path === path,
-			);
-			if (taken) {
-				throw new InvalidOutputStage({
-					source: "hono",
-					details: {
-						reason: `hono.docs.path "${path}" collides with a GET operation route.`,
-					},
-				});
-			}
-			const routing: Record<string, unknown> = {};
-			for (const key of ROUTE_OPTION_KEYS) {
-				if (options[key] !== undefined) routing[key] = options[key];
-			}
-			const document = openapi({
-				info,
-				...(servers ? { servers } : {}),
-				...(routing as RouteOptions),
-			}).build(operations, { output });
-			const served =
-				Object.keys(webhooks).length > 0
-					? withWebhooks(document, webhooks, routes)
-					: document;
-			app.get(path, (c) => c.json(served as never));
-		}
+		const docs = table.docs;
+		if (docs) app.get(docs.path, (c) => send(docs.handle(requestOf(c))));
 
 		return app;
 	},

@@ -76,7 +76,7 @@ export async function createServer(
 		{
 			capabilities: { tools: {}, resources: {} },
 			instructions:
-				"Builds a domain from an afora.json: afora_catalog to see what exists, afora_spec_read, then afora_spec_upsert (one declaration at a time) or afora_spec_write, afora_spec_validate and afora_generate. Read the resource afora://spec/guide for the format and rules. Never edit the generated files; change the spec.",
+				"Works on one afora project. afora_project shows what it has: entities, operations, the route each is served at and who may call it; it reads a TypeScript application directly (--app), with no afora.json. To build from an afora.json: afora_catalog to see what exists, afora_spec_read, then afora_spec_upsert (one declaration at a time) or afora_spec_write, afora_spec_validate and afora_generate. Read the resource afora://spec/guide for the format, the rules, when a use case is steps and when it is code, and how to write one by hand. Never edit the generated files; change the spec.",
 		},
 	);
 

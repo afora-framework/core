@@ -13,6 +13,7 @@ export type {
 export {
 	stages,
 	type WebSocketEndpoint,
+	type WebSocketHooks,
 	type WebSocketOptions,
 	type WsOperation,
 	type WsSession,

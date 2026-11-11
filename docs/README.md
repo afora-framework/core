@@ -1,5 +1,67 @@
 # Documentation
 
+A CRUD API over HTTP, validated, documented and with its guarantees, is four declarations:
+
+```ts
+import {
+	blueprintOf,
+	commandOf,
+	entityOf,
+	outputOf,
+	repositoryOf,
+	resourceOf,
+} from "@afora/core";
+import { hono } from "@afora/hono";
+
+// What a post is: each field validates and normalizes its value
+export class Post extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.text, slug: ctx.slug, body: ctx.text })),
+	{ unique: ["slug"], change: ["title", "body"] },
+) {}
+
+// Where posts are kept: in memory, until you name a provider
+const Posts = repositoryOf({
+	entity: Post,
+	actions: ["findById", "findPage", "create", "update", "delete"],
+});
+
+// What can be done with them: the five operations of a REST resource
+const Blog = commandOf({
+	name: "Blog",
+	useCases: resourceOf(Posts, { path: "/posts" }),
+});
+
+// How they are served: an HTTP API, with its OpenAPI document
+const Api = outputOf({
+	name: "Api",
+	commands: [Blog],
+	pipe: [
+		hono({
+			docs: {
+				path: "/openapi.json",
+				info: { title: "Blog", version: "1.0.0" },
+			},
+		}),
+	],
+});
+
+export const api = Api.build();
+
+if (import.meta.main) Bun.serve({ fetch: api.fetch });
+```
+
+That is `POST /posts`, `GET /posts`, `GET /posts/{id}`, `PATCH /posts/{id}`, `DELETE /posts/{id}` and `GET /openapi.json`, with a 400 and its issues for an invalid body, a 409 for a slug that exists, and no key accepted that the blueprint does not declare. The [tutorial](tutorial.md) starts from this file and adds a rule of your own, sign in and access, one step at a time.
+
+## Start here
+
+| Page                                              | For                                                                          |
+| ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [Tutorial](tutorial.md)                           | Building an API step by step, on Bun or Node.                                |
+| [Coming from Hono + Zod](coming-from-hono-zod.md) | The same endpoint before and after, what moves where, and what you can keep. |
+| [afora.json](afora-json.md)                       | Writing the application as data, by hand or with an agent.                   |
+
+## Reference
+
 The [README](../README.md) has the install, a quick start and an overview. These pages are the reference, one per concept. The concepts build on each other, so reading them in this order works.
 
 | Page                                    | What it covers                                                                                            |
@@ -14,6 +76,8 @@ The [README](../README.md) has the install, a quick start and an overview. These
 | [Commands](commands.md)                 | Operations, use case plugins by catalog, transactions, event policies and `publishEvents`.                |
 | [Standard use cases](std-use-cases.md)  | `ctx.create(Posts)` and the others: what each needs, takes and does, their options, ownership.            |
 | [Outputs](outputs.md)                   | Stages, the `select` and `openapi` ones, `statusOf` and `problemOf`, catalogs of stages.                  |
+| [HTTP providers](providers.md)          | Hono, Fastify, Express, Elysia: the same options and hooks, one behavior; writing a provider.             |
+| [Access](auth.md)                       | `access` and `@Access`: scopes, owner, context from the caller; `Unauthenticated` and `Forbidden`.        |
 | [Applications](applications.md)         | The manifest of declarations, composition, bound providers, `describe()`.                                 |
 | [Exceptions](exceptions.md)             | Layers, `trace`, `guard`.                                                                                 |
 | [Logging](logging.md)                   | `log` and log providers, the `Logger` dependency, `logFrom`; what afora logs.                             |
@@ -36,4 +100,4 @@ Every export belongs to a tier, and the tier says where to import it from. [API 
 
 Only stable, adapters and testing are the contract of [VERSIONING.md](../VERSIONING.md): before 1.0 a break there is marked **Breaking.** in the CHANGELOG with a Migration block (before and after), and from 1.0 on it waits for a major. Experimental exports may change in any release, and internal code is not the API. Application code needs only `@afora/core`.
 
-Other documents: [VERSIONING.md](../VERSIONING.md) says what is stable, [CHANGELOG.md](../CHANGELOG.md) lists every change, and each package has its own README: [codegen](../packages/codegen/README.md), [mcp](../packages/mcp/README.md), [hono](../packages/hono/README.md), [ws](../packages/ws/README.md), [drizzle](../packages/drizzle/README.md) and [dynamodb](../packages/dynamodb/README.md).
+Other documents: [VERSIONING.md](../VERSIONING.md) says what is stable, [CHANGELOG.md](../CHANGELOG.md) lists every change, and each package has its own README: [codegen](../packages/codegen/README.md), [mcp](../packages/mcp/README.md), [hono](../packages/hono/README.md), [fastify](../packages/fastify/README.md), [express](../packages/express/README.md), [elysia](../packages/elysia/README.md), [ws](../packages/ws/README.md), [drizzle](../packages/drizzle/README.md) and [dynamodb](../packages/dynamodb/README.md).

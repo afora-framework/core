@@ -238,6 +238,41 @@ They generate `before: checkEntry, after: recordEntry, dependencies: { contentTy
 
 The validator checks that the use case exists (`unknown_generic`), that the repository is declared (`unknown_repository`) and has the actions (`generic_requires_action`), that the entity has the plugins (`generic_requires_plugin`), and the shape of the options and the keys they name (`invalid_generic_option`; `invalid_import` for `before` or `after`, and the issues of a use case's `dependencies` for theirs). What an option asks of the entity beyond its keys, such as omitting a required key, is checked by the use case itself when the generated code loads, which throws `UseCaseUnavailable`. `extractSpec` gives the declaration back as written, from `describe().useCases.<Name>.generic`, and needs no import mapped, a hashing function included, but for `before` and `after`.
 
+## Routes and access
+
+A use case in `afora.json` takes the same `route` and `access` as in TypeScript (see [Routes](use-cases.md#routes) and [Access](auth.md)), beside its description:
+
+```json
+"useCases": {
+	"ListPosts": {
+		"route": {
+			"method": "get",
+			"path": "/posts/{slug}",
+			"headers": { "locale": "accept-language" },
+			"cookie": { "session": "sid" }
+		},
+		"access": { "scopes": ["posts:read"], "context": { "userId": "subject" } },
+		"input": "ListPostsInput",
+		"response": "PostList",
+		"context": { "fields": { "userId": "id" } },
+		"implementation": { "import": "../handlers/list-posts#ListPosts" }
+	},
+	"RemovePost": {
+		"generic": "delete",
+		"repository": "Posts",
+		"route": { "method": "delete", "path": "/posts/{id}", "status": 204 },
+		"access": { "scopes": ["posts:write"] }
+	}
+}
+```
+
+- **Generated as settings.** `route` and `access` become the settings of `useCaseOf`, and options of a standard use case; the generator writes no decorators, so the code runs on Node as it is.
+- **Extracted from either form.** `extractSpec` reads what the class declares, whether it was written with the `route` setting or with `@Route` (and `access` or `@Access`). So a hand-written class may keep its decorators: its generated base carries the same declaration, and declaring the same route or access twice is accepted. A different one throws `InvalidUseCaseDeclaration` when the module loads.
+- **Checked against the spec.** For a use case written in the spec, each key a route places must be a key of the input (`setCookie`, of the response), no key may have two places, the `owner` of an access must name an input key and its `context` keys must be in the context: `invalid_route` and `invalid_access`. For a standard use case only the shape is checked, since its input follows the repository; the generated code checks the rest when it loads.
+- **The route of a sink still wins.** The `route` option of a `hono` (or `fastify`, `express`, `elysia`, `openapi`) stage, by operation id, overrides the method, path and status, as in TypeScript.
+- **Tokens.** `login` and `refresh` take `"token": { "secret": { "env": "JWT_SECRET" }, ... }` in `options`, and a sink `"auth": { "jwt": { "secret": { "env": "JWT_SECRET" } } }`; the secret is always the name of an environment variable (see [Tokens and sessions](auth.md#tokens-and-sessions)).
+- **Hooks are code.** The middlewares and the authenticator of a sink are its second argument, which JSON cannot hold. A stage that needs them is written in a file and named with `{ "import": "./stages.ts#api" }`.
+
 ## Catalogs: providers, stages and event policies
 
 A provider, a stage or an event policy that is not built in is not part of the spec. The spec names it (`"provider": { "use": "drizzle", "options": {...} }`, `{ "sink": "hono" }`, `"events": { "policy": "audit" }`) and a catalog, a codegen option, says which module and export make it.
