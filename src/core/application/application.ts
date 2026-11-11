@@ -968,6 +968,11 @@ function describeRegistry(
 								? { core: (Class as { name: string }).name }
 								: ref;
 						},
+						params: (blueprint) =>
+							fieldsDescriptionOf(
+								(blueprint as AnyBlueprint).properties,
+								scope,
+							),
 					}),
 				} as const);
 	};

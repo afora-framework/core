@@ -110,3 +110,83 @@ describe("run", () => {
 		expect(declare({ run: "a", fn: "x" }).code).toBe("invalid_step");
 	});
 });
+
+describe("run.params", () => {
+	const Params = blueprintOf((ctx) => ({
+		email: ctx.email,
+		times: ctx.number,
+	}));
+
+	test("fn gets the args as the keys of params handled them", async () => {
+		const seen: unknown[] = [];
+		const Case = stepsCase({
+			blueprint: blueprintOf((ctx) => ({ raw: ctx.string, n: ctx.number })),
+			steps: [
+				{
+					run: "record",
+					fn: (email: string, times: number) => {
+						seen.push(email, times);
+					},
+					args: ["$input.raw", "$input.n"],
+					params: Params,
+				},
+				{ return: {} },
+			],
+		});
+		await new Case({ raw: "  ANA@Example.com ", n: 2 }).execute();
+		expect(seen).toEqual(["ana@example.com", 2]);
+	});
+
+	test("an arg params rejects is an InvalidUseCaseStep with its issues, and fn does not run", async () => {
+		let ran = false;
+		const Case = stepsCase({
+			blueprint: blueprintOf((ctx) => ({ raw: ctx.string })),
+			steps: [
+				{
+					run: "record",
+					fn: () => {
+						ran = true;
+					},
+					args: ["$input.raw", "$input.raw"],
+					params: Params,
+				},
+				{ return: {} },
+			],
+		});
+		const error = await new Case({ raw: "nope" }).execute().catch((e) => e);
+		expect(ran).toBe(false);
+		expect(error.name).toBe("InvalidUseCaseStep");
+		expect(error.details).toMatchObject({ index: 0, code: "invalid_args" });
+		expect(error.message).toStartWith('Invalid step 0: the argument "email" ');
+		expect(error.message).toEndWith("(and 1 more).");
+		expect(
+			error.details.issues.map((issue: { path: unknown }) => issue.path),
+		).toEqual([["email"], ["times"]]);
+	});
+
+	test("a reference to a list of the wrong length fails while the steps run", async () => {
+		const Case = stepsCase({
+			blueprint: blueprintOf((ctx) => ({ tags: ctx.listOf(ctx.string) })),
+			steps: [
+				{ run: "record", fn: () => 1, args: "$input.tags", params: Params },
+				{ return: {} },
+			],
+		});
+		const error = await new Case({ tags: ["a"] }).execute().catch((e) => e);
+		expect(error.details).toMatchObject({ code: "invalid_args" });
+		expect(error.message).toContain("declares 2 parameter(s), args gave 1");
+	});
+
+	test("declaration rules", () => {
+		const fn = () => 1;
+		const declare = (step: object) =>
+			invalidStep(() => stepsCase({ steps: [step, { return: {} }] }));
+		expect(declare({ run: "a", fn, params: { email: "x" } }).code).toBe(
+			"invalid_step",
+		);
+		expect(
+			declare({ run: "a", fn, args: ["$input.email"], params: Params }),
+		).toMatchObject({ index: 0, code: "invalid_args" });
+		expect(declare({ run: "a", fn, params: Params }).code).toBe("invalid_args");
+	});
+});

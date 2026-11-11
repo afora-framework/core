@@ -343,6 +343,8 @@ export type StepSpec =
 			/** The function, imported as it is. */
 			readonly fn: ImportRef;
 			readonly args?: readonly StepValueSpec[] | string;
+			/** Checks the `args` when the step runs: each against the field at its position. */
+			readonly params?: BlueprintRefSpec;
 			readonly as?: string;
 	  }
 	| { readonly return: StepValueSpec };

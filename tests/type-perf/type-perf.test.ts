@@ -36,7 +36,9 @@ const CEILING: Record<string, number> = {
 	"use case": 56_600,
 	queries: 53_700,
 	"steps use case": 55_800,
-	"strict steps use case": 64_900,
+	// Raised from 64_900 with the check of `return` against the response
+	// (about 1,900 instantiations, 3%, only with `strictSteps`). Measured plus 1%.
+	"strict steps use case": 66_900,
 	"command and output": 66_700,
 	"named providers": 52_700,
 	// 2% under the target: the next kind of field has to be paid for elsewhere.

@@ -1,4 +1,6 @@
 import { isRecordClass } from "../../blueprint/record-field";
+import type { AnyBlueprint } from "../../blueprint/types/blueprint.interface";
+import type { Issue } from "../../parse/types/parse.interface";
 import { sameValue } from "../../repository/query";
 import { InvalidUseCaseStep } from "../exceptions";
 import { followPath, type ParsedReference, resolveValue } from "./references";
@@ -42,6 +44,39 @@ function isRecordInstance(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * The `args` of a `run` checked by its `params`: each against the key of the
+ * blueprint at its position, given to the function as the keys handled them.
+ */
+function parsedArgs(
+	params: AnyBlueprint,
+	args: readonly unknown[],
+	invalid: (reason: string, code: string, issues?: readonly Issue[]) => never,
+): unknown[] {
+	const keys = Object.keys(params.properties);
+	if (args.length !== keys.length) {
+		invalid(
+			`run.params declares ${keys.length} parameter(s), args gave ${args.length}.`,
+			"invalid_args",
+		);
+	}
+	const result = params.safeParse(
+		Object.fromEntries(keys.map((key, at) => [key, args[at]])),
+	);
+	if (result.issues) {
+		const [first] = result.issues;
+		const more =
+			result.issues.length > 1 ? ` (and ${result.issues.length - 1} more)` : "";
+		return invalid(
+			`the argument "${first?.path.join(".")}" ${first?.message}${more}.`,
+			"invalid_args",
+			result.issues,
+		);
+	}
+	const value = result.value as Record<string, unknown>;
+	return keys.map((key) => value[key]);
+}
+
+/**
  * The `execute` of a use case declared with `steps`: runs them in order, each
  * awaited, over the dependencies `execute` resolved, so that scope, events and
  * trace frames work as in a hand-written `execute`. The wrapper of the
@@ -63,10 +98,14 @@ export async function executeSteps(
 	const value = (raw: unknown): unknown => resolveValue(raw, lookup);
 
 	for (const [index, step] of steps.entries()) {
-		const invalid = (reason: string): never => {
+		const invalid = (
+			reason: string,
+			code = "invalid_target",
+			issues?: readonly Issue[],
+		): never => {
 			throw new InvalidUseCaseStep({
 				source: useCaseName,
-				details: { index, reason, code: "invalid_target" },
+				details: { index, reason, code, ...(issues ? { issues } : {}) },
 			});
 		};
 		const list = (raw: unknown): unknown[] => {
@@ -151,8 +190,14 @@ export async function executeSteps(
 			bind(await child(value(step.input)));
 		} else if (Object.hasOwn(step, "run")) {
 			const fn = step.fn as Method;
+			const args = list(step.args);
 			bind(
-				await fn(...list(step.args), { context: this.context, dependencies }),
+				await fn(
+					...(step.params === undefined
+						? args
+						: parsedArgs(step.params as AnyBlueprint, args, invalid)),
+					{ context: this.context, dependencies },
+				),
 			);
 		} else {
 			// create, update, delete or restore

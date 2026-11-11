@@ -664,6 +664,7 @@ const Step = Type.Union(
 				run: Type.String({ description: "A name, unique in the use case." }),
 				fn: ImportRef,
 				args: StepArgs,
+				params: Type.Optional(BlueprintRef),
 				as: StepAs,
 			},
 			{ additionalProperties: false },

@@ -49,7 +49,7 @@ const SHAPES = {
 	delete: { required: ["delete", "value"], optional: ["as"] },
 	restore: { required: ["restore", "value"], optional: ["as"] },
 	call: { required: ["call", "input"], optional: ["as"] },
-	run: { required: ["run", "fn"], optional: ["args", "as"] },
+	run: { required: ["run", "fn"], optional: ["args", "params", "as"] },
 	return: { required: ["return"], optional: [] },
 } as const;
 
@@ -510,6 +510,27 @@ export function validateSteps(
 				}
 				runs.add(runName as string);
 				checkArgs(index, record.args);
+				if (record.params !== undefined) {
+					if (!isBlueprint(record.params)) {
+						fail(index, "invalid_step", "run.params must be a blueprint.");
+					}
+					const declared = Object.keys(
+						(record.params as AnyBlueprint).properties,
+					).length;
+					const given =
+						record.args === undefined
+							? 0
+							: Array.isArray(record.args)
+								? record.args.length
+								: undefined;
+					if (given !== undefined && given !== declared) {
+						fail(
+							index,
+							"invalid_args",
+							`run.params declares ${declared} parameter(s), args gives ${given}.`,
+						);
+					}
+				}
 				break;
 			}
 			case "return": {
