@@ -11,7 +11,7 @@ import {
 	WATCHED,
 } from "./contenders.ts";
 import { GUARD_DEFAULT, GUARD_LIMITS } from "./guard.limits.ts";
-import { inputOf, KINDS, type Kind } from "./harness.ts";
+import { inputOf, KINDS, type Kind, warmUp } from "./harness.ts";
 
 /** Each case is timed this many times for each contender; the best one counts. */
 const ROUNDS = 9;
@@ -37,10 +37,10 @@ export type Timed = { name: string; best: number };
 export type TimedCase = { scenario: string; kind: Kind; runs: Timed[] };
 
 /**
- * The best time of each named contender on each case. The contenders of a
- * case take turns in every round, so that whatever slows the machine down for
- * a moment slows them all, and the best round of each is the one with the
- * least of it.
+ * The best time of each named contender on each case. Each contender is
+ * warmed up before its first round. The contenders of a case take turns in
+ * every round, so that whatever slows the machine down for a moment slows
+ * them all, and the best round of each is the one with the least of it.
  */
 export function timeCases(
 	cases: Array<{
@@ -70,6 +70,10 @@ export function timeCases(
 	for (let round = 0; round < ROUNDS; round++) {
 		for (const { runs } of timed) {
 			for (const run of runs) {
+				// Before its first timing, a contender runs long enough for the
+				// engine to optimize it (see `warmUp`): sampled too early, a
+				// function can stay unoptimized, and slow, for every round.
+				if (round === 0) warmUp(() => do_not_optimize(run.call()));
 				run.best = Math.min(run.best, timeOf(run.call, run.batch));
 			}
 		}
@@ -104,7 +108,7 @@ export function guard(scenarios: Scenario[]): boolean {
 
 	let passed = true;
 	console.log(
-		`${GUARDED} against ${REFERENCE}, best of ${ROUNDS} rounds (ns per call)\n`,
+		`${GUARDED} against ${REFERENCE}, best of ${ROUNDS} rounds after a warm-up (ns per call)\n`,
 	);
 	for (const { scenario, kind, runs } of timed) {
 		const [reference, guarded, watched] = runs as [Timed, Timed, Timed];

@@ -36,9 +36,9 @@ The same data shape for every library, objects that reject undeclared keys every
 - **6 levels of nesting** (`deep`): `{ name: string (minLength 1, trimmed), count: integer >= 0, child: { ...the same, 6 levels deep } }`. 4 rules broken in the invalid input, at levels 1, 3 and 6.
 - **Small flat object, checks only** (`no-transform`): The flat object with no trim and no lowercase: `{ name: string (minLength 3), email: email, age: integer >= 0 }`. Nothing is transformed, so every library runs its fastest path.
 
-## Results on Bun
+## Results on Bun 1.4.4
 
-### Small flat object, valid input (bun)
+### Small flat object, valid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -58,7 +58,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             | 466.9k |  2142 ns |  2234 ns |  2378 ns | 1.2% |  72.5x slower |
 | Yup validateSync (abortEarly: false)                                                | 229.4k |  4359 ns |  4443 ns |  4883 ns | 2.0% | 147.5x slower |
 
-### Small flat object, invalid input (bun)
+### Small flat object, invalid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -78,7 +78,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             | 145.4k |  6878 ns |  6860 ns |  7107 ns | 0.7% |  76.2x slower |
 | Yup validateSync (abortEarly: false)                                                |  60.1k |  16.6 µs |  17.2 µs |  17.4 µs | 2.5% | 184.4x slower |
 
-### Nested user (address, 5 tags max, 10 addresses), valid input (bun)
+### Nested user (address, 5 tags max, 10 addresses), valid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -98,7 +98,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  67.1k |  14.9 µs |  15.0 µs |  15.3 µs | 1.2% | 158.3x slower |
 | Yup validateSync (abortEarly: false)                                                |  19.0k |  52.5 µs |  54.0 µs |  54.9 µs | 4.1% | 558.2x slower |
 
-### Nested user (address, 5 tags max, 10 addresses), invalid input (bun)
+### Nested user (address, 5 tags max, 10 addresses), invalid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -118,7 +118,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  32.6k |  30.7 µs |  30.7 µs |  31.3 µs | 1.2% |  84.7x slower |
 | Yup validateSync (abortEarly: false)                                                |  11.3k |  88.5 µs |  85.8 µs | 149.0 µs | 2.0% | 244.6x slower |
 
-### API request body (an order with 5 items), valid input (bun)
+### API request body (an order with 5 items), valid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -138,7 +138,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  83.7k |  12.0 µs |  12.0 µs |  12.1 µs | 0.6% |  26.7x slower |
 | Yup validateSync (abortEarly: false)                                                |  20.2k |  49.5 µs |  49.6 µs |  52.4 µs | 2.5% | 110.5x slower |
 
-### API request body (an order with 5 items), invalid input (bun)
+### API request body (an order with 5 items), invalid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -158,7 +158,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  35.8k |  27.9 µs |  28.1 µs |  28.7 µs | 0.9% |  85.2x slower |
 | Yup validateSync (abortEarly: false)                                                |  10.6k |  94.2 µs |  90.8 µs | 177.9 µs | 2.2% | 287.2x slower |
 
-### List of 1,000 items, valid input (bun)
+### List of 1,000 items, valid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |     vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | -------------: |
@@ -178,7 +178,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |    708 |  1.41 ms |  1.36 ms |  2.67 ms | 1.9% |  610.2x slower |
 | Yup validateSync (abortEarly: false)                                                |    183 |  5.45 ms |  6.02 ms |  6.36 ms | 2.1% | 2354.9x slower |
 
-### List of 1,000 items, invalid input (bun)
+### List of 1,000 items, invalid input (Bun)
 
 | Contender                                                                           | ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | ----: | -------: | -------: | -------: | ---: | ------------: |
@@ -198,7 +198,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | TypeBox compiled (Check, then Errors on failure) (no transforms)                    |   457 |  2.19 ms |  2.15 ms |  3.37 ms | 1.5% | 196.5x slower |
 | Yup validateSync (abortEarly: false)                                                |   165 |  6.08 ms |  6.96 ms |  7.87 ms | 3.0% | 545.5x slower |
 
-### Union of 4 variants (12 events), valid input (bun)
+### Union of 4 variants (12 events), valid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -218,7 +218,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | Joi validate (abortEarly: false)                                                    |  22.5k |  44.4 µs |  43.7 µs |  48.2 µs | 2.8% | 255.8x slower |
 | Yup validateSync (abortEarly: false)                                                |  15.7k |  63.7 µs |  61.9 µs | 119.1 µs | 2.0% | 367.3x slower |
 
-### Union of 4 variants (12 events), invalid input (bun)
+### Union of 4 variants (12 events), invalid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -238,7 +238,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | Yup validateSync (abortEarly: false)                                                |  13.2k |  75.6 µs |  78.9 µs |  79.8 µs | 2.8% | 271.6x slower |
 | Joi validate (abortEarly: false)                                                    |  11.9k |  84.3 µs |  82.2 µs | 135.1 µs | 2.0% | 303.0x slower |
 
-### 6 levels of nesting, valid input (bun)
+### 6 levels of nesting, valid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |     vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | -------------: |
@@ -258,7 +258,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             | 158.6k |  6305 ns |  6416 ns |  6569 ns | 1.2% |  556.9x slower |
 | Yup validateSync (abortEarly: false)                                                |  47.9k |  20.9 µs |  21.2 µs |  21.8 µs | 1.9% | 1845.2x slower |
 
-### 6 levels of nesting, invalid input (bun)
+### 6 levels of nesting, invalid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -278,7 +278,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  65.7k |  15.2 µs |  15.2 µs |  15.5 µs | 2.4% | 199.3x slower |
 | Yup validateSync (abortEarly: false)                                                |  22.5k |  44.5 µs |  45.6 µs |  45.8 µs | 2.0% | 583.1x slower |
 
-### Small flat object, checks only, valid input (bun)
+### Small flat object, checks only, valid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -298,7 +298,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | Joi validate (abortEarly: false)                                                    | 599.5k |  1668 ns |  1769 ns |  2050 ns | 1.9% |  53.7x slower |
 | Yup validateSync (abortEarly: false)                                                | 268.6k |  3724 ns |  3802 ns |  4058 ns | 1.4% | 119.8x slower |
 
-### Small flat object, checks only, invalid input (bun)
+### Small flat object, checks only, invalid input (Bun)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -318,9 +318,9 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             | 207.2k |  4825 ns |  4860 ns |  4895 ns | 0.5% |  55.2x slower |
 | Yup validateSync (abortEarly: false)                                                |  60.3k |  16.6 µs |  16.8 µs |  17.5 µs | 2.2% | 189.7x slower |
 
-## Results on Node
+## Results on Node v24.22.2
 
-### Small flat object, valid input (node)
+### Small flat object, valid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |     ± |   vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ----: | -----------: |
@@ -340,7 +340,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             | 324.2k |  3085 ns |  3022 ns |  4309 ns |  3.6% | 76.7x slower |
 | Yup validateSync (abortEarly: false)                                                | 268.3k |  3727 ns |  3669 ns |  3736 ns |  4.3% | 92.7x slower |
 
-### Small flat object, invalid input (node)
+### Small flat object, invalid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |     ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ----: | ------------: |
@@ -360,7 +360,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  76.4k |  13.1 µs |  12.2 µs |  15.3 µs | 10.7% | 209.6x slower |
 | Yup validateSync (abortEarly: false)                                                |  30.8k |  32.5 µs |  32.3 µs |  33.1 µs |  6.2% | 520.2x slower |
 
-### Nested user (address, 5 tags max, 10 addresses), valid input (node)
+### Nested user (address, 5 tags max, 10 addresses), valid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |     ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ----: | ------------: |
@@ -380,7 +380,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  33.1k |  30.2 µs |  29.4 µs |  30.7 µs |  5.9% | 128.6x slower |
 | Yup validateSync (abortEarly: false)                                                |  21.8k |  45.9 µs |  45.2 µs |  45.4 µs |  3.8% | 195.0x slower |
 
-### Nested user (address, 5 tags max, 10 addresses), invalid input (node)
+### Nested user (address, 5 tags max, 10 addresses), invalid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |     ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ----: | ------------: |
@@ -400,7 +400,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  17.4k |  57.6 µs |  57.3 µs |  58.7 µs |  3.2% | 146.6x slower |
 | Yup validateSync (abortEarly: false)                                                |   9.7k | 103.5 µs |  97.5 µs | 225.5 µs |  0.7% | 263.4x slower |
 
-### API request body (an order with 5 items), valid input (node)
+### API request body (an order with 5 items), valid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |     p99 |     ± |   vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | ------: | ----: | -----------: |
@@ -420,7 +420,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  41.6k |  24.1 µs |  23.3 µs | 26.9 µs |  6.5% | 39.4x slower |
 | Yup validateSync (abortEarly: false)                                                |  23.3k |  43.0 µs |  42.5 µs | 43.0 µs |  5.2% | 70.4x slower |
 
-### API request body (an order with 5 items), invalid input (node)
+### API request body (an order with 5 items), invalid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |     ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ----: | ------------: |
@@ -440,7 +440,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  19.3k |  51.9 µs |  50.7 µs |  51.5 µs |  5.1% | 120.3x slower |
 | Yup validateSync (abortEarly: false)                                                |   9.2k | 108.4 µs | 104.0 µs | 224.8 µs |  0.6% | 251.3x slower |
 
-### List of 1,000 items, valid input (node)
+### List of 1,000 items, valid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -460,7 +460,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |    318 |  3.14 ms |  3.15 ms |  3.65 ms | 0.5% | 351.6x slower |
 | Yup validateSync (abortEarly: false)                                                |    236 |  4.23 ms |  4.39 ms |  5.01 ms | 1.0% | 473.8x slower |
 
-### List of 1,000 items, invalid input (node)
+### List of 1,000 items, invalid input (Node 24)
 
 | Contender                                                                           | ops/s |     mean |      p75 |      p99 |     ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | ----: | -------: | -------: | -------: | ----: | ------------: |
@@ -480,7 +480,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |   242 |  4.14 ms |  4.08 ms |  6.17 ms |  1.9% | 262.1x slower |
 | Yup validateSync (abortEarly: false)                                                |   223 |  4.48 ms |  4.62 ms |  5.03 ms |  0.9% | 283.7x slower |
 
-### Union of 4 variants (12 events), valid input (node)
+### Union of 4 variants (12 events), valid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |     ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ----: | ------------: |
@@ -500,7 +500,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | Yup validateSync (abortEarly: false)                                                |  18.9k |  52.8 µs |  51.7 µs |  52.8 µs |  4.3% | 192.5x slower |
 | Joi validate (abortEarly: false)                                                    |  18.3k |  54.6 µs |  54.3 µs |  55.2 µs |  3.7% | 198.9x slower |
 
-### Union of 4 variants (12 events), invalid input (node)
+### Union of 4 variants (12 events), invalid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -520,7 +520,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | Yup validateSync (abortEarly: false)                                                |  12.6k |  79.3 µs |  74.7 µs | 176.9 µs | 0.7% | 230.5x slower |
 | Joi validate (abortEarly: false)                                                    |  10.8k |  92.8 µs |  87.2 µs | 218.2 µs | 0.8% | 269.7x slower |
 
-### 6 levels of nesting, valid input (node)
+### 6 levels of nesting, valid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |     ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ----: | ------------: |
@@ -540,7 +540,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  85.2k |  11.7 µs |  11.6 µs |  11.7 µs |  3.5% | 247.3x slower |
 | Yup validateSync (abortEarly: false)                                                |  62.5k |  16.0 µs |  15.4 µs |  15.5 µs | 11.5% | 337.3x slower |
 
-### 6 levels of nesting, invalid input (node)
+### 6 levels of nesting, invalid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |    ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ---: | ------------: |
@@ -560,7 +560,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | ArkType                                                                             |  37.4k |  26.7 µs |  26.5 µs |  26.6 µs | 7.1% | 286.2x slower |
 | Yup validateSync (abortEarly: false)                                                |  19.6k |  51.0 µs |  51.7 µs |  52.7 µs | 3.7% | 546.1x slower |
 
-### Small flat object, checks only, valid input (node)
+### Small flat object, checks only, valid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |     ± |   vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ----: | -----------: |
@@ -580,7 +580,7 @@ The same data shape for every library, objects that reject undeclared keys every
 | Joi validate (abortEarly: false)                                                    | 442.2k |  2261 ns |  2343 ns |  3813 ns |  4.3% | 54.2x slower |
 | Yup validateSync (abortEarly: false)                                                | 311.1k |  3215 ns |  3225 ns |  3379 ns |  0.8% | 77.1x slower |
 
-### Small flat object, checks only, invalid input (node)
+### Small flat object, checks only, invalid input (Node 24)
 
 | Contender                                                                           |  ops/s |     mean |      p75 |      p99 |     ± |    vs fastest |
 | ----------------------------------------------------------------------------------- | -----: | -------: | -------: | -------: | ----: | ------------: |

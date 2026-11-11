@@ -5,8 +5,13 @@ import type { Row, RuntimeReport, Table } from "./harness.ts";
 import type { Footprint } from "./size.ts";
 
 export type Report = {
-	/** Version of this format; a change that breaks a reader raises it. */
-	schema: 1;
+	/**
+	 * Version of this format; a change that breaks a reader raises it. 2:
+	 * `runs` may hold several Node runs, told apart by `version`, and the keys
+	 * of `Footprint.cold` are those versions instead of `bun` and `node`.
+	 * Everything here reads both.
+	 */
+	schema: 1 | 2;
 	generatedAt: string;
 	/** Version of afora in package.json and the commit that was measured. */
 	afora: { version: string; commit: string };
@@ -28,7 +33,19 @@ const fmtNs = (ns: number) => {
 	return ns >= 1000 ? `${ns.toFixed(0)} ns` : `${ns.toFixed(1)} ns`;
 };
 const fmtKb = (bytes: number) => `${(bytes / 1024).toFixed(1)} kB`;
-const runtimeName = (runtime: string) => (runtime === "bun" ? "Bun" : "Node");
+/** The major version of a run's runtime: 24 for "Node v24.11.0". */
+const majorOf = (run: RuntimeReport) =>
+	Number.parseInt(run.version.replace(/^\D+/, ""), 10) || 0;
+
+/** The short name of a run, "Bun" or "Node 24": a report can hold several Node runs. */
+const runtimeName = (run: RuntimeReport) =>
+	run.runtime === "bun" ? "Bun" : `Node ${majorOf(run)}`;
+
+/** "a", "a and b", "a, b and c". */
+const listed = (items: string[]) =>
+	items.length < 2
+		? (items[0] ?? "")
+		: `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 
 /** Whether two rows are too close to call: their confidence intervals overlap. */
 export const tied = (a: Row, b: Row) =>
@@ -92,10 +109,10 @@ export function renderResults(report: Report): string {
 	];
 
 	for (const run of report.runs) {
-		out.push(`## Results on ${runtimeName(run.runtime)}`, "");
+		out.push(`## Results on ${run.version}`, "");
 		for (const table of run.tables) {
 			out.push(
-				`### ${table.title}, ${table.case} input (${run.runtime})`,
+				`### ${table.title}, ${table.case} input (${runtimeName(run)})`,
 				"",
 				...resultTable(table),
 				"",
@@ -143,9 +160,11 @@ const HEADLINE = GUARDED;
 /** The scenario and case of the chart: the body of a request, valid. */
 const CHART = { scenario: "api-payload", case: "valid" } as const;
 
-/** The run the README leads with: Node when it was measured, as most servers run on it. */
+/** The run the README leads with: the newest Node when one was measured, as most servers run on Node. */
 const leadRun = (report: Report) =>
-	report.runs.find((run) => run.runtime === "node") ?? report.runs[0];
+	report.runs
+		.filter((run) => run.runtime === "node")
+		.sort((a, b) => majorOf(b) - majorOf(a))[0] ?? report.runs[0];
 
 /** The first row of each library in a table (for afora, the headline row). */
 function rowsByLibrary(table: Table): Map<string, Row> {
@@ -160,7 +179,7 @@ function rowsByLibrary(table: Table): Map<string, Row> {
 function summaryTable(run: RuntimeReport): string[] {
 	const libraries = Object.keys(LIBRARIES).filter((key) => key !== "afora");
 	const out = [
-		`| ${runtimeName(run.runtime)} | afora | ${libraries.map((key) => LIBRARIES[key]?.label).join(" | ")} |`,
+		`| ${runtimeName(run)} | afora | ${libraries.map((key) => LIBRARIES[key]?.label).join(" | ")} |`,
 		`| --- | ---: | ${libraries.map(() => "---:").join(" | ")} |`,
 	];
 	for (const table of run.tables) {
@@ -186,7 +205,7 @@ export function renderSummary(report: Report): string {
 	return [
 		`![Validations per second on the body of an API request, ${lead.version}](bench/results/chart.svg)`,
 		"",
-		`Time of each library as a multiple of afora \`blueprint.safeParse\` on the same case: above 1.00x it is slower than afora, below it is faster. TypeBox, Ajv and Typia only check, they do not transform. afora ${report.afora.version}, ${report.runs.map((run) => run.version).join(" and ")}, ${lead.cpu}; generated from \`bench/results/latest.json\`.`,
+		`Time of each library as a multiple of afora \`blueprint.safeParse\` on the same case: above 1.00x it is slower than afora, below it is faster. TypeBox, Ajv and Typia only check, they do not transform. afora ${report.afora.version}, ${listed(report.runs.map((run) => run.version))}, ${lead.cpu}; generated from \`bench/results/latest.json\`.`,
 		"",
 		...summaryTable(lead),
 		...others.flatMap((run) => ["", ...summaryTable(run)]),

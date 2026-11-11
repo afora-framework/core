@@ -32,10 +32,17 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
-      # the Node leg of the benchmark, and the cold start on Node
+      # a Node leg of the benchmark, and the cold start, for each Node in BENCH_NODE_BINS.
+      # Each setup-node puts its Node first on the PATH, so its path is kept right after it.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: echo "NODE_22_BIN=$(which node)" >> "$GITHUB_ENV"
+      # the last one stays on the PATH, for the steps below that call `node`
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+      - run: echo "NODE_24_BIN=$(which node)" >> "$GITHUB_ENV"
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: bench
@@ -45,6 +52,7 @@ jobs:
         env:
           BENCH_QUIET: "1"
           BENCH_HISTORY: "1"
+          BENCH_NODE_BINS: ${{ env.NODE_22_BIN }}:${{ env.NODE_24_BIN }}
       - name: Open a pull request with the results
         run: |
           if git diff --quiet -- bench README.md; then
