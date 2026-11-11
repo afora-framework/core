@@ -1,6 +1,6 @@
 {
 	"name": "@afora/elysia",
-	"version": "0.0.9",
+	"version": "0.0.10",
 	"description": "An Elysia sink for afora outputs: one route per operation, problem+json errors, sensitive data masked, declared access enforced and an optional OpenAPI document.",
 	"keywords": [
 		"afora",

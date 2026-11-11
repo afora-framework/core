@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.0.9 — unreleased (draft: dated when it is published)
+## 0.0.10 — unreleased (draft: dated when it is published)
+
+### Changed
+
+- No change in the packages. This release republishes every `@afora` package through npm trusted publishing (OIDC): `@afora/fastify`, `@afora/express`, `@afora/elysia` and `@afora/dynamodb` 0.0.9 went out through a token, without provenance, and their trusted publisher stayed pending validation. The Release workflow no longer passes a token, so every package is published with provenance or the release fails.
+
+## 0.0.9 — 2026-11-11
 
 ### Changed
 
