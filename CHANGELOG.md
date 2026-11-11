@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `strictSteps: true` in `useCaseOf` checks the steps written inline at compile time (#43): every `$` reference must name a value in scope at any depth (the input, the context, an environment or the result of an earlier step, typed from what it calls or builds), the `args` of `find`, `invoke` and `run` must fit the parameters of the repository method, record method or function, the `values` of `build` the input of the record class (unknown and missing keys included), the `value` of `change` and of the repository writes and the `input` of `call` what they take, `invoke.method` a public method and `change.key` a change key of the record. A wrong reference is reported with the references that fit, which the editor completes inside a `"$"` string. Opt-in, as it costs about 17% more per edit on a five-step use case; no effect at run time. New types `CheckedSteps`, `StepReferenceType`, `StepReferencesOf`, `StepValueCheck`, `StepsInitialScope` and `UseCaseDeclaration`. See `docs/use-cases.md#strict-steps`.
+- `@afora/codegen` generates steps use cases with `strictSteps: true`, so type-checking the generated code checks their steps.
+
+### Changed
+
+- `useCaseOf` validates the paths of `$input` and `$context` at any depth when a steps use case is declared (through nested blueprints, list indices and record fields; below a primitive there is no key), and `afora-codegen check` does the same; only the first key was checked.
+- `useCaseOf` has one signature (it had one with `steps` and one without, so a wrong step was reported as "No overload matches this call" on the call): a type error in the settings or the steps is reported where it is. The returned class is the same; the settings type is the new `UseCaseDeclaration`. `UseCaseStepsSettings` takes `strictSteps?: boolean`.
+
 ## 0.0.8 — unreleased (draft: dated when it is published)
 
 ### Changed
