@@ -6,13 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 510 exports.
-
-### AbstractPropertyConstructor
-
-*type* · tier: stable · `import type { AbstractPropertyConstructor } from "@afora/core"`
-
-A property class; `Value` is the value of its schema, as in `ISchema`.
+Tier: stable. 495 exports.
 
 ### Access
 
@@ -693,12 +687,6 @@ The storage options of an entity class (`versioned`, `expires`).
 
 How an entity is stored: optimistic concurrency and expiry.
 
-### EntityStorageSettings
-
-*interface* · tier: stable · `import type { EntityStorageSettings } from "@afora/core"`
-
-What `entityOf` stores under `EntitySettings`.
-
 ### EntityUniqueKey
 
 *type* · tier: stable · `import type { EntityUniqueKey } from "@afora/core"`
@@ -1009,12 +997,6 @@ What logs: an application, a use case through its `Logger` dependency, your code
 *interface* · tier: stable · `import type { IProperty } from "@afora/core"`
 
 A property instance; `Value` is the value of its schema, as in `ISchema`.
-
-### IPropertyCollection
-
-*type* · tier: stable · `import type { IPropertyCollection } from "@afora/core"`
-
-Property declarations by key, e.g. `{ name: Name, email: Email }`.
 
 ### IPropertyInput
 
@@ -2022,20 +2004,6 @@ it read: someone else wrote it in between (optimistic concurrency).
 `actual` is the stored version, when the provider knows it; `source` is the
 repository name. An output answers it with 409.
 
-### RepositoryCount
-
-*interface* · tier: stable · `import type { RepositoryCount } from "@afora/core"`
-
-`count`: how many entities it holds.
-
-### RepositoryCreate
-
-*interface* · tier: stable · `import type { RepositoryCreate } from "@afora/core"`
-
-`create`: stores the entity, or a new one built from the input, and gives it.
-
-**Throws** {
-
 ### RepositoryCreateInput
 
 *type* · tier: stable · `import type { RepositoryCreateInput } from "@afora/core"`
@@ -2056,29 +2024,11 @@ The query of `findCursor`: as `RepositoryQuery`, with the `next` of the
 previous page as `after` in place of `offset`. `where`, `orderBy`,
 `withDeleted` and `withExpired` must stay the same from one page to the next.
 
-### RepositoryDelete
-
-*interface* · tier: stable · `import type { RepositoryDelete } from "@afora/core"`
-
-`delete`: destroys the entity (or the one of the id), removes it and gives it.
-
 ### RepositoryEntityNotFound
 
 *const* · tier: stable · `import { RepositoryEntityNotFound } from "@afora/core"`
 
 No entity of the id was found; `source` is the repository name.
-
-### RepositoryExists
-
-*interface* · tier: stable · `import type { RepositoryExists } from "@afora/core"`
-
-The `exists` method of a repository: whether any entity matches a query.
-
-### RepositoryExplain
-
-*interface* · tier: stable · `import type { RepositoryExplain } from "@afora/core"`
-
-The `explain` method of a repository, for the actions that list it.
 
 ### RepositoryFindBy
 
@@ -2086,45 +2036,12 @@ The `explain` method of a repository, for the actions that list it.
 
 The `findBy<Key>` of `Actions`, one for each unique key: the entity, or `undefined`.
 
-### RepositoryFindCursor
-
-*interface* · tier: stable · `import type { RepositoryFindCursor } from "@afora/core"`
-
-The `findCursor` method of a repository, for the actions that list it.
-
-### RepositoryFindMany
-
-*interface* · tier: stable · `import type { RepositoryFindMany } from "@afora/core"`
-
-The `findMany` method of a repository: the entities that match a query, all
-of them without one.
-
 ### RepositoryFindManyBy
 
 *type* · tier: stable · `import type { RepositoryFindManyBy } from "@afora/core"`
 
 The `findManyBy<Key>` of `Actions`, one for each key that is not unique
 (a unique key has `findBy<Key>`): every entity holding the value.
-
-### RepositoryFindPage
-
-*interface* · tier: stable · `import type { RepositoryFindPage } from "@afora/core"`
-
-The `findPage` method of a repository: one page of the entities that match a
-query, with its total.
-
-### RepositoryForEachPage
-
-*interface* · tier: stable · `import type { RepositoryForEachPage } from "@afora/core"`
-
-The `forEachPage` method of a repository, for the actions that list it.
-
-### RepositoryIncrement
-
-*interface* · tier: stable · `import type { RepositoryIncrement } from "@afora/core"`
-
-`increment`: adds the deltas to the numeric keys of the entity of the id
-(or the one given) in one atomic write, and gives the entity as stored.
 
 ### RepositoryIncrementDeltas
 
@@ -2182,13 +2099,6 @@ declared index (named by `index`), or by reading every row (`scan`).
 
 The v2 query shared by providers and typed repository reads.
 
-### RepositoryRestore
-
-*interface* · tier: stable · `import type { RepositoryRestore } from "@afora/core"`
-
-`restore`: brings back a soft-deleted entity (or the one of the id) and
-gives it, alive; only for a repository with `deletion: "soft"`.
-
 ### RepositoryScans
 
 *type* · tier: stable · `import type { RepositoryScans } from "@afora/core"`
@@ -2208,16 +2118,6 @@ What `repositoryOf` takes.
 *const* · tier: stable · `import { RepositoryUniqueViolation } from "@afora/core"`
 
 Another entity holds the value of a unique key; `source` is the repository name.
-
-### RepositoryUpdate
-
-*interface* · tier: stable · `import type { RepositoryUpdate } from "@afora/core"`
-
-`update`: stores the current value of an entity it holds, and gives it.
-
-**Throws** {
-
-**Throws** {
 
 ### RepositoryUsedOutsideApplication
 
@@ -4401,7 +4301,13 @@ or by class for `operation.errors`.
 
 ## @afora/core/experimental
 
-Tier: experimental (may change in any release). 28 exports.
+Tier: experimental (may change in any release). 43 exports.
+
+### AbstractPropertyConstructor
+
+*type* · tier: experimental · `import type { AbstractPropertyConstructor } from "@afora/core/experimental"`
+
+A property class; `Value` is the value of its schema, as in `ISchema`.
 
 ### DescribedJwtOptions
 
@@ -4409,6 +4315,18 @@ Tier: experimental (may change in any release). 28 exports.
 
 The options of `jwtOf` where they are described (`describe()`,
 `afora.json`): the secret is named by its environment variable.
+
+### EntityStorageSettings
+
+*interface* · tier: experimental · `import type { EntityStorageSettings } from "@afora/core/experimental"`
+
+What `entityOf` stores under `EntitySettings`.
+
+### IPropertyCollection
+
+*type* · tier: experimental · `import type { IPropertyCollection } from "@afora/core/experimental"`
+
+Property declarations by key, e.g. `{ name: Name, email: Email }`.
 
 ### InvalidJwtOptions
 
@@ -4451,6 +4369,88 @@ What changes for one token.
 *type* · tier: experimental · `import type { PropertyLineage } from "@afora/core/experimental"`
 
 How a property class came from another one, or from a factory.
+
+### RepositoryCount
+
+*interface* · tier: experimental · `import type { RepositoryCount } from "@afora/core/experimental"`
+
+`count`: how many entities it holds.
+
+### RepositoryCreate
+
+*interface* · tier: experimental · `import type { RepositoryCreate } from "@afora/core/experimental"`
+
+`create`: stores the entity, or a new one built from the input, and gives it.
+
+**Throws** {
+
+### RepositoryDelete
+
+*interface* · tier: experimental · `import type { RepositoryDelete } from "@afora/core/experimental"`
+
+`delete`: destroys the entity (or the one of the id), removes it and gives it.
+
+### RepositoryExists
+
+*interface* · tier: experimental · `import type { RepositoryExists } from "@afora/core/experimental"`
+
+The `exists` method of a repository: whether any entity matches a query.
+
+### RepositoryExplain
+
+*interface* · tier: experimental · `import type { RepositoryExplain } from "@afora/core/experimental"`
+
+The `explain` method of a repository, for the actions that list it.
+
+### RepositoryFindCursor
+
+*interface* · tier: experimental · `import type { RepositoryFindCursor } from "@afora/core/experimental"`
+
+The `findCursor` method of a repository, for the actions that list it.
+
+### RepositoryFindMany
+
+*interface* · tier: experimental · `import type { RepositoryFindMany } from "@afora/core/experimental"`
+
+The `findMany` method of a repository: the entities that match a query, all
+of them without one.
+
+### RepositoryFindPage
+
+*interface* · tier: experimental · `import type { RepositoryFindPage } from "@afora/core/experimental"`
+
+The `findPage` method of a repository: one page of the entities that match a
+query, with its total.
+
+### RepositoryForEachPage
+
+*interface* · tier: experimental · `import type { RepositoryForEachPage } from "@afora/core/experimental"`
+
+The `forEachPage` method of a repository, for the actions that list it.
+
+### RepositoryIncrement
+
+*interface* · tier: experimental · `import type { RepositoryIncrement } from "@afora/core/experimental"`
+
+`increment`: adds the deltas to the numeric keys of the entity of the id
+(or the one given) in one atomic write, and gives the entity as stored.
+
+### RepositoryRestore
+
+*interface* · tier: experimental · `import type { RepositoryRestore } from "@afora/core/experimental"`
+
+`restore`: brings back a soft-deleted entity (or the one of the id) and
+gives it, alive; only for a repository with `deletion: "soft"`.
+
+### RepositoryUpdate
+
+*interface* · tier: experimental · `import type { RepositoryUpdate } from "@afora/core/experimental"`
+
+`update`: stores the current value of an entity it holds, and gives it.
+
+**Throws** {
+
+**Throws** {
 
 ### SliceMask
 

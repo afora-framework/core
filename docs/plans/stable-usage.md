@@ -11,510 +11,515 @@ Every name exported by `src/index.ts` (values and types) is looked up as a whole
 
 Cells show file counts (examples and packages by example or package name). **Referenced by** lists the used stable exports whose declaration names the export (from the `apiSurface` declaration text), so moving it out of stable would break code naming it; `(transitive)` means it is reached only through a chain of declarations (including non-exported ones) starting at a used export. "Used" means at least one file in Examples, Packages or Docs; a name is matched by identifier, not by import, so a common word may be over-counted.
 
-**Summary**: 482 stable exports, 206 used, 276 unused (21 unused and not referenced by a used export, 255 unused but referenced by a used export).
+**Summary**: 495 stable exports, 235 used, 260 unused (11 unused and not referenced by a used export, 249 unused but referenced by a used export).
 
-| Export | Kind | Examples | Packages | Docs | Tests | Referenced by |
-| --- | --- | --- | --- | --- | --- | --- |
-| `Access` | function | interop 1 | codegen 1, mcp 1 | 7 | - | - |
-| `AccessDeclaration` | type | - | - | - | - | Access, AnyUseCaseClass |
-| `AnyApplication` | type | - | codegen 1 | 2 | - | RegisteredApplication, applicationOf |
-| `AnyBlueprint` | type | - | - | - | - | AnyUseCaseClass, optionalOf, stripUndeclared |
-| `AnyBlueprintList` | type | - | - | - | - | optionalOf |
-| `AnyBlueprintVariant` | interface | - | - | - | - | optionalOf |
-| `AnyCommand` | type | - | - | 1 | - | isCommand |
-| `AnyEntityClass` | type | - | - | - | - | eventOf, isEntityClass |
-| `AnyEnvironment` | type | - | - | - | - | ApplicationContext, CommandOf |
-| `AnyExceptionClass` | type | - | - | - | - | AnyUseCaseClass |
-| `AnyOptionalRecord` | type | - | - | - | - | (transitive) |
-| `AnyOutput` | type | - | - | - | - | isOutput |
-| `AnyPropertyConstructor` | type | - | - | - | - | optionalOf |
-| `AnyRecordClass` | interface | - | - | - | - | isEntityClass, optionalOf, recordPluginOf, +1 |
-| `AnyRecordPlugin` | type | - | - | - | - | hasPlugin, pluginsOf, recordPluginCatalogOf |
-| `AnyRepository` | type | - | - | 1 | - | GetMaker, RepositoryOf, resourceOf |
-| `AnyRepositoryEntity` | type | - | - | - | - | RepositoryOf, repositoryOf |
-| `AnyUseCaseClass` | interface | - | - | 1 | - | CommandOptions, isUseCaseClass |
-| `AnyUseCasePlugin` | type | - | - | - | - | isUseCasePlugin, useCaseCatalogOf |
-| `ApplicationAlreadyStarted` | const | - | - | 1 | - | - |
-| `ApplicationCollections` | interface | - | - | - | - | applicationOf |
-| `ApplicationConflict` | const | - | - | 1 | - | - |
-| `ApplicationContext` | interface | - | - | 1 | - | logFrom, providerFrom |
-| `ApplicationNotStarted` | const | - | - | 1 | - | - |
-| `ApplicationRunArgs` | type | - | - | - | - | (transitive) |
-| `ApplicationRunOptions` | type | - | - | - | - | (transitive) |
-| `ApplicationSettings` | interface | - | - | - | - | applicationOf |
-| `ApplicationStartOptions` | interface | - | - | - | - | (transitive) |
-| `ArchiveMaker` | type | - | - | - | - | (transitive) |
-| `Authenticatable` | const | - | - | - | - | (transitive) |
-| `BlueprintBuilder` | interface | - | - | - | - | blueprintBuilderOf, blueprintOf |
-| `BlueprintContext` | type | - | - | - | - | (transitive) |
-| `BlueprintData` | type | - | - | - | - | (transitive) |
-| `BlueprintDefinition` | type | - | - | - | - | (transitive) |
-| `BlueprintFactory` | type | - | - | - | - | blueprintPluginOf |
-| `BlueprintField` | type | - | - | - | - | listOf, optionalOf, stripUndeclared, +1 |
-| `BlueprintHelpers` | interface | - | - | - | - | (transitive) |
-| `BlueprintInput` | type | - | - | - | - | CommandOptions, StepsUseCaseConstructor, UseCaseInput, +1 |
-| `BlueprintListOptions` | interface | - | - | - | - | listOf |
-| `BlueprintPluginContext` | type | - | - | - | - | (transitive) |
-| `BlueprintSchema` | type | - | - | - | - | (transitive) |
-| `BlueprintSource` | type | - | - | - | - | blueprintBuilderOf |
-| `BlueprintValue` | type | - | - | - | - | StepsUseCaseConstructor, UseCaseContext, UseCaseResponse |
-| `BlueprintVariants` | type | - | - | - | - | variantOf |
-| `BooleanProperty` | const | - | - | - | - | - |
-| `CallableProperty` | type | - | - | - | - | (transitive) |
-| `CheckedSteps` | type | - | - | - | - | UseCaseDeclaration |
-| `CommandBuilder` | type | - | - | - | - | commandBuilderOf, commandOf |
-| `CommandBuilderSettings` | interface | - | - | - | - | (transitive) |
-| `CommandEnvOption` | type | - | - | - | - | CommandOptions |
-| `CommandEventErrorHandler` | type | - | - | - | - | CommandOf |
-| `CommandEventFailed` | const | - | - | 2 | - | - |
-| `CommandEventHandler` | type | - | - | - | - | (transitive) |
-| `CommandEventInfo` | interface | - | - | - | - | (transitive) |
-| `CommandEvents` | type | - | - | - | - | CommandOf |
-| `CommandExecution` | interface | - | - | - | - | CommandOf |
-| `CommandInput` | type | - | - | 1 | - | - |
-| `CommandOf` | interface | - | - | 1 | - | AnyCommand |
-| `CommandOperation` | type | - | - | 1 | - | CommandInput, CommandResponse |
-| `CommandOptions` | type | - | - | 1 | - | CommandOf |
-| `CommandResponse` | type | - | - | 1 | - | - |
-| `CommandSettings` | interface | - | - | - | - | (transitive) |
-| `CommandUseCases` | type | - | - | - | - | CommandInput, CommandOf, CommandResponse |
-| `CommandUseCasesOption` | type | - | - | - | - | (transitive) |
-| `CreateMaker` | type | - | - | - | - | (transitive) |
-| `CreatedAt` | class | - | - | - | - | Std, blueprintOf, entityOf |
-| `DateProperty` | const | - | - | - | - | - |
-| `DateTime` | class | - | - | - | - | Std, blueprintOf |
-| `DeclaredEntityInstance` | type | - | - | - | - | (transitive) |
-| `DeclaredExceptionClass` | interface | - | - | - | - | ApplicationAlreadyStarted, ApplicationConflict, ApplicationNotStarted, +61 |
-| `DeclaredProperty` | class | - | - | - | - | (transitive) |
-| `DeclaredRecordInstance` | type | - | - | - | - | (transitive) |
-| `DeleteMaker` | type | - | - | - | - | (transitive) |
-| `DeletedAt` | class | - | - | - | - | Std, blueprintOf, entityOf |
-| `DeletedEntity` | const | - | - | 1 | - | - |
-| `DependencyFunctions` | type | - | - | - | - | UseCaseDependencies |
-| `DependencyOf` | type | - | - | - | - | (transitive) |
-| `DependencyOverrides` | type | - | - | - | - | StepsUseCaseConstructor |
-| `DuplicateApplicationDeclaration` | const | - | - | 1 | - | - |
-| `DuplicateOperation` | const | - | - | 1 | - | - |
-| `Email` | const | interop 1 | codegen 1 | 3 | - | - |
-| `EntityBuilder` | type | - | - | - | - | entityBuilderOf, entityOf |
-| `EntityBuilderSettings` | interface | - | - | - | - | entityBuilderOf |
-| `EntityConstructor` | type | - | - | - | - | (transitive) |
-| `EntityDuration` | interface | - | - | - | - | EntityExpires |
-| `EntityEvent` | interface | - | codegen 1 | - | - | AnyUseCaseClass |
-| `EntityEventReference` | type | - | - | - | - | EntityEvents |
-| `EntityEvents` | interface | - | codegen 1 | - | - | (transitive) |
-| `EntityExpires` | type | - | codegen 1 | - | - | (transitive) |
-| `EntityIdentityKey` | type | - | - | - | - | (transitive) |
-| `EntityIncrementKeyOf` | type | - | - | - | - | - |
-| `EntityInput` | type | - | - | - | - | (transitive) |
-| `EntityInstanceOf` | type | - | - | - | - | UseCaseTarget |
-| `EntityKeyOf` | type | - | - | - | - | (transitive) |
-| `EntityMigrationReport` | interface | - | - | - | - | (transitive) |
-| `EntityNonUniqueKeyOf` | type | - | - | - | - | (transitive) |
-| `EntityOfRepository` | type | - | - | 1 | - | UseCaseTarget |
-| `EntityOptions` | type | - | - | - | - | (transitive) |
-| `EntityProperties` | type | - | - | - | - | (transitive) |
-| `EntitySettings` | const | - | - | 1 | - | - |
-| `EntityStorageOptions` | interface | - | - | - | - | (transitive) |
-| `EntityUniqueKey` | type | - | - | - | - | (transitive) |
-| `EntityUniqueKeyOf` | type | - | - | - | - | (transitive) |
-| `EntityUniqueKeys` | const | - | - | - | - | (transitive) |
-| `EntityUpgrade` | type | - | - | - | - | (transitive) |
-| `EntityUpgrades` | interface | - | - | - | - | (transitive) |
-| `EntityValueOf` | type | - | - | - | - | (transitive) |
-| `EntityVersion` | class | - | - | 1 | - | (transitive) |
-| `EnumClass` | type | - | - | - | - | enumOf |
-| `EnvironmentDependencies` | type | - | - | - | - | CommandOf, CommandOptions, providerFrom, +1 |
-| `EnvironmentOptions` | interface | - | - | - | - | environmentOf |
-| `EnvironmentSource` | type | - | - | - | - | (transitive) |
-| `EnvironmentValue` | type | - | - | - | - | ApplicationContext |
-| `EventDefinition` | interface | - | codegen 1 | 1 | 1 | eventOf |
-| `EventHandlerContext` | interface | - | - | - | - | EntityEvent, eventOf |
-| `EventPolicyFactory` | type | - | - | - | - | eventPolicyOf, publishEvents |
-| `EventPolicyOptions` | type | - | codegen 1 | - | - | eventPolicyOf |
-| `EventPolicySettings` | interface | - | - | - | - | eventPolicyOf |
-| `Exception` | class | - | codegen 2, dynamodb 1 | 3 | 1 | Issue, guard |
-| `ExceptionArgs` | type | - | - | - | - | (transitive) |
-| `ExceptionClass` | type | - | - | - | - | Exception |
-| `ExceptionDeclaration` | interface | - | - | - | - | exceptionOf |
-| `ExceptionFrame` | interface | - | - | - | - | Exception |
-| `ExceptionInit` | interface | - | - | - | - | Exception |
-| `ExceptionLayers` | enum | agent-built 3, blog 1, +1 | codegen 3, dynamodb 1, +2 | 4 | 2 | Exception |
-| `ExceptionMessage` | type | - | - | - | - | (transitive) |
-| `ExceptionPropagation` | interface | - | - | - | - | Exception |
-| `ExceptionScope` | interface | - | - | - | - | Exception, guard |
-| `ExpiresAt` | class | - | - | 1 | - | - |
-| `ExpiresAtField` | type | - | - | - | - | (transitive) |
-| `ExpiringIdentity` | type | - | - | - | - | (transitive) |
-| `Forbidden` | const | - | - | 3 | - | - |
-| `GetMaker` | type | - | - | 1 | - | (transitive) |
-| `IApplication` | interface | - | - | - | - | AnyApplication, applicationOf |
-| `IBlueprint` | interface | - | - | - | - | CommandOf, CommandOptions, UseCaseContext, +1 |
-| `IBlueprintCollection` | type | - | - | - | - | CommandOf, CommandOptions, RecordJson, +8 |
-| `IBlueprintFactories` | type | - | - | - | - | (transitive) |
-| `IBlueprintList` | interface | - | - | - | - | listOf |
-| `IBlueprintPlugin` | interface | - | - | - | - | Std, blueprintOf, blueprintPluginOf |
-| `IBlueprintVariant` | interface | - | - | - | - | variantOf |
-| `IDefineProperty` | interface | - | - | - | - | (transitive) |
-| `IEntityIdentity` | type | - | - | - | - | entityBuilderOf |
-| `IEntityVersion` | type | - | - | - | - | (transitive) |
-| `IEnvironment` | interface | - | - | - | - | environmentOf |
-| `IEventPolicyCatalog` | interface | - | - | - | - | StdEventPolicies |
-| `IEventPublisher` | interface | - | ws 1 | - | - | (transitive) |
-| `ILogProvider` | interface | - | - | 1 | - | consoleLogProvider, jsonLogProvider, logProviderOf |
-| `ILogger` | interface | - | dynamodb 1, mcp 1 | 2 | - | ApplicationContext |
-| `IProperty` | interface | - | - | - | - | (transitive) |
-| `IPropertyInput` | interface | - | - | - | - | Password, propertyInputOf |
-| `IPropertyType` | interface | - | - | - | - | (transitive) |
-| `IRecord` | interface | - | - | - | - | (transitive) |
-| `IRecordPlugin` | interface | - | - | - | - | StdRecordPlugins, entityOf, recordOf, +1 |
-| `IRecordPluginCatalog` | interface | - | - | - | - | StdRecordPlugins, entityBuilderOf, recordBuilderOf, +1 |
-| `ISchema` | interface | - | - | - | - | (transitive) |
-| `ISchemaType` | type | - | - | - | - | (transitive) |
-| `IStageCatalog` | interface | - | - | - | - | StdStages |
-| `IUseCaseCatalog` | interface | - | - | - | - | StdUseCases, commandBuilderOf, isUseCaseCatalog, +1 |
-| `IUseCasePlugin` | interface | - | - | - | - | useCasePluginOf |
-| `Id` | class | - | mcp 1 | 6 | - | Std, blueprintOf, entityOf |
-| `IdGenerator` | type | - | - | - | - | (transitive) |
-| `ImmutableEntityKey` | const | - | - | 1 | - | - |
-| `InMemoryProvider` | type | - | - | - | - | inMemoryProvider |
-| `IncompatibleRecordPlugin` | const | - | - | 1 | - | - |
-| `IncompatibleUseCasePlugin` | const | - | - | 1 | - | - |
-| `Integer` | const | agent-built 3 | codegen 1 | 2 | - | (transitive) |
-| `InvalidApplicationDeclaration` | const | - | - | 4 | - | - |
-| `InvalidApplicationEnvironment` | const | - | - | 1 | - | - |
-| `InvalidBlueprintVariant` | const | - | - | 1 | - | - |
-| `InvalidCommandContext` | const | - | - | 2 | - | - |
-| `InvalidCommandDeclaration` | const | - | codegen 1 | 3 | - | - |
-| `InvalidCommandEnvironment` | const | - | - | 1 | - | - |
-| `InvalidEntityExpiry` | const | - | - | 1 | - | - |
-| `InvalidEntitySchemaVersion` | const | - | - | 2 | - | - |
-| `InvalidEnvironment` | const | - | - | 4 | - | - |
-| `InvalidEventPolicy` | const | - | - | 1 | - | - |
-| `InvalidJsonData` | const | - | - | 3 | - | - |
-| `InvalidJsonSchema` | const | - | - | 1 | - | - |
-| `InvalidLogDeclaration` | const | - | - | - | - | - |
-| `InvalidOpenAPIModel` | const | - | - | 1 | - | - |
-| `InvalidOutputStage` | const | - | hono 1, mcp 1, +1 | 2 | - | - |
-| `InvalidPropertyValue` | const | - | - | 2 | - | - |
-| `InvalidRecordDeclaration` | const | - | - | 1 | - | - |
-| `InvalidRecordPlugin` | const | - | - | 1 | - | - |
-| `InvalidRecordValue` | const | - | - | - | - | - |
-| `InvalidRepositoryCursor` | const | - | - | 1 | - | - |
-| `InvalidRepositoryData` | const | - | - | 2 | - | - |
-| `InvalidRepositoryDeclaration` | const | - | drizzle 3, dynamodb 1 | 1 | - | - |
-| `InvalidRepositoryEntity` | const | - | - | - | - | - |
-| `InvalidRepositoryIncrement` | const | - | - | 1 | - | - |
-| `InvalidRepositoryQuery` | const | - | codegen 1, drizzle 1, +1 | 1 | - | - |
-| `InvalidSchemaMigration` | const | - | - | 1 | - | - |
-| `InvalidStoredSchemaVersion` | const | - | - | 1 | - | - |
-| `InvalidUseCaseDeclaration` | const | - | - | 3 | - | - |
-| `InvalidUseCaseDependencies` | const | - | - | - | - | - |
-| `InvalidUseCasePlugin` | const | - | - | 1 | - | - |
-| `InvalidUseCaseStep` | const | - | - | 1 | - | - |
-| `Ip` | const | - | - | 1 | - | - |
-| `Issue` | interface | interop 1 | - | - | - | InvalidCommandContext, InvalidCommandEnvironment, InvalidJsonData, +5 |
-| `IssueCode` | type | - | - | - | - | Issue |
-| `JsonClass` | type | - | - | - | - | jsonOf |
-| `JsonProperty` | const | - | - | 1 | - | - |
-| `JsonValue` | type | - | - | 1 | 1 | EventPolicyOptions, JsonProperty, Principal, +6 |
-| `ListMaker` | type | - | - | - | - | (transitive) |
-| `LogEntry` | interface | - | - | 1 | - | ILogProvider |
-| `LogFactory` | interface | - | - | - | - | logFrom |
-| `LogFields` | type | - | - | - | - | ILogger, LogEntry |
-| `LogLevel` | type | - | - | - | - | LogEntry |
-| `LogProviderSettings` | interface | - | - | - | - | logProviderOf |
-| `LogSettings` | interface | - | - | - | - | logFrom |
-| `Logger` | const | - | codegen 2, mcp 2 | 5 | - | - |
-| `LoggerDeclaration` | interface | - | - | - | - | Logger |
-| `LoginMaker` | type | - | - | - | - | (transitive) |
-| `MASK` | const | agent-built 1 | - | 1 | - | - |
-| `MarkedUniqueKey` | type | - | - | - | - | (transitive) |
-| `Masked` | type | - | - | 1 | - | - |
-| `MemoryLogProvider` | interface | - | - | - | - | memoryLogProvider |
-| `Meta` | const | - | - | 1 | 1 | (transitive) |
-| `MissingRecordPlugin` | interface | - | - | 2 | - | UseCaseTarget |
-| `MissingRepositoryAction` | interface | - | - | 2 | - | UseCaseTarget |
-| `NumberConstraints` | interface | - | - | - | - | (transitive) |
-| `NumberProperty` | const | - | - | - | - | - |
-| `OpenAPIComponents` | interface | - | - | - | - | toOpenAPI |
-| `OpenAPIDocument` | interface | - | - | - | - | openapi |
-| `OpenAPIMethod` | type | - | - | - | - | RouteOptions |
-| `OpenAPIOptions` | interface | - | - | - | - | toOpenAPI |
-| `OpenAPISchema` | interface | - | - | - | - | toOpenAPI |
-| `OpenAPISecurityScheme` | type | - | - | - | - | RouteOptions |
-| `OpenAPISinkOptions` | interface | - | - | - | - | openapi |
-| `OperationCallOptions` | interface | - | - | - | - | (transitive) |
-| `OperationPatch` | interface | - | - | - | - | operationOf |
-| `OptionalBlueprint` | type | - | - | - | - | optionalOf |
-| `OptionalBlueprintList` | type | - | - | - | - | optionalOf |
-| `OptionalBlueprintVariant` | type | - | - | - | - | optionalOf |
-| `OptionalProperty` | type | - | - | - | - | optionalOf |
-| `OptionalRecord` | interface | - | - | - | - | optionalOf |
-| `OutputApplication` | interface | - | - | - | - | (transitive) |
-| `OutputOf` | interface | - | - | - | - | outputOf |
-| `OutputSettings` | interface | - | - | - | - | outputOf |
-| `OutputSource` | type | - | - | - | - | (transitive) |
-| `OutputStatuses` | type | - | - | - | - | (transitive) |
-| `ParseResult` | type | - | - | - | - | (transitive) |
-| `Password` | class | agent-built 1, interop 2 | - | 7 | 1 | Std, blueprintOf |
-| `PasswordHasher` | interface | - | - | 1 | - | (transitive) |
-| `PasswordHasherRequired` | const | - | - | 1 | - | - |
-| `Phone` | const | - | - | 1 | - | - |
-| `PipeResult` | type | - | - | - | - | outputOf |
-| `PlainPassword` | class | - | - | 1 | - | - |
-| `PluginUniqueKey` | type | - | - | - | - | (transitive) |
-| `Principal` | interface | - | mcp 1, ws 1 | 2 | - | (transitive) |
-| `PropertyClass` | interface | - | - | - | - | Email, Integer, Ip, +8 |
-| `PropertyInput` | const | - | - | 3 | - | Password |
-| `PropertyMetadata` | interface | - | - | - | - | (transitive) |
-| `PropertyOptions` | type | - | - | - | - | (transitive) |
-| `PropertyRequired` | const | - | - | - | - | - |
-| `PropertyValue` | type | - | - | - | - | (transitive) |
-| `ProviderFactory` | interface | - | - | - | - | isProviderFactory, providerFrom, providersOf |
-| `ProviderNotBound` | const | - | - | 1 | - | - |
-| `ProviderOption` | type | - | - | - | - | (transitive) |
-| `ProviderOptions` | type | - | - | - | - | providerOf |
-| `ProviderSettings` | interface | - | - | - | - | providerOf |
-| `ProviderSlot` | type | - | - | 1 | - | (transitive) |
-| `ProviderStorage` | type | - | - | - | - | providersOf |
-| `PublishEventsOptions` | interface | - | - | - | - | publishEvents |
-| `PublishMaker` | type | - | - | - | - | (transitive) |
-| `PublishedEvent` | interface | - | ws 2 | - | - | IEventPublisher |
-| `PublisherNotBound` | const | - | - | 1 | - | - |
-| `QueryValueOf` | type | - | - | - | - | (transitive) |
-| `RecordBuilder` | type | - | - | - | - | recordBuilderOf, recordOf |
-| `RecordChange` | type | - | - | 1 | 1 | (transitive) |
-| `RecordChanges` | type | - | - | - | - | (transitive) |
-| `RecordConstructor` | type | - | - | - | - | (transitive) |
-| `RecordEffect` | type | - | - | - | - | RecordEffects |
-| `RecordEffects` | type | - | - | 1 | 1 | (transitive) |
-| `RecordJson` | type | - | - | 1 | - | (transitive) |
-| `RecordKey` | type | - | - | - | - | (transitive) |
-| `RecordOptions` | interface | - | - | - | - | (transitive) |
-| `RecordPluginConflict` | const | - | - | 1 | - | - |
-| `RecordPluginDescriptor` | interface | - | - | - | - | (transitive) |
-| `RecordPluginOptions` | interface | - | - | - | - | recordPluginOf |
-| `RecordPluginReference` | type | - | - | - | - | (transitive) |
-| `RecordPluginRequirement` | interface | - | - | - | - | (transitive) |
-| `RecordPluginsOption` | type | - | - | - | - | (transitive) |
-| `RecordSettings` | interface | - | - | - | - | (transitive) |
-| `RecordValue` | type | - | - | - | 1 | RecordChange, RecordEffects |
-| `Register` | interface | blog 6, interop 6 | codegen 2, drizzle 1, +1 | 6 | 2 | RegisteredApplication |
-| `RegisterMaker` | type | - | - | - | - | (transitive) |
-| `RegisteredApplication` | type | - | - | 1 | - | useApplication |
-| `RepositoryAction` | type | - | - | - | - | RepositoryOf, repositoryOf |
-| `RepositoryConcurrencyConflict` | const | - | codegen 2, drizzle 2, +2 | 4 | - | - |
-| `RepositoryCreateInput` | type | - | - | - | - | - |
-| `RepositoryCursorPage` | interface | - | - | - | - | - |
-| `RepositoryCursorQuery` | interface | - | - | - | - | - |
-| `RepositoryEntityNotFound` | const | agent-built 2 | drizzle 1, dynamodb 1 | 3 | - | - |
-| `RepositoryFindBy` | type | - | - | - | - | (transitive) |
-| `RepositoryFindManyBy` | type | - | - | - | - | (transitive) |
-| `RepositoryIncrementDeltas` | type | - | - | - | - | - |
-| `RepositoryIncrementOptions` | interface | - | - | - | - | - |
-| `RepositoryIndex` | interface | - | - | - | - | (transitive) |
-| `RepositoryOf` | function + type | - | - | 1 | - | - |
-| `RepositoryOrder` | interface | - | - | - | - | RepositoryQuery |
-| `RepositoryPage` | interface | - | - | - | - | - |
-| `RepositoryPlan` | interface | - | - | - | - | - |
-| `RepositoryQuery` | interface | - | drizzle 1 | 1 | - | (transitive) |
-| `RepositoryScans` | type | - | - | - | - | (transitive) |
-| `RepositorySettings` | interface | - | - | - | - | repositoryOf |
-| `RepositoryUniqueViolation` | const | agent-built 2 | codegen 1, drizzle 2, +2 | 6 | - | - |
-| `RepositoryUsedOutsideApplication` | const | - | - | 3 | - | - |
-| `RepositoryWalkOptions` | interface | - | - | - | - | - |
-| `RepositoryWalkPage` | interface | - | - | - | - | - |
-| `RepositoryWalkResult` | interface | - | - | - | - | - |
-| `RepositoryWhere` | type | - | - | - | - | RepositoryQuery |
-| `ReservedBlueprintKey` | const | - | - | - | - | - |
-| `ReservedEntityKey` | const | - | - | 2 | - | - |
-| `ReservedRecordKey` | const | - | - | 1 | - | - |
-| `ResourceAction` | type | - | - | - | - | resourceOf |
-| `ResourceOptions` | interface | - | - | - | - | resourceOf |
-| `ResourceUseCases` | interface | - | - | - | - | resourceOf |
-| `RestoreMaker` | type | - | - | - | - | (transitive) |
-| `Route` | function | agent-built 1, interop 1 | elysia 1, express 1, +2 | 6 | 1 | - |
-| `RouteDeclaration` | interface | - | - | - | 1 | AnyUseCaseClass |
-| `RouteOptions` | interface | - | - | 1 | - | (transitive) |
-| `RouteSettings` | interface | - | - | - | - | Route |
-| `RouteStatus` | type | - | - | - | - | RouteOptions |
-| `RuntimeServices` | interface | - | - | - | - | configure |
-| `SchemaLockMismatch` | const | - | - | 1 | - | - |
-| `SchemaMigrationInvalidRow` | interface | - | - | - | - | (transitive) |
-| `SchemaMigrationOptions` | interface | - | - | - | - | (transitive) |
-| `SchemaMigrationReport` | interface | - | - | - | - | (transitive) |
-| `SchemaProperty` | class | - | - | - | - | Std, blueprintOf |
-| `SecurityRequirement` | interface | - | - | - | - | RouteOptions |
-| `SelectOptions` | interface | - | - | - | - | select |
-| `SensitiveMark` | type | - | - | - | - | propertyOf |
-| `Slug` | class | - | - | 5 | - | Std, blueprintOf |
-| `Stage` | type | - | - | - | - | outputOf |
-| `StageContext` | interface | - | - | - | - | (transitive) |
-| `StageFactory` | type | - | - | - | - | StdStages |
-| `StageOptions` | type | - | codegen 1 | - | - | transformOf |
-| `StandardSchemaV1` | interface + namespace | interop 1 | - | 1 | 2 | Issue |
-| `State` | const | - | - | 1 | - | (transitive) |
-| `Std` | const | - | codegen 9, mcp 3 | 5 | - | - |
-| `StdCreateOptions` | interface | - | - | - | - | (transitive) |
-| `StdEntityOptions` | interface | - | - | - | - | GetMaker |
-| `StdEventPolicies` | const | - | codegen 3 | 2 | - | - |
-| `StdHookArgs` | interface | - | - | - | - | (transitive) |
-| `StdHookOptions` | interface | - | - | - | - | (transitive) |
-| `StdLifecycleOptions` | interface | - | - | - | - | (transitive) |
-| `StdListOptions` | interface | - | - | - | - | (transitive) |
-| `StdNoHookOptions` | interface | - | - | - | - | GetMaker |
-| `StdOwnerOption` | interface | - | - | - | - | (transitive) |
-| `StdRecordPlugins` | const | - | codegen 1 | 1 | 1 | - |
-| `StdStages` | const | - | codegen 3 | 2 | - | - |
-| `StdUseCaseContext` | interface | - | - | - | - | commandOf, resourceOf |
-| `StdUseCaseErrors` | interface | - | - | - | - | (transitive) |
-| `StdUseCaseOptions` | interface | - | - | - | - | (transitive) |
-| `StdUseCasePlugins` | type | - | - | - | - | StdUseCases |
-| `StdUseCases` | const | agent-built 3, blog 1 | codegen 3 | 3 | - | - |
-| `StepArgs` | type | - | codegen 1 | - | - | (transitive) |
-| `StepEnsureKind` | type | - | - | - | - | (transitive) |
-| `StepErrorDescription` | type | - | - | - | - | (transitive) |
-| `StepFindTarget` | type | - | - | - | - | (transitive) |
-| `StepReadAction` | type | - | - | - | - | (transitive) |
-| `StepReference` | type | - | - | - | - | StepArgs, StepValue |
-| `StepReferenceType` | type | - | - | - | - | (transitive) |
-| `StepReferencesOf` | type | - | - | - | - | (transitive) |
-| `StepRepositoryWith` | type | - | - | - | - | (transitive) |
-| `StepValue` | type | - | codegen 1 | - | - | StepArgs |
-| `StepValueCheck` | type | - | - | - | - | (transitive) |
-| `StepsInitialScope` | type | - | - | - | - | (transitive) |
-| `StepsUseCaseConstructor` | type | - | - | 1 | - | useCaseOf |
-| `StringConstraints` | interface | - | - | - | - | (transitive) |
-| `StringProperty` | const | blog 1 | - | - | - | (transitive) |
-| `SyncVerifyUnsupported` | const | - | - | - | - | - |
-| `TagMaker` | type | - | - | - | - | (transitive) |
-| `Text` | const | - | drizzle 1, hono 1, +1 | 1 | - | - |
-| `TransformFactory` | type | - | - | - | - | select, transformOf |
-| `TransformSettings` | interface | - | - | - | - | transformOf |
-| `TransformStage` | interface | - | - | - | - | (transitive) |
-| `Unauthenticated` | const | - | - | 4 | - | - |
-| `UndeclaredBlueprintProperty` | const | - | - | 1 | - | - |
-| `UndeclaredRecordProperty` | const | - | - | 1 | - | - |
-| `UniqueMark` | type | - | - | - | - | propertyOf |
-| `UnknownCommandOperation` | const | - | - | 2 | - | - |
-| `UnknownRecordPlugin` | const | - | - | 1 | - | - |
-| `UnknownUseCasePlugin` | const | - | - | 1 | - | - |
-| `UnregisteredApplicationReference` | const | - | - | 3 | - | - |
-| `UnregisteredRepositoryDependency` | const | - | - | 1 | - | - |
-| `UnregisteredUseCaseDependency` | const | - | - | 1 | - | - |
-| `UpdateMaker` | type | - | - | - | - | (transitive) |
-| `UpdatedAt` | class | - | - | - | - | Std, blueprintOf, entityOf |
-| `Url` | const | - | - | 1 | - | - |
-| `UseCaseAlreadyExecuted` | const | - | - | 1 | - | - |
-| `UseCaseCollection` | type | - | - | - | - | AnyUseCaseClass, StepsUseCaseConstructor, UseCaseDeclaration, +2 |
-| `UseCaseCompilation` | interface | - | - | - | - | (transitive) |
-| `UseCaseConstructor` | type | - | - | - | - | useCaseOf |
-| `UseCaseContext` | type | - | - | 1 | - | - |
-| `UseCaseDeclaration` | interface | - | codegen 1 | - | - | useCaseOf |
-| `UseCaseDependencies` | type | - | - | 1 | 1 | - |
-| `UseCaseDependency` | type | - | - | - | - | (transitive) |
-| `UseCaseEntityConflict` | const | agent-built 2 | - | 3 | - | - |
-| `UseCaseEntityNotFound` | const | agent-built 2 | - | 2 | - | - |
-| `UseCaseFieldPlan` | interface | - | - | - | - | (transitive) |
-| `UseCaseInput` | type | - | - | 1 | 1 | CommandInput, CommandOf |
-| `UseCaseInvalidCredentials` | const | agent-built 2 | - | 3 | - | - |
-| `UseCaseMaker` | type | - | - | - | - | useCasePluginOf |
-| `UseCaseOptions` | type | - | - | 2 | - | CommandOptions |
-| `UseCasePluginDescriptor` | interface | - | - | - | - | (transitive) |
-| `UseCasePluginRequirements` | interface | - | - | - | - | (transitive) |
-| `UseCasePluginSettings` | interface | - | - | - | - | useCasePluginOf |
-| `UseCaseResponse` | type | - | - | 1 | 1 | CommandOf, CommandResponse |
-| `UseCaseSettings` | interface | - | - | - | - | UseCaseDeclaration |
-| `UseCaseStep` | type | - | - | - | - | UseCaseDeclaration, useCaseOf |
-| `UseCaseStepDescription` | type | - | - | - | - | (transitive) |
-| `UseCaseStepsSettings` | interface | - | - | - | - | (transitive) |
-| `UseCaseTarget` | type | - | - | 1 | - | GetMaker |
-| `UseCaseTargetInfo` | interface | - | - | - | - | (transitive) |
-| `UseCaseUnavailable` | const | - | - | 4 | - | - |
-| `VersionedIdentity` | type | - | - | - | - | (transitive) |
-| `applicationOf` | function | agent-built 3, blog 1, +1 | codegen 4, ws 1 | 7 | 2 | - |
-| `blueprintBuilderOf` | function | - | - | 2 | - | - |
-| `blueprintOf` | const | agent-built 6, blog 2, +1 | codegen 1, drizzle 2, +2 | 19 | 2 | - |
-| `blueprintPluginOf` | function | - | - | 1 | - | - |
-| `checkJsonSchema` | function | - | - | 2 | 1 | - |
-| `commandBuilderOf` | function | - | - | 2 | - | - |
-| `commandOf` | const | agent-built 3, blog 1, +1 | codegen 4, drizzle 2, +1 | 9 | 2 | - |
-| `configure` | function | - | - | 1 | - | - |
-| `consoleLogProvider` | function | - | codegen 1 | 1 | - | - |
-| `entityBuilderOf` | function | - | - | 2 | - | - |
-| `entityOf` | const | agent-built 3, blog 1, +1 | codegen 3, drizzle 3, +1 | 13 | 2 | - |
-| `enumOf` | function | blog 1 | codegen 3 | 6 | - | Std, blueprintOf |
-| `environmentOf` | function | blog 1 | codegen 1 | 5 | - | - |
-| `eventOf` | function | - | codegen 2 | 3 | 1 | - |
-| `eventPolicyOf` | function | - | codegen 2 | 2 | - | - |
-| `exceptionOf` | function | agent-built 3, blog 1, +1 | codegen 3, dynamodb 1, +2 | 7 | 2 | - |
-| `guard` | function | - | drizzle 1 | 5 | 2 | - |
-| `hasPlugin` | function | - | - | 1 | 1 | - |
-| `inMemoryProvider` | function | agent-built 3, interop 1 | codegen 2, dynamodb 1 | 3 | 1 | - |
-| `isCommand` | function | - | - | 1 | - | - |
-| `isEntity` | function | - | - | 1 | - | - |
-| `isEntityClass` | function | - | - | 1 | - | - |
-| `isOutput` | function | - | - | 1 | - | - |
-| `isProviderFactory` | function | - | - | 1 | - | - |
-| `isUseCase` | function | - | - | 1 | - | - |
-| `isUseCaseCatalog` | function | - | - | 1 | - | - |
-| `isUseCaseClass` | function | - | - | 1 | - | - |
-| `isUseCasePlugin` | function | - | - | 1 | - | - |
-| `jsonLogProvider` | function | - | codegen 1 | 2 | - | - |
-| `jsonOf` | function | - | codegen 1 | 2 | 1 | Std, blueprintOf |
-| `jsonSchemaIssues` | function | - | - | 1 | - | - |
-| `listOf` | function | interop 1 | codegen 2 | 7 | 2 | (transitive) |
-| `logFrom` | function | - | codegen 3 | 4 | - | - |
-| `logProviderOf` | function | - | - | 1 | - | - |
-| `memoryLogProvider` | function | - | - | 1 | - | - |
-| `openapi` | const | agent-built 12, blog 4, +1 | codegen 3, hono 1, +1 | 10 | 2 | (transitive) |
-| `operationOf` | function | - | - | 1 | - | - |
-| `optionalOf` | function | - | codegen 1, drizzle 1, +1 | 7 | 2 | (transitive) |
-| `outputOf` | function | agent-built 3, blog 1, +1 | codegen 3 | 7 | 2 | - |
-| `pluginsOf` | function | - | - | 1 | - | - |
-| `propertyInputOf` | function | - | - | 1 | - | - |
-| `propertyOf` | function | - | codegen 1 | 6 | 1 | (transitive) |
-| `providerFrom` | function | blog 2 | codegen 1, mcp 1 | 7 | 1 | - |
-| `providerOf` | function | - | codegen 3, drizzle 1, +1 | 3 | - | - |
-| `providersOf` | function | blog 1 | codegen 4, mcp 1 | 2 | 1 | - |
-| `publishEvents` | const | - | codegen 5, mcp 5, +1 | 7 | - | - |
-| `recordBuilderOf` | function | - | - | 1 | - | - |
-| `recordNameOf` | function | - | - | 2 | - | - |
-| `recordOf` | const | interop 1 | codegen 1 | 6 | 2 | - |
-| `recordPluginCatalogOf` | function | - | - | 1 | 1 | - |
-| `recordPluginOf` | function | - | - | 1 | 1 | - |
-| `repositoryOf` | function | agent-built 3, blog 1, +1 | codegen 1, drizzle 2, +1 | 10 | 2 | - |
-| `resetApplication` | function | - | - | 1 | - | - |
-| `resetRuntime` | function | - | - | 1 | - | - |
-| `resourceOf` | function | interop 2 | - | 5 | - | - |
-| `select` | const | - | codegen 3, drizzle 1, +1 | 3 | - | - |
-| `stripUndeclared` | function | - | hono 2 | 1 | - | - |
-| `toOpenAPI` | function | - | mcp 1, ws 1 | 4 | - | - |
-| `transformOf` | function | - | - | 1 | - | - |
-| `useApplication` | function | blog 2 | - | 2 | 1 | - |
-| `useCaseCatalogOf` | function | - | - | 2 | - | - |
-| `useCaseOf` | function | agent-built 3, interop 4 | codegen 4, drizzle 2, +1 | 8 | 2 | - |
-| `useCasePluginOf` | function | - | - | 1 | - | - |
-| `variantOf` | function | - | codegen 4, mcp 1 | 4 | 2 | (transitive) |
+| Export                             | Kind                  | Examples                   | Packages                  | Docs | Tests | Referenced by                                                              |
+| ---------------------------------- | --------------------- | -------------------------- | ------------------------- | ---- | ----- | -------------------------------------------------------------------------- |
+| `Access`                           | function              | interop 1                  | codegen 1, mcp 1          | 10   | -     | -                                                                          |
+| `AccessDeclaration`                | type                  | -                          | -                         | -    | -     | Access, AnyUseCaseClass                                                    |
+| `AnyApplication`                   | type                  | -                          | codegen 1                 | 2    | -     | RegisteredApplication, applicationOf                                       |
+| `AnyBlueprint`                     | type                  | -                          | -                         | -    | -     | AnyUseCaseClass, optionalOf, stripUndeclared                               |
+| `AnyBlueprintList`                 | type                  | -                          | -                         | -    | -     | optionalOf                                                                 |
+| `AnyBlueprintVariant`              | interface             | -                          | -                         | -    | -     | optionalOf                                                                 |
+| `AnyCommand`                       | type                  | -                          | -                         | 1    | -     | isCommand                                                                  |
+| `AnyEntityClass`                   | type                  | -                          | -                         | -    | -     | eventOf, isEntityClass                                                     |
+| `AnyEnvironment`                   | type                  | -                          | -                         | -    | -     | ApplicationContext, CommandOf                                              |
+| `AnyExceptionClass`                | type                  | -                          | -                         | -    | -     | AnyUseCaseClass                                                            |
+| `AnyOptionalRecord`                | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `AnyOutput`                        | type                  | -                          | -                         | -    | -     | isOutput                                                                   |
+| `AnyPropertyConstructor`           | type                  | -                          | -                         | -    | -     | optionalOf                                                                 |
+| `AnyRecordClass`                   | interface             | -                          | -                         | -    | -     | isEntityClass, optionalOf, recordPluginOf, +1                              |
+| `AnyRecordPlugin`                  | type                  | -                          | -                         | -    | -     | hasPlugin, pluginsOf, recordPluginCatalogOf                                |
+| `AnyRepository`                    | type                  | -                          | -                         | 1    | -     | GetMaker, RepositoryOf, resourceOf                                         |
+| `AnyRepositoryEntity`              | type                  | -                          | -                         | -    | -     | RepositoryOf, repositoryOf                                                 |
+| `AnyUseCaseClass`                  | interface             | -                          | -                         | 1    | -     | CommandOptions, isUseCaseClass                                             |
+| `AnyUseCasePlugin`                 | type                  | -                          | -                         | -    | -     | isUseCasePlugin, useCaseCatalogOf                                          |
+| `ApplicationAlreadyStarted`        | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `ApplicationCollections`           | interface             | -                          | -                         | -    | -     | applicationOf                                                              |
+| `ApplicationConflict`              | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `ApplicationContext`               | interface             | -                          | -                         | 1    | -     | logFrom, providerFrom                                                      |
+| `ApplicationNotStarted`            | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `ApplicationRunArgs`               | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `ApplicationRunOptions`            | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `ApplicationSettings`              | interface             | -                          | -                         | -    | -     | applicationOf                                                              |
+| `ApplicationStartOptions`          | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Archivable`                       | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `ArchiveMaker`                     | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Authenticatable`                  | const                 | -                          | -                         | 2    | -     | (transitive)                                                               |
+| `BlueprintBuilder`                 | interface             | -                          | -                         | -    | -     | blueprintBuilderOf, blueprintOf                                            |
+| `BlueprintContext`                 | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `BlueprintData`                    | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `BlueprintDefinition`              | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `BlueprintFactory`                 | type                  | -                          | -                         | -    | -     | blueprintPluginOf                                                          |
+| `BlueprintField`                   | type                  | -                          | -                         | -    | -     | listOf, optionalOf, stripUndeclared, +1                                    |
+| `BlueprintHelpers`                 | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `BlueprintInput`                   | type                  | -                          | -                         | -    | -     | CommandOptions, StepsUseCaseConstructor, UseCaseInput, +1                  |
+| `BlueprintListOptions`             | interface             | -                          | -                         | -    | -     | listOf                                                                     |
+| `BlueprintPluginContext`           | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `BlueprintSchema`                  | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `BlueprintSource`                  | type                  | -                          | -                         | -    | -     | blueprintBuilderOf                                                         |
+| `BlueprintValue`                   | type                  | -                          | -                         | -    | -     | StepsUseCaseConstructor, UseCaseContext, UseCaseResponse                   |
+| `BlueprintVariants`                | type                  | -                          | -                         | -    | -     | variantOf                                                                  |
+| `BooleanProperty`                  | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `CallableProperty`                 | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `CheckedSteps`                     | type                  | -                          | -                         | -    | -     | UseCaseDeclaration                                                         |
+| `CommandBuilder`                   | type                  | -                          | -                         | -    | -     | commandBuilderOf, commandOf                                                |
+| `CommandBuilderSettings`           | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `CommandEnvOption`                 | type                  | -                          | -                         | -    | -     | CommandOptions                                                             |
+| `CommandEventErrorHandler`         | type                  | -                          | -                         | -    | -     | CommandOf                                                                  |
+| `CommandEventFailed`               | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `CommandEventHandler`              | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `CommandEventInfo`                 | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `CommandEvents`                    | type                  | -                          | -                         | -    | -     | CommandOf                                                                  |
+| `CommandExecution`                 | interface             | -                          | -                         | -    | -     | CommandOf                                                                  |
+| `CommandInput`                     | type                  | -                          | -                         | 1    | -     | -                                                                          |
+| `CommandOf`                        | interface             | -                          | -                         | 1    | -     | AnyCommand                                                                 |
+| `CommandOperation`                 | type                  | -                          | -                         | 1    | -     | CommandInput, CommandResponse                                              |
+| `CommandOptions`                   | type                  | -                          | -                         | 1    | -     | CommandOf                                                                  |
+| `CommandResponse`                  | type                  | -                          | -                         | 1    | -     | -                                                                          |
+| `CommandSettings`                  | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `CommandUseCases`                  | type                  | -                          | -                         | -    | -     | CommandInput, CommandOf, CommandResponse                                   |
+| `CommandUseCasesOption`            | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `CreateMaker`                      | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `CreatedAt`                        | class                 | -                          | -                         | 1    | -     | Std, blueprintOf, entityOf                                                 |
+| `DateProperty`                     | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `DateTime`                         | class                 | -                          | -                         | 1    | -     | Std, blueprintOf                                                           |
+| `DeclaredEntityInstance`           | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `DeclaredExceptionClass`           | interface             | -                          | -                         | -    | -     | ApplicationAlreadyStarted, ApplicationConflict, ApplicationNotStarted, +69 |
+| `DeclaredProperty`                 | class                 | -                          | -                         | 1    | -     | (transitive)                                                               |
+| `DeclaredRecordInstance`           | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `DeleteMaker`                      | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `DeletedAt`                        | class                 | -                          | -                         | 1    | -     | Std, blueprintOf, entityOf                                                 |
+| `DeletedEntity`                    | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `DependencyFunctions`              | type                  | -                          | -                         | -    | -     | UseCaseDependencies                                                        |
+| `DependencyOf`                     | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `DependencyOverrides`              | type                  | -                          | -                         | -    | -     | StepsUseCaseConstructor                                                    |
+| `DuplicateApplicationDeclaration`  | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `DuplicateOperation`               | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `Email`                            | const                 | interop 1                  | codegen 1                 | 6    | -     | -                                                                          |
+| `EntityBuilder`                    | type                  | -                          | -                         | -    | -     | entityBuilderOf, entityOf                                                  |
+| `EntityBuilderSettings`            | interface             | -                          | -                         | -    | -     | entityBuilderOf                                                            |
+| `EntityConstructor`                | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityDuration`                   | interface             | -                          | -                         | -    | -     | EntityExpires                                                              |
+| `EntityEvent`                      | interface             | -                          | codegen 1                 | -    | -     | AnyUseCaseClass                                                            |
+| `EntityEventReference`             | type                  | -                          | -                         | -    | -     | EntityEvents                                                               |
+| `EntityEvents`                     | interface             | -                          | codegen 1                 | -    | -     | (transitive)                                                               |
+| `EntityExpires`                    | type                  | -                          | codegen 1                 | -    | -     | (transitive)                                                               |
+| `EntityIdentityKey`                | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityIncrementKeyOf`             | type                  | -                          | -                         | -    | -     | -                                                                          |
+| `EntityInput`                      | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityInstanceOf`                 | type                  | -                          | -                         | -    | -     | UseCaseTarget                                                              |
+| `EntityKeyOf`                      | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityMigrationReport`            | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityNonUniqueKeyOf`             | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityOfRepository`               | type                  | -                          | -                         | 1    | -     | UseCaseTarget                                                              |
+| `EntityOptions`                    | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityProperties`                 | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntitySettings`                   | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `EntityStorageOptions`             | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityUniqueKey`                  | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityUniqueKeyOf`                | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityUniqueKeys`                 | const                 | -                          | -                         | 1    | -     | (transitive)                                                               |
+| `EntityUpgrade`                    | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityUpgrades`                   | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityValueOf`                    | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EntityVersion`                    | class                 | -                          | -                         | 1    | -     | (transitive)                                                               |
+| `EnumClass`                        | type                  | -                          | -                         | -    | -     | enumOf                                                                     |
+| `EnvironmentDependencies`          | type                  | -                          | -                         | -    | -     | CommandOf, CommandOptions, providerFrom, +1                                |
+| `EnvironmentOptions`               | interface             | -                          | -                         | -    | -     | environmentOf                                                              |
+| `EnvironmentSource`                | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `EnvironmentValue`                 | type                  | -                          | -                         | -    | -     | ApplicationContext                                                         |
+| `EventDefinition`                  | interface             | interop 1                  | codegen 1                 | 2    | 1     | eventOf                                                                    |
+| `EventHandlerContext`              | interface             | -                          | -                         | -    | -     | EntityEvent, eventOf                                                       |
+| `EventPolicyFactory`               | type                  | -                          | -                         | -    | -     | eventPolicyOf, publishEvents                                               |
+| `EventPolicyOptions`               | type                  | -                          | codegen 1                 | -    | -     | eventPolicyOf                                                              |
+| `EventPolicySettings`              | interface             | -                          | -                         | -    | -     | eventPolicyOf                                                              |
+| `Exception`                        | class                 | -                          | codegen 2, dynamodb 1     | 3    | 1     | Issue, guard                                                               |
+| `ExceptionArgs`                    | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `ExceptionClass`                   | type                  | -                          | -                         | -    | -     | Exception                                                                  |
+| `ExceptionDeclaration`             | interface             | -                          | -                         | -    | -     | exceptionOf                                                                |
+| `ExceptionFrame`                   | interface             | -                          | -                         | -    | -     | Exception                                                                  |
+| `ExceptionInit`                    | interface             | -                          | -                         | -    | -     | Exception                                                                  |
+| `ExceptionLayers`                  | enum                  | agent-built 3, blog 1, +1  | codegen 3, dynamodb 1, +2 | 5    | 2     | Exception                                                                  |
+| `ExceptionMessage`                 | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `ExceptionPropagation`             | interface             | -                          | -                         | -    | -     | Exception                                                                  |
+| `ExceptionScope`                   | interface             | -                          | -                         | -    | -     | Exception, guard                                                           |
+| `ExpiresAt`                        | class                 | -                          | -                         | 2    | -     | -                                                                          |
+| `ExpiresAtField`                   | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `ExpiringIdentity`                 | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Forbidden`                        | const                 | -                          | -                         | 5    | -     | -                                                                          |
+| `GetMaker`                         | type                  | -                          | -                         | 1    | -     | (transitive)                                                               |
+| `IApplication`                     | interface             | -                          | -                         | -    | -     | AnyApplication, applicationOf                                              |
+| `IBlueprint`                       | interface             | -                          | -                         | -    | -     | CommandOf, CommandOptions, UseCaseContext, +1                              |
+| `IBlueprintCollection`             | type                  | -                          | -                         | -    | -     | CommandOf, CommandOptions, RecordJson, +8                                  |
+| `IBlueprintFactories`              | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `IBlueprintList`                   | interface             | -                          | -                         | -    | -     | listOf                                                                     |
+| `IBlueprintPlugin`                 | interface             | -                          | -                         | -    | -     | Std, blueprintOf, blueprintPluginOf                                        |
+| `IBlueprintVariant`                | interface             | -                          | -                         | -    | -     | variantOf                                                                  |
+| `IDefineProperty`                  | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `IEntityIdentity`                  | type                  | -                          | -                         | -    | -     | entityBuilderOf                                                            |
+| `IEntityVersion`                   | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `IEnvironment`                     | interface             | -                          | -                         | -    | -     | environmentOf                                                              |
+| `IEventPolicyCatalog`              | interface             | -                          | -                         | -    | -     | StdEventPolicies                                                           |
+| `IEventPublisher`                  | interface             | -                          | ws 1                      | -    | -     | (transitive)                                                               |
+| `ILogProvider`                     | interface             | -                          | -                         | 1    | -     | consoleLogProvider, jsonLogProvider, logProviderOf                         |
+| `ILogger`                          | interface             | -                          | dynamodb 1, mcp 1         | 2    | -     | ApplicationContext                                                         |
+| `IProperty`                        | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `IPropertyInput`                   | interface             | -                          | -                         | -    | -     | Password, propertyInputOf                                                  |
+| `IPropertyType`                    | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `IRecord`                          | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `IRecordPlugin`                    | interface             | -                          | -                         | -    | -     | Archivable, Authenticatable, Ownable, +6                                   |
+| `IRecordPluginCatalog`             | interface             | -                          | -                         | -    | -     | StdRecordPlugins, entityBuilderOf, recordBuilderOf, +1                     |
+| `ISchema`                          | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `ISchemaType`                      | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `IStageCatalog`                    | interface             | -                          | -                         | -    | -     | StdStages                                                                  |
+| `ITraceSpan`                       | interface             | -                          | otel 1                    | 1    | -     | ITracer                                                                    |
+| `ITracer`                          | interface             | -                          | otel 1                    | 1    | -     | (transitive)                                                               |
+| `IUseCaseCatalog`                  | interface             | -                          | -                         | -    | -     | StdUseCases, commandBuilderOf, isUseCaseCatalog, +1                        |
+| `IUseCasePlugin`                   | interface             | -                          | -                         | -    | -     | useCasePluginOf                                                            |
+| `Id`                               | class                 | -                          | mcp 1                     | 11   | -     | Std, blueprintOf, entityOf                                                 |
+| `IdGenerator`                      | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `ImmutableEntityKey`               | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InMemoryProvider`                 | type                  | -                          | -                         | -    | -     | inMemoryProvider                                                           |
+| `IncompatibleRecordPlugin`         | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `IncompatibleUseCasePlugin`        | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `Integer`                          | const                 | agent-built 3              | codegen 1                 | 3    | -     | (transitive)                                                               |
+| `InvalidApplicationDeclaration`    | const                 | -                          | -                         | 4    | -     | -                                                                          |
+| `InvalidApplicationEnvironment`    | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `InvalidBlueprintVariant`          | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidCommandContext`            | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `InvalidCommandDeclaration`        | const                 | -                          | codegen 1                 | 4    | -     | -                                                                          |
+| `InvalidCommandEnvironment`        | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidEntityExpiry`              | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidEntitySchemaVersion`       | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `InvalidEnvironment`               | const                 | -                          | -                         | 6    | -     | -                                                                          |
+| `InvalidEventPolicy`               | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidJsonData`                  | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `InvalidJsonSchema`                | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidLogDeclaration`            | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidOpenAPIModel`              | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidOutputStage`               | const                 | -                          | hono 1, mcp 1, +1         | 3    | -     | -                                                                          |
+| `InvalidPropertyValue`             | const                 | -                          | -                         | 4    | -     | -                                                                          |
+| `InvalidRecordDeclaration`         | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidRecordPlugin`              | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidRecordValue`               | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `InvalidRepositoryCursor`          | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `InvalidRepositoryData`            | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `InvalidRepositoryDeclaration`     | const                 | -                          | drizzle 3, dynamodb 1     | 2    | -     | -                                                                          |
+| `InvalidRepositoryEntity`          | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidRepositoryIncrement`       | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidRepositoryQuery`           | const                 | -                          | codegen 1, drizzle 1, +1  | 2    | -     | -                                                                          |
+| `InvalidSchemaMigration`           | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidStoredSchemaVersion`       | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidTraceDeclaration`          | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidUseCaseDeclaration`        | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `InvalidUseCaseDependencies`       | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `InvalidUseCasePlugin`             | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `InvalidUseCaseStep`               | const                 | -                          | mcp 1                     | 1    | -     | -                                                                          |
+| `Ip`                               | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `Issue`                            | interface             | interop 1                  | -                         | 4    | -     | InvalidCommandContext, InvalidCommandEnvironment, InvalidJsonData, +7      |
+| `IssueCode`                        | type                  | -                          | -                         | -    | -     | Issue                                                                      |
+| `JsonClass`                        | type                  | -                          | -                         | -    | -     | jsonOf                                                                     |
+| `JsonProperty`                     | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `JsonValue`                        | type                  | -                          | -                         | 3    | 1     | EventPolicyOptions, JsonProperty, Principal, +6                            |
+| `ListMaker`                        | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `LogEntry`                         | interface             | -                          | -                         | 1    | -     | ILogProvider                                                               |
+| `LogFactory`                       | interface             | -                          | -                         | -    | -     | logFrom                                                                    |
+| `LogFields`                        | type                  | -                          | -                         | -    | -     | ILogger, LogEntry                                                          |
+| `LogLevel`                         | type                  | -                          | -                         | -    | -     | LogEntry, LogLevels                                                        |
+| `LogLevels`                        | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `LogProviderSettings`              | interface             | -                          | -                         | -    | -     | logProviderOf                                                              |
+| `LogSettings`                      | interface             | -                          | -                         | -    | -     | logFrom                                                                    |
+| `Logger`                           | const                 | -                          | codegen 2, mcp 2          | 5    | -     | -                                                                          |
+| `LoggerDeclaration`                | interface             | -                          | -                         | -    | -     | Logger                                                                     |
+| `LoginMaker`                       | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `MASK`                             | const                 | agent-built 1              | -                         | 2    | -     | -                                                                          |
+| `MarkedUniqueKey`                  | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Masked`                           | type                  | -                          | -                         | 1    | -     | -                                                                          |
+| `MemoryLogProvider`                | interface             | -                          | -                         | -    | -     | memoryLogProvider                                                          |
+| `MemorySpan`                       | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `MemoryTracer`                     | interface             | -                          | -                         | -    | -     | memoryTracer                                                               |
+| `Meta`                             | const                 | -                          | -                         | 1    | 1     | (transitive)                                                               |
+| `MissingRecordPlugin`              | interface             | -                          | -                         | 2    | -     | UseCaseTarget                                                              |
+| `MissingRepositoryAction`          | interface             | -                          | -                         | 2    | -     | UseCaseTarget                                                              |
+| `NumberConstraints`                | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `NumberProperty`                   | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `OpenAPIComponents`                | interface             | -                          | -                         | -    | -     | toOpenAPI                                                                  |
+| `OpenAPIDocument`                  | interface             | -                          | -                         | -    | -     | openapi                                                                    |
+| `OpenAPIMethod`                    | type                  | -                          | -                         | -    | -     | RouteOptions                                                               |
+| `OpenAPIOptions`                   | interface             | -                          | -                         | -    | -     | toOpenAPI                                                                  |
+| `OpenAPISchema`                    | interface             | -                          | -                         | -    | -     | toOpenAPI                                                                  |
+| `OpenAPISecurityScheme`            | type                  | -                          | -                         | -    | -     | RouteOptions                                                               |
+| `OpenAPISinkOptions`               | interface             | -                          | -                         | -    | -     | openapi                                                                    |
+| `OperationCallOptions`             | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `OperationPatch`                   | interface             | -                          | -                         | -    | -     | operationOf                                                                |
+| `OptionalBlueprint`                | type                  | -                          | -                         | -    | -     | optionalOf                                                                 |
+| `OptionalBlueprintList`            | type                  | -                          | -                         | -    | -     | optionalOf                                                                 |
+| `OptionalBlueprintVariant`         | type                  | -                          | -                         | -    | -     | optionalOf                                                                 |
+| `OptionalProperty`                 | type                  | -                          | -                         | -    | -     | optionalOf                                                                 |
+| `OptionalRecord`                   | interface             | -                          | -                         | -    | -     | optionalOf                                                                 |
+| `OutputApplication`                | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `OutputOf`                         | interface             | -                          | -                         | -    | -     | outputOf                                                                   |
+| `OutputSettings`                   | interface             | -                          | -                         | -    | -     | outputOf                                                                   |
+| `OutputSource`                     | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `OutputStatuses`                   | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Ownable`                          | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `ParseResult`                      | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Password`                         | class                 | agent-built 1, interop 2   | -                         | 14   | 1     | Std, blueprintOf                                                           |
+| `PasswordHasher`                   | interface             | -                          | -                         | 3    | -     | (transitive)                                                               |
+| `PasswordHasherRequired`           | const                 | -                          | -                         | 4    | -     | -                                                                          |
+| `Phone`                            | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `PipeResult`                       | type                  | -                          | -                         | -    | -     | outputOf                                                                   |
+| `PlainPassword`                    | class                 | -                          | -                         | 3    | -     | -                                                                          |
+| `PluginUniqueKey`                  | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Principal`                        | interface             | -                          | mcp 1, ws 1               | 2    | -     | (transitive)                                                               |
+| `PropertyClass`                    | interface             | -                          | -                         | -    | -     | BooleanProperty, DateProperty, Email, +11                                  |
+| `PropertyInput`                    | const                 | -                          | -                         | 3    | -     | Password                                                                   |
+| `PropertyMetadata`                 | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `PropertyOptions`                  | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `PropertyRequired`                 | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `PropertyValue`                    | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `ProviderFactory`                  | interface             | -                          | -                         | -    | -     | isProviderFactory, providerFrom, providersOf                               |
+| `ProviderNotBound`                 | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `ProviderOption`                   | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `ProviderOptions`                  | type                  | -                          | -                         | -    | -     | providerOf                                                                 |
+| `ProviderSettings`                 | interface             | -                          | -                         | -    | -     | providerOf                                                                 |
+| `ProviderSlot`                     | type                  | -                          | -                         | 1    | -     | (transitive)                                                               |
+| `ProviderStorage`                  | type                  | -                          | -                         | -    | -     | providersOf                                                                |
+| `PublishEventsOptions`             | interface             | -                          | -                         | -    | -     | publishEvents                                                              |
+| `PublishMaker`                     | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Publishable`                      | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `PublishedEvent`                   | interface             | -                          | ws 2                      | -    | -     | IEventPublisher                                                            |
+| `PublisherNotBound`                | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `QueryValueOf`                     | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RecordBuilder`                    | type                  | -                          | -                         | -    | -     | recordBuilderOf, recordOf                                                  |
+| `RecordChange`                     | type                  | -                          | -                         | 1    | 1     | (transitive)                                                               |
+| `RecordChanges`                    | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RecordConstructor`                | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RecordEffect`                     | type                  | -                          | -                         | -    | -     | RecordEffects                                                              |
+| `RecordEffects`                    | type                  | -                          | -                         | 1    | 1     | (transitive)                                                               |
+| `RecordJson`                       | type                  | -                          | -                         | 1    | -     | (transitive)                                                               |
+| `RecordKey`                        | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RecordOptions`                    | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RecordPluginConflict`             | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `RecordPluginDescriptor`           | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RecordPluginOptions`              | interface             | -                          | -                         | -    | -     | recordPluginOf                                                             |
+| `RecordPluginReference`            | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RecordPluginRequirement`          | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RecordPluginsOption`              | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RecordSettings`                   | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RecordValue`                      | type                  | -                          | -                         | -    | 1     | RecordChange, RecordEffects                                                |
+| `Register`                         | interface             | blog 6, interop 6          | codegen 2, drizzle 1, +1  | 8    | 2     | RegisteredApplication                                                      |
+| `RegisterMaker`                    | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RegisteredApplication`            | type                  | -                          | -                         | 1    | -     | useApplication                                                             |
+| `RepositoryAction`                 | type                  | -                          | -                         | -    | -     | RepositoryOf, repositoryOf                                                 |
+| `RepositoryConcurrencyConflict`    | const                 | -                          | codegen 2, drizzle 2, +2  | 5    | -     | -                                                                          |
+| `RepositoryCreateInput`            | type                  | -                          | -                         | -    | -     | -                                                                          |
+| `RepositoryCursorPage`             | interface             | -                          | -                         | -    | -     | -                                                                          |
+| `RepositoryCursorQuery`            | interface             | -                          | -                         | -    | -     | -                                                                          |
+| `RepositoryEntityNotFound`         | const                 | agent-built 2              | drizzle 1, dynamodb 1     | 4    | -     | -                                                                          |
+| `RepositoryFindBy`                 | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RepositoryFindManyBy`             | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RepositoryIncrementDeltas`        | type                  | -                          | -                         | -    | -     | -                                                                          |
+| `RepositoryIncrementOptions`       | interface             | -                          | -                         | -    | -     | -                                                                          |
+| `RepositoryIndex`                  | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RepositoryOf`                     | function + type       | -                          | -                         | 1    | -     | -                                                                          |
+| `RepositoryOrder`                  | interface             | -                          | -                         | -    | -     | RepositoryQuery                                                            |
+| `RepositoryPage`                   | interface             | -                          | -                         | -    | -     | -                                                                          |
+| `RepositoryPlan`                   | interface             | -                          | -                         | -    | -     | -                                                                          |
+| `RepositoryQuery`                  | interface             | -                          | drizzle 1                 | 1    | -     | (transitive)                                                               |
+| `RepositoryScans`                  | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `RepositorySettings`               | interface             | -                          | -                         | -    | -     | repositoryOf                                                               |
+| `RepositoryUniqueViolation`        | const                 | agent-built 2, interop 1   | codegen 1, drizzle 2, +2  | 10   | -     | -                                                                          |
+| `RepositoryUsedOutsideApplication` | const                 | -                          | -                         | 5    | -     | -                                                                          |
+| `RepositoryWalkOptions`            | interface             | -                          | -                         | -    | -     | -                                                                          |
+| `RepositoryWalkPage`               | interface             | -                          | -                         | -    | -     | -                                                                          |
+| `RepositoryWalkResult`             | interface             | -                          | -                         | -    | -     | -                                                                          |
+| `RepositoryWhere`                  | type                  | -                          | -                         | -    | -     | RepositoryQuery                                                            |
+| `ReservedBlueprintKey`             | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `ReservedEntityKey`                | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `ReservedRecordKey`                | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `ResourceAction`                   | type                  | -                          | -                         | -    | -     | resourceOf                                                                 |
+| `ResourceOptions`                  | interface             | -                          | -                         | -    | -     | resourceOf                                                                 |
+| `ResourceUseCases`                 | interface             | -                          | -                         | -    | -     | resourceOf                                                                 |
+| `RestoreMaker`                     | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Route`                            | function              | agent-built 1, interop 1   | elysia 1, express 1, +2   | 8    | 1     | -                                                                          |
+| `RouteDeclaration`                 | interface             | -                          | -                         | -    | 1     | AnyUseCaseClass                                                            |
+| `RouteOptions`                     | interface             | -                          | -                         | 1    | -     | (transitive)                                                               |
+| `RouteSettings`                    | interface             | -                          | -                         | -    | -     | Route                                                                      |
+| `RouteStatus`                      | type                  | -                          | -                         | -    | -     | RouteOptions                                                               |
+| `RuntimeServices`                  | interface             | -                          | -                         | -    | -     | configure                                                                  |
+| `SchemaLockMismatch`               | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `SchemaMigrationInvalidRow`        | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `SchemaMigrationOptions`           | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `SchemaMigrationReport`            | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `SchemaProperty`                   | class                 | -                          | -                         | 1    | -     | Std, blueprintOf                                                           |
+| `SecurityRequirement`              | interface             | -                          | -                         | -    | -     | RouteOptions                                                               |
+| `SelectOptions`                    | interface             | -                          | -                         | -    | -     | select                                                                     |
+| `SensitiveMark`                    | type                  | -                          | -                         | -    | -     | propertyOf                                                                 |
+| `Slug`                             | class                 | -                          | -                         | 7    | -     | Std, blueprintOf                                                           |
+| `Stage`                            | type                  | -                          | -                         | -    | -     | outputOf                                                                   |
+| `StageContext`                     | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StageFactory`                     | type                  | -                          | -                         | -    | -     | StdStages                                                                  |
+| `StageOptions`                     | type                  | -                          | codegen 1                 | -    | -     | transformOf                                                                |
+| `StandardSchemaV1`                 | interface + namespace | interop 1                  | -                         | 1    | 2     | Issue                                                                      |
+| `State`                            | const                 | -                          | -                         | 1    | -     | (transitive)                                                               |
+| `Std`                              | const                 | interop 1                  | codegen 9, mcp 3          | 5    | -     | -                                                                          |
+| `StdCreateOptions`                 | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StdEntityOptions`                 | interface             | -                          | -                         | -    | -     | GetMaker                                                                   |
+| `StdEventPolicies`                 | const                 | -                          | codegen 3                 | 2    | -     | -                                                                          |
+| `StdHookArgs`                      | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StdHookOptions`                   | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StdLifecycleOptions`              | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StdListOptions`                   | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StdNoHookOptions`                 | interface             | -                          | -                         | -    | -     | GetMaker                                                                   |
+| `StdOwnerOption`                   | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StdRecordPlugins`                 | const                 | -                          | codegen 1                 | 2    | 1     | -                                                                          |
+| `StdStages`                        | const                 | -                          | codegen 3                 | 2    | -     | -                                                                          |
+| `StdUseCaseContext`                | interface             | -                          | -                         | -    | -     | commandOf, resourceOf                                                      |
+| `StdUseCaseErrors`                 | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StdUseCaseOptions`                | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StdUseCasePlugins`                | type                  | -                          | -                         | -    | -     | StdUseCases                                                                |
+| `StdUseCases`                      | const                 | agent-built 3, blog 1      | codegen 3                 | 3    | -     | -                                                                          |
+| `StepArgs`                         | type                  | -                          | codegen 1                 | -    | -     | (transitive)                                                               |
+| `StepEnsureKind`                   | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StepErrorDescription`             | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StepFindTarget`                   | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StepReadAction`                   | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StepReference`                    | type                  | -                          | -                         | -    | -     | StepArgs, StepValue                                                        |
+| `StepReferenceType`                | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StepReferencesOf`                 | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StepRepositoryWith`               | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StepValue`                        | type                  | -                          | codegen 1                 | -    | -     | StepArgs                                                                   |
+| `StepValueCheck`                   | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StepsInitialScope`                | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StepsUseCaseConstructor`          | type                  | -                          | -                         | 1    | -     | useCaseOf                                                                  |
+| `StringConstraints`                | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `StringProperty`                   | const                 | blog 1                     | -                         | 1    | -     | (transitive)                                                               |
+| `SyncVerifyUnsupported`            | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `TagMaker`                         | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Taggable`                         | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `Text`                             | const                 | -                          | drizzle 1, hono 1, +1     | 4    | -     | -                                                                          |
+| `TraceAttributes`                  | type                  | -                          | otel 1                    | -    | -     | ITraceSpan, ITracer                                                        |
+| `TraceStatus`                      | type                  | -                          | otel 1                    | -    | -     | ITraceSpan                                                                 |
+| `TransformFactory`                 | type                  | -                          | -                         | -    | -     | select, transformOf                                                        |
+| `TransformSettings`                | interface             | -                          | -                         | -    | -     | transformOf                                                                |
+| `TransformStage`                   | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `Unauthenticated`                  | const                 | -                          | -                         | 6    | -     | -                                                                          |
+| `UndeclaredBlueprintProperty`      | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `UndeclaredRecordProperty`         | const                 | -                          | -                         | 4    | -     | -                                                                          |
+| `UniqueMark`                       | type                  | -                          | -                         | -    | -     | propertyOf                                                                 |
+| `UnknownCommandOperation`          | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `UnknownRecordPlugin`              | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `UnknownUseCasePlugin`             | const                 | -                          | -                         | 1    | -     | -                                                                          |
+| `UnregisteredApplicationReference` | const                 | -                          | -                         | 4    | -     | -                                                                          |
+| `UnregisteredRepositoryDependency` | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `UnregisteredUseCaseDependency`    | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `UpdateMaker`                      | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `UpdatedAt`                        | class                 | -                          | -                         | 1    | -     | Std, blueprintOf, entityOf                                                 |
+| `Url`                              | const                 | -                          | -                         | 2    | -     | -                                                                          |
+| `UseCaseAlreadyExecuted`           | const                 | -                          | -                         | 3    | -     | -                                                                          |
+| `UseCaseCollection`                | type                  | -                          | -                         | -    | -     | AnyUseCaseClass, StepsUseCaseConstructor, UseCaseDeclaration, +2           |
+| `UseCaseCompilation`               | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `UseCaseConstructor`               | type                  | -                          | -                         | -    | -     | useCaseOf                                                                  |
+| `UseCaseContext`                   | type                  | -                          | -                         | 1    | -     | -                                                                          |
+| `UseCaseDeclaration`               | interface             | -                          | codegen 1                 | -    | -     | useCaseOf                                                                  |
+| `UseCaseDependencies`              | type                  | -                          | -                         | 1    | 1     | -                                                                          |
+| `UseCaseDependency`                | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `UseCaseEntityConflict`            | const                 | agent-built 2              | -                         | 3    | -     | -                                                                          |
+| `UseCaseEntityNotFound`            | const                 | agent-built 2              | -                         | 2    | -     | -                                                                          |
+| `UseCaseFieldPlan`                 | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `UseCaseInput`                     | type                  | -                          | -                         | 1    | 1     | CommandInput, CommandOf                                                    |
+| `UseCaseInvalidCredentials`        | const                 | agent-built 2              | -                         | 3    | -     | -                                                                          |
+| `UseCaseMaker`                     | type                  | -                          | -                         | -    | -     | useCasePluginOf                                                            |
+| `UseCaseOptions`                   | type                  | -                          | -                         | 2    | -     | CommandOptions                                                             |
+| `UseCasePluginDescriptor`          | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `UseCasePluginRequirements`        | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `UseCasePluginSettings`            | interface             | -                          | -                         | -    | -     | useCasePluginOf                                                            |
+| `UseCaseResponse`                  | type                  | -                          | -                         | 1    | 1     | CommandOf, CommandResponse                                                 |
+| `UseCaseSettings`                  | interface             | -                          | -                         | -    | -     | UseCaseDeclaration                                                         |
+| `UseCaseStep`                      | type                  | -                          | -                         | -    | -     | UseCaseDeclaration, useCaseOf                                              |
+| `UseCaseStepDescription`           | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `UseCaseStepsSettings`             | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `UseCaseTarget`                    | type                  | -                          | -                         | 1    | -     | GetMaker                                                                   |
+| `UseCaseTargetInfo`                | interface             | -                          | -                         | -    | -     | (transitive)                                                               |
+| `UseCaseUnavailable`               | const                 | -                          | -                         | 5    | -     | -                                                                          |
+| `VersionedIdentity`                | type                  | -                          | -                         | -    | -     | (transitive)                                                               |
+| `applicationOf`                    | function              | agent-built 3, blog 1, +1  | codegen 4, otel 1, +1     | 12   | 2     | -                                                                          |
+| `blueprintBuilderOf`               | function              | interop 1                  | -                         | 2    | -     | -                                                                          |
+| `blueprintOf`                      | const                 | agent-built 6, blog 2, +1  | codegen 1, drizzle 2, +2  | 25   | 2     | -                                                                          |
+| `blueprintPluginOf`                | function              | interop 1                  | -                         | 2    | -     | -                                                                          |
+| `checkJsonSchema`                  | function              | -                          | -                         | 4    | 1     | -                                                                          |
+| `commandBuilderOf`                 | function              | -                          | -                         | 2    | -     | -                                                                          |
+| `commandOf`                        | const                 | agent-built 3, blog 1, +1  | codegen 4, drizzle 2, +1  | 13   | 2     | -                                                                          |
+| `configure`                        | function              | -                          | -                         | 7    | -     | -                                                                          |
+| `consoleLogProvider`               | function              | -                          | codegen 1                 | 1    | -     | -                                                                          |
+| `entityBuilderOf`                  | function              | -                          | -                         | 2    | -     | -                                                                          |
+| `entityOf`                         | const                 | agent-built 3, blog 1, +1  | codegen 3, drizzle 3, +1  | 26   | 2     | -                                                                          |
+| `enumOf`                           | function              | blog 1                     | codegen 3                 | 8    | -     | Std, blueprintOf                                                           |
+| `environmentOf`                    | function              | blog 1                     | codegen 1                 | 9    | -     | -                                                                          |
+| `eventOf`                          | function              | interop 1                  | codegen 2                 | 5    | 1     | -                                                                          |
+| `eventPolicyOf`                    | function              | -                          | codegen 2                 | 3    | -     | -                                                                          |
+| `exceptionOf`                      | function              | agent-built 3, blog 1, +1  | codegen 3, dynamodb 1, +2 | 8    | 2     | -                                                                          |
+| `guard`                            | function              | -                          | drizzle 1                 | 8    | 2     | -                                                                          |
+| `hasPlugin`                        | function              | -                          | -                         | 1    | 1     | -                                                                          |
+| `inMemoryProvider`                 | function              | agent-built 3, interop 2   | codegen 2, dynamodb 1     | 6    | 1     | -                                                                          |
+| `isCommand`                        | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `isEntity`                         | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `isEntityClass`                    | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `isOutput`                         | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `isProviderFactory`                | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `isUseCase`                        | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `isUseCaseCatalog`                 | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `isUseCaseClass`                   | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `isUseCasePlugin`                  | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `jsonLogProvider`                  | function              | -                          | codegen 1                 | 2    | -     | -                                                                          |
+| `jsonOf`                           | function              | -                          | codegen 1                 | 3    | 1     | Std, blueprintOf                                                           |
+| `jsonSchemaIssues`                 | function              | -                          | -                         | 2    | -     | -                                                                          |
+| `listOf`                           | function              | interop 1                  | codegen 2                 | 8    | 2     | (transitive)                                                               |
+| `logFrom`                          | function              | -                          | codegen 3                 | 5    | -     | -                                                                          |
+| `logProviderOf`                    | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `memoryLogProvider`                | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `memoryTracer`                     | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `openapi`                          | const                 | agent-built 12, blog 4, +1 | codegen 3, hono 1, +1     | 14   | 2     | (transitive)                                                               |
+| `operationOf`                      | function              | interop 1                  | -                         | 1    | -     | -                                                                          |
+| `optionalOf`                       | function              | -                          | codegen 1, drizzle 1, +1  | 8    | 2     | (transitive)                                                               |
+| `outputOf`                         | function              | agent-built 3, blog 1, +1  | codegen 3                 | 9    | 2     | -                                                                          |
+| `pluginsOf`                        | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `propertyInputOf`                  | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `propertyOf`                       | function              | interop 1                  | codegen 1                 | 8    | 1     | (transitive)                                                               |
+| `providerFrom`                     | function              | blog 2                     | codegen 1, mcp 1          | 8    | 1     | -                                                                          |
+| `providerOf`                       | function              | interop 1                  | codegen 3, drizzle 1, +1  | 4    | -     | -                                                                          |
+| `providersOf`                      | function              | blog 1                     | codegen 4, mcp 1          | 2    | 1     | -                                                                          |
+| `publishEvents`                    | const                 | interop 1                  | codegen 5, mcp 5, +1      | 11   | -     | -                                                                          |
+| `recordBuilderOf`                  | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `recordNameOf`                     | function              | -                          | -                         | 3    | -     | -                                                                          |
+| `recordOf`                         | const                 | interop 1                  | codegen 1                 | 10   | 2     | -                                                                          |
+| `recordPluginCatalogOf`            | function              | -                          | -                         | 1    | 1     | -                                                                          |
+| `recordPluginOf`                   | function              | -                          | -                         | 3    | 1     | -                                                                          |
+| `repositoryOf`                     | function              | agent-built 3, blog 1, +1  | codegen 1, drizzle 2, +1  | 21   | 2     | -                                                                          |
+| `resetApplication`                 | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `resetRuntime`                     | function              | -                          | -                         | 4    | -     | -                                                                          |
+| `resourceOf`                       | function              | interop 3                  | -                         | 10   | -     | -                                                                          |
+| `select`                           | const                 | -                          | codegen 3, drizzle 1, +1  | 5    | -     | -                                                                          |
+| `stripUndeclared`                  | function              | -                          | hono 2                    | 2    | -     | -                                                                          |
+| `toOpenAPI`                        | function              | -                          | mcp 1, ws 1               | 4    | -     | -                                                                          |
+| `transformOf`                      | function              | interop 1                  | -                         | 1    | -     | -                                                                          |
+| `useApplication`                   | function              | blog 2                     | -                         | 3    | 1     | -                                                                          |
+| `useCaseCatalogOf`                 | function              | -                          | -                         | 3    | -     | -                                                                          |
+| `useCaseOf`                        | function              | agent-built 3, interop 5   | codegen 4, drizzle 2, +1  | 12   | 2     | -                                                                          |
+| `useCasePluginOf`                  | function              | -                          | -                         | 1    | -     | -                                                                          |
+| `variantOf`                        | function              | -                          | codegen 4, mcp 1          | 7    | 2     | (transitive)                                                               |
 
 ## Unused
 
 Exports with zero usage in examples, packages and docs.
 
-### Unused and not referenced by a used export (21)
+### Unused and not referenced by a used export (11)
 
 Unused and unreferenced: candidates to move out of stable.
 
-- `BooleanProperty` (const)
-- `DateProperty` (const)
 - `EntityIncrementKeyOf` (type)
-- `InvalidLogDeclaration` (const)
-- `InvalidRecordValue` (const)
-- `InvalidRepositoryEntity` (const)
-- `InvalidUseCaseDependencies` (const)
-- `NumberProperty` (const)
-- `PropertyRequired` (const)
 - `RepositoryCreateInput` (type)
 - `RepositoryCursorPage` (interface)
 - `RepositoryCursorQuery` (interface)
@@ -525,10 +530,8 @@ Unused and unreferenced: candidates to move out of stable.
 - `RepositoryWalkOptions` (interface)
 - `RepositoryWalkPage` (interface)
 - `RepositoryWalkResult` (interface)
-- `ReservedBlueprintKey` (const)
-- `SyncVerifyUnsupported` (const)
 
-### Unused but referenced by a used export (255)
+### Unused but referenced by a used export (249)
 
 Moving these out of stable would break code that names a type in the signature of a used export.
 
@@ -552,7 +555,6 @@ Moving these out of stable would break code that names a type in the signature o
 - `ApplicationSettings` (interface)
 - `ApplicationStartOptions` (interface)
 - `ArchiveMaker` (type)
-- `Authenticatable` (const)
 - `BlueprintBuilder` (interface)
 - `BlueprintContext` (type)
 - `BlueprintData` (type)
@@ -581,14 +583,10 @@ Moving these out of stable would break code that names a type in the signature o
 - `CommandUseCases` (type)
 - `CommandUseCasesOption` (type)
 - `CreateMaker` (type)
-- `CreatedAt` (class)
-- `DateTime` (class)
 - `DeclaredEntityInstance` (type)
 - `DeclaredExceptionClass` (interface)
-- `DeclaredProperty` (class)
 - `DeclaredRecordInstance` (type)
 - `DeleteMaker` (type)
-- `DeletedAt` (class)
 - `DependencyFunctions` (type)
 - `DependencyOf` (type)
 - `DependencyOverrides` (type)
@@ -608,7 +606,6 @@ Moving these out of stable would break code that names a type in the signature o
 - `EntityStorageOptions` (interface)
 - `EntityUniqueKey` (type)
 - `EntityUniqueKeyOf` (type)
-- `EntityUniqueKeys` (const)
 - `EntityUpgrade` (type)
 - `EntityUpgrades` (interface)
 - `EntityValueOf` (type)
@@ -667,6 +664,8 @@ Moving these out of stable would break code that names a type in the signature o
 - `LoginMaker` (type)
 - `MarkedUniqueKey` (type)
 - `MemoryLogProvider` (interface)
+- `MemorySpan` (interface)
+- `MemoryTracer` (interface)
 - `NumberConstraints` (interface)
 - `OpenAPIComponents` (interface)
 - `OpenAPIDocument` (interface)
@@ -735,7 +734,6 @@ Moving these out of stable would break code that names a type in the signature o
 - `SchemaMigrationInvalidRow` (interface)
 - `SchemaMigrationOptions` (interface)
 - `SchemaMigrationReport` (interface)
-- `SchemaProperty` (class)
 - `SecurityRequirement` (interface)
 - `SelectOptions` (interface)
 - `SensitiveMark` (type)
@@ -771,7 +769,6 @@ Moving these out of stable would break code that names a type in the signature o
 - `TransformStage` (interface)
 - `UniqueMark` (type)
 - `UpdateMaker` (type)
-- `UpdatedAt` (class)
 - `UseCaseCollection` (type)
 - `UseCaseCompilation` (interface)
 - `UseCaseConstructor` (type)

@@ -217,6 +217,7 @@ export {
 	consoleLogProvider,
 	jsonLogProvider,
 	Logger,
+	LogLevels,
 	logProviderOf,
 	memoryLogProvider,
 } from "./core/logger/logger";
@@ -541,7 +542,14 @@ export {
 	UpdatedAt,
 } from "./std/properties/time";
 export { recordOf } from "./std/record";
-export { Authenticatable, StdRecordPlugins } from "./std/record-plugins";
+export {
+	Archivable,
+	Authenticatable,
+	Ownable,
+	Publishable,
+	StdRecordPlugins,
+	Taggable,
+} from "./std/record-plugins";
 export { resourceOf } from "./std/resource";
 export type {
 	IdGenerator,

@@ -11,7 +11,7 @@
 
 ### Changed
 
-- **Breaking.** The stable surface is cut before the 27.0 freeze (#59). These moved from `@afora/core` to `@afora/core/experimental`, outside the contract (20): the record plugins `Archivable`, `Ownable`, `Publishable` and `Taggable` (still in `StdRecordPlugins`, picked as `ctx.publishable`), `LogLevels`, and the types `AbstractPropertyConstructor`, `IPropertyCollection`, `EntityStorageSettings`, `RepositoryCount`, `RepositoryCreate`, `RepositoryDelete`, `RepositoryIncrement`, `RepositoryRestore`, `RepositoryUpdate`, `RepositoryExists`, `RepositoryExplain`, `RepositoryFindCursor`, `RepositoryFindMany`, `RepositoryFindPage` and `RepositoryForEachPage` (name a repository with `RepositoryOf`). Nothing changes at run time: the classes and the plugins are the same objects, and exceptions keep needing no registration in `errors`. Twenty-one other unused exports were weighed and stay stable; `docs/api-tiers.md` ("Moved before 27.0") gives the reason for each, moved or kept, and what would promote a moved one back. See Migration below.
+- **Breaking.** The stable surface is cut before the 27.0 freeze (#59). These moved from `@afora/core` to `@afora/core/experimental`, outside the contract (15), all types: `AbstractPropertyConstructor`, `IPropertyCollection`, `EntityStorageSettings`, `RepositoryCount`, `RepositoryCreate`, `RepositoryDelete`, `RepositoryIncrement`, `RepositoryRestore`, `RepositoryUpdate`, `RepositoryExists`, `RepositoryExplain`, `RepositoryFindCursor`, `RepositoryFindMany`, `RepositoryFindPage` and `RepositoryForEachPage` (name a repository with `RepositoryOf`). Nothing changes at run time. Twenty-six other unused exports were weighed and stay stable; `docs/api-tiers.md` ("Moved before 27.0") gives the reason for each, moved or kept, and what would promote a moved one back. See Migration below.
 - The version scheme is year-based, `YY.minor.patch` (#62): the first stable release is 27.0.0, the major is the year of the cycle and only a major may break the contract. `VERSIONING.md` describes it, drops "A major is not planned", says that a breaking change ships only in the next year's major after a deprecation, and has the changelog template at `27.1.0`. `docs/api-tiers.md` and `docs/README.md` say 27.0 where they said 1.0.
 - `VERSIONING.md` has the rules of release candidates (#63): `27.0.0-rc.1` goes to `next` once the blocking issues of the 27.0 milestone are closed, only fixes land during the rc, it stays open at least two weeks after the last candidate, and `27.0.0` ships when no blocking issue is open.
 - The Release workflow fails on a version that is neither `0.0.<n>` nor `<YY>.<minor>.<patch>[-rc.<n>]` with `YY` at 27 or more, or whose numbers have leading zeros.
@@ -44,24 +44,22 @@ import { RegisterBase } from "../domain/use-cases";
 import { RegisterBase } from "../domain/register.use-case";
 ```
 
-**Exports moved to `@afora/core/experimental` (#59).** Before:
+**Types moved to `@afora/core/experimental` (#59).** Before:
 
 ```ts
-import { LogLevels, Publishable, type RepositoryCreate } from "@afora/core";
+import type { EntityStorageSettings, RepositoryCreate } from "@afora/core";
 ```
 
-After: the same names, from the experimental entry (both entries share one module state, so `hasPlugin` sees the same plugins). A Std record plugin can also be taken from `StdRecordPlugins`, and a repository method type from `RepositoryOf`:
+After: the same names, from the experimental entry; a repository method type can also be taken from `RepositoryOf`, which stays stable:
 
 ```ts
-import {
-	LogLevels,
-	Publishable,
-	type RepositoryCreate,
+import type {
+	EntityStorageSettings,
+	RepositoryCreate,
 } from "@afora/core/experimental";
 
 // or, staying on the stable entry
-import { type RepositoryOf, StdRecordPlugins } from "@afora/core";
-const Publishable = StdRecordPlugins.plugins.publishable;
+import type { RepositoryOf } from "@afora/core";
 type Create = RepositoryOf<typeof Post, ["create"]>["create"];
 ```
 

@@ -3,15 +3,7 @@ import assert from "node:assert/strict";
 // The application supplies the TypeBox peer used by these schemas and core.
 import { Type } from "typebox";
 import { outputValueOf, RESERVED_RECORD_KEYS } from "../dist/adapters.js";
-import {
-	Archivable,
-	jwtOf,
-	Ownable,
-	Publishable,
-	sliceOf,
-	sliceValue,
-	Taggable,
-} from "../dist/experimental.js";
+import { jwtOf, sliceOf, sliceValue } from "../dist/experimental.js";
 import {
 	blueprintOf,
 	DeletedEntity,
@@ -23,7 +15,6 @@ import {
 	propertyOf,
 	Route,
 	recordOf,
-	StdRecordPlugins,
 	useCaseOf,
 } from "../dist/index.js";
 import { providerContract } from "../dist/testing/index.js";
@@ -115,11 +106,6 @@ assert.deepEqual(sliceValue(wrapped, { slim: { title: true } }), {
 });
 const Only = sliceOf(Wrapper.blueprint, { slim: true });
 assert.ok(Only.properties.slim === Slim);
-// the record plugins moved out of stable are the ones of `StdRecordPlugins`
-assert.ok(Publishable === StdRecordPlugins.plugins.publishable);
-assert.ok(Archivable === StdRecordPlugins.plugins.archivable);
-assert.ok(Taggable === StdRecordPlugins.plugins.taggable);
-assert.ok(Ownable === StdRecordPlugins.plugins.ownable);
 
 // adapters entry shares module state with the main one (records mask through it)
 assert.equal(outputValueOf({ user }).user.password, MASK);
