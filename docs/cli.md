@@ -73,7 +73,7 @@ Prints the `afora.json` of an application written in TypeScript.
 - **`--output-dir dir`.** Sets `output.dir` in the printed spec.
 - **`--import key=./file.ts#name`.** Repeatable. Maps something a spec cannot describe to the export it is imported from: a provider made without `providerOf` (`provider`, `repositories.<Name>.provider`, `providers.<key>`), a hand-written use case (`useCases.<Name>`), the `run` function of a steps use case (`useCases.<Name>.run.<name>`), a command handler (`commands.<Name>.events`, `commands.<Name>.onEventError`), a publisher (`publishers.<key>`), a stage written by hand (`outputs.<Name>.pipe.<index>`) or an upgrade step (`entities.<Name>.upgrade.<n>`). A value that is not `key=value` is an error.
 - **Output.** The spec as JSON on standard output (tab indented), so redirect it: `> afora.json`.
-- **Runtime.** It imports your file: run it with Bun, or Node >= 23.6 for TypeScript files.
+- **Runtime.** It imports your file: run it with Bun, or Node >= 22.18 (type stripping on by default) for TypeScript files.
 
 ```bash
 bunx afora-codegen extract src/app.ts#App > afora.json

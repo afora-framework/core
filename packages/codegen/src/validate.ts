@@ -25,6 +25,7 @@ import { isIdentifier, isObject } from "./spec/field";
 import {
 	COLLECTIONS,
 	type CodegenOptions,
+	DEFAULT_OUTPUT_DIR,
 	type EventPolicyCatalogEntry,
 	KIND_OF,
 	type ProviderCatalogEntry,
@@ -33,7 +34,11 @@ import {
 	type StageCatalogEntry,
 } from "./spec/types";
 import { checkException, checkUseCase } from "./use-case";
-import { useCaseFileIssues } from "./use-case-files";
+import {
+	generatedFileIssues,
+	useCaseFileIssues,
+	useCaseFiles,
+} from "./use-case-files";
 
 const TOP_LEVEL_KEYS = [
 	"$schema",
@@ -1417,8 +1422,16 @@ function check(
 			),
 		);
 	}
-	// The files of the use cases hand-written classes need.
-	issues.push(...useCaseFileIssues(own, scope));
+	// The files of the use cases hand-written classes need, and imports of generated files.
+	const files = useCaseFiles(own, scope);
+	issues.push(...useCaseFileIssues(files, scope));
+	const dir = isObject(input.output) ? input.output.dir : DEFAULT_OUTPUT_DIR;
+	if (
+		!issues.some((i) => i.code === "invalid_output") &&
+		typeof dir === "string"
+	) {
+		issues.push(...generatedFileIssues(input, files, dir));
+	}
 	// Stable output: by path, then code.
 	issues.sort(
 		(a, b) =>

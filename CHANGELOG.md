@@ -5,7 +5,7 @@
 ### Changed
 
 - This release republishes every `@afora` package through npm trusted publishing (OIDC): `@afora/fastify`, `@afora/express`, `@afora/elysia` and `@afora/dynamodb` 0.0.9 went out through a token, without provenance, and their trusted publisher stayed pending validation. The Release workflow no longer passes a token, so every package is published with provenance or the release fails.
-- **Breaking** (`@afora/codegen`). A use case implemented by `{ "import" }` can be a dependency of another use case and be `call`ed by its steps (#64); the `import_dependency` issue is gone. To make this possible, each use case that hand-written code needs (the `<Name>Base` of every `import` use case, and every steps use case such a class depends on) is generated in its own `<kebab-name>.use-case.ts` in `output.dir`, and `use-cases.ts` re-exports it. New issues: `import_cycle` (a hand-written module that would import itself back through the generated files) and `file_collision` (two use cases that would get the same file name). `writeGenerated` removes stale generated `*.use-case.ts` files. See Migration below.
+- **Breaking** (`@afora/codegen`). A use case implemented by `{ "import" }` can be a dependency of another use case and be `call`ed by its steps (#64); the `import_dependency` issue is gone. To make this possible, each use case that hand-written code needs (the `<Name>Base` of every `import` use case, and every steps use case such a class depends on) is generated in its own `<kebab-name>.use-case.ts` in `output.dir`, and `use-cases.ts` re-exports it. New issues: `import_cycle` (a hand-written module that would import itself back through the generated files), `file_collision` (two use cases that would get the same file name) and `generated_file` (an `{ "import" }` of a file the generator writes in `output.dir`, such as `./greet.use-case`). `writeGenerated` removes stale generated `*.use-case.ts` files. See Migration below.
 - Every export of `@afora/core`, `/adapters`, `/experimental` and `/testing` has JSDoc (#92). The main builders (`propertyOf`, `blueprintOf`, `recordOf`, `entityOf`, `eventOf`, `repositoryOf`, `useCaseOf`, `environmentOf`, `exceptionOf`, `guard`, `applicationOf`) have an `@example` that is type-checked; functions that throw name the exception with `@throws`, and settings with a default carry `@default`. The block of `IRepositoryProvider` was attached to the wrong declaration.
 
 ### Docs
@@ -16,7 +16,7 @@
 
 ### Migration
 
-`@afora/codegen`: a handler of an `import` use case imports its base from the new file. Importing it from `use-cases.ts` keeps working as long as no generated use case depends on that handler.
+`@afora/codegen`: a handler of an `import` use case imports its base from the new file. Importing it from `use-cases.ts` keeps working only as long as no other use case (steps or `import`) depends on that handler: the dependent's `<kebab-name>.use-case.ts` imports the handler, the handler imports `use-cases.ts`, and `use-cases.ts` re-exports the dependent's file, a loop of imports that can reach the handler before its class is defined. The validator does not read handler code, so it cannot report this.
 
 ```ts
 // before

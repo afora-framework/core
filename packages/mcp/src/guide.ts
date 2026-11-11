@@ -130,7 +130,8 @@ a file of your own.
 - \`implementation\` is \`{ "steps": [...] }\` (generated complete, no hand-written file) or \`{ "import": "../handlers/x.ts#Name" }\`:
   \`afora_generate\` writes \`abstract class <Name>Base\` in \`<kebab-name>.use-case.ts\` of output.dir (\`RegisterUser\` -> \`register-user.use-case.ts\`);
   write \`class Name extends <Name>Base\` with \`execute\` at that path, importing the base from that file. Any use case can list an imported one
-  as a dependency; two hand-written classes in one module that depend on each other are an \`import_cycle\` (give each a module).
+  as a dependency; two hand-written classes in one module that depend on each other are an \`import_cycle\` (give each a module), and an import of
+  a file the generator writes in output.dir (\`./greet.use-case\`, \`./use-cases\`) is a \`generated_file\` (keep handlers outside, e.g. ../handlers).
 - Steps run in order and \`return\` is last, exactly once: \`find\` ("<repo>.<read action>"), \`ensure\` (exists | absent | equals | notEquals | true | false;
   \`other\` for the comparisons, \`error\` a declared exception name or a core one, listed in \`errors\`; optional \`details\`), \`build\` (a record or
   entity name, \`values\`, \`as\`), \`change\` ($ref, \`key\` in the class's change keys, \`value\`), \`invoke\` ($ref, \`method\`, \`args\`),

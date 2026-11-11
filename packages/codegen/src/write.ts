@@ -7,9 +7,9 @@ import {
 	rm,
 	writeFile,
 } from "node:fs/promises";
-import { dirname, relative, resolve, sep } from "node:path";
-import { BANNER, GENERATED_FILES, type GeneratedFile } from "./generate";
-import { USE_CASE_FILE_SUFFIX } from "./use-case-files";
+import { basename, dirname, relative, resolve, sep } from "node:path";
+import { BANNER, type GeneratedFile } from "./generate";
+import { GENERATED_FILES, USE_CASE_FILE_SUFFIX } from "./use-case-files";
 
 /** A file `writeGenerated` would not touch, and why. */
 export interface RefusedFile {
@@ -129,7 +129,7 @@ export async function writeGenerated(
 			if (!isGenerated(current)) {
 				refused.push({
 					path: file.path,
-					reason: `exists and does not start with the generated banner ("${BANNER}"); it is not overwritten`,
+					reason: `${basename(file.path)} exists and does not start with the generated banner ("${BANNER}"), so it is hand-written and not overwritten; rename it (and the imports of it), or rename the declaration the generator names this file after`,
 				});
 				continue;
 			}

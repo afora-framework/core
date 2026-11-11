@@ -1022,6 +1022,104 @@ export class Shout extends ShoutBase {
 		expect(codes(copy)).toEqual(["import_cycle@useCases.Shout.implementation"]);
 	});
 
+	test("one module written as `all`, `all/index` or `all.js` is one module for import_cycle", () => {
+		for (const [greet, shout] of [
+			["../handlers/all", "../handlers/all/index"],
+			["../handlers/all/index.ts", "../handlers/all"],
+			["../handlers/all.js", "../handlers/all.ts"],
+			["../handlers/all.mts", "../handlers/./all"],
+		]) {
+			const copy: Draft = JSON.parse(JSON.stringify(composed));
+			copy.useCases.Greet.implementation = { import: `${greet}#Greet` };
+			copy.useCases.Shout.implementation = { import: `${shout}#Shout` };
+			expect(codes(copy)).toEqual([
+				"import_cycle@useCases.Shout.implementation",
+			]);
+		}
+	});
+
+	test("an import of a file the generator writes is a generated_file", () => {
+		const greetFile: Draft = JSON.parse(JSON.stringify(accounts));
+		greetFile.useCases.Greet.implementation = {
+			import: "./greet.use-case#Greet",
+		};
+		expect(codes(greetFile)).toEqual([
+			"generated_file@useCases.Greet.implementation",
+		]);
+		const fixed: Draft = JSON.parse(JSON.stringify(composed));
+		fixed.useCases.Welcome.implementation.steps.unshift({
+			run: "helper",
+			fn: { import: "../domain/use-cases.js#helper" },
+		});
+		const issues = validateSpec(fixed).filter(
+			(i) => i.code === "generated_file",
+		);
+		expect(issues.map((i) => i.path.join("."))).toEqual([
+			"useCases.Welcome.implementation.steps.0.fn",
+		]);
+		expect(issues[0]?.message).toContain("use-cases.ts");
+		// `./` and `./index` are the generated index.ts
+		const index: Draft = JSON.parse(JSON.stringify(accounts));
+		index.useCases.Greet.implementation = { import: "./#Greet" };
+		expect(codes(index)).toEqual([
+			"generated_file@useCases.Greet.implementation",
+		]);
+		// a file elsewhere with the same name is fine
+		const elsewhere: Draft = JSON.parse(JSON.stringify(accounts));
+		elsewhere.useCases.Greet.implementation = {
+			import: "../handlers/greet.use-case#Greet",
+		};
+		expect(codes(elsewhere)).toEqual([]);
+	});
+
+	test("an imported use case can depend on another; each handler imports its base from its own file", async () => {
+		const spec: Draft = JSON.parse(JSON.stringify(accounts));
+		spec.useCases.Ahoy = {
+			input: { fields: { name: "text" } },
+			response: { fields: { message: "string" } },
+			dependencies: { greet: "Greet" },
+			implementation: { import: "../handlers/ahoy#Ahoy" },
+		};
+		const AHOY_TS = `import { AhoyBase } from "../domain/ahoy.use-case";
+
+export class Ahoy extends AhoyBase {
+	override async execute() {
+		const { greeting } = await this.dependencies.greet({ name: this.input.name });
+		return { message: \`\${greeting} Ahoy!\` };
+	}
+}
+`;
+		expect(validateSpec(spec)).toEqual([]);
+		const { dir, domain } = await build(spec, {
+			...EXTRA,
+			"src/handlers/ahoy.ts": AHOY_TS,
+		});
+		expect(
+			await new domain.App.useCases.Ahoy({ name: "Ana" }).execute(),
+		).toEqual({ message: "Hello, Ana! Ahoy!" });
+		expect(await exercise(domain)).toEqual(EXPECTED);
+		// Loaded from any end: use-cases.ts first is fine too.
+		const useCases = await import(join(dir, "src/domain/use-cases.ts"));
+		expect(useCases.AhoyBase).toBeDefined();
+
+		// The legacy import of GreetBase from use-cases.ts loops back through
+		// ahoy.use-case.ts once another use case depends on Greet: loading
+		// use-cases.ts (or the handler) first reaches Greet before it exists.
+		const legacy = GREET_TS.replace(
+			'"../domain/greet.use-case"',
+			'"../domain/use-cases"',
+		);
+		const broken = await makeProject(generate(spec), {
+			...EXTRA,
+			"src/handlers/greet.ts": legacy,
+			"src/handlers/ahoy.ts": AHOY_TS,
+		});
+		projects.push(broken);
+		await expect(
+			import(join(broken, "src/domain/use-cases.ts")),
+		).rejects.toThrow();
+	}, 120_000);
+
 	test("two use cases with the same file are a file_collision", () => {
 		const copy: Draft = JSON.parse(JSON.stringify(accounts));
 		copy.useCases.GetURL = {

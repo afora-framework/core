@@ -41,10 +41,15 @@ function render(): string {
 		out.push(`Tier: ${tierText[entry.tier]}. ${exports.length} exports.`, "");
 		for (const info of exports) out.push(...renderExport(info, entry));
 	}
-	return `${out
-		.join("\n")
-		.replace(/\n{3,}/g, "\n\n")
-		.trimEnd()}\n`;
+	return `${collapseBlankLines(out.join("\n")).trimEnd()}\n`;
+}
+
+/** Collapses runs of blank lines in prose only; fenced blocks stay verbatim. */
+function collapseBlankLines(text: string): string {
+	return text
+		.split(/(^```[^\n]*\n[\s\S]*?\n```$)/m)
+		.map((part, i) => (i % 2 ? part : part.replace(/\n{3,}/g, "\n\n")))
+		.join("");
 }
 
 function renderExport(

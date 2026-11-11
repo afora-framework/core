@@ -28,7 +28,7 @@ No. `afora.json` is one way to write the same application: as data, for an agent
 Both. afora needs Bun >= 1.4.4 or Node >= 22, and its core also loads in browsers and Workers, because `src/` imports no `node:crypto`, `Buffer` or Bun-only API at load. The differences are small:
 
 - `Password` hashes with argon2id: `Bun.password` on Bun, native `node:crypto` on Node 24.7 and later. On an older Node, it throws `PasswordHasherRequired` until you call `configure({ hasher })`.
-- `afora-codegen extract` imports your TypeScript file, so use Bun, or Node >= 23.6. `afora-mcp` imports an application in a Bun subprocess, so it needs Bun on the `PATH` for that. See [CLI](cli.md).
+- `afora-codegen extract` imports your TypeScript file, so use Bun, or Node >= 22.18 (type stripping on by default). `afora-mcp` imports an application in a Bun subprocess, so it needs Bun on the `PATH` for that. See [CLI](cli.md).
 - The repo's own tests and tooling use Bun.
 
 **Can I use it in the browser or a Worker?**

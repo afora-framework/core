@@ -2,10 +2,14 @@
  * Checks that every export of the stable (`@afora/core`), adapters and testing
  * entries is documented on a page (issue #93). Experimental is excluded.
  *
- * - A value (function, class, const, enum) is covered when its name appears
- *   as a whole word, in prose, `code` or code blocks, in README.md, docs/**
- *   (except docs/api-tiers.md, docs/plans/** and docs/reference/api.md) or
- *   packages/* /README.md.
+ * - A name counts as mentioned only as inline code in prose (`Name`, also
+ *   `Name(...)`, `Name.x`, `Name<...>`) or as an identifier (word boundary)
+ *   inside a fenced code block. A bare word in prose does not count, so
+ *   exports named like ordinary words (`guard`, `Kind`, `Id`...) must be
+ *   written in code where the page explains them.
+ * - A value (function, class, const, enum) is covered when it is mentioned
+ *   in README.md, docs/** (except docs/api-tiers.md, docs/plans/** and
+ *   docs/reference/api.md) or packages/* /README.md.
  * - A type (type alias, interface) is covered by the same, or by the
  *   generated docs/reference/api.md.
  *
@@ -38,9 +42,24 @@ const pages = [
 	)
 	.sort();
 
-const pageText = pages.map((file) => readFileSync(file, "utf8")).join("\n");
+/** Keeps only what can document a name: fenced code and inline code spans. */
+function codeOnly(markdown: string): string {
+	const parts: string[] = [];
+	const fence = /^(```|~~~)[^\n]*\n[\s\S]*?\n\1[ \t]*$/gm;
+	const prose = markdown.replace(fence, (block) => {
+		parts.push(block);
+		return "";
+	});
+	for (const span of prose.matchAll(/(`+)([^`\n]|[^`\n][^\n]*?[^`\n])\1(?!`)/g))
+		parts.push(span[2] as string);
+	return parts.join("\n");
+}
+
+const pageText = pages
+	.map((file) => codeOnly(readFileSync(file, "utf8")))
+	.join("\n");
 const referenceText = existsSync(apiReference)
-	? readFileSync(apiReference, "utf8")
+	? codeOnly(readFileSync(apiReference, "utf8"))
 	: "";
 
 const mentions = (text: string, name: string) =>

@@ -1,4 +1,5 @@
 import { posix } from "node:path";
+import { cyclesOf } from "./graph";
 import { isImportObject, parseImportRef } from "./provider";
 import type { Decl, Scope } from "./scope";
 import { isObject } from "./spec/field";
@@ -7,6 +8,26 @@ import { isGeneric, isImported } from "./use-case";
 
 /** The suffix of the file of a use case that hand-written code imports. */
 export const USE_CASE_FILE_SUFFIX = ".use-case.ts";
+
+/**
+ * The names of the files `generate` can write, in the output directory, besides
+ * `<kebab-name>.use-case.ts`: one per use case a hand-written class needs (see `useCaseFiles`).
+ */
+export const GENERATED_FILES = [
+	"properties.ts",
+	"blueprints.ts",
+	"records.ts",
+	"entities.ts",
+	"environments.ts",
+	"providers.ts",
+	"repositories.ts",
+	"exceptions.ts",
+	"use-cases.ts",
+	"commands.ts",
+	"outputs.ts",
+	"application.ts",
+	"index.ts",
+] as const;
 
 /** The file of a use case kept out of `use-cases.ts`: `RegisterUser` -> `register-user.use-case.ts`. */
 function useCaseFileOf(name: string): string {
@@ -30,9 +51,23 @@ function dependencyNames(decl: Decl): string[] {
 	);
 }
 
-/** A module of an import reference, without its extension, to compare two. */
+/** A module path without a trailing `/` or the extension of a script (`.ts`, `.js`, `.mts`...). */
+function withoutExtension(module: string): string {
+	return posix
+		.normalize(module)
+		.replace(/(.)\/+$/, "$1")
+		.replace(/\.[cm]?[jt]sx?$/, "");
+}
+
+/**
+ * A module of an import reference, to compare two: normalized, without its
+ * extension or a trailing `/index`, so `../handlers/all`, `../handlers/all.js`
+ * and `../handlers/all/index.ts` are the same module.
+ */
 function moduleKey(module: string): string {
-	return posix.normalize(module).replace(/\.(m?[jt]sx?)$/, "");
+	const key = withoutExtension(module);
+	if (key === "index") return ".";
+	return key.endsWith("/index") ? key.slice(0, -"/index".length) : key;
 }
 
 /** The module of the hand-written class of an imported use case. */
@@ -102,21 +137,20 @@ export function useCaseFiles(
  * use cases themselves cannot depend on each other in a loop.
  */
 export function useCaseFileIssues(
-	own: readonly Decl[],
+	files: ReadonlyMap<string, string>,
 	scope: Scope,
 ): SpecIssue[] {
 	const issues: SpecIssue[] = [];
-	const files = useCaseFiles(own, scope);
 	const byFile = new Map<string, string>();
 	for (const [name, file] of files) {
-		const seen = byFile.get(file.toLowerCase());
+		const seen = byFile.get(file);
 		if (seen !== undefined) {
 			issues.push({
 				path: ["useCases", name],
 				code: "file_collision",
-				message: `"${name}" and "${seen}" would both be generated as ${file} (a hand-written class needs them, so each has a file of its own). Rename one of them.`,
+				message: `"${name}" and "${seen}" would both be generated as ${file} (a hand-written class needs them, so each has a file of its own, named in lowercase kebab-case). Rename one of them.`,
 			});
-		} else byFile.set(file.toLowerCase(), name);
+		} else byFile.set(file, name);
 	}
 
 	// The graph of imports: a use case file -> the files and modules it imports,
@@ -156,25 +190,11 @@ export function useCaseFileIssues(
 		}
 	}
 
-	const state = new Map<string, "open" | "done">();
-	const stack: string[] = [];
-	let found: string[] | undefined;
-	const walk = (node: string): void => {
-		state.set(node, "open");
-		stack.push(node);
-		for (const next of [...(edges.get(node) ?? [])].sort()) {
-			if (found) break;
-			if (state.get(next) === "open") {
-				found = [...stack.slice(stack.indexOf(next)), next];
-			} else if (!state.has(next)) walk(next);
-		}
-		stack.pop();
-		state.set(node, "done");
-	};
-	for (const node of [...edges.keys()].sort()) {
-		if (found) break;
-		if (!state.has(node)) walk(node);
-	}
+	const [found] = cyclesOf(
+		[...edges.keys()].sort(),
+		(node) => [...(edges.get(node) ?? [])].sort(),
+		true,
+	);
 	// A loop through use cases alone is a `cycle` of declarations, reported apart.
 	if (found?.some((node) => node.startsWith("module "))) {
 		const first = found.find((node) => node.startsWith("use case ")) as string;
@@ -186,6 +206,71 @@ export function useCaseFileIssues(
 				: ["useCases", name],
 			code: "import_cycle",
 			message: `The generated files would import each other in a loop: ${found.join(" -> ")}. A hand-written module that holds several classes or functions joins them; move the class or function to a module of its own.`,
+		});
+	}
+	return issues;
+}
+
+/** Every module the spec imports, with where: each `{ "import": "<module>#<name>" }` and the `import` of an opaque property. */
+function importedModules(
+	value: unknown,
+	path: readonly (string | number)[],
+	found: { path: (string | number)[]; module: string }[],
+): void {
+	if (Array.isArray(value)) {
+		value.forEach((item, index) => {
+			importedModules(item, [...path, index], found);
+		});
+		return;
+	}
+	if (!isObject(value)) return;
+	if (typeof value.import === "string") {
+		const module =
+			parseImportRef(value.import)?.module ??
+			(value.opaque === true ? value.import : undefined);
+		if (module !== undefined) {
+			found.push({
+				path: value.opaque === true ? [...path, "import"] : [...path],
+				module,
+			});
+		}
+	}
+	for (const [key, inner] of Object.entries(value)) {
+		importedModules(inner, [...path, key], found);
+	}
+}
+
+/**
+ * An import of the spec (relative to the output directory `dir`) that is a
+ * file the generator writes there (`generated_file`): one of
+ * `GENERATED_FILES`, or the `<kebab-name>.use-case.ts` of one of `files`. The
+ * generator would overwrite it, so the hand-written code has to live in a file
+ * of another name.
+ */
+export function generatedFileIssues(
+	input: Readonly<Record<string, unknown>>,
+	files: ReadonlyMap<string, string>,
+	dir: string,
+): SpecIssue[] {
+	const outDir = withoutExtension(dir);
+	const generated = new Set<string>([...GENERATED_FILES, ...files.values()]);
+	const found: { path: (string | number)[]; module: string }[] = [];
+	importedModules(input, [], found);
+	const issues: SpecIssue[] = [];
+	for (const { path, module } of found) {
+		if (!module.startsWith(".")) continue;
+		const target = withoutExtension(posix.join(outDir, module));
+		const file =
+			target === outDir
+				? "index.ts"
+				: posix.dirname(target) === outDir
+					? `${posix.basename(target).toLowerCase()}.ts`
+					: undefined;
+		if (file === undefined || !generated.has(file)) continue;
+		issues.push({
+			path,
+			code: "generated_file",
+			message: `"${module}" is ${posix.join(outDir, file)}, which the generator writes and overwrites, so hand-written code cannot live there. Rename the hand-written file or move it out of the output directory (e.g. "../handlers/..."), and point the import at it.`,
 		});
 	}
 	return issues;

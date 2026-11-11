@@ -67,6 +67,26 @@ describe("writeGenerated", () => {
 		expect(await exists(join(root, "src/domain/index.ts"))).toBe(false);
 	});
 
+	test("a hand-written file named as a generated one is refused, with the file and a rename", async () => {
+		const root = await temp();
+		const dir = join(root, "src/domain");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "greet.use-case.ts"), "export const mine = 1;\n");
+		const files = [
+			...generate(blogSpec),
+			{ path: "src/domain/greet.use-case.ts", contents: `${BANNER}\n` },
+		];
+		const result = await writeGenerated(root, files);
+		expect(result.refused).toHaveLength(1);
+		const [refused] = result.refused;
+		expect(refused?.path).toBe("src/domain/greet.use-case.ts");
+		expect(refused?.reason).toContain("greet.use-case.ts");
+		expect(refused?.reason).toContain("rename");
+		expect(await readFile(join(dir, "greet.use-case.ts"), "utf8")).toBe(
+			"export const mine = 1;\n",
+		);
+	});
+
 	test("refuses paths outside the project", async () => {
 		const root = await temp();
 		const result = await writeGenerated(root, [
