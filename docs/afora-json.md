@@ -115,6 +115,7 @@ Some things are code, not data: a provider made by hand, a `run` function, the `
 | `provider`                         | the provider of the application, when created without `providerOf`         |
 | `log`                              | the `log` of the application, when made by `logFrom`                       |
 | `log.providers.<index>`            | a log provider other than `"console"` or `"json"`, by its position         |
+| `trace`                            | the tracer of the application (`trace`), always written by hand            |
 | `repositories.<Name>.provider`     | the own provider of a repository, when created without `providerOf`        |
 | `providers.<key>`                  | a provider of the top-level `providers`, when created without `providerOf` |
 | `useCases.<Name>`                  | a use case with a hand-written `execute`                                   |
@@ -163,6 +164,20 @@ The events come from the lifecycle of the entities. An entity (not a record) dec
 ```
 
 A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
+
+## Tracing
+
+`"trace"` is the tracer of the application (see [Tracing](tracing.md)), an import of one written by hand, such as `otelTracer()` of [`@afora/otel`](../packages/otel/README.md):
+
+```json
+{
+	"version": 1,
+	"name": "blog",
+	"trace": { "import": "../trace.ts#tracer" }
+}
+```
+
+`trace.ts` has `export const tracer = otelTracer();` and the generated application gets `trace: tracer`. Anything but an import is `invalid_trace`, a malformed one `invalid_import`. `describe()` gives the trace as `{ kind: "opaque" }`, so extraction needs `trace` in `imports`.
 
 ## Indexes and query cost
 

@@ -87,6 +87,8 @@ The same exception goes up through every use case and command that called the on
 
 Repository calls are logged only through a use case: calling a repository directly, outside one, logs nothing. Arguments, inputs and responses are never logged, as they can hold sensitive values; log them yourself where you need them.
 
+The same points make spans when the application has a `trace`: one per command operation, use case and repository call, nested as the calls are. See [Tracing](tracing.md).
+
 ## A log made on start
 
 `logFrom((ctx) => log)` makes the `log` on `app.start()`, from the [context](applications.md#the-context-of-an-application) of the application, e.g. to take the level from a variable:
@@ -114,4 +116,4 @@ It is made before the provider, so a `providerFrom` can already log. Nothing is 
 
 ## Extending
 
-An application that `extends` another without a `log` of its own logs through the same providers, under its own name; `app.extend(Other)` keeps the `log`.
+An application that `extends` another without a `log` of its own logs through the same providers, under its own name; `app.extend(Other)` keeps the `log`. A `trace` is inherited and kept the same way ([Tracing](tracing.md#extending)).
