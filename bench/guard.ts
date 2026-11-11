@@ -97,29 +97,33 @@ export function timeCases(
 export const fmtNs = (ns: number) =>
 	ns >= 1000 ? ns.toFixed(0) : ns.toFixed(1);
 
-export function guard(scenarios: Scenario[]): boolean {
-	const names = [REFERENCE, GUARDED, WATCHED, ENTITY];
-	const timed = timeCases(
-		scenarios.flatMap((scenario) =>
-			KINDS.map((kind) => ({
-				scenario,
-				kind,
-				contenders: names.map((name) => {
-					const contender = scenario.contenders.find(
-						(candidate) => candidate.name === name,
-					);
-					if (!contender) throw new Error(`${scenario.id}: no "${name}"`);
-					return contender;
-				}),
-			})),
-		),
-	);
+type Checked = {
+	scenario: string;
+	kind: Kind;
+	line: string;
+	entityLine: string;
+	passed: boolean;
+};
 
-	let passed = true;
-	console.log(
-		`${GUARDED} against ${REFERENCE}, best of ${ROUNDS} rounds after a warm-up (ns per call)\n`,
+/** Times the cases and compares each one with its limits. */
+function check(
+	cases: Array<{ scenario: Scenario; kind: Kind }>,
+	names: string[],
+): Checked[] {
+	const timed = timeCases(
+		cases.map(({ scenario, kind }) => ({
+			scenario,
+			kind,
+			contenders: names.map((name) => {
+				const contender = scenario.contenders.find(
+					(candidate) => candidate.name === name,
+				);
+				if (!contender) throw new Error(`${scenario.id}: no "${name}"`);
+				return contender;
+			}),
+		})),
 	);
-	for (const { scenario, kind, runs } of timed) {
+	return timed.map(({ scenario, kind, runs }) => {
 		const [reference, guarded, watched, entity] = runs as [
 			Timed,
 			Timed,
@@ -129,22 +133,67 @@ export function guard(scenarios: Scenario[]): boolean {
 		const limit = limitOf(scenario, kind);
 		const ratio = guarded.best / reference.best;
 		const ok = ratio <= limit;
-		if (!ok) passed = false;
 		const entityLimit = entityLimitOf(scenario, kind);
 		const entityRatio = entity.best / reference.best;
 		const entityOk = entityRatio <= entityLimit;
-		if (!entityOk) passed = false;
-		console.log(
-			`${ok ? "ok  " : "FAIL"}  ${`${scenario} ${kind}`.padEnd(22)} afora ${fmtNs(guarded.best).padStart(8)}  zod ${fmtNs(reference.best).padStart(8)}  ratio ${ratio.toFixed(2)}  limit ${limit.toFixed(2)}  (Record.safeParse ${(watched.best / reference.best).toFixed(2)}, not guarded)`,
-		);
-		console.log(
-			`${entityOk ? "ok  " : "FAIL"}  ${`${scenario} ${kind}`.padEnd(22)} Entity.safeParse ${fmtNs(entity.best).padStart(8)}  ratio ${entityRatio.toFixed(2)}  limit ${entityLimit.toFixed(2)}`,
-		);
+		return {
+			scenario,
+			kind,
+			passed: ok && entityOk,
+			line: `${ok ? "ok  " : "FAIL"}  ${`${scenario} ${kind}`.padEnd(22)} afora ${fmtNs(guarded.best).padStart(8)}  zod ${fmtNs(reference.best).padStart(8)}  ratio ${ratio.toFixed(2)}  limit ${limit.toFixed(2)}  (Record.safeParse ${(watched.best / reference.best).toFixed(2)}, not guarded)`,
+			entityLine: `${entityOk ? "ok  " : "FAIL"}  ${`${scenario} ${kind}`.padEnd(22)} Entity.safeParse ${fmtNs(entity.best).padStart(8)}  ratio ${entityRatio.toFixed(2)}  limit ${entityLimit.toFixed(2)}`,
+		};
+	});
+}
+
+/**
+ * How many more times a case over its limit is timed before the guard fails.
+ * A shared CI runner can be slow for a whole case (a fast case like
+ * `no-transform valid` is a few hundred nanoseconds, so a slow moment moves
+ * the ratio a lot); a regression stays over the limit every time.
+ */
+const RETRIES = 2;
+
+export function guard(scenarios: Scenario[]): boolean {
+	const names = [REFERENCE, GUARDED, WATCHED, ENTITY];
+	const cases = scenarios.flatMap((scenario) =>
+		KINDS.map((kind) => ({ scenario, kind })),
+	);
+
+	console.log(
+		`${GUARDED} against ${REFERENCE}, best of ${ROUNDS} rounds after a warm-up (ns per call)\n`,
+	);
+	let results = check(cases, names);
+	for (const { line, entityLine } of results) {
+		console.log(line);
+		console.log(entityLine);
 	}
+
+	for (let retry = 1; retry <= RETRIES; retry++) {
+		const failed = results.filter(({ passed }) => !passed);
+		if (failed.length === 0) break;
+		console.log(
+			`\nTiming again what is over its limit, to rule out noise (${retry} of ${RETRIES}):\n`,
+		);
+		results = check(
+			cases.filter(({ scenario, kind }) =>
+				failed.some(
+					(result) => result.scenario === scenario.id && result.kind === kind,
+				),
+			),
+			names,
+		);
+		for (const { line, entityLine } of results) {
+			console.log(line);
+			console.log(entityLine);
+		}
+	}
+
+	const passed = results.every((result) => result.passed);
 	console.log(
 		passed
 			? "\nEvery case is within its limit."
-			: "\nA case is over its limit: validation got slower. Run it again to rule out noise, then find what the change costs (CONTRIBUTING.md); a limit in bench/guard.limits.ts is only raised for a cost that is wanted, with the reason.",
+			: `\nA case is over its limit ${RETRIES + 1} times in a row: validation got slower. Find what the change costs (CONTRIBUTING.md); a limit in bench/guard.limits.ts is only raised for a cost that is wanted, with the reason.`,
 	);
 	return passed;
 }
