@@ -379,16 +379,20 @@ Every field (a property, blueprint, list or record class) implements Standard Sc
 
 ## Performance
 
-`bun run bench` compares afora with TypeBox (compiled), Zod 4, Valibot and ArkType on the same data, on Bun and on Node; the results are in `bench/RESULTS.md`. Absolute numbers depend on the machine, so read the ratios. On the measured machine (Apple M2):
+`bun run bench` times afora next to TypeBox (compiled), Ajv, Typia, Zod 4, Valibot, ArkType, Effect Schema, Yup and Joi on seven scenarios (a flat object, a nested one, the body of an API request, a list of 1,000 items, a union, six levels of nesting, and a flat object with nothing to transform), with valid and invalid input, on Bun and on Node. Every library declares the same rules, rejects undeclared keys and collects every error, and is checked before it is timed. The tables are in [`bench/RESULTS.md`](bench/RESULTS.md) and the method in [`bench/README.md`](bench/README.md). Absolute numbers depend on the machine, so read the ratios. On the measured machine (Apple M2), for `blueprint.safeParse`:
 
-- **Valid input.** `blueprint.safeParse` takes about 0.7x the time of Zod 4 on the flat object and 0.9x on the nested one on Bun, and about 0.55x to 0.7x on Node. Valibot is ahead on Bun, by about 1.1x on the flat object and 1.3x on the nested one, and behind on Node. `Record.safeParse`, which also creates the instance through its constructor, takes about the time of Zod 4 on Bun (up to 1.1x); on Node it is about 0.8x on the nested object and the same on the flat one.
-- **Invalid input.** `blueprint.safeParse` takes about 0.8x the time of Zod 4 on the flat object and 0.65x on the nested one on Bun, and about 0.45x to 0.6x on Node; `Record.safeParse` still runs the constructor, whose record hands its issues over without building an exception: about 1.25x the time of Zod 4 on the flat object and 0.75x on the nested one on Bun, 0.9x and 0.7x on Node, for a class made by `recordOf` and for a subclass alike. Valibot is ahead only on the flat object on Bun, by about 1.1x. A rejected string, number or boolean is told why without TypeBox's error collection, a path is only made for an issue, and the `cause` exception of an issue is built only when it is read. `new Record(value)` throws, so an invalid value costs an exception with its trace: about 1.7x to 3x `Record.safeParse` on Bun and 5x to 12x on Node. Use `safeParse` where invalid input is expected.
-- **Floor.** Compiled TypeBox, which only checks and does not transform, is about 5x to 12x faster than afora on valid input. afora builds on it.
-- **ArkType** is slower than afora in every case here, because its morphs (the transforms) move it to a slower path; without them it is very fast.
+- **Against Zod 4.** Faster in 12 of the 14 cases on Bun, by 1.2x to 2.0x, and level on the valid nested object and the valid list of 1,000 items (within 4%). On Node, faster in 13 of the 14, by 1.2x to 3.7x. The exception on both is an invalid union, below.
+- **Against Valibot.** On Node afora is faster in 13 of the 14 cases, by up to 1.75x outside the valid union (8.5x). On Bun it is close: Valibot is ahead on the valid nested object and the valid list (about 1.7x), afora on the union and the deep object (1.6x to 2.6x), and the rest are within 15% either way.
+- **Against Effect Schema, Joi and Yup.** Faster in every case but the invalid union: 1.5x to 3.3x Effect Schema, 3x to 8x Joi, 13x to 100x Yup.
+- **Against ArkType.** Faster wherever a value is transformed or rejected, by 4x to 23x, because its morphs and its errors take a slower path. With nothing to transform and a valid value, ArkType is about 2.5x faster than afora.
+- **An invalid union is slow.** A property whose schema is a union is explained by TypeBox `Errors`, which walks every variant again for each rejected value: about 10x the time of Zod 4. Valid values of the same union are 2x to 3.7x faster than Zod 4.
+- **Floor.** The checkers that compile and do not transform (TypeBox, Ajv, Typia) are 3x to 50x faster than afora on valid input. afora builds on TypeBox. On invalid input afora is 5x to 14x faster than TypeBox `Errors`, and Ajv and Typia stay ahead.
+- **Records and entities.** `Record.safeParse`, which also creates the instance, takes 1.0x to 2.3x the time of `blueprint.safeParse`. `Entity.safeParse` also makes an id and the time stamps, which on a small object is most of its time: 6x to 18x `blueprint.safeParse` on the flat object, 1.0x to 3x on the larger ones. `new Record(value)` throws on invalid input, which costs an exception with its trace; use `safeParse` where invalid input is expected.
+- **Bundle and cold start.** afora is a framework with one entry point: validating one object bundles to 102 kB gzipped (Zod 4: 25 kB, Valibot: 1.7 kB) and takes 32 ms to load, build and run once in a new Node process (62 ms on Bun; Zod 4: 6 ms).
 
-What afora does that the fast rows do not all do: a pipeline per property (`preHandle`, schema check, `afterHandle`), where a property with a handler has the shape of the value checked first, so handlers only see the right types; objects walked key by key instead of one compiled function; frozen results, which on Bun is most of what a nested valid value costs; every issue with `code`, `path` and `source`; and, for `Record.safeParse` and `new Record`, creating the instance. If you validate bulk data in a hot path and need none of that, compiled TypeBox alone is an order of magnitude faster.
+What afora does that the fast rows do not all do: a pipeline per property (`preHandle`, schema check, `afterHandle`), where a property with a handler has the shape of the value checked first, so handlers only see the right types; objects walked key by key instead of one compiled function; frozen results; every issue with `code`, `path` and `source`; and, for `Record.safeParse` and `new Record`, creating the instance. If you validate bulk data in a hot path and need none of that, a compiled checker alone is an order of magnitude faster.
 
-CI keeps it there: `bun run bench:guard` times `blueprint.safeParse` and Zod 4 `safeParse` on the four cases (flat and nested, valid and invalid) and fails when afora takes more than 1.15x the time of Zod 4 in any of them.
+CI keeps it there: `bun run bench:guard` times `blueprint.safeParse` and Zod 4 `safeParse` on the fourteen cases and fails when afora is over the limit of a case as a multiple of Zod 4 (1.15x unless `bench/guard.limits.ts` states another, with the reason).
 
 ## Comparison
 
@@ -426,7 +430,7 @@ bun run test:interop  # Hono, tRPC and TanStack Form tests (examples/interop), i
 bun run test:blog     # the generated blog (examples/blog): drift, API and extraction
 bun run test:agent-built # the agent-built example (examples/agent-built): drift, replay, API and the invariant evaluation
 bun run smoke         # build, then run the package on plain Node
-bun run bench         # benchmark against TypeBox, Zod, Valibot and ArkType
+bun run bench         # benchmark against TypeBox, Ajv, Typia, Zod, Valibot, ArkType, Effect Schema, Yup and Joi
 bun run lint          # biome lint
 bun run knip          # unused files, exports and dependencies
 bun run fmt           # biome format + fix

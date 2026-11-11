@@ -14,7 +14,9 @@
 			"!examples/agent-built/src/domain",
 			"!examples/agent-built/runs",
 			"!examples/agent-built/baseline/runs",
-			"!examples/agent-built/eval/RESULTS.md"
+			"!examples/agent-built/eval/RESULTS.md",
+			"!bench/typia/generated",
+			"!bench/results"
 		]
 	},
 	"formatter": {
