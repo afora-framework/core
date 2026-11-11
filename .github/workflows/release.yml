@@ -91,10 +91,11 @@ jobs:
       - name: Publish
         # core first, then the packages that depend on it. A version that is
         # already on npm is skipped, so a run can be repeated after a partial failure.
-        # Publishing uses trusted publishing (OIDC). NPM_TOKEN is only needed for
-        # the first publish of a package, which npm cannot do through OIDC.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Publishing uses trusted publishing (OIDC) only. No token is passed on
+        # purpose: with one, npm falls back to it without a word when OIDC fails,
+        # the package goes out without provenance and its trusted publisher is
+        # never validated. A package that is not on npm yet is published once by
+        # hand with scripts/release-setup.sh, since npm cannot create one through OIDC.
         run: |
           publish() {
             dir="$1"
