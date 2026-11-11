@@ -87,6 +87,7 @@ export const flowsSpec: Spec = {
 						run: "hashPassword",
 						fn: { import: "../support/hash#hashPassword" },
 						args: ["$input.plainPassword"],
+						params: { fields: { plain: "string" } },
 						as: "hash",
 					},
 					{
@@ -158,6 +159,7 @@ export const flowsSpec: Spec = {
 						run: "verify",
 						fn: { import: "../support/hash#verify" },
 						args: ["$user", "$input.plainPassword"],
+						params: { fields: { user: "User", plain: "string" } },
 						as: "ok",
 					},
 					{ ensure: "true", value: "$ok", error: "InvalidCredentials" },
