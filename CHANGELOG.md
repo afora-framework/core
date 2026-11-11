@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.0.12 — 2026-11-11
+
 ### Changed
 
 - **Docs.** A new line, "Simple to write. Built to hold.", and a shorter README: why afora, what it gives developers and agents, the quick start (its `afora.json` version folded), the packages and the chart. The benchmark tables, their analysis and the comparison with other validators moved to `docs/performance.md`, generated from the same `bench/results/latest.json`; `docs/brand.md` holds the line, the descriptions, the voice and the palette. The benchmark chart uses the colors of the brand, in light and dark.
