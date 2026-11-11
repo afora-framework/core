@@ -186,7 +186,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type Get<Value, Key extends string> = unknown extends Value ? unknown : [ GetDefined<NonNullable<Value>, Key> ] extends [ infer Found ] ? [ Found ] extends [ never ] ? never : Found | (Value extends null | undefined ? undefined : never) : never;",
   ],
   "(internal) GetDefined": [
-    "type GetDefined<Value, Key extends string> = Value extends readonly unknown[] ? Key extends \`\${number}\` ? Key extends keyof Value ? Value[Key] : Value[number] : never : Key extends keyof Value ? Value[Key] : never;",
+    "type GetDefined<Value, Key extends string> = Value extends readonly unknown[] ? Key extends \`\${number}\` ? Key extends keyof Value ? Value[Key] : Value[number] : Key extends "length" ? number : never : Key extends keyof Value ? Value[Key] : never;",
   ],
   "(internal) HoldsEntity": [
     "type HoldsEntity<Field> = Field extends AnyRepositoryEntity ? true : Field extends { readonly record: AnyRepositoryEntity; } ? true : Field extends IBlueprintList<infer Item> ? Item extends AnyRepositoryEntity ? true : false : false;",
@@ -804,7 +804,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type EntityKeyOf<Entity> = keyof EntityPropertiesOf<Entity> & string;",
   ],
   "EntityMigrationReport": [
-    "export interface EntityMigrationReport { readonly scanned: number; readonly upToDate: number; readonly upgraded: number; readonly removalPending: number; readonly invalid: readonly SchemaMigrationInvalidRow[]; readonly movedFromPreviousNames: number; readonly removedKeys: readonly string[]; }",
+    "export interface EntityMigrationReport { readonly scanned: number; readonly upToDate: number; readonly upgraded: number; readonly removalPending: number; readonly invalid: readonly SchemaMigrationInvalidRow[]; readonly movedFromPreviousNames: number; readonly removedKeys: readonly string[]; readonly deferred: boolean; }",
   ],
   "EntityNonUniqueKeyOf": [
     "export type EntityNonUniqueKeyOf<Entity> = string extends EntityUniqueKeyOf<Entity> ? EntityKeyOf<Entity> : Exclude<EntityKeyOf<Entity>, EntityUniqueKeyOf<Entity>>;",
@@ -996,7 +996,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface IRecordPluginCatalog<Plugins extends Readonly<globalThis.Record<string, AnyRecordPlugin>> = Readonly<globalThis.Record<string, AnyRecordPlugin>>> { readonly [Kind]: "record-plugin-catalog"; readonly plugins: Plugins; readonly list: readonly AnyRecordPlugin[]; resolve(reference: RecordPluginReference): AnyRecordPlugin; resolveAll(references: readonly RecordPluginReference[]): readonly AnyRecordPlugin[]; }",
   ],
   "IRepositoryProvider": [
-    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; migrate?(context: RepositoryContext<Environment>, plan: SchemaPlan): Promise<void>; }",
+    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; migrate?(context: RepositoryContext<Environment>, plan: SchemaPlan): Promise<void | ProviderMigrationResult>; }",
   ],
   "ISchema": [
     "export interface ISchema<SchemaType extends TSchema, Value = Static<SchemaType>> { match(value: unknown): value is Value; matchShape(value: unknown): boolean; errors(value: unknown): string[]; toString(): string; get type(): ISchemaType<SchemaType, Value>; }",
@@ -1363,6 +1363,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "ProviderKeyset": [
     "export type ProviderKeyset<Provider> = undefined extends Provider ? true : Provider extends { readonly capabilities?: infer Capabilities; } ? [ NonNullable<Capabilities> ] extends [ { readonly keyset?: infer Keyset; } ] ? true extends Keyset ? true : false : false : false;",
+  ],
+  "ProviderMigrationResult": [
+    "export type ProviderMigrationResult = { readonly deferred: true; };",
   ],
   "ProviderNotBound": [
     "ProviderNotBound: import("../../index.js").DeclaredExceptionClass<{ readonly provider: string; }>",
@@ -2881,7 +2884,7 @@ exports[`testing entry (contract) 1`] = `
     "export interface IRecord<Properties extends IBlueprintCollection, Sensitive extends string = never> { readonly [Meta]: { readonly blueprint: IBlueprint<Properties>; readonly options: RecordSettings<Properties>; }; toJSON(): RecordJson<Properties, Sensitive>; }",
   ],
   "(internal) IRepositoryProvider": [
-    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; migrate?(context: RepositoryContext<Environment>, plan: SchemaPlan): Promise<void>; }",
+    "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: string): Promise<void>; increment?(context: RepositoryContext<Environment>, id: string, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; migrate?(context: RepositoryContext<Environment>, plan: SchemaPlan): Promise<void | ProviderMigrationResult>; }",
   ],
   "(internal) ISchema": [
     "export interface ISchema<SchemaType extends TSchema, Value = Static<SchemaType>> { match(value: unknown): value is Value; matchShape(value: unknown): boolean; errors(value: unknown): string[]; toString(): string; get type(): ISchemaType<SchemaType, Value>; }",
@@ -2968,6 +2971,9 @@ exports[`testing entry (contract) 1`] = `
   ],
   "(internal) ProviderIncrementOptions": [
     "export interface ProviderIncrementOptions { readonly set?: RepositoryData; readonly create?: RepositoryData; readonly now?: string; }",
+  ],
+  "(internal) ProviderMigrationResult": [
+    "export type ProviderMigrationResult = { readonly deferred: true; };",
   ],
   "(internal) ProviderQuery": [
     "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; readonly index?: string; readonly now?: string; }",
