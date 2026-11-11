@@ -541,6 +541,13 @@ export {
 	useCaseCatalogOf,
 } from "./core/use-case/plugin-catalog";
 export type {
+	CheckedSteps,
+	StepReferencesOf,
+	StepReferenceType,
+	StepsInitialScope,
+	StepValueCheck,
+} from "./core/use-case/steps/types/check.interface";
+export type {
 	StepArgs,
 	StepEnsureKind,
 	StepErrorDescription,
@@ -583,6 +590,7 @@ export type {
 	UseCaseCollection,
 	UseCaseConstructor,
 	UseCaseContext,
+	UseCaseDeclaration,
 	UseCaseDependencies,
 	UseCaseDependency,
 	UseCaseInput,

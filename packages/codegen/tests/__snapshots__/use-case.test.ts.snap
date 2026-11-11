@@ -118,6 +118,7 @@ export class Login extends useCaseOf({
 	dependencies: { users: Users },
 	errors: [InvalidCredentials],
 	deprecated: true,
+	strictSteps: true,
 	steps: [
 		{ find: "users.findByEmail", args: ["$input.email"], as: "user" },
 		{ ensure: "exists", value: "$user", error: InvalidCredentials },
@@ -146,6 +147,7 @@ export class Register extends useCaseOf({
 	errors: [UserAlreadyExists, RepositoryUniqueViolation],
 	description: "Signs a user up.",
 	tags: ["users"],
+	strictSteps: true,
 	steps: [
 		{ find: "users.findByEmail", args: ["$input.email"], as: "existing" },
 		{
