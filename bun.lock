@@ -29,7 +29,7 @@
     },
     "packages/codegen": {
       "name": "@afora/codegen",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "bin": {
         "afora-codegen": "dist/cli.js",
       },
@@ -44,7 +44,7 @@
     },
     "packages/drizzle": {
       "name": "@afora/drizzle",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "devDependencies": {
         "@electric-sql/pglite": "0.4.6",
         "@types/bun": "^1.4.4",
@@ -58,7 +58,7 @@
     },
     "packages/dynamodb": {
       "name": "@afora/dynamodb",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "devDependencies": {
         "@aws-sdk/client-dynamodb": "^3.1164.0",
         "@aws-sdk/lib-dynamodb": "^3.1164.0",
@@ -72,7 +72,7 @@
     },
     "packages/elysia": {
       "name": "@afora/elysia",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "devDependencies": {
         "@types/bun": "^1.4.4",
         "elysia": "^2.0.0-rc.4",
@@ -86,7 +86,7 @@
     },
     "packages/express": {
       "name": "@afora/express",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "devDependencies": {
         "@types/bun": "^1.4.4",
         "@types/express": "^5.0.6",
@@ -101,7 +101,7 @@
     },
     "packages/fastify": {
       "name": "@afora/fastify",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "devDependencies": {
         "@types/bun": "^1.4.4",
         "fastify": "^5.12.8",
@@ -115,7 +115,7 @@
     },
     "packages/hono": {
       "name": "@afora/hono",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "devDependencies": {
         "@seriousme/openapi-schema-validator": "2.11.0",
         "@types/bun": "^1.4.4",
@@ -130,7 +130,7 @@
     },
     "packages/mcp": {
       "name": "@afora/mcp",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "bin": {
         "afora-mcp": "dist/bin.js",
       },
@@ -149,7 +149,7 @@
     },
     "packages/otel": {
       "name": "@afora/otel",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "devDependencies": {
         "@afora/hono": "workspace:*",
         "@opentelemetry/api": "^1.9.0",
@@ -165,7 +165,7 @@
     },
     "packages/ws": {
       "name": "@afora/ws",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "devDependencies": {
         "@types/bun": "^1.4.4",
         "typebox": "^1.4.3",

@@ -1,6 +1,6 @@
 {
 	"name": "@afora/core",
-	"version": "0.0.10",
+	"version": "0.0.11",
 	"description": "Domain modeling on TypeBox: entities with invariants, repositories, use cases, sensitive data masking and layered exceptions, usable by any Standard Schema consumer.",
 	"keywords": [
 		"domain-driven-design",
