@@ -6,8 +6,12 @@ import { InvalidLogDeclaration } from "./exceptions";
 /** What a log line carries besides its event. */
 export type LogFields = Readonly<Record<string, unknown>>;
 
+/** The severity of a log line, from the least to the most severe. */
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
+/**
+ * The {@link LogLevel}s in order of severity, from `"debug"` to `"error"`.
+ */
 export const LogLevels: readonly LogLevel[] = Object.freeze([
 	"debug",
 	"info",
@@ -46,7 +50,11 @@ export interface ILogProvider {
 
 /** The `log` of an application. */
 export interface LogSettings {
-	/** Lines below it are dropped. `"info"` by default. */
+	/**
+	 * Lines below it are dropped.
+	 *
+	 * @default "info"
+	 */
 	readonly level?: LogLevel;
 	readonly providers: readonly ILogProvider[];
 }
@@ -250,6 +258,11 @@ export interface LoggerDeclaration {
 	readonly [Kind]: "logger";
 }
 
+/**
+ * The dependency that gives a use case the logger of its application:
+ * `dependencies: { logger: Logger }` makes `this.dependencies.logger` an {@link
+ * ILogger}.
+ */
 export const Logger: LoggerDeclaration = Object.freeze({
 	[Kind]: "logger" as const,
 });

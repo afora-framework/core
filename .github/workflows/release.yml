@@ -37,6 +37,13 @@ jobs:
           version="$(node -p 'require("./package.json").version')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+          # The scheme of VERSIONING.md: 0.0.<n> before 27.0, then <YY>.<minor>.<patch>
+          # with an optional -rc.<n>, where YY (the year of the cycle) is 27 or more.
+          if ! printf '%s' "$version" | grep -Eq '^(0\.0\.(0|[1-9][0-9]*)|(2[7-9]|[3-9][0-9]|[1-9][0-9]{2,})\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?)$'; then
+            echo "::error::$version is not in the scheme of VERSIONING.md: 0.0.<n>, or <YY>.<minor>.<patch>[-rc.<n>] with YY >= 27"
+            exit 1
+          fi
+
           # The tag is created last, so a missing tag also means an unfinished release.
           if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
             echo "v$version is already released, nothing to do"
@@ -91,10 +98,11 @@ jobs:
       - name: Publish
         # core first, then the packages that depend on it. A version that is
         # already on npm is skipped, so a run can be repeated after a partial failure.
-        # Publishing uses trusted publishing (OIDC). NPM_TOKEN is only needed for
-        # the first publish of a package, which npm cannot do through OIDC.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Publishing uses trusted publishing (OIDC) only. No token is passed on
+        # purpose: with one, npm falls back to it without a word when OIDC fails,
+        # the package goes out without provenance and its trusted publisher is
+        # never validated. A package that is not on npm yet is published once by
+        # hand with scripts/release-setup.sh, since npm cannot create one through OIDC.
         run: |
           publish() {
             dir="$1"
@@ -123,6 +131,7 @@ jobs:
           publish packages/ws
           publish packages/drizzle
           publish packages/dynamodb
+          publish packages/otel
       - name: Create the tag and the GitHub release
         run: |
           prerelease=""

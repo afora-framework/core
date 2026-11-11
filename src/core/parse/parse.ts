@@ -255,6 +255,16 @@ export function parseCollection(
 const ROOT: Path = Object.freeze([]) as unknown as Path;
 
 /**
+ * Makes, once the rest of a collection is known to be valid, the values the
+ * caller left out for it (`undefined` in `handled`); it returns the keys it
+ * made that still have to be checked.
+ * @internal
+ */
+export type Complete = (
+	handled: Record<string, unknown>,
+) => readonly string[] | undefined;
+
+/**
  * `parseCollection` at the root, as a function of the value alone: what it
  * needs of `properties` is looked up on the first value and kept, instead of
  * on every one. For what parses many values of one shape, a blueprint or a
@@ -268,12 +278,16 @@ export function collectionParserOf(
 ): (
 	value: unknown,
 	vouched?: readonly string[],
+	complete?: Complete,
 ) => ParseResult<Readonly<Record<string, unknown>>> {
 	let collection: Collection | undefined;
-	return (value, vouched) => {
+	return (value, vouched, complete) => {
 		collection ??= collectionOf(properties);
 		const run = runOf(ROOT, source);
-		return resultOf(run, collectionAt(collection, value, run, 0, vouched));
+		return resultOf(
+			run,
+			collectionAt(collection, value, run, 0, vouched, undefined, complete),
+		);
 	};
 }
 
@@ -289,6 +303,7 @@ function collectionAt(
 	depth: number,
 	vouched?: readonly string[],
 	tag?: string,
+	complete?: Complete,
 ): unknown {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		return reject(run, "invalid_type", "must be an object", pathOf(run, depth));
@@ -318,9 +333,20 @@ function collectionAt(
 	// The key of a variant goes first, with the name that chose this collection.
 	const handled: Record<string, unknown> =
 		tag === undefined ? {} : { [tag]: (value as Record<string, unknown>)[tag] };
+	// The few keys a caller vouches for (at most three: `id`, `createdAt` and
+	// `expiresAt`) are compared as locals, not searched for in each key.
+	const first = vouched?.[0];
+	const second = vouched?.[1];
+	const third = vouched?.[2];
 	for (let index = 0; index < names.length; index++) {
 		const name = names[index] as string;
-		if (vouched?.includes(name)) {
+		if (
+			vouched !== undefined &&
+			(name === first ||
+				name === second ||
+				name === third ||
+				(vouched.length > 3 && vouched.includes(name)))
+		) {
 			handled[name] = (value as Record<string, unknown>)[name];
 			continue;
 		}
@@ -333,6 +359,20 @@ function collectionAt(
 		);
 		if (item === REJECTED) rejected = true;
 		else if (item !== undefined) handled[name] = item;
+	}
+
+	if (!rejected && complete !== undefined) {
+		for (const name of complete(handled) ?? []) {
+			run.keys[depth] = name;
+			const item = fieldAt(
+				steps[names.indexOf(name)] as Step,
+				handled[name],
+				run,
+				depth + 1,
+			);
+			if (item === REJECTED) rejected = true;
+			else if (item !== undefined) handled[name] = item;
+		}
 	}
 
 	return rejected ? REJECTED : Object.freeze(handled);

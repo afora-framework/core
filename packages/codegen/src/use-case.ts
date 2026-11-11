@@ -33,7 +33,7 @@ const STEP_SHAPES = {
 	delete: { required: ["delete", "value"], optional: ["as"] },
 	restore: { required: ["restore", "value"], optional: ["as"] },
 	call: { required: ["call", "input"], optional: ["as"] },
-	run: { required: ["run", "fn"], optional: ["args", "as"] },
+	run: { required: ["run", "fn"], optional: ["args", "params", "as"] },
 	return: { required: ["return"], optional: [] },
 } as const;
 
@@ -580,20 +580,6 @@ function checkDependencies(
 			issues.push(issue(here, "cycle", "A use case cannot depend on itself."));
 			continue;
 		}
-		if (
-			target.kind === "useCase" &&
-			target.via === undefined &&
-			isImported(target.spec)
-		) {
-			issues.push(
-				issue(
-					here,
-					"import_dependency",
-					`"${target.name}" is implemented by a hand-written class, which imports the generated file that would import it back. Make it a steps use case, or call it through a step of a use case that does not need it as a dependency.`,
-				),
-			);
-			continue;
-		}
 		dependencies.set(key, target);
 	}
 	return dependencies;
@@ -812,6 +798,7 @@ export function checkUseCase(
 		dependencies,
 		errors,
 		issues,
+		inline,
 	});
 }
 
@@ -908,6 +895,7 @@ interface StepsContext {
 	readonly dependencies: ReadonlyMap<string, Decl>;
 	readonly errors: readonly string[];
 	readonly issues: SpecIssue[];
+	readonly inline: InlineChecker;
 }
 
 function checkSteps(steps: unknown, implPath: Path, ctx: StepsContext): void {
@@ -1262,6 +1250,36 @@ function checkSteps(steps: unknown, implPath: Path, ctx: StepsContext): void {
 					checkImport(step.fn, [...here, "fn"], issues);
 				}
 				checkArgs(step.args);
+				if (step.params !== undefined) {
+					const ref = checkBlueprintRef(
+						step.params,
+						[...here, "params"],
+						scope,
+						ctx.inline,
+						issues,
+					);
+					const fields =
+						ref &&
+						(ref.kind === "inline" ? ref.fields : fieldsOfDecl(ref.decl));
+					const declared = fields ? Object.keys(fields).length : undefined;
+					const given =
+						step.args === undefined
+							? 0
+							: Array.isArray(step.args)
+								? step.args.length
+								: undefined;
+					if (
+						declared !== undefined &&
+						given !== undefined &&
+						declared !== given
+					) {
+						fail(
+							"invalid_args",
+							`run.params declares ${declared} parameter(s), args gives ${given}.`,
+							"params",
+						);
+					}
+				}
 				break;
 			}
 			case "return": {

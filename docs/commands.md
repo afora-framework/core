@@ -3,7 +3,42 @@
 `commandOf` groups use cases under operation names and is the **execution boundary** of a call: the context is validated once, a transaction can wrap the use case, the events it raised are handled by a policy, and the trace gets a `command` frame.
 
 ```ts
-import { blueprintOf, commandOf } from "@afora/core";
+import {
+	blueprintOf,
+	commandOf,
+	entityOf,
+	environmentOf,
+	useCaseOf,
+} from "@afora/core";
+
+const Mail = environmentOf(blueprintOf((ctx) => ({ FROM: ctx.email })));
+const Queue = environmentOf(blueprintOf((ctx) => ({ QUEUE_URL: ctx.url })));
+const Credentials = blueprintOf((ctx) => ({ email: ctx.email }));
+class User extends entityOf(Credentials) {}
+const UserResponse = blueprintOf(() => ({ user: User }));
+class Register extends useCaseOf({
+	name: "Register",
+	blueprint: Credentials,
+	response: UserResponse,
+}) {
+	override async execute() {
+		return { user: new User(this.input) };
+	}
+}
+class Login extends useCaseOf({
+	name: "Login",
+	blueprint: Credentials,
+	response: UserResponse,
+}) {
+	override async execute() {
+		return { user: new User(this.input) };
+	}
+}
+const input = { email: "ana@example.com" };
+const context = {
+	userId: "01a173d2-051c-77bb-8166-a371e999573e",
+	requestId: "req-1",
+};
 
 const Users = commandOf({
 	name: "Users",
@@ -27,6 +62,7 @@ The keys of `useCases` are the operation names: identifiers holding concrete use
 
 `commandBuilderOf(...catalogs)` gives a `commandOf` whose `useCases` may also be a function of the use case plugins of the catalogs (see [Use cases](use-cases.md#plugins)), each called with a repository; classes written by hand go beside them. The function runs once, at declaration, and a plugin that cannot make its use case throws `UseCaseUnavailable` there. A later catalog wins a name; anything that is not a catalog throws `InvalidCommandDeclaration`.
 
+<!-- docs:code skip: get and publish stand for use case plugins written as in Use cases > Plugins -->
 ```ts
 const commandOf = commandBuilderOf(useCaseCatalogOf(get, publish));
 
@@ -63,8 +99,20 @@ An event policy is a handler made by a factory of `eventPolicyOf`, with JSON opt
 
 **`publishEvents`** publishes the events of a call to a publisher of the application, once the call succeeded and committed: to a WebSocket hub (`wsHub` of [`@afora/ws`](../packages/ws/README.md)), a queue, a broker.
 
+<!-- docs:code continue -->
 ```ts
-import { applicationOf, commandOf, publishEvents } from "@afora/core";
+import {
+	applicationOf,
+	publishEvents,
+	repositoryOf,
+	StdUseCases,
+} from "@afora/core";
+import { wsHub } from "@afora/ws";
+
+class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+const PostStore = repositoryOf({ entity: Post, actions: ["create"] });
+const CreatePost = StdUseCases.context.create(PostStore);
+const hub = wsHub();
 
 const Posts = commandOf({
 	name: "Posts",
@@ -74,8 +122,9 @@ const Posts = commandOf({
 
 const App = applicationOf({
 	name: "Blog",
+	entities: { Post },
+	repositories: { PostStore },
 	commands: { Posts },
-	// ...the rest of the declarations
 	publishers: { realtime: hub }, // any { publish(topic, event) }
 });
 ```
@@ -117,12 +166,28 @@ What fails:
 
 `run` and `execute` take `env`, some variables of the command's environments, typed, in place of the loaded ones for that call only:
 
+<!-- docs:code continue -->
 ```ts
+class Notify extends useCaseOf({
+	name: "Notify",
+	blueprint: Credentials,
+	response: blueprintOf((ctx) => ({ sent: ctx.boolean })),
+	dependencies: { mail: Mail },
+}) {
+	override async execute() {
+		return { sent: this.dependencies.mail.FROM !== this.input.email };
+	}
+}
+declare function publish(
+	url: string,
+	events: readonly unknown[],
+): Promise<void>;
+
 const Mailer = commandOf({
 	name: "Mailer",
 	useCases: { notify: Notify }, // Notify declares { mail: Mail }
 	environmentDependencies: [Mail, Queue],
-	events: async (events, { env }) => publish(env.QUEUE_URL, events),
+	events: async (events, { env }) => publish(env.QUEUE_URL as string, events), // info.env is not typed by key
 });
 
 Mailer.env.QUEUE_URL; // string

@@ -1,4 +1,8 @@
-import type { AnyRecordClass } from "../../../blueprint/types/blueprint.interface";
+import type { FieldsDescription } from "../../../application/types/application.interface";
+import type {
+	AnyBlueprint,
+	AnyRecordClass,
+} from "../../../blueprint/types/blueprint.interface";
 import type { AnyRepository } from "../../../repository/types/repository.interface";
 import type {
 	AnyExceptionClass,
@@ -160,6 +164,11 @@ export type UseCaseStep<
 			// biome-ignore lint/suspicious/noExplicitAny: any function, validated at execution
 			readonly fn: (...args: any[]) => unknown;
 			readonly args?: StepArgs;
+			/**
+			 * Checks the `args` at execution: each against the key of the blueprint
+			 * at its position; `fn` gets the values as the keys handled them.
+			 */
+			readonly params?: AnyBlueprint;
 			readonly as?: string;
 	  }
 	| { readonly return: StepValue };
@@ -224,6 +233,7 @@ export type UseCaseStepDescription =
 			readonly run: string;
 			readonly fn: { readonly kind: "opaque" };
 			readonly args?: StepArgs;
+			readonly params?: FieldsDescription;
 			readonly as?: string;
 	  }
 	| { readonly return: StepValue };

@@ -139,6 +139,38 @@ function dependenciesOf(decl: Decl, scope: Scope): string[] {
 }
 
 /**
+ * The cycles of a directed graph, by a depth-first walk from each of `roots`
+ * in turn (skipping nodes already walked) along `next`, each as the path that
+ * closes it (`[a, b, a]`). With `first`, it stops at the first cycle.
+ */
+export function cyclesOf(
+	roots: readonly string[],
+	next: (node: string) => readonly string[],
+	first = false,
+): string[][] {
+	const cycles: string[][] = [];
+	const state = new Map<string, "open" | "done">();
+	const stack: string[] = [];
+	const visit = (node: string): void => {
+		state.set(node, "open");
+		stack.push(node);
+		for (const to of next(node)) {
+			if (first && cycles.length > 0) break;
+			if (state.get(to) === "open") {
+				cycles.push([...stack.slice(stack.indexOf(to)), to]);
+			} else if (!state.has(to)) visit(to);
+		}
+		stack.pop();
+		state.set(node, "done");
+	};
+	for (const root of roots) {
+		if (first && cycles.length > 0) break;
+		if (!state.has(root)) visit(root);
+	}
+	return cycles;
+}
+
+/**
  * The own declarations in an order where each comes after what it needs
  * (ties by name, so the order is deterministic), and the cycles found.
  */
@@ -153,24 +185,10 @@ export function orderOf(
 			dependenciesOf(decl, scope).filter((name) => ownNames.has(name)),
 		]),
 	);
-	const cycles: string[][] = [];
-
-	const state = new Map<string, "open" | "done">();
-	const stack: string[] = [];
-	const visit = (name: string): void => {
-		state.set(name, "open");
-		stack.push(name);
-		for (const next of needs.get(name) ?? []) {
-			if (state.get(next) === "open") {
-				cycles.push([...stack.slice(stack.indexOf(next)), next]);
-			} else if (!state.has(next)) visit(next);
-		}
-		stack.pop();
-		state.set(name, "done");
-	};
-	for (const name of [...ownNames].sort()) {
-		if (!state.has(name)) visit(name);
-	}
+	const cycles = cyclesOf(
+		[...ownNames].sort(),
+		(name) => needs.get(name) ?? [],
+	);
 
 	const remaining = new Map(
 		[...needs].map(([name, list]) => [name, new Set(list)]),

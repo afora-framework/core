@@ -1,6 +1,6 @@
 {
 	"name": "@afora/codegen",
-	"version": "0.0.9",
+	"version": "0.0.11",
 	"description": "Generates idiomatic @afora/core TypeScript from an afora.json spec, and extracts the spec back from an application.",
 	"keywords": [
 		"afora",

@@ -34,8 +34,12 @@ claude mcp add afora -- bunx @afora/mcp --project .
 `mcpTools` is a sink stage of an afora output: it turns the operations of the output into MCP tools, so an agent can call your domain directly (the same operations `@afora/hono` serves over HTTP).
 
 ```ts
-import { outputOf } from "@afora/core";
+import { commandOf, outputOf } from "@afora/core";
 import { mcpTools } from "@afora/mcp";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+const Users = commandOf({ name: "Users", useCases: {} }); // your use cases go here
+const Posts = commandOf({ name: "Posts", useCases: {} });
 
 const Tools = outputOf({
 	name: "Blog",
@@ -52,7 +56,8 @@ const Tools = outputOf({
 });
 
 const mcp = Tools.build(); // { tools, call, register, server }
-await mcp.server().connect(transport); // any transport of the MCP SDK
+const transport = new StdioServerTransport(); // or any transport of the MCP SDK
+await mcp.server().connect(transport);
 ```
 
 - Options (JSON, so the stage can live in `afora.json`): `name`, `version` (of the server `server()` creates), `prefix`, `include` (operation ids; all by default), `context` and `auth`.
@@ -88,6 +93,7 @@ The server does not need an `afora.json`. Started with `--app src/app.ts#App`, i
 
 ```ts
 import { createServer } from "@afora/mcp";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 const server = await createServer({
 	project: "/path/to/project",
@@ -98,5 +104,5 @@ const server = await createServer({
 		{ name: "drizzle", module: "@acme/drizzle", export: "drizzleProvider" },
 	],
 });
-await server.connect(transport); // any transport of the MCP SDK
+await server.connect(new StdioServerTransport()); // or any transport of the MCP SDK
 ```

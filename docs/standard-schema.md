@@ -15,7 +15,13 @@ import { sValidator } from "@hono/standard-validator";
 import { FieldApi, FormApi } from "@tanstack/form-core"; // see examples/interop for the full setup
 import { initTRPC } from "@trpc/server";
 import { Hono } from "hono";
-import { blueprintOf, Email, listOf, recordOf } from "@afora/core";
+import {
+	blueprintOf,
+	Email,
+	listOf,
+	recordOf,
+	type StandardSchemaV1,
+} from "@afora/core";
 
 const Address = blueprintOf((ctx) => ({ street: ctx.string, zip: ctx.string }));
 const UserBlueprint = blueprintOf((ctx) => ({
@@ -36,13 +42,23 @@ const t = initTRPC.create();
 t.procedure.input(User).mutation(({ input }) => input.name);
 
 // TanStack Form: a property validates a field, a blueprint validates the form
+const form = new FormApi({ defaultValues: { email: "" } });
 new FieldApi({ form, name: "email", validators: { onChange: Email } });
+const defaultValues: StandardSchemaV1.InferInput<typeof UserBlueprint> = {
+	name: "",
+	email: "",
+	slug: "",
+	addresses: [],
+};
 new FormApi({ defaultValues, validators: { onChange: UserBlueprint } });
 ```
 
 Without a framework, `safeParse` (on properties, blueprints and record classes) takes `unknown` and returns `{ value }` or `{ issues }`, never both and never throwing for an invalid value:
 
+<!-- docs:code continue -->
 ```ts
+declare const body: unknown; // e.g. await request.json()
+
 const result = UserBlueprint.safeParse(body);
 if (result.issues) {
 	for (const issue of result.issues) {
@@ -53,12 +69,20 @@ if (result.issues) {
 }
 ```
 
-`code` is one of `required`, `invalid_type`, `invalid_value`, `undeclared_key`, `too_few_items`, `too_many_items` and `not_record`; `source` names who rejected the value, and for a property issue `cause` keeps the exception it raised. That exception is built the first time `cause` is read, so rejecting a value costs no exception until someone asks for one; `cause` is not among the keys of the issue (`Object.keys`, a spread and `JSON.stringify` leave it out).
+`code` is one of `required`, `invalid_type`, `invalid_value`, `undeclared_key`, `too_few_items`, `too_many_items` and `not_record` (each with an example in [Issue codes](reference/issue-codes.md)); `source` names who rejected the value, and for a property issue `cause` keeps the exception it raised. That exception is built the first time `cause` is read, so rejecting a value costs no exception until someone asks for one; `cause` is not among the keys of the issue (`Object.keys`, a spread and `JSON.stringify` leave it out).
 
 **Payloads with more than you read.** A key the shape does not declare is rejected at any depth (`undeclared_key`), never trimmed, and that stays the rule. For a payload from another service that carries much more than the operation reads (a webhook from Stripe or GitHub), `stripUndeclared(shape, value)` gives a copy with only the declared keys, in nested blueprints, list items, `optionalOf` and records or entities held as fields, before parsing. `shape` is a blueprint, a record or entity class, or any field. It does not validate, never throws and does not change `value`: values of the wrong type, a property's value and record instances come back as they are, for parsing to judge.
 
+<!-- docs:code continue -->
 ```ts
-const result = Customer.safeParse(
+import { stripUndeclared } from "@afora/core";
+
+class Customer extends recordOf(
+	blueprintOf((ctx) => ({ id: ctx.string, email: ctx.email })),
+) {}
+declare const stripeEvent: { data: { object: unknown } }; // a webhook payload
+
+const customer = Customer.safeParse(
 	stripUndeclared(Customer, stripeEvent.data.object),
 );
 ```

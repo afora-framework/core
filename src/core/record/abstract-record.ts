@@ -14,7 +14,7 @@ import {
 } from "../blueprint/variant";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { Exception } from "../exception/exception";
-import { collectionParserOf, parseField } from "../parse/parse";
+import { type Complete, collectionParserOf, parseField } from "../parse/parse";
 import type { Issue, ParseResult } from "../parse/types/parse.interface";
 import { standardOfClass } from "../standard/standard";
 import type { StandardSchemaV1 } from "../standard/standard-schema";
@@ -124,14 +124,18 @@ function checkMembers(record: object, properties: IBlueprintCollection): void {
  */
 let vouched: readonly string[] | undefined;
 
+/** What makes, once the record is valid, the vouched values left out. */
+let vouchedComplete: Complete | undefined;
+
 /**
  * Tells the record whose constructor runs next that the values of `keys` are
  * valid as they are. For a class that makes values for its own record on the
  * way to `super()`, as an entity does of its id.
  * @internal
  */
-export function vouchFor(keys: readonly string[]): void {
+export function vouchFor(keys: readonly string[], complete?: Complete): void {
 	vouched = keys;
+	vouchedComplete = complete;
 }
 
 /** What building a record of a class needs, the same for each of them. */
@@ -142,6 +146,7 @@ interface Construction {
 	parse(
 		value: unknown,
 		vouched?: readonly string[],
+		complete?: Complete,
 	): ParseResult<Readonly<Record<string, unknown>>>;
 }
 
@@ -181,6 +186,29 @@ function withIssues<Details extends object>(
 }
 
 /**
+ * The message of a property exception as the record raises it: the key and
+ * the record instead of the name of the property (`Property "password" of
+ * record "User" is required.`); any other exception keeps its message.
+ */
+function recordMessageOf(
+	cause: Exception,
+	key: string,
+	source: string,
+): string {
+	if (key === "" || cause.layer !== ExceptionLayers.Property) {
+		return cause.message;
+	}
+	if (cause.name === "PropertyRequired") {
+		return `Property "${key}" of record "${source}" is required.`;
+	}
+	const errors = (cause.details as { errors?: unknown } | undefined)?.errors;
+	if (cause.name === "InvalidPropertyValue" && Array.isArray(errors)) {
+		return `Invalid value for "${key}" of record "${source}": ${errors.join("; ")}`;
+	}
+	return cause.message;
+}
+
+/**
  * The exception of the first of `issues`, as the record raised it before
  * issues existed, with all of them in its `details`: the exception of a
  * property goes up a layer, an undeclared key is `UndeclaredRecordProperty`,
@@ -197,6 +225,7 @@ function exceptionOfIssues(
 		return first.cause.propagate({
 			layer: ExceptionLayers.Record,
 			source,
+			message: recordMessageOf(first.cause, key, source),
 			details: withIssues({ key }, issues),
 		});
 	}
@@ -532,10 +561,12 @@ export abstract class AbstractRecord<
 
 		// What the class has just made and knows to be valid, for this record alone.
 		const made = vouched;
+		const complete = vouchedComplete;
 		vouched = undefined;
+		vouchedComplete = undefined;
 
 		const { source, parse } = constructionOf(this);
-		const result = parse(value, made);
+		const result = parse(value, made, complete);
 		if (result.issues) {
 			if (asked === undefined) throw exceptionOfIssues(result.issues, source);
 			asked.issues = result.issues;

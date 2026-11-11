@@ -1,6 +1,6 @@
 # API tiers
 
-Every export of `@afora/core` belongs to one tier. The tier says where it is imported from and what [VERSIONING.md](../VERSIONING.md) promises about it. This page is the audit of issue #42: each export of the package before 0.0.9, its tier and why.
+Every export of `@afora/core` belongs to one tier. The tier says where it is imported from and what [VERSIONING.md](../VERSIONING.md) promises about it. This page is the audit of issue #42: each export of the package before 0.0.9, its tier and why; [Moved before 27.0](#moved-before-270) is the cut of #59.
 
 ## The tiers
 
@@ -9,14 +9,14 @@ Every export of `@afora/core` belongs to one tier. The tier says where it is imp
 | stable       | `@afora/core`              | yes      | The reader path of the README and these docs: properties, blueprints, records, entities, repositories, use cases, commands, outputs, applications, environments, exceptions, logging, the Std catalog. |
 | adapters     | `@afora/core/adapters`     | yes      | The plumbing for authors of sinks, providers and code generators: the provider SPI, `sinkOf`, `problemOf`, `statusOf`, the route helpers, the `app.describe()` types, reserved keys.                   |
 | testing      | `@afora/core/testing`      | yes      | `providerContract` and `memoryPublisher`, which provider and publisher packages test against.                                                                                                          |
-| experimental | `@afora/core/experimental` | no       | Features that may change in any release: slicing, and description helpers that `app.describe()` already covers.                                                                                        |
+| experimental | `@afora/core/experimental` | no       | Features that may change in any release: slicing, description helpers that `app.describe()` covers, exports cut before 27.0.                                                                           |
 | internal     | nowhere                    | no       | Machinery of the core: base classes, runtime guards, constants of a rule. No longer exported.                                                                                                          |
 
 - **Application code needs only `@afora/core`.** The adapters entry exists so that the main entry stays a surface a reader can hold in their head; nothing in it is needed to declare a domain, run it or serve it with a companion package.
-- **Stable and adapters follow semver.** Before 1.0 they may still break, and each break is listed in `CHANGELOG.md` with a Migration block (before and after). From 1.0 on, a break waits for a major.
+- **Stable and adapters follow semver.** Before 27.0 they may still break, and each break is listed in `CHANGELOG.md` with a Migration block (before and after). From 27.0 on, a break waits for the next year's major (see [VERSIONING.md](../VERSIONING.md)).
 - **Experimental and internal are outside the contract.** An experimental export may change or go in any release; it is promoted to stable or adapters when it settles. Internal code is reached only through the stable builders.
 - **One name, one entry.** No name is exported by two entries. A package that needs both kinds imports from both: `import { ExceptionLayers } from "@afora/core"` and `import { sinkOf } from "@afora/core/adapters"`.
-- **The entries share module state.** They are built with code splitting, so a class, a symbol or a registry is the same object whichever entry it comes from (`bun run smoke` checks it on Node).
+- **The entries share module state.** `dist/` has one module per module of `src/`, transpiled and not bundled (`scripts/build.ts`), and every entry imports the same files, so a class, a symbol or a registry is the same object whichever entry it comes from (`bun run smoke` checks it on Node). With `"sideEffects": false` in `package.json`, a bundler keeps only the modules an application imports.
 - **`bun run test:api` snapshots each entry.** A change to the snapshot of `@afora/core`, `/adapters` or `/testing` is a change to the contract; one to `/experimental` is reviewed but is not.
 
 ## Deciding a tier
@@ -31,6 +31,27 @@ A new export is stable when the docs show it to someone writing an application, 
 - **Stayed stable (468):** everything else. A few were weighed and kept because the docs show them to application code: `stripUndeclared`, `recordPluginCatalogOf`, `providerOf`, `recordNameOf`, `RepositoryQuery`, `RouteOptions`, `AnyApplication`, the `Meta` and `State` symbols, and the documented guards (`isEntity`, `isEntityClass`, `isCommand`, `isOutput`, `isUseCase`, `isUseCaseClass`, `isUseCasePlugin`, `isUseCaseCatalog`, `isProviderFactory`).
 
 The [CHANGELOG](../CHANGELOG.md) has the migration, before and after.
+
+## Moved before 27.0
+
+Issue #59 cut the stable surface before the freeze: from 27.0 on, moving a name out of stable is breaking, moving one in is not. `bun run stable:usage` (after `bun run build`) writes [the usage report](plans/stable-usage.md): each stable export, the examples, packages and docs that name it, and the used exports whose declarations name it. Of 502 stable exports, 41 were named by none of them and reached by no used declaration. Each was weighed: it moved to `@afora/core/experimental` unless application code can receive it from a stable call, needs it to annotate a value a stable call gives or takes, or it belongs to a documented family that moving it would split. Nothing went to internal. The report now lists 495 stable exports, with the ones added since.
+
+- **To `@afora/core/experimental` (15):**
+  - `AbstractPropertyConstructor` (names the internal base class `AbstractProperty`; `PropertyClass` and `AnyPropertyConstructor` are the stable names), `IPropertyCollection` (`Record<string, AnyPropertyConstructor>`), `EntityStorageSettings` (what `entityOf` keeps under `EntitySettings`, with bookkeeping such as `schemaVersioned` and `previousNames` that may change; `app.describe()` is the stable read of `versioned` and `expires`). Promoted when a stable signature needs to name them.
+  - `RepositoryCount`, `RepositoryCreate`, `RepositoryDelete`, `RepositoryIncrement`, `RepositoryRestore`, `RepositoryUpdate`, `RepositoryExists`, `RepositoryExplain`, `RepositoryFindCursor`, `RepositoryFindMany`, `RepositoryFindPage`, `RepositoryForEachPage`: the interface that holds each generated method. Code names a repository with `RepositoryOf<typeof Post, ["findById", "create"]>`, a method with `RepositoryOf<...>["create"]`; these still show in hovers as the parts of that type. Promoted if a stable signature or the docs name one. `RepositoryFindBy` and `RepositoryFindManyBy`, of the same family, were already stable and stay.
+- **Kept stable (26):**
+  - `InvalidRecordValue`, `PropertyRequired`: raised by every record built from invalid input (`exception.is(PropertyRequired)` through a record), siblings of the documented `InvalidPropertyValue` and `UndeclaredRecordProperty`.
+  - `InvalidRepositoryEntity`: raised at run time by `create`, `update` and `delete` for an entity that is not an instance of the declared class (`instanceof`), which the types cannot rule out for plain JavaScript or a structurally identical class; sibling of the documented repository exceptions.
+  - `InvalidLogDeclaration`: raised at run time by `applicationOf({ log })` and `logProviderOf` for a `log` that is malformed, e.g. built from configuration, as `logFrom` makes it on `app.start()`.
+  - `InvalidUseCaseDependencies`: raised by `execute(overrides)` for an override [Use cases](use-cases.md) rules out, and by a dependency function called after execution.
+  - `SyncVerifyUnsupported`: raised by `Password.verifySync` without a `verifySync` in the hasher, which the README describes; sibling of `PasswordHasherRequired`.
+  - `ReservedBlueprintKey`: enforces the reserved context keys of [Blueprints](blueprints.md); sibling of the documented `ReservedRecordKey` and `ReservedEntityKey`.
+  - `Publishable`, `Archivable`, `Taggable`, `Ownable`: moved at first, as `StdRecordPlugins` reaches them, and moved back once [Std properties](std-properties.md) and [Records](records.md) documented them by name (`plugins: [Publishable, Taggable]`). `Authenticatable` was not among the 41: the report counted it as referenced, matching a local type of the same name in the standard use cases.
+  - `LogLevels`: moved at first, and moved back once [Logging](logging.md) used it (`ctx.enumOf([...LogLevels])` for a `LOG_LEVEL` variable).
+  - `BooleanProperty`, `NumberProperty`, `DateProperty`: the Std primitives behind `ctx.boolean`, `ctx.number` and `ctx.date`, siblings of `StringProperty`, `Integer`, `Text` and `DateTime`, to refine outside a blueprint as `StringProperty.with(...)` is.
+  - `RepositoryPage`, `RepositoryCursorPage`, `RepositoryCursorQuery`, `RepositoryPlan`, `RepositoryWalkPage`, `RepositoryWalkOptions`, `RepositoryWalkResult`, `RepositoryCreateInput`, `RepositoryIncrementDeltas`, `RepositoryIncrementOptions`, `EntityIncrementKeyOf`: what the generated methods take and give (a hover on `await Users.findPage()` reads `RepositoryPage<typeof User>`), the types code annotates when it passes a page, a cursor or a walk result along.
+
+The report now lists 11 of the kept ones as unused and unreferenced, the repository value types; the docs name the others. This section is why they stay.
 
 ## Audit of `@afora/core` (as of 0.0.8)
 
@@ -183,7 +204,7 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `EntityOptions`                    | type  | stable       | `@afora/core`              | Type on the reader path: [Entities](entities.md).                                                                      |
 | `EntityProperties`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Entities](entities.md).                                                                      |
 | `EntityStorageOptions`             | type  | stable       | `@afora/core`              | Type on the reader path: [Entities](entities.md).                                                                      |
-| `EntityStorageSettings`            | type  | stable       | `@afora/core`              | Type on the reader path: [Entities](entities.md).                                                                      |
+| `EntityStorageSettings`            | type  | experimental | `@afora/core/experimental` | Moved before 27.0: type plumbing nothing names ([why](#moved-before-270)).                                             |
 | `EntityUniqueKey`                  | type  | stable       | `@afora/core`              | Type on the reader path: [Entities](entities.md).                                                                      |
 | `ExpiresAtField`                   | type  | stable       | `@afora/core`              | Type on the reader path: [Entities](entities.md).                                                                      |
 | `ExpiringIdentity`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Entities](entities.md).                                                                      |
@@ -321,12 +342,12 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `DeclaredProperty`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
 | `PropertyClass`                    | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
 | `propertyOf`                       | value | stable       | `@afora/core`              | Reader path: [Properties](properties.md).                                                                              |
-| `AbstractPropertyConstructor`      | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
+| `AbstractPropertyConstructor`      | type  | experimental | `@afora/core/experimental` | Moved before 27.0: type plumbing nothing names ([why](#moved-before-270)).                                             |
 | `IDefineProperty`                  | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
 | `OptionalProperty`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
 | `IProperty`                        | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
 | `AnyPropertyConstructor`           | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
-| `IPropertyCollection`              | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
+| `IPropertyCollection`              | type  | experimental | `@afora/core/experimental` | Moved before 27.0: type plumbing nothing names ([why](#moved-before-270)).                                             |
 | `PropertyValue`                    | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
 | `CallableProperty`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
 | `NumberConstraints`                | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
@@ -405,12 +426,12 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `ProviderSettings`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
 | `RepositoryCursorPage`             | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
 | `RepositoryCursorQuery`            | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
-| `RepositoryExists`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
-| `RepositoryExplain`                | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
-| `RepositoryFindCursor`             | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
-| `RepositoryFindMany`               | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
-| `RepositoryFindPage`               | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
-| `RepositoryForEachPage`            | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
+| `RepositoryExists`                 | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
+| `RepositoryExplain`                | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
+| `RepositoryFindCursor`             | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
+| `RepositoryFindMany`               | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
+| `RepositoryFindPage`               | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
+| `RepositoryForEachPage`            | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
 | `RepositoryIndex`                  | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
 | `RepositoryOrder`                  | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
 | `RepositoryPage`                   | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
@@ -436,18 +457,18 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `QueryValueOf`                     | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
 | `RepositoryAction`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
 | `RepositoryContext`                | type  | adapters     | `@afora/core/adapters`     | What each provider call receives.                                                                                      |
-| `RepositoryCount`                  | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
-| `RepositoryCreate`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
+| `RepositoryCount`                  | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
+| `RepositoryCreate`                 | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
 | `RepositoryCreateInput`            | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
 | `RepositoryData`                   | type  | adapters     | `@afora/core/adapters`     | A stored row, as a provider reads and writes it.                                                                       |
-| `RepositoryDelete`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
+| `RepositoryDelete`                 | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
 | `RepositoryFindBy`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
 | `RepositoryFindManyBy`             | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
-| `RepositoryIncrement`              | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
+| `RepositoryIncrement`              | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
 | `RepositoryIncrementDeltas`        | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
 | `RepositoryIncrementOptions`       | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
-| `RepositoryRestore`                | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
-| `RepositoryUpdate`                 | type  | stable       | `@afora/core`              | Type on the reader path: [Repositories](repositories.md).                                                              |
+| `RepositoryRestore`                | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
+| `RepositoryUpdate`                 | type  | experimental | `@afora/core/experimental` | Moved before 27.0: name the repository with `RepositoryOf` ([why](#moved-before-270)).                                 |
 | `SchemaClass`                      | type  | internal     | none                       | Type of `schemaOf`, which is internal.                                                                                 |
 | `schemaOf`                         | value | internal     | none                       | Machinery behind `SchemaProperty`; not documented.                                                                     |
 | `ISchema`                          | type  | stable       | `@afora/core`              | Type on the reader path: [Properties](properties.md).                                                                  |
@@ -601,6 +622,10 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `StdUseCasePlugins`                | type  | stable       | `@afora/core`              | Standard use cases ([Standard use cases](std-use-cases.md)).                                                           |
 | `TagMaker`                         | type  | stable       | `@afora/core`              | Standard use cases ([Standard use cases](std-use-cases.md)).                                                           |
 | `UpdateMaker`                      | type  | stable       | `@afora/core`              | Standard use cases ([Standard use cases](std-use-cases.md)).                                                           |
+
+## Added after 0.0.9
+
+- **`@afora/core`** (#65): `memoryTracer`, `InvalidTraceDeclaration` and the types `ITracer`, `ITraceSpan`, `TraceAttributes`, `TraceStatus`, `MemoryTracer` and `MemorySpan`: the `trace` of an application, shown to application code in [Tracing](tracing.md) as `log` is in [Logging](logging.md) (`memoryTracer` is stable like `memoryLogProvider`). `ApplicationDescription` (`@afora/core/adapters`) gains `trace`, `{ kind: "opaque" }` when the application has one.
 
 ## Added in 0.0.9
 

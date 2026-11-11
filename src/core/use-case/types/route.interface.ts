@@ -8,13 +8,29 @@ export type RouteSuccessStatus = 200 | 201 | 202 | 204;
 export interface RouteCookie {
 	/** The name of the cookie. */
 	readonly name: string;
-	/** Not readable by scripts of the page. `true` by default. */
+	/**
+	 * Not readable by scripts of the page.
+	 *
+	 * @default true
+	 */
 	readonly httpOnly?: boolean;
-	/** Sent over HTTPS only. `true` by default. */
+	/**
+	 * Sent over HTTPS only.
+	 *
+	 * @default true
+	 */
 	readonly secure?: boolean;
-	/** `"lax"` by default. */
+	/**
+	 * The `SameSite` attribute of the cookie.
+	 *
+	 * @default "lax"
+	 */
 	readonly sameSite?: "strict" | "lax" | "none";
-	/** `"/"` by default. */
+	/**
+	 * The `Path` attribute of the cookie.
+	 *
+	 * @default "/"
+	 */
 	readonly path?: string;
 	readonly domain?: string;
 	/** The seconds the cookie lives; without it, until the browser closes. */
@@ -35,7 +51,11 @@ export interface RouteDeclaration {
 	 * is the default of the sink: `/{kebab(command)}/{kebab(operation)}`.
 	 */
 	readonly path?: string;
-	/** `200` by default. */
+	/**
+	 * The status of a successful response.
+	 *
+	 * @default 200
+	 */
 	readonly status?: RouteSuccessStatus;
 	/**
 	 * Scalar input keys read from the query string. A `get` or `delete` route

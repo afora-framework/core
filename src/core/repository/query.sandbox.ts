@@ -1,6 +1,10 @@
+import type {
+	RepositoryExists,
+	RepositoryFindMany,
+	RepositoryFindPage,
+} from "../../experimental";
 import {
-	blueprintOf, entityOf, type RepositoryQuery, type RepositoryFindMany,
-	type RepositoryExists, type RepositoryFindPage, type ProviderOptions,
+	blueprintOf, entityOf, type RepositoryQuery, type ProviderOptions,
 } from "../../index";
 
 class User extends entityOf(blueprintOf((ctx) => ({ name: ctx.string, age: ctx.integer }))) {}

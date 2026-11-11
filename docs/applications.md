@@ -3,6 +3,37 @@
 `applicationOf` gathers the declarations of an app in one named, immutable manifest, so everything runs in one context and can be inspected:
 
 ```ts
+import {
+	applicationOf,
+	blueprintOf,
+	entityOf,
+	enumOf,
+	environmentOf,
+	Integer,
+	inMemoryProvider,
+	repositoryOf,
+} from "@afora/core";
+
+const Age = Integer.with({ min: 0 });
+const Status = enumOf(["draft", "published"]);
+const Address = blueprintOf((ctx) => ({ street: ctx.string, zip: ctx.string }));
+class User extends entityOf(
+	blueprintOf((ctx) => ({ email: ctx.email, age: Age, address: Address })),
+	{ unique: ["email"] },
+) {}
+class Post extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.text, status: Status, author: User })),
+) {}
+const Database = environmentOf(
+	blueprintOf((ctx) => ({ DATABASE_URL: ctx.string })),
+);
+const Users = repositoryOf({ entity: User, actions: ["findMany", "create"] });
+const Posts = repositoryOf({
+	entity: Post,
+	actions: ["findMany", "create"],
+	relations: [Users],
+});
+
 const Blog = applicationOf({
 	name: "blog",
 	properties: { Age, Status },
@@ -27,7 +58,7 @@ A record or entity that declares a `name` (`entityOf(blueprint, { name: "User" }
 
 Use cases are registered by name too: `useCases: { Register, CreateUser }` (concrete classes, keyed by their `useCaseName`) and `exceptions: { UserAlreadyExists }` (made by `exceptionOf`, keyed by their `name`); another key throws `InvalidApplicationDeclaration`. The resolved set (extended applications included) is checked: every dependency of a use case must be registered, a use case, repository or environment (`UnregisteredUseCaseDependency`, with `details.useCase` and `details.dependency`); records and entities held by its `blueprint`, `response` or `context` must be registered (`UnregisteredApplicationReference`); and each class in `errors` must be in `exceptions`, unless it is an exception exported by `@afora/core` such as `RepositoryUniqueViolation` (`UnregisteredApplicationReference` otherwise).
 
-With a `provider`, `providers`, `log` or `publishers`, `app.useCases.Register` is a subclass of `Register` whose `dependencies` swap each repository for the application's bound one, through child use cases too; it is the same subclass every time, and `Register` itself is never changed. Without any of them, `app.useCases.Register === Register`. `app.useCase(Register)` gives the same class from the original, as `app.repository(Users)` does. So a use case that must read and write through the application runs as `new app.useCases.Register(input).execute()`, with no override, or in one call as `await app.run(Register, input)`; `new Register(input).execute()` on the module-level class reaches the module-level repositories, which throw `RepositoryUsedOutsideApplication` once an application bound them (see below), unless `execute` is given the application's (`execute({ users: app.repositories.Users })`).
+With a `provider`, `providers`, `log`, `trace` or `publishers`, `app.useCases.Register` is a subclass of `Register` whose `dependencies` swap each repository for the application's bound one, through child use cases too; it is the same subclass every time, and `Register` itself is never changed. Without any of them, `app.useCases.Register === Register`. `app.useCase(Register)` gives the same class from the original, as `app.repository(Users)` does. So a use case that must read and write through the application runs as `new app.useCases.Register(input).execute()`, with no override, or in one call as `await app.run(Register, input)`; `new Register(input).execute()` on the module-level class reaches the module-level repositories, which throw `RepositoryUsedOutsideApplication` once an application bound them (see below), unless `execute` is given the application's (`execute({ users: app.repositories.Users })`).
 
 `app.run(UseCase, input, options?)` builds the bound use case and executes it, returning its response: `options.context` is the context of the use case (required when it declares one) and `options.dependencies` is what its `execute` takes to replace dependencies. The input may be left out when none of its keys is required. It always rejects rather than throws: with `InvalidApplicationDeclaration` for a use case that is not registered, and with what the constructor (invalid input or context) or `execute` raise. The events the use case collected are not handled, since the instance is not returned; a [command](commands.md) is what dispatches them, and `new app.useCases.Register(input)` gives the instance to call `pullEvents()` on.
 
@@ -53,18 +84,15 @@ Repositories are module-level and may be shared, so an application does not chan
 
 **A provider made from the environment.** `providerFrom(environmentDependencies, create)` declares a provider that needs variables, such as a database URL, without reading them when the module loads:
 
-```ts
-import {
-	applicationOf,
-	blueprintOf,
-	environmentOf,
-	providerFrom,
-} from "@afora/core";
-import { drizzleProvider } from "@afora/drizzle";
+With the domain of the first example (`Database` is the environment declared there, `environmentOf(blueprintOf((ctx) => ({ DATABASE_URL: ctx.string })))`):
 
-const Database = environmentOf(
-	blueprintOf((ctx) => ({ DATABASE_URL: ctx.string })),
-);
+<!-- docs:code continue -->
+```ts
+import { providerFrom } from "@afora/core";
+import { type DrizzleProviderOptions, drizzleProvider } from "@afora/drizzle";
+
+declare const tables: DrizzleProviderOptions["tables"]; // your Drizzle tables
+declare function connect(url: string): DrizzleProviderOptions["db"]; // your driver
 
 export const App = applicationOf({
 	name: "blog",
@@ -87,9 +115,14 @@ await App.start(); // validates Database, then calls create once
 
 An application can read and write through several providers, e.g. one database for the domain and another for an audit log. `providersOf` declares them by key, in a module of their own, so that repositories can name one before any application exists:
 
+<!-- docs:code continue -->
 ```ts
 // providers.ts
-import { providerFrom, providersOf } from "@afora/core";
+import { providersOf } from "@afora/core";
+import type { IRepositoryProvider } from "@afora/core/adapters";
+
+const Audit = environmentOf(blueprintOf((ctx) => ({ AUDIT_URL: ctx.string })));
+declare function auditProvider(url: string): IRepositoryProvider;
 
 export const Providers = providersOf({
 	main: providerFrom(Database, (env) =>
@@ -99,6 +132,7 @@ export const Providers = providersOf({
 });
 
 // repositories.ts
+class AuditLog extends entityOf(blueprintOf((ctx) => ({ action: ctx.text }))) {}
 export const AuditLogs = repositoryOf({
 	entity: AuditLog,
 	actions: ["create"],
@@ -106,7 +140,7 @@ export const AuditLogs = repositoryOf({
 });
 
 // application.ts
-export const App = applicationOf({
+export const AuditedApp = applicationOf({
 	name: "blog",
 	environments: { Database, Audit },
 	providers: Providers,
@@ -133,10 +167,25 @@ The factories an application runs on start get it, so that a provider, or the lo
 ```ts
 import {
 	applicationOf,
+	blueprintOf,
+	environmentOf,
 	jsonLogProvider,
 	logFrom,
 	providerFrom,
 } from "@afora/core";
+import { type DrizzleProviderOptions, drizzleProvider } from "@afora/drizzle";
+
+declare const tables: DrizzleProviderOptions["tables"];
+declare function connect(url: string): DrizzleProviderOptions["db"];
+
+const Database = environmentOf(
+	blueprintOf((ctx) => ({ DATABASE_URL: ctx.string })),
+);
+const Logging = environmentOf(
+	blueprintOf((ctx) => ({
+		LOG_LEVEL: ctx.enumOf(["debug", "info", "warn", "error"]),
+	})),
+);
 
 export const App = applicationOf({
 	name: "blog",
@@ -162,7 +211,27 @@ export const App = applicationOf({
 `start()` also makes the application the started one of the process, which `useApplication()` gives from anywhere, without importing it. A hand-written use case or handler that the application itself imports can reach the application this way without an import cycle.
 
 ```ts
-import { useApplication } from "@afora/core";
+import {
+	blueprintOf,
+	commandOf,
+	entityOf,
+	repositoryOf,
+	useApplication,
+	useCaseOf,
+} from "@afora/core";
+
+class User extends entityOf(blueprintOf((ctx) => ({ email: ctx.email }))) {}
+const Users = repositoryOf({ entity: User, actions: ["findMany"] });
+class Notify extends useCaseOf({
+	name: "Notify",
+	blueprint: blueprintOf((ctx) => ({ to: ctx.list.email })),
+	response: blueprintOf(() => ({})),
+}) {
+	override async execute() {
+		return {};
+	}
+}
+const Mailer = commandOf({ name: "Mailer", useCases: { notify: Notify } });
 
 export async function notifyAll() {
 	const app = useApplication(); // throws ApplicationNotStarted before start()
@@ -173,6 +242,7 @@ export async function notifyAll() {
 
 `useApplication()` is typed by augmenting the `Register` interface once in the project, in a file of your own (codegen does not write it, so that two generated applications in one project do not conflict):
 
+<!-- docs:code skip: augments @afora/core, which would retype useApplication() in every other block -->
 ```ts
 import type { App } from "./domain";
 

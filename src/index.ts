@@ -150,7 +150,6 @@ export type {
 	EntityOptions,
 	EntityProperties,
 	EntityStorageOptions,
-	EntityStorageSettings,
 	EntityUniqueKey,
 	EntityUpgrade,
 	EntityUpgrades,
@@ -282,14 +281,10 @@ export type { IPropertyInput } from "./core/property/input";
 export { PropertyInput, propertyInputOf } from "./core/property/input";
 export type { DeclaredProperty, PropertyClass } from "./core/property/property";
 export { propertyOf } from "./core/property/property";
-export type { AbstractPropertyConstructor } from "./core/property/types/abstract-property-constructor.type";
 export type { IDefineProperty } from "./core/property/types/define-property.interface";
 export type { OptionalProperty } from "./core/property/types/optional-property.type";
 export type { IProperty } from "./core/property/types/property.interface";
-export type {
-	AnyPropertyConstructor,
-	IPropertyCollection,
-} from "./core/property/types/property-collection.type";
+export type { AnyPropertyConstructor } from "./core/property/types/property-collection.type";
 export type { PropertyValue } from "./core/property/types/property-constructor.type";
 export type {
 	CallableProperty,
@@ -372,12 +367,6 @@ export type {
 	ProviderSettings,
 	RepositoryCursorPage,
 	RepositoryCursorQuery,
-	RepositoryExists,
-	RepositoryExplain,
-	RepositoryFindCursor,
-	RepositoryFindMany,
-	RepositoryFindPage,
-	RepositoryForEachPage,
 	RepositoryIndex,
 	RepositoryOrder,
 	RepositoryPage,
@@ -400,17 +389,11 @@ export type {
 	EntityValueOf,
 	QueryValueOf,
 	RepositoryAction,
-	RepositoryCount,
-	RepositoryCreate,
 	RepositoryCreateInput,
-	RepositoryDelete,
 	RepositoryFindBy,
 	RepositoryFindManyBy,
-	RepositoryIncrement,
 	RepositoryIncrementDeltas,
 	RepositoryIncrementOptions,
-	RepositoryRestore,
-	RepositoryUpdate,
 } from "./core/repository/types/repository.interface";
 export type {
 	EntityMigrationReport,
@@ -425,6 +408,16 @@ export type {
 export type { StandardSchemaV1 } from "./core/standard/standard-schema";
 export { Meta } from "./core/symbols/meta";
 export { State } from "./core/symbols/state";
+export { InvalidTraceDeclaration } from "./core/tracing/exceptions";
+export type {
+	ITracer,
+	ITraceSpan,
+	MemorySpan,
+	MemoryTracer,
+	TraceAttributes,
+	TraceStatus,
+} from "./core/tracing/tracing";
+export { memoryTracer } from "./core/tracing/tracing";
 export { Access, Route } from "./core/use-case/decorators";
 export {
 	IncompatibleUseCasePlugin,

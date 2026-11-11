@@ -24,7 +24,7 @@ const Admin = blueprintOf([User], (ctx) => ({
 const Customer = User.join(Timestamps); // every field of both
 ```
 
-`ctx.optional.*` and `ctx.list.*` mirror every field: `ctx.list.string` is `listOf(ctx.string)` and `ctx.list.optional.string` an optional list of strings. Every context also has `ctx.listOf`, `ctx.optionalOf`, `ctx.propertyOf` and `ctx.variantOf`, the same functions as the exports, to make fields inline: `ctx.listOf(ctx.string, { maxItems: 5 })`, `ctx.optionalOf(Address)`. `optional`, `list`, `listOf`, `optionalOf`, `propertyOf` and `variantOf` are reserved, so no plugin can declare them. Factories such as `ctx.enumOf` are not mirrored under `optional` and `list`, which would lose their literal types; wrap what they return in `ctx.listOf` or `ctx.optionalOf`.
+`ctx.optional.*` and `ctx.list.*` mirror every field: `ctx.list.string` is `listOf(ctx.string)` and `ctx.list.optional.string` an optional list of strings. Every context also has `ctx.listOf`, `ctx.optionalOf`, `ctx.propertyOf` and `ctx.variantOf`, the same functions as the exports, to make fields inline: `ctx.listOf(ctx.string, { maxItems: 5 })`, `ctx.optionalOf(Address)`. `optional`, `list`, `listOf`, `optionalOf`, `propertyOf` and `variantOf` are reserved, so no plugin can declare them: a plugin that does throws `ReservedBlueprintKey`. Factories such as `ctx.enumOf` are not mirrored under `optional` and `list`, which would lose their literal types; wrap what they return in `ctx.listOf` or `ctx.optionalOf`.
 
 `join` takes any number of blueprints (`A.join(B, C)` is `A.join(B).join(C)`); a later one replaces a key of an earlier one, like plugins do. `listOf` takes a property, a blueprint or another list, and `optionalOf` makes it an optional key.
 
@@ -63,6 +63,10 @@ A value is handled by the blueprint its key names, exactly as a nested blueprint
 A variant can also be a record class, an entity included:
 
 ```ts
+import { blueprintOf, recordOf, variantOf } from "@afora/core";
+
+const Pix = blueprintOf((ctx) => ({ key: ctx.email }));
+
 class Card extends recordOf(
 	blueprintOf((ctx) => ({ holder: ctx.text, number: ctx.text })),
 ) {}
@@ -84,7 +88,10 @@ In an `afora.json` the field is `{ "variant": { "key": "method", "of": { "card":
 `blueprintOf` is `blueprintBuilderOf(Std)`. To build blueprints from other properties, without `Std`, make a builder of your own:
 
 ```ts
-import { blueprintBuilderOf, blueprintPluginOf } from "@afora/core";
+import { blueprintBuilderOf, blueprintPluginOf, Text } from "@afora/core";
+
+const Title = Text.with({ max: 120 });
+const Body = Text;
 
 const contentBlueprintOf = blueprintBuilderOf(
 	blueprintPluginOf("content", { title: Title, body: Body }),
@@ -94,5 +101,7 @@ const Post = contentBlueprintOf((ctx) => ({
 	body: ctx.body,
 }));
 ```
+
+Blueprints, lists, variants and records are told apart by a brand, not by their shape: each carries the `Kind` symbol (exported by `@afora/core/adapters`, for code that walks fields), so a plain object with a `schema` key is never taken for a blueprint.
 
 A plugin can also take factories, functions that make a field from their arguments, as `Std` does with `enumOf`: `blueprintPluginOf("content", { title: Title }, { enumOf })` gives `ctx.enumOf`. A factory replaces a field with the same name.

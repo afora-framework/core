@@ -1,10 +1,12 @@
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { exceptionOf } from "../exception/exception";
+import type { Issue } from "../parse/types/parse.interface";
 
 /**
  * A step of a use case is invalid: at declaration (`useCaseOf({ steps })`),
  * or while the steps run (a `change` or `invoke` on something that is not a
- * record or has no such member). `details.index` is the position of the step.
+ * record or has no such member, or `args` that a `run`'s `params` reject).
+ * `details.index` is the position of the step.
  */
 export const InvalidUseCaseStep = exceptionOf({
 	layer: ExceptionLayers.UseCase,
@@ -16,6 +18,8 @@ export const InvalidUseCaseStep = exceptionOf({
 		readonly index: number;
 		readonly reason: string;
 		readonly code?: string;
+		/** The issues of the `args` a `run` gave its `params` (`code: "invalid_args"`). */
+		readonly issues?: readonly Issue[];
 	}) => `Invalid step ${index}: ${reason}`,
 });
 

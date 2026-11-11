@@ -18,9 +18,11 @@ new Name("a"); // throws: Invalid value for property "name": ...
 Name.demo().value; // "Jane"
 ```
 
+`propertyOf` returns a class whose instances are `DeclaredProperty<Schema, Value>`; extend it to add behavior, as `Id` does with `generate()`. `undefined` given to a property that is not optional throws `PropertyRequired`, and a value its rules reject throws `InvalidPropertyValue`, both with the property name as `source`. The `Demo` symbol (from `@afora/core/adapters`), given to the constructor in place of a value, builds the instance from the `default`, as `demo()` does: `new Name(Demo).value` is `"Jane"`.
+
 A handler only gets a value of the types of the schema: before `preHandle` runs, the value is checked against the schema without its constraints (`minLength`, `format`...), and one of another type is rejected there. A property with no `preHandle` has no such step, its value goes straight to validation.
 
-Pass `optional: true` to accept `undefined`, `sensitive: true` to have records mask it (as `Password` does) and `unique: true` to have records list its key in `options.unique` (as `Slug` does). `Std` ships `Id`, `Slug`, `Email`, `Phone`, `Url`, `Ip`, `Password`, strings, numbers, booleans, date properties and [JSON](#json).
+Pass `optional: true` to accept `undefined`, `sensitive: true` to have records mask it (as `Password` does) and `unique: true` to have records list its key in `options.unique` (as `Slug` does). `Std` ships `Id`, `Slug`, `Email`, `Phone`, `Url`, `Ip`, `Password`, strings, numbers, booleans, date properties and [JSON](#json); [Std properties](std-properties.md) lists each one with what it validates and transforms.
 
 A property whose callers give another form of its value than the one it stores says so with a static under the `PropertyInput` symbol: `{ accepts, convert }`, the property that validates what a caller gives (of the same value type) and the function that turns it into what is stored. `Password` declares `{ accepts: PlainPassword, convert }`, a plain password checked by the password rules and hashed, so what derives inputs from an entity, as the [standard use cases](std-use-cases.md) do, takes a plain password for a `Password` key and stores its hash. `propertyInputOf(field)` reads it (`undefined` for a property that takes its value as it stores it); a class extending or refining the property keeps it. `PlainPassword` is exported; it is not in the `Std` context.
 
@@ -52,6 +54,7 @@ import { blueprintOf, enumOf } from "@afora/core";
 const Status = enumOf(["draft", "published"], { name: "status" });
 
 new Status("draft").value; // "draft", typed "draft" | "published"
+// @ts-expect-error: "archived" is not one of the values
 new Status("archived"); // throws: Invalid value for property "status": ...
 
 const Post = blueprintOf((ctx) => ({
