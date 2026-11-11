@@ -226,14 +226,16 @@ export interface UseCaseDeclaration<
 	 * class concrete: validated here, interpreted by its `execute`, and
 	 * described by `describe()`. TypeScript checks the kinds of the steps and
 	 * the names of dependencies and actions; with `strictSteps`, also their
-	 * references and values (see `CheckedSteps`).
+	 * references and values, and the `return` against the response (see
+	 * `CheckedSteps`).
 	 */
 	readonly steps?: [Strict] extends [true]
 		? CheckedSteps<
 				Steps,
 				NoInfer<Input>,
 				NoInfer<Context>,
-				NoInfer<Dependencies>
+				NoInfer<Dependencies>,
+				NoInfer<Output>
 			>
 		: Steps;
 	/**

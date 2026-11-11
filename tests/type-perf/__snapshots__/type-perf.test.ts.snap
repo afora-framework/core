@@ -350,34 +350,14 @@ complete L18:28 { change: "$user", key: "‸", value: "$input.name", as: "rename
   name (string)
 complete L19:23 { return: { user: "$‸" } },
   $input (string)
-  $input.address (string)
-  $input.address.zip (string)
-  $input.age (string)
-  $input.email (string)
-  $input.name (string)
   $renamed (string)
-  $renamed.age (string)
-  $renamed.createdAt (string)
-  $renamed.deletedAt (string)
-  $renamed.email (string)
-  $renamed.id (string)
-  $renamed.name (string)
-  $renamed.updatedAt (string)
-  $user (string)
-  $user.age (string)
-  $user.createdAt (string)
-  $user.deletedAt (string)
-  $user.email (string)
-  $user.id (string)
-  $user.name (string)
-  $user.updatedAt (string)
 diagnostics (3)
   TS2322 L17:39 { find: "users.findByEmail", args: [‸"$"], as: "user" },
     Type '"$"' is not assignable to type '"$input.name" | "$input.email" | "$input.address.zip"'.
   TS2322 L18:22 { change: "$user", ‸key: "", value: "$input.name", as: "renamed" },
     Type '""' is not assignable to type '"name"'.
   TS2322 L19:15 { return: { ‸user: "$" } },
-    Type '"$"' is not assignable to type '"$user" | "$input.name" | "$input" | "$input.email" | "$input.age" | "$input.address" | "$input.address.zip" | "$user.id" | "$user.email" | "$user.createdAt" | "$user.updatedAt" | ... 10 more ... | "$renamed.age"'."
+    Type '"$"' is not assignable to type '"$input" | "$renamed"'."
 `;
 
 exports[`source mode experience errors: strict steps 1`] = `
@@ -759,34 +739,14 @@ complete L18:28 { change: "$user", key: "‸", value: "$input.name", as: "rename
   name (string)
 complete L19:23 { return: { user: "$‸" } },
   $input (string)
-  $input.address (string)
-  $input.address.zip (string)
-  $input.age (string)
-  $input.email (string)
-  $input.name (string)
   $renamed (string)
-  $renamed.age (string)
-  $renamed.createdAt (string)
-  $renamed.deletedAt (string)
-  $renamed.email (string)
-  $renamed.id (string)
-  $renamed.name (string)
-  $renamed.updatedAt (string)
-  $user (string)
-  $user.age (string)
-  $user.createdAt (string)
-  $user.deletedAt (string)
-  $user.email (string)
-  $user.id (string)
-  $user.name (string)
-  $user.updatedAt (string)
 diagnostics (3)
   TS2322 L17:39 { find: "users.findByEmail", args: [‸"$"], as: "user" },
     Type '"$"' is not assignable to type '"$input.name" | "$input.email" | "$input.address.zip"'.
   TS2322 L18:22 { change: "$user", ‸key: "", value: "$input.name", as: "renamed" },
     Type '""' is not assignable to type '"name"'.
   TS2322 L19:15 { return: { ‸user: "$" } },
-    Type '"$"' is not assignable to type '"$user" | "$input.name" | "$input" | "$input.email" | "$input.age" | "$input.address" | "$input.address.zip" | "$user.id" | "$user.email" | "$user.createdAt" | "$user.updatedAt" | ... 10 more ... | "$renamed.age"'."
+    Type '"$"' is not assignable to type '"$input" | "$renamed"'."
 `;
 
 exports[`package mode experience errors: strict steps 1`] = `

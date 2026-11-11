@@ -1,9 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import {
 	blueprintOf,
 	environmentOf,
 	type StepReferencesOf,
 	type StepReferenceType,
+	type StepValueCheck,
 	useCaseOf,
 } from "../../../index";
 import {
@@ -264,6 +265,75 @@ describe("strictSteps", () => {
 			}),
 		];
 		expect(typeof declare).toBe("function");
+	});
+
+	test("TypeScript checks the return against the response", () => {
+		const Response = blueprintOf((ctx) => ({ user: User, label: ctx.string }));
+		const declare = () => [
+			useCaseOf({
+				name: "Right",
+				blueprint: SignUp,
+				response: Response,
+				dependencies: { users: Users },
+				strictSteps: true,
+				steps: [
+					{ find: "users.findByEmail", args: ["$input.email"], as: "found" },
+					{ ensure: "exists", value: "$found", error: UserAlreadyExists },
+					{ return: { user: "$found", label: "$input.name" } },
+				],
+				errors: [UserAlreadyExists],
+			}),
+			useCaseOf({
+				name: "WrongType",
+				blueprint: SignUp,
+				response: Response,
+				strictSteps: true,
+				steps: [
+					// @ts-expect-error: user is a User, not a string
+					{ return: { user: "$input.name", label: "$input.name" } },
+				],
+			}),
+			useCaseOf({
+				name: "MissingKey",
+				blueprint: SignUp,
+				response: Response,
+				strictSteps: true,
+				steps: [
+					// @ts-expect-error: label is missing
+					{ return: { user: { name: "a", email: "a@b.co", password: "p" } } },
+				],
+			}),
+			useCaseOf({
+				name: "MaybeUndefined",
+				blueprint: SignUp,
+				response: Response,
+				dependencies: { users: Users },
+				strictSteps: true,
+				steps: [
+					{ find: "users.findByEmail", args: ["$input.email"], as: "found" },
+					// @ts-expect-error: found may be undefined without an ensure
+					{ return: { user: "$found", label: "$input.name" } },
+				],
+			}),
+		];
+		expect(typeof declare).toBe("function");
+	});
+
+	test("a wrong value names the type taken, and a hint when it may be undefined", () => {
+		type Scope = {
+			readonly input: { readonly name: string };
+			readonly found: { readonly email: string } | undefined;
+		};
+		// No reference fits a number: the error names number, not never.
+		expectTypeOf<
+			StepValueCheck<"$input.name", number, Scope>
+		>().toEqualTypeOf<number>();
+		expectTypeOf<StepValueCheck<"$found.email", string, Scope>>().toEqualTypeOf<
+			"$input.name" | "$found.email may be undefined: ensure it exists first"
+		>();
+		expectTypeOf<
+			StepValueCheck<"$input.name", string, Scope>
+		>().toEqualTypeOf<"$input.name">();
 	});
 
 	test("without strictSteps, references are checked only at declaration", () => {

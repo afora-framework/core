@@ -14,6 +14,7 @@
  * never evaluates them with the constraint of the steps while it infers them.
  */
 import type {
+	BlueprintInput,
 	BlueprintValue,
 	IBlueprint,
 	IBlueprintCollection,
@@ -164,15 +165,35 @@ export type StepReferencesOf<Scope, Expected = unknown> = Scope extends unknown
 		}[keyof Scope & string]
 	: never;
 
-/** `Reference` when it names a value of `Scope` that fits `Expected`; else the references that would. */
+/**
+ * The references of `Scope` that fit `Expected`, or `Expected` itself when
+ * none does, so that the error names the type that is taken rather than `never`.
+ */
+type Suggested<Expected, Scope> = [StepReferencesOf<Scope, Expected>] extends [
+	infer References,
+]
+	? [References] extends [never]
+		? Expected
+		: References
+	: never;
+
+/**
+ * `Reference` when it names a value of `Scope` that fits `Expected`; else the
+ * references that would, and, when it only fails because it may be
+ * `undefined`, a hint to ensure it exists first.
+ */
 type CheckReference<Reference, Expected, Scope> = [
 	StepReferenceType<Scope, Reference>,
 ] extends [infer Type]
 	? [Type] extends [never]
-		? StepReferencesOf<Scope, Expected>
+		? Suggested<Expected, Scope>
 		: [Type] extends [Expected]
 			? Reference
-			: StepReferencesOf<Scope, Expected>
+			: [NonNullable<Type>] extends [Expected]
+				?
+						| Suggested<Expected, Scope>
+						| `${Reference & string} may be undefined: ensure it exists first`
+				: Suggested<Expected, Scope>
 	: never;
 
 // -------------------------------------------------------------------- values
@@ -394,7 +415,7 @@ type ChangeStep<Step, Record, Scope> = [Record] extends [never]
 		: [Step, Record];
 
 /** `[what Step must be, what it gives to its as]`, read against `Scope`. */
-type CheckStep<Step, Dependencies, Scope> = [Step] extends [
+type CheckStep<Step, Dependencies, Scope, Response> = [Step] extends [
 	{ readonly find: infer Target },
 ]
 	? CallStep<Step, FindMethod<Dependencies, Target>, Scope>
@@ -452,14 +473,27 @@ type CheckStep<Step, Dependencies, Scope> = [Step] extends [
 												MemberOf<Dependencies, Repository, "restore">,
 												Scope
 											>
-										: // ensure and return: references only
-											ValueStep<
-												Step,
-												"value" | "other" | "details" | "return",
-												unknown,
-												unknown,
-												Scope
-											>;
+										: [Step] extends [{ readonly return: unknown }]
+											? ValueStep<
+													Step,
+													"return",
+													ResponseInput<Response>,
+													unknown,
+													Scope
+												>
+											: // ensure: references only
+												ValueStep<
+													Step,
+													"value" | "other" | "details",
+													unknown,
+													unknown,
+													Scope
+												>;
+
+/** What the response blueprint `Response` takes, or anything when it is not known. */
+type ResponseInput<Response> = [Response] extends [IBlueprintCollection]
+	? BlueprintInput<Response>
+	: unknown;
 
 type WriteStep<Step, Method, Scope> = ValueStep<
 	Step,
@@ -487,13 +521,18 @@ type CheckSteps<
 	Steps extends readonly unknown[],
 	Dependencies,
 	Scope,
+	Response,
 	Checked extends readonly unknown[] = [],
 > = [Steps] extends [readonly [infer Step, ...infer Rest]]
-	? CheckStep<Step, Dependencies, Scope> extends [infer Current, infer Result]
+	? CheckStep<Step, Dependencies, Scope, Response> extends [
+			infer Current,
+			infer Result,
+		]
 		? CheckSteps<
 				Rest,
 				Dependencies,
 				ScopeAfter<Step, Result, Scope>,
+				Response,
 				[...Checked, Current]
 			>
 		: never
@@ -501,7 +540,8 @@ type CheckSteps<
 
 /**
  * What `useCaseOf` takes as `steps`: the steps, inferred as a tuple, each
- * checked against the values in scope. Steps that are not a tuple (built at
+ * checked against the values in scope, and the `return` against what the
+ * response blueprint (the collection `Response`) takes. Steps that are not a tuple (built at
  * run time) are checked only when the use case is declared.
  */
 export type CheckedSteps<
@@ -509,10 +549,12 @@ export type CheckedSteps<
 	Input extends IBlueprintCollection,
 	Context extends IBlueprintCollection | undefined,
 	Dependencies,
+	Response extends IBlueprintCollection | undefined = undefined,
 > = [Steps] extends [readonly [unknown, ...unknown[]]]
 	? CheckSteps<
 			Steps,
 			Dependencies,
-			StepsInitialScope<Input, Context, Dependencies>
+			StepsInitialScope<Input, Context, Dependencies>,
+			Response
 		>
 	: Steps;
