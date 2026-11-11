@@ -23,8 +23,9 @@ const parsingDefinitions = new WeakMap<
  * The definition `Class` parses with. It does not depend on any member the
  * constructor sets, and `parse` leaves nothing on it that the next one reads,
  * so every `safeParse` shares one.
+ * @internal
  */
-function parsingDefinitionOf(Class: {
+export function parsingDefinitionOf(Class: {
 	prototype: object;
 }): AbstractDefineProperty<TSchema> {
 	let definition = parsingDefinitions.get(Class);

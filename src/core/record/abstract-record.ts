@@ -13,6 +13,7 @@ import { parseCollection, parseField } from "../parse/parse";
 import type { Issue, ParseResult } from "../parse/types/parse.interface";
 import { standardOfClass } from "../standard/standard";
 import type { StandardSchemaV1 } from "../standard/standard-schema";
+import { Kind } from "../symbols/kind";
 import { Meta } from "../symbols/meta";
 import {
 	InvalidRecordValue,
@@ -89,9 +90,10 @@ const checked = new WeakSet<object>();
  * with the name of a key, e.g. a `name()` method, which would hide `user.name`.
  * Each class is checked once, on its first record.
  */
-function checkMembers(record: object, keys: readonly string[]): void {
+function checkMembers(record: object, properties: IBlueprintCollection): void {
 	const Class = record.constructor;
 	if (checked.has(Class)) return;
+	const keys = Object.keys(properties);
 
 	for (
 		let prototype = Object.getPrototypeOf(record);
@@ -176,6 +178,52 @@ function issuesOfError(error: unknown, source: string): readonly Issue[] {
 }
 
 /**
+ * The value `parseRecord` has handled for the record it is about to build, so
+ * that the constructor does not handle it again.
+ */
+let handled:
+	| {
+			readonly Class: object;
+			readonly input: unknown;
+			readonly value: Readonly<Record<string, unknown>>;
+	  }
+	| undefined;
+
+/** Whether each record class, from itself to the one `recordOf` made, has no constructor of its own. */
+const declaredConstructors = new WeakMap<object, boolean>();
+
+/**
+ * Whether a record of `Class` is built from the value it is given, as it is:
+ * `Class` is made by `recordOf`, or extends one without declaring a
+ * constructor at any level. A class that declares one may change the value
+ * before the record sees it, or reject it after, so only its constructor can
+ * tell what the record is. A class is told by its source; one that is not
+ * written as a `class` (compiled to a function, for instance) counts as
+ * declaring a constructor.
+ */
+function constructsAsDeclared(Class: object): boolean {
+	let declared = declaredConstructors.get(Class);
+	if (declared === undefined) {
+		declared = false;
+		for (
+			let current: unknown = Class;
+			typeof current === "function";
+			current = Object.getPrototypeOf(current)
+		) {
+			// The class `recordOf` made: what it extends decides.
+			if (Object.hasOwn(current, Kind)) {
+				declared = Object.getPrototypeOf(current) === AbstractRecord;
+				break;
+			}
+			const source = Function.prototype.toString.call(current);
+			if (!source.startsWith("class") || source.includes("constructor")) break;
+		}
+		declaredConstructors.set(Class, declared);
+	}
+	return declared;
+}
+
+/**
  * An instance of `Class`, a class made by `recordOf`, for `value`: `value`
  * itself if it is one already, otherwise what its constructor makes of it, or
  * the issues of the error the constructor throws.
@@ -185,6 +233,31 @@ function parseRecord(
 	value: unknown,
 ): ParseResult<object> {
 	if (value instanceof Class) return { value };
+
+	// A class that gives its value to the record as it is, and whose members
+	// were checked by a first record, has the value handled first: one that is
+	// rejected is not built, so nothing is thrown for it.
+	if (checked.has(Class) && constructsAsDeclared(Class)) {
+		const source = recordNameOf(Class);
+		const result = parseCollection(
+			(Class as unknown as RecordDeclaration<IBlueprintCollection>).blueprint
+				.properties,
+			value,
+			[],
+			source,
+		);
+		if (result.issues) return result;
+
+		handled = { Class, input: value, value: result.value };
+		try {
+			return { value: new Class(value as never) };
+		} catch (error) {
+			return { issues: issuesOfError(error, source) };
+		} finally {
+			handled = undefined;
+		}
+	}
+
 	try {
 		return { value: new Class(value as never) };
 	} catch (error) {
@@ -376,15 +449,22 @@ export abstract class AbstractRecord<
 	}
 
 	constructor(value: BlueprintInput<Properties>) {
-		checkMembers(this, Object.keys(this[Meta].blueprint.properties));
+		// `safeParse` has handled the value of the record it is building.
+		if (
+			handled !== undefined &&
+			handled.input === value &&
+			handled.Class === this.constructor
+		) {
+			values.set(this, handled.value);
+			handled = undefined;
+			return;
+		}
+
+		const { properties } = this[Meta].blueprint;
+		checkMembers(this, properties);
 
 		const source = recordNameOf(this.constructor);
-		const result = parseCollection(
-			this[Meta].blueprint.properties,
-			value,
-			[],
-			source,
-		);
+		const result = parseCollection(properties, value, [], source);
 		if (result.issues) throw exceptionOfIssues(result.issues, source);
 		values.set(this, result.value);
 	}

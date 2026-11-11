@@ -71,6 +71,7 @@
 		"build": "rm -rf dist && bun build ./src/index.ts ./src/experimental.ts ./src/testing/index.ts --outdir ./dist --target node --format esm --splitting --packages external && tsc -p tsconfig.build.json",
 		"postbuild": "bun scripts/add-dts-extensions.ts",
 		"bench": "cd bench && bun install && bun run.ts",
+		"bench:guard": "cd bench && bun install && bun run.ts --guard",
 		"smoke": "bun run build && node scripts/smoke.mjs",
 		"test:types": "bun run build && bun tests/types-compat/run.ts",
 		"test:type-perf": "bun run build && bun test ./tests/type-perf",

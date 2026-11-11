@@ -1,5 +1,6 @@
 // Runs every scenario with mitata, on Bun and (if there is a `node`) on Node,
 // then writes RESULTS.md. `bun run.ts`; the Node leg is spawned by this file.
+// `bun run.ts --guard` only compares afora with Zod 4 and fails on a regression.
 import { writeFileSync } from "node:fs";
 import { cpus } from "node:os";
 import { bench, do_not_optimize, group, run } from "mitata";
@@ -21,13 +22,13 @@ type Report = {
 	tables: Table[];
 };
 
-async function measure(): Promise<Report> {
+/** Every scenario, each contender checked once: valid input succeeds, invalid input fails. */
+async function load() {
 	const afora = isBun
 		? await import("../src/index.ts")
 		: await import("./.dist/afora.js");
 	const { scenarios, hasStandard } = await build(afora);
 
-	// Check every contender once: valid input succeeds, invalid input fails.
 	for (const scenario of scenarios) {
 		for (const contender of scenario.contenders) {
 			const valid =
@@ -46,6 +47,11 @@ async function measure(): Promise<Report> {
 			}
 		}
 	}
+	return { scenarios, hasStandard };
+}
+
+async function measure(): Promise<Report> {
+	const { scenarios, hasStandard } = await load();
 
 	for (const scenario of scenarios) {
 		for (const kind of ["valid", "invalid"] as const) {
@@ -136,7 +142,7 @@ function render(reports: Report[]): string {
 		"",
 		"Differences to keep in mind:",
 		"",
-		"- **TypeBox compiled** has no transforms: it only checks, so its valid input is the already-trimmed value, and on failure it also runs `Errors` (which is what afora does on failure). It is the floor afora builds on.",
+		"- **TypeBox compiled** has no transforms: it only checks, so its valid input is the already-trimmed value. It is the floor afora builds on for valid input. On failure it also runs `Errors`, which walks the schema again without the compiled code; afora only asks it about properties whose schema is an object, an array or a union, and tells why a string, a number or a boolean was rejected by itself, with the same messages.",
 		"- **Zod, Valibot, ArkType** transform in the same order as afora: trim, lowercase, then check. ArkType lowercases through a function morph. ArkType is very fast without morphs (about 50 ns for the flat valid case in a separate probe, no transforms) but morphs move it to a slower traversal path, which is what this table measures.",
 		"- **afora `Record.safeParse`** also creates the record instance; **`new Record(value)`** throws on invalid input, so its invalid case is measured inside `try/catch`, which includes creating and throwing an exception with its trace.",
 		`- afora \`blueprint["~standard"].validate\`: ${first.standard ? "measured." : "not on this branch, skipped."}`,
@@ -173,13 +179,110 @@ function render(reports: Report[]): string {
 	out.push(
 		"## Reading the numbers",
 		"",
-		"TypeBox compiled is the floor: one generated function, no transforms, no result object. Everything afora does on top is paid for by features the other rows do not all have. Each value runs a handler pipeline (`preHandle`, schema check, `afterHandle`) with a state machine per property, preceded by a shape check so that handlers only ever see the right types; objects are walked key by key, so each field is a separate small validation instead of one compiled function for the whole object; results are frozen; issues are collected with their full path and source (failing properties also keep an exception as `cause`); and `Record.safeParse` / `new Record` additionally create an instance with its prototype getters and member checks. Zod, Valibot and ArkType make fewer of those guarantees, or make them differently, so a lower number here is not a verdict on either side, only on the cost of that feature set. Re-run on your machine before relying on a ratio.",
+		"TypeBox compiled is the floor for valid input: one generated function, no transforms, no result object. Everything afora does on top is paid for by features the other rows do not all have. Each value runs the pipeline of its property (`preHandle`, schema check, `afterHandle`), where a property that declares a handler first has the shape of the value checked, so that handlers only ever see the right types; objects are walked key by key, so each field is a separate small validation instead of one compiled function for the whole object; results are frozen, objects and arrays, which on Bun is most of what the nested valid case costs (freezing an array is slow in JavaScriptCore); issues are collected with their full path and source (failing properties also keep an exception as `cause`, built when it is read); and `Record.safeParse` / `new Record` additionally create an instance. `new Record` throws on invalid input, which is why its invalid rows are far from `Record.safeParse`. Zod, Valibot and ArkType make fewer of those guarantees, or make them differently, so a lower number here is not a verdict on either side, only on the cost of that feature set. Re-run on your machine before relying on a ratio.",
+		"",
+		`\`bun run bench:guard\` (\`bun run.ts --guard\`) is what CI runs: it times \`blueprint.safeParse\` and Zod 4 \`safeParse\` on the four cases, several times each, and fails when the best time of afora is over ${GUARD_RATIO}x the best time of Zod 4 in any of them.`,
 		"",
 	);
 	return out.join("\n");
 }
 
-if (isChild) {
+// ---------------------------------------------------------------- guard
+// `bun run.ts --guard` fails when afora `blueprint.safeParse` falls behind
+// Zod 4 `safeParse` in any of the four cases (flat and nested, valid and
+// invalid input). What is compared is the ratio between the two on the same
+// machine, in the same process, so the limit does not depend on the hardware.
+
+/**
+ * The most `blueprint.safeParse` may take, as a multiple of Zod 4 on the same
+ * case. afora is at or below Zod 4 in every case (see RESULTS.md); the 15%
+ * above it is room for the noise of a shared CI runner, not for a regression:
+ * a change that costs more than that in any case fails the guard.
+ */
+const GUARD_RATIO = 1.15;
+/** Each case is timed this many times for each contender; the best one counts. */
+const GUARD_ROUNDS = 9;
+/** How long one timing of one contender runs, in milliseconds. */
+const GUARD_ROUND_MS = 150;
+
+const GUARDED = "afora blueprint.safeParse";
+const REFERENCE = "Zod 4 safeParse";
+/** Timed and shown with the others, but not held to the limit. */
+const WATCHED = "afora Record.safeParse";
+
+/** The mean time of one call of `fn`, in nanoseconds, over about `GUARD_ROUND_MS`. */
+function timeOf(fn: () => unknown): number {
+	const start = performance.now();
+	const end = start + GUARD_ROUND_MS;
+	let calls = 0;
+	while (performance.now() < end) {
+		for (let index = 0; index < 200; index++) do_not_optimize(fn());
+		calls += 200;
+	}
+	return ((performance.now() - start) * 1e6) / calls;
+}
+
+async function guard(): Promise<boolean> {
+	const { scenarios } = await load();
+	const names = [REFERENCE, GUARDED, WATCHED];
+
+	const cases = scenarios.flatMap((scenario) =>
+		(["valid", "invalid"] as const).map((kind) => ({
+			label: `${scenario.id} ${kind}`,
+			runs: names.map((name) => {
+				const contender = scenario.contenders.find(
+					(candidate) => candidate.name === name,
+				);
+				if (!contender) throw new Error(`${scenario.id}: no "${name}"`);
+				const input = scenario.input[kind];
+				return { name, best: Number.POSITIVE_INFINITY, input, contender };
+			}),
+		})),
+	);
+
+	// The contenders of a case take turns in every round, so that whatever
+	// slows the machine down for a moment slows them all, and the best round
+	// of each is the one with the least of it.
+	for (let round = 0; round < GUARD_ROUNDS; round++) {
+		for (const { runs } of cases) {
+			for (const run of runs) {
+				const { contender, input } = run;
+				run.best = Math.min(
+					run.best,
+					timeOf(() => contender.make(input)),
+				);
+			}
+		}
+	}
+
+	let passed = true;
+	console.log(
+		`${GUARDED} against ${REFERENCE}, best of ${GUARD_ROUNDS} rounds (ns per call); limit ${GUARD_RATIO}x\n`,
+	);
+	for (const { label, runs } of cases) {
+		const [reference, guarded, watched] = runs as [
+			(typeof runs)[number],
+			(typeof runs)[number],
+			(typeof runs)[number],
+		];
+		const ratio = guarded.best / reference.best;
+		const ok = ratio <= GUARD_RATIO;
+		if (!ok) passed = false;
+		console.log(
+			`${ok ? "ok  " : "FAIL"}  ${label.padEnd(15)} afora ${fmtNs(guarded.best).padStart(7)}  zod ${fmtNs(reference.best).padStart(7)}  ratio ${ratio.toFixed(2)}  (Record.safeParse ${(watched.best / reference.best).toFixed(2)}, not guarded)`,
+		);
+	}
+	console.log(
+		passed
+			? "\nEvery case is within the limit."
+			: `\nA case is over ${GUARD_RATIO}x Zod 4: validation got slower. Run it again to rule out noise, then find what the change costs (CONTRIBUTING.md); GUARD_RATIO in bench/run.ts is only raised for a cost that is wanted, with the reason.`,
+	);
+	return passed;
+}
+
+if (process.argv.includes("--guard")) {
+	process.exit((await guard()) ? 0 : 1);
+} else if (isChild) {
 	// Node leg: write the report for the parent to merge.
 	const report = await measure();
 	writeFileSync(`${here}.node-report.json`, JSON.stringify(report));

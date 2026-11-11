@@ -18,7 +18,7 @@ Same data shape for every library. Each case is a call on an already-built schem
 
 Differences to keep in mind:
 
-- **TypeBox compiled** has no transforms: it only checks, so its valid input is the already-trimmed value, and on failure it also runs `Errors` (which is what afora does on failure). It is the floor afora builds on.
+- **TypeBox compiled** has no transforms: it only checks, so its valid input is the already-trimmed value. It is the floor afora builds on for valid input. On failure it also runs `Errors`, which walks the schema again without the compiled code; afora only asks it about properties whose schema is an object, an array or a union, and tells why a string, a number or a boolean was rejected by itself, with the same messages.
 - **Zod, Valibot, ArkType** transform in the same order as afora: trim, lowercase, then check. ArkType lowercases through a function morph. ArkType is very fast without morphs (about 50 ns for the flat valid case in a separate probe, no transforms) but morphs move it to a slower traversal path, which is what this table measures.
 - **afora `Record.safeParse`** also creates the record instance; **`new Record(value)`** throws on invalid input, so its invalid case is measured inside `try/catch`, which includes creating and throwing an exception with its trace.
 - afora `blueprint["~standard"].validate`: measured.
@@ -28,110 +28,112 @@ Differences to keep in mind:
 
 ### Small flat object, valid input (bun)
 
-| Contender                                                        |  ops/s | ns/iter |   vs fastest |
-| ---------------------------------------------------------------- | -----: | ------: | -----------: |
-| TypeBox compiled (Check, then Errors on failure) (no transforms) | 26.78M |    37.3 |      fastest |
-| Valibot safeParse                                                |  5.11M |   195.5 |  5.2x slower |
-| Zod 4 safeParse                                                  |  3.17M |   315.1 |  8.4x slower |
-| afora blueprint["~standard"].validate                            |  2.89M |   345.7 |  9.3x slower |
-| afora blueprint.safeParse                                        |  2.87M |   347.9 |  9.3x slower |
-| afora Record.safeParse                                           |  2.28M |   438.8 | 11.7x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input) |  2.25M |   443.5 | 11.9x slower |
-| ArkType                                                          | 575.8k |    1737 | 46.5x slower |
+| Contender | ops/s | ns/iter | vs fastest |
+| --- | ---: | ---: | ---: |
+| TypeBox compiled (Check, then Errors on failure) (no transforms) | 26.84M | 37.3 | fastest |
+| Valibot safeParse | 5.12M | 195.2 | 5.2x slower |
+| afora blueprint.safeParse | 4.69M | 213.1 | 5.7x slower |
+| afora blueprint["~standard"].validate | 4.56M | 219.5 | 5.9x slower |
+| afora Record.safeParse | 3.25M | 307.6 | 8.3x slower |
+| Zod 4 safeParse | 3.25M | 307.9 | 8.3x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input) | 3.24M | 308.2 | 8.3x slower |
+| ArkType | 584.4k | 1711 | 45.9x slower |
 
 ### Small flat object, invalid input (bun)
 
-| Contender                                                        |  ops/s | ns/iter |   vs fastest |
-| ---------------------------------------------------------------- | -----: | ------: | -----------: |
-| Valibot safeParse                                                |  2.50M |   399.3 |      fastest |
-| Zod 4 safeParse                                                  |  1.61M |   622.7 |  1.6x slower |
-| afora blueprint["~standard"].validate                            | 480.7k |    2080 |  5.2x slower |
-| afora blueprint.safeParse                                        | 475.0k |    2105 |  5.3x slower |
-| TypeBox compiled (Check, then Errors on failure) (no transforms) | 432.1k |    2314 |  5.8x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input) | 259.0k |    3862 |  9.7x slower |
-| afora Record.safeParse                                           | 252.2k |    3966 |  9.9x slower |
-| ArkType                                                          | 193.8k |    5159 | 12.9x slower |
+| Contender | ops/s | ns/iter | vs fastest |
+| --- | ---: | ---: | ---: |
+| Valibot safeParse | 2.45M | 408.0 | fastest |
+| afora blueprint.safeParse | 2.21M | 453.4 | 1.1x slower |
+| afora Record.safeParse | 2.18M | 458.4 | 1.1x slower |
+| afora blueprint["~standard"].validate | 2.18M | 458.8 | 1.1x slower |
+| Zod 4 safeParse | 1.79M | 557.4 | 1.4x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input) | 516.7k | 1935 | 4.7x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms) | 439.0k | 2278 | 5.6x slower |
+| ArkType | 193.0k | 5183 | 12.7x slower |
 
 ### Nested user (address, 5 tags max, 10 addresses), valid input (bun)
 
-| Contender                                                        |  ops/s | ns/iter |   vs fastest |
-| ---------------------------------------------------------------- | -----: | ------: | -----------: |
-| TypeBox compiled (Check, then Errors on failure) (no transforms) |  5.28M |   189.2 |      fastest |
-| Valibot safeParse                                                | 586.0k |    1706 |  9.0x slower |
-| Zod 4 safeParse                                                  | 397.8k |    2514 | 13.3x slower |
-| afora blueprint.safeParse                                        | 238.4k |    4194 | 22.2x slower |
-| afora blueprint["~standard"].validate                            | 234.6k |    4263 | 22.5x slower |
-| afora Record.safeParse                                           | 231.0k |    4330 | 22.9x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input) | 228.5k |    4377 | 23.1x slower |
-| ArkType                                                          |  67.9k |   14724 | 77.8x slower |
+| Contender | ops/s | ns/iter | vs fastest |
+| --- | ---: | ---: | ---: |
+| TypeBox compiled (Check, then Errors on failure) (no transforms) | 5.25M | 190.3 | fastest |
+| Valibot safeParse | 580.2k | 1724 | 9.1x slower |
+| afora blueprint.safeParse | 437.0k | 2288 | 12.0x slower |
+| afora blueprint["~standard"].validate | 435.2k | 2298 | 12.1x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input) | 414.1k | 2415 | 12.7x slower |
+| afora Record.safeParse | 413.9k | 2416 | 12.7x slower |
+| Zod 4 safeParse | 402.9k | 2482 | 13.0x slower |
+| ArkType | 67.8k | 14752 | 77.5x slower |
 
 ### Nested user (address, 5 tags max, 10 addresses), invalid input (bun)
 
-| Contender                                                        |  ops/s | ns/iter |   vs fastest |
-| ---------------------------------------------------------------- | -----: | ------: | -----------: |
-| Valibot safeParse                                                | 455.8k |    2194 |      fastest |
-| Zod 4 safeParse                                                  | 336.0k |    2976 |  1.4x slower |
-| afora blueprint["~standard"].validate                            | 148.7k |    6726 |  3.1x slower |
-| afora blueprint.safeParse                                        | 147.8k |    6766 |  3.1x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input) | 109.4k |    9141 |  4.2x slower |
-| afora Record.safeParse                                           | 106.0k |    9432 |  4.3x slower |
-| TypeBox compiled (Check, then Errors on failure) (no transforms) |  77.8k |   12848 |  5.9x slower |
-| ArkType                                                          |  36.4k |   27449 | 12.5x slower |
+| Contender | ops/s | ns/iter | vs fastest |
+| --- | ---: | ---: | ---: |
+| afora blueprint["~standard"].validate | 513.9k | 1946 | fastest |
+| afora blueprint.safeParse | 512.5k | 1951 | 1.0x slower |
+| afora Record.safeParse | 510.4k | 1959 | 1.0x slower |
+| Valibot safeParse | 437.6k | 2285 | 1.2x slower |
+| Zod 4 safeParse | 341.5k | 2928 | 1.5x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input) | 260.9k | 3833 | 2.0x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms) | 78.5k | 12741 | 6.5x slower |
+| ArkType | 35.9k | 27892 | 14.3x slower |
 
 ## Results on Node
 
 ### Small flat object, valid input (node)
 
-| Contender                                                        |  ops/s | ns/iter |   vs fastest |
-| ---------------------------------------------------------------- | -----: | ------: | -----------: |
-| TypeBox compiled (Check, then Errors on failure) (no transforms) | 17.17M |    58.3 |      fastest |
-| Valibot safeParse                                                |  2.55M |   391.4 |  6.7x slower |
-| Zod 4 safeParse                                                  |  1.89M |   528.1 |  9.1x slower |
-| afora blueprint["~standard"].validate                            |  1.20M |   832.3 | 14.3x slower |
-| afora blueprint.safeParse                                        |  1.19M |   841.3 | 14.4x slower |
-| afora Record.safeParse                                           | 826.6k |    1210 | 20.8x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input) | 800.3k |    1250 | 21.4x slower |
-| ArkType                                                          | 309.3k |    3234 | 55.5x slower |
+| Contender | ops/s | ns/iter | vs fastest |
+| --- | ---: | ---: | ---: |
+| TypeBox compiled (Check, then Errors on failure) (no transforms) | 17.39M | 57.5 | fastest |
+| afora blueprint.safeParse | 3.20M | 312.5 | 5.4x slower |
+| afora blueprint["~standard"].validate | 3.15M | 317.3 | 5.5x slower |
+| Zod 4 safeParse | 2.23M | 447.5 | 7.8x slower |
+| Valibot safeParse | 2.11M | 474.7 | 8.3x slower |
+| afora Record.safeParse | 1.73M | 578.2 | 10.1x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input) | 1.60M | 625.4 | 10.9x slower |
+| ArkType | 296.1k | 3377 | 58.7x slower |
 
 ### Small flat object, invalid input (node)
 
-| Contender                                                        |  ops/s | ns/iter |   vs fastest |
-| ---------------------------------------------------------------- | -----: | ------: | -----------: |
-| Valibot safeParse                                                | 882.4k |    1133 |      fastest |
-| Zod 4 safeParse                                                  | 768.1k |    1302 |  1.1x slower |
-| TypeBox compiled (Check, then Errors on failure) (no transforms) | 227.0k |    4406 |  3.9x slower |
-| afora blueprint["~standard"].validate                            | 207.8k |    4812 |  4.2x slower |
-| afora blueprint.safeParse                                        | 205.6k |    4864 |  4.3x slower |
-| ArkType                                                          |  73.9k |   13525 | 11.9x slower |
-| afora Record.safeParse                                           |  59.1k |   16931 | 14.9x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input) |  49.1k |   20380 | 18.0x slower |
+| Contender | ops/s | ns/iter | vs fastest |
+| --- | ---: | ---: | ---: |
+| afora blueprint["~standard"].validate | 942.3k | 1061 | fastest |
+| afora blueprint.safeParse | 870.6k | 1149 | 1.1x slower |
+| afora Record.safeParse | 867.8k | 1152 | 1.1x slower |
+| Valibot safeParse | 819.6k | 1220 | 1.1x slower |
+| Zod 4 safeParse | 799.4k | 1251 | 1.2x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms) | 222.5k | 4494 | 4.2x slower |
+| ArkType | 77.8k | 12847 | 12.1x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input) | 71.7k | 13948 | 13.1x slower |
 
 ### Nested user (address, 5 tags max, 10 addresses), valid input (node)
 
-| Contender                                                        |  ops/s | ns/iter |    vs fastest |
-| ---------------------------------------------------------------- | -----: | ------: | ------------: |
-| TypeBox compiled (Check, then Errors on failure) (no transforms) |  3.57M |   280.4 |       fastest |
-| Valibot safeParse                                                | 300.2k |    3332 |  11.9x slower |
-| Zod 4 safeParse                                                  | 286.2k |    3494 |  12.5x slower |
-| afora blueprint["~standard"].validate                            | 127.3k |    7853 |  28.0x slower |
-| afora blueprint.safeParse                                        | 126.3k |    7921 |  28.2x slower |
-| afora Record.safeParse                                           | 118.0k |    8476 |  30.2x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input) | 102.9k |    9717 |  34.7x slower |
-| ArkType                                                          |  34.3k |   29149 | 104.0x slower |
+| Contender | ops/s | ns/iter | vs fastest |
+| --- | ---: | ---: | ---: |
+| TypeBox compiled (Check, then Errors on failure) (no transforms) | 3.29M | 304.2 | fastest |
+| afora blueprint.safeParse | 403.0k | 2482 | 8.2x slower |
+| afora blueprint["~standard"].validate | 400.8k | 2495 | 8.2x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input) | 343.5k | 2911 | 9.6x slower |
+| afora Record.safeParse | 314.5k | 3180 | 10.5x slower |
+| Valibot safeParse | 292.2k | 3423 | 11.3x slower |
+| Zod 4 safeParse | 275.6k | 3628 | 11.9x slower |
+| ArkType | 34.2k | 29253 | 96.2x slower |
 
 ### Nested user (address, 5 tags max, 10 addresses), invalid input (node)
 
-| Contender                                                        |  ops/s | ns/iter |   vs fastest |
-| ---------------------------------------------------------------- | -----: | ------: | -----------: |
-| Zod 4 safeParse                                                  | 201.5k |    4964 |      fastest |
-| Valibot safeParse                                                | 163.8k |    6105 |  1.2x slower |
-| afora blueprint["~standard"].validate                            |  64.5k |   15492 |  3.1x slower |
-| afora blueprint.safeParse                                        |  64.0k |   15625 |  3.1x slower |
-| TypeBox compiled (Check, then Errors on failure) (no transforms) |  39.3k |   25476 |  5.1x slower |
-| afora Record.safeParse                                           |  35.2k |   28413 |  5.7x slower |
-| afora new Record(value) (in try/catch) (throws on invalid input) |  31.7k |   31515 |  6.3x slower |
-| ArkType                                                          |  16.8k |   59423 | 12.0x slower |
+| Contender | ops/s | ns/iter | vs fastest |
+| --- | ---: | ---: | ---: |
+| afora blueprint.safeParse | 278.4k | 3592 | fastest |
+| afora blueprint["~standard"].validate | 266.8k | 3748 | 1.0x slower |
+| afora Record.safeParse | 205.1k | 4875 | 1.4x slower |
+| Zod 4 safeParse | 184.3k | 5425 | 1.5x slower |
+| Valibot safeParse | 169.6k | 5898 | 1.6x slower |
+| afora new Record(value) (in try/catch) (throws on invalid input) | 51.2k | 19533 | 5.4x slower |
+| TypeBox compiled (Check, then Errors on failure) (no transforms) | 38.5k | 25950 | 7.2x slower |
+| ArkType | 16.8k | 59514 | 16.6x slower |
 
 ## Reading the numbers
 
-TypeBox compiled is the floor: one generated function, no transforms, no result object. Everything afora does on top is paid for by features the other rows do not all have. Each value runs a handler pipeline (`preHandle`, schema check, `afterHandle`) with a state machine per property, preceded by a shape check so that handlers only ever see the right types; objects are walked key by key, so each field is a separate small validation instead of one compiled function for the whole object; results are frozen; issues are collected with their full path and source (failing properties also keep an exception as `cause`); and `Record.safeParse` / `new Record` additionally create an instance with its prototype getters and member checks. Zod, Valibot and ArkType make fewer of those guarantees, or make them differently, so a lower number here is not a verdict on either side, only on the cost of that feature set. Re-run on your machine before relying on a ratio.
+TypeBox compiled is the floor for valid input: one generated function, no transforms, no result object. Everything afora does on top is paid for by features the other rows do not all have. Each value runs the pipeline of its property (`preHandle`, schema check, `afterHandle`), where a property that declares a handler first has the shape of the value checked, so that handlers only ever see the right types; objects are walked key by key, so each field is a separate small validation instead of one compiled function for the whole object; results are frozen, objects and arrays, which on Bun is most of what the nested valid case costs (freezing an array is slow in JavaScriptCore); issues are collected with their full path and source (failing properties also keep an exception as `cause`, built when it is read); and `Record.safeParse` / `new Record` additionally create an instance. `new Record` throws on invalid input, which is why its invalid rows are far from `Record.safeParse`. Zod, Valibot and ArkType make fewer of those guarantees, or make them differently, so a lower number here is not a verdict on either side, only on the cost of that feature set. Re-run on your machine before relying on a ratio.
+
+`bun run bench:guard` (`bun run.ts --guard`) is what CI runs: it times `blueprint.safeParse` and Zod 4 `safeParse` on the four cases, several times each, and fails when the best time of afora is over 1.15x the best time of Zod 4 in any of them.

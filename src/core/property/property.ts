@@ -4,7 +4,7 @@ import { schemaOf } from "../schema/schema";
 import type { StandardSchemaV1 } from "../standard/standard-schema";
 import { Demo } from "../symbols/demo";
 import { AbstractProperty } from "./abstract-property";
-import { AbstractDefineProperty } from "./define-property";
+import { AbstractDefineProperty, declarePipeline } from "./define-property";
 import type { AbstractPropertyConstructor } from "./types/abstract-property-constructor.type";
 import type { AnyPropertyConstructor } from "./types/property-collection.type";
 import type { PropertyValue } from "./types/property-constructor.type";
@@ -136,15 +136,17 @@ export function propertyOf<
 		override get type(): IPropertyType<ValueSchema> {
 			return type;
 		}
-
-		protected override preHandle(value: Static<ValueSchema>) {
-			return onPreHandle ? onPreHandle(value) : value;
-		}
-
-		protected override afterHandle(value: Static<ValueSchema>) {
-			return onAfterHandle ? onAfterHandle(value) : value;
-		}
 	}
+
+	// A handler is a step of the pipeline only when it is given: one that is
+	// not is not run, and neither is what protects it.
+	const steps = DefineProperty.prototype as unknown as {
+		preHandle(value: Static<ValueSchema>): Static<ValueSchema>;
+		afterHandle(value: Static<ValueSchema>): Static<ValueSchema>;
+	};
+	if (onPreHandle) steps.preHandle = (value) => onPreHandle(value);
+	if (onAfterHandle) steps.afterHandle = (value) => onAfterHandle(value);
+	declarePipeline(DefineProperty.prototype);
 
 	class Property extends AbstractProperty<ValueSchema> {
 		static readonly type = type;

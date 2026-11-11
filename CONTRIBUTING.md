@@ -55,7 +55,7 @@ bun run smoke           # the build, run on plain Node
 - A change to public types runs `test:types` and `test:type-perf`, not only `bun check`.
 - A snapshot (`test:api`, `test:type-perf`) is updated with `-u` only on purpose, and the pull request says why.
 - The quick start in `README.md` must stay equal to `examples/interop/quickstart.ts` and `quickstart.afora.json`; `test:interop` checks it.
-- The invalid-input path is performance-sensitive: check `bun run bench` when you touch parsing or validation.
+- Parsing and validation are performance-sensitive, valid and invalid input alike. `bun run bench:guard` (the `bench` job in CI) times `blueprint.safeParse` against Zod 4 `safeParse` on the four cases of `bench/` and fails when afora takes more than 1.15x the time of Zod 4 in any of them; it compares a ratio measured in one process, so it does not depend on the machine. Run it when you touch `src/core/parse`, `src/core/property`, `src/core/schema` or the constructor of a record. When it fails, run it again to rule out noise, then find what the change costs; the limit (`GUARD_RATIO` in `bench/run.ts`) is only raised for a cost that is wanted, and the pull request says why. `bun run bench` runs every contender on Bun and Node and rewrites `bench/RESULTS.md`; run it, and update the ratios in the Performance section of `README.md`, when a change moves them.
 
 ## Releases
 

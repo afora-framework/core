@@ -34,6 +34,13 @@
 - `app.describe().repositories.<Name>` has `indexes` and `scans`.
 - The function of a `run` step gets `{ context, dependencies }` after its args: the dependencies as the call resolved them, overrides included (it got `{ context }`).
 - `routeOptionsIssue` rejects a `route[id].path` with `:` or `*`, which used to pass and was ignored by the document; a parameter is written `{name}`.
+- Validation is faster, with the same values and the same issues (#41). On the four cases of `bench/` (flat and nested, valid and invalid), `blueprint.safeParse` went from between 1.1x and 3.4x the time of Zod 4 `safeParse` to between 0.65x and 0.9x on Bun (and on Node), and `Record.safeParse` from between 1.4x and 6.4x to between 0.65x and 1.0x on Bun; see `bench/RESULTS.md`. What changed underneath:
+  - A property that declares no `preHandle` skips the shape check that protects it, so its value goes through TypeBox once, not twice; `propertyOf` no longer gives every property a `preHandle` and an `afterHandle` that do nothing. A definition written on `AbstractDefineProperty` with a `handle` of its own keeps the shape check.
+  - A rejected string, number, boolean, literal or enum is told why by each keyword of its schema, compiled once, instead of TypeBox `Errors`, which walks the schema on every call. The errors, their order and their messages are the same, and follow TypeBox's locale and `maxErrors`; object, array, union and refined schemas still go to `Errors`.
+  - The path of a value is made only for an issue, and a field gives its value back without a result object.
+  - `Record.safeParse` handles the value before it builds the record, so a rejected value throws nothing. This holds for a class made by `recordOf` and for classes extending it without a constructor of their own; a class that declares a constructor (which may change the value or reject it), and every entity, goes through the constructor as before. `new Record(value)` is unchanged.
+  - The `cause` of an issue raised by a property is a getter of the issue's class instead of a non-enumerable property of its own: `issue.cause`, `Object.keys(issue)`, spreading and `JSON.stringify` give what they gave; `Object.getOwnPropertyDescriptor(issue, "cause")` is now `undefined`. The issues of a rejected `Record.safeParse` are no longer a frozen array.
+- `bun run bench:guard` (and the `bench` job in CI) fails when `blueprint.safeParse` takes more than 1.15x the time of Zod 4 `safeParse` in any of the four cases.
 
 ### Added
 
