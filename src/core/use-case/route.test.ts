@@ -190,6 +190,7 @@ describe("routes of operations", () => {
 			query: ["page"],
 			requestHeaders: { locale: "accept-language" },
 			cookies: { session: "sid" },
+			setCookies: {},
 		});
 		expect(routes.get("Posts.get")).toMatchObject({
 			method: "get",

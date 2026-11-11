@@ -329,7 +329,9 @@ const GENERIC_OPTIONS: Readonly<Record<string, readonly string[]>> = {
 	tag: ["as", "owner", ...GENERIC_HOOKS],
 	untag: ["as", "owner", ...GENERIC_HOOKS],
 	register: ["as", "owner", "omit", "values", ...GENERIC_HOOKS],
-	login: ["as"],
+	login: ["as", "token"],
+	refresh: ["token"],
+	logout: [],
 };
 
 let cached: Catalog | undefined;

@@ -19,6 +19,7 @@ import {
 	isScalarSchema,
 	parametersOfPath,
 } from "../use-case/route";
+import type { RouteCookie } from "../use-case/types/route.interface";
 import { InvalidOutputStage } from "./exceptions";
 import { PROBLEM_MEDIA_TYPE } from "./problem";
 import { sinkOf } from "./stage";
@@ -473,6 +474,8 @@ export interface OperationRoute {
 	readonly requestHeaders: { readonly [inputKey: string]: string };
 	/** The input keys read from cookies, with the cookie of each. */
 	readonly cookies: { readonly [inputKey: string]: string };
+	/** The response keys sent as cookies instead of in the body, with the cookie of each. */
+	readonly setCookies: { readonly [responseKey: string]: RouteCookie };
 }
 
 /** Whether `name` is an input key that is a scalar property (no object, no list). */
@@ -565,6 +568,7 @@ export function operationRoutes(
 			query,
 			requestHeaders,
 			cookies,
+			setCookies: declared?.setCookie ?? {},
 		});
 	}
 	return routes;
@@ -684,6 +688,13 @@ function responsesOf(
 			}
 		: {};
 	const successHeaders: Obj = { ...idHeaders };
+	const setCookies = Object.values(route.setCookies);
+	if (setCookies.length > 0) {
+		successHeaders["set-cookie"] = {
+			description: `Sets ${setCookies.map(({ name }) => `\`${name}\``).join(", ")}.`,
+			schema: { type: "string" },
+		};
+	}
 	for (const [name, value] of Object.entries(route.headers)) {
 		successHeaders[name] = { schema: { type: "string", const: value } };
 	}
@@ -858,7 +869,10 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 				...Object.keys(route.requestHeaders),
 				...Object.keys(route.cookies),
 			]);
-			const response = schemas[`${operation.id}#response`] as OpenAPISchema;
+			const response = withoutKeys(
+				schemas[`${operation.id}#response`] as OpenAPISchema,
+				Object.keys(route.setCookies),
+			);
 			const hasInput = Object.keys(input.properties ?? {}).length > 0;
 			const placed = (
 				keys: Readonly<Record<string, string>>,

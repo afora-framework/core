@@ -128,6 +128,7 @@ The blueprint stays the only description of the input: a route adds no schema, i
 - **`query`** lists input keys read from the query string. A `get` or `delete` route already reads from the query every key that has no other place, so `query` is for routes with a body.
 - **`headers`** and **`cookie`** map input keys to the header or the cookie each is read from: `{ locale: "accept-language" }`.
 - **What is left** is the JSON body of a `post`, `put` or `patch`, and the query of a `get` or `delete`.
+- **`setCookie`** maps keys of the _response_ to cookies: `{ token: { name: "sid" } }` sends the `token` of the response as the cookie `sid` and leaves it out of the body. A cookie is `{ name, httpOnly?, secure?, sameSite?, path?, domain?, maxAge? }`, by default `HttpOnly; Secure; SameSite=Lax; Path=/`. An empty text removes the cookie, and an absent value sets none. The key must be a scalar key of the response.
 
 A key read from the path, the query, a header or a cookie arrives as text, so it must be a scalar property of the input (a number or a boolean is converted), and each key has one place. Anything else throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class with both the setting and the decorator.
 

@@ -69,3 +69,95 @@ Both are exceptions of the `Output` layer, served as `application/problem+json` 
 ## In the OpenAPI document
 
 With `security.schemes` in the options of the sink, an operation with an `access` gets its `security` from the declaration: the `default` scheme, else the only scheme, with the declared `scopes`. `{ public: true }` is `security: []` under a `default`. Each such operation documents a `401`, and a `403` when it declares `scopes` or an `owner`. An entry in `security.operations` still documents an operation by hand, but `false` on an operation with an `access` throws `InvalidOutputStage`: the document would call public what the output refuses.
+
+## Tokens and sessions
+
+**Experimental.** What follows is imported from `@afora/core/experimental` or marked as such, and may change in any release (see [API tiers](api-tiers.md)). The declaration of access above is stable; how a caller gets and presents a token is what may still move.
+
+afora ships one ready-made way to authenticate: JSON Web Tokens signed with a shared secret (HMAC), on Web Crypto, so the same code runs on Bun, Node and Workers. It is three pieces that share one set of options.
+
+```ts
+import { commandOf, outputOf } from "@afora/core";
+import { hono } from "@afora/hono";
+
+const token = {
+	secret: { env: "JWT_SECRET" }, // at least 32 characters
+	issuer: "blog",
+	expiresIn: 900, // seconds; the default
+	refresh: { expiresIn: 60 * 60 * 24 * 30 },
+	scopesFrom: "roles", // a key of the entity that holds its scopes
+} as const;
+
+const Auth = commandOf({
+	name: "Auth",
+	useCases: (ctx) => ({
+		register: ctx.register(Users, {
+			route: { method: "post", path: "/users", status: 201 },
+		}),
+		login: ctx.login(Users, {
+			token,
+			route: { method: "post", path: "/login" },
+		}),
+		refresh: ctx.refresh(Users, {
+			token,
+			route: { method: "post", path: "/refresh" },
+		}),
+	}),
+});
+
+const Api = outputOf({
+	name: "Api",
+	commands: [Auth, Posts],
+	pipe: [
+		hono({ auth: { jwt: { secret: { env: "JWT_SECRET" }, issuer: "blog" } } }),
+	],
+});
+```
+
+- **`login` with `token`** answers `{ item, token }`, and `refreshToken` too with `refresh`. The token is signed for the entity: its `id` is the subject, its scopes are `scopes` (a fixed list) plus the list held by the key `scopesFrom`, and `claims: { tenant: "tenantId" }` copies keys of the entity into claims.
+- **`refresh`** takes `{ refreshToken }` and answers a new `{ token, refreshToken }`, if the entity still exists. A refresh token is signed for that use only: it is not accepted as an access token, nor the other way round.
+- **`auth.jwt`** in the options of a sink that serves HTTP is the authenticator: it reads `Authorization: Bearer <token>` (another header with `header`), verifies it and gives the `Principal` that the [access](#the-declaration) of each use case is checked against. The OpenAPI document gets the matching security scheme. An `authenticator` given in the hooks of the sink replaces it.
+- **The secret is named, never written.** These options are described by `describe()` and stored in `afora.json`, so `secret` is `{ env: "NAME" }` there; the variable is read when the first token is signed or verified, and a missing or short one throws `InvalidJwtOptions`.
+
+A token is refused, with a 401, when it is malformed, signed with another secret or algorithm (the algorithm is the one of the options, never the one the token names), expired, or of another issuer, audience or use.
+
+**Sessions in cookies.** The route of a use case can send keys of its response as cookies, with [`setCookie`](use-cases.md#routes), and read input keys from cookies, with `cookie`. So a browser session is the same three use cases with other routes:
+
+```ts
+const sid = { name: "sid" }; // HttpOnly; Secure; SameSite=Lax; Path=/
+const rid = { name: "rid", path: "/refresh", maxAge: 60 * 60 * 24 * 30 };
+
+login: ctx.login(Users, {
+	token,
+	route: { method: "post", path: "/login", setCookie: { token: sid, refreshToken: rid } },
+}),
+refresh: ctx.refresh(Users, {
+	token,
+	route: {
+		method: "post",
+		path: "/refresh",
+		cookie: { refreshToken: "rid" },
+		setCookie: { token: sid, refreshToken: rid },
+	},
+}),
+logout: ctx.logout(Users, {
+	route: { method: "post", path: "/logout", setCookie: { token: sid, refreshToken: rid } },
+}),
+
+// and the sink reads the token from the cookie:
+hono({ auth: { jwt: { secret: { env: "JWT_SECRET" }, issuer: "blog", cookie: "sid" } } });
+```
+
+The tokens then never reach the body, and `logout`, which answers empty tokens, removes both cookies.
+
+**What it does not do.** Tokens are not stored, so there is no revocation: a token already issued is valid until it expires, and `logout` only removes cookies. Keep `expiresIn` short and let `refresh` renew it; a deleted entity cannot refresh. For revocation, rotation with reuse detection, asymmetric keys or an identity provider, write the `authenticator` hook and your own use cases; the declaration of access does not change.
+
+**By hand.** `jwtOf(options)` is the same signer on its own: `sign({ subject, scopes?, claims? }, { expiresIn?, use? })`, `verify(token, { use? })` and `authenticator({ header?, cookie? })`. Here the secret may be the text itself.
+
+```ts
+import { jwtOf } from "@afora/core/experimental";
+
+const jwt = jwtOf({ secret: process.env.JWT_SECRET, issuer: "blog" });
+const token = await jwt.sign({ subject: user.id, scopes: ["posts:write"] });
+hono(options, { authenticator: jwt.authenticator() });
+```

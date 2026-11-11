@@ -1,3 +1,4 @@
+import type { DescribedJwtOptions } from "../../auth/types/jwt.interface";
 import type { Principal } from "../../use-case/types/access.interface";
 import type {
 	OpenAPIMethod,
@@ -30,6 +31,20 @@ export interface HttpOptions extends RouteOptions {
 	readonly context?: {
 		readonly headers?: { readonly [contextKey: string]: string };
 		readonly variables?: { readonly [contextKey: string]: string };
+	};
+	/**
+	 * Who calls, from a JSON Web Token (see `jwtOf`; the secret is named by
+	 * its environment variable, `{ env: "JWT_SECRET" }`): read from the
+	 * `authorization` header (`Bearer <token>`; another header with `header`)
+	 * and, with `cookie`, from that cookie when the header is absent. The
+	 * document gets a matching security scheme unless `security` declares
+	 * its own. An `authenticator` given in the hooks of the sink replaces it.
+	 */
+	readonly auth?: {
+		readonly jwt: DescribedJwtOptions & {
+			readonly header?: string;
+			readonly cookie?: string;
+		};
 	};
 }
 

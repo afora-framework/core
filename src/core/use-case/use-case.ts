@@ -854,7 +854,7 @@ export function useCaseOf(
 	}
 	let route: RouteDeclaration | undefined;
 	if (settings.route !== undefined) {
-		const declared = routeDeclarationOf(settings.route, blueprint);
+		const declared = routeDeclarationOf(settings.route, blueprint, response);
 		route = typeof declared === "string" ? invalidSetting(declared) : declared;
 	}
 	let access: AccessDeclaration | undefined;

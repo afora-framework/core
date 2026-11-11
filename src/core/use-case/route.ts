@@ -6,6 +6,7 @@ import { toOpenAPI } from "../openapi/openapi";
 import type { OpenAPISchema } from "../openapi/types/openapi.interface";
 import { isProperty } from "../property/is-property";
 import type {
+	RouteCookie,
 	RouteDeclaration,
 	RouteMethod,
 	RouteSuccessStatus,
@@ -68,7 +69,67 @@ function isObject(value: unknown): value is Obj {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const ROUTE_KEYS = ["method", "path", "status", "query", "headers", "cookie"];
+const ROUTE_KEYS = [
+	"method",
+	"path",
+	"status",
+	"query",
+	"headers",
+	"cookie",
+	"setCookie",
+];
+const COOKIE_KEYS = [
+	"name",
+	"httpOnly",
+	"secure",
+	"sameSite",
+	"path",
+	"domain",
+	"maxAge",
+];
+
+/** Why `cookie` cannot be the settings of a cookie, or `undefined`. */
+function cookieIssue(cookie: unknown, where: string): string | undefined {
+	if (!isObject(cookie) || typeof cookie.name !== "string") {
+		return `Expected ${where} to be { name, httpOnly?, secure?, sameSite?, path?, domain?, maxAge? }.`;
+	}
+	for (const key of Object.keys(cookie)) {
+		if (!COOKIE_KEYS.includes(key)) return `${where} has no option "${key}".`;
+	}
+	if (!HEADER_NAME.test(cookie.name)) {
+		return `Expected ${where}.name to be the name of a cookie.`;
+	}
+	for (const key of ["httpOnly", "secure"]) {
+		if (cookie[key] !== undefined && typeof cookie[key] !== "boolean") {
+			return `Expected ${where}.${key} to be a boolean.`;
+		}
+	}
+	if (
+		cookie.sameSite !== undefined &&
+		!["strict", "lax", "none"].includes(cookie.sameSite as string)
+	) {
+		return `Expected ${where}.sameSite to be "strict", "lax" or "none".`;
+	}
+	if (cookie.sameSite === "none" && cookie.secure === false) {
+		return `${where}.sameSite "none" needs a secure cookie.`;
+	}
+	for (const key of ["path", "domain"]) {
+		const value = cookie[key];
+		if (
+			value !== undefined &&
+			(typeof value !== "string" || value === "" || /[;\s]/.test(value))
+		) {
+			return `Expected ${where}.${key} to be text without ";" or spaces.`;
+		}
+	}
+	if (
+		cookie.maxAge !== undefined &&
+		(!Number.isInteger(cookie.maxAge) || (cookie.maxAge as number) < 0)
+	) {
+		return `Expected ${where}.maxAge to be a whole number of seconds, 0 or more.`;
+	}
+	return undefined;
+}
 
 /**
  * The frozen, normalized declaration of `route` for a use case whose input is
@@ -77,9 +138,10 @@ const ROUTE_KEYS = ["method", "path", "status", "query", "headers", "cookie"];
 export function routeDeclarationOf(
 	route: unknown,
 	blueprint: AnyBlueprint,
+	response: AnyBlueprint,
 ): RouteDeclaration | string {
 	if (!isObject(route)) {
-		return "Expected route to be { method, path?, status?, query?, headers?, cookie? }.";
+		return "Expected route to be { method, path?, status?, query?, headers?, cookie?, setCookie? }.";
 	}
 	for (const key of Object.keys(route)) {
 		if (!ROUTE_KEYS.includes(key)) return `route has no option "${key}".`;
@@ -89,7 +151,7 @@ export function routeDeclarationOf(
 	if (!(ROUTE_METHODS as readonly unknown[]).includes(method)) {
 		return `Expected route.method to be one of ${ROUTE_METHODS.join(", ")}.`;
 	}
-	const { path, status, query, headers, cookie } = route;
+	const { path, status, query, headers, cookie, setCookie } = route;
 	/** Each input key and the place it is read from. */
 	const places = new Map<string, string>();
 	const place = (key: string, where: string): string | undefined => {
@@ -149,6 +211,24 @@ export function routeDeclarationOf(
 			names.add(folded);
 		}
 	}
+	if (setCookie !== undefined) {
+		if (!isObject(setCookie)) {
+			return "Expected route.setCookie to map response keys to cookies.";
+		}
+		const names = new Set<string>();
+		for (const [key, settings] of Object.entries(setCookie)) {
+			if (!isScalarKey(response, key)) {
+				return `route.setCookie sends "${key}", which is not a scalar key of the response.`;
+			}
+			const bad = cookieIssue(settings, `route.setCookie["${key}"]`);
+			if (bad) return bad;
+			const { name } = settings as RouteCookie;
+			if (names.has(name)) {
+				return `route.setCookie sets the cookie "${name}" from two response keys.`;
+			}
+			names.add(name);
+		}
+	}
 	return Object.freeze({
 		method: method as RouteMethod,
 		...(path === undefined ? {} : { path: path as string }),
@@ -170,5 +250,16 @@ export function routeDeclarationOf(
 		...(cookie === undefined
 			? {}
 			: { cookie: Object.freeze({ ...(cookie as Record<string, string>) }) }),
+		...(setCookie === undefined
+			? {}
+			: {
+					setCookie: Object.freeze(
+						Object.fromEntries(
+							Object.entries(setCookie as Record<string, RouteCookie>).map(
+								([key, settings]) => [key, Object.freeze({ ...settings })],
+							),
+						),
+					),
+				}),
 	});
 }

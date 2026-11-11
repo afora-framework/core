@@ -1,6 +1,8 @@
+import { jwtOf, jwtOptionsIssue } from "../auth/jwt";
 import { Exception } from "../exception/exception";
 import { HEADER_NAME } from "../use-case/route";
 import type { Principal } from "../use-case/types/access.interface";
+import type { RouteCookie } from "../use-case/types/route.interface";
 import { coerceTextValues } from "./coerce";
 import { InvalidOutputStage } from "./exceptions";
 import {
@@ -13,7 +15,7 @@ import {
 	requestIdHeaderOf,
 	routeOptionsIssue,
 } from "./openapi-sink";
-import { PROBLEM_MEDIA_TYPE, problemOf } from "./problem";
+import { outputValueOf, PROBLEM_MEDIA_TYPE, problemOf } from "./problem";
 import { statusOf } from "./status";
 import type {
 	CompiledRoute,
@@ -48,6 +50,7 @@ export const HTTP_OPTION_KEYS = [
 	"docs",
 	"debug",
 	"context",
+	"auth",
 ] as const;
 
 /**
@@ -64,7 +67,31 @@ export function httpOptionsIssue(
 	if (given.debug !== undefined && typeof given.debug !== "boolean") {
 		return `Expected ${where}.debug to be a boolean.`;
 	}
-	const { docs, context } = given;
+	const { docs, context, auth } = given;
+	if (auth !== undefined) {
+		if (!isObject(auth) || Object.keys(auth).join() !== "jwt") {
+			return `Expected ${where}.auth to be { jwt: { secret, ... } }.`;
+		}
+		const bad = jwtOptionsIssue(
+			auth.jwt,
+			`${where}.auth.jwt`,
+			["header", "cookie"],
+			true,
+		);
+		if (bad) return bad;
+		const { header, cookie } = auth.jwt as Obj;
+		for (const [key, value] of [
+			["header", header],
+			["cookie", cookie],
+		] as const) {
+			if (
+				value !== undefined &&
+				(typeof value !== "string" || !HEADER_NAME.test(value))
+			) {
+				return `Expected ${where}.auth.jwt.${key} to be the name of a ${key}.`;
+			}
+		}
+	}
 	if (docs !== undefined) {
 		if (!isObject(docs)) return `Expected ${where}.docs to be an object.`;
 		const docsBad = onlyKeys(
@@ -161,6 +188,24 @@ function cookiesOf(header: string | undefined): Map<string, string> {
 	return cookies;
 }
 
+/** Writes the `set-cookie` header of `cookie` for a value; an empty one removes the cookie. */
+function cookieWriterOf(cookie: RouteCookie): (value: string) => string {
+	const sameSite = cookie.sameSite ?? "lax";
+	const attributes = [
+		`Path=${cookie.path ?? "/"}`,
+		...(cookie.domain === undefined ? [] : [`Domain=${cookie.domain}`]),
+		...(cookie.httpOnly === false ? [] : ["HttpOnly"]),
+		...(cookie.secure === false ? [] : ["Secure"]),
+		`SameSite=${sameSite.charAt(0).toUpperCase()}${sameSite.slice(1)}`,
+	].join("; ");
+	const lasting =
+		cookie.maxAge === undefined ? "" : `; Max-Age=${cookie.maxAge}`;
+	return (value) =>
+		value === ""
+			? `${cookie.name}=; ${attributes}; Max-Age=0`
+			: `${cookie.name}=${encodeURIComponent(value)}; ${attributes}${lasting}`;
+}
+
 /**
  * The routes of `operations`, compiled once, for a sink that serves HTTP on
  * any server: the sink routes each `method` and `path` to `handle` and sends
@@ -193,8 +238,17 @@ export function compileRoutes(
 	context: StageContext,
 	settings: CompileRoutesSettings,
 ): RouteTable {
-	const { source, authenticator } = settings;
+	const { source } = settings;
 	const { output } = context;
+	// The hook of the sink, else the token the options describe.
+	let authenticator = settings.authenticator;
+	if (!authenticator && options.auth) {
+		const { header, cookie, ...jwt } = options.auth.jwt;
+		authenticator = jwtOf(jwt).authenticator({
+			...(header === undefined ? {} : { header }),
+			...(cookie === undefined ? {} : { cookie }),
+		});
+	}
 	const routes = operationRoutes(operations, options, source);
 	const debug = options.debug === true;
 	const contextHeaders = options.context?.headers ?? {};
@@ -258,6 +312,9 @@ export function compileRoutes(
 			.map((key) => [key, contextVariables[key] as string]);
 		const guarded =
 			operation.access !== undefined && operation.access.public !== true;
+		const setCookies = Object.entries(route.setCookies).map(
+			([key, cookie]) => [key, cookieWriterOf(cookie)] as const,
+		);
 		const successHeaders = Object.freeze(
 			status === 204
 				? { ...route.headers }
@@ -335,11 +392,31 @@ export function compileRoutes(
 					input,
 					call as OperationCallOptions,
 				);
+				if (setCookies.length === 0) {
+					return {
+						status,
+						headers: headersOf(successHeaders, request),
+						cookies: NO_COOKIES,
+						body: status === 204 ? null : (JSON.stringify(response) ?? "null"),
+					};
+				}
+				// The keys sent as cookies leave the body.
+				const value = outputValueOf(response);
+				const sent: string[] = [];
+				if (isObject(value)) {
+					for (const [key, write] of setCookies) {
+						const cookie = value[key];
+						delete value[key];
+						if (cookie !== undefined && cookie !== null) {
+							sent.push(write(String(cookie)));
+						}
+					}
+				}
 				return {
 					status,
 					headers: headersOf(successHeaders, request),
-					cookies: NO_COOKIES,
-					body: status === 204 ? null : (JSON.stringify(response) ?? "null"),
+					cookies: sent,
+					body: status === 204 ? null : (JSON.stringify(value) ?? "null"),
 				};
 			} catch (error) {
 				return failure(error, { operation, request });
@@ -364,6 +441,24 @@ export function compileRoutes(
 		const routing: Record<string, unknown> = {};
 		for (const key of ROUTE_OPTION_KEYS) {
 			if (options[key] !== undefined) routing[key] = options[key];
+		}
+		// The token of `auth` is the scheme of the document, unless it declares its own.
+		if (options.auth && routing.security === undefined) {
+			const { header, cookie } = options.auth.jwt;
+			routing.security = {
+				schemes:
+					cookie !== undefined && header === undefined
+						? { session: { type: "apiKey", in: "cookie", name: cookie } }
+						: header !== undefined && header.toLowerCase() !== "authorization"
+							? { token: { type: "apiKey", in: "header", name: header } }
+							: {
+									bearer: {
+										type: "http",
+										scheme: "bearer",
+										bearerFormat: "JWT",
+									},
+								},
+			};
 		}
 		const document = openapi({
 			info,

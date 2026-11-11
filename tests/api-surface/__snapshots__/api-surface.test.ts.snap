@@ -152,6 +152,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) Demo": [
     "Demo: unique symbol",
   ],
+  "(internal) DescribedJwtOptions": [
+    "export interface DescribedJwtOptions extends Omit<JwtOptions, "secret"> { readonly secret: { readonly env: string; }; }",
+  ],
   "(internal) ElementAt": [
     "type ElementAt<Expected, Index> = unknown extends Expected ? unknown : Expected extends readonly unknown[] ? Index extends keyof Expected ? Expected[Index] : Expected[number] : never;",
   ],
@@ -273,6 +276,12 @@ exports[`exports of the package and their declarations 1`] = `
     "export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };",
     "type JsonValue<Properties extends IBlueprintCollection, Sensitive, Result = 0 extends 1 & Properties ? Readonly<Record<string, unknown>> : string extends keyof Properties ? Readonly<Record<string, unknown>> : JsonKeys<Properties, BlueprintData<Properties>, Sensitive>> = Result;",
   ],
+  "(internal) JwtAlgorithm": [
+    "export type JwtAlgorithm = "HS256" | "HS384" | "HS512";",
+  ],
+  "(internal) JwtOptions": [
+    "export interface JwtOptions { readonly secret: string | { readonly env: string; }; readonly issuer?: string; readonly audience?: string; readonly expiresIn?: number; readonly algorithm?: JwtAlgorithm; }",
+  ],
   "(internal) KeyOf": [
     "type KeyOf<Repository> = keyof Props<Repository> & string;",
   ],
@@ -296,6 +305,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) LogDescription": [
     "export interface LogDescription { readonly level: LogLevel; readonly providers: readonly ({ readonly kind: "log-provider"; readonly name: string; } | { readonly kind: "opaque"; })[]; }",
+  ],
+  "(internal) LogoutMaker": [
+    "export type LogoutMaker = <Repository extends AnyRepository>(repository: Repository, options?: StdUseCaseOptions & StdNoHookOptions) => StepsUseCaseConstructor<Record<never, never>, { readonly token: typeof StringProperty; readonly refreshToken: typeof StringProperty; }, Record<never, never>>;",
   ],
   "(internal) METHODS": [
     "METHODS: readonly [ "get", "post", "put", "patch", "delete" ]",
@@ -487,6 +499,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) RecordValueOf": [
     "type RecordValueOf<Record extends AnyRecordClass, Mode extends FieldMode> = Mode extends "value" ? InstanceType<Record> : Mode extends "input" ? InstanceType<Record> | RecordInput<Record> | AcceptedBy<Record> : Record["blueprint"] extends IBlueprint<infer Properties, boolean> ? CollectionValue<Properties, "data"> : never;",
   ],
+  "(internal) RefreshMaker": [
+    "export type RefreshMaker = <Repository extends AnyRepository>(repository: Repository & UseCaseTarget<Repository, "findById">, options: StdUseCaseOptions & { readonly token: StdTokenOptions & { readonly refresh: { readonly expiresIn: number; }; }; } & StdNoHookOptions) => StepsUseCaseConstructor<{ readonly refreshToken: typeof StringProperty; }, { readonly token: typeof StringProperty; readonly refreshToken: typeof StringProperty; }, { readonly repository: Repository; }>;",
+  ],
   "(internal) RepositoryContext": [
     "export interface RepositoryContext<Environment = unknown> { readonly entity: AnyRepositoryEntity; readonly name: string; readonly unique: readonly string[]; readonly indexes?: Readonly<Record<string, RepositoryIndex>>; readonly expiry?: { readonly key: string; }; readonly schema?: RepositorySchema; readonly env: Environment; }",
   ],
@@ -517,6 +532,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) ResultOf": [
     "type ResultOf<Value> = [ Value ] extends [ Fn ] ? Awaited<ReturnType<Value>> : unknown;",
+  ],
+  "(internal) RouteCookie": [
+    "export interface RouteCookie { readonly name: string; readonly httpOnly?: boolean; readonly secure?: boolean; readonly sameSite?: "strict" | "lax" | "none"; readonly path?: string; readonly domain?: string; readonly maxAge?: number; }",
   ],
   "(internal) RouteMethod": [
     "export type RouteMethod = "get" | "post" | "put" | "patch" | "delete";",
@@ -575,6 +593,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) StageDescription": [
     "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; } | { readonly kind: "opaque"; };",
   ],
+  "(internal) StdTokenOptions": [
+    "export interface StdTokenOptions extends DescribedJwtOptions { readonly refresh?: { readonly expiresIn: number; }; readonly scopes?: readonly string[]; readonly scopesFrom?: string; readonly claims?: { readonly [claim: string]: string; }; }",
+  ],
   "(internal) StepInvokeMethod": [
     "type StepInvokeMethod<Record> = Record extends unknown ? { [Key in keyof Record & string]-?: Record[Key] extends Fn ? Key : never; }[Exclude<keyof Record & string, ForbiddenMethod>] : never;",
   ],
@@ -595,6 +616,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) TaggableRecord_base": [
     "TaggableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ tags: import("../index.js").IBlueprintList<import("../index.js").PropertyClass<import("typebox").TString, string>, true>; }>, [ ], never, unknown, never, never>",
+  ],
+  "(internal) TokenResponse": [
+    "type TokenResponse<Options> = Options extends { readonly token: infer Token; } ? { readonly token: typeof StringProperty; } & (Token extends { readonly refresh: object; } ? { readonly refreshToken: typeof StringProperty; } : unknown) : unknown;",
   ],
   "(internal) Types": [
     "interface Types<Input = unknown, Output = Input> { readonly input: Input; readonly output: Output; }",
@@ -1299,7 +1323,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface LoggerDeclaration { readonly [Kind]: "logger"; }",
   ],
   "LoginMaker": [
-    "export type LoginMaker = <Repository extends AnyRepository, const Options extends StdUseCaseOptions & { readonly as?: string; } & StdNoHookOptions = None>(repository: Repository & UseCaseTarget<Repository, "findByEmail", Authenticatable, "authenticatable">, options?: Options) => StepsUseCaseConstructor<{ readonly email: FieldAt<Props<Repository>, "email">; readonly password: typeof StringProperty; }, EntityResponse<Repository, Options>, { readonly repository: Repository; }>;",
+    "export type LoginMaker = <Repository extends AnyRepository, const Options extends StdUseCaseOptions & { readonly as?: string; readonly token?: StdTokenOptions; } & StdNoHookOptions = None>(repository: Repository & UseCaseTarget<Repository, "findByEmail", Authenticatable, "authenticatable">, options?: Options) => StepsUseCaseConstructor<{ readonly email: FieldAt<Props<Repository>, "email">; readonly password: typeof StringProperty; }, EntityResponse<Repository, Options> & TokenResponse<Options>, { readonly repository: Repository; }>;",
   ],
   "MASK": [
     "MASK = "********"",
@@ -1655,7 +1679,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function Route(method: RouteSettings["method"], path?: string, options?: Omit<RouteSettings, "method" | "path">): UseCaseDecorator;",
   ],
   "RouteDeclaration": [
-    "export interface RouteDeclaration { readonly method: RouteMethod; readonly path?: string; readonly status?: RouteSuccessStatus; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; }",
+    "export interface RouteDeclaration { readonly method: RouteMethod; readonly path?: string; readonly status?: RouteSuccessStatus; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
   ],
   "RouteOptions": [
     "export interface RouteOptions { readonly basePath?: string; readonly route?: { readonly [operationId: string]: { readonly method?: OpenAPIMethod; readonly path?: string; readonly status?: RouteStatus; }; }; readonly responses?: { readonly [operationId: string]: { readonly headers?: { readonly [name: string]: string; }; }; }; readonly requestId?: true | string; readonly security?: { readonly schemes: { readonly [name: string]: OpenAPISecurityScheme; }; readonly operations?: { readonly [operationId: string]: SecurityRequirement | false; }; readonly default?: SecurityRequirement; }; }",
@@ -1752,13 +1776,13 @@ exports[`exports of the package and their declarations 1`] = `
     "StdStages: import("../index.js").IStageCatalog<Readonly<Record<string, import("../index.js").StageFactory>>>",
   ],
   "StdUseCaseContext": [
-    "export interface StdUseCaseContext { readonly create: CreateMaker; readonly get: GetMaker; readonly list: ListMaker; readonly update: UpdateMaker; readonly delete: DeleteMaker; readonly restore: RestoreMaker; readonly publish: PublishMaker; readonly unpublish: PublishMaker; readonly archive: ArchiveMaker; readonly unarchive: ArchiveMaker; readonly tag: TagMaker; readonly untag: TagMaker; readonly register: RegisterMaker; readonly login: LoginMaker; }",
+    "export interface StdUseCaseContext { readonly create: CreateMaker; readonly get: GetMaker; readonly list: ListMaker; readonly update: UpdateMaker; readonly delete: DeleteMaker; readonly restore: RestoreMaker; readonly publish: PublishMaker; readonly unpublish: PublishMaker; readonly archive: ArchiveMaker; readonly unarchive: ArchiveMaker; readonly tag: TagMaker; readonly untag: TagMaker; readonly register: RegisterMaker; readonly login: LoginMaker; readonly refresh: RefreshMaker; readonly logout: LogoutMaker; }",
   ],
   "StdUseCaseErrors": [
     "export interface StdUseCaseErrors { readonly notFound?: AnyExceptionClass; readonly conflict?: AnyExceptionClass; readonly invalid?: AnyExceptionClass; readonly owner?: AnyExceptionClass; }",
   ],
   "StdUseCaseOptions": [
-    "export interface StdUseCaseOptions { readonly name?: string; readonly description?: string; readonly tags?: readonly string[]; readonly deprecated?: boolean; readonly errors?: StdUseCaseErrors; }",
+    "export interface StdUseCaseOptions { readonly name?: string; readonly description?: string; readonly tags?: readonly string[]; readonly deprecated?: boolean; readonly errors?: StdUseCaseErrors; readonly route?: RouteSettings; readonly access?: AccessDeclaration; }",
   ],
   "StdUseCasePlugins": [
     "export type StdUseCasePlugins = { readonly [Name in keyof StdUseCaseContext]: IUseCasePlugin<Name, StdUseCaseContext[Name]>; };",
@@ -2230,6 +2254,9 @@ exports[`adapters entry (contract) 1`] = `
   "(internal) DeclaredExceptionClass": [
     "export interface DeclaredExceptionClass<Details = undefined> { new (args: ExceptionArgs<Details>): Exception<Details>; readonly prototype: Exception<Details>; readonly layer: ExceptionLayers; from: typeof Exception.from; }",
   ],
+  "(internal) DescribedJwtOptions": [
+    "export interface DescribedJwtOptions extends Omit<JwtOptions, "secret"> { readonly secret: { readonly env: string; }; }",
+  ],
   "(internal) EntityClassBrand": [
     "EntityClassBrand: unique symbol",
   ],
@@ -2372,6 +2399,12 @@ exports[`adapters entry (contract) 1`] = `
   "(internal) JsonValue": [
     "export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };",
     "type JsonValue<Properties extends IBlueprintCollection, Sensitive, Result = 0 extends 1 & Properties ? Readonly<Record<string, unknown>> : string extends keyof Properties ? Readonly<Record<string, unknown>> : JsonKeys<Properties, BlueprintData<Properties>, Sensitive>> = Result;",
+  ],
+  "(internal) JwtAlgorithm": [
+    "export type JwtAlgorithm = "HS256" | "HS384" | "HS512";",
+  ],
+  "(internal) JwtOptions": [
+    "export interface JwtOptions { readonly secret: string | { readonly env: string; }; readonly issuer?: string; readonly audience?: string; readonly expiresIn?: number; readonly algorithm?: JwtAlgorithm; }",
   ],
   "(internal) ListShape": [
     "type ListShape<Item, Mode extends FieldMode, Optional extends boolean> = Optional extends true ? FieldValue<Item, Mode>[] | undefined : FieldValue<Item, Mode>[];",
@@ -2529,8 +2562,11 @@ exports[`adapters entry (contract) 1`] = `
   "(internal) Result": [
     "type Result<Output> = SuccessResult<Output> | FailureResult;",
   ],
+  "(internal) RouteCookie": [
+    "export interface RouteCookie { readonly name: string; readonly httpOnly?: boolean; readonly secure?: boolean; readonly sameSite?: "strict" | "lax" | "none"; readonly path?: string; readonly domain?: string; readonly maxAge?: number; }",
+  ],
   "(internal) RouteDeclaration": [
-    "export interface RouteDeclaration { readonly method: RouteMethod; readonly path?: string; readonly status?: RouteSuccessStatus; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; }",
+    "export interface RouteDeclaration { readonly method: RouteMethod; readonly path?: string; readonly status?: RouteSuccessStatus; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
   ],
   "(internal) RouteMethod": [
     "export type RouteMethod = "get" | "post" | "put" | "patch" | "delete";",
@@ -2635,10 +2671,10 @@ exports[`adapters entry (contract) 1`] = `
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
   ],
   "HTTP_OPTION_KEYS": [
-    "HTTP_OPTION_KEYS: readonly [ "basePath", "route", "responses", "requestId", "security", "docs", "debug", "context" ]",
+    "HTTP_OPTION_KEYS: readonly [ "basePath", "route", "responses", "requestId", "security", "docs", "debug", "context", "auth" ]",
   ],
   "HttpOptions": [
-    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; }",
+    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; readonly auth?: { readonly jwt: DescribedJwtOptions & { readonly header?: string; readonly cookie?: string; }; }; }",
   ],
   "HttpRequest": [
     "export interface HttpRequest { param(name: string): string | undefined; query(): Readonly<Record<string, string | undefined>>; header(name: string): string | undefined; text(): string | Promise<string>; variable?(name: string): unknown; readonly native?: unknown; }",
@@ -2659,7 +2695,7 @@ exports[`adapters entry (contract) 1`] = `
     "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyBlueprint; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
   ],
   "OperationRoute": [
-    "export interface OperationRoute { readonly method: OpenAPIMethod; readonly path: string; readonly parameters: readonly string[]; readonly status: RouteStatus; readonly headers: { readonly [name: string]: string; }; readonly body: boolean; readonly query: readonly string[]; readonly requestHeaders: { readonly [inputKey: string]: string; }; readonly cookies: { readonly [inputKey: string]: string; }; }",
+    "export interface OperationRoute { readonly method: OpenAPIMethod; readonly path: string; readonly parameters: readonly string[]; readonly status: RouteStatus; readonly headers: { readonly [name: string]: string; }; readonly body: boolean; readonly query: readonly string[]; readonly requestHeaders: { readonly [inputKey: string]: string; }; readonly cookies: { readonly [inputKey: string]: string; }; readonly setCookies: { readonly [responseKey: string]: RouteCookie; }; }",
   ],
   "OutputDescription": [
     "export interface OutputDescription { readonly from: string; readonly name: string; readonly commands: readonly string[]; readonly statuses: Readonly<Record<string, number>>; readonly pipe: readonly StageDescription[]; }",
@@ -2890,6 +2926,12 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "(internal) AsBlueprint": [
     "type AsBlueprint<Properties, Optional extends boolean> = IBlueprint<Extract<Properties, IBlueprintCollection>, Optional>;",
+  ],
+  "(internal) AuthRequest": [
+    "export interface AuthRequest { header(name: string): string | undefined; cookie(name: string): string | undefined; readonly operation: OperationDescriptor; readonly native?: unknown; }",
+  ],
+  "(internal) Authenticator": [
+    "export type Authenticator = (request: AuthRequest) => Principal | null | Promise<Principal | null>;",
   ],
   "(internal) BlueprintData": [
     "export type BlueprintData<Properties extends IBlueprintCollection> = CollectionValue<Properties, "data">;",
@@ -3361,8 +3403,11 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) Result": [
     "type Result<Output> = SuccessResult<Output> | FailureResult;",
   ],
+  "(internal) RouteCookie": [
+    "export interface RouteCookie { readonly name: string; readonly httpOnly?: boolean; readonly secure?: boolean; readonly sameSite?: "strict" | "lax" | "none"; readonly path?: string; readonly domain?: string; readonly maxAge?: number; }",
+  ],
   "(internal) RouteDeclaration": [
-    "export interface RouteDeclaration { readonly method: RouteMethod; readonly path?: string; readonly status?: RouteSuccessStatus; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; }",
+    "export interface RouteDeclaration { readonly method: RouteMethod; readonly path?: string; readonly status?: RouteSuccessStatus; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
   ],
   "(internal) RouteMethod": [
     "export type RouteMethod = "get" | "post" | "put" | "patch" | "delete";",
@@ -3460,6 +3505,27 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) ValueAt": [
     "type ValueAt<Entity, Key extends string> = Key extends keyof EntityValueOf<Entity> ? EntityValueOf<Entity>[Key] : never;",
   ],
+  "DescribedJwtOptions": [
+    "export interface DescribedJwtOptions extends Omit<JwtOptions, "secret"> { readonly secret: { readonly env: string; }; }",
+  ],
+  "InvalidJwtOptions": [
+    "InvalidJwtOptions: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
+  "Jwt": [
+    "export interface Jwt { sign(subject: JwtSubject, options?: JwtTokenOptions): Promise<string>; verify(token: string, options?: Pick<JwtTokenOptions, "use">): Promise<Principal>; authenticator(options?: { readonly header?: string; readonly cookie?: string; }): Authenticator; }",
+  ],
+  "JwtAlgorithm": [
+    "export type JwtAlgorithm = "HS256" | "HS384" | "HS512";",
+  ],
+  "JwtOptions": [
+    "export interface JwtOptions { readonly secret: string | { readonly env: string; }; readonly issuer?: string; readonly audience?: string; readonly expiresIn?: number; readonly algorithm?: JwtAlgorithm; }",
+  ],
+  "JwtSubject": [
+    "export interface JwtSubject { readonly subject: string; readonly scopes?: readonly string[]; readonly claims?: Principal["claims"]; }",
+  ],
+  "JwtTokenOptions": [
+    "export interface JwtTokenOptions { readonly expiresIn?: number; readonly use?: string; }",
+  ],
   "PropertyLineage": [
     "export type PropertyLineage = { readonly kind: "refined"; readonly base: AnyPropertyConstructor; readonly options: Readonly<Record<string, unknown>>; } | { readonly kind: "optional"; readonly base: AnyPropertyConstructor; } | { readonly kind: "factory"; readonly factory: string; readonly args: Readonly<Record<string, unknown>>; };",
   ],
@@ -3472,6 +3538,9 @@ exports[`experimental entry (not contract) 1`] = `
   "SlicedValue": [
     "export type SlicedValue<Value, Mask> = Value extends readonly (infer Item)[] ? SlicedValue<Item, Mask>[] : Value extends { readonly [Meta]: { readonly blueprint: IBlueprint<infer Properties, boolean>; }; toJSON(): unknown; } ? SlicedValue<BlueprintData<Properties>, Mask> : Value extends { toJSON(): infer Json; } ? SlicedValue<Json, Mask> : Value extends object ? { [Key in keyof Value as Key extends keyof Mask ? Key : never]: Key extends keyof Mask ? Mask[Key] extends true ? Value[Key] : SlicedValue<Value[Key], Mask[Key]> : never; } : Value;",
   ],
+  "StdTokenOptions": [
+    "export interface StdTokenOptions extends DescribedJwtOptions { readonly refresh?: { readonly expiresIn: number; }; readonly scopes?: readonly string[]; readonly scopesFrom?: string; readonly claims?: { readonly [claim: string]: string; }; }",
+  ],
   "UseCaseOriginInfo": [
     "export interface UseCaseOriginInfo { readonly plugin: AnyUseCasePlugin; readonly repository: AnyRepository; readonly options: Readonly<Record<string, unknown>>; }",
   ],
@@ -3483,6 +3552,9 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "eventPolicyDescriptionOf": [
     "export declare function eventPolicyDescriptionOf(handler: unknown): EventPolicyDescription | undefined;",
+  ],
+  "jwtOf": [
+    "export declare function jwtOf(options: JwtOptions): Jwt;",
   ],
   "matchesQuery": [
     "export declare function matchesQuery(data: RepositoryData, query: ProviderQuery, expiry?: string, now?: number): boolean;",

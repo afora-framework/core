@@ -80,7 +80,11 @@ export function Route(
 				"The use case already has a route: declare it once, with the route setting or with @Route.",
 			);
 		}
-		const declared = routeDeclarationOf(settings, UseCase.blueprint);
+		const declared = routeDeclarationOf(
+			settings,
+			UseCase.blueprint,
+			UseCase.response,
+		);
 		if (typeof declared === "string") invalid(declared);
 		Object.defineProperty(UseCase, "route", { value: declared });
 	};

@@ -1,3 +1,4 @@
+import type { DescribedJwtOptions } from "../../core/auth/types/jwt.interface";
 import type {
 	AnyBlueprint,
 	AnyBlueprintList,
@@ -20,10 +21,12 @@ import type {
 	AnyRepositoryEntity,
 	EntityInstanceOf,
 } from "../../core/repository/types/repository.interface";
+import type { AccessDeclaration } from "../../core/use-case/types/access.interface";
 import type {
 	IUseCasePlugin,
 	UseCaseTarget,
 } from "../../core/use-case/types/plugin.interface";
+import type { RouteSettings } from "../../core/use-case/types/route.interface";
 import type {
 	AnyExceptionClass,
 	DependencyFunctions,
@@ -98,7 +101,39 @@ export interface StdUseCaseOptions {
 	readonly tags?: readonly string[];
 	readonly deprecated?: boolean;
 	readonly errors?: StdUseCaseErrors;
+	/** Where the use case is served over HTTP: the `route` of `useCaseOf`. */
+	readonly route?: RouteSettings;
+	/** Who may call it: the `access` of `useCaseOf`. */
+	readonly access?: AccessDeclaration;
 }
+
+/**
+ * The tokens `login` and `refresh` issue: the options of `jwtOf`, plus what
+ * a token says of the entity. JSON, so it lives in an `afora.json`: the
+ * secret is named by its environment variable (`{ env: "JWT_SECRET" }`).
+ * Experimental: it may change in any release.
+ */
+export interface StdTokenOptions extends DescribedJwtOptions {
+	/** Also issues a refresh token, which `refresh` exchanges; `expiresIn` is its life in seconds. */
+	readonly refresh?: { readonly expiresIn: number };
+	/** Scopes every token gets. */
+	readonly scopes?: readonly string[];
+	/** A key of the entity that holds a list of scopes, added to `scopes`. */
+	readonly scopesFrom?: string;
+	/** Claims of the token, each from a key of the entity: `{ tenant: "tenantId" }`. */
+	readonly claims?: { readonly [claim: string]: string };
+}
+
+/** The response keys the `token` option adds. */
+type TokenResponse<Options> = Options extends {
+	readonly token: infer Token;
+}
+	? { readonly token: typeof StringProperty } & (Token extends {
+			readonly refresh: object;
+		}
+			? { readonly refreshToken: typeof StringProperty }
+			: unknown)
+	: unknown;
 
 /** Who owns the entities: the caller, whose id the context gives. */
 export interface StdOwnerOption<Repository> {
@@ -606,6 +641,8 @@ export type LoginMaker = <
 	Repository extends AnyRepository,
 	const Options extends StdUseCaseOptions & {
 		readonly as?: string;
+		/** Issues a token for the entity (and a refresh token, with `refresh`), in the response. */
+		readonly token?: StdTokenOptions;
 	} & StdNoHookOptions = None,
 >(
 	repository: Repository &
@@ -621,8 +658,38 @@ export type LoginMaker = <
 		readonly email: FieldAt<Props<Repository>, "email">;
 		readonly password: typeof StringProperty;
 	},
-	EntityResponse<Repository, Options>,
+	EntityResponse<Repository, Options> & TokenResponse<Options>,
 	{ readonly repository: Repository }
+>;
+
+/** `refresh`: exchanges a refresh token of `login` for new tokens; needs `findById`. */
+export type RefreshMaker = <Repository extends AnyRepository>(
+	repository: Repository & UseCaseTarget<Repository, "findById">,
+	options: StdUseCaseOptions & {
+		readonly token: StdTokenOptions & {
+			readonly refresh: { readonly expiresIn: number };
+		};
+	} & StdNoHookOptions,
+) => StepsUseCaseConstructor<
+	{ readonly refreshToken: typeof StringProperty },
+	{
+		readonly token: typeof StringProperty;
+		readonly refreshToken: typeof StringProperty;
+	},
+	{ readonly repository: Repository }
+>;
+
+/** `logout`: gives empty tokens, which a route with `setCookie` turns into removed cookies. */
+export type LogoutMaker = <Repository extends AnyRepository>(
+	repository: Repository,
+	options?: StdUseCaseOptions & StdNoHookOptions,
+) => StepsUseCaseConstructor<
+	Record<never, never>,
+	{
+		readonly token: typeof StringProperty;
+		readonly refreshToken: typeof StringProperty;
+	},
+	Record<never, never>
 >;
 
 /**
@@ -644,6 +711,8 @@ export interface StdUseCaseContext {
 	readonly untag: TagMaker;
 	readonly register: RegisterMaker;
 	readonly login: LoginMaker;
+	readonly refresh: RefreshMaker;
+	readonly logout: LogoutMaker;
 }
 
 /** The plugins of `StdUseCases`, by name. */
