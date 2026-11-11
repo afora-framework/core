@@ -8,7 +8,7 @@ import { dirname, resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const files = [
 	...new Bun.Glob("README.md").scanSync(root),
-	...new Bun.Glob("docs/*.md").scanSync(root),
+	...new Bun.Glob("docs/**/*.md").scanSync(root),
 	...new Bun.Glob("packages/*/README.md").scanSync(root),
 	...new Bun.Glob("examples/*/README.md").scanSync(root),
 ];
@@ -17,7 +17,7 @@ const files = [
 const slugOf = (heading: string): string =>
 	heading
 		.toLowerCase()
-		.replace(/[^\p{L}\p{N}\s-]/gu, "")
+		.replace(/[^\p{L}\p{N}\s_-]/gu, "")
 		.trim()
 		.replace(/\s/g, "-");
 
