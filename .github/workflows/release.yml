@@ -37,6 +37,13 @@ jobs:
           version="$(node -p 'require("./package.json").version')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+          # The scheme of VERSIONING.md: 0.0.<n> before 27.0, then <YY>.<minor>.<patch>
+          # with an optional -rc.<n>, where YY (the year of the cycle) is 27 or more.
+          if ! printf '%s' "$version" | grep -Eq '^(0\.0\.(0|[1-9][0-9]*)|(2[7-9]|[3-9][0-9]|[1-9][0-9]{2,})\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?)$'; then
+            echo "::error::$version is not in the scheme of VERSIONING.md: 0.0.<n>, or <YY>.<minor>.<patch>[-rc.<n>] with YY >= 27"
+            exit 1
+          fi
+
           # The tag is created last, so a missing tag also means an unfinished release.
           if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
             echo "v$version is already released, nothing to do"
