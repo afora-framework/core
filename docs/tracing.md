@@ -62,6 +62,7 @@ The tests of the core (with a `sensitive` field) and of `@afora/otel` check it: 
 
 `ITracer` is two methods; `memoryTracer()` is one, for tests:
 
+<!-- docs:code skip: the application is elided (`/* ... */`), so `app.commands.Posts` has no type here -->
 ```ts
 import { memoryTracer } from "@afora/core";
 

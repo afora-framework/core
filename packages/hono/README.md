@@ -11,12 +11,15 @@ bun add @afora/core @afora/hono hono typebox
 ## Example
 
 ```ts
-import { outputOf } from "@afora/core";
+import { commandOf, outputOf } from "@afora/core";
 import { hono } from "@afora/hono";
+
+const Users = commandOf({ name: "Users", useCases: {} }); // your use cases go here
+const Posts = commandOf({ name: "Posts", useCases: {} });
 
 const Api = outputOf({
 	name: "Blog",
-	commands: [Users, Posts], // commandOf(...) declarations
+	commands: [Users, Posts],
 	statuses: { InvalidCredentials: 401, Unauthorized: 401 },
 	pipe: [
 		hono({
@@ -90,6 +93,8 @@ Invalid options throw `InvalidOutputStage` when the stage is made, and unknown o
 ## Routes, statuses and headers
 
 ```ts
+import { hono } from "@afora/hono";
+
 hono({
 	route: {
 		"Entries.get": { method: "get", path: "/entries/{slug}" },
@@ -124,6 +129,8 @@ DELETE /entries/hello         -> 204, no body
 `webhooks` names the operations that receive webhooks from another service. The sink checks the signature of each request over the raw body, byte for byte as it was sent, before it parses anything. A request that fails is a `401` problem `InvalidWebhookSignature`. Its `detail` never says what was wrong; the `trace` of a `debug` problem does. Change the status with the output `statuses` (`{ InvalidWebhookSignature: 403 }`).
 
 ```ts
+import { hono } from "@afora/hono";
+
 hono({
 	webhooks: {
 		"Payments.received": {
@@ -172,6 +179,7 @@ hono({
 
 Who may call an operation is declared on its use case, with [`access`](../../docs/auth.md), and the core enforces it. The sink only has to say **who is calling**, which is the `authenticator` hook: it gets the request and gives a `Principal` (`{ subject, scopes, claims? }`), or `null` for an anonymous caller.
 
+<!-- docs:code skip: EntryChanges, EntryResponse, Entries and sessions stand for your own declarations -->
 ```ts
 import { Access, outputOf, Route, useCaseOf } from "@afora/core";
 import { hono } from "@afora/hono";
@@ -216,6 +224,7 @@ const api = outputOf({
 
 A value that is not about access (a tenant resolved from the host, a feature flag) still reaches the context through a middleware and `context.variables`:
 
+<!-- docs:code skip: fragment, tenantOf stands for your code -->
 ```ts
 hono(
 	{ context: { variables: { tenant: "tenant" } } },

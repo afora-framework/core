@@ -154,7 +154,11 @@ export interface StdOwnerOption<Repository> {
 export interface StdEntityOptions<Repository>
 	extends StdUseCaseOptions,
 		StdOwnerOption<Repository> {
-	/** The key of the response that holds the entity; `item` by default. */
+	/**
+	 * The key of the response that holds the entity.
+	 *
+	 * @default "item"
+	 */
 	readonly as?: string;
 }
 

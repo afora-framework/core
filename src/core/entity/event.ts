@@ -3,6 +3,10 @@ import { isEntityClass } from "./entity";
 
 /** A class made by `entityOf`, including subclasses. */
 export const EntityClassBrand = Symbol("entityClass");
+/**
+ * Any class made by {@link entityOf}, subclasses included: what {@link eventOf}
+ * takes as the entity of an event.
+ */
 export type AnyEntityClass = (abstract new (
 	value: never,
 ) => object) & { readonly [EntityClassBrand]: true };
@@ -32,11 +36,22 @@ export interface EntityEvent<Entity = object> {
 	handle(context?: Partial<EventHandlerContext>): Promise<void>;
 }
 
+/**
+ * An event of the lifecycle of an entity, as `onCreate`, `onUpdate` and
+ * `onDelete` take it: a definition made by {@link eventOf}, a list of them, or
+ * a function that gives either, which lets the entity name an event declared
+ * after its class.
+ */
 export type EntityEventReference =
 	| EventDefinition
 	| readonly EventDefinition[]
 	| (() => EventDefinition | readonly EventDefinition[]);
 
+/**
+ * The lifecycle events of an entity, the options of {@link entityOf}:
+ * `onCreate` is queued when a new entity is built, `onUpdate` after each
+ * change, and `onDelete` when it is destroyed.
+ */
 export interface EntityEvents {
 	readonly onCreate?: EntityEventReference;
 	readonly onUpdate?: EntityEventReference;
@@ -57,6 +72,30 @@ const withHandler = new WeakSet<EventDefinition>();
  * Defines an event without executing its handler. Without a handler, the
  * event only carries the entity, for a policy such as `publishEvents`, and
  * `handle()` does nothing.
+ *
+ * @throws {TypeError} when `entityClass` is not an entity class, or `handler` is given and is not a function.
+ *
+ * @example
+ * ```ts
+ * import { blueprintOf, type EventDefinition, entityOf, eventOf } from "@afora/core";
+ *
+ * class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.string }))) {
+ * 	publish(): void {
+ * 		this.emit(PostPublished);
+ * 	}
+ * }
+ *
+ * // The annotation breaks TypeScript's circular inference through the base class.
+ * const PostPublished: EventDefinition = eventOf(
+ * 	"post.published",
+ * 	Post,
+ * 	async (post, { logger }) => logger.info("post.published", { id: post.id }),
+ * );
+ *
+ * const post = new Post({ title: "Hi" });
+ * post.publish();
+ * for (const event of post.pullEvents()) await event.handle();
+ * ```
  */
 export function eventOf<Class extends AnyEntityClass>(
 	name: string,

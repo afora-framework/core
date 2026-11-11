@@ -99,6 +99,7 @@ DynamoDB has no schema to change, so `migrate` is a no-op, and a change of an en
 
 `PAY_PER_REQUEST`, string `pk` and `sk`, nothing else. With the AWS CDK:
 
+<!-- docs:code skip: the AWS CDK is not a dependency of this repo; this is the body of a Stack constructor, and handler is your function -->
 ```ts
 import { RemovalPolicy } from "aws-cdk-lib";
 import { AttributeType, Billing, TableV2 } from "aws-cdk-lib/aws-dynamodb";

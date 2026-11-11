@@ -323,11 +323,17 @@ export interface IApplication<
 export interface ApplicationStartOptions {
 	/**
 	 * Become the started application of the process (what `useApplication()`
-	 * gives). Default `true`; another one already started throws
-	 * `ApplicationAlreadyStarted`.
+	 * gives). Another one already started throws `ApplicationAlreadyStarted`.
+	 *
+	 * @default true
 	 */
 	readonly register?: boolean;
-	/** Stop the started application of the process and take its place, e.g. on hot reload. Default `false`. */
+	/**
+	 * Stop the started application of the process and take its place, e.g. on hot
+	 * reload.
+	 *
+	 * @default false
+	 */
 	readonly replace?: boolean;
 	/**
 	 * The committed schema lock (`afora.lock.json`): start throws
@@ -412,6 +418,7 @@ export type FieldDescription =
 			readonly variants: Readonly<Record<string, FieldDescription>>;
 	  };
 
+/** The fields of a blueprint, record or entity in a description, by name. */
 export type FieldsDescription = Readonly<Record<string, FieldDescription>>;
 
 /** A record or an entity: its fields (an entity's identity and its plugins' keys left out), options and plugins. */

@@ -66,6 +66,12 @@ jobs:
       - run: bun run test:blog
       - run: bun run test:agent-built
       - run: bun run docs:links
+      # every ts block of README.md, docs/ and the package READMEs type-checks (or is skipped with a reason)
+      - run: bun run docs:code
+      # docs/reference/api.md and exceptions.md are what the JSDoc gives; every export is on a page
+      - run: bun run build
+      - run: bun run docs:api:check
+      - run: bun run docs:coverage
       # bench/RESULTS.md, the chart and the block of the README are what bench/results/latest.json gives
       - run: bun run bench:check
 

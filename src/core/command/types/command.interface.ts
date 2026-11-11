@@ -63,6 +63,11 @@ export type CommandEventErrorHandler = (
 	info: CommandEventInfo,
 ) => void | Promise<void>;
 
+/**
+ * What {@link commandOf} takes: the `name` and the `useCases` of the command,
+ * the `context` a call supplies, and how a call runs (`transaction`,
+ * `environmentDependencies`, `events` and `onEventError`).
+ */
 export interface CommandSettings<
 	UseCases extends CommandUseCases,
 	Context extends IBlueprintCollection | undefined = undefined,
@@ -74,7 +79,11 @@ export interface CommandSettings<
 	/** What the caller supplies with each call; validated once by this blueprint. */
 	readonly context?: IBlueprint<Exclude<Context, undefined>>;
 	readonly useCases: UseCases;
-	/** Runs every call in a transaction of the provider of the repositories. Default `false`. */
+	/**
+	 * Runs every call in a transaction of the provider of the repositories.
+	 *
+	 * @default false
+	 */
 	readonly transaction?: boolean;
 	/**
 	 * One environment, or a list merged in order: read on first use as

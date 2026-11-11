@@ -26,10 +26,16 @@ export interface OpenAPIComponents<Name extends PropertyKey = string> {
 	readonly schemas: { readonly [Key in Name]: OpenAPISchema };
 }
 
+/**
+ * What `toOpenAPI` takes after the models: how a record named among them is
+ * referenced.
+ */
 export interface OpenAPIOptions {
 	/**
 	 * Where a record named among the models is referenced from: `$ref` is this
-	 * prefix and its name. `"#/components/schemas/"` by default.
+	 * prefix and its name.
+	 *
+	 * @default "#/components/schemas/"
 	 */
 	readonly refPrefix?: string;
 }

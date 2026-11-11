@@ -20,7 +20,11 @@ export interface HttpOptions extends RouteOptions {
 		readonly info: OpenAPISinkOptions["info"];
 		readonly servers?: OpenAPISinkOptions["servers"];
 	};
-	/** Adds the `trace` to problems and the real `detail` to 5xx ones. Off by default. */
+	/**
+	 * Adds the `trace` to problems and the real `detail` to 5xx ones.
+	 *
+	 * @default false
+	 */
 	readonly debug?: boolean;
 	/**
 	 * The context of an operation, by context key: from request headers

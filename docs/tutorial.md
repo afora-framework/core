@@ -106,6 +106,7 @@ Nothing in `blog.ts` handles those cases. A duplicate is a 409 because the repos
 
 `new Post({...})` gives a **record**: its values are validated when it is built and can only change through `post.change.title("...")`, which validates again. The values are read with getters (`post.title`), so two things surprise at first:
 
+<!-- docs:code continue -->
 ```ts
 const post = new Post({ title: "Hello", slug: "hello", body: "First post." });
 
@@ -272,6 +273,7 @@ A rule that is a plain sequence (find, check, write, return) can also be written
 
 `@Route("POST", "/posts/{slug}/publish")` says where `PublishPost` is served, on the class itself. The input stays described once, by the blueprint: the route only says that the key `slug` comes from the path. A route can read keys from the query, a header or a cookie the same way:
 
+<!-- docs:code skip: fragment, the decorator alone with its options -->
 ```ts
 @Route("GET", "/posts/{slug}", {
 	headers: { locale: "accept-language" },
@@ -325,6 +327,7 @@ Nothing above depends on Hono. To serve the same application on Fastify:
 bun add @afora/fastify fastify   # or: npm install @afora/fastify fastify
 ```
 
+<!-- docs:code skip: fragment, shows the fastify stage that replaces hono({...}) in the pipe above -->
 ```ts
 import { fastify } from "@afora/fastify";
 

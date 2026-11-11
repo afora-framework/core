@@ -44,7 +44,7 @@ The constructor validates its arguments and exposes their parsed values as read-
 
 A repository dependency is the repository it was declared with, so `new RegisterUser(input).execute()` on the module-level class reads and writes through that repository's own provider, until an application binds the repository to its provider: from then on it throws `RepositoryUsedOutsideApplication`. Inside an application, run the class the application gives instead: `await app.run(RegisterUser, input)`, or `new app.useCases.RegisterUser(input).execute()` (also `app.useCase(RegisterUser)`, `app.get(RegisterUser)`), which is a subclass whose repositories, and those of its child use cases, are the ones bound to the application's provider. See [Applications](applications.md).
 
-Dependencies default to `{}`. Each dependency function creates a fresh child, resolves its dependencies and returns its validated response. Await all dependency calls before returning. Functions are usable only during execution. Use the destructured defaults shown above to keep both no-argument calls and partial overrides inferred in TypeScript. `execute(deps = this.dependencies)` also supports no-argument calls, but its inferred override type requires the complete dependency map. During execution, `this.dependencies` exposes the resolved functions, including overrides. Overrides apply only to direct dependencies, and their inputs and responses are validated against the declared child. There is no global container.
+Dependencies default to `{}`. Each dependency function creates a fresh child, resolves its dependencies and returns its validated response. Await all dependency calls before returning. Functions are usable only during execution: one called after `execute` has ended throws `InvalidUseCaseDependencies`, as does an override that names a dependency the use case does not declare or gives the wrong kind of value for one (an environment override its blueprint rejects included). Use the destructured defaults shown above to keep both no-argument calls and partial overrides inferred in TypeScript. `execute(deps = this.dependencies)` also supports no-argument calls, but its inferred override type requires the complete dependency map. During execution, `this.dependencies` exposes the resolved functions, including overrides. Overrides apply only to direct dependencies, and their inputs and responses are validated against the declared child. There is no global container.
 
 Events from managed children move to the parent when each child finishes, including on failure and when the parent's response omits the child result. Then the validated parent response is traversed through declared records, entities, nested blueprints and lists. Repeated object references are visited once; separately emitted duplicate events are preserved. Child events follow completion order, followed by remaining response events. No handlers run automatically. `pullEvents()` immediately drains the queue, which remains available after failure. Invalid responses are not drained. Overrides contribute events from their returned entities; hidden operations inside an override must expose their events separately.
 
@@ -54,7 +54,20 @@ In an application with a `log`, each execution, each repository call made throug
 
 A use case can declare a `context`, a blueprint for what the caller supplies with each call (the signed-in user, a request id), and metadata that tools can read:
 
+<!-- docs:code continue -->
 ```ts
+import {
+	exceptionOf,
+	ExceptionLayers,
+	RepositoryUniqueViolation,
+} from "@afora/core";
+
+const UserAlreadyExists = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "UserAlreadyExists",
+	message: "A user with this email exists.",
+});
+
 const RegisterBase = useCaseOf({
 	name: "Register",
 	blueprint: UserInput,
@@ -66,8 +79,17 @@ const RegisterBase = useCaseOf({
 	errors: [UserAlreadyExists, RepositoryUniqueViolation], // exceptionOf classes a caller should expect
 });
 
-const operation = new Register(input, { context: { userId, requestId } });
-operation.context; // Readonly<{ userId: string; requestId: string }>, parsed and frozen
+class Register extends RegisterBase {
+	override async execute() {
+		return { user: new User(this.input) };
+	}
+}
+
+const registration = new Register(
+	{ name: "Ana" },
+	{ context: { userId: user.id, requestId: "req-1" } },
+);
+registration.context; // Readonly<{ userId: string; requestId: string }>, parsed and frozen
 ```
 
 With a declared `context`, the second constructor argument is required by type and validated by its blueprint; a missing or invalid one throws `InvalidUseCaseContext` (`UseCase` layer, `details.issues`). Without one, `options.context` is not accepted and `this.context` is `undefined`. `UseCaseContext<typeof Register>` extracts the type, and `UseCaseOptions` is the type of the second argument.
@@ -83,6 +105,7 @@ A use case can say where it is served over HTTP, next to its input, instead of i
 ```ts
 import { blueprintOf, Route, useCaseOf } from "@afora/core";
 
+const PostList = blueprintOf((ctx) => ({ titles: ctx.list.text }));
 const ListPostsInput = blueprintOf((ctx) => ({
 	slug: ctx.slug,
 	page: ctx.integer,
@@ -103,20 +126,27 @@ class ListPosts extends useCaseOf({
 }) {
 	override async execute() {
 		// this.input: { slug, page, locale?, session }
+		return { titles: [] };
 	}
 }
+```
 
-// The same declaration, as a decorator of the class:
+The same declaration, as a decorator of the class:
+
+<!-- docs:code continue -->
+```ts
 @Route("GET", "/posts/{slug}", {
 	headers: { locale: "accept-language" },
 	cookie: { session: "sid" },
 })
-class ListPosts extends useCaseOf({
+class ListPostsByDecorator extends useCaseOf({
 	name: "ListPosts",
 	blueprint: ListPostsInput,
 	response: PostList,
 }) {
-	// ...
+	override async execute() {
+		return { titles: [] };
+	}
 }
 ```
 
@@ -140,9 +170,46 @@ The route is data: `ListPosts.route` is the frozen declaration, `app.describe().
 
 ## Steps
 
-Instead of writing `execute`, a use case can declare `steps`: plain data that the use case interprets. The class is concrete, so it needs no body, and `describe()` reports the steps (a hand-written `execute` is `{ kind: "opaque" }`).
+Instead of writing `execute`, a use case can declare `steps`: plain data that the use case interprets. The class is concrete, so it needs no body, and `describe()` reports the steps (a hand-written `execute` is `{ kind: "opaque" }`). Steps are a sequence, with no branching, loops or expressions; a rule that needs them is written in code (see [What steps will never have](#what-steps-will-never-have)).
 
 ```ts
+import {
+	blueprintOf,
+	entityOf,
+	ExceptionLayers,
+	exceptionOf,
+	Password,
+	PlainPassword,
+	repositoryOf,
+	useCaseOf,
+} from "@afora/core";
+
+class User extends entityOf(
+	blueprintOf((ctx) => ({
+		name: ctx.text,
+		email: ctx.email,
+		password: ctx.password,
+	})),
+	{ unique: ["email"] },
+) {}
+const Users = repositoryOf({
+	entity: User,
+	actions: ["findByEmail", "create"],
+});
+const RegisterInput = blueprintOf((ctx) => ({
+	name: ctx.text,
+	email: ctx.email,
+	plainPassword: PlainPassword,
+}));
+const UserResponse = blueprintOf(() => ({ user: User }));
+const UserAlreadyExists = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "UserAlreadyExists",
+	message: "A user with this email exists.",
+});
+const hashPassword = async (plain: string) =>
+	(await Password.hash(plain)).value as string;
+
 class Register extends useCaseOf({
 	name: "Register",
 	blueprint: RegisterInput, // { name, email, plainPassword }
@@ -188,6 +255,7 @@ There are no operators or interpolation: anything computed goes through `run`. T
 
 **The args of `run` are not checked at run time unless it declares `params`.** `fn` is any function, so without `params` it gets the resolved values as they are, whatever its parameters say (only [`strictSteps`](#strict-steps) checks them, at compile time, and only in TypeScript). `params` is a blueprint whose keys match the `args` by position: the args are parsed before `fn` is called, `fn` gets the values as the keys handled them (an `email` trimmed and lowercased), and a rejected arg throws `InvalidUseCaseStep` with `code: "invalid_args"`, the key in the message and the issues in `details.issues`; `fn` does not run. The number of args must equal the number of keys (checked at declaration for a list, while the steps run for a reference). Declare it whenever `fn` relies on what it gets, and always in an `afora.json` written by an agent:
 
+<!-- docs:code skip: one step of a steps list, not a module -->
 ```ts
 {
 	run: "hashPassword",
@@ -217,6 +285,7 @@ There are no operators or interpolation: anything computed goes through `run`. T
 
 With `strictSteps: true`, TypeScript checks the steps written inline in `useCaseOf` as it checks a hand-written `execute`. The steps are read in order, each against the values in scope: the input, the context, the environments and the results of the earlier steps, typed (`find` gives what the repository method returns, `build` the instance, `change` the record, `invoke` and `run` what the method or function returns, awaited, `call` the response of the use case). An `ensure: "exists"` on a bound name removes `undefined` from it for the steps after.
 
+<!-- docs:code skip: shows the type error strictSteps reports, so it does not compile on purpose -->
 ```ts
 class Register extends useCaseOf({
 	name: "Register",
@@ -243,6 +312,19 @@ A reference that does not fit is reported with the references that would (`'"$in
 
 Checking costs the editor about 11,000 more type instantiations per edit (20%) on a use case of five steps (see `bun run test:type-perf`), which is why it is opt-in. It only applies to steps written inline (a tuple); steps built at run time are checked at declaration only. `strictSteps` has no effect at run time and must be a boolean. The code [codegen](../packages/codegen/README.md) generates from `afora.json` declares it.
 
+### What steps will never have
+
+Steps are for a rule that is a sequence: read, check, build, change, store, call and return, in order. Each step names declared things (a repository action, a record class, an exception, a dependency) and values that are references or literals, so the whole rule is data that a spec, a reviewer or an agent can govern: `useCaseOf` and the `afora.json` validator check every name and path, `describe()` reports the rule, and [`afora.json`](afora-json.md) generates it and extracts it back unchanged.
+
+Steps have no branching (`if`, `switch`), no loops (`forEach`, `while`) and no expressions (operators, interpolation, conditions on values), and will not get them. Each would turn the list into a small programming language inside JSON, with its own scoping, evaluation order and errors, that the validator, the types of [strict steps](#strict-steps) and the round trip would all have to follow. And from 27.0 on the vocabulary is bound by compatibility: a step added once stays in every later version. The vocabulary is the table above.
+
+What does not fit leaves the steps in one of two ways, and neither changes the declaration:
+
+- **A value computed from others** (a hash, a total, a slug): keep the steps and add a `run` step with a function. The function is code; the flow stays data.
+- **A rule that branches, loops over a list with effects, or reads better as code**: implement the use case in code. In TypeScript, the class drops `steps` and overrides `execute`. In `afora.json`, `implementation` becomes `{ "import": "../handlers/reserve#Reserve" }`: the generator writes `export abstract class ReserveBase extends useCaseOf({...}) {}` with the same declaration (in `reserve.use-case.ts`), and the hand-written `Reserve` extends it and implements `execute`. The input, response, context, dependencies, errors, route and access stay declared, so the response is still validated, the errors are still listed, and every use case that depends on it stays as it is, a steps use case that `call`s it included. [When steps are not enough](afora-json.md#when-steps-are-not-enough) shows the move, before and after.
+
+Bending a rule into steps with flags and `ensure` tricks to avoid code is not the intent: a use case implemented in code is the supported way out, not a failure of the spec.
+
 ## Plugins
 
 A use case plugin is a use case that is made for a repository: its blueprints, dependencies and steps follow the entity, the actions the repository declares and the record plugins of the entity. The [standard ones](std-use-cases.md) (`create`, `list`, `publish`...) are plugins; this is how to write another.
@@ -251,8 +333,11 @@ A use case plugin is a use case that is made for a repository: its blueprints, d
 import {
 	type AnyRepository,
 	blueprintBuilderOf,
+	blueprintOf,
+	entityOf,
 	type EntityOfRepository,
 	type Id,
+	repositoryOf,
 	type StepsUseCaseConstructor,
 	UseCaseEntityNotFound,
 	type UseCaseTarget,
@@ -261,6 +346,9 @@ import {
 } from "@afora/core";
 
 const fields = blueprintBuilderOf();
+
+class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+const Posts = repositoryOf({ entity: Post, actions: ["findById"] });
 
 type GetMaker = <Repository extends AnyRepository>(
 	repository: Repository & UseCaseTarget<Repository, "findById">,

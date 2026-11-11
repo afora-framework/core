@@ -10,6 +10,7 @@ bun add @afora/core @afora/otel @opentelemetry/api
 
 ## Example
 
+<!-- docs:code skip: Post, Posts, Blog and Api are the declarations of your application -->
 ```ts
 import { applicationOf } from "@afora/core";
 import { otelTracer } from "@afora/otel";

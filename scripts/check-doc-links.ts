@@ -1,6 +1,10 @@
 /**
  * Checks that every relative markdown link, and every `#anchor`, in the
- * README, the docs, the package READMEs and the example READMEs resolves. Run: `bun scripts/check-doc-links.ts`.
+ * README, the docs, the package READMEs and the example READMEs resolves,
+ * and that docs/nav.json (the navigation of the site, see docs/site.md) is
+ * complete: each path exists, is listed once and has a known type, and every
+ * page of docs/ (apart from docs/plans/) is listed.
+ * Run: `bun scripts/check-doc-links.ts`.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -8,7 +12,7 @@ import { dirname, resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const files = [
 	...new Bun.Glob("README.md").scanSync(root),
-	...new Bun.Glob("docs/*.md").scanSync(root),
+	...new Bun.Glob("docs/**/*.md").scanSync(root),
 	...new Bun.Glob("packages/*/README.md").scanSync(root),
 	...new Bun.Glob("examples/*/README.md").scanSync(root),
 ];
@@ -17,7 +21,7 @@ const files = [
 const slugOf = (heading: string): string =>
 	heading
 		.toLowerCase()
-		.replace(/[^\p{L}\p{N}\s-]/gu, "")
+		.replace(/[^\p{L}\p{N}\s_-]/gu, "")
 		.trim()
 		.replace(/\s/g, "-");
 
@@ -58,8 +62,47 @@ for (const file of files) {
 	}
 }
 
+interface NavPage {
+	title: string;
+	path: string;
+	type: string;
+}
+const navFile = "docs/nav.json";
+const pageTypes = new Set([
+	"guide",
+	"concept",
+	"recipe",
+	"reference",
+	"project",
+]);
+const nav = JSON.parse(readFileSync(resolve(root, navFile), "utf8")) as {
+	sections: { title: string; pages: NavPage[] }[];
+};
+const listed = new Set<string>();
+for (const section of nav.sections) {
+	for (const page of section.pages) {
+		const where = `${navFile}: ${section.title} > ${page.title}`;
+		if (!page.title || !page.path)
+			problems.push(`${where} (needs a title and a path)`);
+		if (!pageTypes.has(page.type))
+			problems.push(
+				`${where} (type "${page.type}" is not one of ${[...pageTypes].join(", ")})`,
+			);
+		if (!existsSync(resolve(root, page.path)))
+			problems.push(`${where}: ${page.path} (no such file)`);
+		if (listed.has(page.path))
+			problems.push(`${where}: ${page.path} (listed twice)`);
+		listed.add(page.path);
+	}
+}
+for (const page of new Bun.Glob("docs/**/*.md").scanSync(root))
+	if (!page.startsWith("docs/plans/") && !listed.has(page))
+		problems.push(`${page} (not in ${navFile}: add it to a section)`);
+
 if (problems.length > 0) {
 	console.error(problems.join("\n"));
 	process.exit(1);
 }
-console.log(`${files.length} files, all relative links resolve.`);
+console.log(
+	`${files.length} files, all relative links resolve; ${navFile} lists ${listed.size} pages, every page of docs/ included.`,
+);

@@ -1276,6 +1276,36 @@ function describeRegistry(
  * under one name (or one object under two names) throw `ApplicationConflict`.
  * `describe()` gives the graph. With a `provider` (or that of the last
  * application extended that has one), `repositories` are bound to it.
+ *
+ * @throws {@link DuplicateApplicationDeclaration} when one object is registered under two names.
+ * @throws {@link ApplicationConflict} when extended applications register different objects under one name.
+ * @throws {@link InvalidApplicationDeclaration} when a declaration is not of the kind its collection holds.
+ * @throws {@link UnregisteredApplicationReference} when a registered declaration holds one that is not registered.
+ *
+ * @example
+ * ```ts
+ * import {
+ * 	applicationOf,
+ * 	blueprintOf,
+ * 	entityOf,
+ * 	inMemoryProvider,
+ * 	repositoryOf,
+ * } from "@afora/core";
+ *
+ * class User extends entityOf(blueprintOf((ctx) => ({ name: ctx.string }))) {}
+ * const Users = repositoryOf({ entity: User, actions: ["create"] });
+ *
+ * const Blog = applicationOf({
+ * 	name: "blog",
+ * 	entities: { User },
+ * 	repositories: { Users },
+ * 	provider: inMemoryProvider(), // the default of its repositories
+ * });
+ *
+ * await Blog.start();
+ * await Blog.repositories.Users.create({ name: "Ana" });
+ * await Blog.stop();
+ * ```
  */
 export function applicationOf<
 	const Name extends string,

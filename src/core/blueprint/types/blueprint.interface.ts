@@ -510,11 +510,23 @@ export type OptionalProperties<Properties> = {
 							: never;
 };
 
+/**
+ * The function {@link blueprintOf} takes: it gets the context `ctx` of the
+ * sources (the factories of their plugins, `listOf`, `optionalOf`, `propertyOf`
+ * and `variantOf`) and gives the fields of the blueprint.
+ */
 export type BlueprintDefinition<
 	Sources extends readonly BlueprintSource[],
 	Properties extends IBlueprintCollection,
 > = (ctx: BlueprintContext<Sources>) => Properties;
 
+/**
+ * A blueprint: an object shape of named fields, made by {@link blueprintOf}. It
+ * parses a value with `safeParse` or its Standard Schema (`~standard`), joins
+ * others with `join`, and is a field of another blueprint or the base of a
+ * record (see {@link recordOf}). `Optional` is `true` for one that, as a field,
+ * accepts `undefined`.
+ */
 export interface IBlueprint<
 	Properties extends IBlueprintCollection,
 	Optional extends boolean = false,
@@ -597,6 +609,10 @@ export type OptionalBlueprint<Blueprint extends AnyBlueprint> =
 		? IBlueprint<Properties, true>
 		: never;
 
+/**
+ * The bounds of a list field, as `ctx.listOf(item, { minItems, maxItems })`
+ * takes them: the fewest and the most items it accepts.
+ */
 export interface BlueprintListOptions {
 	readonly minItems?: number;
 	readonly maxItems?: number;
