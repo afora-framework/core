@@ -2,13 +2,18 @@
 // is a `node`) on Node, measures bundle size and cold start, and writes
 // results/latest.json and RESULTS.md.
 //   --only flat,nested   only these scenarios; nothing is written
+//   --rounds 3           times each row is timed, in turns; the best counts (default 3)
+//   --jobs 3             that many rows at a time, to iterate: the times are off by 1.4x and more, and nothing is written
 //   --guard              afora against Zod 4, fails over a limit (what CI runs)
 //   --render             RESULTS.md again from results/latest.json, no timing
 import { writeFileSync } from "node:fs";
-import { guard } from "./guard.ts";
+import type { Scenario } from "./contenders.ts";
+import { fmtNs, guard } from "./guard.ts";
 import {
 	here,
 	isBun,
+	KINDS,
+	type Kind,
 	libraryVersions,
 	loadScenarios,
 	measure,
@@ -26,6 +31,15 @@ const only = (process.env.BENCH_ONLY ?? optionOf("--only") ?? "")
 	.split(",")
 	.filter(Boolean);
 
+/** Processes at a time. Above 1 they share the machine and its cores, and a row takes 1.4x to 4x its time alone: for iterating, never for publishing. */
+const jobs = Math.max(1, Number.parseInt(optionOf("--jobs") ?? "1", 10) || 1);
+
+/** Times each row is timed, in turns; the best counts. */
+const rounds = Math.max(
+	1,
+	Number.parseInt(optionOf("--rounds") ?? "3", 10) || 3,
+);
+
 const latest = `${here}results/latest.json`;
 
 /** afora's source imports `typebox` and `slugify` from the root install. */
@@ -36,12 +50,15 @@ async function installRoot() {
 	}
 }
 
-/** The same benchmark on Node, against a build of afora; `undefined` when it cannot run. */
-async function nodeLeg(): Promise<RuntimeReport | undefined> {
+type Runtime = { name: "bun" | "node"; command: string[] };
+
+/** Bun, and Node when there is one that can run the benchmark against a build of afora. */
+async function runtimes(): Promise<Runtime[]> {
+	const list: Runtime[] = [{ name: "bun", command: ["bun"] }];
 	const found = await Bun.$`node --version`.nothrow().quiet();
 	if (found.exitCode !== 0) {
 		console.log("No `node` found; the results are Bun-only.");
-		return undefined;
+		return list;
 	}
 	const version = found.text().trim();
 	const major = Number.parseInt(version.slice(1), 10);
@@ -52,27 +69,105 @@ async function nodeLeg(): Promise<RuntimeReport | undefined> {
 			.quiet();
 	if (major < 22 || build.exitCode !== 0) {
 		console.log(`Node ${version} cannot run the benchmark; Bun-only.`);
-		return undefined;
+		return list;
 	}
 	const flags =
 		major >= 23 ? [] : ["--experimental-strip-types", "--no-warnings"];
-	console.log(`\nRunning the same benchmark on Node ${version}...\n`);
-	const child = await Bun.$`node ${flags} run.ts`
-		.cwd(here)
-		.env({ ...process.env, BENCH_CHILD: "1", BENCH_ONLY: only.join(",") })
-		.nothrow();
-	const file = Bun.file(`${here}.node-report.json`);
-	if (child.exitCode !== 0 || !(await file.exists())) {
-		console.log("The Node run failed; the results are Bun-only.");
-		return undefined;
+	list.push({ name: "node", command: ["node", ...flags] });
+	return list;
+}
+
+/**
+ * Every row of a runtime, each timed by a process of its own: one contender,
+ * one case, nothing before it. `jobs` of them run at a time. `undefined` when
+ * a process fails.
+ */
+async function leg(
+	runtime: Runtime,
+	scenarios: Scenario[],
+	jobs: number,
+): Promise<RuntimeReport | undefined> {
+	const rows = scenarios.flatMap((scenario) =>
+		KINDS.flatMap((kind) =>
+			scenario.contenders.map((contender, index) => ({
+				scenario,
+				kind,
+				contender,
+				index,
+			})),
+		),
+	);
+	const parts: Array<RuntimeReport | undefined> = new Array(rows.length);
+	let next = 0;
+	let failed = false;
+	const worker = async (slot: number) => {
+		const out = `${here}.dist/row-${runtime.name}-${slot}.json`;
+		while (!failed && next < rows.length) {
+			const position = next++;
+			const { scenario, kind, contender, index } = rows[
+				position
+			] as (typeof rows)[number];
+			const child = await Bun.$`${runtime.command} run.ts`
+				.cwd(here)
+				.env({
+					...process.env,
+					BENCH_CHILD: "1",
+					BENCH_ONLY: scenario.id,
+					BENCH_PICK: `${kind},${index}`,
+					BENCH_OUT: out,
+				})
+				.nothrow()
+				.quiet();
+			if (child.exitCode !== 0) {
+				failed = true;
+				console.log(child.stderr.toString());
+				console.log(`The ${runtime.name} run failed at ${scenario.id}.`);
+				return;
+			}
+			const part = (await Bun.file(out).json()) as RuntimeReport;
+			const row = part.tables[0]?.rows[0];
+			const best = parts[position]?.tables[0]?.rows[0];
+			if (!best || (row && row.avg < best.avg)) parts[position] = part;
+			console.log(
+				`${runtime.name.padEnd(4)}  ${`${scenario.id} ${kind}`.padEnd(22)} ${fmtNs(row?.avg ?? 0).padStart(9)} ns  ${contender.name}`,
+			);
+		}
+	};
+	// Every row is timed once per round and its best round counts. A machine
+	// drifts over the minutes a run takes (heat, power, other programs); taking
+	// turns spreads that over every row instead of the rows of one moment.
+	for (let round = 1; round <= rounds && !failed; round++) {
+		console.log(`\n${runtime.name}: round ${round} of ${rounds}`);
+		next = 0;
+		await Promise.all(Array.from({ length: jobs }, (_, slot) => worker(slot)));
 	}
-	return (await file.json()) as RuntimeReport;
+	if (failed) return undefined;
+
+	// Merged in the order of the scenarios, whatever order the processes ended in.
+	let report: RuntimeReport | undefined;
+	for (const part of parts) {
+		const table = part?.tables[0];
+		const row = table?.rows[0];
+		if (!part || !table || !row) continue;
+		report ??= { ...part, tables: [] };
+		const merged = report.tables.find(
+			(candidate) =>
+				candidate.scenario === table.scenario && candidate.case === table.case,
+		);
+		if (merged) merged.rows.push(row);
+		else report.tables.push({ ...table, rows: [row] });
+	}
+	return report;
 }
 
 if (process.env.BENCH_CHILD === "1") {
-	// Node leg: write the report for the parent to merge.
-	const report = await measure(await loadScenarios(only));
-	writeFileSync(`${here}.node-report.json`, JSON.stringify(report));
+	// One row, for the parent to merge.
+	const [kind, index] = (process.env.BENCH_PICK ?? "").split(",");
+	const report = await measure(await loadScenarios(only), {
+		kind: kind as Kind,
+		contender: Number(index),
+	});
+	writeFileSync(process.env.BENCH_OUT as string, JSON.stringify(report));
 } else if (flag("--guard")) {
 	await installRoot();
 	process.exit(guard(await loadScenarios(only)) ? 0 : 1);
@@ -85,13 +180,20 @@ if (process.env.BENCH_CHILD === "1") {
 	if (!isBun) throw new Error("Run it with Bun: `bun run bench`.");
 	await installRoot();
 
-	const runs: RuntimeReport[] = [await measure(await loadScenarios(only))];
-	const node = await nodeLeg();
-	if (node) runs.push(node);
+	const scenarios = await loadScenarios(only);
+	const runs: RuntimeReport[] = [];
+	for (const runtime of await runtimes()) {
+		const report = await leg(runtime, scenarios, jobs);
+		if (report) runs.push(report);
+	}
+	if (runs.length === 0) throw new Error("Nothing was measured.");
+	const node = runs.some((run) => run.runtime === "node");
 
-	if (only.length > 0) {
+	if (only.length > 0 || jobs > 1) {
+		const file = `${here}.dist/partial.json`;
+		await Bun.write(file, JSON.stringify(runs));
 		console.log(
-			"\n--only: results/latest.json and RESULTS.md are left as they are.",
+			`\n--only or --jobs: results/latest.json and RESULTS.md are left as they are; the rows are in ${file}.`,
 		);
 	} else {
 		const { footprints } = await import("./size.ts");

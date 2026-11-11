@@ -3,14 +3,19 @@
 How fast afora validates, next to the validators people use: TypeBox (compiled), Ajv, Typia, Zod 4, Valibot, ArkType, Effect Schema, Yup and Joi. The numbers are in [RESULTS.md](RESULTS.md), generated from `results/latest.json`.
 
 ```bash
-bun run bench                      # everything, on Bun and Node; writes results/latest.json and RESULTS.md
-bun run bench -- --only flat,union # only some scenarios; prints, writes nothing
+bun run bench                      # everything, on Bun and Node (about half an hour); writes results/latest.json and RESULTS.md
+bun run bench -- --only flat,union # only some scenarios; prints, writes nothing (add --rounds 1 for a quick look)
 bun run bench:guard                # afora against Zod 4, fails over a limit (what CI runs)
 ```
 
 ## What is measured
 
-- **Time per call** on an already-built schema, with [mitata](https://github.com/evanwashere/mitata), for a valid and an invalid input of each scenario. The tables give the mean, p75, p99 and the margin (half of the 95% confidence interval of the mean); two rows whose intervals overlap are reported as tied, not ranked.
+- **Time per call** on an already-built schema, with the sampler of [mitata](https://github.com/evanwashere/mitata), for a valid and an invalid input of each scenario. The tables give the mean, p75, p99 and the margin (half of the 95% confidence interval of the mean); two rows whose intervals overlap are reported as tied, not ranked. Three things keep a row from depending on anything but itself:
+  - **A process per row.** Each row is timed by a process that times nothing else. Code that ran before changes what the engine makes of the code that runs after: in one process, compiled TypeBox was 13x slower on one case when six other scenarios had run first.
+  - **A warm-up.** The row runs for 400 ms before it is sampled. With mitata's own warm-up alone, Node was at times still running unoptimized code and stayed twice as slow for the whole measurement, in about half of the processes.
+  - **Rounds.** Every row is timed three times, taking turns with all the others, and its best round counts. A machine drifts over the half hour a run takes (heat, power, other programs); taking turns spreads that over every row.
+
+  Measured this way on a laptop in use, two runs agree within 5% on 56 of 60 rows and within 8% on all of them. `--jobs` runs rows side by side to iterate faster, and its times are off by 1.4x and more, so it never writes results.
 - **Bundle size**: each file of `entries/` validates the flat object with one library and is bundled by itself (`bun build --minify`), minified and gzipped.
 - **Cold start**: the time a new process takes to import that bundle, which loads the library, builds the schema and validates once; the median of 15 processes.
 

@@ -8,13 +8,14 @@ import { largeList } from "./large-list.ts";
 import { nested } from "./nested.ts";
 import { union } from "./union.ts";
 
+// Keyed by the id of the scenario, so that one can be built without the others.
 // biome-ignore lint/suspicious/noExplicitAny: the afora module is loaded from source on Bun and from a build on Node
-export const scenarioBuilders: Array<(afora: any) => Scenario> = [
+export const scenarioBuilders: Record<string, (afora: any) => Scenario> = {
 	flat,
 	nested,
-	apiPayload,
-	largeList,
+	"api-payload": apiPayload,
+	"large-list": largeList,
 	union,
 	deep,
-	noTransform,
-];
+	"no-transform": noTransform,
+};

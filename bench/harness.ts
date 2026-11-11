@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { cpus } from "node:os";
-import { bench, do_not_optimize, group, run } from "mitata";
+import { do_not_optimize, measure as sample } from "mitata";
 import { type Contender, LIBRARIES, type Scenario } from "./contenders.ts";
 import { scenarioBuilders } from "./scenarios/index.ts";
 
@@ -56,12 +56,19 @@ export async function loadScenarios(
 	afora?: any,
 ): Promise<Scenario[]> {
 	const module = afora ?? (await loadAfora());
-	const scenarios = scenarioBuilders
-		.map((build) => build(module))
-		.filter((scenario) => only.length === 0 || only.includes(scenario.id));
-	if (scenarios.length === 0) {
-		throw new Error(`No scenario matches ${only.join(", ")}`);
+	const unknown = only.filter((id) => !(id in scenarioBuilders));
+	if (unknown.length > 0) {
+		throw new Error(
+			`No scenario named ${unknown.join(", ")}; there are ${Object.keys(scenarioBuilders).join(", ")}.`,
+		);
 	}
+	const scenarios = Object.entries(scenarioBuilders)
+		.filter(([id]) => only.length === 0 || only.includes(id))
+		.map(([id, build]) => {
+			const scenario = build(module);
+			if (scenario.id !== id) throw new Error(`${id} is named ${scenario.id}`);
+			return scenario;
+		});
 	for (const scenario of scenarios) verify(scenario);
 	return scenarios;
 }
@@ -96,6 +103,21 @@ function verify(scenario: Scenario) {
 	}
 }
 
+/** How long a row runs before it is sampled, in milliseconds. */
+const WARM_UP_MS = Number(process.env.BENCH_WARM_UP_MS ?? 400);
+
+/**
+ * Runs `call` until the engine has had the time to optimize it. mitata's own
+ * warm-up is two samples, after which Node at times is still running the
+ * unoptimized code, and stays twice as slow for the whole measurement.
+ */
+function warmUp(call: () => unknown) {
+	const end = performance.now() + WARM_UP_MS;
+	while (performance.now() < end) {
+		for (let index = 0; index < 100; index++) call();
+	}
+}
+
 function marginOf(samples: number[], avg: number): number {
 	if (samples.length < 2 || avg === 0) return 0;
 	let sum = 0;
@@ -113,57 +135,53 @@ export function noteOf(scenario: Scenario, contender: Contender) {
 	return notes.length > 0 ? notes.join("; ") : undefined;
 }
 
-export async function measure(scenarios: Scenario[]): Promise<RuntimeReport> {
-	const trials = new Map<
-		string,
-		{ scenario: Scenario; kind: Kind; contender: Contender }
-	>();
+/**
+ * Times the contenders of `scenarios`; with `pick`, one contender on one case.
+ * A published number comes from a process that timed nothing else (see
+ * run.ts): code that ran before changes what the engine makes of code that
+ * runs after, so a row would otherwise depend on the rows before it.
+ */
+export async function measure(
+	scenarios: Scenario[],
+	pick?: { kind: Kind; contender: number },
+): Promise<RuntimeReport> {
+	const tables = new Map<string, Table>();
 	for (const scenario of scenarios) {
 		for (const kind of KINDS) {
-			group(`${scenario.id}, ${kind} input`, () => {
-				for (const contender of scenario.contenders) {
-					const input = inputOf(scenario, contender, kind);
-					const alias = `${scenario.id} ${kind}: ${contender.name}`;
-					trials.set(alias, { scenario, kind, contender });
-					bench(alias, () => do_not_optimize(contender.make(input)));
+			if (pick && pick.kind !== kind) continue;
+			for (const [index, contender] of scenario.contenders.entries()) {
+				if (pick && pick.contender !== index) continue;
+				const input = inputOf(scenario, contender, kind);
+				// mitata's sampler by itself: `run` would also time four empty
+				// functions first, three seconds that every process would repeat.
+				const call = () => do_not_optimize(contender.make(input));
+				warmUp(call);
+				const stats = await sample(call);
+				const key = `${scenario.id} ${kind}`;
+				let table = tables.get(key);
+				if (!table) {
+					table = {
+						scenario: scenario.id,
+						title: scenario.title,
+						shape: scenario.shape,
+						case: kind,
+						rows: [],
+					};
+					tables.set(key, table);
 				}
-			});
+				table.rows.push({
+					contender: contender.name,
+					library: contender.library,
+					note: noteOf(scenario, contender),
+					avg: stats.avg,
+					min: stats.min,
+					p50: stats.p50,
+					p75: stats.p75,
+					p99: stats.p99,
+					margin: marginOf(stats.samples, stats.avg),
+				});
+			}
 		}
-	}
-
-	const { benchmarks } = await run({
-		format: process.env.BENCH_QUIET ? "quiet" : "mitata",
-	});
-
-	const tables = new Map<string, Table>();
-	for (const trial of benchmarks) {
-		const meta = trials.get(trial.alias);
-		const stats = trial.runs[0]?.stats;
-		if (!meta || !stats) continue;
-		const { scenario, kind, contender } = meta;
-		const key = `${scenario.id} ${kind}`;
-		let table = tables.get(key);
-		if (!table) {
-			table = {
-				scenario: scenario.id,
-				title: scenario.title,
-				shape: scenario.shape,
-				case: kind,
-				rows: [],
-			};
-			tables.set(key, table);
-		}
-		table.rows.push({
-			contender: contender.name,
-			library: contender.library,
-			note: noteOf(scenario, contender),
-			avg: stats.avg,
-			min: stats.min,
-			p50: stats.p50,
-			p75: stats.p75,
-			p99: stats.p99,
-			margin: marginOf(stats.samples, stats.avg),
-		});
 	}
 
 	return {
