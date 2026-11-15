@@ -3314,7 +3314,9 @@ The JSON Schema (draft 2020-12) of a property, blueprint, list, variant,
 record or entity, as a standalone document: what an AI client, a form or
 any JSON Schema validator reads. It is `toOpenAPI` in the JSON Schema
 dialect: each record held inside is defined once under `$defs`, by its
-name, and referenced as `{ $ref: "#/$defs/Address" }`, and a variant is
+name, and referenced as `{ $ref: "#/$defs/Address" }` (so is the schema
+of a property with an `$id`, without it, so the document is
+self-contained), a read-only key is not `required`, and a variant is
 `oneOf` without the OpenAPI `discriminator`. Sensitive keys are
 `writeOnly`, the identity of an entity `readOnly`, optional keys left out
 of `required`, and objects closed with `additionalProperties: false`.

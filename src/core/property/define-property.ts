@@ -270,7 +270,8 @@ export abstract class AbstractDefineProperty<
 
 	/**
 	 * The `InvalidPropertyValue` of an error that is not an `Exception`, as its
-	 * cause; its issue has the error's message as it is.
+	 * cause; its issue has the error's message as it is (`"is invalid"` when
+	 * empty).
 	 */
 	private invalidValue(error: unknown): Exception {
 		const message = error instanceof Error ? error.message : String(error);
@@ -279,7 +280,9 @@ export abstract class AbstractDefineProperty<
 			details: { errors: [message] },
 			cause: error,
 		});
-		STEP_MESSAGES.set(exception, message);
+		// An error without a message says nothing: its issue "is invalid", as
+		// that of a schema without errors.
+		STEP_MESSAGES.set(exception, message === "" ? "is invalid" : message);
 		return exception;
 	}
 

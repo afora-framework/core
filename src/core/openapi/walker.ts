@@ -27,23 +27,34 @@ export type Schema = Record<string, unknown>;
  * models, and where they are.
  * - `"openapi"`: a variant names its key in a `discriminator`, and a record
  *   not named among the models is written inline.
- * - `"json-schema"`: no `discriminator` (not a JSON Schema keyword), and
- *   every record not named is added to `defs` under its name, once, and
- *   referenced from there.
+ * - `"json-schema"`: no `discriminator` (not a JSON Schema keyword), a
+ *   read-only key (the identity of an entity) is not `required`, and every
+ *   record not named, and every schema of a property with an `$id`, is added
+ *   to `defs` under its name, once, and referenced from there.
  * @internal
  */
 export interface Scope {
 	readonly dialect: "openapi" | "json-schema";
 	readonly names: ReadonlyMap<AnyRecordClass, string>;
 	readonly prefix: string;
-	/** The records of `"json-schema"` given a definition so far, by class. */
-	readonly defs?: Map<AnyRecordClass, { name: string; schema?: Schema }>;
+	/**
+	 * The definitions of `"json-schema"` so far: by record class, and by the
+	 * `$id` of a schema (whose `$ref`s are rewritten to the definition once
+	 * the walk is done, by `refsToDefs`).
+	 */
+	readonly defs?: Map<AnyRecordClass | string, Definition>;
 }
 
 /** Keys a record marks on its own: sensitive ones, and the identity of an entity. */
 interface Marks {
 	readonly writeOnly: readonly string[];
 	readonly readOnly: readonly string[];
+}
+
+/** A definition under `$defs`: its name, and its schema once walked. */
+export interface Definition {
+	readonly name: string;
+	schema?: Schema;
 }
 
 const NO_MARKS: Marks = { writeOnly: [], readOnly: [] };
@@ -104,7 +115,9 @@ function objectOf(
 		if (marks.readOnly.includes(key)) schema.readOnly = true;
 		if (marks.writeOnly.includes(key)) schema.writeOnly = true;
 		shape[key] = schema;
-		if (!isOptional(field)) required.push(key);
+		// What the server sets is not asked of who writes the value.
+		const readOnly = scope.dialect === "json-schema" && schema.readOnly;
+		if (!isOptional(field) && !readOnly) required.push(key);
 	}
 
 	return {
@@ -137,18 +150,96 @@ export function recordSchemaOf(record: AnyRecordClass, scope: Scope): Schema {
 function defined(record: AnyRecordClass, scope: Scope): string | undefined {
 	const { defs } = scope;
 	if (defs === undefined) return undefined;
-	const known = defs.get(record);
+	return define(defs, record, recordNameOf(record), () =>
+		recordSchemaOf(record, scope),
+	);
+}
+
+/**
+ * The name `key` is defined under in `defs`, adding it the first time with
+ * the schema `walk` gives, under `base` or, when taken, `base2`...
+ */
+function define(
+	defs: Map<AnyRecordClass | string, Definition>,
+	key: AnyRecordClass | string,
+	base: string,
+	walk: () => Schema,
+): string {
+	const known = defs.get(key);
 	if (known) return known.name;
 
-	const base = recordNameOf(record);
 	const taken = new Set([...defs.values()].map(({ name }) => name));
 	let name = base;
 	for (let n = 2; taken.has(name); n++) name = `${base}${n}`;
-	// Named before it is walked, so a record that holds itself is a `$ref`.
-	const entry: { name: string; schema?: Schema } = { name };
-	defs.set(record, entry);
-	entry.schema = recordSchemaOf(record, scope);
+	// Named before it is walked, so a schema that holds itself is a `$ref`.
+	const entry: Definition = { name };
+	defs.set(key, entry);
+	entry.schema = walk();
 	return name;
+}
+
+/** Whether `id` is a schema of JSON Schema itself, which every validator knows. */
+function isMetaSchema(id: string): boolean {
+	return /^https?:\/\/json-schema\.org\//.test(id);
+}
+
+/**
+ * `plainOf` for `"json-schema"`: a schema with an `$id`, at any depth, is
+ * defined once in `defs`, without its `$id`, and is a `$ref` to its `$id`
+ * here, which `refsToDefs` points at the definition.
+ */
+function hoistedOf(
+	value: unknown,
+	defs: Map<AnyRecordClass | string, Definition>,
+): unknown {
+	if (Array.isArray(value)) return value.map((item) => hoistedOf(item, defs));
+	if (typeof value !== "object" || value === null) return value;
+
+	const id = (value as { $id?: unknown }).$id;
+	if (typeof id === "string") {
+		if (isMetaSchema(id)) return { $ref: id };
+		define(defs, id, id.replace(/[^A-Za-z0-9_-]+/g, "_") || "Schema", () =>
+			copyOf(value, defs, true),
+		);
+		return { $ref: id };
+	}
+	return copyOf(value, defs, false);
+}
+
+/** A plain copy of `value`, without its `~` keys, and without `$id` when `dropId`. */
+function copyOf(
+	value: object,
+	defs: Map<AnyRecordClass | string, Definition>,
+	dropId: boolean,
+): Schema {
+	const plain: Schema = {};
+	for (const [key, item] of Object.entries(value)) {
+		if (key.startsWith("~") || (dropId && key === "$id")) continue;
+		plain[key] = hoistedOf(item, defs);
+	}
+	return plain;
+}
+
+/**
+ * `schema` with every `$ref` to the `$id` of a definition in `defs` pointing
+ * at it, as `prefix` and its name, in place.
+ */
+export function refsToDefs(
+	schema: unknown,
+	defs: ReadonlyMap<AnyRecordClass | string, Definition>,
+	prefix: string,
+): void {
+	if (typeof schema !== "object" || schema === null) return;
+	if (Array.isArray(schema)) {
+		for (const item of schema) refsToDefs(item, defs, prefix);
+		return;
+	}
+	const target = schema as Schema;
+	if (typeof target.$ref === "string") {
+		const definition = defs.get(target.$ref);
+		if (definition) target.$ref = `${prefix}${definition.name}`;
+	}
+	for (const item of Object.values(target)) refsToDefs(item, defs, prefix);
 }
 
 /** The schema of `field`; a record named among the models is a `$ref`. */
@@ -205,7 +296,10 @@ export function schemaOf(field: BlueprintField, scope: Scope): Schema {
 			details: { name: String(field) },
 		});
 	}
-	const schema = plainOf(rawTypeOf(field.type.schema)) as Schema;
+	const raw = rawTypeOf(field.type.schema);
+	const schema = (
+		scope.defs === undefined ? plainOf(raw) : hoistedOf(raw, scope.defs)
+	) as Schema;
 	if (field.type.sensitive) schema.writeOnly = true;
 	return schema;
 }

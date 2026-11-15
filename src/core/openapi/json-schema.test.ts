@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+import { Type } from "typebox";
 import { blueprintOf } from "../../std/blueprint";
 import { entityOf } from "../../std/entity";
 import { Integer } from "../../std/properties/primitives";
@@ -8,6 +9,7 @@ import { listOf } from "../blueprint/list";
 import { optionalOf } from "../blueprint/optional";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
 import { variantOf } from "../blueprint/variant";
+import { propertyOf } from "../property/property";
 import { recordOf } from "../record/record";
 import { InvalidOpenAPIModel } from "./exceptions";
 import { jsonSchemaOf } from "./json-schema";
@@ -215,6 +217,52 @@ describe("jsonSchemaOf", () => {
 		const validate = validatorOf(Payment);
 		expect(validate({ method: "card", last4: "1234" })).toBe(true);
 		expect(validate({ method: "boleto" })).toBe(false);
+	});
+
+	test("the identity of an entity is read-only and not required, as safeParse has it", () => {
+		const Note = entityOf(blueprintOf((ctx) => ({ text: ctx.string })));
+		const schema = jsonSchemaOf(Note);
+		expect(schema.required).toEqual(["text"]);
+		expect(schema.properties?.id?.readOnly).toBe(true);
+		const input = { text: "hi" };
+		expect("value" in Note.safeParse(input)).toBe(true);
+		expect(validatorOf(Note)(input)).toBe(true);
+		expect(validatorOf(Note)({})).toBe(false);
+		// toOpenAPI does not change.
+		expect(toOpenAPI(Note).required).toContain("id");
+	});
+
+	test("a schema with an $id is defined once under $defs, without it", () => {
+		const Inner = Type.Object(
+			{ n: Type.Integer() },
+			{ $id: "Inner", additionalProperties: false },
+		);
+		const Holder = propertyOf({
+			name: "holder",
+			schema: Type.Object({ inner: Inner, list: Type.Array(Inner) }),
+		});
+		const Root = propertyOf({ name: "root", schema: Inner });
+		const Both = blueprintOf(() => ({ a: Holder, b: Holder, c: Root }));
+		const schema = jsonSchemaOf(Both);
+		const ref = { $ref: "#/$defs/Inner" };
+		expect(schema.properties?.c).toEqual(ref);
+		expect(schema.properties?.a?.properties).toEqual({
+			inner: ref,
+			list: { type: "array", items: ref },
+		});
+		expect(schema.$defs?.Inner).toEqual({
+			type: "object",
+			properties: { n: { type: "integer" } },
+			required: ["n"],
+			additionalProperties: false,
+		});
+		expect(JSON.stringify(schema)).not.toContain('"$id"');
+
+		const validate = validatorOf(Both);
+		const inner = { n: 1 };
+		const holder = { inner, list: [inner] };
+		expect(validate({ a: holder, b: holder, c: inner })).toBe(true);
+		expect(validate({ a: holder, b: holder, c: { n: "x" } })).toBe(false);
 	});
 
 	test("anything else throws InvalidOpenAPIModel", () => {
