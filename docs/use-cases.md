@@ -120,10 +120,10 @@ class RecentArticles extends useCaseOf({
 	}
 }
 
-const articles = await new RecentArticles({ limit: 10 }).execute(); // { slug: string; title: string }[]
+const articles = await new RecentArticles({ limit: 10 }).execute();
 ```
 
-The list validates the array and each item, with its bounds (`minItems`, `maxItems`); an invalid item is an `InvalidUseCaseResponse` whose issue paths start with the index (`[1, "title"]`, read `"1.title"` in the message). Its items may be blueprints, records, entities or properties, and the events of the entities in it are collected as for any response. `UseCaseResponse<typeof RecentArticles>` and a dependency function give the array type. HTTP outputs send the array as the JSON body, OpenAPI documents it as `type: array` with the items, and the MCP and WebSocket sinks send it as is. A list has no keys, so `route.setCookie` is rejected with it at declaration; respond with a blueprint (`{ items, token }`) to set a cookie or to add paging later. The response must not be optional.
+The list validates the array and each item, with its bounds (`minItems`, `maxItems`); an invalid item is an `InvalidUseCaseResponse` whose issue paths start with the index (`[1, "title"]`, read `"1.title"` in the message). Its items may be blueprints, records, entities or properties, and the events of the entities in it are collected as for any response. The array is frozen and typed read-only: `UseCaseResponse<typeof RecentArticles>`, a dependency function and the `execute` of a steps use case give `readonly { slug: string; title: string }[]` (an override of `execute` keeps the type it returns). HTTP outputs send the array as the JSON body, OpenAPI documents it as `type: array` with the items, and the MCP and WebSocket sinks send it as is. A list has no keys, so `route.setCookie` is rejected with it at declaration; respond with a blueprint (`{ items, token }`) to set a cookie or to add paging later. The response must not be optional.
 
 ## Routes
 

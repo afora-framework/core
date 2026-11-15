@@ -2340,8 +2340,8 @@ The `response` declared for `Output`: the list itself, or the blueprint of the f
 
 *type* · tier: stable · `import type { ResponseOf } from "@afora/core"`
 
-The value of a `response`: of a list, an array of its items (e.g.
-`Article[]`); of a blueprint, its object.
+The value of a `response`: of a list, a read-only array of its items
+(e.g. `readonly Article[]`, frozen at run time); of a blueprint, its object.
 
 ### ResponseSetting
 

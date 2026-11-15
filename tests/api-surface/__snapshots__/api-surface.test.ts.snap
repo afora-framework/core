@@ -1810,13 +1810,13 @@ exports[`exports of the package and their declarations 1`] = `
     "export type ResponseBlueprint<Output extends UseCaseOutput> = Output extends AnyBlueprintList ? Output : IBlueprint<Extract<Output, IBlueprintCollection>>;",
   ],
   "ResponseOf": [
-    "export type ResponseOf<Response> = Response extends AnyBlueprintList ? BlueprintListValue<Response> : Response extends { readonly properties: infer Properties; } ? BlueprintValue<Extract<Properties, IBlueprintCollection>> : never;",
+    "export type ResponseOf<Response> = Response extends AnyBlueprintList ? Readonly<BlueprintListValue<Response>> : Response extends { readonly properties: infer Properties; } ? BlueprintValue<Extract<Properties, IBlueprintCollection>> : never;",
   ],
   "ResponseSetting": [
     "export type ResponseSetting<Output extends UseCaseOutput> = IBlueprint<Extract<Output, IBlueprintCollection>> | Extract<Output, AnyBlueprintList>;",
   ],
   "ResponseValue": [
-    "export type ResponseValue<Output extends UseCaseOutput> = Output extends AnyBlueprintList ? BlueprintListValue<Output> : BlueprintValue<Extract<Output, IBlueprintCollection>>;",
+    "export type ResponseValue<Output extends UseCaseOutput> = Output extends AnyBlueprintList ? Readonly<BlueprintListValue<Output>> : BlueprintValue<Extract<Output, IBlueprintCollection>>;",
   ],
   "RestoreMaker": [
     "export type RestoreMaker = <Repository extends AnyRepository, const Options extends StdUseCaseOptions & { readonly as?: string; } = None, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "restore">, options?: Options & Hookable<Repository, ById<Repository>, never, None, undefined, Dependencies, false>) => StepsUseCaseConstructor<ById<Repository>, EntityResponse<Repository, Options>, { readonly repository: Repository; } & Dependencies>;",
@@ -3712,7 +3712,7 @@ exports[`experimental entry (not contract) 1`] = `
     "type RequiredKeys<Schemas> = keyof Omit<Schemas, ReadonlyOptionalKeys<Schemas> | ReadonlyKeys<Schemas> | OptionalKeys<Schemas>>;",
   ],
   "(internal) ResponseOf": [
-    "export type ResponseOf<Response> = Response extends AnyBlueprintList ? BlueprintListValue<Response> : Response extends { readonly properties: infer Properties; } ? BlueprintValue<Extract<Properties, IBlueprintCollection>> : never;",
+    "export type ResponseOf<Response> = Response extends AnyBlueprintList ? Readonly<BlueprintListValue<Response>> : Response extends { readonly properties: infer Properties; } ? BlueprintValue<Extract<Properties, IBlueprintCollection>> : never;",
   ],
   "(internal) Result": [
     "type Result<Output> = SuccessResult<Output> | FailureResult;",

@@ -38,15 +38,15 @@ export type ResponseSetting<Output extends UseCaseOutput> =
 /** The value a use case whose response gives `Output` resolves with. */
 export type ResponseValue<Output extends UseCaseOutput> =
 	Output extends AnyBlueprintList
-		? BlueprintListValue<Output>
+		? Readonly<BlueprintListValue<Output>>
 		: BlueprintValue<Extract<Output, IBlueprintCollection>>;
 
 /**
- * The value of a `response`: of a list, an array of its items (e.g.
- * `Article[]`); of a blueprint, its object.
+ * The value of a `response`: of a list, a read-only array of its items
+ * (e.g. `readonly Article[]`, frozen at run time); of a blueprint, its object.
  */
 export type ResponseOf<Response> = Response extends AnyBlueprintList
-	? BlueprintListValue<Response>
+	? Readonly<BlueprintListValue<Response>>
 	: Response extends { readonly properties: infer Properties }
 		? BlueprintValue<Extract<Properties, IBlueprintCollection>>
 		: never;
@@ -62,7 +62,7 @@ export function isUseCaseResponse(value: unknown): value is AnyUseCaseResponse {
 /**
  * `value` handled by `response`: the object a blueprint gives, or the frozen
  * array a list gives, or the issues that reject it (item paths start with the
- * index, e.g. `["0", "title"]`).
+ * index, e.g. `[1, "title"]`).
  */
 export function parseResponse(
 	response: AnyUseCaseResponse,

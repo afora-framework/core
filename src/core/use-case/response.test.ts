@@ -45,17 +45,23 @@ describe("a list as the response", () => {
 
 	test("the type of the response is an array of the items", async () => {
 		expectTypeOf<UseCaseResponse<typeof Recent>>().toEqualTypeOf<
-			SummaryValue[]
+			readonly SummaryValue[]
 		>();
 		const items = await new Recent({ count: 1 }).execute();
-		expectTypeOf(items).toEqualTypeOf<SummaryValue[]>();
+		// An override narrows the return type to what it returns.
+		expectTypeOf(items).toMatchTypeOf<readonly SummaryValue[]>();
 		const Records = useCaseOf({
 			name: "Records",
 			blueprint: Empty,
 			response: listOf(Article),
 			steps: [{ return: [] }],
 		});
-		expectTypeOf<UseCaseResponse<typeof Records>>().toEqualTypeOf<Article[]>();
+		expectTypeOf<UseCaseResponse<typeof Records>>().toEqualTypeOf<
+			readonly Article[]
+		>();
+		expectTypeOf(await new Records({}).execute()).toEqualTypeOf<
+			readonly Article[]
+		>();
 		// An object response keeps its type.
 		const Single = useCaseOf({
 			name: "Single",
@@ -129,7 +135,7 @@ describe("a list as the response", () => {
 		}) {
 			override async execute(deps = this.dependencies) {
 				const items = await deps.recent({ count: 3 });
-				expectTypeOf(items).toEqualTypeOf<SummaryValue[]>();
+				expectTypeOf(items).toEqualTypeOf<readonly SummaryValue[]>();
 				return { total: items.length };
 			}
 		}
