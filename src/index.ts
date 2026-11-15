@@ -540,6 +540,7 @@ export { SchemaProperty } from "./std/properties/headless";
 export {
 	Id,
 	Key,
+	OwnerId,
 	Slug,
 	TextKey,
 	Uuid,

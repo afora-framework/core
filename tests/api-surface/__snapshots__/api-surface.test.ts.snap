@@ -361,13 +361,16 @@ exports[`exports of the package and their declarations 1`] = `
     "type Override<Base, Overrides> = { [Key in keyof Base | keyof Overrides]: Key extends keyof Overrides ? Overrides[Key] : Key extends keyof Base ? Base[Key] : never; };",
   ],
   "(internal) OwnableRecord": [
-    "export declare class OwnableRecord extends OwnableRecord_base { isOwnedBy(id: string): boolean; transferTo(id: string): this; }",
+    "export declare class OwnableRecord extends OwnableRecord_base { isOwnedBy(id: string | number): boolean; transferTo(id: string | number): this; }",
   ],
   "(internal) OwnableRecord_base": [
-    "OwnableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ ownerId: import("../index.js").CallableProperty<typeof import("../index.js").Id>; }>, [ ], never, unknown, never, never>",
+    "OwnableRecord_base: import("../index.js").RecordConstructor<import("../core/property/types/property-options.interface.js").StoredFields<{ ownerId: typeof OwnerId; }>, [ ], never, unknown, never, never>",
   ],
   "(internal) OwnerContext": [
     "type OwnerContext<Repository, Options> = Options extends { readonly owner: { readonly context: infer Key extends string; }; } ? { readonly [Name in Key]: IdField<Repository>; } : undefined;",
+  ],
+  "(internal) OwnerId_base": [
+    "OwnerId_base: import("../../index.js").PropertyClass<Type.TUnion<[ Type.TString, Type.TInteger ]>, string | number>",
   ],
   "(internal) OwnerKey": [
     "type OwnerKey<Options> = Options extends { readonly owner: infer Owner; } ? Owner extends { readonly key: infer Key; } ? Key : "ownerId" : never;",
@@ -1534,6 +1537,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "Ownable": [
     "Ownable: import("../index.js").IRecordPlugin<typeof OwnableRecord, "ownable">",
+  ],
+  "OwnerId": [
+    "export declare class OwnerId extends OwnerId_base { }",
   ],
   "ParseResult": [
     "export type ParseResult<Output> = { readonly value: Output; readonly issues?: undefined; } | { readonly issues: readonly Issue[]; };",

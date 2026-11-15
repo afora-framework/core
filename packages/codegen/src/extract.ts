@@ -1,4 +1,10 @@
-import { type AnyApplication, Key, Std, Uuid } from "@afora/core";
+import {
+	type AnyApplication,
+	EntityIdStrategy,
+	Key,
+	Std,
+	Uuid,
+} from "@afora/core";
 import type {
 	ApplicationDescription,
 	FieldDescription,
@@ -365,19 +371,21 @@ class Extraction {
 }
 
 /**
- * The `id` of the spec of the entity `name`, from the `id` its description
- * gives: `uuid` or `key` for the strategies of `std`; any other `idOf`
- * cannot be named in a spec.
+ * The `id` of the spec of the entity `name`, from the strategy its class
+ * holds: `uuid` or `key` for the strategies `Uuid` and `Key` themselves; any
+ * other `idOf` cannot be named in a spec.
  */
 function idSpecOf(
-	id: { readonly property: string; readonly generated: boolean } | undefined,
+	entity: unknown,
 	name: string,
 ): { readonly id?: "uuid" | "key" } {
-	if (id === undefined) return {};
-	const named = (strategy: { readonly property: { readonly type: unknown } }) =>
-		(strategy.property.type as { readonly name: string }).name;
-	if (id.generated && id.property === named(Uuid)) return { id: "uuid" };
-	if (!id.generated && id.property === named(Key)) return { id: "key" };
+	const strategy =
+		typeof entity === "function"
+			? (entity as { readonly [EntityIdStrategy]?: unknown })[EntityIdStrategy]
+			: undefined;
+	if (strategy === undefined) return {};
+	if (strategy === Uuid) return { id: "uuid" };
+	if (strategy === Key) return { id: "key" };
 	throw new ExtractionError(
 		`The id of the entity "${name}" is made by a custom idOf, which a spec cannot name: use Uuid or Key, or leave the entity out of the spec.`,
 	);
@@ -459,7 +467,7 @@ export function extractSpec(
 	);
 	const entities = entries(description.entities, (value, name) => ({
 		...(record(["", value])[1] as Record<string, unknown>),
-		...idSpecOf(value.id, name),
+		...idSpecOf(app.entities[name], name),
 		...(value.versioned === true ? { versioned: true } : {}),
 		...(value.expires === undefined
 			? {}

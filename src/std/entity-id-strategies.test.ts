@@ -130,3 +130,53 @@ describe("idOf", () => {
 		).toThrow(InvalidIdStrategy);
 	});
 });
+
+describe("ownable, with owners of any id strategy", () => {
+	class Note extends entityOf(
+		blueprintOf(() => ({ text: Text })),
+		{
+			plugins: (ctx) => [ctx.ownable],
+		},
+	) {}
+
+	test("a UUID v7 owner behaves as before: kept in lower case, compared in any case", () => {
+		const owner = "01A173D2-051C-77BB-8166-A371E999573E";
+		const note = new Note({ text: "a", ownerId: owner });
+		expect(note.ownerId).toBe(owner.toLowerCase());
+		expect(note.isOwnedBy(owner)).toBe(true);
+		expect(note.isOwnedBy(owner.toLowerCase())).toBe(true);
+		expect(note.isOwnedBy("01a173d2-051c-77bb-8166-a371e999573f")).toBe(false);
+	});
+
+	test("a v4 UUID owner", () => {
+		const note = new Note({ text: "a", ownerId: V4 });
+		expect(note.ownerId).toBe(V4.toLowerCase());
+		expect(note.isOwnedBy(V4)).toBe(true);
+	});
+
+	test("a natural key owner is kept and compared as given", () => {
+		class Setting extends entityOf(Named, { id: Key }) {}
+		const owner = new Setting({ id: "Profile", name: "p" });
+		const note = new Note({ text: "a", ownerId: owner.id });
+		expect(note.ownerId).toBe("Profile");
+		expect(note.isOwnedBy(owner.id)).toBe(true);
+		expect(note.isOwnedBy("profile")).toBe(false);
+	});
+
+	test("an integer owner, compared by value", () => {
+		class Member extends entityOf(Named, { id: idOf(Integer, () => 7) }) {}
+		const owner = new Member({ name: "m" });
+		const note = new Note({ text: "a", ownerId: owner.id });
+		expect(note.ownerId).toBe(7);
+		expect(note.isOwnedBy(7)).toBe(true);
+		expect(note.isOwnedBy("7")).toBe(true);
+		expect(note.isOwnedBy(8)).toBe(false);
+		expect(note.transferTo(8).isOwnedBy(8)).toBe(true);
+	});
+
+	test("an empty owner, or one that is not a positive integer, is rejected", () => {
+		expect(Note.safeParse({ text: "a", ownerId: "" }).issues).toBeDefined();
+		expect(Note.safeParse({ text: "a", ownerId: 0 }).issues).toBeDefined();
+		expect(Note.safeParse({ text: "a", ownerId: 1.5 }).issues).toBeDefined();
+	});
+});

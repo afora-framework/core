@@ -38,6 +38,39 @@ export class TextKey extends propertyOf({
 	default: "profile",
 }) {}
 
+const UUID_ANY_CASE = new RegExp(ANY_UUID, "i");
+
+/**
+ * An id as an id strategy makes it, in one form for comparing: a UUID in
+ * lower case (as `Id` and `Uuid` keep it), any other text as is, a number as
+ * its decimal text. @internal
+ */
+export function idKeyOf(id: string | number): string {
+	return typeof id === "number"
+		? String(id)
+		: UUID_ANY_CASE.test(id)
+			? id.toLowerCase()
+			: id;
+}
+
+/**
+ * The id of an entity of any id strategy, held by another record (as
+ * `ownerId`): text of 1 to 256 characters, a UUID kept in lower case, or a
+ * positive integer.
+ */
+export class OwnerId extends propertyOf({
+	name: "ownerId",
+	schema: Type.Union([
+		Type.String({ minLength: 1, maxLength: 256 }),
+		Type.Integer({ minimum: 1 }),
+	]),
+	default: "01a173d2-051c-77bb-8166-a371e999573e",
+	preHandle: (value) =>
+		typeof value === "string" && UUID_ANY_CASE.test(value)
+			? value.toLowerCase()
+			: value,
+}) {}
+
 /**
  * The `id` option of an entity whose ids are UUIDs of any version (a v4
  * loaded from an existing database included), lower-cased; a new entity

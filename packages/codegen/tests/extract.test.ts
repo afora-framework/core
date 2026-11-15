@@ -7,16 +7,22 @@ import {
 	enumOf,
 	environmentOf,
 	Integer,
+	idOf,
 	inMemoryProvider,
+	Key,
 	listOf,
 	optionalOf,
 	propertyOf,
 	recordOf,
 	repositoryOf,
+	TextKey,
 	toOpenAPI,
+	Uuid,
+	UuidKey,
 } from "@afora/core";
 import { Type } from "typebox";
 import {
+	ExtractionError,
 	extractSpec,
 	generate,
 	normalizeSpec,
@@ -264,6 +270,26 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 		expect(extracted.entities?.Legacy?.id).toBe("uuid");
 		expect(extracted.entities?.Plain?.id).toBeUndefined();
 		expect(normalizeSpec(extracted)).toEqual(normalizeSpec(spec));
+	});
+
+	test("a custom idOf cannot be extracted, even on the property of Key or Uuid", () => {
+		const Named = blueprintOf((ctx) => ({ name: ctx.string }));
+		const extract = (id: unknown) =>
+			extractSpec(
+				applicationOf({
+					name: "Ids",
+					entities: { Thing: entityOf(Named, { id: id as typeof Key }) },
+				}),
+			);
+		expect(extract(Key).entities?.Thing?.id).toBe("key");
+		expect(extract(Uuid).entities?.Thing?.id).toBe("uuid");
+		for (const custom of [
+			idOf(TextKey),
+			idOf(UuidKey, () => crypto.randomUUID()),
+			idOf(Integer, () => 1),
+		]) {
+			expect(() => extract(custom)).toThrow(ExtractionError);
+		}
 	});
 
 	test("an id other than uuid7, uuid or key is invalid", () => {
