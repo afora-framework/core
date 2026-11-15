@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Type } from "typebox";
 import {
 	type OperationDescriptor,
 	outputValueOf,
@@ -24,6 +25,7 @@ import {
 	operationOf,
 	outputOf,
 	Password,
+	propertyOf,
 	recordOf,
 	StdStages,
 	select,
@@ -816,6 +818,45 @@ describe("problemOf", () => {
 	test("goes with statusOf", () => {
 		const status = statusOf(invalid);
 		expect(problemOf(invalid, { status }).status).toBe(400);
+	});
+
+	test("the message a handler throws reaches the issue as it is", async () => {
+		const Slug = propertyOf({
+			name: "slug",
+			schema: Type.String(),
+			afterHandle: (value) => {
+				if (!/^[a-z0-9-]+$/.test(value)) {
+					throw new Error("Use lowercase letters, numbers and hyphens.");
+				}
+				return value;
+			},
+		});
+		const Create = useCaseOf({
+			name: "Create",
+			blueprint: blueprintOf(() => ({ slug: Slug })),
+			response: Empty,
+		});
+		class CreatePost extends Create {
+			override async execute() {
+				return {};
+			}
+		}
+		const [create] = outputOf({
+			name: "Api",
+			commands: [
+				commandOf({ name: "Posts", useCases: { create: CreatePost } }),
+			],
+		}).operations as [OperationDescriptor];
+		const error = await create.invoke({ slug: "Not A Slug" }).catch((e) => e);
+		const status = statusOf(error, create);
+		expect(status).toBe(400);
+		expect(problemOf(error, { status }).issues).toEqual([
+			{
+				path: ["slug"],
+				code: "invalid_value",
+				message: "Use lowercase letters, numbers and hyphens.",
+			},
+		]);
 	});
 });
 

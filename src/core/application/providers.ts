@@ -1,4 +1,5 @@
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
+import { forwardProvider } from "../repository/wrap";
 import { Kind } from "../symbols/kind";
 import { InvalidApplicationDeclaration, ProviderNotBound } from "./exceptions";
 import { isProviderFactory, type ProviderFactory } from "./start";
@@ -87,25 +88,7 @@ function slotOf(
 			enumerable: true,
 		});
 	} else {
-		const target = value as unknown as Record<
-			string,
-			(...args: unknown[]) => unknown
-		>;
-		for (const method of [
-			...METHODS,
-			"increment",
-			"transaction",
-			"close",
-			"migrate",
-		]) {
-			if (typeof target[method] === "function") {
-				slot[method] = (...args: unknown[]) => target[method]?.(...args);
-			}
-		}
-		Object.defineProperty(slot, "capabilities", {
-			get: () => value.capabilities,
-			enumerable: true,
-		});
+		forwardProvider(slot, value, undefined, false);
 	}
 	Object.freeze(slot);
 	slots.set(slot, { key, storage, value });

@@ -20,6 +20,30 @@ Name.demo().value; // "Jane"
 
 `propertyOf` returns a class whose instances are `DeclaredProperty<Schema, Value>`; extend it to add behavior, as `Id` does with `generate()`. `undefined` given to a property that is not optional throws `PropertyRequired`, and a value its rules reject throws `InvalidPropertyValue`, both with the property name as `source`. The `Demo` symbol (from `@afora/core/adapters`), given to the constructor in place of a value, builds the instance from the `default`, as `demo()` does: `new Name(Demo).value` is `"Jane"`.
 
+A handler rejects a value by throwing. An `Exception` it throws goes up as it is. Any other error becomes an `InvalidPropertyValue` with the error as its `cause`, and the issue `safeParse` (or `~standard.validate`) gives has the error's message as it is, since its `path` already names the property; this is how a property gives its own message:
+
+```ts
+import { Type } from "typebox";
+import { propertyOf } from "@afora/core";
+
+const PostSlug = propertyOf({
+	name: "slug",
+	schema: Type.String(),
+	afterHandle: (value) => {
+		if (!/^[a-z0-9-]+$/.test(value)) {
+			throw new Error("Use lowercase letters, numbers and hyphens.");
+		}
+		return value;
+	},
+});
+
+PostSlug.safeParse("Not A Slug"); // { issues: [...] }
+// issues: [{ code: "invalid_value", path: [], message: "Use lowercase letters, numbers and hyphens.", ... }]
+new PostSlug("Not A Slug"); // throws: Invalid value for property "slug": Use lowercase letters, numbers and hyphens.
+```
+
+In a blueprint the issue is at the key (`path: ["slug"]`), and a problem+json response lists it with that message. The exception the constructor throws, which logs and traces show, keeps the property name in its message.
+
 A handler only gets a value of the types of the schema: before `preHandle` runs, the value is checked against the schema without its constraints (`minLength`, `format`...), and one of another type is rejected there. A property with no `preHandle` has no such step, its value goes straight to validation.
 
 Pass `optional: true` to accept `undefined`, `sensitive: true` to have records mask it (as `Password` does) and `unique: true` to have records list its key in `options.unique` (as `Slug` does). `Std` ships `Id`, `Slug`, `Email`, `Phone`, `Url`, `Ip`, `Password`, strings, numbers, booleans, date properties and [JSON](#json); [Std properties](std-properties.md) lists each one with what it validates and transforms.

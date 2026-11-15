@@ -222,7 +222,9 @@ export {
 	memoryLogProvider,
 } from "./core/logger/logger";
 export { InvalidOpenAPIModel } from "./core/openapi/exceptions";
+export { jsonSchemaOf } from "./core/openapi/json-schema";
 export { toOpenAPI } from "./core/openapi/openapi";
+export type { JSONSchema } from "./core/openapi/types/json-schema.interface";
 export type {
 	OpenAPIComponents,
 	OpenAPIOptions,
@@ -401,6 +403,13 @@ export type {
 	SchemaMigrationOptions,
 	SchemaMigrationReport,
 } from "./core/repository/types/schema.interface";
+export type {
+	ProviderCall,
+	ProviderInterceptor,
+	ProviderOperation,
+	ProviderResults,
+} from "./core/repository/types/wrap.interface";
+export { wrapProvider } from "./core/repository/wrap";
 export type {
 	ISchema,
 	ISchemaType,
