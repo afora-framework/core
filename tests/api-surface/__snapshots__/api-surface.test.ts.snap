@@ -4264,6 +4264,9 @@ exports[`testing entry (contract) 1`] = `
   "(internal) ProviderMigrationResult": [
     "export type ProviderMigrationResult = { readonly deferred: true; };",
   ],
+  "(internal) ProviderOperation": [
+    "export type ProviderOperation = "findOne" | "findMany" | "insert" | "update" | "remove" | "count" | "increment" | "migrate";",
+  ],
   "(internal) ProviderQuery": [
     "export interface ProviderQuery extends RepositoryQuery { readonly after?: readonly unknown[]; readonly index?: string; readonly now?: string; }",
   ],
@@ -4429,6 +4432,12 @@ exports[`testing entry (contract) 1`] = `
   "ProviderContractOptions": [
     "export interface ProviderContractOptions { readonly transactions?: boolean; readonly keyset?: boolean; readonly indexes?: boolean; readonly versioning?: boolean; readonly atomic?: boolean; readonly expiry?: boolean; readonly schemaEvolution?: boolean; readonly schemaVersionKey?: boolean; }",
   ],
+  "ProviderSpy": [
+    "export interface ProviderSpy { calls(entity?: string | AnyRepositoryEntity, operation?: ProviderOperation): readonly SpiedCall[]; fail(entity: string | AnyRepositoryEntity, operation: ProviderOperation, error: unknown, options?: { readonly times?: number; }): void; reset(): void; }",
+  ],
+  "SpiedCall": [
+    "export interface SpiedCall { readonly operation: ProviderOperation; readonly entity: string; readonly args: readonly unknown[]; }",
+  ],
   "httpProviderContract": [
     "export declare function httpProviderContract<Server>(name: string, settings: HttpProviderContractSettings<Server>, runner: ContractRunner): void;",
   ],
@@ -4437,6 +4446,9 @@ exports[`testing entry (contract) 1`] = `
   ],
   "providerContract": [
     "export declare function providerContract(runner: ContractRunner, makeProvider: () => IRepositoryProvider | Promise<IRepositoryProvider>, options?: ProviderContractOptions): void;",
+  ],
+  "spyProvider": [
+    "export declare function spyProvider<Provider extends IRepositoryProvider>(provider: Provider): Provider & ProviderSpy;",
   ],
 }
 `;
