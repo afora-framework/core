@@ -52,7 +52,7 @@ import {
 	startSpan,
 } from "../tracing/tracing";
 import { accessDeclarationOf } from "./access";
-import { ServiceNotBound } from "./exceptions";
+import { ServiceNotBound, ServiceOutsideExecution } from "./exceptions";
 import { routeDeclarationOf } from "./route";
 import { type ExecutionScope, ScopeKey } from "./scope";
 import {
@@ -771,7 +771,10 @@ export abstract class AbstractUseCase<
 						serviceFactoriesOf(state.owner)?.[dependency.name] === undefined
 							? unboundService(dependency, source)
 							: () => {
-									throw new InvalidUseCaseDependencies({ source });
+									throw new ServiceOutsideExecution({
+										source,
+										details: { service: dependency.name },
+									});
 								},
 					enumerable: true,
 				});

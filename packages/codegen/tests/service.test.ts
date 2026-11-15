@@ -108,6 +108,11 @@ describe("services: validation", () => {
 			"invalid_name@services.not-ok",
 		],
 		[
+			"a service is not named Logger",
+			(c) => (c.services.Logger = { import: "../services#cache" }),
+			"invalid_name@services.Logger",
+		],
+		[
 			"a service name is not a declaration name",
 			(c) => (c.services.Remember = { import: "../services#cache" }),
 			"duplicate_name@services.Remember",
@@ -148,10 +153,42 @@ describe("services: generation", () => {
 		expect(useCase).toContain(
 			'cache: serviceOf<Awaited<ReturnType<typeof cache>>>("cache")',
 		);
-		expect(useCase).toContain('from "../services"');
+		// A type only: loading the use case does not load the factory.
+		expect(useCase).toContain('import type { cache } from "../services";');
 		const app = files.find((f) => f.path.endsWith("application.ts"))
 			?.contents as string;
 		expect(app).toContain("services: { cache }");
+	});
+
+	test("a service of an extended spec is typed by its factory, seen from here", () => {
+		const base: Spec = {
+			version: 1,
+			name: "base",
+			output: { dir: "src/domain" },
+			services: { cache: { import: "../services#cache" } },
+		};
+		const child = edit((c) => {
+			c.extends = ["../base/afora.json"];
+			delete c.services;
+		});
+		const useCase = generate(child, {
+			"../base/afora.json": { spec: base },
+		}).find((f) => f.path.endsWith("remember.use-case.ts"))?.contents as string;
+		expect(useCase).toContain(
+			'import type { cache } from "../../../base/src/services";',
+		);
+		expect(useCase).toContain(
+			'serviceOf<Awaited<ReturnType<typeof cache>>>("cache")',
+		);
+		// Relative to a spec reached as a package: not importable, unknown.
+		const packaged = generate(
+			edit((c) => {
+				c.extends = ["@acme/base"];
+				delete c.services;
+			}),
+			{ "@acme/base": { spec: base } },
+		).find((f) => f.path.endsWith("remember.use-case.ts"))?.contents as string;
+		expect(packaged).toContain('cache: serviceOf("cache")');
 	});
 
 	test("clean for Biome and type-checks", async () => {

@@ -424,6 +424,7 @@ export {
 	InvalidUseCasePlugin,
 	InvalidUseCaseStep,
 	ServiceNotBound,
+	ServiceOutsideExecution,
 	UnknownUseCasePlugin,
 	UseCaseEntityConflict,
 	UseCaseEntityNotFound,

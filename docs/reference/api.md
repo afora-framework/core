@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 503 exports.
+Tier: stable. 504 exports.
 
 ### Access
 
@@ -2324,6 +2324,14 @@ Makes the value of a service for a call; may be async.
 A use case read a service (see `serviceOf`) that nothing gives it: no
 application binds the name in its `services`, and `execute` was not given a
 value for it. `details.service` is the name of the service.
+
+### ServiceOutsideExecution
+
+*const* · tier: stable · `import { ServiceOutsideExecution } from "@afora/core"`
+
+A use case read a service (see `serviceOf`) before its `execute` started or
+after it ended: a service is made when `execute` starts, so it is read
+inside `execute`. `details.service` is the name of the service.
 
 ### ServiceScope
 

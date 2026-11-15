@@ -1783,6 +1783,9 @@ exports[`exports of the package and their declarations 1`] = `
   "ServiceNotBound": [
     "ServiceNotBound: import("../../index.js").DeclaredExceptionClass<{ readonly service: string; }>",
   ],
+  "ServiceOutsideExecution": [
+    "ServiceOutsideExecution: import("../../index.js").DeclaredExceptionClass<{ readonly service: string; }>",
+  ],
   "ServiceScope": [
     "export interface ServiceScope { readonly name: string; readonly context: unknown; readonly principal: Principal | null | undefined; readonly logger: ILogger; readonly native: unknown; environment<Environment extends AnyEnvironment>(environment: Environment): EnvironmentValue<Environment>; }",
   ],

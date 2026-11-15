@@ -129,6 +129,14 @@ export function checkServices(
 					`"${key}" is not a valid service name: use an identifier.`,
 				),
 			);
+		} else if (key === "Logger") {
+			issues.push(
+				issue(
+					path,
+					"invalid_name",
+					'"Logger" is the logger of the core, which a dependency names as "Logger": give the service another name.',
+				),
+			);
 		} else if (declared(key)) {
 			issues.push(
 				issue(

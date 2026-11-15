@@ -11,6 +11,7 @@ import {
 	isService,
 	outputOf,
 	ServiceNotBound,
+	ServiceOutsideExecution,
 	type ServiceScope,
 	serviceOf,
 	UnregisteredUseCaseDependency,
@@ -113,6 +114,20 @@ describe("services as dependencies", () => {
 			}
 		}
 		await expect(new Unused({ key: "a" }).execute()).resolves.toEqual({});
+	});
+
+	test("reading a bound service outside execute throws ServiceOutsideExecution", () => {
+		const App = applicationOf({
+			name: "outside",
+			useCases: { Recall, Remember },
+			services: { cache: () => memoryCache() },
+		});
+		const useCase = new App.useCases.Recall({ key: "a" });
+		expect(() => useCase.dependencies.cache).toThrow(ServiceOutsideExecution);
+		// Unbound, it says so first.
+		expect(() => new Recall({ key: "a" }).dependencies.cache).toThrow(
+			ServiceNotBound,
+		);
 	});
 
 	test("an override must be a value", async () => {

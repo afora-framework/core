@@ -109,3 +109,15 @@ export const ServiceNotBound = exceptionOf({
 	message: ({ service }: { readonly service: string }) =>
 		`The service "${service}" is not bound: give it in the services of an application, or as an override of execute.`,
 });
+
+/**
+ * A use case read a service (see `serviceOf`) before its `execute` started or
+ * after it ended: a service is made when `execute` starts, so it is read
+ * inside `execute`. `details.service` is the name of the service.
+ */
+export const ServiceOutsideExecution = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "ServiceOutsideExecution",
+	message: ({ service }: { readonly service: string }) =>
+		`The service "${service}" is available only while execute runs: read it inside execute.`,
+});
