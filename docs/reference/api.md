@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 529 exports.
+Tier: stable. 531 exports.
 
 ### Access
 
@@ -2332,14 +2332,30 @@ Says where a use case is served over HTTP, on the class itself:
 
 ```ts
 
+### RouteBody
+
+*type* · tier: stable · `import type { RouteBody } from "@afora/core"`
+
+The `body` of a route of `Method`: a `delete` may read a JSON body
+(`body: true`); any other method takes no `body`, since a `get` never reads
+one and a `post`, `put` or `patch` always does.
+
 ### RouteDeclaration
 
-*interface* · tier: stable · `import type { RouteDeclaration } from "@afora/core"`
+*type* · tier: stable · `import type { RouteDeclaration } from "@afora/core"`
 
 Where a use case is served over HTTP, as data: declared with the `route`
 setting of `useCaseOf` or with `@Route`, and read by the sinks that serve
 or document HTTP. The blueprint of the use case stays the only description
-of its input: a route only says where each key comes from.
+of its input: a route only says where each key comes from. `body` is only
+allowed on a `delete` (see {@link RouteBody}).
+
+### RouteFields
+
+*interface* · tier: stable · `import type { RouteFields } from "@afora/core"`
+
+What a route says besides its method and `body`: the shared part of
+{@link RouteDeclaration} and {@link RouteSettings}.
 
 ### RouteOptions
 
@@ -2350,7 +2366,7 @@ sinks that serve HTTP, so the served routes and the document agree.
 
 ### RouteSettings
 
-*interface* · tier: stable · `import type { RouteSettings } from "@afora/core"`
+*type* · tier: stable · `import type { RouteSettings } from "@afora/core"`
 
 What the `route` setting and `@Route` take: a {@link RouteDeclaration}
 whose method may be written in upper case.
@@ -3607,7 +3623,8 @@ parameter, the input key `name` (a scalar), left out of the body or query.
 The `operationId` is the id with its dot as an underscore (`Users.register`
 -> `Users_register`), unique or the build throws. `get` and `delete` send
 the input as query parameters, which needs every input field to be a
-scalar property. Responses: the `route` status (`200` by default; `204`
+scalar property; a `delete` with `body: true` sends it as a JSON body,
+required only when a field left in it is. Responses: the `route` status (`200` by default; `204`
 without content) with the response schema and the `responses` headers,
 `400` and `500` always, and the status of each declared error (`statusOf`:
 `statuses` of the output, else 422); `requestId` adds its header to all of
@@ -4482,11 +4499,13 @@ any server: the sink routes each `method` and `path` to `handle` and sends
 the result as is. Everything a request needs is decided here, so a call
 only reads, coerces and runs:
 
-- The input is the JSON body of a `post`, `put` or `patch` and the query
-  of a `get` or `delete`, with the keys the route reads elsewhere over it:
-  `{name}` segments of the path, and the query keys, headers and cookies
-  the use case route declares. Text is coerced to the numbers and booleans
-  the input takes; the operation validates it (a 400 problem with `issues`).
+- The input is the JSON body of a `post`, `put` or `patch` (or of a
+  `delete` with `body: true`) and the query of a `get` or `delete`, with
+  the keys the route reads elsewhere over it: `{name}` segments of the path, and the query keys, headers and cookies
+  the use case route declares, which are only read from there (a key the
+  body or the query sends for them is dropped). Text is coerced to the
+  numbers and booleans the input takes; the operation validates it (a 400
+  problem with `issues`).
 - The context comes from `context.headers` (coerced) and
   `context.variables` (as is); a missing one leaves the key out.
 - An operation with an `access` other than `public` asks

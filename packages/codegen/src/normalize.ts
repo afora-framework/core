@@ -306,6 +306,7 @@ function canonicalRouting(value: Json): Json {
 			...(headers === undefined ? {} : { headers }),
 			...(route.cookie === undefined ? {} : { cookie: route.cookie }),
 			...(route.setCookie === undefined ? {} : { setCookie: route.setCookie }),
+			...(route.body === undefined ? {} : { body: route.body }),
 		};
 	} else if (route !== undefined) out.route = route;
 	if (isObject(access)) {

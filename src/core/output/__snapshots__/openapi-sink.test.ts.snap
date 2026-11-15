@@ -931,6 +931,105 @@ exports[`openapi sink routes matches the snapshot 1`] = `
         "summary": "Entries.update",
       },
     },
+    "/api/entries/{slug}/archive": {
+      "delete": {
+        "operationId": "Entries_archive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "note": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "reason": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "reason",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success.",
+            "headers": {
+              "x-request-id": {
+                "description": "The id of the request: the one it sent in this header, else a new one.",
+                "schema": {
+                  "type": "string",
+                },
+              },
+            },
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem",
+                },
+              },
+            },
+            "description": "Invalid input or context.",
+            "headers": {
+              "x-request-id": {
+                "description": "The id of the request: the one it sent in this header, else a new one.",
+                "schema": {
+                  "type": "string",
+                },
+              },
+            },
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem",
+                },
+              },
+            },
+            "description": "Internal error.",
+            "headers": {
+              "x-request-id": {
+                "description": "The id of the request: the one it sent in this header, else a new one.",
+                "schema": {
+                  "type": "string",
+                },
+              },
+            },
+          },
+        },
+        "summary": "Entries.archive",
+      },
+    },
     "/api/users": {
       "post": {
         "description": "Creates an account.",
