@@ -1,4 +1,9 @@
-import { InvalidOutputStage, type Principal, toOpenAPI } from "@afora/core";
+import {
+	Exception,
+	InvalidOutputStage,
+	type Principal,
+	toOpenAPI,
+} from "@afora/core";
 import {
 	type Authenticator,
 	coerceTextValues,
@@ -250,14 +255,13 @@ export const websocket = sinkOf<
 			}
 		}
 
-		const problem = (
-			error: Error & { readonly name: string },
-			fallback: number,
-		): Problem => {
-			const status = Object.hasOwn(output.statuses, error.name)
-				? (output.statuses[error.name] as number)
-				: fallback;
-			return problemOf(error, { status, debug });
+		// The output `statuses` first, as for a call; `fallback` otherwise.
+		const problem = (error: unknown, fallback: number): Problem => {
+			const status =
+				error instanceof Exception && Object.hasOwn(output.statuses, error.name)
+					? (output.statuses[error.name] as number)
+					: fallback;
+			return problemOf(error, { status, debug, statuses: output.statuses });
 		};
 
 		const call = async (
@@ -304,7 +308,15 @@ export const websocket = sinkOf<
 				return { id, value: outputValueOf(response) ?? null };
 			} catch (error) {
 				const status = statusOf(error, operation, output.statuses);
-				return { id, problem: problemOf(error, { status, debug }) };
+				return {
+					id,
+					problem: problemOf(error, {
+						status,
+						debug,
+						statuses: output.statuses,
+						operation,
+					}),
+				};
 			}
 		};
 
@@ -349,7 +361,7 @@ export const websocket = sinkOf<
 					return await call(request, id, extra?.values ?? {}, extra?.principal);
 				return unavailable(id);
 			} catch (error) {
-				return { id: null, problem: problemOf(error, { status: 500, debug }) };
+				return { id: null, problem: problem(error, 500) };
 			}
 		};
 
@@ -414,7 +426,7 @@ export const websocket = sinkOf<
 					} catch (error) {
 						send({
 							id: null,
-							problem: problemOf(error, { status: 500, debug }),
+							problem: problem(error, 500),
 						});
 					}
 				},

@@ -1,6 +1,6 @@
 import { Exception } from "../exception/exception";
 import type { Issue } from "../parse/types/parse.interface";
-import { raisedOf } from "./status";
+import { isDeclaredError, raisedOf } from "./status";
 import type { Problem, ProblemOptions } from "./types/output.interface";
 
 /** The media type of a problem response. */
@@ -11,11 +11,12 @@ const INTERNAL = "Internal error.";
 /**
  * An RFC 9457 problem for `error`. `issues` (`path`, `code`, `message`; no
  * values or causes) is present only for a 400, `trace` only with `debug`,
- * and the `detail` of a 5xx is `"Internal error."` unless `debug` is set, so
- * internal messages do not leak.
+ * and the `detail` of a 5xx is `"Internal error."` unless `debug` is set or
+ * the output declares the exception (its name in `statuses`, or a class of
+ * `operation.errors`, except afora's internal ones), so internal messages do not leak.
  */
 export function problemOf(error: unknown, options: ProblemOptions): Problem {
-	const { status, debug = false } = options;
+	const { status, debug = false, statuses, operation } = options;
 	const exception = error instanceof Exception ? error : undefined;
 	const title = exception?.name ?? "UnexpectedError";
 	const message =
@@ -36,7 +37,10 @@ export function problemOf(error: unknown, options: ProblemOptions): Problem {
 		type: `urn:afora:exception:${title}`,
 		title,
 		status,
-		detail: status >= 500 && !debug ? INTERNAL : message,
+		detail:
+			status >= 500 && !debug && !isDeclaredError(error, operation, statuses)
+				? INTERNAL
+				: message,
 		...(raised ? { layer: raised.layer } : {}),
 		...(issues ? { issues } : {}),
 		...(debug

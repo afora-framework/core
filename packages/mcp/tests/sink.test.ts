@@ -83,6 +83,23 @@ describe("mcpTools sink", () => {
 		expect(problem.status).toBe(401);
 	});
 
+	test("a declared error mapped to a 5xx keeps its detail", async () => {
+		const { Users, Posts } = blog();
+		const mcp = outputOf({
+			name: "Blog",
+			commands: [Users, Posts],
+			statuses: { InvalidCredentials: 503 },
+			pipe: [mcpTools({ name: "blog", version: "1.0.0" })],
+		}).build() as McpTools;
+		const result = await mcp.call("users_login", {
+			email: ana.email,
+			plainPassword: "nope",
+		});
+		const problem = parse(result);
+		expect(problem.status).toBe(503);
+		expect(problem.detail).not.toBe("Internal error.");
+	});
+
 	test("invalid input is a 400 with issues; unknown tool is a 404", async () => {
 		const mcp = build();
 		const bad = await mcp.call("users_register", { name: "" });

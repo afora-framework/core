@@ -1400,6 +1400,9 @@ exports[`exports of the package and their declarations 1`] = `
   "IssueCode": [
     "export type IssueCode = "required" | "invalid_type" | "invalid_value" | "undeclared_key" | "too_few_items" | "too_many_items" | "not_record";",
   ],
+  "JSONSchema": [
+    "export interface JSONSchema extends OpenAPISchema { readonly $schema: "https://json-schema.org/draft/2020-12/schema"; readonly $defs?: { readonly [name: string]: OpenAPISchema; }; }",
+  ],
   "JsonClass": [
     "export type JsonClass<Schema extends TSchema, Optional extends boolean = false> = PropertyClass<Optional extends true ? TOptional<Schema> : Schema, Static<Schema>>;",
   ],
@@ -2217,6 +2220,9 @@ exports[`exports of the package and their declarations 1`] = `
   "jsonSchemaIssues": [
     "export declare function jsonSchemaIssues(schema: unknown, value: unknown, { source }?: { readonly source?: string; }): readonly Issue[];",
   ],
+  "jsonSchemaOf": [
+    "export declare function jsonSchemaOf(field: BlueprintField): JSONSchema;",
+  ],
   "listOf": [
     "export declare function listOf<Item extends BlueprintField>(item: Item, { minItems, maxItems }?: BlueprintListOptions): IBlueprintList<StoredField<Item>>;",
   ],
@@ -2886,7 +2892,7 @@ exports[`adapters entry (contract) 1`] = `
     "export interface Problem { readonly type: string; readonly title: string; readonly status: number; readonly detail: string; readonly layer?: string; readonly issues?: readonly { readonly path: readonly (string | number)[]; readonly code: string; readonly message: string; }[]; readonly trace?: string; }",
   ],
   "ProblemOptions": [
-    "export interface ProblemOptions { readonly status: number; readonly debug?: boolean; }",
+    "export interface ProblemOptions { readonly status: number; readonly debug?: boolean; readonly statuses?: OutputStatuses; readonly operation?: Pick<OperationDescriptor, "errors">; }",
   ],
   "PropertyDescription": [
     "export interface PropertyDescription { readonly name: string; readonly optional: boolean; readonly sensitive: boolean; readonly unique: boolean; readonly schema: Readonly<Record<string, unknown>>; readonly lineage?: PropertyLineageDescription; }",

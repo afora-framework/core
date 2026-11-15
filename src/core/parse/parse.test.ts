@@ -239,9 +239,12 @@ test("a handler that throws is an invalid_value issue caused by the exception", 
 	const [wrapped] = issuesOf(Strict.safeParse("boom"));
 	expect(wrapped).toMatchObject({
 		code: "invalid_value",
-		message: 'Invalid value for property "strict": boom',
+		message: "boom",
 	});
 	expect(wrapped?.cause).toBeInstanceOf(InvalidPropertyValue);
+	expect(wrapped?.cause?.message).toBe(
+		'Invalid value for property "strict": boom',
+	);
 	expect(wrapped?.cause?.cause).toBeInstanceOf(Error);
 
 	const [typed] = issuesOf(Strict.safeParse("typed"));

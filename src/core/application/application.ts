@@ -58,7 +58,7 @@ import {
 	logProviderNameOf,
 	silentLogger,
 } from "../logger/logger";
-import { plainOf } from "../openapi/openapi";
+import { plainOf } from "../openapi/walker";
 import { isOutput, outputOf } from "../output/output";
 import { stageDescriptionOf } from "../output/stage";
 import type { AnyOutput } from "../output/types/output.interface";
