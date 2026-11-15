@@ -6,6 +6,14 @@
 
 - `wrapProvider(provider, { around })` runs `around({ operation, context, args }, next)` around each operation of a repository provider that takes a context, for logs, traces and spies. The result is typed as the provider it wraps, with no cast, and has the same shape: a plain frozen object with the same operations (`increment`, `migrate`, `transaction` and `close` stay absent when the provider has none), `capabilities` read live, and the other members bound at wrap time. `args` is typed by operation, and `around` must give the result of the operation, which `next()` gives (a missing `return` is a type error). The provider a `transaction` gives is wrapped with the same interceptor, and wraps compose. A provider of `providersOf` is rejected with `InvalidRepositoryDeclaration`: wrap the provider before giving it to `providersOf`. New types `ProviderOperation` (the union of the operations taking a context), `ProviderCall`, `ProviderResults` and `ProviderInterceptor`. See `docs/repositories.md#wrapping-a-provider`.
 
+### Added
+
+- `jsonSchemaOf(field)` (#123): the JSON Schema (draft 2020-12) of a property, blueprint, list, variant, record or entity, as a standalone document with `$schema`, each record held inside defined once under `$defs` by its name and referenced as `#/$defs/<Name>`, variants as `oneOf` without the OpenAPI `discriminator`, the read-only identity of an entity left out of `required`, and the schema of a property with an `$id` defined once under `$defs`, without it, so the document is self-contained. It shares the walker of `toOpenAPI`, whose output does not change, and keeps its `writeOnly` sensitive keys and `readOnly` entity identity. For whatever reads JSON Schema rather than OpenAPI, such as an MCP `describe_schema` tool. Type `JSONSchema`. See [`docs/openapi.md#json-schema`](docs/openapi.md#json-schema).
+
+### Changed
+
+- **Behavior change.** When a `preHandle`, `handle` or `afterHandle` throws an error that is not an `Exception`, the issue `safeParse`, `~standard.validate` and problem+json `issues[]` give has the error's message as it is (`"Use lowercase letters, numbers and hyphens."`), no longer prefixed with `Invalid value for property "slug": `, since the issue `path` already names the property (#123). An error with an empty message gives `"is invalid"`. The `InvalidPropertyValue` a property's constructor throws and its `cause` keep the prefix. The message of the exception a record throws for that key (built from its first issue, as `InvalidRecordValue` is) loses the inner prefix: `Invalid value for "slug" of record "Post": Use lowercase letters, numbers and hyphens.`, where it read `...: Invalid value for property "slug": Use lowercase...`. A client that stripped the prefix can stop. See [`docs/properties.md`](docs/properties.md).
+
 ## 0.0.12 — 2026-11-11
 
 ### Changed
