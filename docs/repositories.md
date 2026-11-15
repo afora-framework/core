@@ -452,6 +452,41 @@ await AuditEvents.count({ withExpired: true }); // every stored event
 
 Every read parses the stored rows against the current blueprint. For an entity that declares `schemaVersion`, `previousNames`, or a key with `fill` or `renamedFrom`, the repository first brings each row up to the current shape: its `upgrade` steps from the stored version (`$v`, 1 when absent), then the renames, fills and keys no longer declared, at any depth; the rows of related entities too. Writes store the current shape and `$v`. `app.migrate({ mode: "check" | "apply" })` rewrites the stored rows for good and moves those of previous names. See [Schema evolution](schema-evolution.md).
 
+## Wrapping a provider
+
+`wrapProvider(provider, { around })` gives a provider that runs `around` around each operation of `provider`, for logs, traces or spies, without writing a provider by hand. `around({ operation, context, args }, next)` gets the operation, its `RepositoryContext` and the arguments after it; `next()` calls the provider and gives what it gives, which `around` returns (or replaces). An error of `next()` rejects the operation unless `around` catches it.
+
+```ts
+import { inMemoryProvider, recordNameOf, wrapProvider } from "@afora/core";
+
+declare const tracer: {
+	startSpan(name: string): { end(status: "ok" | "error"): void };
+};
+
+const traced = wrapProvider(inMemoryProvider(), {
+	async around({ operation, context }, next) {
+		const span = tracer.startSpan(
+			`provider ${recordNameOf(context.entity)}.${operation}`,
+		);
+		try {
+			const result = await next();
+			span.end("ok");
+			return result;
+		} catch (error) {
+			span.end("error");
+			throw error;
+		}
+	},
+});
+```
+
+- The result has the type of `provider` (an `InMemoryProvider` stays one), with no cast.
+- `operation` is a `ProviderOperation`: `findOne`, `findMany`, `insert`, `update`, `remove`, `count`, `increment` or `migrate`, the operations that take a context. `args` is typed by operation, so a `switch` on it is exhaustive and narrows `args` (`remove` gives `[id]`). They are a `ProviderCall`; the interceptor is a `ProviderInterceptor`.
+- It has the operations `provider` has and no other: `increment`, `migrate`, `transaction` and `close` stay absent when it has none, so what a repository accepts does not change.
+- `capabilities` is read from `provider` on each access, and its other members (methods bound to it, values) are kept. A provider of `providerOf` keeps its name and options.
+- The provider a `transaction` gives is wrapped with the same interceptor, so the operations run inside it go through `around` too. `transaction` itself and `close` take no context and are forwarded as they are.
+- Wraps compose, the last one outermost: in `wrapProvider(wrapProvider(dynamo, logs), spans)`, `spans` runs first and its `next()` runs `logs`.
+
 ## Testing a provider
 
 `@afora/core/testing` has a contract test kit for `IRepositoryProvider` implementations. It does not import a test runner: pass the `describe`, `it` and `expect` of yours, and a factory of fresh, empty providers (called once per case).

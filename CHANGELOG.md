@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Wrapping a provider (#124)
+
+- `wrapProvider(provider, { around })` runs `around({ operation, context, args }, next)` around each operation of a repository provider that takes a context, for logs, traces and spies, and gives a provider of the same type, without a cast. `next()` gives what the provider gives, which `around` returns. Optional operations (`increment`, `migrate`, `transaction`, `close`) stay absent when the provider has none, `capabilities` is read live, other members are kept, the provider a `transaction` gives is wrapped with the same interceptor, and wraps compose. New types `ProviderOperation` (the union of the operations taking a context), `ProviderCall` (with `args` typed by operation) and `ProviderInterceptor`. The slots of `providersOf` forward through the same code. See `docs/repositories.md#wrapping-a-provider`.
+
 ## 0.0.12 — 2026-11-11
 
 ### Changed
