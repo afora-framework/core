@@ -327,6 +327,16 @@ export function httpProviderContract<Server>(
 			});
 		});
 
+		it("never reads a header, cookie or route query key from the body", async () => {
+			await withServer({}, async (send) => {
+				const changed = await send("PUT", "/items/p?page=1", {
+					body: { title: "T", locale: "evil", session: "evil" },
+				});
+				expect(changed.status).toBe(201);
+				expect(changed.json).toEqual({ id: "p", page: 1, title: "T" });
+			});
+		});
+
 		it("fills the context from headers", async () => {
 			await withServer(
 				{ context: { headers: { tenant: "x-tenant" } } },

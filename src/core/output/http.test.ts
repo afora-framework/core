@@ -162,6 +162,31 @@ describe("compileRoutes", () => {
 		});
 	});
 
+	test("a key read from a header, a cookie or the route query never comes from the body", async () => {
+		const result = await routeOf(table(), "Posts.change").handle(
+			request({
+				params: { slug: "a" },
+				query: { page: "1" },
+				body: { title: "T", locale: "evil", session: "evil", page: 9 },
+			}),
+		);
+		expect(result.status).toBe(201);
+		expect(JSON.parse(result.body as string)).toEqual({
+			slug: "a",
+			page: 1,
+			title: "T",
+		});
+		const missing = await routeOf(table(), "Posts.change").handle(
+			request({ params: { slug: "a" }, body: { title: "T", page: 9 } }),
+		);
+		expect(missing.status).toBe(400);
+		expect(
+			JSON.parse(missing.body as string).issues.map(
+				(issue: { path: unknown[] }) => issue.path,
+			),
+		).toEqual([["page"]]);
+	});
+
 	test("a get reads the query, coerced; a 204 has no body", async () => {
 		const listed = await routeOf(table(), "Posts.list").handle(
 			request({ query: { page: "2" } }),
@@ -389,6 +414,19 @@ describe("a delete route with body: true", () => {
 			endpoint: "https://push.example/1",
 			page: 2,
 			limit: 5,
+		});
+	});
+
+	test("the route query key is not read from the body", async () => {
+		const result = await routeOf(routes(), "Push.unsubscribe").handle(
+			request({
+				params: { channel: "web" },
+				body: { endpoint: "e", page: 9 },
+			}),
+		);
+		expect(JSON.parse(result.body as string)).toEqual({
+			channel: "web",
+			endpoint: "e",
 		});
 	});
 

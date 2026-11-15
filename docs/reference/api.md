@@ -4483,11 +4483,13 @@ any server: the sink routes each `method` and `path` to `handle` and sends
 the result as is. Everything a request needs is decided here, so a call
 only reads, coerces and runs:
 
-- The input is the JSON body of a `post`, `put` or `patch` and the query
-  of a `get` or `delete`, with the keys the route reads elsewhere over it:
-  `{name}` segments of the path, and the query keys, headers and cookies
-  the use case route declares. Text is coerced to the numbers and booleans
-  the input takes; the operation validates it (a 400 problem with `issues`).
+- The input is the JSON body of a `post`, `put` or `patch` (or of a
+  `delete` with `body: true`) and the query of a `get` or `delete`, with
+  the keys the route reads elsewhere over it: `{name}` segments of the path, and the query keys, headers and cookies
+  the use case route declares, which are only read from there (a key the
+  body or the query sends for them is dropped). Text is coerced to the
+  numbers and booleans the input takes; the operation validates it (a 400
+  problem with `issues`).
 - The context comes from `context.headers` (coerced) and
   `context.variables` (as is); a missing one leaves the key out.
 - An operation with an `access` other than `public` asks
