@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### A list as the response (#117)
+
+- The `response` of a use case written in the spec can be a list field: `"Article[]"`, `{ "type": "Article", "list": { "maxItems": 50 } }`, `"string[]"` or `{ "fields": {...}, "list": true }`, generated as `listOf(...)` and extracted back from `describe()` (`responseList`). It must be a list, not optional, and not of variants (`invalid_blueprint`); a `route.setCookie` with it is `invalid_route`. `afora.schema.json` describes it.
+
 ### Services (#115)
 
 - A top-level `"services": { "cache": { "import": "../services.ts#cache" } }` names the factory of each service of the application, generated as `applicationOf({ services })`. A use case names one in its `dependencies` (`{ "cache": "cache" }`), generated as `serviceOf<Awaited<ReturnType<typeof cache>>>("cache")`, with the factory imported by `import type`, so a hand-written `execute` reads it typed by what the factory returns. One inherited from a spec extended by a relative path, or whose factory comes from a package, is typed the same; one whose factory cannot be imported from the child (relative to a spec reached as a package, or of a nested extended spec) is `unknown`. Issues: `invalid_services`, `invalid_name` (also for a service named `Logger`), `duplicate_name` (a service named like a declaration) and `invalid_import`. `extractSpec` needs `imports["services.<name>"]`. `afora.schema.json` describes it.

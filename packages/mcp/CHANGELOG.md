@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A use case whose response is a list (#117) answers its tool call with the JSON array as text, as any other response; the guide says a `response` can be a list field (`"Article[]"`).
+
 - The guide and the tool descriptions cover the top-level `services` of a spec (#115): a use case dependency that names a service, the factory of each as an import, and `services.<name>` among the `imports` of `afora_extract`.
 
 ### `params` on a `run` step

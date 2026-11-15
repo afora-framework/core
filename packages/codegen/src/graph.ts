@@ -1,6 +1,7 @@
 import { type StdPropertyInfo, stdProperty } from "./catalog";
-import { type Field, parseFields } from "./model";
+import { type Field, parseField, parseFields } from "./model";
 import type { Decl, Scope } from "./scope";
+import { isListResponseSpec } from "./spec/field";
 import type { EnumValue, SpecIssue } from "./spec/types";
 
 /** The fields of a declaration that has them, parsed (malformed ones are left out). */
@@ -63,7 +64,10 @@ function useCaseNamesOf(decl: Decl): string[] {
 	names.push(...stringsOf(options?.throws));
 	for (const key of ["input", "response", "context"]) {
 		const ref = spec[key];
-		if (typeof ref === "string") names.push(ref);
+		if (key === "response" && isListResponseSpec(ref)) {
+			const field = parseField(ref, [], []);
+			if (field) names.push(...typesIn({ response: field }));
+		} else if (typeof ref === "string") names.push(ref);
 		else if (ref && typeof ref === "object") {
 			const fields = parseFields((ref as { fields?: unknown }).fields, [], []);
 			if (fields) names.push(...typesIn(fields));

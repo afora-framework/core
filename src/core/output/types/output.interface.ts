@@ -2,6 +2,7 @@ import type { AnyBlueprint } from "../../blueprint/types/blueprint.interface";
 import type { AnyCommand } from "../../command/types/command.interface";
 import type { JsonValue } from "../../json";
 import type { Kind } from "../../symbols/kind";
+import type { AnyUseCaseResponse } from "../../use-case/response";
 import type {
 	AccessDeclaration,
 	Principal,
@@ -49,7 +50,8 @@ export interface OperationDescriptor {
 	readonly tags: readonly string[];
 	readonly deprecated: boolean;
 	readonly input: AnyBlueprint;
-	readonly response: AnyBlueprint;
+	/** An object blueprint, or a list made by `listOf`. */
+	readonly response: AnyUseCaseResponse;
 	/** The command context, else the use case one. */
 	readonly context?: AnyBlueprint;
 	/** The `errors` of the use case. */

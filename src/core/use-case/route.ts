@@ -1,3 +1,4 @@
+import { isBlueprintList } from "../blueprint/list";
 import type {
 	AnyBlueprint,
 	BlueprintField,
@@ -5,6 +6,7 @@ import type {
 import { toOpenAPI } from "../openapi/openapi";
 import type { OpenAPISchema } from "../openapi/types/openapi.interface";
 import { isProperty } from "../property/is-property";
+import type { AnyUseCaseResponse } from "./response";
 import type {
 	RouteCookie,
 	RouteDeclaration,
@@ -138,7 +140,7 @@ function cookieIssue(cookie: unknown, where: string): string | undefined {
 export function routeDeclarationOf(
 	route: unknown,
 	blueprint: AnyBlueprint,
-	response: AnyBlueprint,
+	response: AnyUseCaseResponse,
 ): RouteDeclaration | string {
 	if (!isObject(route)) {
 		return "Expected route to be { method, path?, status?, query?, headers?, cookie?, setCookie? }.";
@@ -212,6 +214,9 @@ export function routeDeclarationOf(
 		}
 	}
 	if (setCookie !== undefined) {
+		if (isBlueprintList(response)) {
+			return "route.setCookie sends response keys, and a list response has none: respond with a blueprint to set cookies.";
+		}
 		if (!isObject(setCookie)) {
 			return "Expected route.setCookie to map response keys to cookies.";
 		}

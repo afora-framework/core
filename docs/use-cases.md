@@ -98,6 +98,33 @@ A child called through a dependency function receives its parent's context narro
 
 The class gets the frozen statics `context`, `description`, `tags`, `deprecated`, `errors`, `route` (see [Routes](#routes)) and `access` (see [Access](auth.md)), beside `useCaseName`, `blueprint`, `response` and `dependencies`. `context` is a non-optional blueprint, `tags` are distinct non-empty strings, and `errors` are distinct classes made by `exceptionOf`; anything else throws `InvalidUseCaseDeclaration`. `errors` documents what to expect and changes nothing at runtime: an exception that is not listed still propagates.
 
+## A list as the response
+
+The `response` is an object blueprint, or a list made by `listOf`: the use case then answers an array, without a wrapper object.
+
+```ts
+import { blueprintOf, listOf, useCaseOf } from "@afora/core";
+
+const ArticleSummary = blueprintOf((ctx) => ({
+	slug: ctx.slug,
+	title: ctx.text,
+}));
+
+class RecentArticles extends useCaseOf({
+	name: "RecentArticles",
+	blueprint: blueprintOf((ctx) => ({ limit: ctx.integer })),
+	response: listOf(ArticleSummary, { maxItems: 50 }),
+}) {
+	override async execute() {
+		return [{ slug: "hello", title: "Hello" }].slice(0, this.input.limit);
+	}
+}
+
+const articles = await new RecentArticles({ limit: 10 }).execute(); // { slug: string; title: string }[]
+```
+
+The list validates the array and each item, with its bounds (`minItems`, `maxItems`); an invalid item is an `InvalidUseCaseResponse` whose issue paths start with the index (`[1, "title"]`, read `"1.title"` in the message). Its items may be blueprints, records, entities or properties, and the events of the entities in it are collected as for any response. `UseCaseResponse<typeof RecentArticles>` and a dependency function give the array type. HTTP outputs send the array as the JSON body, OpenAPI documents it as `type: array` with the items, and the MCP and WebSocket sinks send it as is. A list has no keys, so `route.setCookie` is rejected with it at declaration; respond with a blueprint (`{ items, token }`) to set a cookie or to add paging later. The response must not be optional.
+
 ## Routes
 
 A use case can say where it is served over HTTP, next to its input, instead of in the options of a sink:

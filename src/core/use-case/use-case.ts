@@ -53,6 +53,16 @@ import {
 } from "../tracing/tracing";
 import { accessDeclarationOf } from "./access";
 import { ServiceNotBound, ServiceOutsideExecution } from "./exceptions";
+import {
+	type AnyUseCaseResponse,
+	isUseCaseResponse,
+	parseResponse,
+	type ResponseBlueprint,
+	type ResponseOf,
+	type ResponseSetting,
+	type ResponseValue,
+	type UseCaseOutput,
+} from "./response";
 import { routeDeclarationOf } from "./route";
 import { type ExecutionScope, ScopeKey } from "./scope";
 import {
@@ -75,7 +85,7 @@ export interface AnyUseCaseClass {
 	readonly [Kind]: "use-case";
 	readonly useCaseName: string;
 	readonly blueprint: AnyBlueprint;
-	readonly response: AnyBlueprint;
+	readonly response: AnyUseCaseResponse;
 	readonly dependencies: UseCaseCollection;
 	readonly context: AnyBlueprint | undefined;
 	readonly description: string | undefined;
@@ -121,7 +131,7 @@ export type UseCaseCollection = Readonly<Record<string, UseCaseDependency>>;
 
 type Declaration = {
 	readonly blueprint: AnyBlueprint;
-	readonly response: AnyBlueprint;
+	readonly response: AnyUseCaseResponse;
 	readonly dependencies: UseCaseCollection;
 };
 
@@ -134,10 +144,10 @@ export type UseCaseInput<Class extends Declaration> = BlueprintInput<
 >;
 /**
  * The value `execute` of a use case class resolves with: the value of its
- * `response` blueprint.
+ * `response` blueprint, or an array of the items of its `response` list.
  */
-export type UseCaseResponse<Class extends Declaration> = BlueprintValue<
-	Class["response"]["properties"]
+export type UseCaseResponse<Class extends Declaration> = ResponseOf<
+	Class["response"]
 >;
 /**
  * The dependencies of a use case class as `this.dependencies` gives them: a
@@ -210,13 +220,14 @@ export type DependencyOverrides<Dependencies extends UseCaseCollection> = {
  */
 export interface UseCaseSettings<
 	Input extends IBlueprintCollection,
-	Output extends IBlueprintCollection,
+	Output extends UseCaseOutput,
 	Dependencies extends UseCaseCollection,
 	Context extends IBlueprintCollection | undefined = undefined,
 > {
 	readonly name: string;
 	readonly blueprint: IBlueprint<Input>;
-	readonly response: IBlueprint<Output>;
+	/** What `execute` gives: an object blueprint, or a list (`listOf(Article)`). */
+	readonly response: ResponseSetting<Output>;
 	readonly dependencies?: Dependencies;
 	/** What the caller supplies with each call, e.g. the user and the request; validated by this blueprint. */
 	readonly context?: IBlueprint<Exclude<Context, undefined>>;
@@ -246,7 +257,7 @@ export interface UseCaseSettings<
 /** `UseCaseSettings` with the `steps` that are its `execute`. */
 export interface UseCaseStepsSettings<
 	Input extends IBlueprintCollection,
-	Output extends IBlueprintCollection,
+	Output extends UseCaseOutput,
 	Dependencies extends UseCaseCollection,
 	Context extends IBlueprintCollection | undefined = undefined,
 > extends UseCaseSettings<Input, Output, Dependencies, Context> {
@@ -265,7 +276,7 @@ export interface UseCaseStepsSettings<
  */
 export interface UseCaseDeclaration<
 	Input extends IBlueprintCollection,
-	Output extends IBlueprintCollection,
+	Output extends UseCaseOutput,
 	Dependencies extends UseCaseCollection,
 	Context extends IBlueprintCollection | undefined = undefined,
 	Steps extends readonly UseCaseStep<Dependencies>[] | undefined = undefined,
@@ -388,7 +399,7 @@ function invalidValue(
 
 /** Drains entities by their declared shape, without serialization or snapshots. */
 function collectEvents(
-	blueprint: AnyBlueprint,
+	blueprint: AnyUseCaseResponse,
 	value: unknown,
 	events: EntityEvent[],
 ): void {
@@ -706,7 +717,7 @@ function isOverrideOf(dependency: UseCaseDependency, value: unknown): boolean {
 /** An operation with validated input, dependency functions and a drainable event queue. */
 export abstract class AbstractUseCase<
 	Input extends IBlueprintCollection,
-	Output extends IBlueprintCollection,
+	Output extends UseCaseOutput,
 	Dependencies extends UseCaseCollection,
 > {
 	readonly input: Readonly<BlueprintValue<Input>>;
@@ -910,7 +921,8 @@ export abstract class AbstractUseCase<
 							const input = Child.blueprint.safeParse(value);
 							if (input.issues)
 								invalidValue(input.issues, childSource, "input");
-							const output = Child.response.safeParse(
+							const output = parseResponse(
+								Child.response,
 								await guard(
 									{ layer: ExceptionLayers.UseCase, source: childSource },
 									() =>
@@ -952,7 +964,7 @@ export abstract class AbstractUseCase<
 								? perform()
 								: runInSpan(tracer as ITracer, span, perform),
 					);
-					const parsed = declaration.response.safeParse(result);
+					const parsed = parseResponse(declaration.response, result);
 					if (parsed.issues) invalidValue(parsed.issues, source, "response");
 					collectEvents(declaration.response, parsed.value, state.events);
 					writeLog(loggerOfCall(state), "debug", "use-case", {
@@ -997,7 +1009,7 @@ export abstract class AbstractUseCase<
 	 */
 	abstract execute(
 		dependencies?: DependencyOverrides<Dependencies>,
-	): Promise<BlueprintValue<Output>>;
+	): Promise<ResponseValue<Output>>;
 
 	/** Immediately drains collected events; never executes their handlers. */
 	pullEvents(): EntityEvent[] {
@@ -1008,14 +1020,14 @@ export abstract class AbstractUseCase<
 /** What every use case class carries, abstract or not. */
 type UseCaseStatics<
 	Input extends IBlueprintCollection,
-	Output extends IBlueprintCollection,
+	Output extends UseCaseOutput,
 	Dependencies extends UseCaseCollection,
 	Context extends IBlueprintCollection | undefined,
 > = {
 	readonly [Kind]: "use-case";
 	readonly useCaseName: string;
 	readonly blueprint: IBlueprint<Input>;
-	readonly response: IBlueprint<Output>;
+	readonly response: ResponseBlueprint<Output>;
 	readonly dependencies: Dependencies;
 	/** The blueprint of the context of each call, or `undefined`. */
 	readonly context: Context extends IBlueprintCollection
@@ -1048,7 +1060,7 @@ type UseCaseInstanceContext<Context extends IBlueprintCollection | undefined> =
  */
 export type UseCaseConstructor<
 	Input extends IBlueprintCollection,
-	Output extends IBlueprintCollection,
+	Output extends UseCaseOutput,
 	Dependencies extends UseCaseCollection,
 	Context extends IBlueprintCollection | undefined = undefined,
 > = (abstract new (
@@ -1064,7 +1076,7 @@ export type UseCaseConstructor<
  */
 export type StepsUseCaseConstructor<
 	Input extends IBlueprintCollection,
-	Output extends IBlueprintCollection,
+	Output extends UseCaseOutput,
 	Dependencies extends UseCaseCollection,
 	Context extends IBlueprintCollection | undefined = undefined,
 > = (new (
@@ -1074,7 +1086,7 @@ export type StepsUseCaseConstructor<
 	UseCaseInstanceContext<Context> & {
 		execute(
 			dependencies?: DependencyOverrides<Dependencies>,
-		): Promise<BlueprintValue<Output>>;
+		): Promise<ResponseValue<Output>>;
 	}) &
 	UseCaseStatics<Input, Output, Dependencies, Context>;
 
@@ -1104,7 +1116,7 @@ export type StepsUseCaseConstructor<
  */
 export function useCaseOf<
 	Input extends IBlueprintCollection,
-	Output extends IBlueprintCollection,
+	Output extends UseCaseOutput,
 	const Dependencies extends UseCaseCollection = Record<never, never>,
 	Context extends IBlueprintCollection | undefined = undefined,
 	const Steps extends
@@ -1126,13 +1138,13 @@ export function useCaseOf<
 export function useCaseOf(
 	settings: UseCaseSettings<
 		IBlueprintCollection,
-		IBlueprintCollection,
+		UseCaseOutput,
 		UseCaseCollection,
 		IBlueprintCollection | undefined
 	> & { readonly steps?: unknown; readonly strictSteps?: unknown },
 ): unknown {
 	type Input = IBlueprintCollection;
-	type Output = IBlueprintCollection;
+	type Output = UseCaseOutput;
 	type Dependencies = UseCaseCollection;
 	type Context = IBlueprintCollection | undefined;
 	const { name, blueprint, response, context } = settings;
@@ -1146,8 +1158,7 @@ export function useCaseOf(
 		!name.trim() ||
 		!isBlueprint(blueprint) ||
 		blueprint.optional ||
-		!isBlueprint(response) ||
-		response.optional ||
+		!isUseCaseResponse(response) ||
 		typeof dependencies !== "object" ||
 		dependencies === null ||
 		Array.isArray(dependencies) ||
@@ -1161,7 +1172,7 @@ export function useCaseOf(
 			source: typeof name === "string" ? name : "useCaseOf",
 			details: {
 				reason:
-					"Expected a name, input and response blueprints, and UseCase classes, repositories, environments, Logger or services as dependencies.",
+					"Expected a name, an input blueprint, a response blueprint or list, and UseCase classes, repositories, environments, Logger or services as dependencies.",
 			},
 		});
 	}
@@ -1282,7 +1293,7 @@ export function isUseCase(
 	value: unknown,
 ): value is AbstractUseCase<
 	IBlueprintCollection,
-	IBlueprintCollection,
+	UseCaseOutput,
 	UseCaseCollection
 > {
 	return value instanceof AbstractUseCase;

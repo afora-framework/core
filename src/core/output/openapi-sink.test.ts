@@ -521,3 +521,39 @@ describe("openapi sink route errors", () => {
 		).toThrow(InvalidOutputStage);
 	});
 });
+
+describe("a list response", () => {
+	class Comment extends entityOf(blueprintOf((ctx) => ({ body: ctx.text }))) {}
+	class Recent extends useCaseOf({
+		name: "Recent",
+		blueprint: blueprintOf((ctx) => ({ page: ctx.optional.integer })),
+		response: listOf(Comment, { maxItems: 20 }),
+		route: { method: "get", path: "/comments" },
+	}) {
+		override async execute() {
+			return [] as never;
+		}
+	}
+	const document = outputOf({
+		name: "Comments",
+		commands: [commandOf({ name: "Comments", useCases: { recent: Recent } })],
+		pipe: [openapi({ info })],
+	}).build();
+
+	test("is an array of its items, whose records are components", async () => {
+		await validated(document);
+		const get = document.paths["/comments"]?.get as {
+			responses: Record<
+				string,
+				{ content: { "application/json": { schema: unknown } } }
+			>;
+		};
+		expect(get.responses["200"]?.content["application/json"].schema).toEqual({
+			type: "array",
+			items: { $ref: "#/components/schemas/Comment" },
+			maxItems: 20,
+		});
+		expect(document.components.schemas).toHaveProperty("Comment");
+		expect(document).toMatchSnapshot();
+	});
+});

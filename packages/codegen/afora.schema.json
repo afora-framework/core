@@ -1678,29 +1678,37 @@
 								"response": {
 									"anyOf": [
 										{
-											"type": "string",
-											"pattern": "^[A-Z][A-Za-z0-9]*$",
-											"description": "The name of a declared blueprint."
-										},
-										{
-											"type": "object",
-											"required": ["fields"],
-											"properties": {
-												"fields": {
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[A-Z][A-Za-z0-9]*$",
+													"description": "The name of a declared blueprint."
+												},
+												{
 													"type": "object",
-													"patternProperties": {
-														"^[A-Za-z_$][A-Za-z0-9_$]*$": {
-															"$ref": "#/$defs/Field"
+													"required": ["fields"],
+													"properties": {
+														"fields": {
+															"type": "object",
+															"patternProperties": {
+																"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+																	"$ref": "#/$defs/Field"
+																}
+															},
+															"additionalProperties": false,
+															"description": "Fields by key."
 														}
 													},
-													"additionalProperties": false,
-													"description": "Fields by key."
+													"additionalProperties": false
 												}
-											},
-											"additionalProperties": false
+											],
+											"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+										},
+										{
+											"$ref": "#/$defs/Field"
 										}
 									],
-									"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+									"description": "A blueprint, or a list written as a field: \"Article[]\", { \"type\": \"Article\", \"list\": { \"maxItems\": 50 } } or { \"fields\": {...}, \"list\": true }. The use case then answers an array."
 								},
 								"context": {
 									"anyOf": [

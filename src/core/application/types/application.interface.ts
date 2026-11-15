@@ -504,7 +504,10 @@ export interface UseCaseDescription {
 	/** Who may call it, from the `access` setting or `@Access`. */
 	readonly access?: AccessDeclaration;
 	readonly input: FieldsDescription;
+	/** The fields of the response blueprint; `{}` when the response is a list (see `responseList`). */
 	readonly response: FieldsDescription;
+	/** The response, when it is a list made by `listOf` rather than a blueprint. */
+	readonly responseList?: Extract<FieldDescription, { readonly kind: "list" }>;
 	readonly context?: FieldsDescription;
 	/**
 	 * The names of the registered blueprints that are the `input`, `response`

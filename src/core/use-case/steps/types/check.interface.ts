@@ -14,6 +14,7 @@
  * never evaluates them with the constraint of the steps while it infers them.
  */
 import type {
+	AnyBlueprintList,
 	BlueprintInput,
 	BlueprintValue,
 	IBlueprint,
@@ -23,6 +24,7 @@ import type {
 	AnyEnvironment,
 	EnvironmentValue,
 } from "../../../environment/environment";
+import type { StandardSchemaV1 } from "../../../standard/standard-schema";
 import type { Meta } from "../../../symbols/meta";
 import type {
 	AnyUseCaseClass,
@@ -490,10 +492,12 @@ type CheckStep<Step, Dependencies, Scope, Response> = [Step] extends [
 													Scope
 												>;
 
-/** What the response blueprint `Response` takes, or anything when it is not known. */
+/** What the response `Response` takes (the fields of a blueprint, or a list), or anything when it is not known. */
 type ResponseInput<Response> = [Response] extends [IBlueprintCollection]
 	? BlueprintInput<Response>
-	: unknown;
+	: [Response] extends [AnyBlueprintList]
+		? StandardSchemaV1.InferInput<Response>
+		: unknown;
 
 type WriteStep<Step, Method, Scope> = ValueStep<
 	Step,
@@ -541,7 +545,7 @@ type CheckSteps<
 /**
  * What `useCaseOf` takes as `steps`: the steps, inferred as a tuple, each
  * checked against the values in scope, and the `return` against what the
- * response blueprint (the collection `Response`) takes. Steps that are not a tuple (built at
+ * response (the collection `Response`, or a list) takes. Steps that are not a tuple (built at
  * run time) are checked only when the use case is declared.
  */
 export type CheckedSteps<
@@ -549,7 +553,10 @@ export type CheckedSteps<
 	Input extends IBlueprintCollection,
 	Context extends IBlueprintCollection | undefined,
 	Dependencies,
-	Response extends IBlueprintCollection | undefined = undefined,
+	Response extends
+		| IBlueprintCollection
+		| AnyBlueprintList
+		| undefined = undefined,
 > = [Steps] extends [readonly [unknown, ...unknown[]]]
 	? CheckSteps<
 			Steps,
