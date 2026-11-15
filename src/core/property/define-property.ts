@@ -22,6 +22,13 @@ import type { IPropertyType } from "./types/property-type.interface";
 const MISMATCH = Symbol("mismatch");
 
 /**
+ * The message of the error each `InvalidPropertyValue` a step's own error
+ * became was made of: the issue says it as it is, since its `path` already
+ * names the property.
+ */
+const STEP_MESSAGES = new WeakMap<Exception, string>();
+
+/**
  * Why a value stopped the pipeline: the exception `make` throws, built the
  * first time it is asked for and kept, and what the issues `parse` returns
  * are made of.
@@ -103,7 +110,7 @@ export function takeRejectionIssues(
 
 	if (raised) {
 		issues.push({
-			message: raised.message,
+			message: STEP_MESSAGES.get(raised) ?? raised.message,
 			path,
 			code: "invalid_value",
 			source,
@@ -261,15 +268,19 @@ export abstract class AbstractDefineProperty<
 		}
 	}
 
-	/** The `InvalidPropertyValue` of an error that is not an `Exception`, as its cause. */
+	/**
+	 * The `InvalidPropertyValue` of an error that is not an `Exception`, as its
+	 * cause; its issue has the error's message as it is.
+	 */
 	private invalidValue(error: unknown): Exception {
-		return new InvalidPropertyValue({
+		const message = error instanceof Error ? error.message : String(error);
+		const exception = new InvalidPropertyValue({
 			source: this.type.name,
-			details: {
-				errors: [error instanceof Error ? error.message : String(error)],
-			},
+			details: { errors: [message] },
 			cause: error,
 		});
+		STEP_MESSAGES.set(exception, message);
+		return exception;
 	}
 
 	/** Rejects the value with an `exception` that a step threw. */
