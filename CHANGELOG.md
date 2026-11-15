@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- `jsonSchemaOf(field)` (#123): the JSON Schema (draft 2020-12) of a property, blueprint, list, variant, record or entity, as a standalone document with `$schema`, each record held inside defined once under `$defs` by its name and referenced as `#/$defs/<Name>`, and variants as `oneOf` without the OpenAPI `discriminator`. It shares the walker of `toOpenAPI`, whose output does not change, and keeps its `writeOnly` sensitive keys and `readOnly` entity identity. For whatever reads JSON Schema rather than OpenAPI, such as an MCP `describe_schema` tool. Type `JSONSchema`. See [`docs/openapi.md#json-schema`](docs/openapi.md#json-schema).
+
+### Changed
+
+- **Behavior change.** When a `preHandle`, `handle` or `afterHandle` throws an error that is not an `Exception`, the issue `safeParse`, `~standard.validate` and problem+json `issues[]` give has the error's message as it is (`"Use lowercase letters, numbers and hyphens."`), no longer prefixed with `Invalid value for property "slug": `, since the issue `path` already names the property (#123). The `InvalidPropertyValue` the constructor throws, its `cause` and what logs show keep the prefix. A client that stripped the prefix can stop. See [`docs/properties.md`](docs/properties.md).
+
 ## 0.0.12 — 2026-11-11
 
 ### Changed

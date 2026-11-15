@@ -13,6 +13,8 @@
         "@commitlint/config-conventional": "^21.2.4",
         "@seriousme/openapi-schema-validator": "2.11.0",
         "@types/bun": "^1.4.4",
+        "ajv": "^8.20.0",
+        "ajv-formats": "^3.0.1",
         "husky": "^9.1.7",
         "knip": "^6.43.0",
         "typebox": "^1.4.3",

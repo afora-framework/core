@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 495 exports.
+Tier: stable. 497 exports.
 
 ### Access
 
@@ -1222,7 +1222,7 @@ A schema given to `jsonOf` or `checkJsonSchema` that is not a JSON Schema (draft
 
 *const* · tier: stable · `import { InvalidOpenAPIModel } from "@afora/core"`
 
-`toOpenAPI` is given something that is not a field: a property, blueprint, list, record or entity.
+`toOpenAPI` or `jsonSchemaOf` is given something that is not a field: a property, blueprint, list, record or entity.
 
 ### InvalidOutputStage
 
@@ -1373,6 +1373,13 @@ it is, e.g. `["addresses", 0, "zip"]`, empty for the value itself.
 *type* · tier: stable · `import type { IssueCode } from "@afora/core"`
 
 Why a value was rejected.
+
+### JSONSchema
+
+*interface* · tier: stable · `import type { JSONSchema } from "@afora/core"`
+
+A JSON Schema (draft 2020-12) document: what `jsonSchemaOf` gives, its
+`$schema` set and the records it holds under `$defs`.
 
 ### JsonClass
 
@@ -3298,6 +3305,29 @@ Schema, draft 2020-12, or a TypeBox type), as afora issues: empty when
 there is none. For schemas known at runtime only, e.g. loaded from a
 database: TypeBox checks the value by walking the schema, compiling
 nothing. Throws `InvalidJsonSchema` when `schema` is not a JSON Schema.
+
+### jsonSchemaOf
+
+*function* · tier: stable · `import { jsonSchemaOf } from "@afora/core"`
+
+The JSON Schema (draft 2020-12) of a property, blueprint, list, variant,
+record or entity, as a standalone document: what an AI client, a form or
+any JSON Schema validator reads. It is `toOpenAPI` in the JSON Schema
+dialect: each record held inside is defined once under `$defs`, by its
+name, and referenced as `{ $ref: "#/$defs/Address" }`, and a variant is
+`oneOf` without the OpenAPI `discriminator`. Sensitive keys are
+`writeOnly`, the identity of an entity `readOnly`, optional keys left out
+of `required`, and objects closed with `additionalProperties: false`.
+
+**Example**
+
+```ts
+import { blueprintOf, jsonSchemaOf } from "@afora/core";
+
+const Post = blueprintOf((ctx) => ({ title: ctx.string, tags: ctx.list.string }));
+jsonSchemaOf(Post);
+// { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", ... }
+```
 
 ### listOf
 
