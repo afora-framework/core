@@ -49,7 +49,7 @@ created without providerOf ("provider", "repositories.<Name>.provider" or
 "providers.<key>"), a use case
 with a hand-written execute ("useCases.<Name>") or a run function of a steps use case
 ("useCases.<Name>.run.<name>"), a command handler ("commands.<Name>.events" or
-"commands.<Name>.onEventError"), a publisher ("publishers.<key>"), a stage written by hand
+"commands.<Name>.onEventError"), a publisher ("publishers.<key>"), a service ("services.<name>"), a stage written by hand
 ("outputs.<Name>.pipe.<index>") or an upgrade step of an entity ("entities.<Name>.upgrade.<n>").
 schema lock refuses to replace a lock when a change needs a declaration the code lacks
 (a fill, renamedFrom, previousNames or an upgrade step) unless --force; schema check prints

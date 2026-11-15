@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The guide and the tool descriptions cover the top-level `services` of a spec (#115): a use case dependency that names a service, the factory of each as an import, and `services.<name>` among the `imports` of `afora_extract`.
+
 ### `params` on a `run` step
 
 - The guide's example declares `"params"` on its `run` step and says to declare it whenever the function relies on what it gets, so the args are checked before it runs.

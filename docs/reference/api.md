@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 520 exports.
+Tier: stable. 529 exports.
 
 ### Access
 
@@ -125,6 +125,12 @@ Any repository, whatever its entity, actions and environment.
 *type* · tier: stable · `import type { AnyRepositoryEntity } from "@afora/core"`
 
 Any class made by `entityOf`, or extending one, that a repository holds.
+
+### AnyService
+
+*type* · tier: stable · `import type { AnyService } from "@afora/core"`
+
+Any service made by {@link serviceOf}.
 
 ### AnyUseCaseClass
 
@@ -529,14 +535,16 @@ A collection of dependencies as a use case receives them: each one as {@link * D
 *type* · tier: stable · `import type { DependencyOf } from "@afora/core"`
 
 What a use case gets for a dependency: a function for a use case, the
-repository itself, the variables of an environment, or an `ILogger`.
+repository itself, the variables of an environment, an `ILogger`, or the
+value of a service.
 
 ### DependencyOverrides
 
 *type* · tier: stable · `import type { DependencyOverrides } from "@afora/core"`
 
 What `execute` takes to replace dependencies: a function for a use case,
-some of the methods of a repository, or the variables of an environment.
+some of the methods of a repository, the variables of an environment, or
+the value of a service.
 
 ### DuplicateApplicationDeclaration
 
@@ -1661,7 +1669,8 @@ The options of the `openapi` sink.
 The call of an operation: `context` is what the command (or use case)
 declares, and `principal` is who calls, as the sink authenticated it
 (`null` or absent for an anonymous caller). An operation with an `access`
-checks the principal before it runs.
+checks the principal before it runs. `native` is the native request of the
+sink (e.g. the Hono context), given to the factories of services.
 
 ### OperationPatch
 
@@ -2413,6 +2422,51 @@ The options of `select`.
 The type of a property declared `sensitive`, as `Password`, so that the
 type of `toJSON` masks the keys holding it.
 
+### ServiceDeclaration
+
+*interface* · tier: stable · `import type { ServiceDeclaration } from "@afora/core"`
+
+A service a use case depends on by name, made by {@link serviceOf}: a
+cache, a storage, a client of another API. An application gives its value
+per call (`applicationOf({ services })`); `execute` can replace it.
+
+### ServiceFactory
+
+*type* · tier: stable · `import type { ServiceFactory } from "@afora/core"`
+
+Makes the value of a service for a call; may be async.
+
+### ServiceNotBound
+
+*const* · tier: stable · `import { ServiceNotBound } from "@afora/core"`
+
+A use case read a service (see `serviceOf`) that nothing gives it: no
+application binds the name in its `services`, and `execute` was not given a
+value for it. `details.service` is the name of the service.
+
+### ServiceOutsideExecution
+
+*const* · tier: stable · `import { ServiceOutsideExecution } from "@afora/core"`
+
+A use case read a service (see `serviceOf`) before its `execute` started or
+after it ended: a service is made when `execute` starts, so it is read
+inside `execute`. `details.service` is the name of the service.
+
+### ServiceScope
+
+*interface* · tier: stable · `import type { ServiceScope } from "@afora/core"`
+
+What the factory of a service gets, once per call: the name of the
+service, the context of the call and who calls, its logger, the variables
+of an environment, and what the sink that received the call gives as
+`native` (the Hono context, a Request), if any.
+
+### ServiceValueOf
+
+*type* · tier: stable · `import type { ServiceValueOf } from "@afora/core"`
+
+The value a service gives a use case.
+
 ### Slug
 
 *class* · tier: stable · `import { Slug } from "@afora/core"`
@@ -2830,7 +2884,7 @@ A URL of up to 2048 characters, trimmed.
 *type* · tier: stable · `import type { UseCaseCollection } from "@afora/core"`
 
 The `dependencies` of a use case, by name: use case classes, repositories,
-environments or the {@link Logger }.
+environments, the {@link Logger } or services.
 
 ### UseCaseCompilation
 
@@ -2873,7 +2927,8 @@ environment or an {@link ILogger} (see {@link DependencyOf}).
 *type* · tier: stable · `import type { UseCaseDependency } from "@afora/core"`
 
 What a use case can depend on: another use case, a repository made by
-`repositoryOf`, an environment made by `environmentOf`, or `Logger`.
+`repositoryOf`, an environment made by `environmentOf`, `Logger`, or a
+service made by `serviceOf`.
 
 ### UseCaseEntityConflict
 
@@ -3423,6 +3478,12 @@ Whether `value` is an output made by `outputOf`.
 
 Whether `value` was made by `providerFrom`.
 
+### isService
+
+*function* · tier: stable · `import { isService } from "@afora/core"`
+
+Whether `value` is a service made by {@link serviceOf}.
+
 ### isUseCase
 
 *function* · tier: stable · `import { isUseCase } from "@afora/core"`
@@ -3836,6 +3897,29 @@ spread the rest: `(ctx) => ({ ...resourceOf(Posts, options)(ctx), create: ctx.cr
 
 Keeps the operations that match every given option: `tags` (any of),
 `operations` (ids to keep) and `exclude` (ids to drop).
+
+### serviceOf
+
+*function* · tier: stable · `import { serviceOf } from "@afora/core"`
+
+Declares a service named `name`, a dependency of use cases whose value an
+application gives per call: `dependencies: { cache: Cache }` makes
+`this.dependencies.cache` a `Value`. A use case reads it as it is (no
+`await`): the factories of the services it declares run before its
+`execute`, once per call.
+
+**Throws** {
+
+**Example**
+
+```ts
+import { serviceOf } from "@afora/core";
+
+interface CacheClient {
+	get(key: string): Promise<string | null>;
+}
+const Cache = serviceOf<CacheClient>("cache");
+```
 
 ### stripUndeclared
 

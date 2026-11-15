@@ -395,7 +395,7 @@ export interface UseCaseSpec {
 	readonly input: BlueprintRefSpec;
 	readonly response: BlueprintRefSpec;
 	readonly context?: BlueprintRefSpec;
-	/** Key -> name of a use case, repository or environment. */
+	/** Key -> name of a use case, repository or environment, of a service (a key of `services`), or `"Logger"`. */
 	readonly dependencies?: Readonly<Record<string, string>>;
 	/** Declared exceptions or core exceptions (by class name) a caller should expect. */
 	readonly errors?: readonly string[];
@@ -493,6 +493,12 @@ export interface Spec {
 	readonly trace?: ImportRef;
 	/** Where event policies publish (`applicationOf({ publishers })`), by camelCase key: a publisher written by hand. */
 	readonly publishers?: Readonly<Record<string, ImportRef>>;
+	/**
+	 * The services of the use cases (`applicationOf({ services })`), by name:
+	 * the factory of each, written by hand, that makes its value per call. A
+	 * use case names one in its `dependencies`.
+	 */
+	readonly services?: Readonly<Record<string, ImportRef>>;
 	readonly properties?: Readonly<Record<string, PropertySpec>>;
 	readonly blueprints?: Readonly<Record<string, BlueprintSpec>>;
 	readonly records?: Readonly<Record<string, RecordSpec>>;

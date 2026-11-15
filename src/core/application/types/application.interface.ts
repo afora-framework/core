@@ -36,6 +36,7 @@ import type {
 } from "../../repository/types/schema.interface";
 import type { Kind } from "../../symbols/kind";
 import type { ITracer } from "../../tracing/tracing";
+import type { ServiceFactory } from "../../use-case/service";
 import type { UseCaseStepDescription } from "../../use-case/steps/types/steps.interface";
 import type { AccessDeclaration } from "../../use-case/types/access.interface";
 import type { RouteDeclaration } from "../../use-case/types/route.interface";
@@ -161,6 +162,17 @@ export interface ApplicationSettings<
 	 * policy names a key that is not here throws `UnregisteredApplicationReference`.
 	 */
 	readonly publishers?: Readonly<Record<string, IEventPublisher>>;
+	/**
+	 * What gives the services of its use cases (see `serviceOf`), by service
+	 * name: a function of the `ServiceScope` of a call (its context, who
+	 * calls, its logger, its environments, the native request of the sink)
+	 * that makes the value, maybe async. Run once per call, before the use
+	 * cases that declare it execute; `execute` can replace the value. Those of
+	 * the extended applications are inherited, a later one winning a name. A
+	 * use case that depends on a service not here throws
+	 * `UnregisteredUseCaseDependency`.
+	 */
+	readonly services?: Readonly<Record<string, ServiceFactory>>;
 }
 
 /**
@@ -466,8 +478,16 @@ export interface RecordDescription {
 
 /** What a use case depends on, by the name it has in the application. */
 export interface UseCaseDependencyDescription {
-	/** `logger` is the core's `Logger`, whose `ref` is always `"Logger"`. */
-	readonly kind: "use-case" | "repository" | "environment" | "logger";
+	/**
+	 * `logger` is the core's `Logger`, whose `ref` is always `"Logger"`; the
+	 * `ref` of a `service` is its name, a key of `services`.
+	 */
+	readonly kind:
+		| "use-case"
+		| "repository"
+		| "environment"
+		| "logger"
+		| "service";
 	readonly ref: string;
 }
 
@@ -597,6 +617,8 @@ export interface ApplicationDescription {
 	readonly trace?: { readonly kind: "opaque" };
 	/** Its publishers (inherited ones included), by key, with the application that declared each; present only when it has some. */
 	readonly publishers?: Readonly<Record<string, { readonly from: string }>>;
+	/** Its services (inherited ones included), by name, with the application that declared each; present only when it has some. */
+	readonly services?: Readonly<Record<string, { readonly from: string }>>;
 	readonly properties: Readonly<
 		Record<string, PropertyDescription & { readonly from: string }>
 	>;

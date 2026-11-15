@@ -292,6 +292,15 @@ const Publishers = Type.Record(
 	},
 );
 
+const Services = Type.Record(
+	Type.String({ pattern: PUBLISHER_KEY }),
+	ImportRef,
+	{
+		description:
+			'The services of the use cases, by name (applicationOf({ services })): the factory written by hand that makes the value of each per call, { "import": "./services.ts#cache" }. A use case names one in its dependencies.',
+	},
+);
+
 const Log = Type.Union(
 	[
 		Type.Object(
@@ -869,7 +878,7 @@ const WrittenUseCaseDeclaration = Type.Object(
 		dependencies: Type.Optional(
 			Type.Record(Type.String({ pattern: KEY }), Type.String(), {
 				description:
-					"Key -> name of a declared use case, repository or environment.",
+					'Key -> name of a declared use case, repository or environment, a key of "services", or "Logger".',
 			}),
 		),
 		errors: Type.Optional(
@@ -1036,6 +1045,7 @@ export const specSchema = Type.Object(
 			),
 		),
 		publishers: Type.Optional(Publishers),
+		services: Type.Optional(Services),
 		properties: Type.Optional(
 			Names(Property, "Custom properties, by PascalCase name."),
 		),

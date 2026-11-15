@@ -97,3 +97,27 @@ export const UseCaseInvalidCredentials = exceptionOf({
 	name: "UseCaseInvalidCredentials",
 	message: "Invalid credentials.",
 });
+
+/**
+ * A use case read a service (see `serviceOf`) that nothing gives it: no
+ * application binds the name in its `services`, and `execute` was not given a
+ * value for it. `details.service` is the name of the service.
+ */
+export const ServiceNotBound = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "ServiceNotBound",
+	message: ({ service }: { readonly service: string }) =>
+		`The service "${service}" is not bound: give it in the services of an application, or as an override of execute.`,
+});
+
+/**
+ * A use case read a service (see `serviceOf`) before its `execute` started or
+ * after it ended: a service is made when `execute` starts, so it is read
+ * inside `execute`. `details.service` is the name of the service.
+ */
+export const ServiceOutsideExecution = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "ServiceOutsideExecution",
+	message: ({ service }: { readonly service: string }) =>
+		`The service "${service}" is available only while execute runs: read it inside execute.`,
+});

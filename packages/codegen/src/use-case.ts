@@ -530,7 +530,8 @@ function checkGenericUseCase(
 
 /**
  * The \`dependencies\` of a use case, \`key -> name\` of a declared use case,
- * repository or environment, or \`"Logger"\`: gives the valid ones by key.
+ * repository or environment, of a service, or \`"Logger"\`: gives the valid
+ * declarations by key (services and \`Logger\` are not declarations).
  */
 function checkDependencies(
 	decl: Decl,
@@ -560,6 +561,14 @@ function checkDependencies(
 		const target = typeof name === "string" ? scope.decls.get(name) : undefined;
 		// The core's `Logger`: nothing to declare, and no step reads it.
 		if (name === "Logger" && target === undefined) continue;
+		// A service of the top-level `services`: no step reads it either.
+		if (
+			typeof name === "string" &&
+			target === undefined &&
+			scope.serviceNames.has(name)
+		) {
+			continue;
+		}
 		if (
 			target?.kind !== "useCase" &&
 			target?.kind !== "repository" &&
@@ -570,8 +579,8 @@ function checkDependencies(
 					here,
 					target ? "wrong_kind" : "unknown_dependency",
 					target
-						? `"${name}" is a ${target.kind}; a dependency is a use case, a repository, an environment or "Logger".`
-						: `"${String(name)}" is not a declared use case, repository or environment, nor "Logger".`,
+						? `"${name}" is a ${target.kind}; a dependency is a use case, a repository, an environment, a service or "Logger".`
+						: `"${String(name)}" is not a declared use case, repository or environment, a key of "services", nor "Logger".`,
 				),
 			);
 			continue;

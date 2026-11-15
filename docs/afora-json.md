@@ -137,6 +137,7 @@ Some things are code, not data: a provider made by hand, a `run` function, the `
 | `commands.<Name>.events`           | the event handler of a command, when it is not a policy                    |
 | `commands.<Name>.onEventError`     | the `onEventError` handler of a command                                    |
 | `publishers.<key>`                 | a publisher of the top-level `publishers`                                  |
+| `services.<name>`                  | the factory of a service of the top-level `services`                       |
 | `entities.<Name>.events.<event>`   | the handler of a lifecycle event of an entity                              |
 | `outputs.<Name>.pipe.<index>`      | a stage written by hand, by its position in the `pipe`                     |
 | `<property name>`                  | the module of a property that cannot be recreated (see the limitations)    |
@@ -163,6 +164,26 @@ A command's `events` can name an event policy of the catalog with JSON options, 
 ```
 
 `realtime.ts` exports the publisher, any object with a `publish(topic, event)` method, such as `export const hub = wsHub();` of [`@afora/ws`](../packages/ws/README.md), whose `{ "sink": "websocket" }` serves the operations and the subscriptions (`--stages @afora/ws`). The generated application gets `publishers: { realtime: hub }`, and a spec that extends this one can name `realtime` too. The validator makes a built-in policy with its options, so what it would throw is an `invalid_event_policy_options` issue; a name outside the catalog is `unknown_event_policy`, a `publisher` that is not a key of `publishers` (own or inherited) `unknown_publisher`, and a publisher that is not an import `invalid_import`. Extraction needs `publishers.<key>` in `imports`.
+
+## Services
+
+A use case that needs what is not a repository (a cache, a storage, a client of another API) names a service in its `dependencies`, a key of the top-level `services`, whose value is the factory written by hand that makes it once per call (see [Services](use-cases.md#services)):
+
+```json
+{
+	"services": { "cache": { "import": "../services.ts#cache" } },
+	"useCases": {
+		"GetContent": {
+			"input": { "fields": { "key": "string" } },
+			"response": { "fields": { "value": "string" } },
+			"dependencies": { "cache": "cache" },
+			"implementation": { "import": "../handlers/get-content.ts#GetContent" }
+		}
+	}
+}
+```
+
+`services.ts` exports the factory, `(scope: ServiceScope) => value`, maybe async. The use case is generated with `cache: serviceOf<Awaited<ReturnType<typeof cache>>>("cache")`, so its hand-written `execute` reads `this.dependencies.cache` typed by what the factory returns (imported with `import type`, so loading the use case never loads `services.ts`), and the application with `services: { cache }`. A spec that extends this one can name `cache` too, typed the same when this spec is extended by a relative path or the factory is imported from a package; a factory relative to a spec reached as a package, or one of a spec that an extended spec extends in turn, is not importable from the child, and the service is `unknown` there. Steps do not read a service. A name of `services` must be an identifier other than `Logger` (`invalid_name`) and cannot be the name of a declaration (`duplicate_name`); a dependency that names neither a declaration nor a service is `unknown_dependency`. Extraction needs `services.<name>` in `imports`.
 
 The events come from the lifecycle of the entities. An entity (not a record) declares them by cycle, each one event or a list:
 

@@ -128,7 +128,9 @@ a file of your own.
 
 - \`exceptions\`: \`{ layer, message? }\`; \`layer\` is one of \`exceptionLayers\` of \`afora_catalog\`; the message is "<Name>." when omitted.
 - \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`. \`dependencies\` map a key to a use case, repository
-  or environment, or to \`"Logger"\` for the logger of the application (an \`ILogger\`; no step reads it). \`errors\` are declared exceptions or exceptions exported by @afora/core (\`coreExceptions\` of \`afora_catalog\`).
+  or environment, to \`"Logger"\` for the logger of the application (an \`ILogger\`; no step reads it), or to a key of the top-level
+  \`"services": { "cache": { "import": "../services.ts#cache" } }\`: a factory written by hand, \`(scope: ServiceScope) => value\`, run once per call
+  (no step reads it; a hand-written \`execute\` gets \`this.dependencies.cache\`, typed by what the factory returns). \`errors\` are declared exceptions or exceptions exported by @afora/core (\`coreExceptions\` of \`afora_catalog\`).
 - \`implementation\` is \`{ "steps": [...] }\` (generated complete, no hand-written file) or \`{ "import": "../handlers/x.ts#Name" }\`:
   \`afora_generate\` writes \`abstract class <Name>Base\` in \`<kebab-name>.use-case.ts\` of output.dir (\`RegisterUser\` -> \`register-user.use-case.ts\`);
   write \`class Name extends <Name>Base\` with \`execute\` at that path, importing the base from that file. Any use case can list an imported one
@@ -192,7 +194,7 @@ a file of your own.
 - \`outputs\`: \`commands\` are declared commands; \`statuses\` maps an exception name (declared or exported by @afora/core) to a status from 400 to 599;
   \`pipe\` is transforms and, last, at most one sink, each \`{ "transform" | "sink": name, "options"?: {...JSON} }\` with a name from the \`stages\` of
   \`afora_catalog\` (\`select\`, \`openapi\`, plus the ones given to the server with \`--stages\`), or \`{ "import": "./stages.ts#auth" }\` for a stage written by hand.
-- \`afora_extract\` needs \`imports\` for \`publishers.<key>\`, \`commands.<Name>.events\` (a handler, not a policy), \`commands.<Name>.onEventError\` and \`outputs.<Name>.pipe.<index>\` (hand-written ones).
+- \`afora_extract\` needs \`imports\` for \`publishers.<key>\`, \`services.<name>\`, \`commands.<Name>.events\` (a handler, not a policy), \`commands.<Name>.onEventError\` and \`outputs.<Name>.pipe.<index>\` (hand-written ones).
 
 ## Routes and access
 

@@ -420,6 +420,10 @@ export function compileRoutes(
 						? { context: values, principal: principal ?? null }
 						: { context: values };
 				} else if (guarded) call = { principal: principal ?? null };
+				// The native request, for the factories of services.
+				if (request.native !== undefined) {
+					call = { ...call, native: request.native };
+				}
 
 				const response = await operation.invoke(input, call);
 				if (setCookies.length === 0) {

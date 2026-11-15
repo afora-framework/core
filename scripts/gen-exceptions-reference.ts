@@ -123,6 +123,8 @@ const HANDLING: Record<string, string> = {
 	ReservedBlueprintKey: DECLARATION,
 	ReservedEntityKey: DECLARATION,
 	ReservedRecordKey: `${DECLARATION} Rename the key or the member.`,
+	ServiceNotBound: `${BUG} Give the service in the \`services\` of the application, or as an override of \`execute\` in a test.`,
+	ServiceOutsideExecution: `${BUG} Read the service inside \`execute\`.`,
 	SchemaLockMismatch: `${START} \`details.problems\` lists each entity; add \`previousNames\` or raise \`schemaVersion\`.`,
 	SyncVerifyUnsupported:
 		"Use `await password.verify(input)`, or configure a hasher with `verifySync`.",

@@ -445,6 +445,8 @@ export {
 	IncompatibleUseCasePlugin,
 	InvalidUseCasePlugin,
 	InvalidUseCaseStep,
+	ServiceNotBound,
+	ServiceOutsideExecution,
 	UnknownUseCasePlugin,
 	UseCaseEntityConflict,
 	UseCaseEntityNotFound,
@@ -456,6 +458,14 @@ export {
 	isUseCaseCatalog,
 	useCaseCatalogOf,
 } from "./core/use-case/plugin-catalog";
+export type {
+	AnyService,
+	ServiceDeclaration,
+	ServiceFactory,
+	ServiceScope,
+	ServiceValueOf,
+} from "./core/use-case/service";
+export { isService, serviceOf } from "./core/use-case/service";
 export type {
 	CheckedSteps,
 	StepReferencesOf,

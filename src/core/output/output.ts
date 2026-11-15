@@ -1,6 +1,7 @@
 import { isCommand } from "../command/command";
 import type { AnyCommand } from "../command/types/command.interface";
 import { Kind } from "../symbols/kind";
+import { type CallOrigin, OriginKey } from "../use-case/scope";
 import type { AnyUseCaseClass } from "../use-case/use-case";
 import { accessGuardOf } from "./access";
 import { DuplicateOperation, InvalidOutputStage } from "./exceptions";
@@ -95,6 +96,33 @@ export function operationOf(
 	});
 }
 
+/**
+ * `run` with who calls and the native request of `options`, for the
+ * factories of services (see `serviceOf`).
+ */
+function withOrigin(
+	run: { readonly context?: unknown } | undefined,
+	options: OperationCallOptions | undefined,
+):
+	| { readonly context?: unknown; readonly [OriginKey]?: CallOrigin }
+	| undefined {
+	if (
+		options === undefined ||
+		(options.principal === undefined && options.native === undefined)
+	) {
+		return run;
+	}
+	return {
+		...run,
+		[OriginKey]: {
+			...(options.principal === undefined
+				? {}
+				: { principal: options.principal }),
+			...(options.native === undefined ? {} : { native: options.native }),
+		},
+	};
+}
+
 /** The operations of one command, in declaration order. */
 function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 	return (command.operations as readonly string[]).map((name) => {
@@ -133,13 +161,13 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 			meta: Object.freeze({}),
 			invoke: guard
 				? async (input: unknown, options?: OperationCallOptions) =>
-						run(name, input, guard(input, options))
+						run(name, input, withOrigin(guard(input, options), options))
 				: (input: unknown, options?: OperationCallOptions) =>
 						run(
 							name,
 							input,
-							options && "principal" in options
-								? { context: options.context }
+							options && ("principal" in options || "native" in options)
+								? withOrigin({ context: options.context }, options)
 								: options,
 						),
 		});

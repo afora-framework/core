@@ -35,7 +35,8 @@ export interface ExtractOptions {
 	 * a standard use case `useCases.<Name>.before` and `.after`, a command with a handler
 	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, the handler of
 	 * an entity event `entities.<Name>.events.<event>`, a publisher
-	 * `publishers.<key>`, a tracer `trace`, and a stage
+	 * `publishers.<key>`, the factory of a service `services.<name>`, a tracer
+	 * `trace`, and a stage
 	 * written by hand `outputs.<Name>.pipe.<index>`, all `"./file.ts#export"`.
 	 */
 	readonly imports?: Readonly<Record<string, string>>;
@@ -781,6 +782,21 @@ export function extractSpec(
 				},
 			]),
 	);
+	// Its own services: inherited ones belong to the spec it extends.
+	const services = Object.fromEntries(
+		Object.entries(description.services ?? {})
+			.filter(([, { from }]) => from === description.name)
+			.map(([key]) => [
+				key,
+				{
+					import: importFor(
+						options.imports,
+						`services.${key}`,
+						`The factory of the service "${key}"`,
+					),
+				},
+			]),
+	);
 	const spec: Json = {
 		version: 1,
 		name: description.name,
@@ -817,6 +833,7 @@ export function extractSpec(
 					},
 				}),
 		...(Object.keys(publishers).length > 0 ? { publishers } : {}),
+		...(Object.keys(services).length > 0 ? { services } : {}),
 		...(Object.keys(allProperties).length > 0
 			? { properties: allProperties }
 			: {}),

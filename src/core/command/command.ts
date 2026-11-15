@@ -34,7 +34,13 @@ import {
 	startSpan,
 } from "../tracing/tracing";
 import { isUseCaseCatalog } from "../use-case/plugin-catalog";
-import { type ExecutionScope, ScopeKey } from "../use-case/scope";
+import {
+	type CallOrigin,
+	type ExecutionScope,
+	OriginKey,
+	ScopeKey,
+} from "../use-case/scope";
+import { serviceFactoriesOf } from "../use-case/service";
 import type {
 	IUseCaseCatalog,
 	UseCasePluginContext,
@@ -384,7 +390,9 @@ function declareCommand<
 	const perform = async (
 		op: string,
 		input: unknown,
-		options: { context?: unknown; env?: unknown } | undefined,
+		options:
+			| { context?: unknown; env?: unknown; [OriginKey]?: CallOrigin }
+			| undefined,
 		keepSpan: boolean,
 	): Promise<{
 		value: unknown;
@@ -450,13 +458,24 @@ function declareCommand<
 				overrides === undefined || overrides.byEnvironment.size === 0
 					? scope?.environments
 					: overrides.byEnvironment;
-			if (!environmentsOfCall && !logger && !tracer) return scope;
+			// The services of the call, made once for every use case it runs.
+			const services = serviceFactoriesOf(UseCase) !== undefined;
+			if (!environmentsOfCall && !logger && !tracer && !services) return scope;
 			return {
 				...scope,
 				providers: scope?.providers ?? new Map(),
 				...(environmentsOfCall ? { environments: environmentsOfCall } : {}),
 				...(logger ? { logger } : {}),
 				...(tracer ? { tracer, ...(span ? { span } : {}) } : {}),
+				...(services
+					? {
+							services: new Map(),
+							context: callContext,
+							...(options?.[OriginKey] === undefined
+								? {}
+								: { origin: options[OriginKey] }),
+						}
+					: {}),
 			};
 		};
 		const run = async (declared: ExecutionScope | undefined) => {

@@ -48,7 +48,7 @@ Dependencies default to `{}`. Each dependency function creates a fresh child, re
 
 Events from managed children move to the parent when each child finishes, including on failure and when the parent's response omits the child result. Then the validated parent response is traversed through declared records, entities, nested blueprints and lists. Repeated object references are visited once; separately emitted duplicate events are preserved. Child events follow completion order, followed by remaining response events. No handlers run automatically. `pullEvents()` immediately drains the queue, which remains available after failure. Invalid responses are not drained. Overrides contribute events from their returned entities; hidden operations inside an override must expose their events separately.
 
-In an application with a `log`, each execution, each repository call made through it and a failure, once, are logged. A use case that logs itself declares `Logger` as a dependency (`dependencies: { logger: Logger }`) and gets an `ILogger`, which `execute` can replace like any dependency; see [Logging](logging.md).
+In an application with a `log`, each execution, each repository call made through it and a failure, once, are logged. A use case that logs itself declares `Logger` as a dependency (`dependencies: { logger: Logger }`) and gets an `ILogger`, which `execute` can replace like any dependency; see [Logging](logging.md). A cache, a storage or a client of another API is a dependency too, a service the application gives per call: see [Services](#services).
 
 ## Context and metadata
 
@@ -167,6 +167,57 @@ The route is data: `ListPosts.route` is the frozen declaration, `app.describe().
 `@Route(method, path?, options?)` (or `@Route(method, options)`) is a standard class decorator, with no `experimentalDecorators` and no metadata reflection; it also works as a legacy TypeScript decorator. Bun runs it as written. Node has no decorator syntax yet, so there the code goes through a compiler (`tsc` with a `target` of `ES2022` or lower, `tsx`, esbuild), or uses the `route` setting, which needs nothing.
 
 `UseCaseInput`, `UseCaseResponse` and `UseCaseDependencies` extract a declaration's types. `isUseCase` identifies instances; `isUseCaseClass` identifies concrete declarations with a prototype `execute`. UseCases carry their own kind and cannot be used as fields of ordinary data blueprints. Validation errors carry `details.issues`; errors crossing an execution boundary preserve their cause and gain a `UseCase` trace frame using the declared name.
+
+## Services
+
+What is not a repository, an environment or another use case (a cache, a file storage, a client of another API, the `waitUntil` of a Worker) is a service: a name and the type of its value, made by `serviceOf`. A use case declares it among its `dependencies`, and an application gives its value per call with `services`, by the same name:
+
+```ts
+import {
+	applicationOf,
+	blueprintOf,
+	environmentOf,
+	serviceOf,
+	useCaseOf,
+} from "@afora/core";
+
+interface CacheClient {
+	get(key: string): Promise<string | null>;
+}
+const Cache = serviceOf<CacheClient>("cache");
+
+const Env = environmentOf(blueprintOf((ctx) => ({ CACHE_URL: ctx.url })));
+// A client written by hand, and one in memory for tests.
+declare function remoteCache(url: string): CacheClient;
+const memoryCache = (): CacheClient => ({ get: async () => null });
+
+class GetContent extends useCaseOf({
+	name: "GetContent",
+	blueprint: blueprintOf((ctx) => ({ key: ctx.string })),
+	response: blueprintOf((ctx) => ({ value: ctx.optional.string })),
+	dependencies: { cache: Cache },
+}) {
+	override async execute({ cache = this.dependencies.cache } = {}) {
+		return { value: (await cache.get(this.input.key)) ?? undefined };
+	}
+}
+
+const App = applicationOf({
+	name: "content",
+	environments: { Env },
+	useCases: { GetContent },
+	// Once per call: the scope has the context, principal, logger, environments and native request.
+	services: { cache: (scope) => remoteCache(scope.environment(Env).CACHE_URL) },
+});
+
+await new App.useCases.GetContent({ key: "home" }).execute();
+// In a test, without an application:
+await new GetContent({ key: "home" }).execute({ cache: memoryCache() });
+```
+
+The factory of a service gets a `ServiceScope`: its `name`, the `context` of the call (the command's, else the use case's), the `principal` an output authenticated, the `logger` of the call, `environment(Env)` for the variables of an environment, and `native`, the request of the sink that received the call (with Hono, its context, so `scope.native.executionCtx.waitUntil` on Workers; `undefined` for a call made in process). A factory may be async, so the factories of the services a use case declares run when its `execute` starts, before the implementation: `this.dependencies.cache` is the value itself, read without `await`. Each runs once per call, and the use cases a call runs (a command operation and its child use cases) share its value. A factory that throws fails the call.
+
+`execute({ cache })` replaces the value for that execution with any value other than `undefined`; its child use cases still get the application's. A use case that reads a service no application gives, and that `execute` was not given, throws `ServiceNotBound` (`details.service` names it); one that does not read it runs. A service is made when `execute` starts, so reading it before or after (`new GetContent(input).dependencies.cache`) throws `ServiceOutsideExecution`. An application with a use case that declares a service missing from its `services` (its own, or inherited from the applications it `extends`) throws `UnregisteredUseCaseDependency` at declaration, and `describe()` reports the dependency as `{ kind: "service", ref: "cache" }`. `isService(value)` tells a declaration of `serviceOf` apart. Steps do not read services: a service is for a hand-written `execute`. In afora.json, the top-level `services` names the factory of each (see [afora.json](afora-json.md)).
 
 ## Steps
 

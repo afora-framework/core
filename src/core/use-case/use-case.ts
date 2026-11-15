@@ -52,8 +52,16 @@ import {
 	startSpan,
 } from "../tracing/tracing";
 import { accessDeclarationOf } from "./access";
+import { ServiceNotBound, ServiceOutsideExecution } from "./exceptions";
 import { routeDeclarationOf } from "./route";
 import { type ExecutionScope, ScopeKey } from "./scope";
+import {
+	type AnyService,
+	isService,
+	type ServiceDeclaration,
+	type ServiceScope,
+	serviceFactoriesOf,
+} from "./service";
 import { freezeData } from "./steps/references";
 import { executeSteps } from "./steps/run";
 import type { CheckedSteps } from "./steps/types/check.interface";
@@ -95,17 +103,19 @@ export type AnyExceptionClass = DeclaredExceptionClass<any>;
 
 /**
  * What a use case can depend on: another use case, a repository made by
- * `repositoryOf`, an environment made by `environmentOf`, or `Logger`.
+ * `repositoryOf`, an environment made by `environmentOf`, `Logger`, or a
+ * service made by `serviceOf`.
  */
 export type UseCaseDependency =
 	| AnyUseCaseClass
 	| AnyRepository
 	| AnyEnvironment
-	| LoggerDeclaration;
+	| LoggerDeclaration
+	| AnyService;
 
 /**
  * The `dependencies` of a use case, by name: use case classes, repositories,
- * environments or the {@link Logger}.
+ * environments, the {@link Logger} or services.
  */
 export type UseCaseCollection = Readonly<Record<string, UseCaseDependency>>;
 
@@ -160,7 +170,8 @@ type OptionsArgs<Context extends IBlueprintCollection | undefined> =
 
 /**
  * What a use case gets for a dependency: a function for a use case, the
- * repository itself, the variables of an environment, or an `ILogger`.
+ * repository itself, the variables of an environment, an `ILogger`, or the
+ * value of a service.
  */
 export type DependencyOf<Dependency> = Dependency extends AnyUseCaseClass
 	? (input: UseCaseInput<Dependency>) => Promise<UseCaseResponse<Dependency>>
@@ -168,7 +179,9 @@ export type DependencyOf<Dependency> = Dependency extends AnyUseCaseClass
 		? EnvironmentValue<Dependency>
 		: Dependency extends LoggerDeclaration
 			? ILogger
-			: Dependency;
+			: Dependency extends ServiceDeclaration<infer Value>
+				? Value
+				: Dependency;
 
 /**
  * A collection of dependencies as a use case receives them: each one as {@link
@@ -180,7 +193,8 @@ export type DependencyFunctions<Dependencies extends UseCaseCollection> = {
 
 /**
  * What `execute` takes to replace dependencies: a function for a use case,
- * some of the methods of a repository, or the variables of an environment.
+ * some of the methods of a repository, the variables of an environment, or
+ * the value of a service.
  */
 export type DependencyOverrides<Dependencies extends UseCaseCollection> = {
 	readonly [Key in keyof Dependencies]?: Dependencies[Key] extends AnyRepository
@@ -308,7 +322,7 @@ export const InvalidUseCaseDependencies = exceptionOf({
 	layer: ExceptionLayers.UseCase,
 	name: "InvalidUseCaseDependencies",
 	message:
-		"Dependency overrides must contain only declared names: functions for use cases, objects of methods for repositories, and valid variables for environments.",
+		"Dependency overrides must contain only declared names: functions for use cases, objects of methods for repositories, valid variables for environments, and values for services.",
 });
 
 interface RuntimeDeclaration extends Declaration {
@@ -317,7 +331,8 @@ interface RuntimeDeclaration extends Declaration {
 }
 interface ExecutionState {
 	readonly context: object | undefined;
-	readonly scope: ExecutionScope | undefined;
+	/** Given by the caller; `execute` adds the services of the call, if it needs them. */
+	scope: ExecutionScope | undefined;
 	started: boolean;
 	active: boolean;
 	readonly events: EntityEvent[];
@@ -636,8 +651,51 @@ function narrowedContext(
 	return picked;
 }
 
+/** A getter that throws `ServiceNotBound` for `service`. */
+function unboundService(service: AnyService, source: string): () => never {
+	return () => {
+		throw new ServiceNotBound({
+			source,
+			details: { service: service.name },
+		});
+	};
+}
+
+/**
+ * The value of `service` for the call of `state`: made by the factory its
+ * application binds, once per call (the scope keeps it for the use cases the
+ * call runs). `undefined` when no application binds it.
+ */
+function serviceOfCall(
+	state: ExecutionState,
+	service: AnyService,
+): Promise<unknown> | undefined {
+	const factory = serviceFactoriesOf(state.owner)?.[service.name];
+	const made = state.scope?.services;
+	if (factory === undefined || made === undefined) return undefined;
+	let value = made.get(service.name);
+	if (value === undefined) {
+		const scope = state.scope as ExecutionScope;
+		const serviceScope: ServiceScope = {
+			name: service.name,
+			context: scope.context ?? state.context,
+			principal: scope.origin?.principal,
+			native: scope.origin?.native,
+			logger: loggerOfCall(state) ?? silentLogger,
+			environment: (environment) =>
+				(scope.environments?.get(environment) ?? environment.load()) as never,
+		};
+		value = Promise.resolve().then(() => factory(serviceScope));
+		// Awaited by the use cases that read it; never an unhandled rejection.
+		value.catch(() => {});
+		made.set(service.name, value);
+	}
+	return value;
+}
+
 /** Whether `value` can replace `dependency` in `execute`. */
 function isOverrideOf(dependency: UseCaseDependency, value: unknown): boolean {
+	if (isService(dependency)) return value !== undefined;
 	if (isLoggerDeclaration(dependency)) return isLogger(value);
 	if (isRepository(dependency) || isEnvironment(dependency)) {
 		return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -706,6 +764,22 @@ export abstract class AbstractUseCase<
 				);
 				continue;
 			}
+			if (isService(dependency)) {
+				// Made when `execute` starts: until then, and after, it is not read.
+				Object.defineProperty(state.dependencies, key, {
+					get:
+						serviceFactoriesOf(state.owner)?.[dependency.name] === undefined
+							? unboundService(dependency, source)
+							: () => {
+									throw new ServiceOutsideExecution({
+										source,
+										details: { service: dependency.name },
+									});
+								},
+					enumerable: true,
+				});
+				continue;
+			}
 			if (isLoggerDeclaration(dependency)) {
 				// The logger of the call, resolved on use: a started application
 				// can give one after the use case was built.
@@ -725,7 +799,7 @@ export abstract class AbstractUseCase<
 				});
 				continue;
 			}
-			const Child = dependency;
+			const Child = dependency as AnyUseCaseClass;
 			state.dependencies[key] = async (value: unknown) => {
 				if (!state.active) throw new InvalidUseCaseDependencies({ source });
 				const child = new Child(value, {
@@ -745,6 +819,19 @@ export abstract class AbstractUseCase<
 			value: async (overrides: unknown = {}) => {
 				if (state.started) throw new UseCaseAlreadyExecuted({ source });
 				state.started = true;
+				// The services of the call are made once for every use case it
+				// runs: the first that can make one keeps them in the scope.
+				if (
+					state.scope?.services === undefined &&
+					serviceFactoriesOf(state.owner) !== undefined
+				) {
+					state.scope = {
+						...state.scope,
+						providers: state.scope?.providers ?? new Map(),
+						services: new Map(),
+						context: state.scope?.context ?? state.context,
+					};
+				}
 				// Its span starts before the dependencies are resolved, so that
 				// their failures show.
 				const tracer = resolveTracer(state.scope?.tracer, state.owner);
@@ -752,6 +839,8 @@ export abstract class AbstractUseCase<
 					tracer === undefined
 						? undefined
 						: traceUseCase(tracer, state, source);
+				let resolved: Record<string, unknown> | undefined;
+				const services: [string, Promise<unknown>][] = [];
 				try {
 					if (
 						typeof overrides !== "object" ||
@@ -771,10 +860,23 @@ export abstract class AbstractUseCase<
 					}
 					const replaced = overrides as Record<string, unknown>;
 					const dependencies: Record<string, unknown> = {};
-					for (const key of Object.keys(declaration.dependencies)) {
-						if (!Object.hasOwn(replaced, key)) {
-							dependencies[key] = state.dependencies[key];
+					for (const [key, dependency] of Object.entries(
+						declaration.dependencies,
+					)) {
+						if (Object.hasOwn(replaced, key)) continue;
+						if (isService(dependency)) {
+							const value = serviceOfCall(state, dependency);
+							if (value === undefined) {
+								Object.defineProperty(dependencies, key, {
+									get: unboundService(dependency, source),
+									enumerable: true,
+								});
+							} else {
+								services.push([key, value]);
+							}
+							continue;
 						}
+						dependencies[key] = state.dependencies[key];
 					}
 					for (const [key, substitute] of Object.entries(replaced)) {
 						const dependency = declaration.dependencies[
@@ -789,7 +891,7 @@ export abstract class AbstractUseCase<
 							);
 							continue;
 						}
-						if (isLoggerDeclaration(dependency)) {
+						if (isLoggerDeclaration(dependency) || isService(dependency)) {
 							dependencies[key] = substitute;
 							continue;
 						}
@@ -821,7 +923,7 @@ export abstract class AbstractUseCase<
 							return output.value;
 						};
 					}
-					state.resolved = Object.freeze(dependencies);
+					resolved = dependencies;
 				} catch (error) {
 					if (tracer !== undefined) {
 						failSpan(span, error, ExceptionLayers.UseCase);
@@ -831,21 +933,24 @@ export abstract class AbstractUseCase<
 				}
 				state.active = true;
 				const started = clock();
+				// The values of the services, then the implementation.
+				const perform = async () => {
+					for (const [key, value] of services) {
+						(resolved as Record<string, unknown>)[key] = await value;
+					}
+					state.resolved = Object.freeze(resolved);
+					return implementation.call(
+						this,
+						state.resolved as DependencyOverrides<Dependencies>,
+					);
+				};
 				try {
 					const result = await guard(
 						{ layer: ExceptionLayers.UseCase, source },
 						() =>
 							span === undefined
-								? implementation.call(
-										this,
-										state.resolved as DependencyOverrides<Dependencies>,
-									)
-								: runInSpan(tracer as ITracer, span, () =>
-										implementation.call(
-											this,
-											state.resolved as DependencyOverrides<Dependencies>,
-										),
-									),
+								? perform()
+								: runInSpan(tracer as ITracer, span, perform),
 					);
 					const parsed = declaration.response.safeParse(result);
 					if (parsed.issues) invalidValue(parsed.issues, source, "response");
@@ -1056,7 +1161,7 @@ export function useCaseOf(
 			source: typeof name === "string" ? name : "useCaseOf",
 			details: {
 				reason:
-					"Expected a name, input and response blueprints, and UseCase classes, repositories, environments or Logger as dependencies.",
+					"Expected a name, input and response blueprints, and UseCase classes, repositories, environments, Logger or services as dependencies.",
 			},
 		});
 	}
@@ -1154,7 +1259,8 @@ function isDependency(value: unknown): value is UseCaseDependency {
 		isUseCaseClass(value) ||
 		isRepository(value) ||
 		isEnvironment(value) ||
-		isLoggerDeclaration(value)
+		isLoggerDeclaration(value) ||
+		isService(value)
 	);
 }
 
