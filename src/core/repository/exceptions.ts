@@ -1,3 +1,4 @@
+import type { IdValue } from "../entity/types/id.interface";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { exceptionOf } from "../exception/exception";
 import type { Issue } from "../parse/types/parse.interface";
@@ -57,7 +58,7 @@ export const InvalidStoredSchemaVersion = exceptionOf({
 			current,
 			reason,
 		}: {
-			readonly id: string;
+			readonly id: IdValue;
 			readonly stored: unknown;
 			readonly current: number;
 			readonly reason?: string;
@@ -107,7 +108,7 @@ export const RepositoryUsedOutsideApplication = exceptionOf({
 export const RepositoryEntityNotFound = exceptionOf({
 	layer: ExceptionLayers.Repository,
 	name: "RepositoryEntityNotFound",
-	message: ({ id }: { readonly id: string }, source) =>
+	message: ({ id }: { readonly id: IdValue }, source) =>
 		`"${source}" holds no entity of id "${id}".`,
 });
 
@@ -125,7 +126,7 @@ export const RepositoryConcurrencyConflict = exceptionOf({
 			id,
 			expected,
 		}: {
-			readonly id: string;
+			readonly id: IdValue;
 			readonly expected: number;
 			readonly actual?: number;
 		},

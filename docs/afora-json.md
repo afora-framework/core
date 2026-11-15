@@ -49,6 +49,19 @@ A repository lists `"increment"` among its actions for atomic counters; the enti
 }
 ```
 
+## Ids
+
+An entity takes `"id"`, how its ids are made: `"uuid7"` (the default, as when it is left out), `"uuid"` (any UUID version, a v4 from an existing database included; new ones are still v7) or `"key"` (a natural key of 1 to 256 characters that the input of `create` must hold, never generated). They are generated as `entityOf(..., { id: Uuid })` and `entityOf(..., { id: Key })` and extracted back from `describe()`; an entity whose id is a custom `idOf` cannot be extracted (`ExtractionError`). Ids that a database assigns (serial integers) are not supported in a spec yet. A record does not take it (`unknown_key`), and any other value is `invalid_option`.
+
+```json
+{
+	"entities": {
+		"Setting": { "fields": { "value": "text" }, "id": "key" },
+		"Customer": { "fields": { "name": "text" }, "id": "uuid" }
+	}
+}
+```
+
 ## Schema evolution
 
 An entity takes `schemaVersion`, `previousNames` and `upgrade` (each step an import of a hand-written function, by the version it reaches), and the object form of a type or enum field takes `fill` and `renamedFrom` (see [Schema evolution](schema-evolution.md)):

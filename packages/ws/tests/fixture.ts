@@ -21,6 +21,11 @@ const Forbidden = exceptionOf({
 	name: "Forbidden",
 	message: "Not yours.",
 });
+export const Upstream = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "Upstream",
+	message: "The upstream refused.",
+});
 
 /** Posts that raise `published` on create, with a sensitive key, served over WebSocket; events go to `topic`. */
 export function realtime(options: WebSocketOptions = {}, topic = "feed") {
@@ -48,6 +53,10 @@ export function realtime(options: WebSocketOptions = {}, topic = "feed") {
 			if (this.input.title === "forbidden") {
 				throw new Forbidden({ source: "Create" });
 			}
+			if (this.input.title === "upstream") {
+				throw new Upstream({ source: "Create" });
+			}
+			if (this.input.title === "crash") throw new Error("db is down");
 			const post = new Post({
 				title: this.input.title,
 				author: this.context.author ?? "anonymous",
@@ -76,7 +85,7 @@ export function realtime(options: WebSocketOptions = {}, topic = "feed") {
 	const Live = outputOf({
 		name: "Live",
 		commands: [PostsCommand],
-		statuses: { Forbidden: 403 },
+		statuses: { Forbidden: 403, Upstream: 502 },
 		pipe: [
 			websocket(
 				// A key given as undefined is left out: options are JSON.

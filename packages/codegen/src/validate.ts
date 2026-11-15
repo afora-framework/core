@@ -691,6 +691,7 @@ function checkFieldsOf(
 					"change",
 					"plugins",
 					"events",
+					"id",
 					"versioned",
 					"expires",
 					"schemaVersion",
@@ -736,6 +737,18 @@ function checkRecord(
 	const path = [collection, decl.name];
 	const fields = checkFieldsOf(decl, collection, owner, scope, issues);
 	const entries = catalog();
+	if (
+		decl.spec.id !== undefined &&
+		!["uuid7", "uuid", "key"].includes(decl.spec.id as string)
+	) {
+		issues.push(
+			issue(
+				[...path, "id"],
+				"invalid_option",
+				'Expected "uuid7" (the default), "uuid" or "key".',
+			),
+		);
+	}
 	if (
 		decl.spec.versioned !== undefined &&
 		typeof decl.spec.versioned !== "boolean"

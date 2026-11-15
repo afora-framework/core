@@ -28,7 +28,7 @@ export const ImmutableEntityKey = exceptionOf({
 export const DeletedEntity = exceptionOf({
 	layer: ExceptionLayers.Entity,
 	name: "DeletedEntity",
-	message: ({ id }: { readonly id: string }, source) =>
+	message: ({ id }: { readonly id: string | number }, source) =>
 		`Entity "${source}" of id "${id}" was destroyed and cannot change.`,
 });
 
@@ -55,4 +55,16 @@ export const InvalidEntitySchemaVersion = exceptionOf({
 	name: "InvalidEntitySchemaVersion",
 	message: ({ reason }: { readonly reason: string }, source) =>
 		`Invalid schema evolution options of entity "${source}": ${reason}`,
+});
+
+/**
+ * `idOf` was given something other than a required property, or a
+ * `generate` that is not a function; or the `id` option of `entityOf` is not
+ * a strategy made by `idOf`. `source` is `idOf` or the entity name.
+ */
+export const InvalidIdStrategy = exceptionOf({
+	layer: ExceptionLayers.Entity,
+	name: "InvalidIdStrategy",
+	message: ({ reason }: { readonly reason: string }, source) =>
+		`Invalid id strategy of "${source}": ${reason}`,
 });

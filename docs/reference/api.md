@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 504 exports.
+Tier: stable. 529 exports.
 
 ### Access
 
@@ -583,6 +583,14 @@ What an entity builder needs: the identity fields, and how to make an id and a t
 
 What `entityOf` returns: a record class with identity.
 
+### EntityConstructorWithId
+
+*type* · tier: stable · `import type { EntityConstructorWithId } from "@afora/core"`
+
+What `entityOf` returns for an entity with an `id` option: as
+`EntityConstructor`, built from `Input` (which holds the id when the
+strategy makes none). Kept apart so that the default costs no more.
+
 ### EntityDuration
 
 *interface* · tier: stable · `import type { EntityDuration } from "@afora/core"`
@@ -618,6 +626,25 @@ change, and `onDelete` when it is destroyed.
 
 `after` a duration from `createdAt` (stored as `expiresAt`), or `at` the
 date held by a key of the blueprint, `Key`.
+
+### EntityIdOf
+
+*type* · tier: stable · `import type { EntityIdOf } from "@afora/core"`
+
+The type of the ids of the entities of `Entity`: a string, unless its `id` option says otherwise.
+
+### EntityIdOptions
+
+*interface* · tier: stable · `import type { EntityIdOptions } from "@afora/core"`
+
+How an entity gets its id.
+
+### EntityIdStrategy
+
+*const* · tier: stable · `import { EntityIdStrategy } from "@afora/core"`
+
+The id strategy of a class made by `entityOf` with an `id` option (made by
+`idOf`); a class without one has none.
 
 ### EntityIdentityKey
 
@@ -1105,6 +1132,32 @@ A UUID v7, time-ordered, so ids sort by creation.
 
 Makes a new id, as a UUID v7 string.
 
+### IdStrategy
+
+*interface* · tier: stable · `import type { IdStrategy } from "@afora/core"`
+
+How the entities of one class get their id, made by `idOf`: `property`
+validates it, and `generate`, when `Generated`, makes it for an entity
+built without one.
+
+### IdValue
+
+*type* · tier: stable · `import type { IdValue } from "@afora/core"`
+
+The value of an id at run time: a string, or a number a database assigns.
+
+### IdValueOf
+
+*type* · tier: stable · `import type { IdValueOf } from "@afora/core"`
+
+The value `Property` gives, the type of the ids it validates.
+
+### IdentityWithId
+
+*type* · tier: stable · `import type { IdentityWithId } from "@afora/core"`
+
+`Identity`, with the property of the strategy `Id` as its `id`.
+
 ### ImmutableEntityKey
 
 *const* · tier: stable · `import { ImmutableEntityKey } from "@afora/core"`
@@ -1206,6 +1259,14 @@ A variable of the environment is missing or rejected by its blueprint.
 
 `eventPolicyOf`, a policy's options or a catalog got something it cannot use; `details.reason` says what.
 
+### InvalidIdStrategy
+
+*const* · tier: stable · `import { InvalidIdStrategy } from "@afora/core"`
+
+`idOf` was given something other than a required property, or a
+`generate` that is not a function; or the `id` option of `entityOf` is not
+a strategy made by `idOf`. `source` is `idOf` or the entity name.
+
 ### InvalidJsonData
 
 *const* · tier: stable · `import { InvalidJsonData } from "@afora/core"`
@@ -1230,7 +1291,7 @@ A schema given to `jsonOf` or `checkJsonSchema` that is not a JSON Schema (draft
 
 *const* · tier: stable · `import { InvalidOpenAPIModel } from "@afora/core"`
 
-`toOpenAPI` is given something that is not a field: a property, blueprint, list, record or entity.
+`toOpenAPI` or `jsonSchemaOf` is given something that is not a field: a property, blueprint, list, record or entity.
 
 ### InvalidOutputStage
 
@@ -1382,6 +1443,13 @@ it is, e.g. `["addresses", 0, "zip"]`, empty for the value itself.
 
 Why a value was rejected.
 
+### JSONSchema
+
+*interface* · tier: stable · `import type { JSONSchema } from "@afora/core"`
+
+A JSON Schema (draft 2020-12) document: what `jsonSchemaOf` gives, its
+`$schema` set and the records it holds under `$defs`.
+
 ### JsonClass
 
 *type* · tier: stable · `import type { JsonClass } from "@afora/core"`
@@ -1402,6 +1470,14 @@ For JSON of a known shape, `jsonOf({ schema })`.
 *type* · tier: stable · `import type { JsonValue } from "@afora/core"`
 
 A value JSON can hold, as `JSON.parse` gives it.
+
+### Key
+
+*const* · tier: stable · `import { Key } from "@afora/core"`
+
+The `id` option of an entity whose id is a natural key: any text of 1 to
+256 characters, never generated, so the input of the entity must hold it,
+e.g. `entityOf(Setting, { id: Key })` and `new Setting({ id: "seo", ... })`.
 
 ### ListMaker
 
@@ -1671,6 +1747,14 @@ An HTTP-style status by exception name.
 
 An `ownerId`, with `isOwnedBy` and `transferTo`.
 
+### OwnerId
+
+*class* · tier: stable · `import { OwnerId } from "@afora/core"`
+
+The id of an entity of any id strategy, held by another record (as
+`ownerId`): text of 1 to 256 characters, a UUID kept in lower case, or a
+positive integer.
+
 ### ParseResult
 
 *type* · tier: stable · `import type { ParseResult } from "@afora/core"`
@@ -1774,12 +1858,26 @@ A required property got `undefined`; `source` is the property name.
 The value a property holds: the value of its schema, or `undefined` too
 when it is optional. `Value` is the value of the schema, as in `ISchema`.
 
+### ProviderCall
+
+*type* · tier: stable · `import type { ProviderCall } from "@afora/core"`
+
+One call to a provider, as `around` gets it: the `operation`, its
+`context` and the arguments after it (`args`), typed by operation, so a
+`switch` on `operation` narrows `args`.
+
 ### ProviderFactory
 
 *interface* · tier: stable · `import type { ProviderFactory } from "@afora/core"`
 
 A provider an application creates when it starts, from the variables of
 its environments: what `providerFrom` makes.
+
+### ProviderInterceptor
+
+*interface* · tier: stable · `import type { ProviderInterceptor } from "@afora/core"`
+
+What `wrapProvider` runs around each operation of a provider.
 
 ### ProviderNotBound
 
@@ -1788,6 +1886,15 @@ its environments: what `providerFrom` makes.
 A repository read or wrote through a provider of `providersOf` made by
 `providerFrom` outside an application: an application that registers the
 storage makes it on start, and its bound repositories use it.
+
+### ProviderOperation
+
+*type* · tier: stable · `import type { ProviderOperation } from "@afora/core"`
+
+The operations of an `IRepositoryProvider` that take a `RepositoryContext`
+first: the ones `wrapProvider` hands to `around`. `transaction` and `close`
+take none and are not intercepted (the provider a transaction gives is
+wrapped with the same interceptor).
 
 ### ProviderOption
 
@@ -1800,6 +1907,12 @@ JSON values retained in provider descriptors, including explicit import referenc
 *type* · tier: stable · `import type { ProviderOptions } from "@afora/core"`
 
 The JSON options of a named provider, as its description keeps them.
+
+### ProviderResults
+
+*type* · tier: stable · `import type { ProviderResults } from "@afora/core"`
+
+What each operation of a provider gives, once awaited.
 
 ### ProviderSettings
 
@@ -2160,6 +2273,12 @@ What `forEachPage` did.
 *type* · tier: stable · `import type { RepositoryWhere } from "@afora/core"`
 
 Equality, or membership in a list. Conditions on different keys are ANDed.
+
+### RequiredIdInput
+
+*type* · tier: stable · `import type { RequiredIdInput } from "@afora/core"`
+
+`{ readonly id: ... }`, required, when the strategy `Id` makes no id.
 
 ### ReservedBlueprintKey
 
@@ -2632,6 +2751,12 @@ The hasher in use cannot verify without waiting; use `verify` instead.
 
 A string that is not blank once trimmed.
 
+### TextKey
+
+*class* · tier: stable · `import { TextKey } from "@afora/core"`
+
+Any text of 1 to 256 characters, kept as given: a natural key, e.g. `profile`.
+
 ### TraceAttributes
 
 *type* · tier: stable · `import type { TraceAttributes } from "@afora/core"`
@@ -2928,6 +3053,21 @@ What `compile` gets of the repository a use case is made for.
 A use case plugin cannot make its use case for a repository: the
 repository lacks an action, the entity lacks a record plugin, or an option
 names what the entity does not have. `source` is the plugin name.
+
+### Uuid
+
+*const* · tier: stable · `import { Uuid } from "@afora/core"`
+
+The `id` option of an entity whose ids are UUIDs of any version (a v4
+loaded from an existing database included), lower-cased; a new entity
+still gets a UUID v7 from the configured generator, e.g.
+`entityOf(Legacy, { id: Uuid })`.
+
+### UuidKey
+
+*class* · tier: stable · `import { UuidKey } from "@afora/core"`
+
+A UUID of any version, in lower case.
 
 ### VersionedIdentity
 
@@ -3261,6 +3401,30 @@ Whether `value`, a record, an entity or a class of them, has `plugin`
 (given or by name), applied to it or required by one of its plugins; a
 record of the plugin's own class has it too.
 
+### idOf
+
+*function* · tier: stable · `import { idOf } from "@afora/core"`
+
+How the entities of one class get their id, for the `id` option of
+`entityOf`: `property` validates it (it replaces the `id` of the identity
+and stays unique) and `generate`, when given, makes it for an entity built
+without one. Without `generate`, the id is a natural key: the input of the
+entity must hold it, or building it reports an issue at `id`.
+
+**Example**
+
+```ts
+import { blueprintOf, entityOf, idOf, Integer } from "@afora/core";
+
+let next = 0;
+class Ticket extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{ id: idOf(Integer, () => ++next) },
+) {}
+
+new Ticket({ title: "First" }).id; // 1
+```
+
 ### inMemoryProvider
 
 *function* · tier: stable · `import { inMemoryProvider } from "@afora/core"`
@@ -3289,6 +3453,18 @@ Whether `value` is an entity, an instance of a class made by `entityOf`.
 *function* · tier: stable · `import { isEntityClass } from "@afora/core"`
 
 Whether `value` is a class made by `entityOf`, or one extending it.
+
+### isIdStrategy
+
+*function* · tier: stable · `import { isIdStrategy } from "@afora/core"`
+
+Whether `value` is an id strategy, made by `idOf`.
+
+### isIdValue
+
+*function* · tier: stable · `import { isIdValue } from "@afora/core"`
+
+Whether `value` can be an id: a string, or a finite number.
 
 ### isOutput
 
@@ -3359,6 +3535,31 @@ Schema, draft 2020-12, or a TypeBox type), as afora issues: empty when
 there is none. For schemas known at runtime only, e.g. loaded from a
 database: TypeBox checks the value by walking the schema, compiling
 nothing. Throws `InvalidJsonSchema` when `schema` is not a JSON Schema.
+
+### jsonSchemaOf
+
+*function* · tier: stable · `import { jsonSchemaOf } from "@afora/core"`
+
+The JSON Schema (draft 2020-12) of a property, blueprint, list, variant,
+record or entity, as a standalone document: what an AI client, a form or
+any JSON Schema validator reads. It is `toOpenAPI` in the JSON Schema
+dialect: each record held inside is defined once under `$defs`, by its
+name, and referenced as `{ $ref: "#/$defs/Address" }` (so is the schema
+of a property with an `$id`, without it, so the document is
+self-contained), a read-only key is not `required`, and a variant is
+`oneOf` without the OpenAPI `discriminator`. Sensitive keys are
+`writeOnly`, the identity of an entity `readOnly`, optional keys left out
+of `required`, and objects closed with `additionalProperties: false`.
+
+**Example**
+
+```ts
+import { blueprintOf, jsonSchemaOf } from "@afora/core";
+
+const Post = blueprintOf((ctx) => ({ title: ctx.string, tags: ctx.list.string }));
+jsonSchemaOf(Post);
+// { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", ... }
+```
 
 ### listOf
 
@@ -3832,6 +4033,42 @@ class (an entity too): the value is then an instance of it, told apart by
 its class, and the key is only in what is given, in `toJSON` and in what is
 stored.
 
+### wrapProvider
+
+*function* · tier: stable · `import { wrapProvider } from "@afora/core"`
+
+A provider that runs `interceptor.around` around each operation of
+`provider` taking a context (`ProviderOperation`), for logs, traces or
+spies. It has the operations `provider` has and no other (`increment`,
+`migrate`, `transaction` and `close` stay absent when it has none), its
+`capabilities` (read live) and its other members; the provider a
+`transaction` gives is wrapped with the same interceptor; `close` is
+forwarded as it is. Wraps compose: the last one runs first.
+
+The wrapper is a plain frozen object (`instanceof` the class of
+`provider` is false) and the other members are bound when it is made.
+`around` must give what `next()` gives (or another value of the
+operation's result, `ProviderResults[operation]`).
+
+**Throws** {
+
+**Example**
+
+```ts
+import { inMemoryProvider, wrapProvider } from "@afora/core";
+
+const logged = wrapProvider(inMemoryProvider(), {
+  async around({ operation, context }, next) {
+    try {
+      return await next();
+    } catch (error) {
+      console.error(`${context.name}.${operation} failed`, error);
+      throw error;
+    }
+  },
+});
+```
+
 ## @afora/core/adapters
 
 Tier: adapters. 73 exports.
@@ -3999,8 +4236,10 @@ An RFC 9457 problem.
 
 *interface* · tier: adapters · `import type { ProblemOptions } from "@afora/core/adapters"`
 
-What `problemOf` takes: the HTTP `status` of the problem and `debug`, which
-adds the `trace` and the real `detail` of a 5xx.
+What `problemOf` takes: the HTTP `status` of the problem, `debug`, which
+adds the `trace` and the real `detail` of a 5xx, and what the output
+declares (`statuses`, the `operation` and its `errors`): the `detail` of a
+declared exception is kept at any status.
 
 ### PropertyDescription
 
@@ -4309,8 +4548,9 @@ goes through its `toJSON`, so sensitive values are always masked.
 
 An RFC 9457 problem for `error`. `issues` (`path`, `code`, `message`; no
 values or causes) is present only for a 400, `trace` only with `debug`,
-and the `detail` of a 5xx is `"Internal error."` unless `debug` is set, so
-internal messages do not leak.
+and the `detail` of a 5xx is `"Internal error."` unless `debug` is set or
+the output declares the exception (its name in `statuses`, or a class of
+`operation.errors`, except afora's internal ones), so internal messages do not leak.
 
 ### requestIdHeaderOf
 

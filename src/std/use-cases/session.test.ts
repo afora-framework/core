@@ -10,6 +10,8 @@ import {
 	blueprintOf,
 	commandOf,
 	entityOf,
+	Integer,
+	idOf,
 	inMemoryProvider,
 	outputOf,
 	repositoryOf,
@@ -395,5 +397,104 @@ describe("session: tokens of login", () => {
 		expect(
 			httpOptionsIssue({ auth: { jwt: { secret: named } } }, "x"),
 		).toBeUndefined();
+	});
+});
+
+describe("session: entities with integer ids", () => {
+	function buildInteger() {
+		let next = 0;
+		class Member extends entityOf(
+			blueprintOf((ctx) => ({ name: ctx.string })),
+			{
+				id: idOf(Integer, () => ++next),
+				plugins: (ctx) => [ctx.authenticatable],
+			},
+		) {}
+		const Members = repositoryOf({
+			entity: Member,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findByEmail", "create"],
+		});
+		const token = {
+			secret: named,
+			issuer: "blog",
+			expiresIn: 60,
+			refresh: { expiresIn: 3600 },
+		} as const;
+		class Me extends useCaseOf({
+			name: "Me",
+			blueprint: blueprintOf(() => ({})),
+			response: blueprintOf((ctx) => ({ id: ctx.integer })),
+			context: blueprintOf((ctx) => ({ id: ctx.integer })),
+			route: { method: "get", path: "/me" },
+			access: { context: { id: "subject" } },
+		}) {
+			override async execute() {
+				return { ...this.context };
+			}
+		}
+		const Auth = commandOf({
+			name: "Auth",
+			useCases: (ctx) => ({
+				register: ctx.register(Members, {
+					route: { method: "post", path: "/users", status: 201 },
+				}),
+				login: ctx.login(Members, {
+					as: "user",
+					token,
+					route: { method: "post", path: "/login" },
+				}),
+				refresh: ctx.refresh(Members, {
+					token,
+					route: { method: "post", path: "/refresh" },
+				}),
+				me: Me,
+			}),
+		});
+		const Api = outputOf({ name: "Api", commands: [Auth] });
+		const table = compileRoutes(
+			Api.operations,
+			{ auth: { jwt: { secret: named, issuer: "blog" } } },
+			{ output: { name: "Api", statuses: Api.statuses } },
+			{ source: "test" },
+		);
+		return async (
+			path: string,
+			given: { body?: unknown; headers?: Record<string, string> } = {},
+		) => {
+			const route = table.routes.find((entry) => entry.path === path);
+			if (!route) throw new Error(path);
+			const result = await route.handle({
+				param: () => undefined,
+				query: () => ({}),
+				header: (name) => given.headers?.[name],
+				text: () => JSON.stringify(given.body ?? {}),
+			});
+			return {
+				...result,
+				json: result.body ? JSON.parse(result.body) : undefined,
+			};
+		};
+	}
+
+	test("the subject fills an integer context key, and refresh finds the entity", async () => {
+		const call = buildInteger();
+		const body = { name: "Ana", email: "ana@x.dev", password: "S3nha!forte" };
+		expect((await call("/users", { body })).status).toBe(201);
+		const login = await call("/login", {
+			body: { email: body.email, password: body.password },
+		});
+		expect(login.json.user.id).toBe(1);
+		const me = await call("/me", {
+			headers: { authorization: `Bearer ${login.json.token}` },
+		});
+		expect(me.status).toBe(200);
+		expect(me.json).toEqual({ id: 1 });
+		const refreshed = await call("/refresh", {
+			body: { refreshToken: login.json.refreshToken },
+		});
+		expect(refreshed.status).toBe(200);
+		const jwt = jwtOf({ secret, issuer: "blog" });
+		expect((await jwt.verify(refreshed.json.token)).subject).toBe("1");
 	});
 });

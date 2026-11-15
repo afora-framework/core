@@ -9,7 +9,13 @@ import {
 	eventOf,
 	exceptionOf,
 	guard,
+	type IdValue,
+	type InMemoryProvider,
+	Integer,
+	idOf,
+	inMemoryProvider,
 	type JsonValue,
+	Key,
 	listOf,
 	Meta,
 	openapi,
@@ -23,6 +29,7 @@ import {
 	repositoryOf,
 	type StandardSchemaV1,
 	variantOf,
+	wrapProvider,
 } from "@afora/core";
 import type { IRepositoryProvider } from "@afora/core/adapters";
 import { type SliceMask, sliceOf } from "@afora/core/experimental";
@@ -422,6 +429,18 @@ declare const runner: ContractRunner;
 declare const makeProvider: () => IRepositoryProvider;
 providerContract(runner, makeProvider, { transactions: false });
 
+// wrapProvider keeps the type of the provider; args are typed by operation.
+const wrapped = wrapProvider(inMemoryProvider(), {
+	async around(call, next) {
+		if (call.operation === "remove") {
+			const id: IdValue = call.args[0];
+			void id;
+		}
+		return next();
+	},
+});
+export const wrappedType: Equals<typeof wrapped, InMemoryProvider> = true;
+
 // Queries, steps, commands and outputs (1.0).
 class ClubMember extends entityOf(
 	blueprintOf((ctx) => ({
@@ -691,3 +710,19 @@ useCaseOf({
 	// @ts-expect-error a route has no such method
 	route: { method: "head" },
 });
+
+// Per-entity id strategies: the id type follows the strategy; a natural key is required.
+class Setting extends entityOf(
+	blueprintOf((ctx) => ({ value: ctx.string })),
+	{ id: Key },
+) {}
+export const settingId: string = new Setting({ id: "seo", value: "on" }).id;
+// @ts-expect-error: the input of an entity with a natural key holds its id.
+new Setting({ value: "on" });
+class Ticket extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{
+		id: idOf(Integer, () => 1),
+	},
+) {}
+export const ticketId: number = new Ticket({ title: "a" }).id;

@@ -71,6 +71,7 @@ const HANDLING: Record<string, string> = {
 	InvalidCommandEnvironment:
 		"Configuration, not input (an output answers 500): fix the `env` given to the call or the environment blueprint.",
 	InvalidEntityExpiry: DECLARATION,
+	InvalidIdStrategy: DECLARATION,
 	InvalidEntitySchemaVersion: DECLARATION,
 	InvalidEnvironment:
 		"Set or fix the variable named in the message; validate environments at start (`app.start()`) so it fails before serving.",

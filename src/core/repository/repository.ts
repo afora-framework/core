@@ -15,7 +15,9 @@ import {
 import { isEntity, isEntityClass } from "../entity/entity";
 import { enqueueLifecycle } from "../entity/event";
 import { InvalidEntitySchemaVersion } from "../entity/exceptions";
+import { isIdValue } from "../entity/id";
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
+import type { IdValue } from "../entity/types/id.interface";
 import {
 	type EnvironmentDependencies,
 	isEnvironment,
@@ -148,7 +150,7 @@ type RepositoryOfProvider<
 /** Stores each entity a record holds as its id. */
 const REFERENCES: RecordDataOptions = {
 	reference: (record) =>
-		isEntity(record) ? (record as unknown as { id: string }).id : undefined,
+		isEntity(record) ? (record as unknown as { id: IdValue }).id : undefined,
 };
 
 /**
@@ -742,7 +744,7 @@ function deltasOf(
  */
 function createdOf(
 	context: RepositoryContext,
-	id: string,
+	id: IdValue,
 	input: unknown,
 	deltas: Readonly<Record<string, number>>,
 ): object {
@@ -781,7 +783,7 @@ function renamedFromOf(field: BlueprintField | undefined): string | undefined {
  */
 async function bringUpRenamed(
 	self: Internal,
-	id: string,
+	id: IdValue,
 	deltas: Readonly<Record<string, number>>,
 ): Promise<void> {
 	const { context } = self;
@@ -833,8 +835,7 @@ async function bringUpRenamed(
 const increment = action(
 	async (self, target: unknown, deltas: unknown, options: unknown) => {
 		const { context } = self;
-		const id =
-			typeof target === "string" ? target : (self.dataOf(target).id as string);
+		const id = isIdValue(target) ? target : (self.dataOf(target).id as IdValue);
 		const checked = deltasOf(context, deltas);
 		if (options !== undefined && !isPlainObject(options)) {
 			invalid(context.name, "Expected the options of increment as an object.");
@@ -868,7 +869,7 @@ const increment = action(
 const remove = action(async (self, target: unknown) => {
 	const { context } = self;
 	let entity = target;
-	if (typeof target === "string") {
+	if (isIdValue(target)) {
 		const data = await self.provider.findOne(
 			context,
 			equals(self, "id", target),
@@ -890,15 +891,14 @@ const remove = action(async (self, target: unknown) => {
 	if (stateOf(self).deletion === "soft") {
 		await writeEntity(self, entity);
 	} else {
-		await self.provider.remove(context, data.id as string);
+		await self.provider.remove(context, data.id as IdValue);
 	}
 	return entity;
 });
 
 const restore = action(async (self, target: unknown) => {
 	const { context } = self;
-	const id =
-		typeof target === "string" ? target : (self.dataOf(target).id as string);
+	const id = isIdValue(target) ? target : (self.dataOf(target).id as IdValue);
 	const data = await self.provider.findOne(context, {
 		...equals(self, "id", id),
 		withDeleted: true,

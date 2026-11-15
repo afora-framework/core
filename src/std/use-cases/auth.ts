@@ -1,5 +1,6 @@
 import { jwtOf, jwtOptionsIssue } from "../../core/auth/jwt";
 import type { JsonValue } from "../../core/json";
+import { coerceTextValues } from "../../core/output/coerce";
 import { outputValueOf } from "../../core/output/problem";
 import {
 	UseCaseEntityConflict,
@@ -97,8 +98,16 @@ function tokensOf(target: UseCaseTargetInfo, options: Options) {
 				: {}),
 		};
 	};
-	const verifyRefresh = (token: string) =>
-		jwt.verify(token, { use: "refresh" });
+	// The subject of a token is text; the id it names may be a number.
+	const verifyRefresh = async (token: string) => {
+		const caller = await jwt.verify(token, { use: "refresh" });
+		return {
+			...caller,
+			subject: coerceTextValues(target.entity.blueprint, {
+				id: caller.subject,
+			}).id,
+		};
+	};
 	return { issue, verifyRefresh, refresh: refresh !== undefined };
 }
 

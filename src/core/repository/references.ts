@@ -12,6 +12,8 @@ import {
 	namedVariantOf,
 } from "../blueprint/variant";
 import { isEntityClass } from "../entity/entity";
+import { isIdValue } from "../entity/id";
+import type { IdValue } from "../entity/types/id.interface";
 import { recordNameOf } from "../record/name";
 import { type ExecutionScope, scopedProvider } from "../use-case/scope";
 import {
@@ -210,7 +212,7 @@ export function parseEntity(state: RepositoryState, data: RepositoryData) {
 }
 
 /** What one read shares: the entities it loaded, by repository and id. */
-export type ReferenceSession = Map<RepositoryState, Map<string, object>>;
+export type ReferenceSession = Map<RepositoryState, Map<IdValue, object>>;
 
 /**
  * The stored values of `ids`, in one `findMany`. A soft-deleted or expired
@@ -219,7 +221,7 @@ export type ReferenceSession = Map<RepositoryState, Map<string, object>>;
  */
 function loadByIds(
 	state: RepositoryState,
-	ids: readonly string[],
+	ids: readonly IdValue[],
 	scope: ExecutionScope | undefined,
 ): Promise<readonly RepositoryData[]> {
 	return scopedProvider(scope, state.provider).findMany(contextOf(state), {
@@ -246,12 +248,12 @@ export async function resolveReferences(
 	if (state.relations.size === 0) return datas;
 	const { properties } = state.entity.blueprint;
 
-	const wanted = new Map<RepositoryState, Set<string>>();
+	const wanted = new Map<RepositoryState, Set<IdValue>>();
 	for (const data of datas) {
 		mapReferences(properties, data, (target, value) => {
 			const relation = state.relations.get(target);
-			if (relation && typeof value === "string") {
-				const ids = wanted.get(relation) ?? new Set<string>();
+			if (relation && isIdValue(value)) {
+				const ids = wanted.get(relation) ?? new Set<IdValue>();
 				wanted.set(relation, ids.add(value));
 			}
 			return value;
@@ -259,7 +261,7 @@ export async function resolveReferences(
 	}
 
 	for (const [relation, ids] of wanted) {
-		const loaded = session.get(relation) ?? new Map<string, object>();
+		const loaded = session.get(relation) ?? new Map<IdValue, object>();
 		session.set(relation, loaded);
 		const missing = [...ids].filter((id) => !loaded.has(id));
 		if (missing.length === 0) continue;
@@ -270,7 +272,7 @@ export async function resolveReferences(
 		);
 		const resolved = await resolveReferences(relation, found, session, scope);
 		for (const data of resolved) {
-			const id = data.id as string;
+			const id = data.id as IdValue;
 			if (!loaded.has(id)) loaded.set(id, parseEntity(relation, data));
 		}
 		for (const id of missing) {
@@ -288,7 +290,7 @@ export async function resolveReferences(
 	return datas.map((data) =>
 		mapReferences(properties, data, (target, value) => {
 			const relation = state.relations.get(target);
-			return relation && typeof value === "string"
+			return relation && isIdValue(value)
 				? (session.get(relation)?.get(value) ?? value)
 				: value;
 		}),

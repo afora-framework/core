@@ -18,6 +18,7 @@ import {
 } from "../command/command";
 import type { AnyCommand } from "../command/types/command.interface";
 import {
+	EntityIdStrategy,
 	EntitySettings,
 	identityKeysOf,
 	isVersionedEntityClass,
@@ -25,6 +26,7 @@ import {
 import { isEntityClass } from "../entity/entity";
 import { eventHasHandler, lifecycleEventsOf } from "../entity/event";
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
+import type { IdStrategy } from "../entity/types/id.interface";
 import {
 	type AnyEnvironment,
 	InvalidEnvironment,
@@ -56,7 +58,7 @@ import {
 	logProviderNameOf,
 	silentLogger,
 } from "../logger/logger";
-import { plainOf } from "../openapi/openapi";
+import { plainOf } from "../openapi/walker";
 import { isOutput, outputOf } from "../output/output";
 import { stageDescriptionOf } from "../output/stage";
 import type { AnyOutput } from "../output/types/output.interface";
@@ -939,6 +941,20 @@ function fieldsDescriptionOf(
 	);
 }
 
+/** `{ id }` of an entity declared with an `id` option, else nothing. */
+function idDescriptionOf(entity: unknown): Pick<RecordDescription, "id"> {
+	const strategy = (entity as { readonly [EntityIdStrategy]?: IdStrategy })[
+		EntityIdStrategy
+	];
+	if (strategy === undefined) return {};
+	return {
+		id: {
+			property: (strategy.property.type as { readonly name: string }).name,
+			generated: strategy.generate !== undefined,
+		},
+	};
+}
+
 function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 	const Record = entry.value as {
 		readonly blueprint: AnyBlueprint;
@@ -992,6 +1008,7 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 		plugins,
 		...(Object.keys(events).length > 0 ? { events } : {}),
 		...(expires === undefined ? {} : { expires }),
+		...(entry.collection === "entities" ? idDescriptionOf(Record) : {}),
 		...(entry.collection === "entities" && isVersionedEntityClass(Record)
 			? { versioned: true }
 			: {}),

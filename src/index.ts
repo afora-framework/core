@@ -118,6 +118,7 @@ export type {
 	CommandUseCasesOption,
 } from "./core/command/types/command.interface";
 export {
+	EntityIdStrategy,
 	EntitySettings,
 	EntityUniqueKeys,
 } from "./core/entity/abstract-entity";
@@ -136,16 +137,20 @@ export {
 	ImmutableEntityKey,
 	InvalidEntityExpiry,
 	InvalidEntitySchemaVersion,
+	InvalidIdStrategy,
 	ReservedEntityKey,
 } from "./core/entity/exceptions";
+export { idOf, isIdStrategy, isIdValue } from "./core/entity/id";
 export type {
 	DeclaredEntityInstance,
 	EntityBuilder,
 	EntityBuilderSettings,
 	EntityConstructor,
+	EntityConstructorWithId,
 	EntityDuration,
 	EntityExpires,
 	EntityIdentityKey,
+	EntityIdOptions,
 	EntityInput,
 	EntityOptions,
 	EntityProperties,
@@ -159,6 +164,13 @@ export type {
 	IEntityVersion,
 	VersionedIdentity,
 } from "./core/entity/types/entity.interface";
+export type {
+	IdentityWithId,
+	IdStrategy,
+	IdValue,
+	IdValueOf,
+	RequiredIdInput,
+} from "./core/entity/types/id.interface";
 export { EntityVersion } from "./core/entity/version";
 export type {
 	AnyEnvironment,
@@ -222,7 +234,9 @@ export {
 	memoryLogProvider,
 } from "./core/logger/logger";
 export { InvalidOpenAPIModel } from "./core/openapi/exceptions";
+export { jsonSchemaOf } from "./core/openapi/json-schema";
 export { toOpenAPI } from "./core/openapi/openapi";
+export type { JSONSchema } from "./core/openapi/types/json-schema.interface";
 export type {
 	OpenAPIComponents,
 	OpenAPIOptions,
@@ -381,6 +395,7 @@ export type {
 export type {
 	AnyRepository,
 	AnyRepositoryEntity,
+	EntityIdOf,
 	EntityIncrementKeyOf,
 	EntityInstanceOf,
 	EntityKeyOf,
@@ -401,6 +416,13 @@ export type {
 	SchemaMigrationOptions,
 	SchemaMigrationReport,
 } from "./core/repository/types/schema.interface";
+export type {
+	ProviderCall,
+	ProviderInterceptor,
+	ProviderOperation,
+	ProviderResults,
+} from "./core/repository/types/wrap.interface";
+export { wrapProvider } from "./core/repository/wrap";
 export type {
 	ISchema,
 	ISchemaType,
@@ -527,7 +549,15 @@ export {
 	InvalidJsonSchema,
 } from "./std/properties/exceptions";
 export { SchemaProperty } from "./std/properties/headless";
-export { Id, Slug } from "./std/properties/identity";
+export {
+	Id,
+	Key,
+	OwnerId,
+	Slug,
+	TextKey,
+	Uuid,
+	UuidKey,
+} from "./std/properties/identity";
 export type { JsonClass, JsonValue } from "./std/properties/json";
 export {
 	checkJsonSchema,

@@ -313,7 +313,10 @@ export const mcpTools = sinkOf<McpTools, McpToolsOptions, McpToolsHooks>({
 				return text(outputValueOf(response) ?? null);
 			} catch (error) {
 				const status = statusOf(error, operation, output.statuses);
-				return text(problemOf(error, { status }), true);
+				return text(
+					problemOf(error, { status, statuses: output.statuses, operation }),
+					true,
+				);
 			}
 		};
 

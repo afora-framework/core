@@ -65,6 +65,8 @@ a file of your own.
   \`"versioned": true\`, which adds that identity key (optimistic concurrency: \`update\` throws \`RepositoryConcurrencyConflict\`,
   a 409, when someone else wrote the entity since it was read). No record member names
   (\`toJSON\`, \`set\`, \`onSet\`...); see \`reservedRecordKeys\` in the catalog. \`blueprint\` and \`options\` are valid fields.
+- An entity's ids are UUID v7 by default. \`"id": "uuid"\` accepts any UUID version (existing v4 rows) and still
+  generates v7; \`"id": "key"\` is a natural key (1 to 256 characters) the input of \`create\` must hold.
 - \`unique\`, \`sensitive\`, \`change\` must name fields (or keys of its plugins); \`change\` cannot name an identity key.
   \`password\` is always sensitive and \`slug\` always unique; \`id\` is always unique.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.

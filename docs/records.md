@@ -135,7 +135,7 @@ class Article extends entityOf(
 | `publishable`     | `publishedAt?`                           | `publish(at?)`, `unpublish()`, `isPublished`     |
 | `archivable`      | `archivedAt?`                            | `archive(at?)`, `restore()`, `isArchived`        |
 | `taggable`        | `tags?` (strings)                        | `tag(...tags)`, `untag(...tags)`, `hasTag(tag)`  |
-| `ownable`         | `ownerId` (an `Id`)                      | `isOwnedBy(id)`, `transferTo(id)`                |
+| `ownable`         | `ownerId` (an `OwnerId`)                 | `isOwnedBy(id)`, `transferTo(id)`                |
 | `authenticatable` | `email` (unique), `password` (sensitive) | `change.password(hash)`, `verifyPassword(plain)` |
 
 Your own catalog is `recordPluginCatalogOf(Slugged, ...StdRecordPlugins.list)`, given to `recordBuilderOf(catalog)` or to `entityBuilderOf({ ..., plugins: [catalog] })`. A later catalog replaces a plugin of an earlier one that has the same name.
