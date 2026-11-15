@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Security
+
+- `@afora/codegen` and `@afora/mcp` (#69): `projectBoundaryIssues`, which `@afora/mcp` runs on every spec an agent sends, refuses (`outside_project`) the imports and `extends` that left the project or ran the runtime's own modules: `pkg/../../../x`, a backslash or percent-encoded `..` in a relative module, a `?` that a URL reads as a query, a built-in module such as `child_process`, a symlink out of the project, an `output.dir` in `node_modules` or `.git` (any case), and the same in a spec extended inside the project, at any depth (`resolveExtended(spec, file, { root })`). `generate` keeps a `__proto__` key of a JSON value an own property. `afora_generate` runs `bunx --no-install tsc`. See `SECURITY.md`.
+
 ### A body on DELETE routes (#119)
 
 - `route: { method: "delete", body: true }` reads the input keys with no other place from a JSON body instead of the query, merged as for the other methods (the path, the route query keys, headers and cookies win); an empty body is `{}`. It is an opt-in, so existing `delete` routes, their clients and their documents do not change. It is taken by the use case route (`route` setting and `@Route`) and by the `route` option of the sinks (`openapi`, `hono`, `express`, `fastify`, `elysia`), which wins; `body` on a `get`, `post`, `put` or `patch` is rejected (`InvalidUseCaseDeclaration`, `InvalidOutputStage`). The `openapi` document gives such a route a JSON `requestBody`, `required` only when a field left in it is, and `operationRoutes` reports it as `body: true`. `httpProviderContract` checks that every HTTP sink delivers the body of a `DELETE`. See [`docs/use-cases.md#routes`](docs/use-cases.md#routes).
