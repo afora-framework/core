@@ -7,3 +7,5 @@ export type {
 	ProviderContractOptions,
 } from "./provider-contract";
 export { providerContract } from "./provider-contract";
+export type { ProviderSpy, SpiedCall } from "./spy";
+export { spyProvider } from "./spy";

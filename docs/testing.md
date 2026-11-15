@@ -207,6 +207,106 @@ test("creates a note, then refuses a duplicate with 409", async () => {
 
 To test as a signed-in caller, send the credentials the sink is configured for (a bearer token for `jwt`); to test a use case's rule without HTTP, call `app.run(UseCase, input, { context })`. See [Access](auth.md).
 
+## Spying on the database
+
+A repository is frozen: `vi.spyOn(Projects, "findMany")` or `spyOn` from `bun:test` throws, because the object cannot be changed. That is on purpose. One repository is shared by every use case, command and application that names it, so a patched method would leak into every other test of the process; and an application with a `provider` does not even call it, since `app.repositories.Projects` is a copy bound to that provider. Spy on what lies under every repository instead: the provider.
+
+**Behind an HTTP sink**, where the test sends a request and never calls `execute`, wrap the provider with `spyProvider` from `@afora/core/testing` and give it to the application. The spy is the provider itself, plus three members:
+
+- `calls(entity?, operation?)` gives the calls recorded so far, in order, as `{ operation, entity, args }`: `entity` is the name of the entity (`recordNameOf`, the `name` option when it has one), and the filter takes that name or the class; `operation` is one of the operations of [`wrapProvider`](repositories.md#wrapping-a-provider) (`findOne`, `findMany`, `insert`, `update`, `remove`, `count`, `increment`, `migrate`). The calls inside a transaction are recorded too.
+- `fail(entity, operation, error, { times })` makes that operation reject with `error` instead of reaching the provider: the next `times` calls, or every call until `reset()`. The call is still recorded.
+- `reset()` forgets the calls and the failures.
+
+```ts
+import { expect, test } from "bun:test";
+import {
+	applicationOf,
+	blueprintOf,
+	commandOf,
+	entityOf,
+	ExceptionLayers,
+	exceptionOf,
+	inMemoryProvider,
+	outputOf,
+	repositoryOf,
+	useCaseOf,
+} from "@afora/core";
+import { spyProvider } from "@afora/core/testing";
+import { hono } from "@afora/hono";
+
+class Setting extends entityOf(blueprintOf((ctx) => ({ key: ctx.string }))) {}
+const Settings = repositoryOf({ entity: Setting, actions: ["count"] });
+const StoreDown = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "StoreDown",
+	message: "The store is down.",
+});
+
+class CountSettings extends useCaseOf({
+	name: "CountSettings",
+	blueprint: blueprintOf(() => ({})),
+	response: blueprintOf((ctx) => ({ total: ctx.integer })),
+	dependencies: { Settings },
+	route: { method: "get", path: "/settings/count" },
+}) {
+	override async execute({ Settings = this.dependencies.Settings } = {}) {
+		return { total: await Settings.count() };
+	}
+}
+const Admin = commandOf({ name: "Admin", useCases: { count: CountSettings } });
+const Api = outputOf({
+	name: "Api",
+	commands: [Admin],
+	statuses: { StoreDown: 503 },
+	pipe: [hono()],
+});
+
+test("a failing count is a 503", async () => {
+	const spy = spyProvider(inMemoryProvider());
+	const app = applicationOf({
+		name: "cms",
+		entities: { Setting },
+		repositories: { Settings },
+		useCases: { CountSettings },
+		commands: { Admin },
+		outputs: { Api },
+		provider: spy,
+	});
+	await app.start({ replace: true });
+	const api = app.outputs.Api.build();
+
+	expect((await api.request("/settings/count")).status).toBe(200);
+	expect(spy.calls("Setting", "count")).toHaveLength(1);
+
+	spy.fail(Setting, "count", new StoreDown({ source: "test" }));
+	expect((await api.request("/settings/count")).status).toBe(503);
+
+	await app.stop();
+});
+```
+
+Inject a declared exception (`exceptionOf`) and map its name in the output `statuses`. A plain `Error` crosses the repository as `UnexpectedError`: it is a 500, and its message stays masked in the response.
+
+**With a direct call**, you need no spy: a use case takes its repositories as parameters of `execute`, so the test passes an object with the methods it wants to count or to fail (see [Use cases](#use-cases) and the [recipe](recipes/override-repository-method.md)).
+
+<!-- docs:code continue -->
+```ts
+test("counts through the repository it is given", async () => {
+	let reads = 0;
+	const result = await new CountSettings({}).execute({
+		Settings: {
+			count: async () => {
+				reads += 1;
+				return 3;
+			},
+		} satisfies Partial<typeof Settings> as typeof Settings,
+	});
+
+	expect(result.total).toBe(3);
+	expect(reads).toBe(1);
+});
+```
+
 ## Events and publishers
 
 `memoryPublisher()` from `@afora/core/testing` is a publisher that keeps what it is given. Register it under the key your `publishEvents` policy names, run the command, and read `published`, a list of `{ topic, event }`. `clear()` forgets it.
@@ -281,6 +381,7 @@ test("ids are predictable", () => {
 | Export                 | For                                                                                       |
 | ---------------------- | ----------------------------------------------------------------------------------------- |
 | `memoryPublisher()`    | Testing an application: a publisher that keeps `{ topic, event }` in `published`.         |
+| `spyProvider()`        | Testing an application: a provider that records its calls and fails on demand.            |
 | `providerContract`     | Writing a repository provider: the cases every `IRepositoryProvider` must pass.           |
 | `httpProviderContract` | Writing an HTTP sink for a server (as `@afora/hono` and `@afora/fastify` are): its cases. |
 
