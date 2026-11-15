@@ -780,6 +780,37 @@ describe("problemOf", () => {
 				statuses: { InvalidCommandEnvironment: 500 },
 			}).detail,
 		).toBe("Internal error.");
+
+		// A plain error wrapped by `guard`: its raw message never shows.
+		const wrapped = Exception.from(new Error("postgres://admin:pw@db"), {
+			layer: ExceptionLayers.Repository,
+			source: "Posts",
+		});
+		const statuses = { UnexpectedError: 503, Renamed: 503 };
+		const status = statusOf(wrapped, undefined, statuses);
+		expect(status).toBe(503);
+		const unexpected = problemOf(wrapped, { status, statuses });
+		expect(unexpected.detail).toBe("Internal error.");
+		expect(JSON.stringify(unexpected)).not.toContain("postgres");
+		const renamed = wrapped.propagate({
+			layer: ExceptionLayers.UseCase,
+			source: "Publish",
+			name: "Renamed",
+		});
+		expect(problemOf(renamed, { status: 503, statuses }).detail).toBe(
+			"Internal error.",
+		);
+		// afora's own exception, listed on purpose: its message shows.
+		const duplicate = new DuplicateOperation({
+			source: "Api",
+			details: { id: "Posts.create" },
+		});
+		expect(
+			problemOf(duplicate, {
+				status: 503,
+				statuses: { DuplicateOperation: 503 },
+			}).detail,
+		).toBe('The operation "Posts.create" is declared twice.');
 	});
 
 	test("goes with statusOf", () => {

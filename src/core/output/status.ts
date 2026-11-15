@@ -1,4 +1,4 @@
-import { Exception } from "../exception/exception";
+import { Exception, UNEXPECTED_ERROR } from "../exception/exception";
 import type {
 	OperationDescriptor,
 	OutputStatuses,
@@ -12,10 +12,13 @@ const INVALID_INPUT = new Set([
 /** Configuration the call was given, not input: its issues are not the caller's. */
 const CONFIGURATION = new Set(["InvalidCommandEnvironment"]);
 /**
- * Exceptions that say the server is misconfigured or broke its own contract:
- * their message is never the caller's, even when the output lists them.
+ * Exceptions whose message is never the caller's, even when the output lists
+ * them: `UnexpectedError` carries the raw message of an error that is not an
+ * exception (a driver, a provider, a bug), and the others say the server is
+ * misconfigured or broke its own contract.
  */
 const INTERNAL = new Set([
+	UNEXPECTED_ERROR,
 	...CONFIGURATION,
 	"InvalidEnvironment",
 	"InvalidApplicationEnvironment",
@@ -52,8 +55,10 @@ export function raisedOf(error: Exception): Exception {
 /**
  * Whether the output declares `error`, so the `detail` of its problem is kept
  * at any status: an exception whose name is in `statuses` or that matches a
- * class of `operation.errors` (by class or by name), except the internal ones
- * (`InvalidCommandEnvironment`, `InvalidEnvironment`,
+ * class of `operation.errors` (by class or by name), afora's own exceptions
+ * included when the output lists them, except the internal ones
+ * (`UnexpectedError`, or any exception that carries its message,
+ * `InvalidCommandEnvironment`, `InvalidEnvironment`,
  * `InvalidApplicationEnvironment`, `InvalidUseCaseResponse`). Being made by
  * `exceptionOf` is not enough: afora's own exceptions are made by it too.
  */
@@ -65,6 +70,11 @@ export function isDeclaredError(
 	if (!(error instanceof Exception)) return false;
 	const { name } = error;
 	if (INTERNAL.has(name)) return false;
+	// The raw message of a wrapped error, passed up under another name.
+	const { origin } = error;
+	if (origin.name === UNEXPECTED_ERROR && origin.message === error.message) {
+		return false;
+	}
 	if (statuses && Object.hasOwn(statuses, name)) return true;
 	return (
 		operation?.errors.some(

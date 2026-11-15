@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { InvalidOutputStage, outputOf, StdStages } from "@afora/core";
 import { stageDescriptionOf } from "@afora/core/experimental";
 import { stages, type WsReply, WsStages, websocket, wsHub } from "../src/index";
-import { fakeSocket, realtime } from "./fixture";
+import { fakeSocket, realtime, Upstream } from "./fixture";
 
 type Problem = {
 	title: string;
@@ -192,6 +192,56 @@ describe("websocket sink: sessions", () => {
 		expect(watcher.sent.at(-1)).toEqual({
 			id: null,
 			subscribed: `posts/${second}`,
+		});
+	});
+
+	test("an error outside a call gets the status of the output, and its detail only when declared", async () => {
+		const { endpoint, hub } = realtime();
+		const failing = (error: unknown) => {
+			const socket = fakeSocket();
+			const session = endpoint.session(socket, {
+				hub,
+				authorize: () => {
+					throw error;
+				},
+			});
+			return { socket, session };
+		};
+		const declared = failing(new Upstream({ source: "authorize" }));
+		await declared.session.message(JSON.stringify({ subscribe: "feed" }));
+		expect(problemOf(declared.socket.sent[0] as WsReply)).toMatchObject({
+			title: "Upstream",
+			status: 502,
+			detail: "The upstream refused.",
+		});
+		const crashed = failing(new Error("redis://admin:pw@cache"));
+		await crashed.session.message(JSON.stringify({ subscribe: "feed" }));
+		const hidden = problemOf(crashed.socket.sent[0] as WsReply);
+		expect(hidden).toMatchObject({ status: 500, detail: "Internal error." });
+		expect(JSON.stringify(hidden)).not.toContain("redis");
+
+		// `handle` answers the same way when its extra cannot be read.
+		const throwing = (error: unknown) =>
+			({
+				get values(): never {
+					throw error;
+				},
+			}) as never;
+		const listed = await endpoint.handle(
+			{ op: "Posts.count" },
+			throwing(new Upstream({ source: "extra" })),
+		);
+		expect(problemOf(listed)).toMatchObject({
+			status: 502,
+			detail: "The upstream refused.",
+		});
+		const plain = await endpoint.handle(
+			{ op: "Posts.count" },
+			throwing(new Error("redis://admin:pw@cache")),
+		);
+		expect(problemOf(plain)).toMatchObject({
+			status: 500,
+			detail: "Internal error.",
 		});
 	});
 

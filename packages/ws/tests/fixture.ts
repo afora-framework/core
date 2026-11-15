@@ -21,7 +21,7 @@ const Forbidden = exceptionOf({
 	name: "Forbidden",
 	message: "Not yours.",
 });
-const Upstream = exceptionOf({
+export const Upstream = exceptionOf({
 	layer: ExceptionLayers.UseCase,
 	name: "Upstream",
 	message: "The upstream refused.",
