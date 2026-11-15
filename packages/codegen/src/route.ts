@@ -17,6 +17,7 @@ const ROUTE_KEYS = [
 	"headers",
 	"cookie",
 	"setCookie",
+	"body",
 ];
 const COOKIE_KEYS = [
 	"name",
@@ -61,7 +62,7 @@ export function checkRoute(
 	if (!isObject(route)) {
 		bad(
 			path,
-			'"route" is { "method", "path"?, "status"?, "query"?, "headers"?, "cookie"?, "setCookie"? }.',
+			'"route" is { "method", "path"?, "status"?, "query"?, "headers"?, "cookie"?, "setCookie"?, "body"? }.',
 		);
 		return;
 	}
@@ -81,6 +82,20 @@ export function checkRoute(
 		!METHODS.includes(route.method.toLowerCase())
 	) {
 		bad([...path, "method"], `"method" is one of ${METHODS.join(", ")}.`);
+	}
+	if (route.body !== undefined) {
+		const method =
+			typeof route.method === "string" ? route.method.toLowerCase() : "";
+		if (typeof route.body !== "boolean") {
+			bad([...path, "body"], '"body" must be a boolean.');
+		} else if (METHODS.includes(method) && method !== "delete") {
+			bad(
+				[...path, "body"],
+				method === "get"
+					? '"body" is only for a delete route: a get route never reads a body.'
+					: `"body" is only for a delete route: a ${method} route always reads a body.`,
+			);
+		}
 	}
 	const placed = new Map<string, string>();
 	const place = (key: string, where: string, at: Path) => {

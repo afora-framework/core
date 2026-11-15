@@ -773,11 +773,18 @@ const UseCaseRoute = Type.Object(
 					"Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie.",
 			}),
 		),
+		body: Type.Optional(
+			Type.Boolean({
+				default: false,
+				description:
+					"Only on a delete: true reads the input keys with no other place from a JSON body instead of the query (an empty body is {}). A get never reads a body, and a post, put or patch always does.",
+			}),
+		),
 	},
 	{
 		additionalProperties: false,
 		description:
-			"Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status.",
+			"Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status and body.",
 	},
 );
 

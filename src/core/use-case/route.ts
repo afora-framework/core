@@ -79,6 +79,7 @@ const ROUTE_KEYS = [
 	"headers",
 	"cookie",
 	"setCookie",
+	"body",
 ];
 const COOKIE_KEYS = [
 	"name",
@@ -143,7 +144,7 @@ export function routeDeclarationOf(
 	response: AnyUseCaseResponse,
 ): RouteDeclaration | string {
 	if (!isObject(route)) {
-		return "Expected route to be { method, path?, status?, query?, headers?, cookie?, setCookie? }.";
+		return "Expected route to be { method, path?, status?, query?, headers?, cookie?, setCookie?, body? }.";
 	}
 	for (const key of Object.keys(route)) {
 		if (!ROUTE_KEYS.includes(key)) return `route has no option "${key}".`;
@@ -153,7 +154,17 @@ export function routeDeclarationOf(
 	if (!(ROUTE_METHODS as readonly unknown[]).includes(method)) {
 		return `Expected route.method to be one of ${ROUTE_METHODS.join(", ")}.`;
 	}
-	const { path, status, query, headers, cookie, setCookie } = route;
+	const { path, status, query, headers, cookie, setCookie, body } = route;
+	if (body !== undefined) {
+		if (typeof body !== "boolean") {
+			return "Expected route.body to be a boolean.";
+		}
+		if (method !== "delete") {
+			return method === "get"
+				? "route.body is only for a delete route: a get route never reads a body."
+				: `route.body is only for a delete route: a ${method} route always reads a body.`;
+		}
+	}
 	/** Each input key and the place it is read from. */
 	const places = new Map<string, string>();
 	const place = (key: string, where: string): string | undefined => {
@@ -238,6 +249,7 @@ export function routeDeclarationOf(
 		method: method as RouteMethod,
 		...(path === undefined ? {} : { path: path as string }),
 		...(status === undefined ? {} : { status: status as RouteSuccessStatus }),
+		...(body === undefined ? {} : { body: body as boolean }),
 		...(query === undefined
 			? {}
 			: { query: Object.freeze([...(query as string[])]) }),
@@ -266,5 +278,5 @@ export function routeDeclarationOf(
 						),
 					),
 				}),
-	});
+	}) as RouteDeclaration;
 }

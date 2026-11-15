@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 536 exports.
+Tier: stable. 531 exports.
 
 ### Access
 
@@ -143,12 +143,6 @@ A concrete UseCase declaration, usable as a dependency.
 *type* · tier: stable · `import type { AnyUseCasePlugin } from "@afora/core"`
 
 Any use case plugin.
-
-### AnyUseCaseResponse
-
-*type* · tier: stable · `import type { AnyUseCaseResponse } from "@afora/core"`
-
-The `response` of a use case: an object blueprint or a list.
 
 ### ApplicationAlreadyStarted
 
@@ -296,12 +290,6 @@ instance of the record, e.g. `{ author: { name: "Jane" } }`.
 The bounds of a list field, as `ctx.listOf(item, { minItems, maxItems })`
 takes them: the fewest and the most items it accepts.
 
-### BlueprintListValue
-
-*type* · tier: stable · `import type { BlueprintListValue } from "@afora/core"`
-
-The value of a list, e.g. `Article[]` for `listOf(Article)`.
-
 ### BlueprintPluginContext
 
 *type* · tier: stable · `import type { BlueprintPluginContext } from "@afora/core"`
@@ -353,7 +341,7 @@ called, as `ctx.number({ min: 1 })`, for the subclass `Property.with` makes.
 
 What `useCaseOf` takes as `steps`: the steps, inferred as a tuple, each
 checked against the values in scope, and the `return` against what the
-response (the collection `Response`, or a list) takes. Steps that are not a tuple (built at
+response blueprint (the collection `Response`) takes. Steps that are not a tuple (built at
 run time) are checked only when the use case is declared.
 
 ### CommandBuilder
@@ -2330,33 +2318,6 @@ The options of `resourceOf`.
 
 The use cases of `resourceOf`, by operation: the standard ones, with no option but their route and access.
 
-### ResponseBlueprint
-
-*type* · tier: stable · `import type { ResponseBlueprint } from "@afora/core"`
-
-The `response` declared for `Output`: the list itself, or the blueprint of the fields.
-
-### ResponseOf
-
-*type* · tier: stable · `import type { ResponseOf } from "@afora/core"`
-
-The value of a `response`: of a list, a read-only array of its items
-(e.g. `readonly Article[]`, frozen at run time); of a blueprint, its object.
-
-### ResponseSetting
-
-*type* · tier: stable · `import type { ResponseSetting } from "@afora/core"`
-
-What the `response` setting takes for `Output`: the blueprint of its fields,
-or the list it is. Written as a union so that `Output` is inferred from
-either.
-
-### ResponseValue
-
-*type* · tier: stable · `import type { ResponseValue } from "@afora/core"`
-
-The value a use case whose response gives `Output` resolves with.
-
 ### RestoreMaker
 
 *type* · tier: stable · `import type { RestoreMaker } from "@afora/core"`
@@ -2371,14 +2332,30 @@ Says where a use case is served over HTTP, on the class itself:
 
 ```ts
 
+### RouteBody
+
+*type* · tier: stable · `import type { RouteBody } from "@afora/core"`
+
+The `body` of a route of `Method`: a `delete` may read a JSON body
+(`body: true`); any other method takes no `body`, since a `get` never reads
+one and a `post`, `put` or `patch` always does.
+
 ### RouteDeclaration
 
-*interface* · tier: stable · `import type { RouteDeclaration } from "@afora/core"`
+*type* · tier: stable · `import type { RouteDeclaration } from "@afora/core"`
 
 Where a use case is served over HTTP, as data: declared with the `route`
 setting of `useCaseOf` or with `@Route`, and read by the sinks that serve
 or document HTTP. The blueprint of the use case stays the only description
-of its input: a route only says where each key comes from.
+of its input: a route only says where each key comes from. `body` is only
+allowed on a `delete` (see {@link RouteBody}).
+
+### RouteFields
+
+*interface* · tier: stable · `import type { RouteFields } from "@afora/core"`
+
+What a route says besides its method and `body`: the shared part of
+{@link RouteDeclaration} and {@link RouteSettings}.
 
 ### RouteOptions
 
@@ -2389,7 +2366,7 @@ sinks that serve HTTP, so the served routes and the document agree.
 
 ### RouteSettings
 
-*interface* · tier: stable · `import type { RouteSettings } from "@afora/core"`
+*type* · tier: stable · `import type { RouteSettings } from "@afora/core"`
 
 What the `route` setting and `@Route` take: a {@link RouteDeclaration}
 whose method may be written in upper case.
@@ -3014,13 +2991,6 @@ any options.
 The second argument of the constructor of a use case: `{ context }`,
 required when the use case declares a context, not accepted otherwise.
 
-### UseCaseOutput
-
-*type* · tier: stable · `import type { UseCaseOutput } from "@afora/core"`
-
-What the `response` of a use case says it gives: the fields of an object
-blueprint, or a list made by `listOf` (e.g. `listOf(Article)`).
-
 ### UseCasePluginDescriptor
 
 *interface* · tier: stable · `import type { UseCasePluginDescriptor } from "@afora/core"`
@@ -3044,7 +3014,7 @@ What `useCasePluginOf` takes, after the name.
 *type* · tier: stable · `import type { UseCaseResponse } from "@afora/core"`
 
 The value `execute` of a use case class resolves with: the value of its
-`response` blueprint, or an array of the items of its `response` list.
+`response` blueprint.
 
 ### UseCaseSettings
 
@@ -3653,7 +3623,8 @@ parameter, the input key `name` (a scalar), left out of the body or query.
 The `operationId` is the id with its dot as an underscore (`Users.register`
 -> `Users_register`), unique or the build throws. `get` and `delete` send
 the input as query parameters, which needs every input field to be a
-scalar property. Responses: the `route` status (`200` by default; `204`
+scalar property; a `delete` with `body: true` sends it as a JSON body,
+required only when a field left in it is. Responses: the `route` status (`200` by default; `204`
 without content) with the response schema and the `responses` headers,
 `400` and `500` always, and the status of each declared error (`statusOf`:
 `statuses` of the output, else 422); `requestId` adds its header to all of
@@ -4528,11 +4499,13 @@ any server: the sink routes each `method` and `path` to `handle` and sends
 the result as is. Everything a request needs is decided here, so a call
 only reads, coerces and runs:
 
-- The input is the JSON body of a `post`, `put` or `patch` and the query
-  of a `get` or `delete`, with the keys the route reads elsewhere over it:
-  `{name}` segments of the path, and the query keys, headers and cookies
-  the use case route declares. Text is coerced to the numbers and booleans
-  the input takes; the operation validates it (a 400 problem with `issues`).
+- The input is the JSON body of a `post`, `put` or `patch` (or of a
+  `delete` with `body: true`) and the query of a `get` or `delete`, with
+  the keys the route reads elsewhere over it: `{name}` segments of the path, and the query keys, headers and cookies
+  the use case route declares, which are only read from there (a key the
+  body or the query sends for them is dropped). Text is coerced to the
+  numbers and booleans the input takes; the operation validates it (a 400
+  problem with `issues`).
 - The context comes from `context.headers` (coerced) and
   `context.variables` (as is); a missing one leaves the key out.
 - An operation with an `access` other than `public` asks
@@ -4988,7 +4961,7 @@ who asks, in the `UseCaseUnavailable` it throws. Throws a `TypeError` when
 
 ## @afora/core/testing
 
-Tier: testing. 7 exports.
+Tier: testing. 10 exports.
 
 ### ContractRunner
 
@@ -5015,6 +4988,18 @@ A publisher that keeps what it is given, for tests.
 What {@link providerContract} takes: which optional groups of cases to run,
 each defaulting to what the provider advertises in `capabilities`, except the
 schema evolution ones.
+
+### ProviderSpy
+
+*interface* · tier: testing · `import type { ProviderSpy } from "@afora/core/testing"`
+
+The members `spyProvider` adds to the provider it wraps.
+
+### SpiedCall
+
+*interface* · tier: testing · `import type { SpiedCall } from "@afora/core/testing"`
+
+One call a `spyProvider` recorded.
 
 ### httpProviderContract
 
@@ -5051,3 +5036,29 @@ A publisher for `applicationOf({ publishers })` in tests: it keeps each
 Registers the behavior every `IRepositoryProvider` v2 must have. Pass the
 `describe`, `it` and `expect` of your runner and a factory of fresh, empty
 providers (called once per case).
+
+### spyProvider
+
+*function* · tier: testing · `import { spyProvider } from "@afora/core/testing"`
+
+A provider for tests that forwards to `provider` and records each call
+of an operation taking a context (`{ operation, entity, args }`, read
+with `calls`), and can make one fail (`fail`). It is the provider itself
+(the same type, with the members of `ProviderSpy`), so it goes where a
+provider goes: `applicationOf({ provider })` or `repositoryOf({ provider })`.
+Repositories are frozen, so this is how a test sees what reaches the
+database, also behind an HTTP sink. Built on `wrapProvider`.
+
+**Throws** {
+
+**Example**
+
+```ts
+import { inMemoryProvider } from "@afora/core";
+import { spyProvider } from "@afora/core/testing";
+
+const spy = spyProvider(inMemoryProvider());
+// applicationOf({ ..., provider: spy }), then a request
+const reads = spy.calls("Project", "findMany").length;
+spy.fail("Setting", "count", new Error("down"), { times: 1 });
+```

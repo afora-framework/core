@@ -213,11 +213,13 @@ function cookieWriterOf(cookie: RouteCookie): (value: string) => string {
  * the result as is. Everything a request needs is decided here, so a call
  * only reads, coerces and runs:
  *
- * - The input is the JSON body of a `post`, `put` or `patch` and the query
- *   of a `get` or `delete`, with the keys the route reads elsewhere over it:
- *   `{name}` segments of the path, and the query keys, headers and cookies
- *   the use case route declares. Text is coerced to the numbers and booleans
- *   the input takes; the operation validates it (a 400 problem with `issues`).
+ * - The input is the JSON body of a `post`, `put` or `patch` (or of a
+ *   `delete` with `body: true`) and the query of a `get` or `delete`, with
+ *   the keys the route reads elsewhere over it: `{name}` segments of the path, and the query keys, headers and cookies
+ *   the use case route declares, which are only read from there (a key the
+ *   body or the query sends for them is dropped). Text is coerced to the
+ *   numbers and booleans the input takes; the operation validates it (a 400
+ *   problem with `issues`).
  * - The context comes from `context.headers` (coerced) and
  *   `context.variables` (as is); a missing one leaves the key out.
  * - An operation with an `access` other than `public` asks
@@ -316,12 +318,15 @@ export function compileRoutes(
 		const queryKeys = body ? route.query : [];
 		const headerKeys = Object.entries(route.requestHeaders);
 		const cookieKeys = Object.entries(route.cookies);
-		const placed =
-			parameters.length +
-				queryKeys.length +
-				headerKeys.length +
-				cookieKeys.length >
-			0;
+		// The keys the route reads from the path, the route query, headers
+		// and cookies: only ever from there, never from the body or the query.
+		const placedKeys = [
+			...parameters,
+			...queryKeys,
+			...headerKeys.map(([key]) => key),
+			...cookieKeys.map(([key]) => key),
+		];
+		const placed = placedKeys.length > 0;
 		const declared = operation.context
 			? Object.keys(operation.context.properties)
 			: [];
@@ -398,8 +403,12 @@ export function compileRoutes(
 							texts[key] = cookies.get(name);
 					}
 					for (const name of parameters) texts[name] = request.param(name);
-					// What the route places wins over the body or the query.
-					input = { ...input, ...coerceTextValues(operation.input, texts) };
+					// What the route places replaces the body or the query: a header
+					// or cookie that is absent leaves its key absent, not sent by
+					// the client in the body.
+					const rest: Record<string, unknown> = { ...input };
+					for (const key of placedKeys) delete rest[key];
+					input = { ...rest, ...coerceTextValues(operation.input, texts) };
 				}
 
 				let call: OperationCallOptions | undefined;

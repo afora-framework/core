@@ -127,7 +127,9 @@ async function extendedOf(
 ): Promise<{ extended: Record<string, ResolvedSpec>; issues: SpecIssue[] }> {
 	try {
 		return {
-			extended: await resolveExtended(spec, join(project.root, SPEC_FILE)),
+			extended: await resolveExtended(spec, join(project.root, SPEC_FILE), {
+				root: project.root,
+			}),
 			issues: [],
 		};
 	} catch (error) {

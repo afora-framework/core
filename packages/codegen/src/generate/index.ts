@@ -103,6 +103,9 @@ type Json = unknown;
 // ---------------------------------------------------------------- literals
 
 function keyDoc(key: string): string {
+	// `__proto__: v` (quoted or not) sets the prototype of an object literal;
+	// a computed key defines the own property JSON.parse gave.
+	if (key === "__proto__") return `[${JSON.stringify(key)}]`;
 	return isIdentifier(key) ? key : JSON.stringify(key);
 }
 

@@ -295,3 +295,29 @@ describe("openapi document of routed use cases", () => {
 		]);
 	});
 });
+
+describe("the type of body", () => {
+	test("is only allowed on a delete", () => {
+		const blueprint = blueprintOf((ctx) => ({ id: ctx.string }));
+		const response = blueprintOf(() => ({}));
+		const declare = () => {
+			useCaseOf({
+				name: "Ok",
+				blueprint,
+				response,
+				route: { method: "DELETE", body: true },
+			});
+			useCaseOf({
+				name: "No",
+				blueprint,
+				response,
+				// @ts-expect-error: a get never reads a body
+				route: { method: "get", body: true },
+			});
+			Route("delete", "/x", { body: true });
+			// @ts-expect-error: a post always reads a body
+			Route("POST", { body: true });
+		};
+		expect(declare).toThrow("a get route never reads a body");
+	});
+});

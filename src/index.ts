@@ -515,7 +515,9 @@ export type {
 	UseCaseTargetInfo,
 } from "./core/use-case/types/plugin.interface";
 export type {
+	RouteBody,
 	RouteDeclaration,
+	RouteFields,
 	RouteSettings,
 } from "./core/use-case/types/route.interface";
 export type {

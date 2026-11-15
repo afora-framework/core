@@ -374,6 +374,8 @@ export interface RouteSpec {
 	readonly setCookie?: Readonly<
 		Record<string, Readonly<Record<string, unknown>>>
 	>;
+	/** Only on a `delete`: read the keys with no other place from a JSON body. */
+	readonly body?: boolean;
 }
 
 /** Who may call a use case: the `access` of `useCaseOf`. */
