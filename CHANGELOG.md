@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Security
+
+- `@afora/codegen` and `@afora/mcp` (#69): `projectBoundaryIssues`, which `@afora/mcp` runs on every spec an agent sends, refuses (`outside_project`) the imports and `extends` that left the project or ran the runtime's own modules: `pkg/../../../x`, a backslash or percent-encoded `..` in a relative module, a built-in module such as `child_process`, a symlink out of the project, and an `output.dir` in `node_modules` or `.git`. `generate` keeps a `__proto__` key of a JSON value an own property. `afora_generate` runs `bunx --no-install tsc`. See `SECURITY.md`.
+
 ### Wrapping a provider (#124)
 
 - `wrapProvider(provider, { around })` runs `around({ operation, context, args }, next)` around each operation of a repository provider that takes a context, for logs, traces and spies. The result is typed as the provider it wraps, with no cast, and has the same shape: a plain frozen object with the same operations (`increment`, `migrate`, `transaction` and `close` stay absent when the provider has none), `capabilities` read live, and the other members bound at wrap time. `args` is typed by operation, and `around` must give the result of the operation, which `next()` gives (a missing `return` is a type error). The provider a `transaction` gives is wrapped with the same interceptor, and wraps compose. A provider of `providersOf` is rejected with `InvalidRepositoryDeclaration`: wrap the provider before giving it to `providersOf`. New types `ProviderOperation` (the union of the operations taking a context), `ProviderCall`, `ProviderResults` and `ProviderInterceptor`. See `docs/repositories.md#wrapping-a-provider`.

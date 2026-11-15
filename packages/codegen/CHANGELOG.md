@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Security: the project boundary (#69)
+
+- `projectBoundaryIssues` reports `outside_project` for the specifiers that escaped it: a package path with a `.` or `..` segment (`pkg/../../../x`, which resolves from `node_modules/pkg` to outside the project, for an `import` and for an `extends`), a backslash or a percent-encoded character in any module (Node and Bun resolve an import as a URL, so `./a\..\..\x` and `./%2e%2e/x` climb out although `path.resolve` keeps them inside on POSIX), control characters, a module built into the runtime (`child_process`, `fs`, `bun`: a `run` step could call `execSync`), a relative module or `extends` that goes through a symlink leaving the project, and an `output.dir` in `node_modules` or `.git`.
+- `generate` writes a `__proto__` key of a JSON value (a provider's options, say) as the computed key `["__proto__"]`, so it stays an own property, as `JSON.parse` gave it, instead of setting the prototype of the object.
+
 ### Services (#115)
 
 - A top-level `"services": { "cache": { "import": "../services.ts#cache" } }` names the factory of each service of the application, generated as `applicationOf({ services })`. A use case names one in its `dependencies` (`{ "cache": "cache" }`), generated as `serviceOf<Awaited<ReturnType<typeof cache>>>("cache")`, with the factory imported by `import type`, so a hand-written `execute` reads it typed by what the factory returns. One inherited from a spec extended by a relative path, or whose factory comes from a package, is typed the same; one whose factory cannot be imported from the child (relative to a spec reached as a package, or of a nested extended spec) is `unknown`. Issues: `invalid_services`, `invalid_name` (also for a service named `Logger`), `duplicate_name` (a service named like a declaration) and `invalid_import`. `extractSpec` needs `imports["services.<name>"]`. `afora.schema.json` describes it.
