@@ -402,6 +402,13 @@ export type {
 	SchemaMigrationReport,
 } from "./core/repository/types/schema.interface";
 export type {
+	ProviderCall,
+	ProviderInterceptor,
+	ProviderOperation,
+	ProviderResults,
+} from "./core/repository/types/wrap.interface";
+export { wrapProvider } from "./core/repository/wrap";
+export type {
 	ISchema,
 	ISchemaType,
 } from "./core/schema/types/schema.interface";

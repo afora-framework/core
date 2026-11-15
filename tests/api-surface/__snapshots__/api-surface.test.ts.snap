@@ -424,11 +424,17 @@ exports[`exports of the package and their declarations 1`] = `
     "interface Props<Input = unknown, Output = Input> { readonly version: 1; readonly vendor: string; readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>; readonly types?: Types<Input, Output> | undefined; }",
     "type Props<Repository> = PropertiesOf<EntityOf<Repository>>;",
   ],
+  "(internal) ProviderArgsOf": [
+    "type ProviderArgsOf<Fn> = Fn extends (context: never, ...args: infer Args) => unknown ? Readonly<Args> : never;",
+  ],
   "(internal) ProviderCapabilities": [
     "export interface ProviderCapabilities { readonly operators?: readonly string[]; readonly transactions?: boolean; readonly keyset?: boolean; readonly indexes?: boolean; readonly versioning?: boolean; readonly atomic?: boolean; readonly expiry?: boolean; }",
   ],
   "(internal) ProviderDescription": [
     "export type ProviderDescription = { readonly kind: "provider"; readonly name: string; readonly options: ProviderOptions; } | { readonly kind: "opaque"; };",
+  ],
+  "(internal) ProviderEnvironmentOf": [
+    "export type ProviderEnvironmentOf<Provider> = Provider extends IRepositoryProvider<infer Environment> ? Environment : unknown;",
   ],
   "(internal) ProviderIncrementOptions": [
     "export interface ProviderIncrementOptions { readonly set?: RepositoryData; readonly create?: RepositoryData; readonly now?: string; }",
@@ -1532,17 +1538,29 @@ exports[`exports of the package and their declarations 1`] = `
   "PropertyValue": [
     "export type PropertyValue<SchemaType extends TSchema, Value = Static<SchemaType>> = SchemaType extends TOptional<TSchema> ? Value | undefined : Value;",
   ],
+  "ProviderCall": [
+    "export type ProviderCall<Environment = unknown, Operation extends ProviderOperation = ProviderOperation> = { readonly [Key in Operation]: { readonly operation: Key; readonly context: RepositoryContext<Environment>; readonly args: ProviderArgsOf<NonNullable<IRepositoryProvider<Environment>[Key]>>; }; }[Operation];",
+  ],
   "ProviderFactory": [
     "export interface ProviderFactory<Environment extends EnvironmentDependencies = EnvironmentDependencies> { readonly [Kind]: "provider-factory"; readonly environments: readonly AnyEnvironment[]; readonly create: (env: MergedEnvironment<Environment>) => IRepositoryProvider | Promise<IRepositoryProvider>; readonly withContext: boolean; }",
   ],
+  "ProviderInterceptor": [
+    "export interface ProviderInterceptor<Environment = unknown> { around<Operation extends ProviderOperation>(call: ProviderCall<Environment>, next: () => Promise<ProviderResults[Operation]>): Promise<ProviderResults[Operation]>; }",
+  ],
   "ProviderNotBound": [
     "ProviderNotBound: import("../../index.js").DeclaredExceptionClass<{ readonly provider: string; }>",
+  ],
+  "ProviderOperation": [
+    "export type ProviderOperation = "findOne" | "findMany" | "insert" | "update" | "remove" | "count" | "increment" | "migrate";",
   ],
   "ProviderOption": [
     "export type ProviderOption = null | boolean | number | string | readonly ProviderOption[] | { readonly [key: string]: ProviderOption; };",
   ],
   "ProviderOptions": [
     "export type ProviderOptions = Readonly<Record<string, ProviderOption>>;",
+  ],
+  "ProviderResults": [
+    "export type ProviderResults = { readonly [Operation in ProviderOperation]: Awaited<ReturnType<NonNullable<IRepositoryProvider[Operation]>>>; };",
   ],
   "ProviderSettings": [
     "export interface ProviderSettings<Options extends ProviderOptions = ProviderOptions, Provider extends IRepositoryProvider = IRepositoryProvider> { readonly name: string; readonly options?: Options; readonly create: (options: Options) => Provider; }",
@@ -2237,6 +2255,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "variantOf": [
     "export declare function variantOf<const Key extends string, const Variants extends BlueprintVariants>(key: Key, variants: Variants): IBlueprintVariant<Key, Variants>;",
+  ],
+  "wrapProvider": [
+    "export declare function wrapProvider<Provider extends IRepositoryProvider>(provider: Provider, interceptor: ProviderInterceptor<ProviderEnvironmentOf<Provider>>): Provider;",
   ],
 }
 `;

@@ -9,6 +9,8 @@ import {
 	eventOf,
 	exceptionOf,
 	guard,
+	type InMemoryProvider,
+	inMemoryProvider,
 	type JsonValue,
 	listOf,
 	Meta,
@@ -23,6 +25,7 @@ import {
 	repositoryOf,
 	type StandardSchemaV1,
 	variantOf,
+	wrapProvider,
 } from "@afora/core";
 import type { IRepositoryProvider } from "@afora/core/adapters";
 import { type SliceMask, sliceOf } from "@afora/core/experimental";
@@ -421,6 +424,18 @@ export type AddressMask = SliceMask<typeof Address.properties>;
 declare const runner: ContractRunner;
 declare const makeProvider: () => IRepositoryProvider;
 providerContract(runner, makeProvider, { transactions: false });
+
+// wrapProvider keeps the type of the provider; args are typed by operation.
+const wrapped = wrapProvider(inMemoryProvider(), {
+	async around(call, next) {
+		if (call.operation === "remove") {
+			const id: string = call.args[0];
+			void id;
+		}
+		return next();
+	},
+});
+export const wrappedType: Equals<typeof wrapped, InMemoryProvider> = true;
 
 // Queries, steps, commands and outputs (1.0).
 class ClubMember extends entityOf(
