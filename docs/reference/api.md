@@ -3915,8 +3915,10 @@ An RFC 9457 problem.
 
 *interface* · tier: adapters · `import type { ProblemOptions } from "@afora/core/adapters"`
 
-What `problemOf` takes: the HTTP `status` of the problem and `debug`, which
-adds the `trace` and the real `detail` of a 5xx.
+What `problemOf` takes: the HTTP `status` of the problem, `debug`, which
+adds the `trace` and the real `detail` of a 5xx, and what the output
+declares (`statuses`, the `operation` and its `errors`): the `detail` of a
+declared exception is kept at any status.
 
 ### PropertyDescription
 
@@ -4225,8 +4227,9 @@ goes through its `toJSON`, so sensitive values are always masked.
 
 An RFC 9457 problem for `error`. `issues` (`path`, `code`, `message`; no
 values or causes) is present only for a 400, `trace` only with `debug`,
-and the `detail` of a 5xx is `"Internal error."` unless `debug` is set, so
-internal messages do not leak.
+and the `detail` of a 5xx is `"Internal error."` unless `debug` is set or
+the output declares the exception (its name in `statuses`, or a class of
+`operation.errors`, except afora's internal ones), so internal messages do not leak.
 
 ### requestIdHeaderOf
 

@@ -11,6 +11,16 @@ const INVALID_INPUT = new Set([
 ]);
 /** Configuration the call was given, not input: its issues are not the caller's. */
 const CONFIGURATION = new Set(["InvalidCommandEnvironment"]);
+/**
+ * Exceptions that say the server is misconfigured or broke its own contract:
+ * their message is never the caller's, even when the output lists them.
+ */
+const INTERNAL = new Set([
+	...CONFIGURATION,
+	"InvalidEnvironment",
+	"InvalidApplicationEnvironment",
+	"InvalidUseCaseResponse",
+]);
 const NOT_FOUND = new Set([
 	"RepositoryEntityNotFound",
 	"UnknownCommandOperation",
@@ -37,6 +47,30 @@ export function raisedOf(error: Exception): Exception {
 		if (current.name === error.name) raised = current;
 	}
 	return raised;
+}
+
+/**
+ * Whether the output declares `error`, so the `detail` of its problem is kept
+ * at any status: an exception whose name is in `statuses` or that matches a
+ * class of `operation.errors` (by class or by name), except the internal ones
+ * (`InvalidCommandEnvironment`, `InvalidEnvironment`,
+ * `InvalidApplicationEnvironment`, `InvalidUseCaseResponse`). Being made by
+ * `exceptionOf` is not enough: afora's own exceptions are made by it too.
+ */
+export function isDeclaredError(
+	error: unknown,
+	operation?: Pick<OperationDescriptor, "errors">,
+	statuses?: OutputStatuses,
+): boolean {
+	if (!(error instanceof Exception)) return false;
+	const { name } = error;
+	if (INTERNAL.has(name)) return false;
+	if (statuses && Object.hasOwn(statuses, name)) return true;
+	return (
+		operation?.errors.some(
+			(Declared) => error.is(Declared) || Declared.name === name,
+		) ?? false
+	);
 }
 
 /**

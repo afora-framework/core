@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **Problem details** (`@afora/core`, `@afora/hono`, `@afora/express`, `@afora/fastify`, `@afora/elysia`, `@afora/ws`, `@afora/mcp`). An exception the output declares keeps its `detail` at a 5xx (#120): `statuses: { PublishFailed: 502 }` answers with the message of `PublishFailed` instead of `"Internal error."`. Declared means its name is in the output `statuses` or it matches a class of `operation.errors`; errors that are not exceptions, exceptions the output does not list, and `InvalidCommandEnvironment`, `InvalidEnvironment`, `InvalidApplicationEnvironment` and `InvalidUseCaseResponse` stay masked unless `debug` is on. `problemOf` takes `statuses` and `operation` to decide it, and every sink passes them. In `@afora/ws`, an error outside an operation call (a message the endpoint fails to handle) now also gets the status the output `statuses` give it.
+
 ## 0.0.12 — 2026-11-11
 
 ### Changed

@@ -17,6 +17,7 @@ import {
 	ExceptionLayers,
 	exceptionOf,
 	InvalidCommandContext,
+	InvalidCommandEnvironment,
 	InvalidOutputStage,
 	isOutput,
 	listOf,
@@ -746,6 +747,39 @@ describe("problemOf", () => {
 			"taken",
 		);
 		expect(problemOf("text", { status: 500, debug: true }).detail).toBe("text");
+	});
+
+	test("a declared exception keeps its detail at any status", () => {
+		const exception = new Taken({ source: "x" });
+		expect(
+			problemOf(exception, { status: 502, statuses: { Taken: 502 } }).detail,
+		).toBe("taken");
+		expect(
+			problemOf(exception, { status: 500, operation: { errors: [Taken] } })
+				.detail,
+		).toBe("taken");
+		// Made by `exceptionOf`, but not declared by this output.
+		expect(
+			problemOf(exception, { status: 500, statuses: { Other: 502 } }).detail,
+		).toBe("Internal error.");
+		const plain = new Error("db password is hunter2");
+		expect(
+			problemOf(plain, {
+				status: 500,
+				statuses: { Error: 500 },
+				operation: { errors: [Taken] },
+			}).detail,
+		).toBe("Internal error.");
+		const configuration = new InvalidCommandEnvironment({
+			source: "Posts",
+			details: { keys: [], issues: [] },
+		});
+		expect(
+			problemOf(configuration, {
+				status: 500,
+				statuses: { InvalidCommandEnvironment: 500 },
+			}).detail,
+		).toBe("Internal error.");
 	});
 
 	test("goes with statusOf", () => {

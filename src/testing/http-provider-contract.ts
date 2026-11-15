@@ -31,6 +31,11 @@ const Rejected = exceptionOf({
 	name: "ContractRejected",
 	message: "rejected",
 });
+const Upstream = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "ContractUpstream",
+	message: "the upstream refused",
+});
 const Echo = blueprintOf((ctx) => ({
 	id: ctx.optional.string,
 	page: ctx.optional.integer,
@@ -81,6 +86,7 @@ function operations() {
 		override async execute() {
 			if (this.input.title === "reject") throw new Rejected({ source: "x" });
 			if (this.input.title === "crash") throw new Error("internal detail");
+			if (this.input.title === "upstream") throw new Upstream({ source: "x" });
 			return { ...this.input, tenant: this.context.tenant };
 		}
 	}
@@ -210,7 +216,7 @@ export function httpProviderContract<Server>(
 		const server = outputOf({
 			name: "Contract",
 			commands: [operations()],
-			statuses: { ContractRejected: 409 },
+			statuses: { ContractRejected: 409, ContractUpstream: 502 },
 			pipe: [settings.sink(options, hooks)],
 		}).build();
 		try {
@@ -331,6 +337,18 @@ export function httpProviderContract<Server>(
 				});
 				expect(crashed.status).toBe(500);
 				expect(crashed.text.includes("internal detail")).toBe(false);
+				expect((crashed.json as { detail: string }).detail).toBe(
+					"Internal error.",
+				);
+				// Declared by the output: its detail is kept at a 5xx.
+				const upstream = await send("PUT", "/items/p?page=1", {
+					body: { title: "upstream" },
+				});
+				expect(upstream.status).toBe(502);
+				expect(upstream.type).toBe("application/problem+json");
+				expect((upstream.json as { detail: string }).detail).toBe(
+					"the upstream refused",
+				);
 			});
 			await withServer({ debug: true }, async (send) => {
 				const crashed = await send("PUT", "/items/p?page=1", {

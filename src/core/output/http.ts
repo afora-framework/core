@@ -296,7 +296,16 @@ export function compileRoutes(
 			)
 				? fallback
 				: statusOf(error, operation, output.statuses);
-		return problem(problemOf(error, { status, debug }), status, request);
+		return problem(
+			problemOf(error, {
+				status,
+				debug,
+				statuses: output.statuses,
+				operation,
+			}),
+			status,
+			request,
+		);
 	};
 	const failure: RouteTable["failure"] = (error, given) =>
 		fail(error, given?.operation, given?.request, given?.status);

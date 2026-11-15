@@ -64,6 +64,27 @@ describe("websocket sink: handle", () => {
 		expect(problemOf(reply)).toMatchObject({ title: "Forbidden", status: 403 });
 	});
 
+	test("a declared exception keeps its detail at a 5xx, an unexpected error does not", async () => {
+		const { endpoint } = realtime();
+		const declared = await endpoint.handle({
+			op: "Posts.create",
+			input: { title: "upstream" },
+		});
+		expect(problemOf(declared)).toMatchObject({
+			title: "Upstream",
+			status: 502,
+			detail: "The upstream refused.",
+		});
+		const crashed = await endpoint.handle({
+			op: "Posts.create",
+			input: { title: "crash" },
+		});
+		expect(problemOf(crashed)).toMatchObject({
+			status: 500,
+			detail: "Internal error.",
+		});
+	});
+
 	test("an unknown operation is a 404", async () => {
 		const { endpoint } = realtime();
 		const reply = await endpoint.handle({ id: 3, op: "Posts.nope" });
