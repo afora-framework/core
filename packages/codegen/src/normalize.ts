@@ -482,6 +482,14 @@ export function normalizeSpec(
 				.map((key) => [key, cloneJson((spec.publishers as Json)[key])]),
 		);
 	}
+	// Services by name in order.
+	if (isObject(spec.services) && Object.keys(spec.services).length > 0) {
+		out.services = Object.fromEntries(
+			Object.keys(spec.services)
+				.sort()
+				.map((key) => [key, cloneJson((spec.services as Json)[key])]),
+		);
+	}
 	for (const collection of COLLECTIONS) {
 		const declared = spec[collection];
 		if (!isObject(declared)) continue;

@@ -19,11 +19,13 @@ export type OutputStatuses = Readonly<Record<string, number>>;
  * The call of an operation: `context` is what the command (or use case)
  * declares, and `principal` is who calls, as the sink authenticated it
  * (`null` or absent for an anonymous caller). An operation with an `access`
- * checks the principal before it runs.
+ * checks the principal before it runs. `native` is the native request of the
+ * sink (e.g. the Hono context), given to the factories of services.
  */
 export interface OperationCallOptions {
 	readonly context?: unknown;
 	readonly principal?: Principal | null;
+	readonly native?: unknown;
 }
 
 /**

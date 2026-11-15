@@ -97,6 +97,60 @@ export function checkPublishers(value: unknown, issues: SpecIssue[]): void {
 	}
 }
 
+/**
+ * Checks the top-level `services`: the factories of the services of the
+ * application (`applicationOf({ services })`), written by hand, by identifier
+ * name. A name of a declaration cannot be a service: a use case names either
+ * in its `dependencies`.
+ */
+export function checkServices(
+	value: unknown,
+	declared: (name: string) => boolean,
+	issues: SpecIssue[],
+): void {
+	if (value === undefined) return;
+	if (!isObject(value)) {
+		issues.push(
+			issue(
+				["services"],
+				"invalid_services",
+				'"services" is an object of service factories by name: { "cache": { "import": "./services.ts#cache" } }.',
+			),
+		);
+		return;
+	}
+	for (const [key, service] of Object.entries(value)) {
+		const path = ["services", key];
+		if (!isIdentifier(key)) {
+			issues.push(
+				issue(
+					path,
+					"invalid_name",
+					`"${key}" is not a valid service name: use an identifier.`,
+				),
+			);
+		} else if (declared(key)) {
+			issues.push(
+				issue(
+					path,
+					"duplicate_name",
+					`"${key}" is also the name of a declaration; a service needs a name of its own.`,
+				),
+			);
+		}
+		if (isImportObject(service)) checkImport(service, path, issues);
+		else {
+			issues.push(
+				issue(
+					path,
+					"invalid_import",
+					'A service is made by a factory written by hand: { "import": "./services.ts#cache" }.',
+				),
+			);
+		}
+	}
+}
+
 function isJson(value: unknown): boolean {
 	if (value === null) return true;
 	if (typeof value === "string" || typeof value === "boolean") return true;

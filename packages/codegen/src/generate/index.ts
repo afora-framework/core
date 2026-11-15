@@ -895,7 +895,9 @@ function useCaseDoc(
 							// `Logger` is the core's, unless the spec declares its own.
 							name === "Logger" && !scope.decls.has(name)
 								? e.use("Logger")
-								: useCaseRefDoc(name, e, scope, providers),
+								: !scope.decls.has(name) && scope.serviceNames.has(name)
+									? serviceDoc(name, e, scope, providers)
+									: useCaseRefDoc(name, e, scope, providers),
 						] as const,
 				),
 				false,
@@ -980,6 +982,24 @@ function useCaseRefDoc(
 		return e.bind(module, exported, taken);
 	}
 	return e.ref(name);
+}
+
+/**
+ * A service of the top-level \`services\`, typed by what its factory makes:
+ * \`serviceOf<Awaited<ReturnType<typeof cache>>>("cache")\`. One inherited from
+ * an extended spec is \`unknown\` (its factory is imported there).
+ */
+function serviceDoc(
+	name: string,
+	e: Emitter,
+	scope: Scope,
+	providers: Providers,
+): string {
+	const factory = scope.serviceNames.get(name);
+	const serviceOf = e.use("serviceOf");
+	if (factory === undefined) return `${serviceOf}(${JSON.stringify(name)})`;
+	const local = importedDoc(factory, e, providers);
+	return `${serviceOf}<Awaited<ReturnType<typeof ${local}>>>(${JSON.stringify(name)})`;
 }
 
 /** A hand-written function or stage, imported as it is. */
@@ -1492,6 +1512,20 @@ export function generate(
 				Object.entries(publishers).map(
 					([key, publisher]) =>
 						[key, importedDoc(publisher, app, providers)] as const,
+				),
+				false,
+				true,
+			),
+		]);
+	}
+	const services = (spec as { services?: Record<string, unknown> }).services;
+	if (services && Object.keys(services).length > 0) {
+		props.push([
+			"services",
+			objectDoc(
+				Object.entries(services).map(
+					([key, factory]) =>
+						[key, importedDoc(factory, app, providers)] as const,
 				),
 				false,
 				true,

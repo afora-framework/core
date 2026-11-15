@@ -215,6 +215,36 @@ await new RegisterUser({ name: "Ana" }).execute({
 `,
 	},
 	{
+		name: "use case with a service",
+		perf: true,
+		code: `import { applicationOf, blueprintOf, serviceOf, useCaseOf } from "@afora/core";
+
+interface CacheClient {
+	get(key: string): Promise<string | null>;
+}
+const Cache = serviceOf<CacheClient>("cache");
+
+class GetContent extends useCaseOf({
+	name: "GetContent",
+	blueprint: blueprintOf((ctx) => ({ key: ctx.string })),
+	response: blueprintOf((ctx) => ({ value: ctx.optional.string })),
+	dependencies: { cache: Cache },
+}) {
+	override async execute({ cache = this.dependencies./*@hover*/cache } = {}) {
+		return { value: (await cache.get(this.input.key)) ?? undefined };
+	}
+}
+
+const App = applicationOf({
+	name: "content",
+	useCases: { GetContent },
+	services: { cache: (/*@hover*/scope) => ({ get: async () => null }) },
+});
+await new App.useCases.GetContent({ key: "home" }).execute();
+await new GetContent({ key: "home" }).execute({ cache: { get: async () => "cached" } });
+`,
+	},
+	{
 		name: "queries",
 		perf: true,
 		code: `import { blueprintOf, entityOf, repositoryOf } from "@afora/core";

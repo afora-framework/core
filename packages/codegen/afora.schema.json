@@ -301,6 +301,24 @@
 			},
 			"description": "Where event policies publish, by key (applicationOf({ publishers })): a publisher written by hand, { \"import\": \"./realtime.ts#hub\" }."
 		},
+		"services": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+					"type": "object",
+					"required": ["import"],
+					"properties": {
+						"import": {
+							"type": "string",
+							"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+							"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"description": "The services of the use cases, by name (applicationOf({ services })): the factory written by hand that makes the value of each per call, { \"import\": \"./services.ts#cache\" }. A use case names one in its dependencies."
+		},
 		"properties": {
 			"type": "object",
 			"patternProperties": {
@@ -1684,7 +1702,7 @@
 											"type": "string"
 										}
 									},
-									"description": "Key -> name of a declared use case, repository or environment."
+									"description": "Key -> name of a declared use case, repository or environment, a key of \"services\", or \"Logger\"."
 								},
 								"errors": {
 									"type": "array",

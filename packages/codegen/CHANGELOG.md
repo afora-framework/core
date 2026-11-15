@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Services (#115)
+
+- A top-level `"services": { "cache": { "import": "../services.ts#cache" } }` names the factory of each service of the application, generated as `applicationOf({ services })`. A use case names one in its `dependencies` (`{ "cache": "cache" }`), generated as `serviceOf<Awaited<ReturnType<typeof cache>>>("cache")`, so a hand-written `execute` reads it typed by what the factory returns; one inherited from an extended spec is `unknown`. Issues: `invalid_services`, `invalid_name`, `duplicate_name` (a service named like a declaration) and `invalid_import`. `extractSpec` needs `imports["services.<name>"]`. `afora.schema.json` describes it.
+
 ### Imported use cases as dependencies (#64)
 
 - **Breaking.** A use case implemented by `{ "import" }` can be a dependency of another use case, and a steps use case can `call` it; the `import_dependency` issue is gone. Each use case that hand-written code needs (the `<Name>Base` of every `import` use case, and every steps use case such a class depends on) is generated in its own `<kebab-name>.use-case.ts` in `output.dir`, which never imports `use-cases.ts`; `use-cases.ts` re-exports it. A handler imports its base from that file (`import { RegisterBase } from "../domain/register.use-case"`); importing it from `use-cases.ts` keeps working only as long as no other use case (steps or `import`) depends on that handler: the dependent's `<kebab-name>.use-case.ts` imports the handler, the handler imports `use-cases.ts`, and `use-cases.ts` re-exports the dependent's file, a loop of imports that can reach the handler before its class is defined. The validator does not read handler code, so it cannot report this.

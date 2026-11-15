@@ -781,3 +781,19 @@ exports[`package mode experience errors 1`] = `
   TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
     Type '"missing"' is not assignable to type '"n"'."
 `;
+
+exports[`source mode experience use case with a service 1`] = `
+"hover L14:53 override async execute({ cache = this.dependencies.‸cache } = {}) {
+  (property) cache: CacheClient
+hover L22:22 services: { cache: (‸scope) => ({ get: async () => null }) },
+  (parameter) scope: ServiceScope
+diagnostics (0)"
+`;
+
+exports[`package mode experience use case with a service 1`] = `
+"hover L14:53 override async execute({ cache = this.dependencies.‸cache } = {}) {
+  (property) cache: CacheClient
+hover L22:22 services: { cache: (‸scope) => ({ get: async () => null }) },
+  (parameter) scope: ServiceScope
+diagnostics (0)"
+`;

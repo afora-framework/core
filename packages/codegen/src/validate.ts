@@ -6,7 +6,12 @@ import { checkEntitySchema } from "./entity-schema";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import { checkEnum, type Field, parseFields, targetOf } from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
-import { checkPolicyCatalog, checkPublishers, policyEntries } from "./policy";
+import {
+	checkPolicyCatalog,
+	checkPublishers,
+	checkServices,
+	policyEntries,
+} from "./policy";
 import {
 	checkCatalog,
 	checkLog,
@@ -52,6 +57,7 @@ const TOP_LEVEL_KEYS = [
 	"log",
 	"trace",
 	"publishers",
+	"services",
 	...COLLECTIONS,
 ];
 
@@ -1357,6 +1363,7 @@ function check(
 	}
 
 	const scope = scopeOf(input, extended, issues);
+	checkServices(input.services, (name) => scope.decls.has(name), issues);
 	if (input.provider !== undefined) {
 		checkProvider(
 			input.provider,

@@ -97,3 +97,15 @@ export const UseCaseInvalidCredentials = exceptionOf({
 	name: "UseCaseInvalidCredentials",
 	message: "Invalid credentials.",
 });
+
+/**
+ * A use case read a service (see `serviceOf`) that nothing gives it: no
+ * application binds the name in its `services`, and `execute` was not given a
+ * value for it. `details.service` is the name of the service.
+ */
+export const ServiceNotBound = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "ServiceNotBound",
+	message: ({ service }: { readonly service: string }) =>
+		`The service "${service}" is not bound: give it in the services of an application, or as an override of execute.`,
+});

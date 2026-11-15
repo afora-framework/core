@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **Services as dependencies** (#115). `serviceOf<T>(name)` declares a service, a dependency of use cases next to use cases, repositories, environments and `Logger`: a cache, a storage, a client of another API. `applicationOf({ services: { cache: (scope) => value } })` gives its value by name, made once per call (the use cases a call runs share it) from a `ServiceScope`: the `context` of the call, the `principal` an output authenticated, its `logger`, `environment(Env)`, and `native`, the request of the sink (the Hono context, for `waitUntil` on Workers). A factory may be async: the services a use case declares are made when its `execute` starts, so `this.dependencies.cache` is the value, read without `await`. `execute({ cache })` replaces it, like any dependency. Reading a service nothing gives throws the new `ServiceNotBound`; an application with a use case that declares a service it does not give throws `UnregisteredUseCaseDependency`; `describe()` reports `{ kind: "service", ref }` for the dependency and `services` for the application. `OperationCallOptions` takes `native`, which the HTTP sinks give. New exports: `serviceOf`, `isService`, `ServiceNotBound` and the types `ServiceDeclaration`, `AnyService`, `ServiceScope`, `ServiceFactory`, `ServiceValueOf`. See `docs/use-cases.md#services`.
+- `@afora/codegen`: a top-level `services` (`{ "cache": { "import": "../services.ts#cache" } }`) and a use case dependency that names one, generated as `serviceOf<Awaited<ReturnType<typeof cache>>>("cache")` and `applicationOf({ services })`, extracted back with `imports["services.<name>"]`. New issues `invalid_services` and `duplicate_name` (a service named like a declaration). `afora.schema.json` describes it.
+
 ## 0.0.12 — 2026-11-11
 
 ### Changed

@@ -34,6 +34,7 @@ const CEILING: Record<string, number> = {
 	entity: 55_200,
 	repository: 56_100,
 	"use case": 56_600,
+	"use case with a service": 40_200,
 	queries: 53_700,
 	"steps use case": 55_800,
 	// Raised from 64_900 with the check of `return` against the response
