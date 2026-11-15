@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { compileRoutes, type HttpRequest } from "../adapters";
+import {
+	compileRoutes,
+	type HttpRequest,
+	type IRepositoryProvider,
+} from "../adapters";
 import {
 	applicationOf,
 	blueprintOf,
@@ -90,9 +94,31 @@ describe("spyProvider", () => {
 		spy.reset();
 		expect(await Projects.findMany()).toEqual([]);
 
-		expect(() => spy.fail(Project, "count", down, { times: 0 })).toThrow(
-			InvalidRepositoryDeclaration,
-		);
+		for (const times of [0, -1, 1.5, Number.NaN])
+			expect(() => spy.fail(Project, "count", down, { times })).toThrow(
+				InvalidRepositoryDeclaration,
+			);
+		spy.fail(Project, "count", down, { times: Number.POSITIVE_INFINITY });
+		spy.reset();
+	});
+
+	test("refuses an operation the provider does not have", () => {
+		const memory = inMemoryProvider();
+		const withoutIncrement: IRepositoryProvider = {
+			findOne: (context, query) => memory.findOne(context, query),
+			findMany: (context, query) => memory.findMany(context, query),
+			insert: (context, data) => memory.insert(context, data),
+			update: (context, data, options) => memory.update(context, data, options),
+			remove: (context, id) => memory.remove(context, id),
+			count: (context, query) => memory.count(context, query),
+		};
+		const spy = spyProvider(withoutIncrement);
+		expect(() =>
+			spy.fail(Project, "increment", new StoreDown({ source: "test" })),
+		).toThrow(InvalidRepositoryDeclaration);
+		expect(() =>
+			spy.fail(Project, "count", new StoreDown({ source: "test" })),
+		).not.toThrow();
 	});
 
 	test("records the calls inside a transaction", async () => {
@@ -147,6 +173,10 @@ describe("spyProvider", () => {
 		expect(Object.isFrozen(spy)).toBe(true);
 		expect(spy.capabilities).toEqual(memory.capabilities);
 		expect(typeof spy.transaction).toBe("function");
+		for (const member of ["calls", "fail", "reset"])
+			expect(() =>
+				spyProvider({ ...memory, [member]: () => {} } as never),
+			).toThrow(InvalidRepositoryDeclaration);
 		const storage = providersOf({ main: inMemoryProvider() });
 		expect(() => spyProvider(storage.main as never)).toThrow(
 			InvalidRepositoryDeclaration,

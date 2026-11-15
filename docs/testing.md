@@ -214,8 +214,10 @@ A repository is frozen: `vi.spyOn(Projects, "findMany")` or `spyOn` from `bun:te
 **Behind an HTTP sink**, where the test sends a request and never calls `execute`, wrap the provider with `spyProvider` from `@afora/core/testing` and give it to the application. The spy is the provider itself, plus three members:
 
 - `calls(entity?, operation?)` gives the calls recorded so far, in order, as `{ operation, entity, args }`: `entity` is the name of the entity (`recordNameOf`, the `name` option when it has one), and the filter takes that name or the class; `operation` is one of the operations of [`wrapProvider`](repositories.md#wrapping-a-provider) (`findOne`, `findMany`, `insert`, `update`, `remove`, `count`, `increment`, `migrate`). The calls inside a transaction are recorded too.
-- `fail(entity, operation, error, { times })` makes that operation reject with `error` instead of reaching the provider: the next `times` calls, or every call until `reset()`. The call is still recorded.
+- `fail(entity, operation, error, { times })` makes that operation reject with `error` instead of reaching the provider: the next `times` calls, or every call until `reset()`. The call is still recorded. It throws `InvalidRepositoryDeclaration` when `times` is not a positive integer, or when the provider has no such operation (an `increment` on a provider without one would never fail).
 - `reset()` forgets the calls and the failures.
+
+A provider that already has a `calls`, `fail` or `reset` member is refused (`InvalidRepositoryDeclaration`), since the spy would hide it.
 
 ```ts
 import { expect, test } from "bun:test";

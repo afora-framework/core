@@ -36,7 +36,9 @@ export interface ProviderSpy {
 	/**
 	 * Makes `operation` of `entity` reject with `error` instead of calling
 	 * the provider: the next `times` calls, or every call until `reset`.
-	 * The latest `fail` for an operation replaces the previous one.
+	 * The latest `fail` for an operation replaces the previous one. Throws
+	 * `InvalidRepositoryDeclaration` when `times` is not a positive integer
+	 * or the provider has no `operation`.
 	 */
 	fail(
 		entity: string | AnyRepositoryEntity,
@@ -68,7 +70,7 @@ const nameOf = (entity: string | AnyRepositoryEntity): string =>
  * // applicationOf({ ..., provider: spy }), then a request
  * const reads = spy.calls("Project", "findMany").length;
  * spy.fail("Setting", "count", new Error("down"), { times: 1 });
- * @throws {@link InvalidRepositoryDeclaration} when `provider` is not an object or is a provider of `providersOf`.
+ * @throws {@link InvalidRepositoryDeclaration} when `provider` is not an object, is a provider of `providersOf`, or has its own `calls`, `fail` or `reset`.
  */
 export function spyProvider<Provider extends IRepositoryProvider>(
 	provider: Provider,
@@ -85,6 +87,14 @@ export function spyProvider<Provider extends IRepositoryProvider>(
 					"Expected a repository provider (not a provider of providersOf).",
 			},
 		});
+	for (const member of ["calls", "fail", "reset"])
+		if (member in provider)
+			throw new InvalidRepositoryDeclaration({
+				source: "spyProvider",
+				details: {
+					reason: `The provider already has a \`${member}\` member, which the spy would hide.`,
+				},
+			});
 	const recorded: SpiedCall[] = [];
 	const failures = new Map<string, { error: unknown; left: number }>();
 	const keyOf = (entity: string, operation: string) =>
@@ -122,10 +132,27 @@ export function spyProvider<Provider extends IRepositoryProvider>(
 		},
 		fail(entity, operation, error, options = {}) {
 			const { times = Number.POSITIVE_INFINITY } = options;
-			if (!(times > 0))
+			if (
+				!(
+					times === Number.POSITIVE_INFINITY ||
+					(Number.isInteger(times) && times > 0)
+				)
+			)
 				throw new InvalidRepositoryDeclaration({
 					source: "spyProvider",
-					details: { reason: "Expected `times` to be a positive number." },
+					details: {
+						reason: "Expected `times` to be a positive integer.",
+					},
+				});
+			if (
+				typeof (provider as unknown as Record<string, unknown>)[operation] !==
+				"function"
+			)
+				throw new InvalidRepositoryDeclaration({
+					source: "spyProvider",
+					details: {
+						reason: `The provider has no \`${operation}\` operation, so it is never called.`,
+					},
 				});
 			failures.set(keyOf(nameOf(entity), operation), { error, left: times });
 		},
