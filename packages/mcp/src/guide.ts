@@ -129,7 +129,7 @@ a file of your own.
 \`\`\`
 
 - \`exceptions\`: \`{ layer, message? }\`; \`layer\` is one of \`exceptionLayers\` of \`afora_catalog\`; the message is "<Name>." when omitted.
-- \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`. \`dependencies\` map a key to a use case, repository
+- \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`; \`response\` can also be a list field (\`"Article[]"\`, \`{ "type": "Article", "list": { "maxItems": 50 } }\`), and the use case answers an array. \`dependencies\` map a key to a use case, repository
   or environment, to \`"Logger"\` for the logger of the application (an \`ILogger\`; no step reads it), or to a key of the top-level
   \`"services": { "cache": { "import": "../services.ts#cache" } }\`: a factory written by hand, \`(scope: ServiceScope) => value\`, run once per call
   (no step reads it; a hand-written \`execute\` gets \`this.dependencies.cache\`, typed by what the factory returns). \`errors\` are declared exceptions or exceptions exported by @afora/core (\`coreExceptions\` of \`afora_catalog\`).
@@ -214,7 +214,8 @@ A use case says where it is served and who may call it, next to its input (not i
 
 - \`route\`: \`method\` (get, post, put, patch, delete), \`path\` (a \`{name}\` segment fills the input key \`name\`), \`status\` (200, 201, 202, 204),
   \`query\` (input keys read from the query; a get or delete already reads the rest from it), \`headers\` and \`cookie\` (\`{ inputKey: name }\`),
-  \`setCookie\` (\`{ responseKey: { "name": "sid" } }\`: sent as a cookie, left out of the body). The input stays the only description of what
+  \`setCookie\` (\`{ responseKey: { "name": "sid" } }\`: sent as a cookie, left out of the body), \`body\` (delete only: \`true\` reads the rest
+  from a JSON body instead of the query). The input stays the only description of what
   the use case takes: a route adds no fields. A key read from the path, the query, a header or a cookie must be a scalar and has one place.
 - \`access\`: \`{ "public": true }\`, or an authenticated caller (\`{}\`) with \`scopes\` (all of them), that is the \`owner\` (\`{ "input": "userId" }\`:
   that input key equals the caller), and whose values fill the \`context\` (\`{ "userId": "subject" }\`, also \`"scopes"\` and \`"claims.<name>"\`; the

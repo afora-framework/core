@@ -221,6 +221,25 @@ describe("openapi sink errors", () => {
 		expect(() =>
 			openapi({ info, route: { "Users.login": { method: "head" } } } as never),
 		).toThrow(InvalidOutputStage);
+		expect(() =>
+			openapi({
+				info,
+				// @ts-expect-error: body is only allowed on a delete
+				route: { "Users.login": { method: "get", body: true } },
+			}),
+		).toThrow("a get route never reads a body");
+		expect(() =>
+			openapi({
+				info,
+				// @ts-expect-error: body is only allowed on a delete
+				route: { "Users.login": { method: "patch", body: true } },
+			}),
+		).toThrow("a patch route always reads a body");
+	});
+
+	test("rejects body on a route that is not a delete", () => {
+		const Api = make({ info, route: { "Users.login": { body: true } } });
+		expect(() => Api.build()).toThrow("a post route always reads a body");
 	});
 
 	test("rejects two operations on the same method and path", () => {
@@ -290,9 +309,27 @@ class RemoveEntry extends useCaseOf({
 		return {} as never;
 	}
 }
+class ArchiveEntry extends useCaseOf({
+	name: "ArchiveEntry",
+	blueprint: blueprintOf((ctx) => ({
+		slug: ctx.text,
+		reason: ctx.text,
+		note: ctx.optional.text,
+	})),
+	response: blueprintOf(() => ({})),
+}) {
+	override async execute() {
+		return {} as never;
+	}
+}
 const Entries = commandOf({
 	name: "Entries",
-	useCases: { get: GetEntry, update: UpdateEntry, remove: RemoveEntry },
+	useCases: {
+		get: GetEntry,
+		update: UpdateEntry,
+		remove: RemoveEntry,
+		archive: ArchiveEntry,
+	},
 });
 
 describe("openapi sink routes", () => {
@@ -310,6 +347,11 @@ describe("openapi sink routes", () => {
 						method: "delete",
 						path: "/entries/{slug}",
 						status: 204,
+					},
+					"Entries.archive": {
+						method: "delete",
+						path: "/entries/{slug}/archive",
+						body: true,
 					},
 					"Users.register": { path: "/users", status: 201 },
 				},
@@ -343,7 +385,10 @@ describe("openapi sink routes", () => {
 			description?: string;
 			schema?: unknown;
 		}[];
-		requestBody?: { content: { "application/json": { schema: object } } };
+		requestBody?: {
+			required: boolean;
+			content: { "application/json": { schema: object } };
+		};
 		responses: Record<string, { headers?: object; content?: object }>;
 		security?: unknown;
 	};
@@ -398,6 +443,34 @@ describe("openapi sink routes", () => {
 		expect(removed).toBeDefined();
 		expect(removed?.content).toBeUndefined();
 		expect(op("/api/entries/{slug}", "delete").requestBody).toBeUndefined();
+	});
+
+	test("a delete with body: true documents a JSON body", () => {
+		const archive = op("/api/entries/{slug}/archive", "delete");
+		expect(archive.parameters?.map((p) => [p.name, p.in])).toEqual([
+			["slug", "path"],
+		]);
+		expect(archive.requestBody?.required).toBe(true);
+		const body = archive.requestBody?.content["application/json"].schema as {
+			properties: object;
+			required: string[];
+		};
+		expect(Object.keys(body.properties)).toEqual(["reason", "note"]);
+		expect(body.required).toEqual(["reason"]);
+		// Nothing required left in it: the body may be left out.
+		const optional = outputOf({
+			name: "Blog",
+			commands: [Posts],
+			pipe: [
+				openapi({
+					info,
+					route: { "Posts.list": { method: "delete", body: true } },
+				}),
+			],
+		}).build();
+		const list = optional.paths["/posts/list"]?.delete as Op;
+		expect(list.parameters).toBeUndefined();
+		expect(list.requestBody?.required).toBe(false);
 	});
 
 	test("documents static headers and the request id", () => {
@@ -519,5 +592,41 @@ describe("openapi sink route errors", () => {
 				},
 			}).build(),
 		).toThrow(InvalidOutputStage);
+	});
+});
+
+describe("a list response", () => {
+	class Comment extends entityOf(blueprintOf((ctx) => ({ body: ctx.text }))) {}
+	class Recent extends useCaseOf({
+		name: "Recent",
+		blueprint: blueprintOf((ctx) => ({ page: ctx.optional.integer })),
+		response: listOf(Comment, { maxItems: 20 }),
+		route: { method: "get", path: "/comments" },
+	}) {
+		override async execute() {
+			return [] as never;
+		}
+	}
+	const document = outputOf({
+		name: "Comments",
+		commands: [commandOf({ name: "Comments", useCases: { recent: Recent } })],
+		pipe: [openapi({ info })],
+	}).build();
+
+	test("is an array of its items, whose records are components", async () => {
+		await validated(document);
+		const get = document.paths["/comments"]?.get as {
+			responses: Record<
+				string,
+				{ content: { "application/json": { schema: unknown } } }
+			>;
+		};
+		expect(get.responses["200"]?.content["application/json"].schema).toEqual({
+			type: "array",
+			items: { $ref: "#/components/schemas/Comment" },
+			maxItems: 20,
+		});
+		expect(document.components.schemas).toHaveProperty("Comment");
+		expect(document).toMatchSnapshot();
 	});
 });

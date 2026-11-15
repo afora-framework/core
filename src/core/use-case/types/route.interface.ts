@@ -38,13 +38,10 @@ export interface RouteCookie {
 }
 
 /**
- * Where a use case is served over HTTP, as data: declared with the `route`
- * setting of `useCaseOf` or with `@Route`, and read by the sinks that serve
- * or document HTTP. The blueprint of the use case stays the only description
- * of its input: a route only says where each key comes from.
+ * What a route says besides its method and `body`: the shared part of
+ * {@link RouteDeclaration} and {@link RouteSettings}.
  */
-export interface RouteDeclaration {
-	readonly method: RouteMethod;
+export interface RouteFields {
 	/**
 	 * The path, after the `basePath` of the sink, e.g. `"/posts/{slug}"`. A
 	 * `{name}` segment fills the scalar input key `name`. Without it, the path
@@ -76,9 +73,47 @@ export interface RouteDeclaration {
 }
 
 /**
+ * The `body` of a route of `Method`: a `delete` may read a JSON body
+ * (`body: true`); any other method takes no `body`, since a `get` never reads
+ * one and a `post`, `put` or `patch` always does.
+ */
+export type RouteBody<Method extends string> =
+	Lowercase<Method> extends "delete"
+		? {
+				/**
+				 * Only for a `delete` route: `true` reads the input keys with no
+				 * other place from a JSON body, as `post`, `put` and `patch` do,
+				 * instead of from the query. An empty body is `{}`.
+				 *
+				 * @default false
+				 */
+				readonly body?: boolean;
+			}
+		: { readonly body?: never };
+
+/**
+ * Where a use case is served over HTTP, as data: declared with the `route`
+ * setting of `useCaseOf` or with `@Route`, and read by the sinks that serve
+ * or document HTTP. The blueprint of the use case stays the only description
+ * of its input: a route only says where each key comes from. `body` is only
+ * allowed on a `delete` (see {@link RouteBody}).
+ */
+export type RouteDeclaration = RouteFields &
+	(
+		| ({ readonly method: Exclude<RouteMethod, "delete"> } & RouteBody<"get">)
+		| ({ readonly method: "delete" } & RouteBody<"delete">)
+	);
+
+/**
  * What the `route` setting and `@Route` take: a {@link RouteDeclaration}
  * whose method may be written in upper case.
  */
-export interface RouteSettings extends Omit<RouteDeclaration, "method"> {
-	readonly method: RouteMethod | Uppercase<RouteMethod>;
-}
+export type RouteSettings = RouteFields &
+	(
+		| ({
+				readonly method:
+					| Exclude<RouteMethod, "delete">
+					| Uppercase<Exclude<RouteMethod, "delete">>;
+		  } & RouteBody<"get">)
+		| ({ readonly method: "delete" | "DELETE" } & RouteBody<"delete">)
+	);

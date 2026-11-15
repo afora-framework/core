@@ -292,9 +292,10 @@ function honoPath(path: string): string {
  * agree. The requests are handled by the route table of the core
  * (`compileRoutes`), as in every sink that serves HTTP:
  *
- * - Body methods read a JSON body, `get` and `delete` the query string, with
- *   what the route places over it: `{name}` segments of the path, and the
- *   query keys, headers and cookies a use case route declares. Text is
+ * - Body methods (and a `delete` with `body: true`) read a JSON body, `get`
+ *   and `delete` the query string, with what the route places over it:
+ *   `{name}` segments of the path, and the query keys, headers and cookies
+ *   a use case route declares. Text is
  *   coerced to the numbers and booleans the input takes, and the operation
  *   validates it (a 400 problem with `issues`).
  * - The context comes from `context.headers` (`{ contextKey: headerName }`,
@@ -323,8 +324,8 @@ export const hono = sinkOf<Hono, HonoOptions, HonoHooks>({
 			const route = routes.get(id);
 			const reason = !route
 				? `hono.webhooks["${id}"] names no operation of the output.`
-				: route.method === "get" || route.method === "delete"
-					? `hono.webhooks["${id}"] is routed with "${route.method}", which has no body to sign; route it with "post".`
+				: !route.body
+					? `hono.webhooks["${id}"] is routed with "${route.method}", which has no body to sign; route it with "post" (or a "delete" with body: true).`
 					: undefined;
 			if (reason) {
 				throw new InvalidOutputStage({ source: "hono", details: { reason } });

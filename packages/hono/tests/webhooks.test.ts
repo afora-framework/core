@@ -450,6 +450,32 @@ describe("hono webhooks", () => {
 		);
 	});
 
+	test("a delete route with body: true can be a webhook", async () => {
+		const github: WebhookOptions = {
+			scheme: "github",
+			secret: { env: "WEBHOOK_SECRET" },
+		};
+		const app = outputOf({
+			name: "Billing",
+			commands: [Payments],
+			pipe: [
+				hono({
+					webhooks: { "Payments.lookup": github },
+					route: { "Payments.lookup": { method: "delete", body: true } },
+				}),
+			],
+		}).build() as Hono;
+		const body = JSON.stringify({ id: "pi_1" });
+		const call = (headers: Record<string, string>) =>
+			app.request("/payments/lookup", {
+				method: "DELETE",
+				body,
+				headers: { "content-type": "application/json", ...headers },
+			});
+		expect((await call(await githubHeaders(body))).status).toBe(200);
+		expect((await call({})).status).toBe(401);
+	});
+
 	test("other routes are not verified", async () => {
 		const app = api({ scheme: "github", secret: { env: "WEBHOOK_SECRET" } });
 		const response = await app.request("/payments/lookup", {
@@ -603,6 +629,18 @@ describe("hono webhooks", () => {
 					{ "Payments.lookup": { method: "get" } },
 				),
 			).toThrow('is routed with "get", which has no body to sign');
+			expect(
+				build(
+					{ "Payments.lookup": github },
+					{ "Payments.lookup": { method: "delete" } },
+				),
+			).toThrow('is routed with "delete", which has no body to sign');
+			expect(
+				build(
+					{ "Payments.lookup": github },
+					{ "Payments.lookup": { method: "delete", body: true } },
+				),
+			).not.toThrow();
 		});
 	});
 

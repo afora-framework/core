@@ -70,6 +70,7 @@ export type {
 	BlueprintHelpers,
 	BlueprintInput,
 	BlueprintListOptions,
+	BlueprintListValue,
 	BlueprintPluginContext,
 	BlueprintSchema,
 	BlueprintSource,
@@ -461,6 +462,14 @@ export {
 	useCaseCatalogOf,
 } from "./core/use-case/plugin-catalog";
 export type {
+	AnyUseCaseResponse,
+	ResponseBlueprint,
+	ResponseOf,
+	ResponseSetting,
+	ResponseValue,
+	UseCaseOutput,
+} from "./core/use-case/response";
+export type {
 	AnyService,
 	ServiceDeclaration,
 	ServiceFactory,
@@ -508,7 +517,9 @@ export type {
 	UseCaseTargetInfo,
 } from "./core/use-case/types/plugin.interface";
 export type {
+	RouteBody,
 	RouteDeclaration,
+	RouteFields,
 	RouteSettings,
 } from "./core/use-case/types/route.interface";
 export type {

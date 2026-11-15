@@ -5,7 +5,7 @@ import { canonicalEntitySchema } from "./entity-schema";
 import { flagOf } from "./graph";
 import { type Field, parseField } from "./model";
 import { type Scope, scopeOf } from "./scope";
-import { isObject } from "./spec/field";
+import { isListResponseSpec, isObject } from "./spec/field";
 import {
 	COLLECTIONS,
 	DEFAULT_OUTPUT_DIR,
@@ -238,6 +238,13 @@ function canonicalBlueprintRef(value: unknown): unknown {
 	return isObject(value) ? { fields: fieldsOf(value.fields) } : value;
 }
 
+/** A response: a blueprint, or a list field in its canonical form. */
+function canonicalResponse(value: unknown): unknown {
+	if (!isListResponseSpec(value)) return canonicalBlueprintRef(value);
+	const field = parse(value);
+	return field ? canonicalField(field) : value;
+}
+
 function cloneJson<Value>(value: Value): Value {
 	return JSON.parse(JSON.stringify(value)) as Value;
 }
@@ -307,6 +314,7 @@ function canonicalRouting(value: Json): Json {
 			...(headers === undefined ? {} : { headers }),
 			...(route.cookie === undefined ? {} : { cookie: route.cookie }),
 			...(route.setCookie === undefined ? {} : { setCookie: route.setCookie }),
+			...(route.body === undefined ? {} : { body: route.body }),
 		};
 	} else if (route !== undefined) out.route = route;
 	if (isObject(access)) {
@@ -360,7 +368,7 @@ function canonicalUseCase(value: Json): Json {
 		...(value.deprecated === true ? { deprecated: true } : {}),
 		...canonicalRouting(value),
 		input: canonicalBlueprintRef(value.input),
-		response: canonicalBlueprintRef(value.response),
+		response: canonicalResponse(value.response),
 		...(value.context === undefined
 			? {}
 			: { context: canonicalBlueprintRef(value.context) }),
@@ -650,7 +658,9 @@ export function compactSpec(normalized: Spec): Spec {
 			if (!isObject(value)) continue;
 			for (const key of ["input", "response", "context"]) {
 				const ref = value[key];
-				if (isObject(ref)) ref.fields = compactFields(ref.fields);
+				if (key === "response" && isListResponseSpec(ref)) {
+					value[key] = compactField(ref as Json) as unknown as Json;
+				} else if (isObject(ref)) ref.fields = compactFields(ref.fields);
 			}
 			const implementation = value.implementation;
 			if (isObject(implementation) && Array.isArray(implementation.steps)) {

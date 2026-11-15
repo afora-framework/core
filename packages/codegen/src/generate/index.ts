@@ -10,12 +10,12 @@ import {
 import { canonicalExpires } from "../entity-expires";
 import { canonicalEntitySchema } from "../entity-schema";
 import { fieldsOfDecl, orderOf, typesIn } from "../graph";
-import { type Field, parseFields } from "../model";
+import { type Field, parseField, parseFields } from "../model";
 import { defaultMessageOf, normalizeSpec } from "../normalize";
 import { pipeKindOf } from "../output";
 import { isImportObject, parseImportRef } from "../provider";
 import { type Decl, type Scope, scopeOf } from "../scope";
-import { isIdentifier, isObject } from "../spec/field";
+import { isIdentifier, isListResponseSpec, isObject } from "../spec/field";
 import {
 	type CodegenOptions,
 	DEFAULT_OUTPUT_DIR,
@@ -800,6 +800,43 @@ function blueprintRefDoc(ref: unknown, e: Emitter): Doc {
 	return blueprintDoc(fields, e, false);
 }
 
+/**
+ * `response`: a blueprint, or the list a list field says, made with `listOf`
+ * outside of a blueprint (so with the exports of the properties, not `ctx`).
+ */
+function responseDoc(ref: unknown, e: Emitter): Doc {
+	if (!isListResponseSpec(ref)) return blueprintRefDoc(ref, e);
+	const field = parseField(ref, [], []) as Field;
+	let item: Doc;
+	if (field.kind === "inline") item = blueprintDoc(field.fields, e, false);
+	else if (field.kind === "enum") {
+		const options: [string, Doc][] = [];
+		if (field.name !== undefined) options.push(["name", literal(field.name)]);
+		if (field.default !== undefined) {
+			options.push(["default", literal(field.default)]);
+		}
+		item = call(e.use("enumOf"), [
+			literal([...field.values]),
+			...(options.length > 0 ? [objectDoc(options)] : []),
+		]);
+	} else {
+		const type = (field as Extract<Field, { kind: "type" }>).type;
+		const root = /^[a-z]/.test(type)
+			? e.use((stdProperty(type) as { export: string }).export)
+			: e.ref(type);
+		const options = withOptions((field as { with?: unknown }).with);
+		item = options ? callWithObject(`${root}.with`, options) : root;
+	}
+	const bounds = Object.entries(field.list ?? {});
+	return bounds.length > 0
+		? callHuggingLast(
+				e.use("listOf"),
+				[item],
+				bounds.map(([key, value]) => [key, literal(value)] as const),
+			)
+		: call(e.use("listOf"), [item]);
+}
+
 /** A step as the class expression the TypeScript form takes: classes and functions in place of names. */
 function stepDoc(
 	step: Record<string, unknown>,
@@ -922,7 +959,7 @@ function useCaseDoc(
 	const props: [string, Doc][] = [
 		["name", literal(decl.name)],
 		["blueprint", blueprintRefDoc(spec.input, e)],
-		["response", blueprintRefDoc(spec.response, e)],
+		["response", responseDoc(spec.response, e)],
 	];
 	if (spec.context !== undefined) {
 		props.push(["context", blueprintRefDoc(spec.context, e)]);

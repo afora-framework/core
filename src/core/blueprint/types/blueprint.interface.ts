@@ -637,6 +637,12 @@ export interface IBlueprintList<
 	>;
 }
 
+/** The value of a list, e.g. `Article[]` for `listOf(Article)`. */
+export type BlueprintListValue<List extends AnyBlueprintList> =
+	List extends IBlueprintList<infer Item, boolean>
+		? FieldValue<Item, "value">[]
+		: never;
+
 type ListShape<
 	Item,
 	Mode extends FieldMode,

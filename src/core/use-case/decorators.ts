@@ -2,7 +2,11 @@ import { Kind } from "../symbols/kind";
 import { accessDeclarationOf } from "./access";
 import { routeDeclarationOf } from "./route";
 import type { AccessDeclaration } from "./types/access.interface";
-import type { RouteSettings } from "./types/route.interface";
+import type {
+	RouteBody,
+	RouteFields,
+	RouteSettings,
+} from "./types/route.interface";
 import { type AnyUseCaseClass, InvalidUseCaseDeclaration } from "./use-case";
 
 /** What a decorator of this module is given besides the class: nothing it reads. */
@@ -76,19 +80,19 @@ function decoratedUseCase(value: unknown, decorator: string): AnyUseCaseClass {
  * (the same one again is accepted), and for a route that does not fit the
  * input of the use case.
  */
-export function Route(
-	method: RouteSettings["method"],
+export function Route<Method extends RouteSettings["method"]>(
+	method: Method,
 	path?: string,
-	options?: Omit<RouteSettings, "method" | "path">,
+	options?: Omit<RouteFields, "path"> & RouteBody<Method>,
+): UseCaseDecorator;
+export function Route<Method extends RouteSettings["method"]>(
+	method: Method,
+	options?: Omit<RouteFields, "path"> & RouteBody<Method>,
 ): UseCaseDecorator;
 export function Route(
 	method: RouteSettings["method"],
-	options?: Omit<RouteSettings, "method" | "path">,
-): UseCaseDecorator;
-export function Route(
-	method: RouteSettings["method"],
-	pathOrOptions?: string | Omit<RouteSettings, "method" | "path">,
-	options?: Omit<RouteSettings, "method" | "path">,
+	pathOrOptions?: string | (Omit<RouteFields, "path"> & { body?: boolean }),
+	options?: Omit<RouteFields, "path"> & { body?: boolean },
 ): UseCaseDecorator {
 	const settings =
 		typeof pathOrOptions === "string"

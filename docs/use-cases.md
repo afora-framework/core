@@ -98,6 +98,33 @@ A child called through a dependency function receives its parent's context narro
 
 The class gets the frozen statics `context`, `description`, `tags`, `deprecated`, `errors`, `route` (see [Routes](#routes)) and `access` (see [Access](auth.md)), beside `useCaseName`, `blueprint`, `response` and `dependencies`. `context` is a non-optional blueprint, `tags` are distinct non-empty strings, and `errors` are distinct classes made by `exceptionOf`; anything else throws `InvalidUseCaseDeclaration`. `errors` documents what to expect and changes nothing at runtime: an exception that is not listed still propagates.
 
+## A list as the response
+
+The `response` is an object blueprint, or a list made by `listOf`: the use case then answers an array, without a wrapper object.
+
+```ts
+import { blueprintOf, listOf, useCaseOf } from "@afora/core";
+
+const ArticleSummary = blueprintOf((ctx) => ({
+	slug: ctx.slug,
+	title: ctx.text,
+}));
+
+class RecentArticles extends useCaseOf({
+	name: "RecentArticles",
+	blueprint: blueprintOf((ctx) => ({ limit: ctx.integer })),
+	response: listOf(ArticleSummary, { maxItems: 50 }),
+}) {
+	override async execute() {
+		return [{ slug: "hello", title: "Hello" }].slice(0, this.input.limit);
+	}
+}
+
+const articles = await new RecentArticles({ limit: 10 }).execute();
+```
+
+The list validates the array and each item, with its bounds (`minItems`, `maxItems`); an invalid item is an `InvalidUseCaseResponse` whose issue paths start with the index (`[1, "title"]`, read `"1.title"` in the message). Its items may be blueprints, records, entities or properties, and the events of the entities in it are collected as for any response. The array is frozen and typed read-only: `UseCaseResponse<typeof RecentArticles>`, a dependency function and the `execute` of a steps use case give `readonly { slug: string; title: string }[]` (an override of `execute` keeps the type it returns). HTTP outputs send the array as the JSON body, OpenAPI documents it as `type: array` with the items, and the MCP and WebSocket sinks send it as is. A list has no keys, so `route.setCookie` is rejected with it at declaration; respond with a blueprint (`{ items, token }`) to set a cookie or to add paging later. The response must not be optional.
+
 ## Routes
 
 A use case can say where it is served over HTTP, next to its input, instead of in the options of a sink:
@@ -157,12 +184,13 @@ The blueprint stays the only description of the input: a route adds no schema, i
 - **`status`** is the status of a success: `200` (the default), `201`, `202` or `204`.
 - **`query`** lists input keys read from the query string. A `get` or `delete` route already reads from the query every key that has no other place, so `query` is for routes with a body.
 - **`headers`** and **`cookie`** map input keys to the header or the cookie each is read from: `{ locale: "accept-language" }`.
-- **What is left** is the JSON body of a `post`, `put` or `patch`, and the query of a `get` or `delete`.
+- **`body`** is only for a `delete`: `body: true` reads what is left from a JSON body, as a `post` does, instead of from the query, for a client that sends `DELETE /push/subscriptions` with `{ "endpoint": "https://..." }`. An empty body is `{}`, and the keys the route places elsewhere are still read only from there. Any other method rejects it: a `get` never reads a body, and a `post`, `put` or `patch` always does. The types say so too: `RouteDeclaration` and `RouteSettings` take `body` only with a `delete` method (`RouteBody<Method>`; `RouteFields` is the rest of a route), as do `@Route` and the `route` option of a sink, and the declaration checks it again at run time.
+- **What is left** is the JSON body of a `post`, `put` or `patch` (or of a `delete` with `body: true`), and the query of a `get` or `delete`.
 - **`setCookie`** maps keys of the _response_ to cookies: `{ token: { name: "sid" } }` sends the `token` of the response as the cookie `sid` and leaves it out of the body. A cookie is `{ name, httpOnly?, secure?, sameSite?, path?, domain?, maxAge? }`, by default `HttpOnly; Secure; SameSite=Lax; Path=/`. An empty text removes the cookie, and an absent value sets none. The key must be a scalar key of the response.
 
-A key read from the path, the query, a header or a cookie arrives as text, so it must be a scalar property of the input (a number or a boolean is converted), and each key has one place. Anything else throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class whose decorator says another route than the one it already has (the same route again is accepted, which is what a class over a base generated from `afora.json` does).
+A key the route places is read only from that place: a value the client sends for it in the body or the query is dropped, so a missing header or cookie leaves the key absent and the blueprint decides whether that is valid. A key read from the path, the query, a header or a cookie arrives as text, so it must be a scalar property of the input (a number or a boolean is converted), and each key has one place. Anything else throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class whose decorator says another route than the one it already has (the same route again is accepted, which is what a class over a base generated from `afora.json` does).
 
-The route is data: `ListPosts.route` is the frozen declaration, `app.describe().useCases.ListPosts.route` and `afora.json` carry it, and a subclass inherits it. It names no server. The use case becomes an operation through a [command](commands.md), and the sink of an [output](outputs.md) (`openapi`, `hono`…) serves or documents it; the `route` option of that sink still overrides the method, path and status per operation id.
+The route is data: `ListPosts.route` is the frozen declaration, `app.describe().useCases.ListPosts.route` and `afora.json` carry it, and a subclass inherits it. It names no server. The use case becomes an operation through a [command](commands.md), and the sink of an [output](outputs.md) (`openapi`, `hono`…) serves or documents it; the `route` option of that sink still overrides the method, path, status and `body` per operation id.
 
 `@Route(method, path?, options?)` (or `@Route(method, options)`) is a standard class decorator, with no `experimentalDecorators` and no metadata reflection; it also works as a legacy TypeScript decorator. Bun runs it as written. Node has no decorator syntax yet, so there the code goes through a compiler (`tsc` with a `target` of `ES2022` or lower, `tsx`, esbuild), or uses the `route` setting, which needs nothing.
 

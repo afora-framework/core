@@ -1590,10 +1590,15 @@
 												}
 											},
 											"description": "Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie."
+										},
+										"body": {
+											"type": "boolean",
+											"default": false,
+											"description": "Only on a delete: true reads the input keys with no other place from a JSON body instead of the query (an empty body is {}). A get never reads a body, and a post, put or patch always does."
 										}
 									},
 									"additionalProperties": false,
-									"description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status."
+									"description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status and body."
 								},
 								"access": {
 									"anyOf": [
@@ -1686,29 +1691,37 @@
 								"response": {
 									"anyOf": [
 										{
-											"type": "string",
-											"pattern": "^[A-Z][A-Za-z0-9]*$",
-											"description": "The name of a declared blueprint."
-										},
-										{
-											"type": "object",
-											"required": ["fields"],
-											"properties": {
-												"fields": {
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[A-Z][A-Za-z0-9]*$",
+													"description": "The name of a declared blueprint."
+												},
+												{
 													"type": "object",
-													"patternProperties": {
-														"^[A-Za-z_$][A-Za-z0-9_$]*$": {
-															"$ref": "#/$defs/Field"
+													"required": ["fields"],
+													"properties": {
+														"fields": {
+															"type": "object",
+															"patternProperties": {
+																"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+																	"$ref": "#/$defs/Field"
+																}
+															},
+															"additionalProperties": false,
+															"description": "Fields by key."
 														}
 													},
-													"additionalProperties": false,
-													"description": "Fields by key."
+													"additionalProperties": false
 												}
-											},
-											"additionalProperties": false
+											],
+											"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+										},
+										{
+											"$ref": "#/$defs/Field"
 										}
 									],
-									"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+									"description": "A blueprint, or a list written as a field: \"Article[]\", { \"type\": \"Article\", \"list\": { \"maxItems\": 50 } } or { \"fields\": {...}, \"list\": true }. The use case then answers an array."
 								},
 								"context": {
 									"anyOf": [
@@ -2313,10 +2326,15 @@
 												}
 											},
 											"description": "Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie."
+										},
+										"body": {
+											"type": "boolean",
+											"default": false,
+											"description": "Only on a delete: true reads the input keys with no other place from a JSON body instead of the query (an empty body is {}). A get never reads a body, and a post, put or patch always does."
 										}
 									},
 									"additionalProperties": false,
-									"description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status."
+									"description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status and body."
 								},
 								"access": {
 									"anyOf": [
