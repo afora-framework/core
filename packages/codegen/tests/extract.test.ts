@@ -15,6 +15,8 @@ import {
 	propertyOf,
 	recordOf,
 	repositoryOf,
+	Serial,
+	SerialKey,
 	TextKey,
 	toOpenAPI,
 	Uuid,
@@ -241,10 +243,12 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 				Setting: { fields: { value: "text" }, id: "key" },
 				Legacy: { fields: { name: "text" }, id: "uuid" },
 				Plain: { fields: { name: "text" }, id: "uuid7" },
+				Ticket: { fields: { title: "text" }, id: "serial" },
 			},
 			repositories: {
 				Settings: { entity: "Setting", actions: ["create", "findById"] },
 				Legacies: { entity: "Legacy", actions: ["create", "findById"] },
+				Tickets: { entity: "Ticket", actions: ["create", "findById"] },
 			},
 		};
 		expect(validateSpec(spec)).toEqual([]);
@@ -253,6 +257,7 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 		)?.contents;
 		expect(code).toContain("id: Key");
 		expect(code).toContain("id: Uuid");
+		expect(code).toContain("id: Serial");
 		const dir = await generated({ ".": { spec } });
 		const { App } = await import(join(dir, "src/domain/index.ts"));
 		const setting = await App.repositories.Settings.create({
@@ -265,9 +270,13 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 		const v4 = "6f1c2b9e-3d4a-4e8b-9f2a-1c3b5d7e9f0a";
 		await App.repositories.Legacies.create({ id: v4, name: "old" });
 		expect((await App.repositories.Legacies.findById(v4)).name).toBe("old");
+		const ticket = await App.repositories.Tickets.create({ title: "First" });
+		expect(ticket.id).toBe(1);
+		expect((await App.repositories.Tickets.findById(1)).title).toBe("First");
 		const extracted = extractSpec(App);
 		expect(extracted.entities?.Setting?.id).toBe("key");
 		expect(extracted.entities?.Legacy?.id).toBe("uuid");
+		expect(extracted.entities?.Ticket?.id).toBe("serial");
 		expect(extracted.entities?.Plain?.id).toBeUndefined();
 		expect(normalizeSpec(extracted)).toEqual(normalizeSpec(spec));
 	});
@@ -283,7 +292,9 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 			);
 		expect(extract(Key).entities?.Thing?.id).toBe("key");
 		expect(extract(Uuid).entities?.Thing?.id).toBe("uuid");
+		expect(extract(Serial).entities?.Thing?.id).toBe("serial");
 		for (const custom of [
+			idOf(SerialKey),
 			idOf(TextKey),
 			idOf(UuidKey, () => crypto.randomUUID()),
 			idOf(Integer, () => 1),
@@ -292,11 +303,11 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 		}
 	});
 
-	test("an id other than uuid7, uuid or key is invalid", () => {
+	test("an id other than uuid7, uuid, key or serial is invalid", () => {
 		const spec = {
 			version: 1,
 			name: "Ids",
-			entities: { Ticket: { fields: { title: "text" }, id: "serial" } },
+			entities: { Ticket: { fields: { title: "text" }, id: "increment" } },
 		} as unknown as Spec;
 		expect(validateSpec(spec).map((issue) => issue.path)).toContainEqual([
 			"entities",

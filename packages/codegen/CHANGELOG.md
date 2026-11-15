@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Serial ids (#122)
+
+- An entity takes `"id": "serial"`, a positive integer the database assigns on `create`, generated as `{ id: Serial }` and extracted back; `afora.schema.json` has it.
+
 ### Security: the project boundary (#69)
 
 - `projectBoundaryIssues` reports `outside_project` for the specifiers that escaped it: a package path with a `.` or `..` segment (`pkg/../../../x`, which resolves from `node_modules/pkg` to outside the project, for an `import` and for an `extends`), a backslash or a percent-encoded character in any module (Node and Bun resolve an import as a URL, so `./a\..\..\x` and `./%2e%2e/x` climb out although `path.resolve` keeps them inside on POSIX), control characters, a module built into the runtime (`child_process`, `fs`, `bun`: a `run` step could call `execSync`), a relative module or `extends` that goes through a symlink leaving the project, and an `output.dir` in `node_modules` or `.git`.

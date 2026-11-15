@@ -203,8 +203,10 @@ function withIdStrategy(
 			details: { reason: "expected the id option to be made by idOf." },
 		});
 	}
-	const vouched = vouchedIdsOf(id);
+	const assignedIds = id.generatedBy === "database";
+	const vouched = assignedIds ? always : vouchedIdsOf(id);
 	const makesValid: ValidMakers = {
+		// An id the database assigns is left out until then.
 		id: vouched ?? never,
 		createdAt: clock.makesValid?.createdAt ?? never,
 	};
@@ -215,6 +217,7 @@ function withIdStrategy(
 		}) as AnyBlueprint,
 		Object.freeze({
 			generateId: id.generate,
+			...(assignedIds ? { assignedIds } : {}),
 			now: clock.now,
 			makesValid,
 		}),
@@ -222,6 +225,7 @@ function withIdStrategy(
 }
 
 const never = () => false;
+const always = () => true;
 
 /** Whether `value` is a class made by `entityOf`, or one extending it. */
 export function isEntityClass(

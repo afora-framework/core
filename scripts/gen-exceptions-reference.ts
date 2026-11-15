@@ -131,6 +131,8 @@ const HANDLING: Record<string, string> = {
 	Unauthenticated: "An output answers 401.",
 	UndeclaredBlueprintProperty: DECLARATION,
 	UndeclaredRecordProperty: `${INPUT} The value is rejected, never trimmed: drop the key before building the record.`,
+	UnstoredEntity: `${BUG} Create the entity first: \`create\` gives it the id the database assigns.`,
+	UnsupportedIdentity: `${DECLARATION} Give the repository a provider with \`capabilities.generatedIds\` (in memory, Drizzle), or another id strategy than \`Serial\`.`,
 	UnknownCommandOperation:
 		"An output answers 404. In your own code, call an operation the command declares.",
 	UnknownRecordPlugin: DECLARATION,

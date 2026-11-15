@@ -739,13 +739,13 @@ function checkRecord(
 	const entries = catalog();
 	if (
 		decl.spec.id !== undefined &&
-		!["uuid7", "uuid", "key"].includes(decl.spec.id as string)
+		!["uuid7", "uuid", "key", "serial"].includes(decl.spec.id as string)
 	) {
 		issues.push(
 			issue(
 				[...path, "id"],
 				"invalid_option",
-				'Expected "uuid7" (the default), "uuid" or "key".',
+				'Expected "uuid7" (the default), "uuid", "key" or "serial".',
 			),
 		);
 	}

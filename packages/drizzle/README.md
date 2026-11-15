@@ -146,6 +146,22 @@ With soft deletion, a partial index (``.where(sql`"deletedAt" IS NULL`)``) keeps
 - A versioned entity (`entityOf(blueprint, { versioned: true })`) needs an integer `version` column. `update` with an expected version runs `UPDATE ... WHERE id = ? AND version = ?` with `RETURNING`: no row while the id exists is a `RepositoryConcurrencyConflict` (with the stored version as `actual`). The check and the write are one statement, so it holds across connections.
 - `increment` runs `UPDATE ... SET views = coalesce(views, 0) + ?, updatedAt = ? WHERE id = ? AND deletedAt IS NULL RETURNING *`, and with `create`, `INSERT ... ON CONFLICT (id) DO UPDATE SET ...` with the same `SET` (on SQLite and Postgres alike), so two calls creating the same id both count. A soft-deleted row is not incremented: without `create` it is `RepositoryEntityNotFound`, with it `RepositoryUniqueViolation` on `id`. For an entity that expires, an expired row is not incremented either: the `UPDATE` adds the expiry condition, and the upsert's `SET` replaces every column with the inserted row (`CASE WHEN <alive> THEN ... ELSE excluded.<column> END`).
 
+## Ids the database assigns
+
+`capabilities.generatedIds` is true, on SQLite and Postgres. An entity declared with `entityOf(blueprint, { id: Serial })` ([Entities](../../docs/entities.md#ids-the-database-assigns)) is inserted without its `id`, and `INSERT ... RETURNING id` gives the one the database assigned, which `create` sets on the entity. The `id` column must assign it: `integer("id").primaryKey({ autoIncrement: true })` on SQLite (`INTEGER PRIMARY KEY AUTOINCREMENT`; without `AUTOINCREMENT` SQLite may give the id of a deleted row again), and `serial("id").primaryKey()` or `integer("id").primaryKey().generatedAlwaysAsIdentity()` on Postgres. A `bigint` (or `bigserial`) id comes back as a number up to `Number.MAX_SAFE_INTEGER`; one above it is refused with `UnsupportedIdentity` instead of rounded to another id. `update`, soft deletion and `restore` never set the `id` column, so a `GENERATED ALWAYS` identity column works. `create` refuses a new entity given an id of its own (`UnsupportedIdentity`): it would leave the sequence behind. Integer ids order and page by cursor as numbers.
+
+```ts
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
+export const tickets = sqliteTable("tickets", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	createdAt: text("createdAt").notNull(),
+	updatedAt: text("updatedAt"),
+	deletedAt: text("deletedAt"),
+	title: text("title").notNull(),
+});
+```
+
 ## Transactions
 
 `capabilities.transactions` is true. `provider.transaction(run)` uses `db.transaction`, and a nested one a savepoint. Synchronous SQLite drivers (`bun:sqlite`, `better-sqlite3`) cannot run an asynchronous `db.transaction` callback, so there the provider issues `BEGIN` / `SAVEPOINT` itself and makes the other operations wait for the transaction, since there is one connection. The scoped provider throws once its callback ends. Use it with `commandOf({ transaction: true })`.

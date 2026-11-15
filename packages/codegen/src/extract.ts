@@ -2,6 +2,7 @@ import {
 	type AnyApplication,
 	EntityIdStrategy,
 	Key,
+	Serial,
 	Std,
 	Uuid,
 } from "@afora/core";
@@ -373,13 +374,13 @@ class Extraction {
 
 /**
  * The `id` of the spec of the entity `name`, from the strategy its class
- * holds: `uuid` or `key` for the strategies `Uuid` and `Key` themselves; any
- * other `idOf` cannot be named in a spec.
+ * holds: `uuid`, `key` or `serial` for the strategies `Uuid`, `Key` and
+ * `Serial` themselves; any other `idOf` cannot be named in a spec.
  */
 function idSpecOf(
 	entity: unknown,
 	name: string,
-): { readonly id?: "uuid" | "key" } {
+): { readonly id?: "uuid" | "key" | "serial" } {
 	const strategy =
 		typeof entity === "function"
 			? (entity as { readonly [EntityIdStrategy]?: unknown })[EntityIdStrategy]
@@ -387,8 +388,9 @@ function idSpecOf(
 	if (strategy === undefined) return {};
 	if (strategy === Uuid) return { id: "uuid" };
 	if (strategy === Key) return { id: "key" };
+	if (strategy === Serial) return { id: "serial" };
 	throw new ExtractionError(
-		`The id of the entity "${name}" is made by a custom idOf, which a spec cannot name: use Uuid or Key, or leave the entity out of the spec.`,
+		`The id of the entity "${name}" is made by a custom idOf, which a spec cannot name: use Uuid, Key or Serial, or leave the entity out of the spec.`,
 	);
 }
 

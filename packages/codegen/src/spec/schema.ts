@@ -433,10 +433,15 @@ const RecordDeclaration = Type.Object(
 		events: Type.Optional(EntityEvents),
 		id: Type.Optional(
 			Type.Union(
-				[Type.Literal("uuid7"), Type.Literal("uuid"), Type.Literal("key")],
+				[
+					Type.Literal("uuid7"),
+					Type.Literal("uuid"),
+					Type.Literal("key"),
+					Type.Literal("serial"),
+				],
 				{
 					description:
-						'Entities only: how ids are made. "uuid7" (default) generates and accepts UUID v7; "uuid" accepts any UUID version (v4 from an existing database) and generates v7; "key" is a natural key (1 to 256 characters) the input must hold, never generated.',
+						'Entities only: how ids are made. "uuid7" (default) generates and accepts UUID v7; "uuid" accepts any UUID version (v4 from an existing database) and generates v7; "key" is a natural key (1 to 256 characters) the input must hold, never generated; "serial" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds.',
 				},
 			),
 		),

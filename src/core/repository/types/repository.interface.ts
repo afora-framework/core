@@ -392,10 +392,17 @@ export interface IRepositoryProvider<Environment = unknown> {
 		context: RepositoryContext<Environment>,
 		query?: ProviderQuery,
 	): Promise<readonly RepositoryData[]>;
+	/**
+	 * Stores `data`, a new entity. For an entity whose ids the database
+	 * assigns (`Serial`), `data` has no `id` and the provider (one with
+	 * `capabilities.generatedIds`) gives `{ id }`, the one assigned; any
+	 * other insert gives nothing.
+	 */
 	insert(
 		context: RepositoryContext<Environment>,
 		data: RepositoryData,
-	): Promise<void>;
+		// biome-ignore lint/suspicious/noConfusingVoidType: an `async insert() {}` gives Promise<void>
+	): Promise<void | { readonly id: IdValue }>;
 	/**
 	 * With `options.expectedVersion`, writes only when the stored `version` is
 	 * that one, and throws `RepositoryConcurrencyConflict` otherwise; only a

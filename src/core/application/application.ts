@@ -67,7 +67,7 @@ import { type PropertyLineage, propertyLineageOf } from "../property/lineage";
 import { declaredRecordNameOf, recordNameOf } from "../record/name";
 import { pluginsOf } from "../record/plugin";
 import { providerDescriptionOf } from "../repository/provider";
-import { isRepository } from "../repository/repository";
+import { assertGeneratedIds, isRepository } from "../repository/repository";
 import {
 	bindRepository,
 	inspectRepository,
@@ -955,7 +955,10 @@ function idDescriptionOf(entity: unknown): Pick<RecordDescription, "id"> {
 	return {
 		id: {
 			property: (strategy.property.type as { readonly name: string }).name,
-			generated: strategy.generate !== undefined,
+			generated:
+				strategy.generatedBy === "database"
+					? "database"
+					: strategy.generate !== undefined,
 		},
 	};
 }
@@ -1714,6 +1717,21 @@ export function applicationOf<
 		bound.set(entry.value, repository);
 		boundByState.set(entry.key, repository);
 		repositories[entry.name] = repository;
+		// A provider made on start is checked once it exists.
+		const through = providerOfRepository(repository);
+		if (
+			through !== undefined &&
+			!isDeferredProvider(through) &&
+			(inspectRepository(repository) as RepositoryInspection).actions.includes(
+				"create",
+			)
+		) {
+			assertGeneratedIds(
+				name,
+				(inspectRepository(repository) as RepositoryInspection).entity,
+				through,
+			);
+		}
 	}
 
 	// A use case is bound once: a subclass whose dependencies are the bound
@@ -1903,6 +1921,17 @@ export function applicationOf<
 					)
 					.map(([key]) => key),
 			);
+			for (const repository of Object.values(repositories)) {
+				const inspection = inspectRepository(
+					repository,
+				) as RepositoryInspection;
+				if (
+					providerOfRepository(repository) === instance &&
+					inspection.actions.includes("create")
+				) {
+					assertGeneratedIds(name, inspection.entity, made);
+				}
+			}
 		}
 		started = true;
 	};

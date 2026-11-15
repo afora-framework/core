@@ -27,6 +27,7 @@ import {
 	type RecordValue,
 	recordOf,
 	repositoryOf,
+	Serial,
 	type StandardSchemaV1,
 	variantOf,
 	wrapProvider,
@@ -747,3 +748,17 @@ class Ticket extends entityOf(
 	},
 ) {}
 export const ticketId: number = new Ticket({ title: "a" }).id;
+// Ids the database assigns: built without one, typed as the stored number.
+class Numbered extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{ id: Serial },
+) {}
+export const numberedId: number = new Numbered({ title: "a" }).id;
+export const numberedRepository = repositoryOf({
+	entity: Numbered,
+	actions: ["create", "findById"],
+});
+export const numberedFind: Equals<
+	Parameters<typeof numberedRepository.findById>[0],
+	number
+> = true;

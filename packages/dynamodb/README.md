@@ -81,6 +81,7 @@ This suits repositories of thousands of items, not millions: every other read wi
 - `atomic`: `increment` is one `UpdateItem` (`SET data.views = if_not_exists(data.views, 0) + :d`), conditioned on the item existing, not soft-deleted and not expired. With `create`, a missing id is inserted (a concurrent insert of the same id gets the deltas added instead), an expired item is replaced, and a soft-deleted one is `RepositoryUniqueViolation` on `id`. An increment cannot change a unique key (`InvalidRepositoryQuery`).
 - `expiry`: reads leave out records whose date is at or before `query.now`, unless `withExpired`. Expired items stay in the table and keep their unique values; the `UpdateItem` of `increment` compares the dates as strings, so keep them in UTC ISO 8601 (`toISOString()`, as the entity writes them).
 - `transactions` is **not** a capability: DynamoDB writes up to 100 items at once, without reads in between, so `commandOf({ transaction: true })` cannot run on it.
+- `generatedIds` is **not** a capability: DynamoDB has no auto-increment, so an entity declared with `Serial` ids cannot be created through it (`repositoryOf` with `create` throws `UnsupportedIdentity`). Use UUIDs (the default), `Uuid` or a natural `Key`.
 
 ## Limits
 

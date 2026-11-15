@@ -368,6 +368,8 @@ export {
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
 	RepositoryUsedOutsideApplication,
+	UnstoredEntity,
+	UnsupportedIdentity,
 } from "./core/repository/exceptions";
 export {
 	type InMemoryProvider,
@@ -564,6 +566,8 @@ export {
 	Id,
 	Key,
 	OwnerId,
+	Serial,
+	SerialKey,
 	Slug,
 	TextKey,
 	Uuid,

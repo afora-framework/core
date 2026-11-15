@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Ids the database assigns (#122)
+
+- `capabilities.generatedIds` is true: an entity declared with `Serial` is inserted without its `id`, and `INSERT ... RETURNING id` gives back the one an auto-increment, `serial` or identity column assigned (a `bigint` as a number), which `create` sets on the entity. `insert` gives `{ id }` then, nothing otherwise. A `bigint` id above `Number.MAX_SAFE_INTEGER` is given back as text, which the entity refuses, instead of a rounded number.
+- `update` (and so soft deletion and `restore`) no longer sets the `id` column, which never changes: a Postgres identity column `GENERATED ALWAYS` refuses it.
+
 ### Schema evolution (#28, phase 4)
 
 - `migrations?: "apply" | { file }`, opt-in: with it the provider has `migrate(context, plan)`, which turns the structural changes of a `SchemaPlan` into DDL for SQLite and Postgres from the Drizzle table (`ADD COLUMN` of an added key, nullable unless its column is `notNull` with a plain default; `RENAME COLUMN` of a renamed one; `DROP COLUMN` of a removed one only when `plan.destructive`; a unique index of a new unique key; the schema version column) against the columns the table has, so it can run again. `"apply"` runs it in a transaction; `{ file }` writes a drizzle-kit compatible SQL migration file instead. Without the option there is no `migrate`, as before.

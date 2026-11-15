@@ -14,6 +14,7 @@ import {
 	type RepositoryQuery,
 	RepositoryUniqueViolation,
 	repositoryOf,
+	Serial,
 } from "../index";
 
 /** The parts of a test runner the kit uses; `bun:test`, vitest and jest fit. */
@@ -56,6 +57,14 @@ export interface ProviderContractOptions {
 	/** Run the cases of expired records. Defaults to `provider.capabilities?.expiry`. */
 	readonly expiry?: boolean;
 	/**
+	 * Run the cases of ids the database assigns (`Serial`): `insert` without
+	 * an `id` gives `{ id }`. Their entity is named `Serials`, with the keys
+	 * `email` and `name` and an integer `id` the store assigns (an
+	 * auto-increment, serial or identity column). Defaults to
+	 * `provider.capabilities?.generatedIds`.
+	 */
+	readonly generatedIds?: boolean;
+	/**
 	 * Run the cases of schema evolution, through repositories and
 	 * `app.migrate` over the basic methods: an old row read back upgraded,
 	 * the backfill in check and apply, rows moved from a previous name.
@@ -77,9 +86,23 @@ export interface ProviderContractOptions {
 	readonly schemaVersionKey?: boolean;
 }
 
-type GatedCapability = "versioning" | "atomic" | "expiry";
+type GatedCapability = "versioning" | "atomic" | "expiry" | "generatedIds";
 
 type Row = Record<string, unknown>;
+
+/** A fresh entity class with `Serial` ids and its context, named `Serials`. */
+function serialContextOf(): RepositoryContext {
+	class Numbered extends entityOf(
+		blueprintOf((ctx) => ({ email: ctx.string, name: ctx.string })),
+		{ id: Serial },
+	) {}
+	return {
+		entity: Numbered,
+		name: "Serials",
+		unique: ["id", "email"],
+		env: {},
+	} as unknown as RepositoryContext;
+}
 
 /** A fresh entity class (providers may key tables by it) and its context. */
 function contextOf(name = "Accounts"): RepositoryContext {
@@ -1419,6 +1442,79 @@ export function providerContract(
 					data.id,
 				]);
 				expect(await provider.count(context, { now: NOW })).toBe(1);
+			});
+		});
+
+		describe("generated ids", () => {
+			const generated = gated("generatedIds");
+			const numbered = async () => {
+				const provider = await makeProvider();
+				const context = serialContextOf();
+				const insert = async (overrides: Row = {}) => {
+					const { id: _, ...data } = row(overrides);
+					const result = await provider.insert(context, data);
+					return (result as { readonly id?: unknown } | undefined)?.id;
+				};
+				return { provider, context, insert };
+			};
+
+			generated(
+				"an insert without an id gives the one assigned, a positive integer, increasing",
+				async () => {
+					const { provider, context, insert } = await numbered();
+					const first = await insert({ name: "Ana" });
+					const second = await insert({ name: "Bia" });
+					expect(Number.isSafeInteger(first) && (first as number) > 0).toBe(
+						true,
+					);
+					expect((second as number) > (first as number)).toBe(true);
+					const found = await provider.findOne(context, {
+						where: { id: second },
+					});
+					expect([found?.id, found?.name]).toEqual([second, "Bia"]);
+					expect(await provider.count(context)).toBe(2);
+				},
+			);
+
+			generated(
+				"unique keys still hold, and a rejected insert stores nothing",
+				async () => {
+					const { provider, context, insert } = await numbered();
+					await insert({ email: "ana@example.com" });
+					const error = await failure(insert({ email: "ana@example.com" }));
+					expect(error instanceof RepositoryUniqueViolation).toBe(true);
+					expect(await provider.count(context)).toBe(1);
+				},
+			);
+
+			generated("integer ids order and page by cursor", async () => {
+				const { provider, context, insert } = await numbered();
+				const made: unknown[] = [];
+				for (let index = 0; index < 12; index++) made.push(await insert());
+				const orderBy = [{ key: "id" }] as const;
+				expect(ids(await provider.findMany(context, { orderBy }))).toEqual(
+					made,
+				);
+				expect(
+					ids(
+						await provider.findMany(context, {
+							orderBy: [{ key: "id", direction: "desc" }],
+							limit: 3,
+						}),
+					),
+				).toEqual(made.slice(-3).reverse());
+				const keyset = options.keyset ?? provider.capabilities?.keyset === true;
+				if (!keyset) return;
+				// 9 and 10 compare as numbers, not as text.
+				expect(
+					ids(
+						await provider.findMany(context, {
+							orderBy,
+							after: [made[8]],
+							limit: 2,
+						}),
+					),
+				).toEqual(made.slice(9, 11));
 			});
 		});
 

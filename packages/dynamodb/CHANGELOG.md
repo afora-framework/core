@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Ids the database assigns (#122)
+
+- The provider does not advertise `capabilities.generatedIds`: a repository with `create` of an entity declared with `Serial` throws `UnsupportedIdentity` when it is declared. The README says so.
+
 ### Added
 
 - First version (#33). `dynamoDbProvider({ table, client, logger?, retry? })`, an `IRepositoryProvider` v2 on one DynamoDB table (`pk` / `sk`), started from the provider of afora-cms: entities at `E#<repository name>`, unique keys other than `id` enforced by marker items (`U#<repository name>#<key>`) written in the same transaction as the entity.
