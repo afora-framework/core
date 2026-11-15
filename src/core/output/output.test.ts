@@ -18,6 +18,7 @@ import {
 	ExceptionLayers,
 	exceptionOf,
 	InvalidCommandContext,
+	InvalidCommandEnvironment,
 	InvalidOutputStage,
 	isOutput,
 	listOf,
@@ -748,6 +749,70 @@ describe("problemOf", () => {
 			"taken",
 		);
 		expect(problemOf("text", { status: 500, debug: true }).detail).toBe("text");
+	});
+
+	test("a declared exception keeps its detail at any status", () => {
+		const exception = new Taken({ source: "x" });
+		expect(
+			problemOf(exception, { status: 502, statuses: { Taken: 502 } }).detail,
+		).toBe("taken");
+		expect(
+			problemOf(exception, { status: 500, operation: { errors: [Taken] } })
+				.detail,
+		).toBe("taken");
+		// Made by `exceptionOf`, but not declared by this output.
+		expect(
+			problemOf(exception, { status: 500, statuses: { Other: 502 } }).detail,
+		).toBe("Internal error.");
+		const plain = new Error("db password is hunter2");
+		expect(
+			problemOf(plain, {
+				status: 500,
+				statuses: { Error: 500 },
+				operation: { errors: [Taken] },
+			}).detail,
+		).toBe("Internal error.");
+		const configuration = new InvalidCommandEnvironment({
+			source: "Posts",
+			details: { keys: [], issues: [] },
+		});
+		expect(
+			problemOf(configuration, {
+				status: 500,
+				statuses: { InvalidCommandEnvironment: 500 },
+			}).detail,
+		).toBe("Internal error.");
+
+		// A plain error wrapped by `guard`: its raw message never shows.
+		const wrapped = Exception.from(new Error("postgres://admin:pw@db"), {
+			layer: ExceptionLayers.Repository,
+			source: "Posts",
+		});
+		const statuses = { UnexpectedError: 503, Renamed: 503 };
+		const status = statusOf(wrapped, undefined, statuses);
+		expect(status).toBe(503);
+		const unexpected = problemOf(wrapped, { status, statuses });
+		expect(unexpected.detail).toBe("Internal error.");
+		expect(JSON.stringify(unexpected)).not.toContain("postgres");
+		const renamed = wrapped.propagate({
+			layer: ExceptionLayers.UseCase,
+			source: "Publish",
+			name: "Renamed",
+		});
+		expect(problemOf(renamed, { status: 503, statuses }).detail).toBe(
+			"Internal error.",
+		);
+		// afora's own exception, listed on purpose: its message shows.
+		const duplicate = new DuplicateOperation({
+			source: "Api",
+			details: { id: "Posts.create" },
+		});
+		expect(
+			problemOf(duplicate, {
+				status: 503,
+				statuses: { DuplicateOperation: 503 },
+			}).detail,
+		).toBe('The operation "Posts.create" is declared twice.');
 	});
 
 	test("goes with statusOf", () => {

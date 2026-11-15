@@ -150,7 +150,7 @@ Invalid options throw `InvalidOutputStage` when the stage is made.
 | `{ id?, unsubscribe: topic }`   | `{ id, unsubscribed: topic }`                                               |
 | (an event published to a topic) | `{ topic, event: { name, command, operation, entity } }` to its subscribers |
 
-- **Calls.** `op` is an operation id. The input is validated by the operation (a 400 problem with `issues`), the response goes through `outputValueOf` (sensitive values masked), and an error is `problemOf` with the status of `statusOf` and the output `statuses`. An unknown `op` is a 404 `NotFound` problem.
+- **Calls.** `op` is an operation id. The input is validated by the operation (a 400 problem with `issues`), the response goes through `outputValueOf` (sensitive values masked), and an error is `problemOf` with the status of `statusOf` and the output `statuses`; a 5xx says `"Internal error."` unless `debug` is on or the output declares the exception. An unknown `op` is a 404 `NotFound` problem.
 - **`id`** is a non-empty string or a number, echoed in the reply; `null` when the request had none.
 - **Invalid messages.** Text that is not UTF-8 or JSON, a frame that is not an object, an unknown key, not exactly one of `op`, `subscribe` and `unsubscribe`, `input` without `op`, or a message over `maxMessageBytes`: a 400 problem `InvalidWsMessage`, whose `detail` says why.
 - **Subscriptions.** A topic must match `subscriptions.topics`, then `authorize(topic, values)` of the session, if given (ownership, roles): otherwise a 403 `WsTopicForbidden`. A session without a hub, or `handle`, answers a 501 `WsSubscriptionsUnavailable`. The output `statuses` can change these three statuses.

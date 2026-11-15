@@ -14,6 +14,10 @@
 
 - **Behavior change.** When a `preHandle`, `handle` or `afterHandle` throws an error that is not an `Exception`, the issue `safeParse`, `~standard.validate` and problem+json `issues[]` give has the error's message as it is (`"Use lowercase letters, numbers and hyphens."`), no longer prefixed with `Invalid value for property "slug": `, since the issue `path` already names the property (#123). An error with an empty message gives `"is invalid"`. The `InvalidPropertyValue` a property's constructor throws and its `cause` keep the prefix. The message of the exception a record throws for that key (built from its first issue, as `InvalidRecordValue` is) loses the inner prefix: `Invalid value for "slug" of record "Post": Use lowercase letters, numbers and hyphens.`, where it read `...: Invalid value for property "slug": Use lowercase...`. A client that stripped the prefix can stop. See [`docs/properties.md`](docs/properties.md).
 
+### Changed
+
+- **Problem details** (`@afora/core`, `@afora/hono`, `@afora/express`, `@afora/fastify`, `@afora/elysia`, `@afora/ws`, `@afora/mcp`). An exception the output declares keeps its `detail` at a 5xx (#120): `statuses: { PublishFailed: 502 }` answers with the message of `PublishFailed` instead of `"Internal error."`. Declared means its name is in the output `statuses` or it matches a class of `operation.errors`: listing an exception there exposes its message at a 5xx, afora's own exceptions included when you list them on purpose. Exceptions the output does not list stay masked unless `debug` is on, and `UnexpectedError` (an error that is not an exception, with its raw message, or any exception carrying that message), `InvalidCommandEnvironment`, `InvalidEnvironment`, `InvalidApplicationEnvironment` and `InvalidUseCaseResponse` are never exposed, even when listed. `problemOf` takes `statuses` and `operation` to decide it, and every sink passes them. In `@afora/ws`, an error outside an operation call (a message the endpoint fails to handle) now also gets the status the output `statuses` give it.
+
 ## 0.0.12 — 2026-11-11
 
 ### Changed

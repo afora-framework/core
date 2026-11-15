@@ -2816,7 +2816,7 @@ exports[`adapters entry (contract) 1`] = `
     "export interface Problem { readonly type: string; readonly title: string; readonly status: number; readonly detail: string; readonly layer?: string; readonly issues?: readonly { readonly path: readonly (string | number)[]; readonly code: string; readonly message: string; }[]; readonly trace?: string; }",
   ],
   "ProblemOptions": [
-    "export interface ProblemOptions { readonly status: number; readonly debug?: boolean; }",
+    "export interface ProblemOptions { readonly status: number; readonly debug?: boolean; readonly statuses?: OutputStatuses; readonly operation?: Pick<OperationDescriptor, "errors">; }",
   ],
   "PropertyDescription": [
     "export interface PropertyDescription { readonly name: string; readonly optional: boolean; readonly sensitive: boolean; readonly unique: boolean; readonly schema: Readonly<Record<string, unknown>>; readonly lineage?: PropertyLineageDescription; }",

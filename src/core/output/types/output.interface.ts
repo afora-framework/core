@@ -265,10 +265,14 @@ export interface Problem {
 }
 
 /**
- * What `problemOf` takes: the HTTP `status` of the problem and `debug`, which
- * adds the `trace` and the real `detail` of a 5xx.
+ * What `problemOf` takes: the HTTP `status` of the problem, `debug`, which
+ * adds the `trace` and the real `detail` of a 5xx, and what the output
+ * declares (`statuses`, the `operation` and its `errors`): the `detail` of a
+ * declared exception is kept at any status.
  */
 export interface ProblemOptions {
 	readonly status: number;
 	readonly debug?: boolean;
+	readonly statuses?: OutputStatuses;
+	readonly operation?: Pick<OperationDescriptor, "errors">;
 }
