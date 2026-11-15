@@ -146,15 +146,21 @@ function scopeOf(initial: Tables, root: boolean, counters: Counters) {
 		insert: (context, data) =>
 			whenIdle(() => {
 				const table = tableOf(context);
-				// No id: the next one of the table, past those already used.
+				// No id: the next one of the table's sequence. As in a database,
+				// a row inserted with an id of its own does not move it.
 				if (data.id === undefined) {
 					const key = tableKeyOf(context.entity);
-					let next = (counters.get(key) ?? 0) + 1;
-					while (table.has(next)) next++;
+					const next = (counters.get(key) ?? 0) + 1;
+					counters.set(key, next);
 					const row: Record<string, unknown> = { id: next, ...data };
 					row.id = next;
+					if (table.has(next)) {
+						throw new RepositoryUniqueViolation({
+							source: context.name,
+							details: { key: "id" },
+						});
+					}
 					assertUnique(context, row);
-					counters.set(key, next);
 					table.set(next, copy(row));
 					return { id: next };
 				}

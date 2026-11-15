@@ -163,3 +163,16 @@ export const UnsupportedIdentity = exceptionOf({
 	message: ({ reason }: { readonly entity: string; readonly reason: string }) =>
 		reason,
 });
+
+/**
+ * An entity whose id the database assigns (`Serial`) was given to a
+ * repository before `create` stored it, so it has no id yet: to `update`,
+ * `delete`, `restore` or `increment`, or held by another entity (stored by
+ * its id). `source` is the repository name, or the name of the entity held.
+ */
+export const UnstoredEntity = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "UnstoredEntity",
+	message: ({ reason }: { readonly entity: string; readonly reason: string }) =>
+		reason,
+});

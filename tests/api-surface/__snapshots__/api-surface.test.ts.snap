@@ -2051,6 +2051,9 @@ exports[`exports of the package and their declarations 1`] = `
   "UnregisteredUseCaseDependency": [
     "UnregisteredUseCaseDependency: import("../../index.js").DeclaredExceptionClass<{ readonly useCase: string; readonly dependency: string; }>",
   ],
+  "UnstoredEntity": [
+    "UnstoredEntity: import("../../index.js").DeclaredExceptionClass<{ readonly entity: string; readonly reason: string; }>",
+  ],
   "UnsupportedIdentity": [
     "UnsupportedIdentity: import("../../index.js").DeclaredExceptionClass<{ readonly entity: string; readonly reason: string; }>",
   ],

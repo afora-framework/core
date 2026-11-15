@@ -76,6 +76,90 @@ providerContract(
 );
 
 describe("repositoryOf on Postgres", () => {
+	it("updates, soft deletes, restores and increments over a GENERATED ALWAYS identity", async () => {
+		const {
+			bigint,
+			blueprintOf,
+			entityOf,
+			repositoryOf,
+			Serial,
+			UnsupportedIdentity,
+		} = {
+			...(await import("@afora/core")),
+			...(await import("drizzle-orm/pg-core")),
+		};
+		await client.exec(
+			`CREATE TABLE counters (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, "createdAt" text NOT NULL, "updatedAt" text, "deletedAt" text, name text NOT NULL, views integer NOT NULL)`,
+		);
+		const counters = pgTable("counters", {
+			id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+			createdAt: text("createdAt").notNull(),
+			updatedAt: text("updatedAt"),
+			deletedAt: text("deletedAt"),
+			name: text("name").notNull(),
+			views: integer("views").notNull(),
+		});
+		class Counter extends entityOf(
+			blueprintOf((ctx) => ({ name: ctx.string, views: ctx.integer })),
+			{ id: Serial, change: ["name", "views"] },
+		) {}
+		const Counters = repositoryOf({
+			entity: Counter,
+			provider: drizzleProvider({
+				db: drizzle(client),
+				tables: { Counter: counters },
+			}),
+			actions: [
+				"create",
+				"findById",
+				"update",
+				"delete",
+				"restore",
+				"increment",
+			],
+			deletion: "soft",
+		});
+		const counter = await Counters.create({ name: "home", views: 0 });
+		expect(counter.id).toBe(1);
+		await Counters.update(counter.change.name("start"));
+		expect((await Counters.findById(1))?.name).toBe("start");
+		expect((await Counters.increment(1, { views: 2 })).views).toBe(2);
+		await Counters.delete(1);
+		expect(await Counters.findById(1)).toBeUndefined();
+		expect((await Counters.restore(1)).name).toBe("start");
+		expect((await Counters.findById(1))?.views).toBe(2);
+		// An id of its own would leave the identity behind.
+		await expect(
+			Counters.create(new Counter({ id: 7, name: "x", views: 0 })),
+		).rejects.toThrow(UnsupportedIdentity);
+
+		await client.exec(
+			`CREATE TABLE huge (id bigint GENERATED ALWAYS AS IDENTITY (START WITH 9007199254740993) PRIMARY KEY, "createdAt" text NOT NULL, "updatedAt" text, "deletedAt" text, name text NOT NULL, views integer NOT NULL)`,
+		);
+		const huge = pgTable("huge", {
+			id: bigint("id", { mode: "bigint" })
+				.primaryKey()
+				.generatedAlwaysAsIdentity(),
+			createdAt: text("createdAt").notNull(),
+			updatedAt: text("updatedAt"),
+			deletedAt: text("deletedAt"),
+			name: text("name").notNull(),
+			views: integer("views").notNull(),
+		});
+		const Huge = repositoryOf({
+			entity: Counter,
+			provider: drizzleProvider({
+				db: drizzle(client),
+				tables: { Counter: huge },
+			}),
+			actions: ["create"],
+		});
+		// Beyond Number.MAX_SAFE_INTEGER: refused, not rounded to another id.
+		await expect(Huge.create({ name: "big", views: 0 })).rejects.toThrow(
+			UnsupportedIdentity,
+		);
+	});
+
 	it("stores Serial entities in an identity column, and pages by cursor", async () => {
 		const { blueprintOf, entityOf, repositoryOf, Serial } = await import(
 			"@afora/core"

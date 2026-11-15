@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 532 exports.
+Tier: stable. 533 exports.
 
 ### Access
 
@@ -2439,7 +2439,8 @@ can create it.
 
 *class* · tier: stable · `import { SerialKey } from "@afora/core"`
 
-A positive integer the database assigns: an auto-increment, serial or identity column.
+A positive integer the database assigns: an auto-increment, serial or
+identity column; at most `Number.MAX_SAFE_INTEGER`.
 
 ### ServiceDeclaration
 
@@ -2873,6 +2874,15 @@ The entity, relations or environments of a repository are not registered in the 
 *const* · tier: stable · `import { UnregisteredUseCaseDependency } from "@afora/core"`
 
 A dependency of a use case of the application (a use case, repository or environment) is not registered in it.
+
+### UnstoredEntity
+
+*const* · tier: stable · `import { UnstoredEntity } from "@afora/core"`
+
+An entity whose id the database assigns (`Serial`) was given to a
+repository before `create` stored it, so it has no id yet: to `update`,
+`delete`, `restore` or `increment`, or held by another entity (stored by
+its id). `source` is the repository name, or the name of the entity held.
 
 ### UnsupportedIdentity
 
@@ -4970,7 +4980,7 @@ who asks, in the `UseCaseUnavailable` it throws. Throws a `TypeError` when
 
 ## @afora/core/testing
 
-Tier: testing. 7 exports.
+Tier: testing. 10 exports.
 
 ### ContractRunner
 
@@ -4997,6 +5007,18 @@ A publisher that keeps what it is given, for tests.
 What {@link providerContract} takes: which optional groups of cases to run,
 each defaulting to what the provider advertises in `capabilities`, except the
 schema evolution ones.
+
+### ProviderSpy
+
+*interface* · tier: testing · `import type { ProviderSpy } from "@afora/core/testing"`
+
+The members `spyProvider` adds to the provider it wraps.
+
+### SpiedCall
+
+*interface* · tier: testing · `import type { SpiedCall } from "@afora/core/testing"`
+
+One call a `spyProvider` recorded.
 
 ### httpProviderContract
 
@@ -5033,3 +5055,29 @@ A publisher for `applicationOf({ publishers })` in tests: it keeps each
 Registers the behavior every `IRepositoryProvider` v2 must have. Pass the
 `describe`, `it` and `expect` of your runner and a factory of fresh, empty
 providers (called once per case).
+
+### spyProvider
+
+*function* · tier: testing · `import { spyProvider } from "@afora/core/testing"`
+
+A provider for tests that forwards to `provider` and records each call
+of an operation taking a context (`{ operation, entity, args }`, read
+with `calls`), and can make one fail (`fail`). It is the provider itself
+(the same type, with the members of `ProviderSpy`), so it goes where a
+provider goes: `applicationOf({ provider })` or `repositoryOf({ provider })`.
+Repositories are frozen, so this is how a test sees what reaches the
+database, also behind an HTTP sink. Built on `wrapProvider`.
+
+**Throws** {
+
+**Example**
+
+```ts
+import { inMemoryProvider } from "@afora/core";
+import { spyProvider } from "@afora/core/testing";
+
+const spy = spyProvider(inMemoryProvider());
+// applicationOf({ ..., provider: spy }), then a request
+const reads = spy.calls("Project", "findMany").length;
+spy.fail("Setting", "count", new Error("down"), { times: 1 });
+```

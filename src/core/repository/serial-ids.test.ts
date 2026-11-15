@@ -10,8 +10,10 @@ import {
 	eventOf,
 	inMemoryProvider,
 	providerFrom,
+	RepositoryUniqueViolation,
 	repositoryOf,
 	Serial,
+	UnstoredEntity,
 	UnsupportedIdentity,
 	useCaseOf,
 	wrapProvider,
@@ -78,23 +80,134 @@ describe("an entity with Serial ids", () => {
 		).toBe(true);
 	});
 
-	test("create assigns increasing ids, skipping those in use", async () => {
+	test("create assigns increasing ids, never twice", async () => {
 		const Tickets = repositoryOf({
 			entity: Ticket,
 			actions: ["create", "findById", "delete", "findMany"],
 		});
 		const first = await Tickets.create({ title: "First" });
 		expect(first.id).toBe(1);
-		await Tickets.create(new Ticket({ id: 2, title: "Given" }));
-		const third = await Tickets.create(new Ticket({ title: "Third" }));
-		expect(third.id).toBe(3);
-		expect((await Tickets.findById(3))?.title).toBe("Third");
-		await Tickets.delete(3);
+		const second = await Tickets.create(new Ticket({ title: "Second" }));
+		expect(second.id).toBe(2);
+		expect((await Tickets.findById(2))?.title).toBe("Second");
+		await Tickets.delete(2);
 		// As a sequence, an id is never given twice.
-		expect((await Tickets.create({ title: "Fourth" })).id).toBe(4);
+		expect((await Tickets.create({ title: "Third" })).id).toBe(3);
 		expect((await Tickets.findMany()).map((ticket) => ticket.id)).toEqual([
-			1, 2, 4,
+			1, 3,
 		]);
+	});
+
+	test("an id given for a new entity is rejected", async () => {
+		const Tickets = repositoryOf({
+			entity: Ticket,
+			actions: ["create", "increment", "count"],
+		});
+		await expect(
+			Tickets.create(new Ticket({ id: 2, title: "Given" })),
+		).rejects.toThrow(UnsupportedIdentity);
+		await expect(
+			Tickets.create({ id: 2, title: "Given" } as never),
+		).rejects.toThrow(UnsupportedIdentity);
+		class Counted extends entityOf(
+			blueprintOf((ctx) => ({ views: ctx.integer })),
+			{ id: Serial, change: ["views"] },
+		) {}
+		const Counts = repositoryOf({ entity: Counted, actions: ["increment"] });
+		await expect(
+			Counts.increment(1, { views: 1 }, { create: {} }),
+		).rejects.toThrow(UnsupportedIdentity);
+		expect(await Tickets.count()).toBe(0);
+	});
+
+	test("the in-memory sequence does not skip a row inserted with its own id", async () => {
+		const provider = inMemoryProvider();
+		const Tickets = repositoryOf({
+			entity: Ticket,
+			actions: ["create"],
+			provider,
+		});
+		await provider.insert(
+			{ entity: Ticket, name: "TicketRepository", unique: ["id"], env: {} },
+			{ id: 1, title: "Seeded", createdAt: new Date().toISOString() },
+		);
+		// As a database sequence, which a row with its own id does not move.
+		await expect(Tickets.create({ title: "Next" })).rejects.toThrow(
+			RepositoryUniqueViolation,
+		);
+		expect((await Tickets.create({ title: "Next" })).id).toBe(2);
+	});
+
+	test("an entity without an id yet cannot be updated, deleted, restored or incremented", async () => {
+		class Counted extends entityOf(
+			blueprintOf((ctx) => ({ views: ctx.integer })),
+			{ id: Serial, change: ["views"] },
+		) {}
+		const Counts = repositoryOf({
+			entity: Counted,
+			actions: ["update", "delete", "restore", "increment"],
+			deletion: "soft",
+		});
+		const unsaved = new Counted({ views: 0 });
+		const message = (error: unknown) => (error as Error).message;
+		const updated = await Counts.update(unsaved).catch((e: unknown) => e);
+		expect(updated).toBeInstanceOf(UnstoredEntity);
+		expect(message(updated)).toBe(
+			'"CountedRepository" cannot update a Counted that has no id yet: create gives it the id the database assigns.',
+		);
+		await expect(Counts.delete(unsaved)).rejects.toThrow(UnstoredEntity);
+		// Checked before destroy: the entity is left as it was.
+		expect(unsaved.isDeleted).toBe(false);
+		await expect(Counts.restore(unsaved)).rejects.toThrow(UnstoredEntity);
+		await expect(Counts.increment(unsaved, { views: 1 })).rejects.toThrow(
+			UnstoredEntity,
+		);
+	});
+
+	test("an entity without an id yet cannot be held by another one", async () => {
+		class Board extends entityOf(
+			blueprintOf((ctx) => ({
+				name: ctx.string,
+				lead: ctx.optionalOf(Ticket),
+				tickets: ctx.listOf(Ticket),
+			})),
+		) {}
+		const Boards = repositoryOf({
+			entity: Board,
+			actions: ["create"],
+			relations: [repositoryOf({ entity: Ticket, actions: ["findById"] })],
+		});
+		const unsaved = new Ticket({ title: "A" });
+		await expect(
+			Boards.create({ name: "One", lead: unsaved, tickets: [] }),
+		).rejects.toThrow(UnstoredEntity);
+		const error = await Boards.create({
+			name: "Two",
+			tickets: [new Ticket({ id: 4, title: "Stored" }), unsaved],
+		}).catch((e: unknown) => e);
+		expect(error).toBeInstanceOf(UnstoredEntity);
+		expect((error as Error).message).toContain("create it first");
+	});
+
+	test("an id the entity rejects, from the provider, is refused", async () => {
+		for (const given of [0, 2 ** 60, "5", 1.5]) {
+			const inner = inMemoryProvider();
+			const Tickets = repositoryOf({
+				entity: Ticket,
+				actions: ["create"],
+				provider: {
+					...withoutGeneratedIds(),
+					capabilities: { generatedIds: true },
+					insert: async (context, data) => {
+						await inner.insert(context, data);
+						return { id: given };
+					},
+				},
+			});
+			const ticket = new Ticket({ title: "A" });
+			await expect(Tickets.create(ticket)).rejects.toThrow(UnsupportedIdentity);
+			expect(ticket.id).toBeUndefined();
+		}
 	});
 
 	test("a rolled back transaction does not give its ids back", async () => {

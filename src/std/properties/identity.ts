@@ -38,10 +38,14 @@ export class TextKey extends propertyOf({
 	default: "profile",
 }) {}
 
-/** A positive integer the database assigns: an auto-increment, serial or identity column. */
+/**
+ * A positive integer the database assigns: an auto-increment, serial or
+ * identity column; at most `Number.MAX_SAFE_INTEGER`.
+ */
 export class SerialKey extends propertyOf({
 	name: "serial",
-	schema: Type.Integer({ minimum: 1 }),
+	// Beyond it a number loses precision: a larger id (a `bigint` column) is refused.
+	schema: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
 	default: 1,
 }) {}
 

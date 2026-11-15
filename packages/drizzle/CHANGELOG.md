@@ -4,7 +4,8 @@
 
 ### Ids the database assigns (#122)
 
-- `capabilities.generatedIds` is true: an entity declared with `Serial` is inserted without its `id`, and `INSERT ... RETURNING id` gives back the one an auto-increment, `serial` or identity column assigned (a `bigint` as a number), which `create` sets on the entity. `insert` gives `{ id }` then, nothing otherwise.
+- `capabilities.generatedIds` is true: an entity declared with `Serial` is inserted without its `id`, and `INSERT ... RETURNING id` gives back the one an auto-increment, `serial` or identity column assigned (a `bigint` as a number), which `create` sets on the entity. `insert` gives `{ id }` then, nothing otherwise. A `bigint` id above `Number.MAX_SAFE_INTEGER` is given back as text, which the entity refuses, instead of a rounded number.
+- `update` (and so soft deletion and `restore`) no longer sets the `id` column, which never changes: a Postgres identity column `GENERATED ALWAYS` refuses it.
 
 ### Schema evolution (#28, phase 4)
 

@@ -367,6 +367,7 @@ export {
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
 	RepositoryUsedOutsideApplication,
+	UnstoredEntity,
 	UnsupportedIdentity,
 } from "./core/repository/exceptions";
 export {
