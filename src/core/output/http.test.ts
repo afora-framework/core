@@ -357,44 +357,6 @@ describe("compileRoutes", () => {
 	});
 });
 
-describe("a list response", () => {
-	class Item extends recordOf(
-		blueprintOf((ctx) => ({ title: ctx.string, secret: ctx.string })),
-		{ sensitive: ["secret"] },
-	) {}
-	class Recent extends useCaseOf({
-		name: "Recent",
-		blueprint: blueprintOf((ctx) => ({ count: ctx.integer })),
-		response: listOf(Item),
-		route: { method: "get", path: "/recent" },
-	}) {
-		override async execute() {
-			return Array.from(
-				{ length: this.input.count },
-				(_, index) => new Item({ title: `T${index}`, secret: "hunter22" }),
-			);
-		}
-	}
-	const Feed = outputOf({
-		name: "Feed",
-		commands: [commandOf({ name: "Feed", useCases: { recent: Recent } })],
-	});
-
-	test("is sent as a JSON array, sensitive values masked", async () => {
-		const routes = compileRoutes(
-			Feed.operations,
-			{},
-			{ output: { name: "Feed", statuses: Feed.statuses } },
-			{ source: "test" },
-		);
-		const result = await routeOf(routes, "Feed.recent").handle(
-			request({ query: { count: "2" } }),
-		);
-		expect(result.status).toBe(200);
-		const body = JSON.parse(result.body as string);
-		expect(body).toHaveLength(2);
-		expect(body[0].title).toBe("T0");
-		expect(body[0].secret).not.toBe("hunter22");
 describe("a delete route with body: true", () => {
 	class Unsubscribe extends useCaseOf({
 		name: "Unsubscribe",
@@ -538,5 +500,46 @@ describe("a delete route with body: true", () => {
 				}),
 			).toThrow(reason);
 		}
+	});
+});
+
+describe("a list response", () => {
+	class Item extends recordOf(
+		blueprintOf((ctx) => ({ title: ctx.string, secret: ctx.string })),
+		{ sensitive: ["secret"] },
+	) {}
+	class Recent extends useCaseOf({
+		name: "Recent",
+		blueprint: blueprintOf((ctx) => ({ count: ctx.integer })),
+		response: listOf(Item),
+		route: { method: "get", path: "/recent" },
+	}) {
+		override async execute() {
+			return Array.from(
+				{ length: this.input.count },
+				(_, index) => new Item({ title: `T${index}`, secret: "hunter22" }),
+			);
+		}
+	}
+	const Feed = outputOf({
+		name: "Feed",
+		commands: [commandOf({ name: "Feed", useCases: { recent: Recent } })],
+	});
+
+	test("is sent as a JSON array, sensitive values masked", async () => {
+		const routes = compileRoutes(
+			Feed.operations,
+			{},
+			{ output: { name: "Feed", statuses: Feed.statuses } },
+			{ source: "test" },
+		);
+		const result = await routeOf(routes, "Feed.recent").handle(
+			request({ query: { count: "2" } }),
+		);
+		expect(result.status).toBe(200);
+		const body = JSON.parse(result.body as string);
+		expect(body).toHaveLength(2);
+		expect(body[0].title).toBe("T0");
+		expect(body[0].secret).not.toBe("hunter22");
 	});
 });
