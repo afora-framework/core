@@ -127,7 +127,7 @@ a file of your own.
 \`\`\`
 
 - \`exceptions\`: \`{ layer, message? }\`; \`layer\` is one of \`exceptionLayers\` of \`afora_catalog\`; the message is "<Name>." when omitted.
-- \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`. \`dependencies\` map a key to a use case, repository
+- \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`; \`response\` can also be a list field (\`"Article[]"\`, \`{ "type": "Article", "list": { "maxItems": 50 } }\`), and the use case answers an array. \`dependencies\` map a key to a use case, repository
   or environment, to \`"Logger"\` for the logger of the application (an \`ILogger\`; no step reads it), or to a key of the top-level
   \`"services": { "cache": { "import": "../services.ts#cache" } }\`: a factory written by hand, \`(scope: ServiceScope) => value\`, run once per call
   (no step reads it; a hand-written \`execute\` gets \`this.dependencies.cache\`, typed by what the factory returns). \`errors\` are declared exceptions or exceptions exported by @afora/core (\`coreExceptions\` of \`afora_catalog\`).

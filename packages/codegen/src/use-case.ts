@@ -10,7 +10,7 @@ import type { Field } from "./model";
 import { checkImport, isImportObject } from "./provider";
 import { checkAccess, checkRoute } from "./route";
 import { type Decl, issue, type Scope } from "./scope";
-import { isIdentifier, isObject } from "./spec/field";
+import { isIdentifier, isListResponseSpec, isObject } from "./spec/field";
 import type { SpecIssue } from "./spec/types";
 
 type Path = readonly (string | number)[];
@@ -167,6 +167,32 @@ export function checkBlueprintRef(
 		),
 	);
 	return undefined;
+}
+
+/**
+ * Checks a `response` written as a list field: a field like any other (its
+ * type, its options), that is a list, not optional, and not of variants.
+ */
+function checkListResponse(
+	value: unknown,
+	path: Path,
+	inline: InlineChecker,
+	issues: SpecIssue[],
+): void {
+	// Checked as the one field of an object, under its own key, so that the
+	// issues keep the path of the response.
+	const key = path.at(-1) as string;
+	const field = inline({ [key]: value }, path.slice(0, -1))?.[key];
+	if (!field) return;
+	if (!field.list || field.optional || field.kind === "variant") {
+		issues.push(
+			issue(
+				path,
+				"invalid_blueprint",
+				'A response is a blueprint (a name or { "fields": {...} }) or a list of a type or of fields: "Article[]", { "type": "Article", "list": { "maxItems": 50 } } or { "fields": {...}, "list": true }. Not optional, nor a list of variants.',
+			),
+		);
+	}
 }
 
 // ---------------------------------------------------------------- exceptions
@@ -691,7 +717,12 @@ export function checkUseCase(
 		return checkBlueprintRef(spec[key], [...path, key], scope, inline, issues);
 	};
 	const input = blueprint("input");
-	const response = blueprint("response");
+	const listResponse =
+		spec.response !== undefined && isListResponseSpec(spec.response);
+	if (listResponse) {
+		checkListResponse(spec.response, [...path, "response"], inline, issues);
+	}
+	const response = listResponse ? undefined : blueprint("response");
 	const context = blueprint("context");
 	const fieldsOf = (
 		ref: BlueprintRef | undefined,
@@ -706,7 +737,11 @@ export function checkUseCase(
 	const responseFields = fieldsOf(response);
 	const known = {
 		...(inputFields ? { input: Object.keys(inputFields) } : {}),
-		...(responseFields ? { response: Object.keys(responseFields) } : {}),
+		...(listResponse
+			? { response: [], listResponse: true }
+			: responseFields
+				? { response: Object.keys(responseFields) }
+				: {}),
 		...(context === undefined
 			? { context: [] }
 			: contextFields

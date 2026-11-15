@@ -880,7 +880,10 @@ const WrittenUseCaseDeclaration = Type.Object(
 		route: Type.Optional(UseCaseRoute),
 		access: Type.Optional(UseCaseAccess),
 		input: BlueprintRef,
-		response: BlueprintRef,
+		response: Type.Union([BlueprintRef, FieldRef], {
+			description:
+				'A blueprint, or a list written as a field: "Article[]", { "type": "Article", "list": { "maxItems": 50 } } or { "fields": {...}, "list": true }. The use case then answers an array.',
+		}),
 		context: Type.Optional(BlueprintRef),
 		dependencies: Type.Optional(
 			Type.Record(Type.String({ pattern: KEY }), Type.String(), {

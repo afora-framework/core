@@ -70,6 +70,7 @@ export type {
 	BlueprintHelpers,
 	BlueprintInput,
 	BlueprintListOptions,
+	BlueprintListValue,
 	BlueprintPluginContext,
 	BlueprintSchema,
 	BlueprintSource,
@@ -458,6 +459,14 @@ export {
 	isUseCaseCatalog,
 	useCaseCatalogOf,
 } from "./core/use-case/plugin-catalog";
+export type {
+	AnyUseCaseResponse,
+	ResponseBlueprint,
+	ResponseOf,
+	ResponseSetting,
+	ResponseValue,
+	UseCaseOutput,
+} from "./core/use-case/response";
 export type {
 	AnyService,
 	ServiceDeclaration,

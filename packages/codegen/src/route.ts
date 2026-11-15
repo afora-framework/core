@@ -33,6 +33,8 @@ const COOKIE_KEYS = [
 export interface KnownKeys {
 	readonly input?: readonly string[];
 	readonly response?: readonly string[];
+	/** The response is a list, which has no keys. */
+	readonly listResponse?: boolean;
 	readonly context?: readonly string[];
 }
 
@@ -164,6 +166,13 @@ export function checkRoute(
 	if (route.setCookie !== undefined) {
 		if (!isObject(route.setCookie)) {
 			bad([...path, "setCookie"], '"setCookie" maps response keys to cookies.');
+			return;
+		}
+		if (known.listResponse) {
+			bad(
+				[...path, "setCookie"],
+				'"setCookie" sends response keys, and a list response has none: respond with a blueprint to set cookies.',
+			);
 			return;
 		}
 		for (const [key, cookie] of Object.entries(route.setCookie)) {

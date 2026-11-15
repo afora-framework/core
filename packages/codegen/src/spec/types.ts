@@ -395,7 +395,12 @@ export interface UseCaseSpec {
 	readonly route?: RouteSpec;
 	readonly access?: AccessSpec;
 	readonly input: BlueprintRefSpec;
-	readonly response: BlueprintRefSpec;
+	/**
+	 * A blueprint, or a list written as a field: `"Article[]"`,
+	 * `{ "type": "Article", "list": { "maxItems": 50 } }` or
+	 * `{ "fields": {...}, "list": true }`.
+	 */
+	readonly response: BlueprintRefSpec | FieldSpec;
 	readonly context?: BlueprintRefSpec;
 	/** Key -> name of a use case, repository or environment, of a service (a key of `services`), or `"Logger"`. */
 	readonly dependencies?: Readonly<Record<string, string>>;

@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 531 exports.
+Tier: stable. 538 exports.
 
 ### Access
 
@@ -143,6 +143,12 @@ A concrete UseCase declaration, usable as a dependency.
 *type* · tier: stable · `import type { AnyUseCasePlugin } from "@afora/core"`
 
 Any use case plugin.
+
+### AnyUseCaseResponse
+
+*type* · tier: stable · `import type { AnyUseCaseResponse } from "@afora/core"`
+
+The `response` of a use case: an object blueprint or a list.
 
 ### ApplicationAlreadyStarted
 
@@ -290,6 +296,12 @@ instance of the record, e.g. `{ author: { name: "Jane" } }`.
 The bounds of a list field, as `ctx.listOf(item, { minItems, maxItems })`
 takes them: the fewest and the most items it accepts.
 
+### BlueprintListValue
+
+*type* · tier: stable · `import type { BlueprintListValue } from "@afora/core"`
+
+The value of a list, e.g. `Article[]` for `listOf(Article)`.
+
 ### BlueprintPluginContext
 
 *type* · tier: stable · `import type { BlueprintPluginContext } from "@afora/core"`
@@ -341,7 +353,7 @@ called, as `ctx.number({ min: 1 })`, for the subclass `Property.with` makes.
 
 What `useCaseOf` takes as `steps`: the steps, inferred as a tuple, each
 checked against the values in scope, and the `return` against what the
-response blueprint (the collection `Response`) takes. Steps that are not a tuple (built at
+response (the collection `Response`, or a list) takes. Steps that are not a tuple (built at
 run time) are checked only when the use case is declared.
 
 ### CommandBuilder
@@ -2318,6 +2330,33 @@ The options of `resourceOf`.
 
 The use cases of `resourceOf`, by operation: the standard ones, with no option but their route and access.
 
+### ResponseBlueprint
+
+*type* · tier: stable · `import type { ResponseBlueprint } from "@afora/core"`
+
+The `response` declared for `Output`: the list itself, or the blueprint of the fields.
+
+### ResponseOf
+
+*type* · tier: stable · `import type { ResponseOf } from "@afora/core"`
+
+The value of a `response`: of a list, a read-only array of its items
+(e.g. `readonly Article[]`, frozen at run time); of a blueprint, its object.
+
+### ResponseSetting
+
+*type* · tier: stable · `import type { ResponseSetting } from "@afora/core"`
+
+What the `response` setting takes for `Output`: the blueprint of its fields,
+or the list it is. Written as a union so that `Output` is inferred from
+either.
+
+### ResponseValue
+
+*type* · tier: stable · `import type { ResponseValue } from "@afora/core"`
+
+The value a use case whose response gives `Output` resolves with.
+
 ### RestoreMaker
 
 *type* · tier: stable · `import type { RestoreMaker } from "@afora/core"`
@@ -2991,6 +3030,13 @@ any options.
 The second argument of the constructor of a use case: `{ context }`,
 required when the use case declares a context, not accepted otherwise.
 
+### UseCaseOutput
+
+*type* · tier: stable · `import type { UseCaseOutput } from "@afora/core"`
+
+What the `response` of a use case says it gives: the fields of an object
+blueprint, or a list made by `listOf` (e.g. `listOf(Article)`).
+
 ### UseCasePluginDescriptor
 
 *interface* · tier: stable · `import type { UseCasePluginDescriptor } from "@afora/core"`
@@ -3014,7 +3060,7 @@ What `useCasePluginOf` takes, after the name.
 *type* · tier: stable · `import type { UseCaseResponse } from "@afora/core"`
 
 The value `execute` of a use case class resolves with: the value of its
-`response` blueprint.
+`response` blueprint, or an array of the items of its `response` list.
 
 ### UseCaseSettings
 

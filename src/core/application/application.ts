@@ -86,6 +86,7 @@ import {
 	type ITracer,
 } from "../tracing/tracing";
 import { useCaseOriginOf } from "../use-case/plugin";
+import { responsePropertiesOf } from "../use-case/response";
 import {
 	ApplicationServicesKey,
 	isService,
@@ -726,13 +727,17 @@ function validateUseCases(
 				});
 			}
 		}
-		for (const [part, blueprint] of [
-			["blueprint", UseCase.blueprint],
-			["response", UseCase.response],
-			["context", UseCase.context],
+		for (const [part, properties] of [
+			["blueprint", UseCase.blueprint.properties],
+			// A list response is walked as the one field it is.
+			[
+				"response",
+				responsePropertiesOf(UseCase.response) ?? { "": UseCase.response },
+			],
+			["context", UseCase.context?.properties],
 		] as const) {
-			if (blueprint === undefined) continue;
-			for (const record of recordsIn(blueprint.properties)) {
+			if (properties === undefined) continue;
+			for (const record of recordsIn(properties as IBlueprintCollection)) {
 				if (registered.has(record)) continue;
 				throw new UnregisteredApplicationReference({
 					source,
@@ -1255,7 +1260,17 @@ function describeRegistry(
 				...(UseCase.route === undefined ? {} : { route: UseCase.route }),
 				...(UseCase.access === undefined ? {} : { access: UseCase.access }),
 				input: fieldsDescriptionOf(UseCase.blueprint.properties, scope),
-				response: fieldsDescriptionOf(UseCase.response.properties, scope),
+				...(isBlueprintList(UseCase.response)
+					? {
+							response: {},
+							responseList: fieldDescriptionOf(
+								UseCase.response,
+								scope,
+							) as Extract<FieldDescription, { readonly kind: "list" }>,
+						}
+					: {
+							response: fieldsDescriptionOf(UseCase.response.properties, scope),
+						}),
 				...(UseCase.context === undefined
 					? {}
 					: {
@@ -1263,7 +1278,9 @@ function describeRegistry(
 						}),
 				...refsOf({
 					input: UseCase.blueprint,
-					response: UseCase.response,
+					response: isBlueprintList(UseCase.response)
+						? undefined
+						: UseCase.response,
 					context: UseCase.context,
 				}),
 				errors: UseCase.errors.map((Thrown) => {

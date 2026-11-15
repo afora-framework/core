@@ -648,9 +648,12 @@ export function extractSpec(
 			...(value.deprecated ? { deprecated: true } : {}),
 			...routing(value),
 			input: value.refs?.input ?? { fields: extraction.json(value.input) },
-			response: value.refs?.response ?? {
-				fields: extraction.json(value.response),
-			},
+			// A list response is written as the list field it is.
+			response: value.responseList
+				? canonicalField(extraction.field(value.responseList))
+				: (value.refs?.response ?? {
+						fields: extraction.json(value.response),
+					}),
 			...(value.context === undefined
 				? {}
 				: {

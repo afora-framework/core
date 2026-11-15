@@ -268,6 +268,7 @@ user.pullEvents();
 
 // UseCase declarations retain inference and abstract contracts across compiler versions.
 import {
+	listOf as listOfOperations,
 	type UseCaseDependencies,
 	type UseCaseInput,
 	type UseCaseResponse,
@@ -331,6 +332,26 @@ useCaseOf({
 });
 // @ts-expect-error unknown override
 operation.execute({ unknown: async () => ({}) });
+
+// A list as the response: execute resolves with a read-only array of the items.
+const ListOperationBase = useCaseOf({
+	name: "ListOperation",
+	blueprint: OperationInput,
+	response: listOfOperations(OperationUser),
+});
+class ListOperation extends ListOperationBase {
+	override async execute() {
+		return [new OperationUser(this.input)];
+	}
+}
+export const listResponseMatches: Equals<
+	UseCaseResponse<typeof ListOperation>,
+	readonly OperationUser[]
+> = true;
+export const listExecuteMatches: Equals<
+	Awaited<ReturnType<InstanceType<typeof ListOperationBase>["execute"]>>,
+	readonly OperationUser[]
+> = true;
 
 // Record plugins
 import {

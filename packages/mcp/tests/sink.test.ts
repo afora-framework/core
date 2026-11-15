@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { outputOf, StdStages } from "@afora/core";
+import {
+	blueprintOf,
+	commandOf,
+	listOf,
+	outputOf,
+	StdStages,
+	useCaseOf,
+} from "@afora/core";
 import { stageDescriptionOf } from "@afora/core/experimental";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -177,5 +184,28 @@ describe("mcpTools sink", () => {
 		});
 		expect(failed.isError).toBe(true);
 		await client.close();
+	});
+});
+
+describe("mcpTools with a list response", () => {
+	test("the text content is the JSON array", async () => {
+		const Item = blueprintOf((ctx) => ({ title: ctx.string }));
+		class Recent extends useCaseOf({
+			name: "Recent",
+			blueprint: blueprintOf(() => ({})),
+			response: listOf(Item),
+		}) {
+			override async execute() {
+				return [{ title: "a" }, { title: "b" }];
+			}
+		}
+		const mcp = outputOf({
+			name: "Feed",
+			commands: [commandOf({ name: "Feed", useCases: { recent: Recent } })],
+			pipe: [mcpTools({ name: "feed", version: "1.0.0" })],
+		}).build() as McpTools;
+		const result = await mcp.call("feed_recent", {});
+		expect(result.isError).toBeUndefined();
+		expect(parse(result)).toEqual([{ title: "a" }, { title: "b" }]);
 	});
 });

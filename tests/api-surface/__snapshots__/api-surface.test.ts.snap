@@ -18,7 +18,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare abstract class AbstractRepository<Entity extends AnyRepositoryEntity, Actions extends readonly RepositoryAction<Entity>[], Environment> { get [Kind](): "repository"; get entity(): Entity; get actions(): Actions; protected get provider(): IRepositoryProvider<Environment>; protected get context(): RepositoryContext<Environment>; protected get env(): Environment; protected hydrate(data: RepositoryData): Promise<EntityInstanceOf<Entity>>; protected hydrateMany(list: readonly RepositoryData[]): Promise<EntityInstanceOf<Entity>[]>; protected dataOf(entity: EntityInstanceOf<Entity>): RepositoryData; }",
   ],
   "(internal) AbstractUseCase": [
-    "export declare abstract class AbstractUseCase<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection> { readonly input: Readonly<BlueprintValue<Input>>; constructor(input: BlueprintInput<Input>, ...args: unknown[]); get dependencies(): DependencyFunctions<Dependencies>; abstract execute(dependencies?: DependencyOverrides<Dependencies>): Promise<BlueprintValue<Output>>; pullEvents(): EntityEvent[]; }",
+    "export declare abstract class AbstractUseCase<Input extends IBlueprintCollection, Output extends UseCaseOutput, Dependencies extends UseCaseCollection> { readonly input: Readonly<BlueprintValue<Input>>; constructor(input: BlueprintInput<Input>, ...args: unknown[]); get dependencies(): DependencyFunctions<Dependencies>; abstract execute(dependencies?: DependencyOverrides<Dependencies>): Promise<ResponseValue<Output>>; pullEvents(): EntityEvent[]; }",
   ],
   "(internal) AcceptedBy": [
     "type AcceptedBy<Record> = Record extends { readonly [RecordAccepts]?: infer Accepts; } ? unknown extends Accepts ? never : NonNullable<Accepts> : never;",
@@ -144,7 +144,7 @@ exports[`exports of the package and their declarations 1`] = `
     "DateTime_base: DateTimeClass<false>",
   ],
   "(internal) Declaration": [
-    "type Declaration = { readonly blueprint: AnyBlueprint; readonly response: AnyBlueprint; readonly dependencies: UseCaseCollection; };",
+    "type Declaration = { readonly blueprint: AnyBlueprint; readonly response: AnyUseCaseResponse; readonly dependencies: UseCaseCollection; };",
   ],
   "(internal) DeletedAt_base": [
     "DeletedAt_base: DateTimeClass<true>",
@@ -337,7 +337,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type None = Record<never, never>;",
   ],
   "(internal) OperationDescriptor": [
-    "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyBlueprint; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
+    "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyUseCaseResponse; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
   ],
   "(internal) Optional": [
     "type Optional<Field> = Field extends AnyPropertyConstructor ? OptionalProperty<Field> : Field extends AnyBlueprintList ? OptionalBlueprintList<Field> : Field extends AnyBlueprint ? OptionalBlueprint<Field> : Field extends AnyRecordClass ? OptionalRecord<Field> : never;",
@@ -582,7 +582,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type RequiredKeys<Schemas> = keyof Omit<Schemas, ReadonlyOptionalKeys<Schemas> | ReadonlyKeys<Schemas> | OptionalKeys<Schemas>>;",
   ],
   "(internal) ResponseInput": [
-    "type ResponseInput<Response> = [ Response ] extends [ IBlueprintCollection ] ? BlueprintInput<Response> : unknown;",
+    "type ResponseInput<Response> = [ Response ] extends [ IBlueprintCollection ] ? BlueprintInput<Response> : [ Response ] extends [ AnyBlueprintList ] ? StandardSchemaV1.InferInput<Response> : unknown;",
   ],
   "(internal) Result": [
     "type Result<Output> = SuccessResult<Output> | FailureResult;",
@@ -711,7 +711,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface UseCaseDependencyDescription { readonly kind: "use-case" | "repository" | "environment" | "logger" | "service"; readonly ref: string; }",
   ],
   "(internal) UseCaseDescription": [
-    "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly context?: FieldsDescription; readonly refs?: { readonly input?: string; readonly response?: string; readonly context?: string; }; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; readonly generic?: { readonly name: string; readonly version: string; readonly repository: string; readonly options: Readonly<Record<string, unknown>>; }; }",
+    "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly responseList?: Extract<FieldDescription, { readonly kind: "list"; }>; readonly context?: FieldsDescription; readonly refs?: { readonly input?: string; readonly response?: string; readonly context?: string; }; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; readonly generic?: { readonly name: string; readonly version: string; readonly repository: string; readonly options: Readonly<Record<string, unknown>>; }; }",
   ],
   "(internal) UseCaseInstanceContext": [
     "type UseCaseInstanceContext<Context extends IBlueprintCollection | undefined> = { readonly context: Context extends IBlueprintCollection ? Readonly<BlueprintValue<Context>> : undefined; };",
@@ -729,7 +729,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type UseCasePluginsByName<Plugins extends readonly AnyUseCasePlugin[]> = { readonly [Plugin in Plugins[number] as Plugin["name"]]: Plugin; };",
   ],
   "(internal) UseCaseStatics": [
-    "type UseCaseStatics<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined> = { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: IBlueprint<Input>; readonly response: IBlueprint<Output>; readonly dependencies: Dependencies; readonly context: Context extends IBlueprintCollection ? IBlueprint<Context> : undefined; readonly description: string | undefined; readonly tags: readonly string[]; readonly deprecated: boolean; readonly errors: readonly AnyExceptionClass[]; readonly route: RouteDeclaration | undefined; readonly access: AccessDeclaration | undefined; };",
+    "type UseCaseStatics<Input extends IBlueprintCollection, Output extends UseCaseOutput, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined> = { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: IBlueprint<Input>; readonly response: ResponseBlueprint<Output>; readonly dependencies: Dependencies; readonly context: Context extends IBlueprintCollection ? IBlueprint<Context> : undefined; readonly description: string | undefined; readonly tags: readonly string[]; readonly deprecated: boolean; readonly errors: readonly AnyExceptionClass[]; readonly route: RouteDeclaration | undefined; readonly access: AccessDeclaration | undefined; };",
   ],
   "(internal) UuidKey_base": [
     "UuidKey_base: import("../../index.js").PropertyClass<Type.TString, string>",
@@ -819,10 +819,13 @@ exports[`exports of the package and their declarations 1`] = `
     "export type AnyService = ServiceDeclaration<unknown>;",
   ],
   "AnyUseCaseClass": [
-    "export interface AnyUseCaseClass { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: AnyBlueprint; readonly response: AnyBlueprint; readonly dependencies: UseCaseCollection; readonly context: AnyBlueprint | undefined; readonly description: string | undefined; readonly tags: readonly string[]; readonly deprecated: boolean; readonly errors: readonly AnyExceptionClass[]; readonly route: RouteDeclaration | undefined; readonly access: AccessDeclaration | undefined; new (input: any, ...options: any[]): { execute(): Promise<unknown>; pullEvents(): EntityEvent[]; }; }",
+    "export interface AnyUseCaseClass { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: AnyBlueprint; readonly response: AnyUseCaseResponse; readonly dependencies: UseCaseCollection; readonly context: AnyBlueprint | undefined; readonly description: string | undefined; readonly tags: readonly string[]; readonly deprecated: boolean; readonly errors: readonly AnyExceptionClass[]; readonly route: RouteDeclaration | undefined; readonly access: AccessDeclaration | undefined; new (input: any, ...options: any[]): { execute(): Promise<unknown>; pullEvents(): EntityEvent[]; }; }",
   ],
   "AnyUseCasePlugin": [
     "export type AnyUseCasePlugin = IUseCasePlugin<string, any>;",
+  ],
+  "AnyUseCaseResponse": [
+    "export type AnyUseCaseResponse = AnyBlueprint | AnyBlueprintList;",
   ],
   "ApplicationAlreadyStarted": [
     "ApplicationAlreadyStarted: import("../../index.js").DeclaredExceptionClass<{ readonly current: string; readonly attempted: string; }>",
@@ -887,6 +890,9 @@ exports[`exports of the package and their declarations 1`] = `
   "BlueprintListOptions": [
     "export interface BlueprintListOptions { readonly minItems?: number; readonly maxItems?: number; }",
   ],
+  "BlueprintListValue": [
+    "export type BlueprintListValue<List extends AnyBlueprintList> = List extends IBlueprintList<infer Item, boolean> ? FieldValue<Item, "value">[] : never;",
+  ],
   "BlueprintPluginContext": [
     "export type BlueprintPluginContext<Sources extends readonly { readonly properties: IBlueprintCollection; }[]> = Sources extends readonly [ infer Head extends { readonly properties: IBlueprintCollection; }, ...infer Tail extends readonly { readonly properties: IBlueprintCollection; }[] ] ? Override<Head["properties"], BlueprintPluginContext<Tail>> : Record<never, never>;",
   ],
@@ -909,7 +915,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type CallableProperty<Property extends { readonly type: IPropertyType<TSchema>; }> = Property & { (options?: OptionsOfProperty<Property>): Property; readonly [Callable]: Property; };",
   ],
   "CheckedSteps": [
-    "export type CheckedSteps<Steps, Input extends IBlueprintCollection, Context extends IBlueprintCollection | undefined, Dependencies, Response extends IBlueprintCollection | undefined = undefined> = [ Steps ] extends [ readonly [ unknown, ...unknown[] ] ] ? CheckSteps<Steps, Dependencies, StepsInitialScope<Input, Context, Dependencies>, Response> : Steps;",
+    "export type CheckedSteps<Steps, Input extends IBlueprintCollection, Context extends IBlueprintCollection | undefined, Dependencies, Response extends IBlueprintCollection | AnyBlueprintList | undefined = undefined> = [ Steps ] extends [ readonly [ unknown, ...unknown[] ] ] ? CheckSteps<Steps, Dependencies, StepsInitialScope<Input, Context, Dependencies>, Response> : Steps;",
   ],
   "CommandBuilder": [
     "export type CommandBuilder<Generics> = <const UseCases extends CommandUseCases, Context extends IBlueprintCollection | undefined = undefined, Environment extends EnvironmentDependencies | undefined = undefined>(settings: CommandBuilderSettings<UseCases, Context, Environment, Generics>) => CommandOf<UseCases, Context, Environment>;",
@@ -1800,6 +1806,18 @@ exports[`exports of the package and their declarations 1`] = `
   "ResourceUseCases": [
     "export interface ResourceUseCases<Repository extends AnyRepository> { readonly create: EntityUseCase<Repository, None, CreateInput<Repository, None>>; readonly get: EntityUseCase<Repository, None, ById<Repository>>; readonly list: StepsUseCaseConstructor<{ readonly limit: OptionalProperty<typeof Integer>; readonly offset: OptionalProperty<typeof Integer>; }, { readonly items: IBlueprintList<EntityOf<Repository>>; readonly total: typeof Integer; readonly limit: typeof Integer; readonly offset: typeof Integer; }, { readonly repository: Repository; }>; readonly update: EntityUseCase<Repository, None, UpdateInput<Repository>>; readonly delete: EntityUseCase<Repository, None, ById<Repository>>; }",
   ],
+  "ResponseBlueprint": [
+    "export type ResponseBlueprint<Output extends UseCaseOutput> = Output extends AnyBlueprintList ? Output : IBlueprint<Extract<Output, IBlueprintCollection>>;",
+  ],
+  "ResponseOf": [
+    "export type ResponseOf<Response> = Response extends AnyBlueprintList ? Readonly<BlueprintListValue<Response>> : Response extends { readonly properties: infer Properties; } ? BlueprintValue<Extract<Properties, IBlueprintCollection>> : never;",
+  ],
+  "ResponseSetting": [
+    "export type ResponseSetting<Output extends UseCaseOutput> = IBlueprint<Extract<Output, IBlueprintCollection>> | Extract<Output, AnyBlueprintList>;",
+  ],
+  "ResponseValue": [
+    "export type ResponseValue<Output extends UseCaseOutput> = Output extends AnyBlueprintList ? Readonly<BlueprintListValue<Output>> : BlueprintValue<Extract<Output, IBlueprintCollection>>;",
+  ],
   "RestoreMaker": [
     "export type RestoreMaker = <Repository extends AnyRepository, const Options extends StdUseCaseOptions & { readonly as?: string; } = None, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "restore">, options?: Options & Hookable<Repository, ById<Repository>, never, None, undefined, Dependencies, false>) => StepsUseCaseConstructor<ById<Repository>, EntityResponse<Repository, Options>, { readonly repository: Repository; } & Dependencies>;",
   ],
@@ -1980,7 +1998,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type StepsInitialScope<Input extends IBlueprintCollection, Context extends IBlueprintCollection | undefined, Dependencies> = { readonly input: BlueprintValue<Input>; readonly env: { readonly [Key in keyof Dependencies as Dependencies[Key] extends AnyEnvironment ? Key : never]: Dependencies[Key] extends AnyEnvironment ? EnvironmentValue<Dependencies[Key]> : never; }; } & (Context extends IBlueprintCollection ? { readonly context: BlueprintValue<Context>; } : unknown);",
   ],
   "StepsUseCaseConstructor": [
-    "export type StepsUseCaseConstructor<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> = (new (input: BlueprintInput<Input>, ...options: OptionsArgs<Context>) => Omit<AbstractUseCase<Input, Output, Dependencies>, "execute"> & UseCaseInstanceContext<Context> & { execute(dependencies?: DependencyOverrides<Dependencies>): Promise<BlueprintValue<Output>>; }) & UseCaseStatics<Input, Output, Dependencies, Context>;",
+    "export type StepsUseCaseConstructor<Input extends IBlueprintCollection, Output extends UseCaseOutput, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> = (new (input: BlueprintInput<Input>, ...options: OptionsArgs<Context>) => Omit<AbstractUseCase<Input, Output, Dependencies>, "execute"> & UseCaseInstanceContext<Context> & { execute(dependencies?: DependencyOverrides<Dependencies>): Promise<ResponseValue<Output>>; }) & UseCaseStatics<Input, Output, Dependencies, Context>;",
   ],
   "StringConstraints": [
     "export interface StringConstraints { readonly min?: number; readonly max?: number; readonly pattern?: string | RegExp; }",
@@ -2067,13 +2085,13 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface UseCaseCompilation extends Omit<UseCaseStepsSettings<any, any, any, any>, "steps"> { readonly steps: readonly Readonly<Record<string, unknown>>[]; }",
   ],
   "UseCaseConstructor": [
-    "export type UseCaseConstructor<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> = (abstract new (input: BlueprintInput<Input>, ...options: OptionsArgs<Context>) => AbstractUseCase<Input, Output, Dependencies> & UseCaseInstanceContext<Context>) & UseCaseStatics<Input, Output, Dependencies, Context>;",
+    "export type UseCaseConstructor<Input extends IBlueprintCollection, Output extends UseCaseOutput, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> = (abstract new (input: BlueprintInput<Input>, ...options: OptionsArgs<Context>) => AbstractUseCase<Input, Output, Dependencies> & UseCaseInstanceContext<Context>) & UseCaseStatics<Input, Output, Dependencies, Context>;",
   ],
   "UseCaseContext": [
     "export type UseCaseContext<Class extends { readonly context: unknown; }> = Class["context"] extends IBlueprint<infer Properties> ? Readonly<BlueprintValue<Properties>> : undefined;",
   ],
   "UseCaseDeclaration": [
-    "export interface UseCaseDeclaration<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined, Steps extends readonly UseCaseStep<Dependencies>[] | undefined = undefined, Strict extends boolean = false> extends UseCaseSettings<Input, Output, Dependencies, Context> { readonly steps?: [ Strict ] extends [ true ] ? CheckedSteps<Steps, NoInfer<Input>, NoInfer<Context>, NoInfer<Dependencies>, NoInfer<Output>> : Steps; readonly strictSteps?: Strict; }",
+    "export interface UseCaseDeclaration<Input extends IBlueprintCollection, Output extends UseCaseOutput, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined, Steps extends readonly UseCaseStep<Dependencies>[] | undefined = undefined, Strict extends boolean = false> extends UseCaseSettings<Input, Output, Dependencies, Context> { readonly steps?: [ Strict ] extends [ true ] ? CheckedSteps<Steps, NoInfer<Input>, NoInfer<Context>, NoInfer<Dependencies>, NoInfer<Output>> : Steps; readonly strictSteps?: Strict; }",
   ],
   "UseCaseDependencies": [
     "export type UseCaseDependencies<Class extends Declaration> = DependencyFunctions<Class["dependencies"]>;",
@@ -2102,6 +2120,9 @@ exports[`exports of the package and their declarations 1`] = `
   "UseCaseOptions": [
     "export type UseCaseOptions<Context extends IBlueprintCollection | undefined = undefined> = Context extends IBlueprintCollection ? { readonly context: BlueprintInput<Context>; } : { readonly context?: undefined; };",
   ],
+  "UseCaseOutput": [
+    "export type UseCaseOutput = IBlueprintCollection | AnyBlueprintList;",
+  ],
   "UseCasePluginDescriptor": [
     "export interface UseCasePluginDescriptor { readonly kind: "use-case-plugin"; readonly name: string; readonly version: string; readonly description?: string; readonly requires: Required<UseCasePluginRequirements>; }",
   ],
@@ -2112,10 +2133,10 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface UseCasePluginSettings { readonly version?: string; readonly description?: string; readonly requires?: UseCasePluginRequirements; compile(target: UseCaseTargetInfo, options: Readonly<Record<string, unknown>>): UseCaseCompilation; }",
   ],
   "UseCaseResponse": [
-    "export type UseCaseResponse<Class extends Declaration> = BlueprintValue<Class["response"]["properties"]>;",
+    "export type UseCaseResponse<Class extends Declaration> = ResponseOf<Class["response"]>;",
   ],
   "UseCaseSettings": [
-    "export interface UseCaseSettings<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> { readonly name: string; readonly blueprint: IBlueprint<Input>; readonly response: IBlueprint<Output>; readonly dependencies?: Dependencies; readonly context?: IBlueprint<Exclude<Context, undefined>>; readonly description?: string; readonly tags?: readonly string[]; readonly deprecated?: boolean; readonly errors?: readonly AnyExceptionClass[]; readonly route?: RouteSettings; readonly access?: AccessDeclaration; }",
+    "export interface UseCaseSettings<Input extends IBlueprintCollection, Output extends UseCaseOutput, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> { readonly name: string; readonly blueprint: IBlueprint<Input>; readonly response: ResponseSetting<Output>; readonly dependencies?: Dependencies; readonly context?: IBlueprint<Exclude<Context, undefined>>; readonly description?: string; readonly tags?: readonly string[]; readonly deprecated?: boolean; readonly errors?: readonly AnyExceptionClass[]; readonly route?: RouteSettings; readonly access?: AccessDeclaration; }",
   ],
   "UseCaseStep": [
     "export type UseCaseStep<Dependencies extends UseCaseCollection = UseCaseCollection> = { readonly find: StepFindTarget<Dependencies>; readonly args?: StepArgs; readonly as?: string; } | { readonly ensure: "exists" | "absent" | "true" | "false"; readonly value: StepValue; readonly other?: undefined; readonly error: AnyExceptionClass; readonly details?: StepValue; } | { readonly ensure: "equals" | "notEquals"; readonly value: StepValue; readonly other: StepValue; readonly error: AnyExceptionClass; readonly details?: StepValue; } | { readonly build: AnyRecordClass; readonly values: StepValue; readonly as: string; } | { readonly change: StepReference; readonly key: string; readonly value: StepValue; readonly ifPresent?: boolean; readonly as?: string; } | { readonly invoke: StepReference; readonly method: string; readonly args?: StepArgs; readonly as?: string; } | { readonly create: StepRepositoryWith<Dependencies, "create">; readonly value: StepValue; readonly as?: string; } | { readonly update: StepRepositoryWith<Dependencies, "update">; readonly value: StepValue; readonly as?: string; } | { readonly delete: StepRepositoryWith<Dependencies, "delete">; readonly value: StepValue; readonly as?: string; } | { readonly restore: StepRepositoryWith<Dependencies, "restore">; readonly value: StepValue; readonly as?: string; } | { readonly call: UseCaseKeys<Dependencies>; readonly input: StepValue; readonly as?: string; } | { readonly run: string; readonly fn: (...args: any[]) => unknown; readonly args?: StepArgs; readonly params?: AnyBlueprint; readonly as?: string; } | { readonly return: StepValue; };",
@@ -2124,7 +2145,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type UseCaseStepDescription = { readonly find: string; readonly args?: StepArgs; readonly as?: string; } | { readonly ensure: StepEnsureKind; readonly value: StepValue; readonly other?: StepValue; readonly error: StepErrorDescription; readonly details?: StepValue; } | { readonly build: string; readonly values: StepValue; readonly as: string; } | { readonly change: string; readonly key: string; readonly value: StepValue; readonly ifPresent?: boolean; readonly as?: string; } | { readonly invoke: string; readonly method: string; readonly args?: StepArgs; readonly as?: string; } | { readonly create: string; readonly value: StepValue; readonly as?: string; } | { readonly update: string; readonly value: StepValue; readonly as?: string; } | { readonly delete: string; readonly value: StepValue; readonly as?: string; } | { readonly restore: string; readonly value: StepValue; readonly as?: string; } | { readonly call: string; readonly input: StepValue; readonly as?: string; } | { readonly run: string; readonly fn: { readonly kind: "opaque"; }; readonly args?: StepArgs; readonly params?: FieldsDescription; readonly as?: string; } | { readonly return: StepValue; };",
   ],
   "UseCaseStepsSettings": [
-    "export interface UseCaseStepsSettings<Input extends IBlueprintCollection, Output extends IBlueprintCollection, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> extends UseCaseSettings<Input, Output, Dependencies, Context> { readonly steps: readonly UseCaseStep<NoInfer<Dependencies>>[]; readonly strictSteps?: boolean; }",
+    "export interface UseCaseStepsSettings<Input extends IBlueprintCollection, Output extends UseCaseOutput, Dependencies extends UseCaseCollection, Context extends IBlueprintCollection | undefined = undefined> extends UseCaseSettings<Input, Output, Dependencies, Context> { readonly steps: readonly UseCaseStep<NoInfer<Dependencies>>[]; readonly strictSteps?: boolean; }",
   ],
   "UseCaseTarget": [
     "export type UseCaseTarget<Repository, Action extends string, Members = unknown, Plugin extends string = never> = [ Action ] extends [ ActionsOf<Repository> ] ? EntityInstanceOf<EntityOfRepository<Repository>> extends Members ? unknown : MissingRecordPlugin<Plugin> : MissingRepositoryAction<Exclude<Action, ActionsOf<Repository>>>;",
@@ -2233,7 +2254,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function isService(value: unknown): value is AnyService;",
   ],
   "isUseCase": [
-    "export declare function isUseCase(value: unknown): value is AbstractUseCase<IBlueprintCollection, IBlueprintCollection, UseCaseCollection>;",
+    "export declare function isUseCase(value: unknown): value is AbstractUseCase<IBlueprintCollection, UseCaseOutput, UseCaseCollection>;",
   ],
   "isUseCaseCatalog": [
     "export declare function isUseCaseCatalog(value: unknown): value is IUseCaseCatalog;",
@@ -2360,7 +2381,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function useCaseCatalogOf<const Plugins extends readonly AnyUseCasePlugin[]>(...plugins: Plugins): IUseCaseCatalog<UseCasePluginsByName<Plugins>>;",
   ],
   "useCaseOf": [
-    "export declare function useCaseOf<Input extends IBlueprintCollection, Output extends IBlueprintCollection, const Dependencies extends UseCaseCollection = Record<never, never>, Context extends IBlueprintCollection | undefined = undefined, const Steps extends readonly UseCaseStep<NoInfer<Dependencies>>[] | undefined = undefined, Strict extends boolean = false>(settings: UseCaseDeclaration<Input, Output, Dependencies, Context, Steps, Strict>): [ Steps ] extends [ undefined ] ? UseCaseConstructor<Input, Output, Dependencies, Context> : StepsUseCaseConstructor<Input, Output, Dependencies, Context>;",
+    "export declare function useCaseOf<Input extends IBlueprintCollection, Output extends UseCaseOutput, const Dependencies extends UseCaseCollection = Record<never, never>, Context extends IBlueprintCollection | undefined = undefined, const Steps extends readonly UseCaseStep<NoInfer<Dependencies>>[] | undefined = undefined, Strict extends boolean = false>(settings: UseCaseDeclaration<Input, Output, Dependencies, Context, Steps, Strict>): [ Steps ] extends [ undefined ] ? UseCaseConstructor<Input, Output, Dependencies, Context> : StepsUseCaseConstructor<Input, Output, Dependencies, Context>;",
   ],
   "useCasePluginOf": [
     "export declare function useCasePluginOf<const Name extends string, Make extends UseCaseMaker = UseCaseMaker>(name: Name, settings: UseCasePluginSettings): IUseCasePlugin<Name, Make>;",
@@ -2423,6 +2444,9 @@ exports[`adapters entry (contract) 1`] = `
   ],
   "(internal) AnyRepositoryEntity": [
     "export type AnyRepositoryEntity = AnyRecordClass & AnyEntityClass & { readonly [EntityUniqueKeys]: readonly string[]; readonly options: RecordSettings<any>; };",
+  ],
+  "(internal) AnyUseCaseResponse": [
+    "export type AnyUseCaseResponse = AnyBlueprint | AnyBlueprintList;",
   ],
   "(internal) BlueprintData": [
     "export type BlueprintData<Properties extends IBlueprintCollection> = CollectionValue<Properties, "data">;",
@@ -2919,7 +2943,7 @@ exports[`adapters entry (contract) 1`] = `
     "export interface LogDescription { readonly level: LogLevel; readonly providers: readonly ({ readonly kind: "log-provider"; readonly name: string; } | { readonly kind: "opaque"; })[]; }",
   ],
   "OperationDescriptor": [
-    "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyBlueprint; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
+    "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyUseCaseResponse; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
   ],
   "OperationRoute": [
     "export interface OperationRoute { readonly method: OpenAPIMethod; readonly path: string; readonly parameters: readonly string[]; readonly status: RouteStatus; readonly headers: { readonly [name: string]: string; }; readonly body: boolean; readonly query: readonly string[]; readonly requestHeaders: { readonly [inputKey: string]: string; }; readonly cookies: { readonly [inputKey: string]: string; }; readonly setCookies: { readonly [responseKey: string]: RouteCookie; }; }",
@@ -3033,7 +3057,7 @@ exports[`adapters entry (contract) 1`] = `
     "export interface UseCaseDependencyDescription { readonly kind: "use-case" | "repository" | "environment" | "logger" | "service"; readonly ref: string; }",
   ],
   "UseCaseDescription": [
-    "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly context?: FieldsDescription; readonly refs?: { readonly input?: string; readonly response?: string; readonly context?: string; }; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; readonly generic?: { readonly name: string; readonly version: string; readonly repository: string; readonly options: Readonly<Record<string, unknown>>; }; }",
+    "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly responseList?: Extract<FieldDescription, { readonly kind: "list"; }>; readonly context?: FieldsDescription; readonly refs?: { readonly input?: string; readonly response?: string; readonly context?: string; }; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; readonly generic?: { readonly name: string; readonly version: string; readonly repository: string; readonly options: Readonly<Record<string, unknown>>; }; }",
   ],
   "coerceTextValues": [
     "export declare function coerceTextValues(blueprint: AnyBlueprint, texts: Readonly<Record<string, string | undefined>>): Record<string, unknown>;",
@@ -3152,10 +3176,13 @@ exports[`experimental entry (not contract) 1`] = `
     "export type AnyService = ServiceDeclaration<unknown>;",
   ],
   "(internal) AnyUseCaseClass": [
-    "export interface AnyUseCaseClass { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: AnyBlueprint; readonly response: AnyBlueprint; readonly dependencies: UseCaseCollection; readonly context: AnyBlueprint | undefined; readonly description: string | undefined; readonly tags: readonly string[]; readonly deprecated: boolean; readonly errors: readonly AnyExceptionClass[]; readonly route: RouteDeclaration | undefined; readonly access: AccessDeclaration | undefined; new (input: any, ...options: any[]): { execute(): Promise<unknown>; pullEvents(): EntityEvent[]; }; }",
+    "export interface AnyUseCaseClass { readonly [Kind]: "use-case"; readonly useCaseName: string; readonly blueprint: AnyBlueprint; readonly response: AnyUseCaseResponse; readonly dependencies: UseCaseCollection; readonly context: AnyBlueprint | undefined; readonly description: string | undefined; readonly tags: readonly string[]; readonly deprecated: boolean; readonly errors: readonly AnyExceptionClass[]; readonly route: RouteDeclaration | undefined; readonly access: AccessDeclaration | undefined; new (input: any, ...options: any[]): { execute(): Promise<unknown>; pullEvents(): EntityEvent[]; }; }",
   ],
   "(internal) AnyUseCasePlugin": [
     "export type AnyUseCasePlugin = IUseCasePlugin<string, any>;",
+  ],
+  "(internal) AnyUseCaseResponse": [
+    "export type AnyUseCaseResponse = AnyBlueprint | AnyBlueprintList;",
   ],
   "(internal) AsBlueprint": [
     "type AsBlueprint<Properties, Optional extends boolean> = IBlueprint<Extract<Properties, IBlueprintCollection>, Optional>;",
@@ -3180,6 +3207,9 @@ exports[`experimental entry (not contract) 1`] = `
   ],
   "(internal) BlueprintListOptions": [
     "export interface BlueprintListOptions { readonly minItems?: number; readonly maxItems?: number; }",
+  ],
+  "(internal) BlueprintListValue": [
+    "export type BlueprintListValue<List extends AnyBlueprintList> = List extends IBlueprintList<infer Item, boolean> ? FieldValue<Item, "value">[] : never;",
   ],
   "(internal) BlueprintPluginContext": [
     "export type BlueprintPluginContext<Sources extends readonly { readonly properties: IBlueprintCollection; }[]> = Sources extends readonly [ infer Head extends { readonly properties: IBlueprintCollection; }, ...infer Tail extends readonly { readonly properties: IBlueprintCollection; }[] ] ? Override<Head["properties"], BlueprintPluginContext<Tail>> : Record<never, never>;",
@@ -3227,7 +3257,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type CommandUseCases = Readonly<Record<string, AnyUseCaseClass>>;",
   ],
   "(internal) Declaration": [
-    "type Declaration = { readonly blueprint: AnyBlueprint; readonly response: AnyBlueprint; readonly dependencies: UseCaseCollection; };",
+    "type Declaration = { readonly blueprint: AnyBlueprint; readonly response: AnyUseCaseResponse; readonly dependencies: UseCaseCollection; };",
   ],
   "(internal) DeclaredExceptionClass": [
     "export interface DeclaredExceptionClass<Details = undefined> { new (args: ExceptionArgs<Details>): Exception<Details>; readonly prototype: Exception<Details>; readonly layer: ExceptionLayers; from: typeof Exception.from; }",
@@ -3484,7 +3514,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export interface OperationCallOptions { readonly context?: unknown; readonly principal?: Principal | null; readonly native?: unknown; }",
   ],
   "(internal) OperationDescriptor": [
-    "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyBlueprint; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
+    "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyUseCaseResponse; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
   ],
   "(internal) OptionalKeys": [
     "type OptionalKeys<Schemas> = { [Key in keyof Schemas]: Schemas[Key] extends TOptional<TSchema> ? Schemas[Key] extends TReadonly<Schemas[Key]> ? never : Key : never; }[keyof Schemas];",
@@ -3693,6 +3723,9 @@ exports[`experimental entry (not contract) 1`] = `
   "(internal) RequiredKeys": [
     "type RequiredKeys<Schemas> = keyof Omit<Schemas, ReadonlyOptionalKeys<Schemas> | ReadonlyKeys<Schemas> | OptionalKeys<Schemas>>;",
   ],
+  "(internal) ResponseOf": [
+    "export type ResponseOf<Response> = Response extends AnyBlueprintList ? Readonly<BlueprintListValue<Response>> : Response extends { readonly properties: infer Properties; } ? BlueprintValue<Extract<Properties, IBlueprintCollection>> : never;",
+  ],
   "(internal) Result": [
     "type Result<Output> = SuccessResult<Output> | FailureResult;",
   ],
@@ -3802,7 +3835,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export interface UseCasePluginRequirements { readonly actions?: readonly string[]; readonly plugins?: readonly string[]; }",
   ],
   "(internal) UseCaseResponse": [
-    "export type UseCaseResponse<Class extends Declaration> = BlueprintValue<Class["response"]["properties"]>;",
+    "export type UseCaseResponse<Class extends Declaration> = ResponseOf<Class["response"]>;",
   ],
   "(internal) UseCaseTargetInfo": [
     "export interface UseCaseTargetInfo { readonly repository: AnyRepository; readonly repositoryName: string; readonly entity: AnyRepositoryEntity; readonly entityName: string; readonly actions: readonly string[]; readonly deletion: "hard" | "soft"; readonly fields: readonly UseCaseFieldPlan[]; readonly changeKeys: readonly string[]; readonly uniqueKeys: readonly string[]; field(key: string): UseCaseFieldPlan; relation(key: string, actions?: readonly string[]): AnyRepository; unavailable(reason: string): never; }",
@@ -4000,6 +4033,9 @@ exports[`testing entry (contract) 1`] = `
   ],
   "(internal) AnyRepositoryEntity": [
     "export type AnyRepositoryEntity = AnyRecordClass & AnyEntityClass & { readonly [EntityUniqueKeys]: readonly string[]; readonly options: RecordSettings<any>; };",
+  ],
+  "(internal) AnyUseCaseResponse": [
+    "export type AnyUseCaseResponse = AnyBlueprint | AnyBlueprintList;",
   ],
   "(internal) AuthRequest": [
     "export interface AuthRequest { header(name: string): string | undefined; cookie(name: string): string | undefined; readonly operation: OperationDescriptor; readonly native?: unknown; }",
@@ -4232,7 +4268,7 @@ exports[`testing entry (contract) 1`] = `
     "export interface OperationCallOptions { readonly context?: unknown; readonly principal?: Principal | null; readonly native?: unknown; }",
   ],
   "(internal) OperationDescriptor": [
-    "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyBlueprint; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
+    "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyUseCaseResponse; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
   ],
   "(internal) OptionalKeys": [
     "type OptionalKeys<Schemas> = { [Key in keyof Schemas]: Schemas[Key] extends TOptional<TSchema> ? Schemas[Key] extends TReadonly<Schemas[Key]> ? never : Key : never; }[keyof Schemas];",
@@ -7083,31 +7119,39 @@ exports[`afora.json schema 1`] = `
                 "response": {
                   "anyOf": [
                     {
-                      "description": "The name of a declared blueprint.",
-                      "pattern": "^[A-Z][A-Za-z0-9]*$",
-                      "type": "string",
-                    },
-                    {
-                      "additionalProperties": false,
-                      "properties": {
-                        "fields": {
+                      "anyOf": [
+                        {
+                          "description": "The name of a declared blueprint.",
+                          "pattern": "^[A-Z][A-Za-z0-9]*$",
+                          "type": "string",
+                        },
+                        {
                           "additionalProperties": false,
-                          "description": "Fields by key.",
-                          "patternProperties": {
-                            "^[A-Za-z_$][A-Za-z0-9_$]*$": {
-                              "$ref": "#/$defs/Field",
+                          "properties": {
+                            "fields": {
+                              "additionalProperties": false,
+                              "description": "Fields by key.",
+                              "patternProperties": {
+                                "^[A-Za-z_$][A-Za-z0-9_$]*$": {
+                                  "$ref": "#/$defs/Field",
+                                },
+                              },
+                              "type": "object",
                             },
                           },
+                          "required": [
+                            "fields",
+                          ],
                           "type": "object",
                         },
-                      },
-                      "required": [
-                        "fields",
                       ],
-                      "type": "object",
+                      "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
+                    },
+                    {
+                      "$ref": "#/$defs/Field",
                     },
                   ],
-                  "description": "A blueprint by name ("RegisterInput") or declared in place ({ "fields": {...} }).",
+                  "description": "A blueprint, or a list written as a field: "Article[]", { "type": "Article", "list": { "maxItems": 50 } } or { "fields": {...}, "list": true }. The use case then answers an array.",
                 },
                 "route": {
                   "additionalProperties": false,

@@ -14,6 +14,7 @@ import { toOpenAPI } from "../openapi/openapi";
 import type { OpenAPISchema } from "../openapi/types/openapi.interface";
 import { isProperty } from "../property/is-property";
 import { recordNameOf } from "../record/name";
+import { responsePropertiesOf } from "../use-case/response";
 import {
 	HEADER_NAME,
 	isRoutePath as isPath,
@@ -877,7 +878,13 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 		const records = new Set<AnyRecordClass>();
 		for (const operation of operations) {
 			collectRecords(operation.input.properties, records);
-			collectRecords(operation.response.properties, records);
+			// A list response is collected from its item.
+			collectRecords(
+				responsePropertiesOf(operation.response) ?? {
+					"": operation.response,
+				},
+				records,
+			);
 		}
 		const models: Record<string, BlueprintField> = {};
 		const classes = new Map<string, AnyRecordClass>();
