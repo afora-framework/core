@@ -2,6 +2,7 @@ import { recordPluginOf } from "../core/record/plugin";
 import { recordPluginCatalogOf } from "../core/record/plugin-catalog";
 import { recordOf } from "../core/record/record";
 import { blueprintOf } from "./blueprint";
+import { idKeyOf, OwnerId } from "./properties/identity";
 import { Password } from "./properties/password";
 
 /** The current date and time, as `DateTime` accepts it. */
@@ -105,15 +106,18 @@ export const Taggable = recordPluginOf("taggable", TaggableRecord, {
  * @public Exported so declarations can name the plugin's class.
  */
 export class OwnableRecord extends recordOf(
-	blueprintOf((ctx) => ({ ownerId: ctx.id })),
+	blueprintOf(() => ({ ownerId: OwnerId })),
 ) {
-	/** Whether `id` is the id of the owner. */
-	isOwnedBy(id: string): boolean {
-		return this.ownerId === id.toLowerCase();
+	/**
+	 * Whether `id` is the id of the owner: a UUID in any case, other text as
+	 * is, a number by value (`1` and `"1"` name the same owner).
+	 */
+	isOwnedBy(id: string | number): boolean {
+		return idKeyOf(this.ownerId) === idKeyOf(id);
 	}
 
 	/** Makes `id` the owner. */
-	transferTo(id: string): this {
+	transferTo(id: string | number): this {
 		return this.set("ownerId", id);
 	}
 }

@@ -1,3 +1,4 @@
+import type { IdValue } from "../entity/types/id.interface";
 import { declaredRecordNameOf } from "../record/name";
 import {
 	InvalidRepositoryDeclaration,
@@ -27,7 +28,7 @@ export type InMemoryProvider = IRepositoryProvider & {
 	};
 };
 
-type Table = Map<string, RepositoryData>;
+type Table = Map<IdValue, RepositoryData>;
 /** By declared name (a string), or by entity class for an entity without one. */
 type Tables = Map<string | object, Table>;
 
@@ -50,8 +51,8 @@ function tableKeyOf(entity: object): string | object {
 }
 
 /** The id of a stored value. */
-function idOf(data: RepositoryData): string {
-	return data.id as string;
+function idOf(data: RepositoryData): IdValue {
+	return data.id as IdValue;
 }
 
 /** Stored rows are private and replaced, never mutated, so copying the maps isolates a snapshot. */

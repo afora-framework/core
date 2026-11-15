@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 502 exports.
+Tier: stable. 520 exports.
 
 ### Access
 
@@ -575,6 +575,14 @@ What an entity builder needs: the identity fields, and how to make an id and a t
 
 What `entityOf` returns: a record class with identity.
 
+### EntityConstructorWithId
+
+*type* · tier: stable · `import type { EntityConstructorWithId } from "@afora/core"`
+
+What `entityOf` returns for an entity with an `id` option: as
+`EntityConstructor`, built from `Input` (which holds the id when the
+strategy makes none). Kept apart so that the default costs no more.
+
 ### EntityDuration
 
 *interface* · tier: stable · `import type { EntityDuration } from "@afora/core"`
@@ -610,6 +618,25 @@ change, and `onDelete` when it is destroyed.
 
 `after` a duration from `createdAt` (stored as `expiresAt`), or `at` the
 date held by a key of the blueprint, `Key`.
+
+### EntityIdOf
+
+*type* · tier: stable · `import type { EntityIdOf } from "@afora/core"`
+
+The type of the ids of the entities of `Entity`: a string, unless its `id` option says otherwise.
+
+### EntityIdOptions
+
+*interface* · tier: stable · `import type { EntityIdOptions } from "@afora/core"`
+
+How an entity gets its id.
+
+### EntityIdStrategy
+
+*const* · tier: stable · `import { EntityIdStrategy } from "@afora/core"`
+
+The id strategy of a class made by `entityOf` with an `id` option (made by
+`idOf`); a class without one has none.
 
 ### EntityIdentityKey
 
@@ -1097,6 +1124,32 @@ A UUID v7, time-ordered, so ids sort by creation.
 
 Makes a new id, as a UUID v7 string.
 
+### IdStrategy
+
+*interface* · tier: stable · `import type { IdStrategy } from "@afora/core"`
+
+How the entities of one class get their id, made by `idOf`: `property`
+validates it, and `generate`, when `Generated`, makes it for an entity
+built without one.
+
+### IdValue
+
+*type* · tier: stable · `import type { IdValue } from "@afora/core"`
+
+The value of an id at run time: a string, or a number a database assigns.
+
+### IdValueOf
+
+*type* · tier: stable · `import type { IdValueOf } from "@afora/core"`
+
+The value `Property` gives, the type of the ids it validates.
+
+### IdentityWithId
+
+*type* · tier: stable · `import type { IdentityWithId } from "@afora/core"`
+
+`Identity`, with the property of the strategy `Id` as its `id`.
+
 ### ImmutableEntityKey
 
 *const* · tier: stable · `import { ImmutableEntityKey } from "@afora/core"`
@@ -1197,6 +1250,14 @@ A variable of the environment is missing or rejected by its blueprint.
 *const* · tier: stable · `import { InvalidEventPolicy } from "@afora/core"`
 
 `eventPolicyOf`, a policy's options or a catalog got something it cannot use; `details.reason` says what.
+
+### InvalidIdStrategy
+
+*const* · tier: stable · `import { InvalidIdStrategy } from "@afora/core"`
+
+`idOf` was given something other than a required property, or a
+`generate` that is not a function; or the `id` option of `entityOf` is not
+a strategy made by `idOf`. `source` is `idOf` or the entity name.
 
 ### InvalidJsonData
 
@@ -1401,6 +1462,14 @@ For JSON of a known shape, `jsonOf({ schema })`.
 *type* · tier: stable · `import type { JsonValue } from "@afora/core"`
 
 A value JSON can hold, as `JSON.parse` gives it.
+
+### Key
+
+*const* · tier: stable · `import { Key } from "@afora/core"`
+
+The `id` option of an entity whose id is a natural key: any text of 1 to
+256 characters, never generated, so the input of the entity must hold it,
+e.g. `entityOf(Setting, { id: Key })` and `new Setting({ id: "seo", ... })`.
 
 ### ListMaker
 
@@ -1668,6 +1737,14 @@ An HTTP-style status by exception name.
 *const* · tier: stable · `import { Ownable } from "@afora/core"`
 
 An `ownerId`, with `isOwnedBy` and `transferTo`.
+
+### OwnerId
+
+*class* · tier: stable · `import { OwnerId } from "@afora/core"`
+
+The id of an entity of any id strategy, held by another record (as
+`ownerId`): text of 1 to 256 characters, a UUID kept in lower case, or a
+positive integer.
 
 ### ParseResult
 
@@ -2188,6 +2265,12 @@ What `forEachPage` did.
 
 Equality, or membership in a list. Conditions on different keys are ANDed.
 
+### RequiredIdInput
+
+*type* · tier: stable · `import type { RequiredIdInput } from "@afora/core"`
+
+`{ readonly id: ... }`, required, when the strategy `Id` makes no id.
+
 ### ReservedBlueprintKey
 
 *const* · tier: stable · `import { ReservedBlueprintKey } from "@afora/core"`
@@ -2614,6 +2697,12 @@ The hasher in use cannot verify without waiting; use `verify` instead.
 
 A string that is not blank once trimmed.
 
+### TextKey
+
+*class* · tier: stable · `import { TextKey } from "@afora/core"`
+
+Any text of 1 to 256 characters, kept as given: a natural key, e.g. `profile`.
+
 ### TraceAttributes
 
 *type* · tier: stable · `import type { TraceAttributes } from "@afora/core"`
@@ -2909,6 +2998,21 @@ What `compile` gets of the repository a use case is made for.
 A use case plugin cannot make its use case for a repository: the
 repository lacks an action, the entity lacks a record plugin, or an option
 names what the entity does not have. `source` is the plugin name.
+
+### Uuid
+
+*const* · tier: stable · `import { Uuid } from "@afora/core"`
+
+The `id` option of an entity whose ids are UUIDs of any version (a v4
+loaded from an existing database included), lower-cased; a new entity
+still gets a UUID v7 from the configured generator, e.g.
+`entityOf(Legacy, { id: Uuid })`.
+
+### UuidKey
+
+*class* · tier: stable · `import { UuidKey } from "@afora/core"`
+
+A UUID of any version, in lower case.
 
 ### VersionedIdentity
 
@@ -3242,6 +3346,30 @@ Whether `value`, a record, an entity or a class of them, has `plugin`
 (given or by name), applied to it or required by one of its plugins; a
 record of the plugin's own class has it too.
 
+### idOf
+
+*function* · tier: stable · `import { idOf } from "@afora/core"`
+
+How the entities of one class get their id, for the `id` option of
+`entityOf`: `property` validates it (it replaces the `id` of the identity
+and stays unique) and `generate`, when given, makes it for an entity built
+without one. Without `generate`, the id is a natural key: the input of the
+entity must hold it, or building it reports an issue at `id`.
+
+**Example**
+
+```ts
+import { blueprintOf, entityOf, idOf, Integer } from "@afora/core";
+
+let next = 0;
+class Ticket extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{ id: idOf(Integer, () => ++next) },
+) {}
+
+new Ticket({ title: "First" }).id; // 1
+```
+
 ### inMemoryProvider
 
 *function* · tier: stable · `import { inMemoryProvider } from "@afora/core"`
@@ -3270,6 +3398,18 @@ Whether `value` is an entity, an instance of a class made by `entityOf`.
 *function* · tier: stable · `import { isEntityClass } from "@afora/core"`
 
 Whether `value` is a class made by `entityOf`, or one extending it.
+
+### isIdStrategy
+
+*function* · tier: stable · `import { isIdStrategy } from "@afora/core"`
+
+Whether `value` is an id strategy, made by `idOf`.
+
+### isIdValue
+
+*function* · tier: stable · `import { isIdValue } from "@afora/core"`
+
+Whether `value` can be an id: a string, or a finite number.
 
 ### isOutput
 

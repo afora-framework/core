@@ -12,7 +12,9 @@ import type {
 	OptionalBlueprintList,
 	OptionalRecord,
 } from "../../core/blueprint/types/blueprint.interface";
+import type { EntityIdStrategy } from "../../core/entity/abstract-entity";
 import type { EntityIdentityKey } from "../../core/entity/types/entity.interface";
+import type { IdStrategy } from "../../core/entity/types/id.interface";
 import type { EntityVersion } from "../../core/entity/version";
 import type { OptionalProperty } from "../../core/property/types/optional-property.type";
 import type { AnyPropertyConstructor } from "../../core/property/types/property-collection.type";
@@ -345,6 +347,18 @@ type LeftOut<Options> =
 	| (Options extends { readonly omit: readonly (infer Key)[] } ? Key : never)
 	| (Options extends { readonly values: infer Values } ? keyof Values : never);
 
+/**
+ * `"id"` when the entity does not make its id (a natural key, an `idOf`
+ * with no `generate`), so that `create` takes it.
+ */
+type NaturalIdKey<Repository> =
+	EntityOf<Repository> extends {
+		// biome-ignore lint/suspicious/noExplicitAny: any property
+		readonly [EntityIdStrategy]: IdStrategy<any, false>;
+	}
+		? "id"
+		: never;
+
 /** `"version"` for a versioned entity, whose `version` is part of its identity. */
 type VersionKey<Repository> =
 	Props<Repository> extends {
@@ -355,15 +369,15 @@ type VersionKey<Repository> =
 
 /** The input of `create`: the keys of the entity, an entity it holds by `<key>Id`. */
 type CreateInput<Repository, Options> = {
-	readonly [Key in KeyOf<Repository> as Key extends
-		| LeftOut<Options>
-		| VersionKey<Repository>
-		? never
-		: Props<Repository>[Key] extends AnyRepositoryEntity
-			? `${Key}Id`
-			: HoldsEntity<Props<Repository>[Key]> extends true
-				? never
-				: Key]: Props<Repository>[Key] extends AnyRepositoryEntity
+	readonly [Key in KeyOf<Repository> as Key extends "id"
+		? NaturalIdKey<Repository>
+		: Key extends LeftOut<Options> | VersionKey<Repository>
+			? never
+			: Props<Repository>[Key] extends AnyRepositoryEntity
+				? `${Key}Id`
+				: HoldsEntity<Props<Repository>[Key]> extends true
+					? never
+					: Key]: Props<Repository>[Key] extends AnyRepositoryEntity
 		? FieldAt<PropertiesOf<Props<Repository>[Key]>, "id">
 		: Props<Repository>[Key];
 };

@@ -1,3 +1,4 @@
+import type { IdValue } from "../../entity/types/id.interface";
 import type { Issue } from "../../parse/types/parse.interface";
 
 /**
@@ -118,7 +119,7 @@ export interface SchemaMigrationOptions {
 
 /** A row `app.migrate` cannot bring up to the current shape. */
 export interface SchemaMigrationInvalidRow {
-	readonly id: string;
+	readonly id: IdValue;
 	/** Why: the issues of the parse, or one for an error of the upgrade. */
 	readonly issues: readonly Issue[];
 }

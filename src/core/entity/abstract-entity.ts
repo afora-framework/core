@@ -25,6 +25,7 @@ import type {
 	EntityIdentityKey,
 	EntityStorageSettings,
 } from "./types/entity.interface";
+import type { IdValue } from "./types/id.interface";
 
 /** The keys every entity has, which only the entity itself changes. */
 export const ENTITY_IDENTITY_KEYS: readonly EntityIdentityKey[] = Object.freeze(
@@ -49,6 +50,12 @@ export const RESERVED_ENTITY_KEYS: readonly string[] = Object.freeze([
 
 /** How the entities of a class make their id and timestamps, set by `entityOf`. */
 export const EntityClock = Symbol("entityClock");
+
+/**
+ * The id strategy of a class made by `entityOf` with an `id` option (made by
+ * `idOf`); a class without one has none.
+ */
+export const EntityIdStrategy = Symbol("entityIdStrategy");
 
 /** The unique keys of a class made by `entityOf`, as `options.unique` lists them. */
 export const EntityUniqueKeys = Symbol("entityUniqueKeys");
@@ -120,9 +127,12 @@ export function storeEntityVersion(entity: object, version: number): void {
 	);
 }
 
-/** What the statics of a class made by `entityOf` hold under `EntityClock`. */
-interface EntityClockSettings {
-	readonly generateId: () => string;
+/**
+ * What the statics of a class made by `entityOf` hold under `EntityClock`;
+ * an entity whose id is a natural key has no `generateId`.
+ */
+export interface EntityClockSettings {
+	readonly generateId: (() => unknown) | undefined;
 	readonly now: () => string;
 	/** When what the two above make is known to be valid (see `MakesValid`). */
 	readonly makesValid?: ValidMakers;
@@ -158,12 +168,12 @@ export const EntityComplete = Symbol("entityComplete");
  * checked.
  */
 export function completeOf(
-	clock: { readonly generateId: () => string; readonly now: () => string },
+	clock: EntityClockSettings,
 	lifetime: number | undefined,
 ): Complete {
 	return (handled) => {
 		if (handled.createdAt === undefined) handled.createdAt = clock.now();
-		if (handled.id === undefined) handled.id = clock.generateId();
+		if (handled.id === undefined) handled.id = clock.generateId?.();
 		if (lifetime !== undefined && handled[EXPIRES_AT] === undefined) {
 			const created = handled.createdAt;
 			const start = typeof created === "string" ? Date.parse(created) : NaN;
@@ -178,10 +188,22 @@ export function completeOf(
 
 /** The identity of `entity`, as its members expose it. */
 function identityOf(entity: object): {
-	readonly id: string;
+	readonly id: IdValue;
 	readonly deletedAt?: string;
 } {
-	return entity as { readonly id: string; readonly deletedAt?: string };
+	return entity as { readonly id: IdValue; readonly deletedAt?: string };
+}
+
+/**
+ * Whether the entities of `entityClass` make their own id when built without
+ * one; not those whose id is a natural key (an `idOf` with no `generate`).
+ */
+export function generatesIds(entityClass: unknown): boolean {
+	return (
+		typeof entityClass === "function" &&
+		typeof (entityClass as unknown as Partial<Clocked>)[EntityClock]
+			?.generateId === "function"
+	);
 }
 
 /** How the class of `entity` makes its id and timestamps. */
@@ -269,7 +291,8 @@ function withIdentity(
 		createdAt: undefined,
 		...value,
 	};
-	identity.id = id === undefined && !idLater ? clock.generateId() : id;
+	// Without a generator, a missing id stays missing, for the record to report.
+	identity.id = id === undefined && !idLater ? clock.generateId?.() : id;
 	identity.createdAt = created;
 	if (unversioned) identity[ENTITY_VERSION_KEY] = 1;
 	if (expiring && !expiresLater) {

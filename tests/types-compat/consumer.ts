@@ -9,9 +9,13 @@ import {
 	eventOf,
 	exceptionOf,
 	guard,
+	type IdValue,
 	type InMemoryProvider,
+	Integer,
+	idOf,
 	inMemoryProvider,
 	type JsonValue,
+	Key,
 	listOf,
 	Meta,
 	openapi,
@@ -429,7 +433,7 @@ providerContract(runner, makeProvider, { transactions: false });
 const wrapped = wrapProvider(inMemoryProvider(), {
 	async around(call, next) {
 		if (call.operation === "remove") {
-			const id: string = call.args[0];
+			const id: IdValue = call.args[0];
 			void id;
 		}
 		return next();
@@ -706,3 +710,19 @@ useCaseOf({
 	// @ts-expect-error a route has no such method
 	route: { method: "head" },
 });
+
+// Per-entity id strategies: the id type follows the strategy; a natural key is required.
+class Setting extends entityOf(
+	blueprintOf((ctx) => ({ value: ctx.string })),
+	{ id: Key },
+) {}
+export const settingId: string = new Setting({ id: "seo", value: "on" }).id;
+// @ts-expect-error: the input of an entity with a natural key holds its id.
+new Setting({ value: "on" });
+class Ticket extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{
+		id: idOf(Integer, () => 1),
+	},
+) {}
+export const ticketId: number = new Ticket({ title: "a" }).id;

@@ -166,13 +166,13 @@ Every method that changes a key goes through the record's `set`, so on an entity
 | `Publishable`     | `ctx.publishable`     | `publishedAt?` (a `DateTime`)            | `publish(at?)`, `unpublish()`, `isPublished`     | `publish`, `unpublish`            |
 | `Archivable`      | `ctx.archivable`      | `archivedAt?` (a `DateTime`)             | `archive(at?)`, `restore()`, `isArchived`        | `archive`, `unarchive`            |
 | `Taggable`        | `ctx.taggable`        | `tags?` (a list of strings)              | `tag(...tags)`, `untag(...tags)`, `hasTag(tag)`  | `tag`, `untag`                    |
-| `Ownable`         | `ctx.ownable`         | `ownerId` (an `Id`)                      | `isOwnedBy(id)`, `transferTo(id)`                | the `owner` option of any of them |
+| `Ownable`         | `ctx.ownable`         | `ownerId` (an `OwnerId`)                 | `isOwnedBy(id)`, `transferTo(id)`                | the `owner` option of any of them |
 | `Authenticatable` | `ctx.authenticatable` | `email` (unique), `password` (sensitive) | `change.password(hash)`, `verifyPassword(plain)` | `register`, `login`               |
 
 - **`Publishable`.** `publishedAt` is absent while the record is a draft. `publish(at?)` sets it, to now when `at` is not given, `unpublish()` clears it, and `isPublished` tells which.
 - **`Archivable`.** `archivedAt` is absent while the record is active; `archive(at?)` sets it, `restore()` clears it, `isArchived` tells. It is not soft deletion: an archived entity is still found by every query, and an entity's own `deletedAt` is what `delete` sets on a soft-deleting repository.
 - **`Taggable`.** `tag(...tags)` adds each tag the record does not have yet, so each tag is kept once; `untag(...tags)` removes them; `hasTag(tag)` tells.
-- **`Ownable`.** `ownerId` is the id of who owns the record. `isOwnedBy(id)` compares it, whatever the case of `id`, and `transferTo(id)` changes it. The `owner` option of the standard use cases reads `ownerId` by default.
+- **`Ownable`.** `ownerId` is the id of who owns the record, an `OwnerId`: the id of an entity of any id strategy (text of 1 to 256 characters, a UUID kept in lower case, or a positive integer). `isOwnedBy(id)` compares it, a UUID whatever its case and a number by value (`1` and `"1"` are the same owner), and `transferTo(id)` changes it. The `owner` option of the standard use cases reads `ownerId` by default.
 - **`Authenticatable`.** `email` is unique, so the repository gets `findByEmail`; `password` is a `Password`, a sensitive argon2 hash, changed by `change.password(hash)`. `verifyPassword(plain)` tells whether a plain password matches it.
 
 ```ts
