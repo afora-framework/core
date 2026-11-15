@@ -302,7 +302,7 @@ describe("wrapProvider", () => {
 			async around(call, next) {
 				switch (call.operation) {
 					case "remove": {
-						const id: string = call.args[0];
+						const id: string | number = call.args[0];
 						expect(typeof id).toBe("string");
 						break;
 					}

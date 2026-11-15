@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 517 exports.
+Tier: stable. 518 exports.
 
 ### Access
 
@@ -1730,6 +1730,14 @@ An HTTP-style status by exception name.
 *const* · tier: stable · `import { Ownable } from "@afora/core"`
 
 An `ownerId`, with `isOwnedBy` and `transferTo`.
+
+### OwnerId
+
+*class* · tier: stable · `import { OwnerId } from "@afora/core"`
+
+The id of an entity of any id strategy, held by another record (as
+`ownerId`): text of 1 to 256 characters, a UUID kept in lower case, or a
+positive integer.
 
 ### ParseResult
 
