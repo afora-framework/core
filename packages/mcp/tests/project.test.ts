@@ -548,6 +548,8 @@ describe("the project boundary", () => {
 			// Node and Bun resolve an import as a URL: "\\" is "/".
 			"./a\\..\\..\\..\\..\\outside\\x.ts",
 			"./%2e%2e/%2e%2e/%2e%2e/outside/x.ts",
+			// A URL reads "?" as a query: this loads ../../../evil.ts.
+			"../../../evil.ts?/../project/x.ts",
 			"child_process",
 			"fs",
 		]) {
@@ -619,9 +621,40 @@ describe("the project boundary", () => {
 		}
 	});
 
+	test("a spec extended inside the project cannot extend outside it", async () => {
+		const { dir, client } = await setup();
+		const outside = join(dir, "..", `nested-${Date.now()}`);
+		await mkdir(outside, { recursive: true });
+		projects.push(outside);
+		await writeFile(
+			join(outside, "afora.json"),
+			JSON.stringify({ version: 1, blueprints: { Secret: { fields: {} } } }),
+		);
+		await mkdir(join(dir, "shared"));
+		await writeFile(
+			join(dir, "shared/afora.json"),
+			JSON.stringify({
+				version: 1,
+				extends: [`../../${outside.split("/").pop()}`],
+			}),
+		);
+		const result = await client.call("afora_spec_write", {
+			spec: spec({
+				extends: ["./shared"],
+				records: { R: { fields: { s: "Secret" } } },
+			}),
+		});
+		expect(result.data.written).toBe(false);
+		const codes = result.data.issues.map(
+			(issue: { code: string }) => issue.code,
+		);
+		expect(codes).toContain("unresolved_extends");
+		expect(codes).toContain("unknown_type");
+	});
+
 	test("output.dir cannot be node_modules or .git", async () => {
 		const { client } = await setup();
-		for (const dir of ["node_modules/pkg", ".git/hooks"]) {
+		for (const dir of ["node_modules/pkg", ".git/hooks", "Node_Modules/x"]) {
 			const result = await client.call("afora_spec_write", {
 				spec: spec({ output: { dir } }),
 			});
