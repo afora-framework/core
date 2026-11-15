@@ -1539,13 +1539,13 @@ exports[`exports of the package and their declarations 1`] = `
     "export type PropertyValue<SchemaType extends TSchema, Value = Static<SchemaType>> = SchemaType extends TOptional<TSchema> ? Value | undefined : Value;",
   ],
   "ProviderCall": [
-    "export type ProviderCall<Environment = unknown> = { readonly [Operation in ProviderOperation]: { readonly operation: Operation; readonly context: RepositoryContext<Environment>; readonly args: ProviderArgsOf<NonNullable<IRepositoryProvider<Environment>[Operation]>>; }; }[ProviderOperation];",
+    "export type ProviderCall<Environment = unknown, Operation extends ProviderOperation = ProviderOperation> = { readonly [Key in Operation]: { readonly operation: Key; readonly context: RepositoryContext<Environment>; readonly args: ProviderArgsOf<NonNullable<IRepositoryProvider<Environment>[Key]>>; }; }[Operation];",
   ],
   "ProviderFactory": [
     "export interface ProviderFactory<Environment extends EnvironmentDependencies = EnvironmentDependencies> { readonly [Kind]: "provider-factory"; readonly environments: readonly AnyEnvironment[]; readonly create: (env: MergedEnvironment<Environment>) => IRepositoryProvider | Promise<IRepositoryProvider>; readonly withContext: boolean; }",
   ],
   "ProviderInterceptor": [
-    "export interface ProviderInterceptor<Environment = unknown> { around(call: ProviderCall<Environment>, next: () => Promise<unknown>): Promise<unknown>; }",
+    "export interface ProviderInterceptor<Environment = unknown> { around<Operation extends ProviderOperation>(call: ProviderCall<Environment>, next: () => Promise<ProviderResults[Operation]>): Promise<ProviderResults[Operation]>; }",
   ],
   "ProviderNotBound": [
     "ProviderNotBound: import("../../index.js").DeclaredExceptionClass<{ readonly provider: string; }>",
@@ -1558,6 +1558,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "ProviderOptions": [
     "export type ProviderOptions = Readonly<Record<string, ProviderOption>>;",
+  ],
+  "ProviderResults": [
+    "export type ProviderResults = { readonly [Operation in ProviderOperation]: Awaited<ReturnType<NonNullable<IRepositoryProvider[Operation]>>>; };",
   ],
   "ProviderSettings": [
     "export interface ProviderSettings<Options extends ProviderOptions = ProviderOptions, Provider extends IRepositoryProvider = IRepositoryProvider> { readonly name: string; readonly options?: Options; readonly create: (options: Options) => Provider; }",

@@ -1,3 +1,4 @@
+import { Kind } from "../symbols/kind";
 import { InvalidRepositoryDeclaration } from "./exceptions";
 import { inheritProviderDescription } from "./provider";
 import type { IRepositoryProvider } from "./types/repository.interface";
@@ -51,20 +52,22 @@ function membersOf(provider: object): Map<PropertyKey, PropertyDescriptor> {
  * each operation `provider` has (through `interceptor`, when given), its
  * `transaction` (whose provider is wrapped the same way) and `close`, a live
  * `capabilities`, and its other members (methods bound to it, values read
- * live). A key `target` already has is left as it is.
+ * live, unless `members` is false). A key `target` already has is left as
+ * it is.
  * @internal
  */
 export function forwardProvider(
 	target: Record<PropertyKey, unknown>,
 	provider: IRepositoryProvider,
 	interceptor?: ProviderInterceptor<never>,
+	members = true,
 ): void {
 	const inner = provider as unknown as Record<PropertyKey, unknown>;
 	const define = (key: PropertyKey, descriptor: PropertyDescriptor) => {
 		if (!Object.hasOwn(target, key))
 			Object.defineProperty(target, key, { enumerable: true, ...descriptor });
 	};
-	for (const [key, descriptor] of membersOf(provider)) {
+	for (const [key, descriptor] of members ? membersOf(provider) : []) {
 		if (HANDLED.has(key)) continue;
 		const value = descriptor.get ? undefined : descriptor.value;
 		define(
@@ -85,8 +88,12 @@ export function forwardProvider(
 								context,
 								args: Object.freeze(args),
 							} as never,
-							async () =>
-								(inner[operation] as Callable).call(provider, context, ...args),
+							(async () =>
+								(inner[operation] as Callable).call(
+									provider,
+									context,
+									...args,
+								)) as never,
 						)
 				: (...args: unknown[]) =>
 						(inner[operation] as Callable).apply(provider, args),
@@ -118,6 +125,11 @@ export function forwardProvider(
  * `transaction` gives is wrapped with the same interceptor; `close` is
  * forwarded as it is. Wraps compose: the last one runs first.
  *
+ * The wrapper is a plain frozen object (`instanceof` the class of
+ * `provider` is false) and the other members are bound when it is made.
+ * `around` must give what `next()` gives (or another value of the
+ * operation's result, `ProviderResults[operation]`).
+ *
  * @example
  * import { inMemoryProvider, wrapProvider } from "@afora/core";
  *
@@ -131,7 +143,7 @@ export function forwardProvider(
  *     }
  *   },
  * });
- * @throws {@link InvalidRepositoryDeclaration} when `provider` is not an object or `interceptor.around` is not a function.
+ * @throws {@link InvalidRepositoryDeclaration} when `provider` is not an object or is a provider of `providersOf`, or `interceptor.around` is not a function.
  */
 export function wrapProvider<Provider extends IRepositoryProvider>(
 	provider: Provider,
@@ -141,6 +153,14 @@ export function wrapProvider<Provider extends IRepositoryProvider>(
 		throw new InvalidRepositoryDeclaration({
 			source: "wrapProvider",
 			details: { reason: "Expected a repository provider." },
+		});
+	if ((provider as { readonly [Kind]?: unknown })[Kind] === "provider-slot")
+		throw new InvalidRepositoryDeclaration({
+			source: "wrapProvider",
+			details: {
+				reason:
+					"A provider of providersOf cannot be wrapped: wrap the provider before giving it to providersOf, or the one providerFrom's create gives.",
+			},
 		});
 	if (typeof interceptor?.around !== "function")
 		throw new InvalidRepositoryDeclaration({

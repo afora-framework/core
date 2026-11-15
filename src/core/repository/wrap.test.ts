@@ -14,6 +14,7 @@ import {
 	type ProviderCall,
 	type ProviderInterceptor,
 	type ProviderOperation,
+	providersOf,
 	wrapProvider,
 } from "../../index";
 import { providerContract } from "../../testing";
@@ -82,7 +83,9 @@ describe("wrapProvider", () => {
 	test("passes the value of next through, and around may replace it or the error", async () => {
 		const provider = wrapProvider(inMemoryProvider(), {
 			async around({ operation }, next) {
-				if (operation === "count") return 42;
+				// Replacing a result takes a cast: only next() gives the operation's type.
+				if (operation === "count")
+					return 42 as Awaited<ReturnType<typeof next>>;
 				try {
 					return await next();
 				} catch {
@@ -225,6 +228,33 @@ describe("wrapProvider", () => {
 		});
 	});
 
+	test("rejects a provider of providersOf, which only an application binds", () => {
+		const Providers = providersOf({ main: inMemoryProvider() });
+		expect(() => wrapProvider(Providers.main, passthrough)).toThrow(
+			InvalidRepositoryDeclaration,
+		);
+		expect(() => wrapProvider(Providers.main, passthrough)).toThrow(
+			/providersOf cannot be wrapped/,
+		);
+		// Wrapping the provider before giving it to providersOf works.
+		const Wrapped = providersOf({
+			main: wrapProvider(inMemoryProvider(), passthrough),
+		});
+		expect(typeof Wrapped.main.findOne).toBe("function");
+	});
+
+	test("a slot of providersOf forwards only the operations and capabilities", () => {
+		const inner = { ...inMemoryProvider(), label: "x", extra: () => 1 };
+		const slot = providersOf({ main: inner }).main as unknown as Record<
+			string,
+			unknown
+		>;
+		expect("label" in slot).toBe(false);
+		expect("extra" in slot).toBe(false);
+		expect(typeof slot.findOne).toBe("function");
+		expect(slot.capabilities).toBe(inner.capabilities);
+	});
+
 	test("rejects what is not a provider or an interceptor", () => {
 		expect(() => wrapProvider(null as never, passthrough)).toThrow(
 			InvalidRepositoryDeclaration,
@@ -290,6 +320,12 @@ describe("wrapProvider", () => {
 					}
 				}
 				return next();
+			},
+		});
+		wrapProvider(inMemoryProvider(), {
+			// @ts-expect-error around must give what next() gives
+			async around(_call, next) {
+				await next();
 			},
 		});
 		const typed = wrapProvider({} as IRepositoryProvider<{ url: string }>, {

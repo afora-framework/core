@@ -405,6 +405,7 @@ export type {
 	ProviderCall,
 	ProviderInterceptor,
 	ProviderOperation,
+	ProviderResults,
 } from "./core/repository/types/wrap.interface";
 export { wrapProvider } from "./core/repository/wrap";
 export type {

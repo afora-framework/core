@@ -480,10 +480,12 @@ const traced = wrapProvider(inMemoryProvider(), {
 });
 ```
 
-- The result has the type of `provider` (an `InMemoryProvider` stays one), with no cast.
+- The result is typed as `provider` (an `InMemoryProvider` stays one), with no cast. It is a plain frozen object with the same members, not an instance of the class of `provider` (`instanceof` is false), and the members other than the operations are bound to `provider` when it is wrapped.
+- `around` must give what `next()` gives: `next()` is typed with the result of the operation (`ProviderResults`), so forgetting `return` is a type error. Replacing the result takes a cast, `value as Awaited<ReturnType<typeof next>>`, and the value must be what the operation gives (a list for `findMany`, a number for `count`).
 - `operation` is a `ProviderOperation`: `findOne`, `findMany`, `insert`, `update`, `remove`, `count`, `increment` or `migrate`, the operations that take a context. `args` is typed by operation, so a `switch` on it is exhaustive and narrows `args` (`remove` gives `[id]`). They are a `ProviderCall`; the interceptor is a `ProviderInterceptor`.
 - It has the operations `provider` has and no other: `increment`, `migrate`, `transaction` and `close` stay absent when it has none, so what a repository accepts does not change.
 - `capabilities` is read from `provider` on each access, and its other members (methods bound to it, values) are kept. A provider of `providerOf` keeps its name and options.
+- A provider of `providersOf` (`Providers.main`) cannot be wrapped (`InvalidRepositoryDeclaration`): only an application binds it. Wrap the provider before giving it to `providersOf`, or the one `providerFrom`'s `create` gives.
 - The provider a `transaction` gives is wrapped with the same interceptor, so the operations run inside it go through `around` too. `transaction` itself and `close` take no context and are forwarded as they are.
 - Wraps compose, the last one outermost: in `wrapProvider(wrapProvider(dynamo, logs), spans)`, `spans` runs first and its `next()` runs `logs`.
 

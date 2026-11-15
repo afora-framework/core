@@ -88,7 +88,7 @@ function slotOf(
 			enumerable: true,
 		});
 	} else {
-		forwardProvider(slot, value);
+		forwardProvider(slot, value, undefined, false);
 	}
 	Object.freeze(slot);
 	slots.set(slot, { key, storage, value });
