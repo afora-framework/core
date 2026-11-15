@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Security: the project boundary (#69)
+
+- Every tool that validates, writes or generates refuses with `outside_project` what `@afora/codegen` now reports: an `import` or `extends` through a package path with a `.` or `..` segment, a backslash, a percent-encoded character, a built-in module (`child_process`, `fs`, `bun`) or a symlink that leaves the project, and an `output.dir` in `node_modules` or `.git`. An `extends` refused this way is not read.
+- `afora_generate` runs `bunx --no-install tsc`: a project without TypeScript no longer makes it fetch the `tsc` package of the registry and run it.
+
 - The guide and the tool descriptions cover the top-level `services` of a spec (#115): a use case dependency that names a service, the factory of each as an import, and `services.<name>` among the `imports` of `afora_extract`.
 
 ### `params` on a `run` step

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type Connected, connect, makeProject, removeProject } from "./project";
 
@@ -536,6 +536,101 @@ describe("the project boundary", () => {
 			code: "outside_project",
 			path: ["extends", 0],
 		});
+	});
+
+	test("a package specifier, a built-in module or a backslash cannot be used to leave the project", async () => {
+		const { client } = await setup({
+			"node_modules/pkg/package.json": '{"name":"pkg","version":"1.0.0"}',
+		});
+		for (const module of [
+			// From node_modules/pkg, three levels up is outside the project.
+			"pkg/../../../outside/x.ts",
+			// Node and Bun resolve an import as a URL: "\\" is "/".
+			"./a\\..\\..\\..\\..\\outside\\x.ts",
+			"./%2e%2e/%2e%2e/%2e%2e/outside/x.ts",
+			"child_process",
+			"fs",
+		]) {
+			const result = await client.call("afora_spec_write", {
+				spec: spec({
+					useCases: {
+						Run: {
+							input: "A",
+							response: "A",
+							implementation: {
+								steps: [
+									{
+										run: "go",
+										fn: { import: `${module}#go` },
+										args: ["$input.x"],
+										params: { fields: { x: "text" } },
+										as: "out",
+									},
+									{ return: "$input" },
+								],
+							},
+						},
+					},
+				}),
+			});
+			expect(result.data.written).toBe(false);
+			expect(
+				result.data.issues.map((issue: { code: string; path: string[] }) => [
+					issue.code,
+					issue.path.join("."),
+				]),
+			).toEqual([
+				["outside_project", "useCases.Run.implementation.steps.0.fn.import"],
+			]);
+		}
+	});
+
+	test("an extends through a package path or a symlink that leaves the project is not read", async () => {
+		const { dir, client } = await setup({
+			"node_modules/pkg/package.json": '{"name":"pkg","version":"1.0.0"}',
+		});
+		const outside = join(dir, "..", `outside-${Date.now()}`);
+		await mkdir(outside, { recursive: true });
+		projects.push(outside);
+		await writeFile(
+			join(outside, "afora.json"),
+			JSON.stringify({ version: 1, blueprints: { Secret: { fields: {} } } }),
+		);
+		await symlink(outside, join(dir, "shared"));
+		for (const reference of [
+			`pkg/../../../${outside.split("/").pop()}`,
+			"./shared",
+		]) {
+			const result = await client.call("afora_spec_write", {
+				spec: spec({
+					extends: [reference],
+					records: { R: { fields: { s: "Secret" } } },
+				}),
+			});
+			expect(result.data.written).toBe(false);
+			expect(result.data.issues[0]).toMatchObject({
+				code: "outside_project",
+				path: ["extends", 0],
+			});
+			// "Secret" was not read from outside.
+			expect(
+				result.data.issues.map((issue: { code: string }) => issue.code),
+			).toContain("unknown_type");
+		}
+	});
+
+	test("output.dir cannot be node_modules or .git", async () => {
+		const { client } = await setup();
+		for (const dir of ["node_modules/pkg", ".git/hooks"]) {
+			const result = await client.call("afora_spec_write", {
+				spec: spec({ output: { dir } }),
+			});
+			expect(result.data.written).toBe(false);
+			expect(result.data.issues[0]).toMatchObject({
+				code: "outside_project",
+				path: ["output", "dir"],
+			});
+		}
 	});
 
 	test("a spec edited by hand cannot make the generator import from outside", async () => {
