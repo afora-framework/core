@@ -1,6 +1,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { issue } from "./scope";
 import type { SpecIssue } from "./spec/types";
 
@@ -35,6 +36,26 @@ function realWithin(path: string): string {
 /** The directories a generated file never goes in: dependencies and version control. */
 const TOOLING_DIRS = new Set(["node_modules", ".git"]);
 
+/** Whether `path` has a segment naming a tooling directory, in any case (APFS and NTFS ignore it). */
+const inTooling = (path: string) =>
+	path.split(/[\\/]/).some((part) => TOOLING_DIRS.has(part.toLowerCase()));
+
+/**
+ * Where a runtime loads the relative module `module` from `from`: Node and
+ * Bun resolve it as a URL, which reads `?` as a query, `#` as a fragment,
+ * `\\` as `/` and `%2e%2e` as `..`, none of which `path.resolve` does.
+ */
+function urlTarget(from: string, module: string): string | undefined {
+	try {
+		const url = new URL(module, pathToFileURL(`${from}${sep}`));
+		url.search = "";
+		url.hash = "";
+		return fileURLToPath(url);
+	} catch {
+		return undefined;
+	}
+}
+
 /**
  * Why a module cannot be trusted to mean what `path.resolve` says it means.
  * A runtime resolves a relative module as a URL, where a backslash is a `/`
@@ -44,6 +65,8 @@ const TOOLING_DIRS = new Set(["node_modules", ".git"]);
 function specifierProblem(module: string): string | undefined {
 	if (module.includes("\\")) return "has a backslash";
 	if (module.includes("%")) return "has a percent-encoded character";
+	if (/[?#]/.test(module))
+		return 'has a "?" or "#", which a URL reads as a query or a fragment';
 	// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what is refused
 	if (/[\u0000-\u001f\u007f]/.test(module)) return "has a control character";
 	return undefined;
@@ -96,13 +119,27 @@ export function projectBoundaryIssues(
 	spec: unknown,
 	root: string,
 ): SpecIssue[] {
+	return boundaryIssues(spec, root, root);
+}
+
+/**
+ * `projectBoundaryIssues` for a spec whose file is in `specDir` (a spec it
+ * extends): its `extends` and output directory resolve from there, and
+ * nothing may leave `root`.
+ */
+export function boundaryIssues(
+	spec: unknown,
+	root: string,
+	specDir: string,
+): SpecIssue[] {
 	const issues: SpecIssue[] = [];
 	if (typeof spec !== "object" || spec === null) return issues;
 	const base = resolve(root);
 	const realBase = realWithin(base);
+	const home = resolve(base, specDir);
 	const given = (spec as { output?: { dir?: unknown } }).output?.dir;
 	const outputDir = resolve(
-		base,
+		home,
 		typeof given === "string" ? given : DEFAULT_OUTPUT_DIR,
 	);
 
@@ -137,7 +174,8 @@ export function projectBoundaryIssues(
 			return;
 		}
 		const target = resolve(from, module);
-		if (!inside(base, target)) {
+		const loaded = urlTarget(from, module);
+		if (!inside(base, target) || !loaded || !inside(base, loaded)) {
 			issues.push(
 				issue(
 					path,
@@ -145,7 +183,10 @@ export function projectBoundaryIssues(
 					`${what} "${module}" is outside the project directory.`,
 				),
 			);
-		} else if (!inside(realBase, realWithin(target))) {
+		} else if (
+			!inside(realBase, realWithin(target)) ||
+			!inside(realBase, realWithin(loaded))
+		) {
 			issues.push(
 				issue(
 					path,
@@ -159,8 +200,13 @@ export function projectBoundaryIssues(
 	// An output.dir that climbs out (`..`, absolute) is `invalid_output` of
 	// validateSpec; what only the disk or the project's layout tells is here.
 	if (typeof given === "string" && inside(base, outputDir)) {
-		const tooling = given.split(/[\\/]/).some((part) => TOOLING_DIRS.has(part));
-		if (tooling || !inside(realBase, realWithin(outputDir))) {
+		const real = realWithin(outputDir);
+		const escapes = !inside(realBase, real);
+		// The directory as written, and where it really is: a link to node_modules counts.
+		const tooling =
+			inTooling(relative(base, outputDir)) ||
+			(!escapes && inTooling(relative(realBase, real)));
+		if (tooling || escapes) {
 			issues.push(
 				issue(
 					["output", "dir"],
@@ -177,7 +223,7 @@ export function projectBoundaryIssues(
 	if (Array.isArray(references)) {
 		for (const [index, reference] of references.entries()) {
 			if (typeof reference === "string") {
-				check(reference, base, ["extends", index], "The extended spec");
+				check(reference, home, ["extends", index], "The extended spec");
 			}
 		}
 	}

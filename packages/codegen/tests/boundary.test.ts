@@ -1,8 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { projectBoundaryIssues } from "../src";
+import { projectBoundaryIssues, resolveExtended, SpecLoadError } from "../src";
 
 const root = "/work/project";
 const at = (spec: unknown) =>
@@ -102,6 +102,20 @@ describe("projectBoundaryIssues", () => {
 		]);
 	});
 
+	test("refuses what a URL reads as a query or a fragment", () => {
+		// path.resolve sees a folder named "evil.ts?"; a runtime loads ../../../evil.ts.
+		expect(
+			at({
+				provider: { import: "../../../evil.ts?/../project/x.ts#pwn" },
+				extends: ["./a?/../b", "./a#/../b"],
+			}),
+		).toEqual([
+			"outside_project@extends.0",
+			"outside_project@extends.1",
+			"outside_project@provider.import",
+		]);
+	});
+
 	test("refuses modules built into the runtime", () => {
 		const step = (module: string) => ({
 			useCases: {
@@ -123,7 +137,14 @@ describe("projectBoundaryIssues", () => {
 		expect(at({ output: { dir: "src/gen" } })).toEqual([]);
 		// Climbing out is `invalid_output`, reported by validateSpec.
 		expect(at({ output: { dir: "../x" } })).toEqual([]);
-		for (const dir of ["node_modules/pkg", ".git/hooks", "src/.git"]) {
+		for (const dir of [
+			"node_modules/pkg",
+			".git/hooks",
+			"src/.git",
+			// APFS and NTFS ignore case.
+			"Node_Modules/x",
+			".GIT/hooks",
+		]) {
 			expect(at({ output: { dir } })).toEqual(["outside_project@output.dir"]);
 		}
 	});
@@ -158,6 +179,14 @@ describe("projectBoundaryIssues", () => {
 					({ path }) => path.join("."),
 				),
 			).toEqual(["output.dir"]);
+			// A link to node_modules is node_modules.
+			await mkdir(join(project, "node_modules/pkg"), { recursive: true });
+			await symlink(join(project, "node_modules/pkg"), join(project, "gen"));
+			expect(
+				projectBoundaryIssues({ output: { dir: "gen" } }, project).map(
+					({ path }) => path.join("."),
+				),
+			).toEqual(["output.dir"]);
 			// A link that stays inside is fine.
 			await symlink(join(project, "src"), join(project, "lib"));
 			expect(
@@ -166,6 +195,52 @@ describe("projectBoundaryIssues", () => {
 					project,
 				),
 			).toEqual([]);
+		});
+	});
+
+	describe("nested extends, with a root", () => {
+		const dirs: string[] = [];
+		afterAll(() =>
+			Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true }))),
+		);
+
+		test("a spec extended inside the project cannot extend or import outside it", async () => {
+			const scratch = await mkdtemp(join(tmpdir(), "afora-nested-"));
+			dirs.push(scratch);
+			const project = join(scratch, "project");
+			await mkdir(join(project, "shared"), { recursive: true });
+			await mkdir(join(scratch, "outside"));
+			await writeFile(
+				join(scratch, "outside/afora.json"),
+				JSON.stringify({ version: 1, blueprints: { Secret: { fields: {} } } }),
+			);
+			const file = join(project, "afora.json");
+			const spec = { version: 1, extends: ["./shared"] };
+			const nested = (inner: unknown) =>
+				writeFile(join(project, "shared/afora.json"), JSON.stringify(inner));
+
+			await nested({ version: 1, extends: ["../../outside"] });
+			// Without a root, as the CLI on a trusted repository: followed.
+			expect(Object.keys(await resolveExtended(spec, file))).toEqual([
+				"./shared",
+			]);
+			const refused = resolveExtended(spec, file, { root: project });
+			await expect(refused).rejects.toBeInstanceOf(SpecLoadError);
+			await expect(refused).rejects.toThrow("extends.0");
+
+			await nested({
+				version: 1,
+				// From shared/src/domain, four levels up leaves the project.
+				provider: { import: "../../../../outside/db#provider" },
+			});
+			await expect(
+				resolveExtended(spec, file, { root: project }),
+			).rejects.toThrow("provider.import");
+
+			await nested({ version: 1, provider: { import: "../db#provider" } });
+			expect(
+				Object.keys(await resolveExtended(spec, file, { root: project })),
+			).toEqual(["./shared"]);
 		});
 	});
 });

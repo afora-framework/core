@@ -4,7 +4,7 @@
 
 ### Security
 
-- `@afora/codegen` and `@afora/mcp` (#69): `projectBoundaryIssues`, which `@afora/mcp` runs on every spec an agent sends, refuses (`outside_project`) the imports and `extends` that left the project or ran the runtime's own modules: `pkg/../../../x`, a backslash or percent-encoded `..` in a relative module, a built-in module such as `child_process`, a symlink out of the project, and an `output.dir` in `node_modules` or `.git`. `generate` keeps a `__proto__` key of a JSON value an own property. `afora_generate` runs `bunx --no-install tsc`. See `SECURITY.md`.
+- `@afora/codegen` and `@afora/mcp` (#69): `projectBoundaryIssues`, which `@afora/mcp` runs on every spec an agent sends, refuses (`outside_project`) the imports and `extends` that left the project or ran the runtime's own modules: `pkg/../../../x`, a backslash or percent-encoded `..` in a relative module, a `?` that a URL reads as a query, a built-in module such as `child_process`, a symlink out of the project, an `output.dir` in `node_modules` or `.git` (any case), and the same in a spec extended inside the project, at any depth (`resolveExtended(spec, file, { root })`). `generate` keeps a `__proto__` key of a JSON value an own property. `afora_generate` runs `bunx --no-install tsc`. See `SECURITY.md`.
 
 ### Spying on a provider (#121)
 

@@ -5,6 +5,8 @@
 ### Security: the project boundary (#69)
 
 - `projectBoundaryIssues` reports `outside_project` for the specifiers that escaped it: a package path with a `.` or `..` segment (`pkg/../../../x`, which resolves from `node_modules/pkg` to outside the project, for an `import` and for an `extends`), a backslash or a percent-encoded character in any module (Node and Bun resolve an import as a URL, so `./a\..\..\x` and `./%2e%2e/x` climb out although `path.resolve` keeps them inside on POSIX), control characters, a module built into the runtime (`child_process`, `fs`, `bun`: a `run` step could call `execSync`), a relative module or `extends` that goes through a symlink leaving the project, and an `output.dir` in `node_modules` or `.git`.
+- A relative module is also resolved as the URL a runtime loads, and must land inside the project: a `?` or `#` in a module is refused (`../../../evil.ts?/../project/x.ts` is a folder to `path.resolve` and `../../../evil.ts` to Node and Bun). The `node_modules` and `.git` check of `output.dir` ignores case (`Node_Modules`, `.GIT`) and also applies to where a symlinked `output.dir` really is.
+- `resolveExtended(spec, file, { root })`: with `root`, each spec reached by a path, at any depth, must pass the boundary check from its own directory (its `extends`, `import`s and `output.dir`), or `SpecLoadError` is thrown before what it extends is read. A spec reached as a package is not checked.
 - `generate` writes a `__proto__` key of a JSON value (a provider's options, say) as the computed key `["__proto__"]`, so it stays an own property, as `JSON.parse` gave it, instead of setting the prototype of the object.
 
 ### Services (#115)
