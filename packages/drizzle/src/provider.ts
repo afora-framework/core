@@ -253,13 +253,21 @@ function dataOf(
 }
 
 /**
- * The id the database assigned, as a number: a `bigint` or the text some
- * drivers give a `bigserial` become one.
+ * The id the database assigned, as a number when it is one without losing
+ * precision: a `bigint`, or the text some drivers give a `bigserial`.
+ * Beyond `Number.MAX_SAFE_INTEGER` it stays text, which the entity refuses
+ * (`UnsupportedIdentity`) rather than store an id rounded to another.
  */
 function assignedIdOf(value: unknown): unknown {
-	if (typeof value === "bigint") return Number(value);
-	if (typeof value === "string" && /^[0-9]+$/.test(value)) return Number(value);
-	return value;
+	const text =
+		typeof value === "bigint"
+			? String(value)
+			: typeof value === "string" && /^[0-9]+$/.test(value)
+				? value
+				: undefined;
+	if (text === undefined) return value;
+	const number = Number(text);
+	return Number.isSafeInteger(number) ? number : text;
 }
 
 function dataFromRow(row: Record<string, unknown>): RepositoryData {
@@ -585,6 +593,8 @@ function providerOver(
 			hooks.guard(async () => {
 				const mapping = mappingOf(settings, context);
 				const row = dataOf(mapping, data);
+				// The id never changes, and an identity column refuses to be set.
+				delete row[mapping.property.id as string];
 				const id = columnOf(mapping, "id");
 				const { expectedVersion: expected } = options;
 				const version =
