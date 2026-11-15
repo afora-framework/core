@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Serial ids (#122)
+
+- The guide names `"id": "serial"`, an integer the database assigns on `create`, and the providers that assign ids.
+
 - The guide and the tool descriptions cover the top-level `services` of a spec (#115): a use case dependency that names a service, the factory of each as an import, and `services.<name>` among the `imports` of `afora_extract`.
 
 ### `params` on a `run` step

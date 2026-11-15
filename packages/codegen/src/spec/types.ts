@@ -109,7 +109,8 @@ export interface RecordSpec {
 	/**
 	 * Entities only: how its ids are made. `uuid7` (the default) generates and
 	 * accepts UUID v7; `uuid` accepts any UUID version and generates v7; `key`
-	 * is a natural key (1 to 256 characters) the input must hold.
+	 * is a natural key (1 to 256 characters) the input must hold; `serial` is
+	 * a positive integer the database assigns on create.
 	 */
 	readonly id?: EntityIdSpec;
 	/** Entities only: a `version` identity key checked by `update`. */
@@ -125,7 +126,7 @@ export interface RecordSpec {
 }
 
 /** The id strategies a spec can name; `uuid7` is the default. */
-export type EntityIdSpec = "uuid7" | "uuid" | "key";
+export type EntityIdSpec = "uuid7" | "uuid" | "key" | "serial";
 
 /**
  * When the records of an entity expire: `after` a duration from `createdAt`

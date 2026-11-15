@@ -119,7 +119,8 @@ const expiryKeyOf = (context: RepositoryContext): string | undefined =>
 
 /**
  * The provider of `drizzleProvider`: it runs transactions, reads by cursor,
- * honors expected versions, increments atomically and leaves expired records out.
+ * honors expected versions, increments atomically, leaves expired records
+ * out and gives the ids the database assigns (`Serial`).
  */
 export type DrizzleProvider = IRepositoryProvider & {
 	readonly capabilities: {
@@ -128,6 +129,7 @@ export type DrizzleProvider = IRepositoryProvider & {
 		readonly versioning: true;
 		readonly atomic: true;
 		readonly expiry: true;
+		readonly generatedIds: true;
 	};
 };
 
@@ -248,6 +250,16 @@ function dataOf(
 	for (const [key, column] of Object.entries(mapping.columns))
 		row[mapping.property[key] as string] = toColumn(column, data[key]);
 	return row;
+}
+
+/**
+ * The id the database assigned, as a number: a `bigint` or the text some
+ * drivers give a `bigserial` become one.
+ */
+function assignedIdOf(value: unknown): unknown {
+	if (typeof value === "bigint") return Number(value);
+	if (typeof value === "string" && /^[0-9]+$/.test(value)) return Number(value);
+	return value;
 }
 
 function dataFromRow(row: Record<string, unknown>): RepositoryData {
@@ -532,6 +544,7 @@ function providerOver(
 			versioning: true,
 			atomic: true,
 			expiry: true,
+			generatedIds: true,
 		}),
 		findOne: (context, query = {}) =>
 			hooks.guard(async () => (await select(context, query, true))[0]),
@@ -551,9 +564,22 @@ function providerOver(
 				const mapping = mappingOf(settings, context);
 				const row = dataOf(mapping, data);
 				await assertUnique(context, mapping, data, false);
+				if (data.id === undefined) {
+					// The database assigns the id (an auto-increment, serial or
+					// identity column): the row goes without one.
+					delete row[mapping.property.id as string];
+					const [made] = (await write(context, mapping, () =>
+						exec
+							.insert(mapping.table)
+							.values(row)
+							.returning({ id: columnOf(mapping, "id") }),
+					)) as { readonly id: unknown }[];
+					return { id: assignedIdOf(made?.id) as string | number };
+				}
 				await write(context, mapping, () =>
 					exec.insert(mapping.table).values(row),
 				);
+				return undefined;
 			}),
 		update: (context, data, options = {}) =>
 			hooks.guard(async () => {

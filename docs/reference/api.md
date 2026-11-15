@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 529 exports.
+Tier: stable. 532 exports.
 
 ### Access
 
@@ -1137,8 +1137,9 @@ Makes a new id, as a UUID v7 string.
 *interface* · tier: stable · `import type { IdStrategy } from "@afora/core"`
 
 How the entities of one class get their id, made by `idOf`: `property`
-validates it, and `generate`, when `Generated`, makes it for an entity
-built without one.
+validates it, and `generate`, when `Generated` is `true`, makes it for an
+entity built without one. When `Generated` is `"database"` (`Serial`),
+the database assigns it: `repository.create` sets it on the entity.
 
 ### IdValue
 
@@ -1170,7 +1171,8 @@ A key of the identity of an entity is changed by `set`, or listed in
 *type* · tier: stable · `import type { InMemoryProvider } from "@afora/core"`
 
 The provider of `inMemoryProvider`: it runs transactions, reads by cursor,
-honors expected versions, increments atomically and leaves expired records out.
+honors expected versions, increments atomically, leaves expired records
+out and assigns `Serial` ids.
 
 ### IncompatibleRecordPlugin
 
@@ -2422,6 +2424,23 @@ The options of `select`.
 The type of a property declared `sensitive`, as `Password`, so that the
 type of `toJSON` masks the keys holding it.
 
+### Serial
+
+*const* · tier: stable · `import { Serial } from "@afora/core"`
+
+The `id` option of an entity whose id is a positive integer the database
+assigns as it stores the entity (an auto-increment, serial or identity
+column), e.g. `entityOf(Ticket, { id: Serial })`. A new entity has no id
+(`id` reads `undefined`) until `repository.create` stores it and sets the
+one the database gave; only a provider with `capabilities.generatedIds`
+can create it.
+
+### SerialKey
+
+*class* · tier: stable · `import { SerialKey } from "@afora/core"`
+
+A positive integer the database assigns: an auto-increment, serial or identity column.
+
 ### ServiceDeclaration
 
 *interface* · tier: stable · `import type { ServiceDeclaration } from "@afora/core"`
@@ -2854,6 +2873,15 @@ The entity, relations or environments of a repository are not registered in the 
 *const* · tier: stable · `import { UnregisteredUseCaseDependency } from "@afora/core"`
 
 A dependency of a use case of the application (a use case, repository or environment) is not registered in it.
+
+### UnsupportedIdentity
+
+*const* · tier: stable · `import { UnsupportedIdentity } from "@afora/core"`
+
+The entity has ids the database assigns (`Serial`) and the provider does
+not assign them (no `capabilities.generatedIds`), or gave no valid id for
+an entity it inserted; `source` is the repository name, or the
+application whose provider is made on start.
 
 ### UpdateMaker
 

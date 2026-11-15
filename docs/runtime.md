@@ -53,7 +53,7 @@ The hash it gives must be a PHC string of argon2 (`$argon2id$v=19$m=...,t=...,p=
 
 By default, `Id.generate()` and every entity that gets an `id` use a UUID v7 (RFC 9562): 48 bits of Unix milliseconds, then a counter for ids made in the same millisecond, then random bits. Ids sort in creation order, within one process too, which keeps database indexes compact and makes `findCursor` over `id` follow creation.
 
-An entity can take another id strategy of its own with the `id` option of `entityOf`: `Uuid` (any UUID version, still generated as v7), `Key` (a natural key the input must hold) or `idOf(property, generate?)`. See [Entities](entities.md#ids). The other entities keep UUID v7.
+An entity can take another id strategy of its own with the `id` option of `entityOf`: `Uuid` (any UUID version, still generated as v7), `Key` (a natural key the input must hold), `Serial` (a positive integer the database assigns on `create`, through a provider with `capabilities.generatedIds`) or `idOf(property, generate?)`. See [Entities](entities.md#ids). The other entities keep UUID v7. No runtime service makes a `Serial` id: the generator is not called for it.
 
 Replace the generator with `configure({ idGenerator })`. It makes the ids of the entities with the default id and of those declared with `Uuid`; for the default, its ids must still be UUID v7, since `Id` accepts nothing else. An id made by a generator you configured is validated as any value would be. In tests, a generator that counts makes ids you can predict:
 

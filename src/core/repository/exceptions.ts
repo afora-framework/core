@@ -150,3 +150,16 @@ export const InvalidRepositoryIncrement = exceptionOf({
 		readonly issues: readonly Issue[];
 	}) => reason,
 });
+
+/**
+ * The entity has ids the database assigns (`Serial`) and the provider does
+ * not assign them (no `capabilities.generatedIds`), or gave no valid id for
+ * an entity it inserted; `source` is the repository name, or the
+ * application whose provider is made on start.
+ */
+export const UnsupportedIdentity = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "UnsupportedIdentity",
+	message: ({ reason }: { readonly entity: string; readonly reason: string }) =>
+		reason,
+});

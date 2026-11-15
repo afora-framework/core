@@ -66,7 +66,9 @@ a file of your own.
   a 409, when someone else wrote the entity since it was read). No record member names
   (\`toJSON\`, \`set\`, \`onSet\`...); see \`reservedRecordKeys\` in the catalog. \`blueprint\` and \`options\` are valid fields.
 - An entity's ids are UUID v7 by default. \`"id": "uuid"\` accepts any UUID version (existing v4 rows) and still
-  generates v7; \`"id": "key"\` is a natural key (1 to 256 characters) the input of \`create\` must hold.
+  generates v7; \`"id": "key"\` is a natural key (1 to 256 characters) the input of \`create\` must hold;
+  \`"id": "serial"\` is a positive integer the database assigns on \`create\` (auto-increment, serial or identity column),
+  which needs a provider that assigns ids (in memory, Drizzle; not DynamoDB).
 - \`unique\`, \`sensitive\`, \`change\` must name fields (or keys of its plugins); \`change\` cannot name an identity key.
   \`password\` is always sensitive and \`slug\` always unique; \`id\` is always unique.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.

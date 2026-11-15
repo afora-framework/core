@@ -14,12 +14,13 @@ export type IdValueOf<Property> = Property extends {
 
 /**
  * How the entities of one class get their id, made by `idOf`: `property`
- * validates it, and `generate`, when `Generated`, makes it for an entity
- * built without one.
+ * validates it, and `generate`, when `Generated` is `true`, makes it for an
+ * entity built without one. When `Generated` is `"database"` (`Serial`),
+ * the database assigns it: `repository.create` sets it on the entity.
  */
 export interface IdStrategy<
 	Property extends AnyPropertyConstructor = AnyPropertyConstructor,
-	Generated extends boolean = boolean,
+	Generated extends boolean | "database" = boolean | "database",
 > {
 	/** The property of `id`, which replaces the one of the identity. */
 	readonly property: Property;
@@ -27,6 +28,13 @@ export interface IdStrategy<
 	readonly generate: Generated extends true
 		? () => IdValueOf<Property>
 		: undefined;
+	/**
+	 * `"database"` when the database assigns the id as it stores the entity
+	 * (`Serial`): built without one, the entity has none until
+	 * `repository.create`, which only a provider with
+	 * `capabilities.generatedIds` runs.
+	 */
+	readonly generatedBy?: Generated extends "database" ? "database" : undefined;
 }
 
 /** `Identity`, with the property of the strategy `Id` as its `id`. */

@@ -166,12 +166,18 @@ export function lifecycleEventsOf(
 	return found;
 }
 
-export function enqueueEvent(entity: object, event: EventDefinition): void {
+/** Queues `event` for `entity`; `first` puts it before those already queued. */
+export function enqueueEvent(
+	entity: object,
+	event: EventDefinition,
+	first = false,
+): void {
 	const bind = definitions.get(event);
 	if (!bind) throw new TypeError("Expected an eventOf definition");
 	const occurrence = bind(entity);
 	const queue = queues.get(entity) ?? [];
-	queue.push(occurrence);
+	if (first) queue.unshift(occurrence);
+	else queue.push(occurrence);
 	queues.set(entity, queue);
 }
 
@@ -183,9 +189,11 @@ export function pullEntityEvents<Entity extends object>(
 	return queue as EntityEvent<Entity>[];
 }
 
+/** Queues the `cycle` events of `entity`; `first` puts them before those already queued, in order. */
 export function enqueueLifecycle(
 	entity: object,
 	cycle: keyof EntityEvents,
+	first = false,
 ): void {
 	const settings = (
 		entity.constructor as unknown as {
@@ -195,7 +203,10 @@ export function enqueueLifecycle(
 	const reference = settings?.[cycle];
 	if (reference === undefined) return;
 	const events = typeof reference === "function" ? reference() : reference;
-	for (const event of Array.isArray(events) ? events : [events]) {
-		enqueueEvent(entity, event);
-	}
+	const list = (Array.isArray(events) ? events : [events]) as EventDefinition[];
+	if (first) {
+		for (let index = list.length - 1; index >= 0; index--) {
+			enqueueEvent(entity, list[index] as EventDefinition, true);
+		}
+	} else for (const event of list) enqueueEvent(entity, event);
 }

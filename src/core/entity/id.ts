@@ -58,10 +58,26 @@ export function vouchedIdOf<const Property extends AnyPropertyConstructor>(
 	return strategyOf(property, generate, vouched) as IdStrategy<Property, true>;
 }
 
+/**
+ * The strategy of an id the database assigns as it stores the entity, which
+ * `property` validates (as `Serial` of `std`): an entity built without one
+ * has none until `repository.create` stores it.
+ * @internal
+ */
+export function databaseIdOf<const Property extends AnyPropertyConstructor>(
+	property: Property,
+): IdStrategy<Property, "database"> {
+	return strategyOf(property, undefined, undefined, true) as IdStrategy<
+		Property,
+		"database"
+	>;
+}
+
 function strategyOf(
 	property: AnyPropertyConstructor,
 	generate: (() => unknown) | undefined,
 	vouched: (() => boolean) | undefined,
+	database = false,
 ): IdStrategy {
 	const fail = (reason: string): never => {
 		throw new InvalidIdStrategy({ source: "idOf", details: { reason } });
@@ -78,7 +94,9 @@ function strategyOf(
 	if (generate !== undefined && typeof generate !== "function") {
 		fail("expected generate to be a function.");
 	}
-	const strategy: IdStrategy & IdStrategyInternals = { property, generate };
+	const strategy: IdStrategy & IdStrategyInternals = database
+		? { property, generate, generatedBy: "database" }
+		: { property, generate };
 	if (vouched) Object.defineProperty(strategy, VouchedIds, { value: vouched });
 	Object.freeze(strategy);
 	strategies.add(strategy);

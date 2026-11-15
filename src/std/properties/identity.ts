@@ -1,6 +1,6 @@
 import slugify from "slugify";
 import { Type } from "typebox";
-import { idOf, vouchedIdOf } from "../../core/entity/id";
+import { databaseIdOf, idOf, vouchedIdOf } from "../../core/entity/id";
 import { propertyOf } from "../../core/property/property";
 import { generateId, makesDefaultIds } from "../runtime";
 
@@ -36,6 +36,13 @@ export class TextKey extends propertyOf({
 	name: "key",
 	schema: Type.String({ minLength: 1, maxLength: 256 }),
 	default: "profile",
+}) {}
+
+/** A positive integer the database assigns: an auto-increment, serial or identity column. */
+export class SerialKey extends propertyOf({
+	name: "serial",
+	schema: Type.Integer({ minimum: 1 }),
+	default: 1,
 }) {}
 
 const UUID_ANY_CASE = new RegExp(ANY_UUID, "i");
@@ -90,6 +97,16 @@ export const Uuid = vouchedIdOf(
  * e.g. `entityOf(Setting, { id: Key })` and `new Setting({ id: "seo", ... })`.
  */
 export const Key = idOf(TextKey);
+
+/**
+ * The `id` option of an entity whose id is a positive integer the database
+ * assigns as it stores the entity (an auto-increment, serial or identity
+ * column), e.g. `entityOf(Ticket, { id: Serial })`. A new entity has no id
+ * (`id` reads `undefined`) until `repository.create` stores it and sets the
+ * one the database gave; only a provider with `capabilities.generatedIds`
+ * can create it.
+ */
+export const Serial = databaseIdOf(SerialKey);
 
 /**
  * A URL-friendly identifier, e.g. `ola-mundo`: any text given is slugified,

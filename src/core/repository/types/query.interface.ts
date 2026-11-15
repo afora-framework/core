@@ -259,6 +259,12 @@ export interface ProviderCapabilities {
 	readonly atomic?: boolean;
 	/** Whether reads leave out expired records (entities with `expires`, #35). */
 	readonly expiry?: boolean;
+	/**
+	 * Whether the store assigns ids (an auto-increment, serial or identity
+	 * column), which an entity with `Serial` ids needs: `insert` gets its
+	 * data without `id` and gives `{ id }`, the one assigned.
+	 */
+	readonly generatedIds?: true;
 }
 
 /** Declaration input for a named provider, implemented by providerOf in T10. */

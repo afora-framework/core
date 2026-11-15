@@ -169,7 +169,8 @@ function canonicalRecord(
 		...(change ? { change } : {}),
 		...(plugins ? { plugins } : {}),
 		...(Object.keys(events).length > 0 ? { events } : {}),
-		...(entity && (value.id === "uuid" || value.id === "key")
+		...(entity &&
+		(value.id === "uuid" || value.id === "key" || value.id === "serial")
 			? { id: value.id }
 			: {}),
 		...(entity && value.versioned === true ? { versioned: true } : {}),

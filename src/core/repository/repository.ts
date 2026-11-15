@@ -5,6 +5,8 @@ import { recordFieldOf } from "../blueprint/record-field";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
 import { isBlueprintVariant } from "../blueprint/variant";
 import {
+	assignEntityId,
+	assignsIdsOnInsert,
 	EntityClock,
 	EntitySettings,
 	EntityUniqueKeys,
@@ -46,6 +48,7 @@ import {
 	InvalidRepositoryQuery,
 	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
+	UnsupportedIdentity,
 } from "./exceptions";
 import { inMemoryProvider } from "./in-memory";
 import { planQuery } from "./plan";
@@ -608,9 +611,54 @@ const create = action(async (self, input: unknown) => {
 		input instanceof Entity
 			? input
 			: new (Entity as unknown as new (value: unknown) => object)(input);
-	await self.provider.insert(self.context, self.dataOf(entity));
+	const data = self.dataOf(entity);
+	if (!assignsIdsOnInsert(Entity) || data.id !== undefined) {
+		await self.provider.insert(self.context, data);
+		return entity;
+	}
+	// The database assigns the id: the row goes without one, and the entity
+	// gets the one it gave, before anything reads its events.
+	assertGeneratedIds(self.context.name, Entity, self.provider);
+	const { id: _id, ...row } = data;
+	const result = await self.provider.insert(self.context, row);
+	const id = (result as { readonly id?: unknown } | undefined)?.id;
+	if (!isIdValue(id)) {
+		throw new UnsupportedIdentity({
+			source: self.context.name,
+			details: {
+				entity: recordNameOf(Entity),
+				reason: `The provider inserted ${recordNameOf(Entity)} and gave no id for it: an insert of an entity whose ids the database assigns gives { id }.`,
+			},
+		});
+	}
+	assignEntityId(entity, id);
 	return entity;
 });
+
+/**
+ * Throws `UnsupportedIdentity` when the ids of `entity` are assigned by the
+ * database (`Serial`) and `provider` does not assign them
+ * (`capabilities.generatedIds`). @internal
+ */
+export function assertGeneratedIds(
+	source: string,
+	entity: unknown,
+	provider: IRepositoryProvider,
+): void {
+	if (
+		!assignsIdsOnInsert(entity) ||
+		provider.capabilities?.generatedIds === true
+	)
+		return;
+	const name = recordNameOf(entity as object);
+	throw new UnsupportedIdentity({
+		source,
+		details: {
+			entity: name,
+			reason: `The ids of ${name} are assigned by the database (Serial), and the provider does not assign ids (capabilities.generatedIds).`,
+		},
+	});
+}
 
 /** The current date and time, by the clock of the entity class of `context`. */
 function nowOf(context: RepositoryContext): string {
@@ -1209,6 +1257,14 @@ export function repositoryOf<
 		const [kind, implementation] = method;
 		if (kind === "restore" && deletion !== "soft") {
 			invalid(name, '"restore" needs deletion to be "soft".');
+		}
+		// A provider of `providersOf` is checked by the application binding it.
+		if (
+			kind === "create" &&
+			settings.provider !== undefined &&
+			(provider as { readonly [Kind]?: unknown })[Kind] !== "provider-slot"
+		) {
+			assertGeneratedIds(name, entity, provider);
 		}
 		// A provider of `providersOf` may only exist once an application starts.
 		if (

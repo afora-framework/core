@@ -2,7 +2,14 @@ import { afterAll, describe, expect, it } from "bun:test";
 import type { RepositoryContext, SchemaPlan } from "@afora/core/adapters";
 import { providerContract } from "@afora/core/testing";
 import { PGlite } from "@electric-sql/pglite";
-import { boolean, integer, jsonb, pgTable, text } from "drizzle-orm/pg-core";
+import {
+	boolean,
+	integer,
+	jsonb,
+	pgTable,
+	serial,
+	text,
+} from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { drizzleProvider } from "./index";
 
@@ -43,12 +50,21 @@ async function freshDatabase() {
 			`CREATE TABLE ${table} (id text PRIMARY KEY, email text UNIQUE, name text, age integer, active boolean, address jsonb, tags jsonb, "group" integer, n integer, visits integer, version integer, "deletedAt" text, "expiresAt" text, schema_version integer)`,
 		);
 	}
+	const serials = `serials_${round}`;
+	await client.exec(
+		`CREATE TABLE ${serials} (id serial PRIMARY KEY, email text UNIQUE, name text)`,
+	);
 	return {
 		db: drizzle(client),
 		tables: {
 			Accounts: accountTable(names.Accounts),
 			One: accountTable(names.One),
 			Two: accountTable(names.Two),
+			Serials: pgTable(serials, {
+				id: serial("id").primaryKey(),
+				email: text("email").unique(),
+				name: text("name"),
+			}),
 		},
 	};
 }
@@ -60,6 +76,43 @@ providerContract(
 );
 
 describe("repositoryOf on Postgres", () => {
+	it("stores Serial entities in an identity column, and pages by cursor", async () => {
+		const { blueprintOf, entityOf, repositoryOf, Serial } = await import(
+			"@afora/core"
+		);
+		await client.exec(
+			`CREATE TABLE tickets (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, "createdAt" text NOT NULL, "updatedAt" text, "deletedAt" text, title text NOT NULL)`,
+		);
+		const tickets = pgTable("tickets", {
+			id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+			createdAt: text("createdAt").notNull(),
+			updatedAt: text("updatedAt"),
+			deletedAt: text("deletedAt"),
+			title: text("title").notNull(),
+		});
+		class Ticket extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string })),
+			{ id: Serial },
+		) {}
+		const Tickets = repositoryOf({
+			entity: Ticket,
+			provider: drizzleProvider({
+				db: drizzle(client),
+				tables: { Ticket: tickets },
+			}),
+			actions: ["create", "findById", "findCursor"],
+		});
+		const made: number[] = [];
+		for (let index = 1; index <= 10; index++) {
+			made.push((await Tickets.create({ title: `T${index}` })).id);
+		}
+		expect(made).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+		expect((await Tickets.findById(10))?.title).toBe("T10");
+		const first = await Tickets.findCursor({ limit: 9 });
+		const rest = await Tickets.findCursor({ limit: 9, after: first.next });
+		expect(rest.items.map((ticket) => ticket.id)).toEqual([10]);
+	});
+
 	it("stores entities with uuid ids and rolls a command back", async () => {
 		const { blueprintOf, commandOf, entityOf, repositoryOf, useCaseOf } =
 			await import("@afora/core");

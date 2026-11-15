@@ -459,7 +459,11 @@ export interface RecordDescription {
 	 * The `id` option of an entity (made by `idOf`): the name of its property
 	 * and whether it makes ids; present only when it has one.
 	 */
-	readonly id?: { readonly property: string; readonly generated: boolean };
+	readonly id?: {
+		readonly property: string;
+		/** `true` when the entity makes its id, `"database"` when the database assigns it (`Serial`). */
+		readonly generated: boolean | "database";
+	};
 	/** Whether the entity is versioned (`entityOf(..., { versioned: true })`); present only when it is. */
 	readonly versioned?: true;
 	/**
