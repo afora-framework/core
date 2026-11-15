@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 529 exports.
+Tier: stable. 531 exports.
 
 ### Access
 
@@ -2332,14 +2332,30 @@ Says where a use case is served over HTTP, on the class itself:
 
 ```ts
 
+### RouteBody
+
+*type* · tier: stable · `import type { RouteBody } from "@afora/core"`
+
+The `body` of a route of `Method`: a `delete` may read a JSON body
+(`body: true`); any other method takes no `body`, since a `get` never reads
+one and a `post`, `put` or `patch` always does.
+
 ### RouteDeclaration
 
-*interface* · tier: stable · `import type { RouteDeclaration } from "@afora/core"`
+*type* · tier: stable · `import type { RouteDeclaration } from "@afora/core"`
 
 Where a use case is served over HTTP, as data: declared with the `route`
 setting of `useCaseOf` or with `@Route`, and read by the sinks that serve
 or document HTTP. The blueprint of the use case stays the only description
-of its input: a route only says where each key comes from.
+of its input: a route only says where each key comes from. `body` is only
+allowed on a `delete` (see {@link RouteBody}).
+
+### RouteFields
+
+*interface* · tier: stable · `import type { RouteFields } from "@afora/core"`
+
+What a route says besides its method and `body`: the shared part of
+{@link RouteDeclaration} and {@link RouteSettings}.
 
 ### RouteOptions
 
@@ -2350,7 +2366,7 @@ sinks that serve HTTP, so the served routes and the document agree.
 
 ### RouteSettings
 
-*interface* · tier: stable · `import type { RouteSettings } from "@afora/core"`
+*type* · tier: stable · `import type { RouteSettings } from "@afora/core"`
 
 What the `route` setting and `@Route` take: a {@link RouteDeclaration}
 whose method may be written in upper case.

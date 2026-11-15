@@ -93,7 +93,6 @@ export interface RouteOptions {
 	 */
 	readonly route?: {
 		readonly [operationId: string]: {
-			readonly method?: OpenAPIMethod;
 			readonly path?: string;
 			/**
 			 * The status of a successful response.
@@ -101,15 +100,24 @@ export interface RouteOptions {
 			 * @default 200
 			 */
 			readonly status?: RouteStatus;
-			/**
-			 * Only for a `delete` route: `true` reads the input keys with no
-			 * other place from a JSON body instead of from the query. Over the
-			 * `body` of the use case route.
-			 *
-			 * @default false
-			 */
-			readonly body?: boolean;
-		};
+		} & (
+			| {
+					readonly method?: Exclude<OpenAPIMethod, "delete">;
+					readonly body?: never;
+			  }
+			| {
+					readonly method?: "delete";
+					/**
+					 * Only for a `delete` route: `true` reads the input keys with
+					 * no other place from a JSON body instead of from the query.
+					 * Over the `body` of the use case route. Without `method`, the
+					 * method of the use case route must be `delete`.
+					 *
+					 * @default false
+					 */
+					readonly body?: boolean;
+			  }
+		);
 	};
 	/** Static headers of the successful responses, by operation id. */
 	readonly responses?: {

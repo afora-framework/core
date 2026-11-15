@@ -273,5 +273,5 @@ export function routeDeclarationOf(
 						),
 					),
 				}),
-	});
+	}) as RouteDeclaration;
 }

@@ -224,12 +224,14 @@ describe("openapi sink errors", () => {
 		expect(() =>
 			openapi({
 				info,
+				// @ts-expect-error: body is only allowed on a delete
 				route: { "Users.login": { method: "get", body: true } },
 			}),
 		).toThrow("a get route never reads a body");
 		expect(() =>
 			openapi({
 				info,
+				// @ts-expect-error: body is only allowed on a delete
 				route: { "Users.login": { method: "patch", body: true } },
 			}),
 		).toThrow("a patch route always reads a body");

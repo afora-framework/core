@@ -465,10 +465,12 @@ describe("a delete route with body: true", () => {
 			"a put route always reads a body",
 		);
 		expect(() =>
+			// @ts-expect-error: body is only allowed on a delete
 			table({ route: { "Posts.remove": { method: "get", body: true } } }),
 		).toThrow(InvalidOutputStage);
 		expect(
 			httpOptionsIssue(
+				// @ts-expect-error: body is only allowed on a delete
 				{ route: { "Posts.list": { method: "get", body: true } } },
 				"x",
 			),
@@ -491,6 +493,7 @@ describe("a delete route with body: true", () => {
 					name: "Bad",
 					blueprint: blueprintOf((ctx) => ({ id: ctx.string })),
 					response: blueprintOf(() => ({})),
+					// @ts-expect-error: body is only allowed on a delete
 					route: { method, body: true },
 				}),
 			).toThrow(reason);

@@ -628,6 +628,7 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 ## Added after 0.0.9
 
 - **`@afora/core`** (#65): `memoryTracer`, `InvalidTraceDeclaration` and the types `ITracer`, `ITraceSpan`, `TraceAttributes`, `TraceStatus`, `MemoryTracer` and `MemorySpan`: the `trace` of an application, shown to application code in [Tracing](tracing.md) as `log` is in [Logging](logging.md) (`memoryTracer` is stable like `memoryLogProvider`). `ApplicationDescription` (`@afora/core/adapters`) gains `trace`, `{ kind: "opaque" }` when the application has one.
+- **`@afora/core`** (#119): the types `RouteFields` and `RouteBody`, the parts of `RouteDeclaration` and `RouteSettings` that allow `body` only on a `delete` route, stable as the route types are; see [Use cases](use-cases.md#routes).
 
 ## Added in 0.0.9
 
