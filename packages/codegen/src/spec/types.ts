@@ -106,6 +106,12 @@ export interface RecordSpec {
 	readonly plugins?: readonly string[];
 	/** Entities only: the events each lifecycle cycle raises. */
 	readonly events?: EntityEventsSpec;
+	/**
+	 * Entities only: how its ids are made. `uuid7` (the default) generates and
+	 * accepts UUID v7; `uuid` accepts any UUID version and generates v7; `key`
+	 * is a natural key (1 to 256 characters) the input must hold.
+	 */
+	readonly id?: EntityIdSpec;
 	/** Entities only: a `version` identity key checked by `update`. */
 	readonly versioned?: boolean;
 	/** Entities only: when their records expire, which reads then leave out. */
@@ -117,6 +123,9 @@ export interface RecordSpec {
 	/** Entities only: the names the entity had before. */
 	readonly previousNames?: readonly string[];
 }
+
+/** The id strategies a spec can name; `uuid7` is the default. */
+export type EntityIdSpec = "uuid7" | "uuid" | "key";
 
 /**
  * When the records of an entity expire: `after` a duration from `createdAt`

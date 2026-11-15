@@ -1,4 +1,4 @@
-import { type AnyApplication, Std } from "@afora/core";
+import { type AnyApplication, Key, Std, Uuid } from "@afora/core";
 import type {
 	ApplicationDescription,
 	FieldDescription,
@@ -364,6 +364,25 @@ class Extraction {
 	}
 }
 
+/**
+ * The `id` of the spec of the entity `name`, from the `id` its description
+ * gives: `uuid` or `key` for the strategies of `std`; any other `idOf`
+ * cannot be named in a spec.
+ */
+function idSpecOf(
+	id: { readonly property: string; readonly generated: boolean } | undefined,
+	name: string,
+): { readonly id?: "uuid" | "key" } {
+	if (id === undefined) return {};
+	const named = (strategy: { readonly property: { readonly type: unknown } }) =>
+		(strategy.property.type as { readonly name: string }).name;
+	if (id.generated && id.property === named(Uuid)) return { id: "uuid" };
+	if (!id.generated && id.property === named(Key)) return { id: "key" };
+	throw new ExtractionError(
+		`The id of the entity "${name}" is made by a custom idOf, which a spec cannot name: use Uuid or Key, or leave the entity out of the spec.`,
+	);
+}
+
 function importFor(
 	imports: Readonly<Record<string, string>> | undefined,
 	key: string,
@@ -440,6 +459,7 @@ export function extractSpec(
 	);
 	const entities = entries(description.entities, (value, name) => ({
 		...(record(["", value])[1] as Record<string, unknown>),
+		...idSpecOf(value.id, name),
 		...(value.versioned === true ? { versioned: true } : {}),
 		...(value.expires === undefined
 			? {}

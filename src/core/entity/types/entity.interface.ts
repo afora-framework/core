@@ -26,9 +26,18 @@ import type {
 } from "../../record/types/record.interface";
 import type { StandardSchemaV1 } from "../../standard/standard-schema";
 import type { Kind } from "../../symbols/kind";
-import type { AbstractEntity, EntityUniqueKeys } from "../abstract-entity";
+import type {
+	AbstractEntity,
+	EntityIdStrategy,
+	EntityUniqueKeys,
+} from "../abstract-entity";
 import type { EntityClassBrand, EntityEvents } from "../event";
 import type { EntityVersion } from "../version";
+import type {
+	IdentityWithId,
+	IdStrategy,
+	RequiredIdInput,
+} from "./id.interface";
 
 /** The keys every entity has, which its blueprint cannot declare. */
 export type EntityIdentityKey = "id" | "createdAt" | "updatedAt" | "deletedAt";
@@ -57,7 +66,10 @@ export interface EntityBuilderSettings<
 > {
 	/** The blueprint of `id`, `createdAt`, `updatedAt` and `deletedAt`. */
 	readonly identity: IBlueprint<Identity>;
-	/** A new id, as `id` accepts it. */
+	/**
+	 * A new id, as `id` accepts it; the `id` option of an entity (an
+	 * `IdStrategy`) replaces both.
+	 */
 	readonly generateId: () => string;
 	/** The current date and time, as the timestamps accept it. */
 	readonly now: () => string;
@@ -110,7 +122,20 @@ export type EntityOptions<
 		| undefined,
 > = RecordOptions<Properties, Change, Unique, Plugins, Context, Sensitive> &
 	EntityEvents &
-	EntityStorageOptions<RecordKey<Properties>, Expires>;
+	EntityStorageOptions<RecordKey<Properties>, Expires> &
+	EntityIdOptions;
+
+/** How an entity gets its id. */
+export interface EntityIdOptions<
+	Id extends IdStrategy | undefined = IdStrategy,
+> {
+	/**
+	 * The id of the entity, made by `idOf` (or `Uuid`, `Key` of `std`): its
+	 * property replaces the `id` of the identity, and its `generate` the
+	 * generator of the builder; without one, the input must hold the id.
+	 */
+	readonly id?: Id;
+}
 
 /** How an entity is stored: optimistic concurrency and expiry. */
 export interface EntityStorageOptions<
@@ -279,6 +304,63 @@ export type EntityConstructor<
 };
 
 /**
+ * What `entityOf` returns for an entity with an `id` option: as
+ * `EntityConstructor`, built from `Input` (which holds the id when the
+ * strategy makes none). Kept apart so that the default costs no more.
+ */
+export type EntityConstructorWithId<
+	Identity extends IEntityIdentity,
+	Properties extends IBlueprintCollection,
+	Change extends readonly string[],
+	Unique extends readonly string[],
+	Members,
+	Sensitive extends string,
+	Id extends IdStrategy,
+	Input,
+> = {
+	readonly [EntityClassBrand]: true;
+	/** How its entities get their id. */
+	readonly [EntityIdStrategy]: Id;
+	/** The keys no two entities may share, as `options.unique` lists them. */
+	readonly [EntityUniqueKeys]: readonly EntityUniqueKey<
+		Identity,
+		Properties,
+		Unique
+	>[];
+	new (
+		value: Input,
+	): DeclaredEntityInstance<Identity, Properties, Change, Members, Sensitive>;
+	/**
+	 * The Standard Schema of the class: `validate` gives an instance of it, or
+	 * the issues that reject the value. Typed with the instance of the class
+	 * `entityOf` returns, not of a subclass.
+	 */
+	readonly "~standard": StandardSchemaV1.Props<
+		Input,
+		DeclaredEntityInstance<Identity, Properties, Change, Members, Sensitive>
+	>;
+	/**
+	 * An instance of the class (a subclass included) for `value`, or every
+	 * issue that rejects it; never throws for an invalid value.
+	 */
+	safeParse<Self extends new (value: never) => object>(
+		this: Self,
+		value: unknown,
+	): ParseResult<InstanceType<Self>>;
+	readonly [Kind]: "record";
+	/**
+	 * The name of the class as declared: the `name` option, which a bundler
+	 * does not rename, or the name of the class without one. A subclass may
+	 * give its own with `static override readonly recordName = "..."`.
+	 */
+	readonly recordName: string;
+	readonly blueprint: IBlueprint<EntityProperties<Identity, Properties>>;
+	readonly options: RecordSettings<EntityProperties<Identity, Properties>>;
+	/** Its plugins, those they require included, each once. */
+	readonly plugins: readonly AnyRecordPlugin[];
+};
+
+/**
  * What `entityBuilderOf` returns: `entityOf`, declaring entities with the
  * identity it was given, whose `options.plugins` picks from `Context`.
  */
@@ -296,6 +378,7 @@ export type EntityBuilder<
 	const Expires extends
 		| EntityExpires<RecordKey<Properties>>
 		| undefined = undefined,
+	const Id extends IdStrategy | undefined = undefined,
 >(
 	blueprint: IBlueprint<Properties, boolean>,
 	options?: EntityOptions<
@@ -306,12 +389,33 @@ export type EntityBuilder<
 		Context,
 		Sensitive,
 		Expires
-	> & { readonly versioned?: Versioned },
-) => EntityConstructor<
-	VersionedIdentity<ExpiringIdentity<Identity, Expires>, Versioned>,
-	WithPluginProperties<Properties, Plugins>,
-	Change,
-	readonly (Unique[number] | PluginUniqueKey<Plugins>)[],
-	PluginMembers<Plugins>,
-	Sensitive[number] | PluginSensitiveKey<Plugins>
->;
+	> & { readonly versioned?: Versioned; readonly id?: Id },
+) => [Id] extends [IdStrategy]
+	? EntityConstructorWithId<
+			VersionedIdentity<
+				ExpiringIdentity<IdentityWithId<Identity, Id>, Expires>,
+				Versioned
+			>,
+			WithPluginProperties<Properties, Plugins>,
+			Change,
+			readonly (Unique[number] | PluginUniqueKey<Plugins>)[],
+			PluginMembers<Plugins>,
+			Sensitive[number] | PluginSensitiveKey<Plugins>,
+			Id,
+			EntityInput<
+				VersionedIdentity<
+					ExpiringIdentity<IdentityWithId<Identity, Id>, Expires>,
+					Versioned
+				>,
+				WithPluginProperties<Properties, Plugins>
+			> &
+				RequiredIdInput<Id>
+		>
+	: EntityConstructor<
+			VersionedIdentity<ExpiringIdentity<Identity, Expires>, Versioned>,
+			WithPluginProperties<Properties, Plugins>,
+			Change,
+			readonly (Unique[number] | PluginUniqueKey<Plugins>)[],
+			PluginMembers<Plugins>,
+			Sensitive[number] | PluginSensitiveKey<Plugins>
+		>;

@@ -8,6 +8,7 @@ import type {
 	EntityUniqueKeys,
 } from "../../entity/abstract-entity";
 import type { AnyEntityClass } from "../../entity/event";
+import type { IdValue } from "../../entity/types/id.interface";
 import type { RecordSettings } from "../../record/types/record.interface";
 import type { AbstractRepository } from "../repository";
 import type {
@@ -46,6 +47,10 @@ type EntityPropertiesOf<Entity> = Entity extends {
 	? Properties
 	: never;
 
+/** The type of the ids of the entities of `Entity`: a string, unless its `id` option says otherwise. */
+export type EntityIdOf<Entity> =
+	EntityInstanceOf<Entity> extends { readonly id: infer Id } ? Id : string;
+
 /** The value of the entities of `Entity`, by key. */
 export type EntityValueOf<Entity> = BlueprintValue<EntityPropertiesOf<Entity>>;
 
@@ -73,12 +78,17 @@ type ValueAt<
 export type QueryValueOf<Value> = Value extends readonly (infer Item)[]
 	? // biome-ignore lint/suspicious/noExplicitAny: any entity, whatever its blueprint
 		Item extends AbstractEntity<any>
-		? readonly (Item | string)[]
+		? readonly (Item | InstanceIdOf<Item>)[]
 		: Value
 	: // biome-ignore lint/suspicious/noExplicitAny: any entity, whatever its blueprint
 		Value extends AbstractEntity<any>
-		? Value | string
+		? Value | InstanceIdOf<Value>
 		: Value;
+
+/** The type of the id of the entity `Instance`. */
+type InstanceIdOf<Instance> = Instance extends { readonly id: infer Id }
+	? Id
+	: string;
 
 /** What `create` takes: an entity, or the input that builds one. */
 export type RepositoryCreateInput<Entity> =
@@ -149,7 +159,7 @@ export interface RepositoryIncrementOptions<Entity> {
  */
 export interface RepositoryIncrement<Entity> {
 	increment(
-		entity: EntityInstanceOf<Entity> | string,
+		entity: EntityInstanceOf<Entity> | EntityIdOf<Entity>,
 		deltas: RepositoryIncrementDeltas<Entity>,
 		options?: RepositoryIncrementOptions<Entity>,
 	): Promise<EntityInstanceOf<Entity>>;
@@ -158,7 +168,7 @@ export interface RepositoryIncrement<Entity> {
 /** `delete`: destroys the entity (or the one of the id), removes it and gives it. */
 export interface RepositoryDelete<Entity> {
 	delete(
-		entity: EntityInstanceOf<Entity> | string,
+		entity: EntityInstanceOf<Entity> | EntityIdOf<Entity>,
 	): Promise<EntityInstanceOf<Entity>>;
 }
 
@@ -168,7 +178,7 @@ export interface RepositoryDelete<Entity> {
  */
 export interface RepositoryRestore<Entity> {
 	restore(
-		entity: EntityInstanceOf<Entity> | string,
+		entity: EntityInstanceOf<Entity> | EntityIdOf<Entity>,
 	): Promise<EntityInstanceOf<Entity>>;
 }
 
@@ -396,7 +406,7 @@ export interface IRepositoryProvider<Environment = unknown> {
 		data: RepositoryData,
 		options?: ProviderUpdateOptions,
 	): Promise<void>;
-	remove(context: RepositoryContext<Environment>, id: string): Promise<void>;
+	remove(context: RepositoryContext<Environment>, id: IdValue): Promise<void>;
 	/**
 	 * Adds each of `deltas` to the stored number of its key (a missing one
 	 * counts as 0) and stores `options.set` in the same atomic write, then
@@ -410,7 +420,7 @@ export interface IRepositoryProvider<Environment = unknown> {
 	 */
 	increment?(
 		context: RepositoryContext<Environment>,
-		id: string,
+		id: IdValue,
 		deltas: Readonly<Record<string, number>>,
 		options?: ProviderIncrementOptions,
 	): Promise<RepositoryData>;

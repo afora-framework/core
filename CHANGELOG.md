@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- **Per-entity id strategies** (#122). UUID v7 stays the default of `entityOf`; the new `id` option replaces it for one entity. `Uuid` accepts a UUID of any version (lower-cased) and still generates v7; `Key` is a natural key (1 to 256 characters) that the input must hold, required by the constructor type too; `idOf(property, generate?)` takes any required property and an optional generator, so ids can be integers. The type of `entity.id`, `findById`, `delete`/`restore`/`increment` by id, query values and the `{id}` of the standard use cases follow the property; the standard `create` takes the id when the entity makes none, and an integer `{id}` in an HTTP path is read as a number. Only the default generator (and `Uuid` with it) skips the check of the id it made. New exports: `idOf`, `isIdStrategy`, `isIdValue`, `Uuid`, `Key` (and their properties `UuidKey`, `TextKey`), `InvalidIdStrategy`, `EntityIdStrategy`, and the types `IdStrategy`, `IdValue`, `IdValueOf`, `IdentityWithId`, `RequiredIdInput`, `EntityIdOptions`, `EntityConstructorWithId`, `EntityIdOf`. `app.describe().entities.<Name>.id` gives `{ property, generated }` for an entity with the option. See `docs/entities.md#ids`.
+- `@afora/codegen`: an entity of `afora.json` takes `"id": "uuid7" | "uuid" | "key"`, generated as `{ id: Uuid }` / `{ id: Key }` and extracted back. `afora.schema.json` has it.
+
+### Changed
+
+- Repositories handle ids as strings or numbers (`IdValue`): the in-memory provider, references between entities (loaded in batches by id), `delete`/`restore`/`increment` by id. `IRepositoryProvider.remove` and `increment` take an `IdValue`; the `id` in the details of `DeletedEntity`, `RepositoryEntityNotFound`, `RepositoryConcurrencyConflict`, `InvalidStoredSchemaVersion` and `SchemaMigrationInvalidRow` is an `IdValue`. The DynamoDB provider still needs a non-empty string id (`Uuid` and `Key` qualify).
+
 ## 0.0.12 — 2026-11-11
 
 ### Changed

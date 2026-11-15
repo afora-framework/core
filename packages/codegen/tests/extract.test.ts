@@ -226,6 +226,59 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 		expect(normalizeSpec(extracted)).toEqual(normalizeSpec(spec));
 	});
 
+	test("the id strategies of entities round trip", async () => {
+		const spec: Spec = {
+			version: 1,
+			name: "Ids",
+			output: { dir: "src/domain" },
+			entities: {
+				Setting: { fields: { value: "text" }, id: "key" },
+				Legacy: { fields: { name: "text" }, id: "uuid" },
+				Plain: { fields: { name: "text" }, id: "uuid7" },
+			},
+			repositories: {
+				Settings: { entity: "Setting", actions: ["create", "findById"] },
+				Legacies: { entity: "Legacy", actions: ["create", "findById"] },
+			},
+		};
+		expect(validateSpec(spec)).toEqual([]);
+		const code = generate(spec).find((file) =>
+			file.path.endsWith("entities.ts"),
+		)?.contents;
+		expect(code).toContain("id: Key");
+		expect(code).toContain("id: Uuid");
+		const dir = await generated({ ".": { spec } });
+		const { App } = await import(join(dir, "src/domain/index.ts"));
+		const setting = await App.repositories.Settings.create({
+			id: "seo",
+			value: "on",
+		});
+		expect((await App.repositories.Settings.findById("seo")).id).toBe(
+			setting.id,
+		);
+		const v4 = "6f1c2b9e-3d4a-4e8b-9f2a-1c3b5d7e9f0a";
+		await App.repositories.Legacies.create({ id: v4, name: "old" });
+		expect((await App.repositories.Legacies.findById(v4)).name).toBe("old");
+		const extracted = extractSpec(App);
+		expect(extracted.entities?.Setting?.id).toBe("key");
+		expect(extracted.entities?.Legacy?.id).toBe("uuid");
+		expect(extracted.entities?.Plain?.id).toBeUndefined();
+		expect(normalizeSpec(extracted)).toEqual(normalizeSpec(spec));
+	});
+
+	test("an id other than uuid7, uuid or key is invalid", () => {
+		const spec = {
+			version: 1,
+			name: "Ids",
+			entities: { Ticket: { fields: { title: "text" }, id: "serial" } },
+		} as unknown as Spec;
+		expect(validateSpec(spec).map((issue) => issue.path)).toContainEqual([
+			"entities",
+			"Ticket",
+			"id",
+		]);
+	});
+
 	test("the shorthand is used where it says the same", async () => {
 		const dir = await generated({ ".": { spec: blogSpec } });
 		const domain = await import(join(dir, "src/domain/index.ts"));

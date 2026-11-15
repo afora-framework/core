@@ -2,7 +2,7 @@
 
 An entity is a record with identity, ready to persist. `entityOf` takes a blueprint and the options of `recordOf` (`name` included, which keeps the name of the entity [stable when the code is minified](records.md)), and adds four keys to it, from `std`:
 
-- `id`: an `Id` (UUID v7), generated when the value has none and always listed in `options.unique`.
+- `id`: an `Id` (UUID v7) by default, generated when the value has none and always listed in `options.unique`. The `id` option replaces it for one entity (see [Ids](#ids)).
 - `createdAt`: generated as now when the value has none. The `id` and `createdAt` that `entityOf` makes by default (and the `expiresAt` of an entity that expires) are made only after the rest of the value is known to be valid, so invalid input makes none of them; an entity that nests others gets its id after theirs. A generator set with `configure({ idGenerator })` still makes its id first, and the id is checked.
 - `updatedAt`: absent until the first change, then set to now by each `set` or `change.<key>`, before `onSetAll` and `onSet` run.
 - `deletedAt`: set by `destroy()`, which then runs `onDestroy`. A destroyed entity (`isDeleted`) no longer changes: `set`, `change.<key>` and `destroy` throw `DeletedEntity`.
@@ -100,6 +100,33 @@ for (const event of user.pullEvents()) {
 Each lifecycle option accepts a definition, a readonly list, or a function returning either. Functions are resolved only during their cycle, so definitions may follow the entity class but must exist before constructing instances. `onCreate` queues after base construction and validation only when **both** input `id` and `createdAt` are `undefined`. Supplying either identity field, as when loading persisted data, suppresses creation; parsing plain input follows the same rule. `onUpdate` queues after each valid `set` (including `change.<key>` and equal values) stores the value and `updatedAt`, before `onSetAll` and `onSet`. `onDelete` queues after `deletedAt` is stored, before `onDestroy`. Invalid operations and repeated deletion do not queue lifecycle events. If an existing hook throws after a mutation, its queued events remain.
 
 The consuming layer decides when to drain and execute events. `handle()` propagates handler failures and can be called more than once. There is no automatic execution, dispatcher, retry, or execution-once guarantee.
+
+## Ids
+
+By default the id of an entity is a UUID v7, made when the value has none. The `id` option of `entityOf` gives one entity another strategy, and leaves every other entity as it is:
+
+- `Uuid`: a UUID of any version (a v4 loaded from an existing database), lower-cased. A new entity still gets a UUID v7 from the configured generator.
+- `Key`: a natural key, any text of 1 to 256 characters, never generated: the input must hold it, and building the entity without one reports an issue at `id`. The constructor type requires it too.
+- `idOf(property, generate?)`: any required property, with the function that makes an id when the value has none. Without `generate`, the id is a natural key, as with `Key`.
+
+```ts
+import { blueprintOf, entityOf, idOf, Integer, Key, Uuid } from "@afora/core";
+
+const Named = blueprintOf((ctx) => ({ name: ctx.string }));
+
+class Legacy extends entityOf(Named, { id: Uuid }) {}
+new Legacy({ id: "6f1c2b9e-3d4a-4e8b-9f2a-1c3b5d7e9f0a", name: "Old" }); // kept
+new Legacy({ name: "New" }).id; // a UUID v7
+
+class Setting extends entityOf(Named, { id: Key }) {}
+new Setting({ id: "seo", name: "SEO" }).id; // "seo"
+
+let next = 0;
+class Ticket extends entityOf(Named, { id: idOf(Integer, () => ++next) }) {}
+new Ticket({ name: "First" }).id; // 1, typed number
+```
+
+The properties of `Uuid` and `Key` are exported as `UuidKey` and `TextKey`. The property of the strategy takes the place of `Id`: the type of `entity.id`, of `findById`, of `delete(id)` and of the `{id}` of the standard use cases follows it, and an HTTP route reads an integer id from the path as a number. The id stays unique and read-only. An id made by `generate` is validated like any other value; only the default generator, and `Uuid` with it, skip the check of what they just made. The standard `create` use case takes the id in its input when the entity makes none. Repositories store and resolve references to these entities by their id, a string or a number (`IdValue`); the DynamoDB provider still needs a non-empty string id. The class keeps its strategy under the `EntityIdStrategy` symbol, and `app.describe().entities.<Name>.id` gives `{ property, generated }`. An `id` not made by `idOf` throws `InvalidIdStrategy`.
 
 ## Records that expire
 

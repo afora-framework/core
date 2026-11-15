@@ -491,7 +491,7 @@ function providerOver(
 		}
 	};
 
-	const notFound = (context: RepositoryContext, id: string) =>
+	const notFound = (context: RepositoryContext, id: string | number) =>
 		new RepositoryEntityNotFound({ source: context.name, details: { id } });
 
 	/** The `version` column, which an expected version needs. */

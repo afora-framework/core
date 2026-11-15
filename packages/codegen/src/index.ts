@@ -34,6 +34,7 @@ export type {
 	EntityEventSpec,
 	EntityEventsSpec,
 	EntityExpiresSpec,
+	EntityIdSpec,
 	EnumField,
 	EnumValue,
 	EnvironmentSpec,

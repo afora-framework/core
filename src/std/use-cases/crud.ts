@@ -1,6 +1,7 @@
 import { listOf } from "../../core/blueprint/list";
 import { optionalOf } from "../../core/blueprint/optional";
 import type { BlueprintField } from "../../core/blueprint/types/blueprint.interface";
+import { generatesIds } from "../../core/entity/abstract-entity";
 import { UseCaseEntityNotFound } from "../../core/use-case/exceptions";
 import { useCasePluginOf } from "../../core/use-case/plugin";
 import type {
@@ -100,7 +101,10 @@ export function createCompilation(
 
 	for (const plan of target.fields) {
 		const { key } = plan;
-		if (plan.identity) continue;
+		// A natural key (an id the entity does not make) comes with the input.
+		if (plan.identity && (key !== "id" || generatesIds(target.entity))) {
+			continue;
+		}
 		if (Object.hasOwn(constants, key)) {
 			values[key] = literal(constants[key]);
 			continue;

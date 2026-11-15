@@ -446,6 +446,10 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 			],
 		]);
 	}
+	const id = entity ? decl.spec.id : undefined;
+	if (id === "uuid" || id === "key") {
+		options.push(["id", e.use(id === "uuid" ? "Uuid" : "Key")]);
+	}
 	if (entity && decl.spec.versioned === true) {
 		options.push(["versioned", "true"]);
 	}
