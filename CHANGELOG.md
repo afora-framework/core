@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Spying on a provider (#121)
+
+- `spyProvider(provider)` in `@afora/core/testing`: a provider for tests that forwards to `provider` (through `wrapProvider`) and records each call as `{ operation, entity, args }` (`entity` is `recordNameOf` the entity), transactions included. `calls(entity?, operation?)` reads them (by entity name or class), `fail(entity, operation, error, { times })` makes an operation reject the next `times` calls (or until `reset()`), and `reset()` forgets both. The spy is the provider, typed as it, so it goes to `applicationOf({ provider })` and lets a test count reads or inject a failure behind an HTTP sink, where repositories, being frozen, cannot be spied on. `docs/testing.md` explains why repositories are frozen and shows both ways: `spyProvider` behind a sink, overrides in `execute()` for a direct call.
+
 ### Wrapping a provider (#124)
 
 - `wrapProvider(provider, { around })` runs `around({ operation, context, args }, next)` around each operation of a repository provider that takes a context, for logs, traces and spies. The result is typed as the provider it wraps, with no cast, and has the same shape: a plain frozen object with the same operations (`increment`, `migrate`, `transaction` and `close` stay absent when the provider has none), `capabilities` read live, and the other members bound at wrap time. `args` is typed by operation, and `around` must give the result of the operation, which `next()` gives (a missing `return` is a type error). The provider a `transaction` gives is wrapped with the same interceptor, and wraps compose. A provider of `providersOf` is rejected with `InvalidRepositoryDeclaration`: wrap the provider before giving it to `providersOf`. New types `ProviderOperation` (the union of the operations taking a context), `ProviderCall`, `ProviderResults` and `ProviderInterceptor`. See `docs/repositories.md#wrapping-a-provider`.
