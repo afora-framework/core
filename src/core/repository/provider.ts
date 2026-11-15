@@ -64,3 +64,12 @@ export function providerDescriptionOf(
 ): ProviderDescription {
 	return descriptions.get(provider) ?? opaque;
 }
+
+/** Gives `to` the declaration of `from`, if it has one. @internal */
+export function inheritProviderDescription(
+	from: IRepositoryProvider,
+	to: IRepositoryProvider,
+): void {
+	const description = descriptions.get(from);
+	if (description) descriptions.set(to, description);
+}
