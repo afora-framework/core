@@ -3607,7 +3607,8 @@ parameter, the input key `name` (a scalar), left out of the body or query.
 The `operationId` is the id with its dot as an underscore (`Users.register`
 -> `Users_register`), unique or the build throws. `get` and `delete` send
 the input as query parameters, which needs every input field to be a
-scalar property. Responses: the `route` status (`200` by default; `204`
+scalar property; a `delete` with `body: true` sends it as a JSON body,
+required only when a field left in it is. Responses: the `route` status (`200` by default; `204`
 without content) with the response schema and the `responses` headers,
 `400` and `500` always, and the status of each declared error (`statusOf`:
 `statuses` of the output, else 422); `requestId` adds its header to all of

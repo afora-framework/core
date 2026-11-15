@@ -81,7 +81,7 @@ const notes: Spec = {
 		RemoveNote: {
 			generic: "delete",
 			repository: "Notes",
-			route: { method: "delete", path: "/notes/{id}", status: 204 },
+			route: { method: "delete", path: "/notes/{id}", status: 204, body: true },
 			access: { scopes: ["notes:write"] },
 		},
 		Login: {
@@ -165,6 +165,20 @@ describe("route and access in a spec", () => {
 			),
 		).toEqual(["useCases.CreateNote.route.setCookie.nope: invalid_route"]);
 		expect(
+			codes(edited((s) => (s.useCases.CreateNote.route.body = true))),
+		).toEqual(["useCases.CreateNote.route.body: invalid_route"]);
+		expect(
+			codes(
+				edited((s) => {
+					s.useCases.FindNote.route.body = false;
+					s.useCases.RemoveNote.route.body = "yes";
+				}),
+			),
+		).toEqual([
+			"useCases.FindNote.route.body: invalid_route",
+			"useCases.RemoveNote.route.body: invalid_route",
+		]);
+		expect(
 			codes(edited((s) => (s.useCases.CreateNote.route.verb = "x"))),
 		).toEqual(["useCases.CreateNote.route.verb: unknown_key"]);
 		// A standard use case: the shape is checked, the keys by the generated code.
@@ -218,7 +232,7 @@ describe("route and access in a spec", () => {
 		);
 		expect(useCases).toContain('access: { owner: { input: "ownerId" } }');
 		expect(useCases).toContain(
-			'route: { method: "delete", path: "/notes/{id}", status: 204 }',
+			'route: { method: "delete", path: "/notes/{id}", status: 204, body: true }',
 		);
 		expect(useCases).toContain('secret: { env: "NOTES_JWT_SECRET" }');
 		expect(useCases).not.toContain("@Route");
@@ -241,6 +255,7 @@ describe("route and access in a spec", () => {
 			context: { userId: "subject" },
 		});
 		expect(useCases.RemoveNote.route.status).toBe(204);
+		expect(useCases.RemoveNote.route.body).toBe(true);
 		expect(useCases.Login.access).toEqual({ public: true });
 		expect(Object.keys(useCases.Login.response.properties)).toEqual([
 			"user",

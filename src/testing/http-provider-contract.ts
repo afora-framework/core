@@ -100,6 +100,25 @@ function operations() {
 			return {};
 		}
 	}
+	class Unsubscribe extends useCaseOf({
+		name: "ContractUnsubscribe",
+		blueprint: blueprintOf((ctx) => ({
+			id: ctx.string,
+			page: ctx.optional.integer,
+			title: ctx.string,
+		})),
+		response: Echo,
+		route: {
+			method: "delete",
+			path: "/subscriptions/{id}",
+			query: ["page"],
+			body: true,
+		},
+	}) {
+		override async execute() {
+			return { ...this.input };
+		}
+	}
 	class Reveal extends useCaseOf({
 		name: "ContractReveal",
 		blueprint: blueprintOf(() => ({})),
@@ -149,6 +168,7 @@ function operations() {
 			get: Get,
 			change: Change,
 			remove: Remove,
+			unsubscribe: Unsubscribe,
 			reveal: Reveal,
 			mine: Mine,
 			enter: Enter,
@@ -286,6 +306,24 @@ export function httpProviderContract<Server>(
 					session: "s 1",
 					title: "T",
 				});
+			});
+		});
+
+		it("reads the JSON body of a delete route with body: true", async () => {
+			await withServer({}, async (send) => {
+				const removed = await send("DELETE", "/subscriptions/s?page=2", {
+					body: { id: "from-body", page: 9, title: "T" },
+				});
+				expect(removed.status).toBe(200);
+				expect(removed.json).toEqual({ id: "s", page: 2, title: "T" });
+				// No body is `{}`, so the required key is missing.
+				const empty = await send("DELETE", "/subscriptions/s");
+				expect(empty.status).toBe(400);
+				expect(
+					(empty.json as { issues: { path: unknown[] }[] }).issues.map(
+						(issue) => issue.path,
+					),
+				).toEqual([["title"]]);
 			});
 		});
 
@@ -448,6 +486,7 @@ export function httpProviderContract<Server>(
 						"/api/items/{id}",
 						"/api/mine",
 						"/api/note",
+						"/api/subscriptions/{id}",
 					]);
 				},
 			);

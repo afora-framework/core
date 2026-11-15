@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### A body on DELETE routes (#119)
+
+- `route: { method: "delete", body: true }` reads the input keys with no other place from a JSON body instead of the query, merged as for the other methods (the path, the route query keys, headers and cookies win); an empty body is `{}`. It is an opt-in, so existing `delete` routes, their clients and their documents do not change. It is taken by the use case route (`route` setting and `@Route`) and by the `route` option of the sinks (`openapi`, `hono`, `express`, `fastify`, `elysia`), which wins; `body` on a `get`, `post`, `put` or `patch` is rejected (`InvalidUseCaseDeclaration`, `InvalidOutputStage`). The `openapi` document gives such a route a JSON `requestBody`, `required` only when a field left in it is, and `operationRoutes` reports it as `body: true`. `httpProviderContract` checks that every HTTP sink delivers the body of a `DELETE`. See [`docs/use-cases.md#routes`](docs/use-cases.md#routes).
+- `@afora/hono`: a `delete` route with `body: true` can be a webhook.
+- `@afora/codegen`: a use case route in `afora.json` takes `"body": true`, checked (`invalid_route` off a `delete`), generated and extracted back. `afora.schema.json` has it.
+
 ### Wrapping a provider (#124)
 
 - `wrapProvider(provider, { around })` runs `around({ operation, context, args }, next)` around each operation of a repository provider that takes a context, for logs, traces and spies. The result is typed as the provider it wraps, with no cast, and has the same shape: a plain frozen object with the same operations (`increment`, `migrate`, `transaction` and `close` stay absent when the provider has none), `capabilities` read live, and the other members bound at wrap time. `args` is typed by operation, and `around` must give the result of the operation, which `next()` gives (a missing `return` is a type error). The provider a `transaction` gives is wrapped with the same interceptor, and wraps compose. A provider of `providersOf` is rejected with `InvalidRepositoryDeclaration`: wrap the provider before giving it to `providersOf`. New types `ProviderOperation` (the union of the operations taking a context), `ProviderCall`, `ProviderResults` and `ProviderInterceptor`. See `docs/repositories.md#wrapping-a-provider`.

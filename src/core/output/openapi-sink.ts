@@ -101,6 +101,14 @@ export interface RouteOptions {
 			 * @default 200
 			 */
 			readonly status?: RouteStatus;
+			/**
+			 * Only for a `delete` route: `true` reads the input keys with no
+			 * other place from a JSON body instead of from the query. Over the
+			 * `body` of the use case route.
+			 *
+			 * @default false
+			 */
+			readonly body?: boolean;
 		};
 	};
 	/** Static headers of the successful responses, by operation id. */
@@ -302,6 +310,13 @@ function securityIssue(security: unknown, where: string): string | undefined {
 	return undefined;
 }
 
+/** Why `body` cannot be set on a route of `method`: only a `delete` takes it. */
+function bodyIssue(where: string, method: unknown): string {
+	return method === "get"
+		? `${where} is only for a delete route: a get route never reads a body.`
+		: `${where} is only for a delete route: a ${String(method)} route always reads a body.`;
+}
+
 /** The option names of {@link RouteOptions}, for sinks that list their options. */
 export const ROUTE_OPTION_KEYS = [
 	"basePath",
@@ -334,9 +349,9 @@ export function routeOptionsIssue(
 		for (const [id, entry] of Object.entries(route)) {
 			if (
 				!isObject(entry) ||
-				onlyKeys(entry, ["method", "path", "status"], "route")
+				onlyKeys(entry, ["method", "path", "status", "body"], "route")
 			) {
-				return `Expected ${where}.route["${id}"] to be { method?, path?, status? }.`;
+				return `Expected ${where}.route["${id}"] to be { method?, path?, status?, body? }.`;
 			}
 			if (
 				entry.method !== undefined &&
@@ -358,6 +373,14 @@ export function routeOptionsIssue(
 				!(SUCCESS_STATUSES as readonly unknown[]).includes(entry.status)
 			) {
 				return `Expected ${where}.route["${id}"].status to be one of ${SUCCESS_STATUSES.join(", ")}.`;
+			}
+			if (entry.body !== undefined) {
+				if (typeof entry.body !== "boolean") {
+					return `Expected ${where}.route["${id}"].body to be a boolean.`;
+				}
+				if (entry.method !== undefined && entry.method !== "delete") {
+					return bodyIssue(`${where}.route["${id}"].body`, entry.method);
+				}
 			}
 		}
 	}
@@ -475,7 +498,8 @@ export interface OperationRoute {
 	readonly headers: { readonly [name: string]: string };
 	/**
 	 * Whether the input keys with no other place are a JSON body (`post`,
-	 * `put`, `patch`); otherwise they are read from the query.
+	 * `put`, `patch`, and a `delete` with `body: true`); otherwise they are
+	 * read from the query.
 	 */
 	readonly body: boolean;
 	/** The input keys the use case route reads from the query, whatever the method. */
@@ -568,13 +592,23 @@ export function operationRoutes(
 			);
 		}
 		taken.set(key, operation.id);
+		if (chosen.body !== undefined && method !== "delete") {
+			invalid(
+				bodyIssue(`${source}.route["${operation.id}"].body`, method),
+				source,
+			);
+		}
 		routes.set(operation.id, {
 			method,
 			path,
 			parameters,
 			status: chosen.status ?? declared?.status ?? 200,
 			headers: { ...(responses[operation.id]?.headers ?? {}) },
-			body: method !== "get" && method !== "delete",
+			// `body` of the use case route is only ever set on a delete.
+			body:
+				method === "delete"
+					? (chosen.body ?? declared?.body) === true
+					: method !== "get",
 			query,
 			requestHeaders,
 			cookies,
@@ -810,7 +844,8 @@ function requirementOf(requirement: SecurityRequirement): {
  * The `operationId` is the id with its dot as an underscore (`Users.register`
  * -> `Users_register`), unique or the build throws. `get` and `delete` send
  * the input as query parameters, which needs every input field to be a
- * scalar property. Responses: the `route` status (`200` by default; `204`
+ * scalar property; a `delete` with `body: true` sends it as a JSON body,
+ * required only when a field left in it is. Responses: the `route` status (`200` by default; `204`
  * without content) with the response schema and the `responses` headers,
  * `400` and `500` always, and the status of each declared error (`statusOf`:
  * `statuses` of the output, else 422); `requestId` adds its header to all of
@@ -960,7 +995,9 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 				...(hasBody && hasInput
 					? {
 							requestBody: {
-								required: true,
+								// A delete may send no body when nothing in it is required.
+								required:
+									method !== "delete" || (input.required ?? []).length > 0,
 								content: { "application/json": { schema: input } },
 							},
 						}

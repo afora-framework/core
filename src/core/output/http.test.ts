@@ -329,3 +329,133 @@ describe("compileRoutes", () => {
 		);
 	});
 });
+
+describe("a delete route with body: true", () => {
+	class Unsubscribe extends useCaseOf({
+		name: "Unsubscribe",
+		blueprint: blueprintOf((ctx) => ({
+			channel: ctx.string,
+			endpoint: ctx.string,
+			page: ctx.optional.integer,
+			limit: ctx.optional.integer,
+		})),
+		response: blueprintOf((ctx) => ({
+			channel: ctx.string,
+			endpoint: ctx.string,
+			page: ctx.optional.integer,
+			limit: ctx.optional.integer,
+		})),
+		route: {
+			method: "delete",
+			path: "/subscriptions/{channel}",
+			query: ["page"],
+			body: true,
+		},
+	}) {
+		override async execute() {
+			return this.input;
+		}
+	}
+	class Purge extends useCaseOf({
+		name: "Purge",
+		blueprint: blueprintOf((ctx) => ({ before: ctx.optional.integer })),
+		response: blueprintOf((ctx) => ({ before: ctx.optional.integer })),
+		route: { method: "delete", path: "/subscriptions", body: true },
+	}) {
+		override async execute() {
+			return this.input;
+		}
+	}
+	const Push = commandOf({
+		name: "Push",
+		useCases: { unsubscribe: Unsubscribe, purge: Purge },
+	});
+	const pushed = outputOf({ name: "Push", commands: [Push] });
+	const routes = (options: HttpOptions = {}) =>
+		compileRoutes(pushed.operations, options, stage, { source: "test" });
+
+	test("reads the keys with no other place from a JSON body", async () => {
+		const result = await routeOf(routes(), "Push.unsubscribe").handle(
+			request({
+				params: { channel: "web" },
+				query: { page: "2", limit: "9" },
+				body: { endpoint: "https://push.example/1", channel: "x", limit: 5 },
+			}),
+		);
+		expect(result.status).toBe(200);
+		// The path and the route query win over the body; other query keys are not read.
+		expect(JSON.parse(result.body as string)).toEqual({
+			channel: "web",
+			endpoint: "https://push.example/1",
+			page: 2,
+			limit: 5,
+		});
+	});
+
+	test("an empty body is {}, and invalid JSON a 400", async () => {
+		const purge = routeOf(routes(), "Push.purge");
+		const empty = await purge.handle(request({ body: "" }));
+		expect(empty.status).toBe(200);
+		expect(JSON.parse(empty.body as string)).toEqual({});
+		const notJson = await purge.handle(request({ body: "{nope" }));
+		expect(JSON.parse(notJson.body as string)).toMatchObject({
+			title: "InvalidRequestBody",
+			status: 400,
+		});
+	});
+
+	test("without it, a delete reads the query", async () => {
+		const result = await routeOf(
+			routes({ route: { "Push.purge": { body: false } } }),
+			"Push.purge",
+		).handle(request({ query: { before: "7" }, body: { before: 1 } }));
+		expect(JSON.parse(result.body as string)).toEqual({ before: 7 });
+	});
+
+	test("the sink route sets it, on a delete only", async () => {
+		const result = await routeOf(
+			table({ route: { "Posts.remove": { body: true } } }, () => ({
+				subject: "u",
+				scopes: ["posts:write"],
+			})),
+			"Posts.remove",
+		).handle(
+			request({ params: { slug: "a" }, query: { slug: "q" }, body: "" }),
+		);
+		expect(result.status).toBe(204);
+		expect(() => table({ route: { "Posts.change": { body: true } } })).toThrow(
+			"a put route always reads a body",
+		);
+		expect(() =>
+			table({ route: { "Posts.remove": { method: "get", body: true } } }),
+		).toThrow(InvalidOutputStage);
+		expect(
+			httpOptionsIssue(
+				{ route: { "Posts.list": { method: "get", body: true } } },
+				"x",
+			),
+		).toContain("a get route never reads a body");
+		expect(
+			httpOptionsIssue(
+				{ route: { "Posts.list": { body: "yes" } } } as never,
+				"x",
+			),
+		).toContain('x.route["Posts.list"].body to be a boolean');
+	});
+
+	test("the use case route takes it on a delete only", () => {
+		for (const [method, reason] of [
+			["get", "a get route never reads a body"],
+			["post", "a post route always reads a body"],
+		] as const) {
+			expect(() =>
+				useCaseOf({
+					name: "Bad",
+					blueprint: blueprintOf((ctx) => ({ id: ctx.string })),
+					response: blueprintOf(() => ({})),
+					route: { method, body: true },
+				}),
+			).toThrow(reason);
+		}
+	});
+});

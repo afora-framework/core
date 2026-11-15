@@ -58,6 +58,15 @@ export interface RouteDeclaration {
 	 */
 	readonly status?: RouteSuccessStatus;
 	/**
+	 * Only for a `delete` route: `true` reads the input keys with no other
+	 * place from a JSON body, as `post`, `put` and `patch` do, instead of from
+	 * the query. An empty body is `{}`. Any other method rejects it: a `get`
+	 * never reads a body, and the others always do.
+	 *
+	 * @default false
+	 */
+	readonly body?: boolean;
+	/**
 	 * Scalar input keys read from the query string. A `get` or `delete` route
 	 * reads from the query every key that has no other place, so this is for
 	 * the routes with a body.
