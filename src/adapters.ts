@@ -56,6 +56,7 @@ export type {
 	AuthRequest,
 	CompiledRoute,
 	CompileRoutesSettings,
+	FormParts,
 	HttpOptions,
 	HttpRequest,
 	HttpResult,

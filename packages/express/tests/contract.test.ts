@@ -28,7 +28,9 @@ httpProviderContract(
 			return fetch(`http://127.0.0.1:${port}${url.pathname}${url.search}`, {
 				method: request.method,
 				headers: request.headers,
-				...(request.body ? { body: await request.text() } : {}),
+				...(request.body
+					? { body: new Uint8Array(await request.arrayBuffer()) }
+					: {}),
 			});
 		},
 		close: (app) =>

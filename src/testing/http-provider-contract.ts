@@ -163,6 +163,44 @@ function operations() {
 			return { title: this.input.title, token: "t 1", refreshToken: "" };
 		}
 	}
+	class Upload extends useCaseOf({
+		name: "ContractUpload",
+		blueprint: blueprintOf((ctx) => ({
+			folder: ctx.string,
+			file: ctx.fileOf({ types: ["image/png", "image/*"], maxBytes: 64 }),
+			count: ctx.optional.integer,
+			flag: ctx.optional.boolean,
+			tags: ctx.list.optional.string,
+			extras: ctx.optionalOf(ctx.listOf(ctx.file)),
+			meta: ctx.optionalOf(blueprintOf((ctx) => ({ alt: ctx.string }))),
+		})),
+		response: blueprintOf((ctx) => ({
+			folder: ctx.string,
+			name: ctx.string,
+			type: ctx.string,
+			size: ctx.integer,
+			isFile: ctx.boolean,
+			count: ctx.optional.integer,
+			flag: ctx.optional.boolean,
+			tags: ctx.list.optional.string,
+			extras: ctx.list.optional.string,
+			alt: ctx.optional.string,
+		})),
+		route: { method: "post", path: "/uploads/{folder}" },
+	}) {
+		override async execute() {
+			const { file, extras, meta, ...rest } = this.input;
+			return {
+				...rest,
+				name: file.name,
+				type: file.type,
+				size: file.size,
+				isFile: file instanceof File,
+				...(extras ? { extras: extras.map((extra) => extra.name) } : {}),
+				...(meta ? { alt: meta.alt } : {}),
+			};
+		}
+	}
 	class Health extends useCaseOf({
 		name: "ContractHealth",
 		blueprint: blueprintOf((ctx) => ({ page: ctx.optional.integer })),
@@ -187,6 +225,7 @@ function operations() {
 			reveal: Reveal,
 			mine: Mine,
 			enter: Enter,
+			upload: Upload,
 		},
 	});
 }
@@ -257,18 +296,23 @@ export function httpProviderContract<Server>(
 		try {
 			await body(async (method, path, init = {}) => {
 				const hasBody = init.body !== undefined;
+				// A form sets its own multipart content type, with the boundary.
+				const form = init.body instanceof FormData;
 				const response = await settings.fetch(
 					server,
 					new Request(`${origin}${path}`, {
 						method,
 						headers: {
-							...(hasBody ? { "content-type": "application/json" } : {}),
+							...(hasBody && !form
+								? { "content-type": "application/json" }
+								: {}),
 							...init.headers,
 						},
 						...(hasBody
 							? {
-									body:
-										typeof init.body === "string"
+									body: form
+										? (init.body as FormData)
+										: typeof init.body === "string"
 											? init.body
 											: JSON.stringify(init.body),
 								}
@@ -517,6 +561,141 @@ export function httpProviderContract<Server>(
 			});
 		});
 
+		it("reads a multipart body for an input with a file", async () => {
+			await withServer({}, async (send) => {
+				// An image of `size` bytes: the signature of its type, then zeros.
+				const signatures: Record<string, number[]> = {
+					"image/png": [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+					"image/gif": [0x47, 0x49, 0x46, 0x38, 0x39, 0x61],
+					"image/webp": [
+						0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+					],
+				};
+				const image = (type: string, size: number, name = "a.png") => {
+					const bytes = new Uint8Array(size);
+					bytes.set((signatures[type] ?? []).slice(0, size));
+					return new File([bytes], name, { type });
+				};
+				const form = (entries: [string, string | File][]) => {
+					const data = new FormData();
+					for (const [key, value] of entries) data.append(key, value);
+					return data;
+				};
+				const sent = await send("POST", "/uploads/docs?count=9", {
+					body: form([
+						["folder", "from-body"],
+						["file", image("image/png", 10)],
+						["count", "3"],
+						["flag", "true"],
+						["tags", "a"],
+						["tags", "b"],
+						["extras", image("image/gif", 8, "x.gif")],
+						["extras", image("image/gif", 8, "y.gif")],
+						["meta", '{"alt":"A"}'],
+					]),
+				});
+				expect(sent.status).toBe(200);
+				expect(sent.json).toEqual({
+					folder: "docs",
+					name: "a.png",
+					type: "image/png",
+					size: 10,
+					isFile: true,
+					count: 3,
+					flag: true,
+					tags: ["a", "b"],
+					extras: ["x.gif", "y.gif"],
+					alt: "A",
+				});
+
+				const one = await send("POST", "/uploads/docs", {
+					body: form([
+						["file", image("image/webp", 64, "b.webp")],
+						["tags", "only"],
+					]),
+				});
+				expect(one.status).toBe(200);
+				expect((one.json as { tags: string[] }).tags).toEqual(["only"]);
+
+				const wrongType = await send("POST", "/uploads/docs", {
+					body: form([["file", image("text/plain", 4, "a.txt")]]),
+				});
+				expect(wrongType.status).toBe(400);
+				expect(wrongType.type).toBe("application/problem+json");
+				const typeIssues = (wrongType.json as { issues: { path: unknown }[] })
+					.issues;
+				expect(typeIssues.map((issue) => issue.path)).toEqual([["file"]]);
+
+				const tooLarge = await send("POST", "/uploads/docs", {
+					body: form([["file", image("image/png", 65)]]),
+				});
+				expect(tooLarge.status).toBe(400);
+				expect(
+					(tooLarge.json as { issues: { path: unknown }[] }).issues.map(
+						(issue) => issue.path,
+					),
+				).toEqual([["file"]]);
+
+				const notAFile = await send("POST", "/uploads/docs", {
+					body: form([
+						["file", "text"],
+						["count", "x"],
+					]),
+				});
+				expect(notAFile.status).toBe(400);
+				expect(
+					(notAFile.json as { issues: { path: unknown }[] }).issues
+						.map((issue) => issue.path)
+						.sort(),
+				).toEqual([["count"], ["file"]]);
+
+				const disguised = await send("POST", "/uploads/docs", {
+					body: form([
+						["file", new File(["<svg/>"], "a.png", { type: "image/png" })],
+					]),
+				});
+				expect(disguised.status).toBe(400);
+				expect((disguised.json as { title: string }).title).toBe(
+					"InvalidFileContent",
+				);
+
+				// A body that is not multipart after all, or has no boundary.
+				for (const type of [
+					"multipart/form-data; boundary=nope",
+					"multipart/form-data",
+				]) {
+					const malformed = await send("POST", "/uploads/docs", {
+						headers: { "content-type": type },
+						body: "not a multipart body",
+					});
+					expect(malformed.status).toBe(400);
+					expect((malformed.json as { title: string }).title).toBe(
+						"InvalidRequestBody",
+					);
+				}
+
+				// A route without a file reads JSON: a multipart body is invalid.
+				const notJson = await send("POST", "/enter", {
+					body: form([["title", "T"]]),
+				});
+				expect(notJson.status).toBe(400);
+				expect((notJson.json as { title: string }).title).toBe(
+					"InvalidRequestBody",
+				);
+
+				// JSON still works for the other keys; the file is then missing.
+				const json = await send("POST", "/uploads/docs", {
+					body: { count: 1 },
+				});
+				expect(json.status).toBe(400);
+				expect(
+					(json.json as { issues: { path: unknown }[] }).issues.map(
+						(issue) => issue.path,
+					),
+				).toEqual([["file"]]);
+			});
+		});
+
 		it("serves the document of the same routes", async () => {
 			await withServer(
 				{
@@ -536,6 +715,18 @@ export function httpProviderContract<Server>(
 						"/api/mine",
 						"/api/note",
 						"/api/subscriptions/{id}",
+						"/api/uploads/{folder}",
+					]);
+					const upload = (
+						docs.json as {
+							paths: Record<
+								string,
+								{ post: { requestBody: { content: object } } }
+							>;
+						}
+					).paths["/api/uploads/{folder}"];
+					expect(Object.keys(upload?.post.requestBody.content ?? {})).toEqual([
+						"multipart/form-data",
 					]);
 					const health = (
 						docs.json as {

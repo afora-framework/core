@@ -30,8 +30,11 @@ if (!existsSync(join(import.meta.dir, "../../dist/index.d.ts")))
  */
 const CEILING: Record<string, number> = {
 	"bare blueprint": 35_900,
-	"quick start": 46_700,
-	entity: 55_200,
+	// Raised from 46_700 and 55_200 with `ctx.file` and `ctx.fileOf` (#118):
+	// two more members of the Std context cost about 300 instantiations
+	// (0.6%) in every case; these two had less room. Measured plus 1%.
+	"quick start": 47_200,
+	entity: 55_800,
 	repository: 56_100,
 	"use case": 56_600,
 	"use case with a service": 40_200,

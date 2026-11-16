@@ -38,6 +38,18 @@ export interface EnumField extends FieldModifiers, FieldEvolution {
 	readonly default?: EnumValue;
 }
 
+/** What a file accepts (`fileOf`): its media types (`"image/*"` takes any image) and its largest size. */
+export interface FileOptionsSpec {
+	readonly types?: readonly string[];
+	readonly maxBytes?: number;
+	readonly name?: string;
+}
+
+/** A field holding a file, sent in a `multipart/form-data` body (`fileOf`). */
+export interface FileField extends FieldModifiers {
+	readonly file: FileOptionsSpec;
+}
+
 /** A nested object, declared in place. */
 export interface InlineField extends FieldModifiers {
 	readonly fields: Readonly<Record<string, FieldSpec>>;
@@ -66,12 +78,13 @@ export type FieldSpec =
 	| string
 	| TypeField
 	| EnumField
+	| FileField
 	| InlineField
 	| VariantField;
 
 export type FieldsSpec = Readonly<Record<string, FieldSpec>>;
 
-/** A custom property: a Std/declared property with options, an enum, or an import. */
+/** A custom property: a Std/declared property with options, an enum, a file, or an import. */
 export type PropertySpec =
 	| {
 			readonly base: string;
@@ -82,6 +95,10 @@ export type PropertySpec =
 			readonly enum: readonly EnumValue[];
 			readonly name?: string;
 			readonly default?: EnumValue;
+			readonly optional?: boolean;
+	  }
+	| {
+			readonly file: FileOptionsSpec;
 			readonly optional?: boolean;
 	  }
 	| {

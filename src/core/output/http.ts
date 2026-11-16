@@ -7,6 +7,14 @@ import type { RouteCookie } from "../use-case/types/route.interface";
 import { coerceTextValues } from "./coerce";
 import { InvalidOutputStage, UndeclaredStatus } from "./exceptions";
 import {
+	contentMismatchOf,
+	DEFAULT_MAX_PARTS,
+	fileKeysOf,
+	formInputOf,
+	isMultipart,
+	TooManyParts,
+} from "./form";
+import {
 	type OpenAPISinkOptions,
 	type OperationRoute,
 	openapi,
@@ -22,6 +30,7 @@ import type {
 	Authenticator,
 	CompiledRoute,
 	CompileRoutesSettings,
+	FormParts,
 	HttpOptions,
 	HttpRequest,
 	HttpResult,
@@ -51,6 +60,7 @@ export const HTTP_OPTION_KEYS = [
 	...ROUTE_OPTION_KEYS,
 	"docs",
 	"debug",
+	"maxParts",
 	"context",
 	"auth",
 ] as const;
@@ -68,6 +78,14 @@ export function httpOptionsIssue(
 	if (routing) return routing;
 	if (given.debug !== undefined && typeof given.debug !== "boolean") {
 		return `Expected ${where}.debug to be a boolean.`;
+	}
+	if (
+		given.maxParts !== undefined &&
+		(typeof given.maxParts !== "number" ||
+			!Number.isInteger(given.maxParts) ||
+			given.maxParts < 1)
+	) {
+		return `Expected ${where}.maxParts to be a whole number, 1 or more.`;
 	}
 	const { docs, context, auth } = given;
 	if (auth !== undefined) {
@@ -221,6 +239,11 @@ function cookieWriterOf(cookie: RouteCookie): (value: string) => string {
  *   body or the query sends for them is dropped). Text is coerced to the
  *   numbers and booleans the input takes; the operation validates it (a 400
  *   problem with `issues`).
+ * - An input that holds a file (`format: "binary"`, as `fileOf`) is read
+ *   from a `multipart/form-data` body when the request sends one: files as
+ *   they are, text coerced, objects as JSON text, repeated keys as a list.
+ *   A server whose requests have no `form` answers it with 415. A JSON body
+ *   still works for its other keys.
  * - The context comes from `context.headers` (coerced) and
  *   `context.variables` (as is); a missing one leaves the key out.
  * - An operation with an `access` other than `public` asks
@@ -258,6 +281,7 @@ export function compileRoutes(
 	}
 	const routes = operationRoutes(operations, options, source);
 	const debug = options.debug === true;
+	const maxParts = options.maxParts ?? DEFAULT_MAX_PARTS;
 	const contextHeaders = options.context?.headers ?? {};
 	const contextVariables = options.context?.variables ?? {};
 	const requestIdHeader = requestIdHeaderOf(options);
@@ -355,6 +379,8 @@ export function compileRoutes(
 		const readsCookies = cookieKeys.length > 0;
 		const authenticates = guarded && authenticator !== undefined;
 		const hasContext = operation.context !== undefined;
+		// An input with a file is read from a multipart body when one is sent.
+		const takesFiles = body && fileKeysOf(operation.input).length > 0;
 
 		const handle = async (request: HttpRequest): Promise<HttpResult> => {
 			try {
@@ -374,7 +400,60 @@ export function compileRoutes(
 				}
 
 				let input: unknown;
-				if (body) {
+				if (takesFiles && isMultipart(request.header("content-type"))) {
+					if (request.form === undefined) {
+						return problem(
+							{
+								type: "urn:afora:exception:UnsupportedMediaType",
+								title: "UnsupportedMediaType",
+								status: 415,
+								detail: "This server does not read multipart/form-data bodies.",
+							},
+							415,
+							request,
+						);
+					}
+					let form: FormParts;
+					try {
+						form = await request.form();
+					} catch (error) {
+						// The server says why it could not read the body (it was
+						// already read, say): its own error, a 500 unless the
+						// output maps it.
+						if (error instanceof Exception) {
+							return fail(error, operation, request, 500);
+						}
+						return problem(
+							{
+								type: "urn:afora:exception:InvalidRequestBody",
+								title: "InvalidRequestBody",
+								status: 400,
+								detail: "The request body is not valid multipart/form-data.",
+							},
+							400,
+							request,
+						);
+					}
+					let parts: Record<string, unknown>;
+					try {
+						parts = formInputOf(operation.input, form, maxParts);
+					} catch (error) {
+						if (!(error instanceof TooManyParts)) throw error;
+						return problem(
+							{
+								type: "urn:afora:exception:TooManyParts",
+								title: "TooManyParts",
+								status: 413,
+								detail: error.message,
+							},
+							413,
+							request,
+						);
+					}
+					const mismatch = await contentMismatchOf(parts);
+					if (mismatch) return problem(mismatch, 400, request);
+					input = parts;
+				} else if (body) {
 					const text = await request.text();
 					try {
 						input = text.trim() === "" ? {} : JSON.parse(text);

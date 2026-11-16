@@ -299,13 +299,34 @@ function withOptions(options: unknown): Doc | undefined {
 
 /** `fill` and `renamedFrom` of a field, as options of `with`. */
 function evolutionOptions(field: Field): Record<string, unknown> {
-	if (field.kind === "inline" || field.kind === "variant") return {};
+	if (
+		field.kind === "inline" ||
+		field.kind === "variant" ||
+		field.kind === "file"
+	)
+		return {};
 	return {
 		...(field.fill === undefined ? {} : { fill: field.fill }),
 		...(field.renamedFrom === undefined
 			? {}
 			: { renamedFrom: field.renamedFrom }),
 	};
+}
+
+/** The arguments of `fileOf` for a file: its options, none when it takes any file. */
+function fileArgs(file: {
+	readonly types?: readonly string[];
+	readonly maxBytes?: number;
+	readonly name?: string;
+}): Doc[] {
+	const options: [string, Doc][] = [];
+	if (file.types !== undefined)
+		options.push(["types", literal([...file.types])]);
+	if (file.maxBytes !== undefined) {
+		options.push(["maxBytes", literal(file.maxBytes)]);
+	}
+	if (file.name !== undefined) options.push(["name", literal(file.name)]);
+	return options.length > 0 ? [objectDoc(options)] : [];
 }
 
 /** The property a field names, without optional or list. */
@@ -323,6 +344,10 @@ function itemDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 		]);
 		const evolution = withOptions(evolutionOptions(field));
 		return evolution ? [made, ".with(", evolution, ")"] : made;
+	}
+	if (field.kind === "file") {
+		ctx.used = true;
+		return call("ctx.fileOf", fileArgs(field));
 	}
 	if (field.kind === "inline") return blueprintDoc(field.fields, e, false);
 	if (field.kind === "variant") {
@@ -427,6 +452,8 @@ function propertyDoc(decl: Decl, e: Emitter): Doc {
 			literal(spec.enum),
 			...(options.length > 0 ? [objectDoc(options)] : []),
 		]);
+	} else if (typeof spec.file === "object" && spec.file !== null) {
+		expression = call(e.use("fileOf"), fileArgs(spec.file));
 	} else {
 		const base = spec.base as string;
 		const root = /^[a-z]/.test(base)
@@ -819,6 +846,8 @@ function responseDoc(ref: unknown, e: Emitter): Doc {
 			literal([...field.values]),
 			...(options.length > 0 ? [objectDoc(options)] : []),
 		]);
+	} else if (field.kind === "file") {
+		item = call(e.use("fileOf"), fileArgs(field));
 	} else {
 		const type = (field as Extract<Field, { kind: "type" }>).type;
 		const root = /^[a-z]/.test(type)

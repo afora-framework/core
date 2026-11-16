@@ -1,6 +1,7 @@
 import { blueprintPluginOf } from "../core/blueprint/blueprint-plugin";
 import { Email, Ip, Phone, Url } from "./properties/contact";
 import { enumOf } from "./properties/enum";
+import { FileProperty, fileOf } from "./properties/file";
 import { SchemaProperty } from "./properties/headless";
 import { Id, Slug } from "./properties/identity";
 import { JsonProperty, jsonOf } from "./properties/json";
@@ -22,7 +23,7 @@ import {
 
 /**
  * The standard properties, for blueprints to pick from, and the factories
- * `enumOf` and `jsonOf`, as `ctx.enumOf(["draft", "published"])`.
+ * `enumOf`, `jsonOf` and `fileOf`, as `ctx.enumOf(["draft", "published"])`.
  */
 export const Std = blueprintPluginOf(
 	"std",
@@ -46,6 +47,7 @@ export const Std = blueprintPluginOf(
 		deletedAt: DeletedAt,
 		schema: SchemaProperty,
 		json: JsonProperty,
+		file: FileProperty,
 	},
-	{ enumOf, jsonOf },
+	{ enumOf, jsonOf, fileOf },
 );

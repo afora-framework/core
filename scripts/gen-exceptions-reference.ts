@@ -58,6 +58,8 @@ const HANDLING: Record<string, string> = {
 	DuplicateOperation: `${DECLARATION} Give each operation its own id.`,
 	Forbidden:
 		"An output answers 403. In your own code, check the scopes or the owner before calling, or let it through.",
+	EntityHoldsFile:
+		"Store where the file went (a URL, a storage key) in the entity, and keep the file in the input of the use case.",
 	ImmutableEntityKey: `${BUG} The identity keys are set by the entity and the repository.`,
 	IncompatibleRecordPlugin:
 		"Install the plugin version the catalog reference asks for, or update the reference.",
@@ -76,6 +78,8 @@ const HANDLING: Record<string, string> = {
 	InvalidEnvironment:
 		"Set or fix the variable named in the message; validate environments at start (`app.start()`) so it fails before serving.",
 	InvalidEventPolicy: DECLARATION,
+	InvalidFile: INPUT,
+	InvalidFileOptions: DECLARATION,
 	InvalidJsonData: INPUT,
 	InvalidJsonSchema:
 		"Fix the schema; for a schema loaded at runtime, check it when it is saved, not when it is used.",

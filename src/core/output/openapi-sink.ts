@@ -25,6 +25,7 @@ import {
 } from "../use-case/route";
 import type { RouteCookie } from "../use-case/types/route.interface";
 import { InvalidOutputStage } from "./exceptions";
+import { fileKeysOf } from "./form";
 import { PROBLEM_MEDIA_TYPE } from "./problem";
 import { sinkOf } from "./stage";
 import { statusOf } from "./status";
@@ -632,6 +633,18 @@ export function operationRoutes(
 				source,
 			);
 		}
+		// `body` of the use case route is only ever set on a delete.
+		const body =
+			method === "delete"
+				? (chosen.body ?? declared?.body) === true
+				: method !== "get";
+		const files = fileKeysOf(operation.input);
+		if (!body && files.length > 0) {
+			invalid(
+				`${operation.id} is routed to ${method.toUpperCase()} ${path}, whose input is read from the query, but "${files[0]}" is a file, which only a multipart/form-data body sends; route it with method "post"${method === "delete" ? " or give the delete route body: true" : ""}.`,
+				source,
+			);
+		}
 		const status = chosen.status ?? declared?.status ?? 200;
 		const statuses = chosen.statuses ?? declared?.statuses ?? [];
 		if (statuses.includes(status)) {
@@ -647,11 +660,7 @@ export function operationRoutes(
 			status,
 			statuses,
 			headers: { ...(responses[operation.id]?.headers ?? {}) },
-			// `body` of the use case route is only ever set on a delete.
-			body:
-				method === "delete"
-					? (chosen.body ?? declared?.body) === true
-					: method !== "get",
+			body,
 			query,
 			requestHeaders,
 			cookies,
@@ -893,6 +902,14 @@ function queryParametersOf(
 	});
 }
 
+/** Whether a key of the object `schema` is a file, or a list of files. */
+function hasFile(schema: OpenAPISchema): boolean {
+	return Object.values(schema.properties ?? {}).some(
+		(property) =>
+			property.format === "binary" || property.items?.format === "binary",
+	);
+}
+
 /** `schema` without the keys in `keys` (the path parameters). */
 function withoutKeys(
 	schema: OpenAPISchema,
@@ -1087,7 +1104,11 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 								// A delete may send no body when nothing in it is required.
 								required:
 									method !== "delete" || (input.required ?? []).length > 0,
-								content: { "application/json": { schema: input } },
+								// A file is sent in a multipart body, as its binary string.
+								content: {
+									[hasFile(input) ? "multipart/form-data" : "application/json"]:
+										{ schema: input },
+								},
 							},
 						}
 					: {}),

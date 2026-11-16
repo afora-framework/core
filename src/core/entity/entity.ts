@@ -1,5 +1,6 @@
 import type { TSchema } from "typebox";
 import { blueprintFromProperties } from "../blueprint/blueprint";
+import { filePathOf } from "../blueprint/files";
 import { isRecordClass } from "../blueprint/record-field";
 import type {
 	AnyBlueprint,
@@ -39,6 +40,7 @@ import {
 	EntityEventSettings,
 } from "./event";
 import {
+	EntityHoldsFile,
 	ImmutableEntityKey,
 	InvalidEntityExpiry,
 	InvalidEntitySchemaVersion,
@@ -112,6 +114,13 @@ export function entityBuilderOf<
 			if (RESERVED_ENTITY_KEYS.includes(key) || added.includes(key)) {
 				throw new ReservedEntityKey({ source: "entity", details: { key } });
 			}
+		}
+		const file = filePathOf(blueprint.properties);
+		if (file) {
+			throw new EntityHoldsFile({
+				source: options.name ?? "entity",
+				details: { path: file },
+			});
 		}
 		for (const key of options.change ?? []) {
 			if (

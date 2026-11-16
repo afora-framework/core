@@ -4,7 +4,13 @@ import { checkEntityEvents } from "./entity-events";
 import { checkEntityExpires } from "./entity-expires";
 import { checkEntitySchema } from "./entity-schema";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
-import { checkEnum, type Field, parseFields, targetOf } from "./model";
+import {
+	checkEnum,
+	checkFile,
+	type Field,
+	parseFields,
+	targetOf,
+} from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
 import {
 	checkPolicyCatalog,
@@ -209,6 +215,18 @@ function checkField(
 		);
 	}
 	if (field.kind === "enum") return;
+	if (field.kind === "file") {
+		if (owner === "environment") {
+			issues.push(
+				issue(
+					path,
+					"invalid_environment_field",
+					"An environment variable cannot be a file.",
+				),
+			);
+		}
+		return;
+	}
 	if (field.kind === "inline") {
 		if (owner === "environment") {
 			issues.push(
@@ -550,13 +568,13 @@ function checkStringList(
 function checkProperty(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 	const path = ["properties", decl.name];
 	const { spec } = decl;
-	const forms = ["base", "enum", "opaque"].filter((key) => key in spec);
+	const forms = ["base", "enum", "file", "opaque"].filter((key) => key in spec);
 	if (forms.length !== 1) {
 		issues.push(
 			issue(
 				path,
 				"invalid_property",
-				'A property declares exactly one of "base" (a Std or declared property), "enum" or "opaque".',
+				'A property declares exactly one of "base" (a Std or declared property), "enum", "file" or "opaque".',
 			),
 		);
 		return;
@@ -622,6 +640,11 @@ function checkProperty(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 		checkEnum(spec, path, issues);
 		return;
 	}
+	if (forms[0] === "file") {
+		allowKeys(["file", "optional"]);
+		checkFile(spec.file, [...path, "file"], issues);
+		return;
+	}
 	allowKeys(["base", "with", "optional"]);
 	if (typeof spec.base !== "string") {
 		issues.push(
@@ -671,6 +694,34 @@ function checkProperty(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 			checkWith(spec.with, rootOf(spec.base, scope), [...path, "with"], issues);
 		}
 	}
+}
+
+/**
+ * Whether `field` holds a file: a `file` field, the Std `file`, a declared
+ * property made by `file` (or based on one), or a nested object with one.
+ */
+function holdsFile(
+	field: Field,
+	scope: Scope,
+	seen: Set<string> = new Set(),
+): boolean {
+	if (field.kind === "file") return true;
+	if (field.kind === "inline") {
+		return Object.values(field.fields).some((inner) =>
+			holdsFile(inner, scope, seen),
+		);
+	}
+	if (field.kind !== "type") return false;
+	if (field.type === "file") return true;
+	const decl = scope.decls.get(field.type);
+	if (decl?.kind !== "property" || seen.has(decl.name)) return false;
+	seen.add(decl.name);
+	const { spec } = decl;
+	if (typeof spec.file === "object" && spec.file !== null) return true;
+	return (
+		typeof spec.base === "string" &&
+		holdsFile({ kind: "type", type: spec.base, optional: false }, scope, seen)
+	);
 }
 
 function checkFieldsOf(
@@ -760,6 +811,35 @@ function checkRecord(
 				"Expected true or false.",
 			),
 		);
+	}
+	// A file is read and passed on: never stored, compared nor masked.
+	for (const [key, field] of Object.entries(fields ?? {})) {
+		if (owner === "entity" && holdsFile(field, scope)) {
+			issues.push(
+				issue(
+					[...path, "fields", key],
+					"entity_file",
+					`"${key}" holds a file, which an entity cannot store: store where the file went (a URL, a storage key) instead, and keep the file in the input of a use case.`,
+				),
+			);
+		}
+		for (const option of ["sensitive", "unique"] as const) {
+			const keys = decl.spec[option];
+			if (
+				Array.isArray(keys) &&
+				keys.includes(key) &&
+				field.kind !== "inline" &&
+				holdsFile(field, scope)
+			) {
+				issues.push(
+					issue(
+						[...path, option, keys.indexOf(key)],
+						"invalid_file",
+						`"${key}" holds a file, which cannot be ${option}.`,
+					),
+				);
+			}
+		}
 	}
 	const identityKeys = owner === "entity" ? identityKeysOf(decl.spec) : [];
 	if (owner === "entity" && decl.spec.events !== undefined) {

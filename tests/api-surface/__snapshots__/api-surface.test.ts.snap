@@ -1049,6 +1049,9 @@ exports[`exports of the package and their declarations 1`] = `
   "EntityExpires": [
     "export type EntityExpires<Key extends string = string> = { readonly after: EntityDuration; } | { readonly at: Key; };",
   ],
+  "EntityHoldsFile": [
+    "EntityHoldsFile: import("../../index.js").DeclaredExceptionClass<{ readonly path: readonly string[]; }>",
+  ],
   "EntityIdOf": [
     "export type EntityIdOf<Entity> = EntityInstanceOf<Entity> extends { readonly id: infer Id; } ? Id : string;",
   ],
@@ -1183,6 +1186,15 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "ExpiringIdentity": [
     "export type ExpiringIdentity<Identity extends IEntityIdentity, Expires> = Expires extends { readonly after: EntityDuration; } ? Identity & { readonly expiresAt: ExpiresAtField; } : Identity;",
+  ],
+  "FileClass": [
+    "export type FileClass<Optional extends boolean = false> = PropertyClass<Optional extends true ? TOptional<TFile> : TFile, File>;",
+  ],
+  "FileOptions": [
+    "export interface FileOptions<Optional extends boolean = false> { readonly types?: readonly string[]; readonly maxBytes?: number; readonly name?: string; readonly optional?: Optional; }",
+  ],
+  "FileProperty": [
+    "FileProperty: PropertyClass<TUnsafe<File>, File>",
   ],
   "Forbidden": [
     "Forbidden: import("../../index.js").DeclaredExceptionClass<{ readonly reason: "scope" | "owner"; readonly scopes?: readonly string[]; }>",
@@ -1336,6 +1348,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "InvalidEventPolicy": [
     "InvalidEventPolicy: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
+  "InvalidFile": [
+    "InvalidFile: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
+  "InvalidFileOptions": [
+    "InvalidFileOptions: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
   ],
   "InvalidIdStrategy": [
     "InvalidIdStrategy: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
@@ -1920,7 +1938,7 @@ exports[`exports of the package and their declarations 1`] = `
     "State: unique symbol",
   ],
   "Std": [
-    "Std: import("../index.js").IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: import("../index.js").PropertyClass<import("typebox").TString, string>; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof DateTime; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; schema: typeof SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; }, { enumOf: typeof enumOf; jsonOf: typeof jsonOf; }> & { readonly factories: { enumOf: typeof enumOf; jsonOf: typeof jsonOf; }; }",
+    "Std: import("../index.js").IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: import("../index.js").PropertyClass<import("typebox").TString, string>; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof DateTime; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; schema: typeof SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof enumOf; jsonOf: typeof jsonOf; fileOf: typeof fileOf; }> & { readonly factories: { enumOf: typeof enumOf; jsonOf: typeof jsonOf; fileOf: typeof fileOf; }; }",
   ],
   "StdCreateOptions": [
     "export interface StdCreateOptions<Repository> extends StdEntityOptions<Repository> { readonly omit?: readonly KeyOf<Repository>[]; readonly values?: { readonly [Key in KeyOf<Repository>]?: unknown; }; }",
@@ -2017,6 +2035,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "SyncVerifyUnsupported": [
     "SyncVerifyUnsupported: import("../index.js").DeclaredExceptionClass<undefined>",
+  ],
+  "TFile": [
+    "export type TFile = TUnsafe<File>;",
   ],
   "TagMaker": [
     "export type TagMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", { tag(...tags: string[]): unknown; untag(...tags: string[]): unknown; }, "taggable">, options?: Options & Hookable<Repository, TagInput<Repository>, never, None, Owner, Dependencies, true>) => EntityUseCase<Repository, Options, TagInput<Repository>, Dependencies>;",
@@ -2190,7 +2211,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function blueprintBuilderOf<const Base extends readonly BlueprintSource[]>(...base: Base): BlueprintBuilder<Base>;",
   ],
   "blueprintOf": [
-    "blueprintOf: import("../index.js").BlueprintBuilder<readonly [ import("../index.js").IBlueprintPlugin<{ id: typeof import("../index.js").Id; slug: typeof import("../index.js").Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: import("../index.js").PropertyClass<import("typebox").TString, string>; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof import("../index.js").Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof import("../index.js").DateTime; createdAt: typeof import("../index.js").CreatedAt; updatedAt: typeof import("../index.js").UpdatedAt; deletedAt: typeof import("../index.js").DeletedAt; schema: typeof import("../index.js").SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; }, { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; }> & { readonly factories: { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; }; } ]>",
+    "blueprintOf: import("../index.js").BlueprintBuilder<readonly [ import("../index.js").IBlueprintPlugin<{ id: typeof import("../index.js").Id; slug: typeof import("../index.js").Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: import("../index.js").PropertyClass<import("typebox").TString, string>; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof import("../index.js").Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof import("../index.js").DateTime; createdAt: typeof import("../index.js").CreatedAt; updatedAt: typeof import("../index.js").UpdatedAt; deletedAt: typeof import("../index.js").DeletedAt; schema: typeof import("../index.js").SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; }> & { readonly factories: { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; }; } ]>",
   ],
   "blueprintPluginOf": [
     "export declare function blueprintPluginOf<Properties extends IBlueprintCollection, Factories extends Record<keyof Factories, BlueprintFactory>>(name: string, properties: Properties, factories: Factories): IBlueprintPlugin<Properties, Factories> & { readonly factories: Factories; };",
@@ -2232,6 +2253,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "exceptionOf": [
     "export declare function exceptionOf<Details = undefined>({ layer, name, message, }: ExceptionDeclaration<Details>): DeclaredExceptionClass<Details>;",
+  ],
+  "fileOf": [
+    "export declare function fileOf<Optional extends boolean = false>(options?: FileOptions<Optional>): FileClass<Optional>;",
   ],
   "guard": [
     "export declare function guard<Result>(scope: ExceptionScope, run: () => Result, resolve?: (exception: Exception, pass: () => never) => Result | Awaited<Result>): Result;",
@@ -2942,14 +2966,17 @@ exports[`adapters entry (contract) 1`] = `
   "FieldsDescription": [
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
   ],
+  "FormParts": [
+    "export interface FormParts { entries(): Iterable<readonly [ string, unknown ]>; }",
+  ],
   "HTTP_OPTION_KEYS": [
-    "HTTP_OPTION_KEYS: readonly [ "basePath", "route", "responses", "requestId", "security", "docs", "debug", "context", "auth" ]",
+    "HTTP_OPTION_KEYS: readonly [ "basePath", "route", "responses", "requestId", "security", "docs", "debug", "maxParts", "context", "auth" ]",
   ],
   "HttpOptions": [
-    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; readonly auth?: { readonly jwt: DescribedJwtOptions & { readonly header?: string; readonly cookie?: string; }; }; }",
+    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly maxParts?: number; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; readonly auth?: { readonly jwt: DescribedJwtOptions & { readonly header?: string; readonly cookie?: string; }; }; }",
   ],
   "HttpRequest": [
-    "export interface HttpRequest { param(name: string): string | undefined; query(): Readonly<Record<string, string | undefined>>; header(name: string): string | undefined; text(): string | Promise<string>; variable?(name: string): unknown; readonly native?: unknown; }",
+    "export interface HttpRequest { param(name: string): string | undefined; query(): Readonly<Record<string, string | undefined>>; header(name: string): string | undefined; text(): string | Promise<string>; form?(): Promise<FormParts>; variable?(name: string): unknown; readonly native?: unknown; }",
   ],
   "HttpResult": [
     "export interface HttpResult { readonly status: number; readonly headers: Readonly<Record<string, string>>; readonly cookies: readonly string[]; readonly body: string | null; }",
@@ -4173,7 +4200,7 @@ exports[`testing entry (contract) 1`] = `
     "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? VariantValue<Key, Variants, Mode> : never;",
   ],
   "(internal) HttpOptions": [
-    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; readonly auth?: { readonly jwt: DescribedJwtOptions & { readonly header?: string; readonly cookie?: string; }; }; }",
+    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly maxParts?: number; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; readonly auth?: { readonly jwt: DescribedJwtOptions & { readonly header?: string; readonly cookie?: string; }; }; }",
   ],
   "(internal) IBlueprint": [
     "export interface IBlueprint<Properties extends IBlueprintCollection, Optional extends boolean = false> { readonly [Kind]: "blueprint"; readonly plugins: readonly IBlueprintPlugin[]; readonly properties: Properties; readonly schema: ISchema<BlueprintSchema<Properties>, BlueprintData<Properties>>; readonly optional: Optional; safeParse(value: unknown): ParseResult<Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; readonly "~standard": StandardSchemaV1.Props<Optional extends true ? BlueprintInput<Properties> | undefined : BlueprintInput<Properties>, Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; join<const Blueprints extends readonly AnyBlueprint[]>(...blueprints: Blueprints): IBlueprint<JoinedProperties<readonly [ { readonly properties: Properties; }, ...Blueprints ]>>; }",
@@ -4672,6 +4699,67 @@ exports[`afora.json schema 1`] = `
           },
           "required": [
             "enum",
+          ],
+          "type": "object",
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "file": {
+              "additionalProperties": false,
+              "description": "A file (fileOf), sent in a multipart/form-data body: the media types it accepts and its largest size. {} takes any file.",
+              "properties": {
+                "maxBytes": {
+                  "description": "The largest size, in bytes.",
+                  "minimum": 0,
+                  "type": "integer",
+                },
+                "name": {
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "types": {
+                  "items": {
+                    "description": "A media type, "image/png", or "image/*" for any image.",
+                    "pattern": "^[^\\s/]+/[^\\s/]+$",
+                    "type": "string",
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                },
+              },
+              "type": "object",
+            },
+            "list": {
+              "anyOf": [
+                {
+                  "type": "boolean",
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Bounds of a list.",
+                  "properties": {
+                    "maxItems": {
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "minItems": {
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                  },
+                  "type": "object",
+                },
+              ],
+              "description": "A list of the type (the options in \`with\` apply to each item). \`true\` or { minItems, maxItems }.",
+            },
+            "optional": {
+              "description": "The key may be absent.",
+              "type": "boolean",
+            },
+          },
+          "required": [
+            "file",
           ],
           "type": "object",
         },
@@ -5721,6 +5809,43 @@ exports[`afora.json schema 1`] = `
             {
               "additionalProperties": false,
               "properties": {
+                "file": {
+                  "additionalProperties": false,
+                  "description": "A file (fileOf), sent in a multipart/form-data body: the media types it accepts and its largest size. {} takes any file.",
+                  "properties": {
+                    "maxBytes": {
+                      "description": "The largest size, in bytes.",
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "name": {
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "types": {
+                      "items": {
+                        "description": "A media type, "image/png", or "image/*" for any image.",
+                        "pattern": "^[^\\s/]+/[^\\s/]+$",
+                        "type": "string",
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+                "optional": {
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "file",
+              ],
+              "type": "object",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
                 "import": {
                   "description": "The module it is exported from, relative to the output directory.",
                   "type": "string",
@@ -5741,7 +5866,7 @@ exports[`afora.json schema 1`] = `
               "type": "object",
             },
           ],
-          "description": "A custom property: \`base\` + \`with\` (a refined Std property), an \`enum\`, or an \`opaque\` import of a hand-written property.",
+          "description": "A custom property: \`base\` + \`with\` (a refined Std property), an \`enum\`, a \`file\`, or an \`opaque\` import of a hand-written property.",
         },
       },
       "type": "object",

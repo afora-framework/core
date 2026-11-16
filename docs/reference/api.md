@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 544 exports.
+Tier: stable. 552 exports.
 
 ### Access
 
@@ -639,6 +639,14 @@ change, and `onDelete` when it is destroyed.
 `after` a duration from `createdAt` (stored as `expiresAt`), or `at` the
 date held by a key of the blueprint, `Key`.
 
+### EntityHoldsFile
+
+*const* · tier: stable · `import { EntityHoldsFile } from "@afora/core"`
+
+The blueprint of an entity holds a file (`fileOf`), at `details.path`: an
+entity is stored, and a file is not. Store where the file went (a URL, a
+key of the storage) instead. `source` is the entity name.
+
 ### EntityIdOf
 
 *type* · tier: stable · `import type { EntityIdOf } from "@afora/core"`
@@ -923,6 +931,24 @@ required date and time, as `createdAt`.
 *type* · tier: stable · `import type { ExpiringIdentity } from "@afora/core"`
 
 `Identity`, with `expiresAt` when `Expires` is `{ after }`.
+
+### FileClass
+
+*type* · tier: stable · `import type { FileClass } from "@afora/core"`
+
+A class declared with `fileOf`.
+
+### FileOptions
+
+*interface* · tier: stable · `import type { FileOptions } from "@afora/core"`
+
+What `fileOf` takes.
+
+### FileProperty
+
+*const* · tier: stable · `import { FileProperty } from "@afora/core"`
+
+Any file (a `File` or a `Blob`), of any type and size; `fileOf` for limits.
 
 ### Forbidden
 
@@ -1272,6 +1298,20 @@ A variable of the environment is missing or rejected by its blueprint.
 *const* · tier: stable · `import { InvalidEventPolicy } from "@afora/core"`
 
 `eventPolicyOf`, a policy's options or a catalog got something it cannot use; `details.reason` says what.
+
+### InvalidFile
+
+*const* · tier: stable · `import { InvalidFile } from "@afora/core"`
+
+A value a file property (`FileProperty`, `fileOf`) rejects: not a file, of
+a media type it does not accept, or larger than its `maxBytes`. Its
+message is the issue's, so `statusOf` gives 400 with the issue at the key.
+
+### InvalidFileOptions
+
+*const* · tier: stable · `import { InvalidFileOptions } from "@afora/core"`
+
+Options of `fileOf` that are not valid: `types` not media types, or `maxBytes` not a size.
 
 ### InvalidIdStrategy
 
@@ -2596,7 +2636,7 @@ done.
 *const* · tier: stable · `import { Std } from "@afora/core"`
 
 The standard properties, for blueprints to pick from, and the factories
-`enumOf` and `jsonOf`, as `ctx.enumOf(["draft", "published"])`.
+`enumOf`, `jsonOf` and `fileOf`, as `ctx.enumOf(["draft", "published"])`.
 
 ### StdCreateOptions
 
@@ -2807,6 +2847,12 @@ Any string.
 *const* · tier: stable · `import { SyncVerifyUnsupported } from "@afora/core"`
 
 The hasher in use cannot verify without waiting; use `verify` instead.
+
+### TFile
+
+*type* · tier: stable · `import type { TFile } from "@afora/core"`
+
+The schema of a file: `format: "binary"`, which OpenAPI documents as a binary string.
 
 ### TagMaker
 
@@ -3471,6 +3517,28 @@ const UserNotFound = exceptionOf({
 const error = new UserNotFound({ source: "FindUser", details: { id: "42" } });
 error.message; // "There is no user 42."
 error.layer; // ExceptionLayers.UseCase
+```
+
+### fileOf
+
+*function* · tier: stable · `import { fileOf } from "@afora/core"`
+
+A file, as `multipart/form-data` gives it (a `File`, or any `Blob`):
+checked to be one, of one of `types` (`image/*` takes any image but SVG)
+and of at most `maxBytes`, and kept as it is, never copied or read. The
+type is the one the client declares; the HTTP sinks check that the first
+bytes of a PNG, JPEG, GIF, WebP or AVIF match it. Its schema is
+`format: "binary"`, so an HTTP sink reads `multipart/form-data` for an
+input that holds one and OpenAPI documents it as a binary string. A file
+cannot be `sensitive` or `unique`; a record's `toJSON` gives it as it is,
+and `JSON.stringify` writes a `Blob` as `{}`.
+
+**Example**
+
+```ts
+import { fileOf } from "@afora/core";
+
+const Avatar = fileOf({ types: ["image/png", "image/jpeg"], maxBytes: 5_000_000 });
 ```
 
 ### guard
@@ -4220,7 +4288,7 @@ const logged = wrapProvider(inMemoryProvider(), {
 
 ## @afora/core/adapters
 
-Tier: adapters. 74 exports.
+Tier: adapters. 75 exports.
 
 ### ApplicationDescription
 
@@ -4297,6 +4365,13 @@ What a key of a blueprint, record or environment holds.
 *type* · tier: adapters · `import type { FieldsDescription } from "@afora/core/adapters"`
 
 The fields of a blueprint, record or entity in a description, by name.
+
+### FormParts
+
+*interface* · tier: adapters · `import type { FormParts } from "@afora/core/adapters"`
+
+What the route table reads of a `FormData`: its parts, in order, each a
+name and a value (text or a `File`). A `FormData` of any runtime is one.
 
 ### HTTP_OPTION_KEYS
 
@@ -4646,6 +4721,11 @@ only reads, coerces and runs:
   body or the query sends for them is dropped). Text is coerced to the
   numbers and booleans the input takes; the operation validates it (a 400
   problem with `issues`).
+- An input that holds a file (`format: "binary"`, as `fileOf`) is read
+  from a `multipart/form-data` body when the request sends one: files as
+  they are, text coerced, objects as JSON text, repeated keys as a list.
+  A server whose requests have no `form` answers it with 415. A JSON body
+  still works for its other keys.
 - The context comes from `context.headers` (coerced) and
   `context.variables` (as is); a missing one leaves the key out.
 - An operation with an `access` other than `public` asks

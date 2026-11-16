@@ -51,10 +51,14 @@ a file of your own.
   \`with\` applies to each item of a list and only takes options valid for the type (min/max/pattern for strings,
   min/max/exclusiveMin/exclusiveMax/multipleOf for numbers, plus title/description/examples/deprecated/readOnly/writeOnly/default).
 - Enum: \`{ "enum": ["a", "b"] }\`. Nested object in place: \`{ "fields": { "lat": "number", "lng": "number" } }\`.
+- File (an upload, read from a multipart/form-data body): \`"file"\` for any file, or
+  \`{ "file": { "types": ["image/png", "image/*"], "maxBytes": 5000000 } }\`; \`optional\` and \`list\` apply. Only the
+  input of a post, put or patch route (or a delete with body: true) can hold one, at the top level. An entity cannot
+  hold a file (store its URL instead), and a file cannot be sensitive or unique.
 - One of several objects (variantOf): \`{ "variant": { "key": "type", "of": { "click": "Click", "visit": { "fields": { "path": "string" } } } } }\`.
   Each value of \`of\` is a declared blueprint, record or entity, or fields in place; none declares \`key\`, which the field
   adds with the name of the variant (\`{ "type": "click", ... }\`). \`optional\` and \`list\` apply; an entity among them needs a relation.
-- A property of your own: \`{ "base": "integer", "with": {...} }\`, \`{ "enum": [...] }\`, or
+- A property of your own: \`{ "base": "integer", "with": {...} }\`, \`{ "enum": [...] }\`, \`{ "file": {...} }\`, or
   \`{ "opaque": true, "import": "./my-property" }\` for a hand-written one (imported as it is).
 
 ## Rules the validator enforces

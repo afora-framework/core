@@ -62,8 +62,23 @@ interface Call {
 	readonly store?: Record<string, unknown>;
 }
 
-/** The body stays the text that was sent: the table parses it. */
-const TEXT_BODY = { parse: "text" } as const;
+/** What the body of a `multipart/form-data` request is, left unread: `form` reads it. */
+const MULTIPART = Object.freeze({ multipart: true });
+
+/**
+ * The body stays the text that was sent, for the table to parse; a
+ * `multipart/form-data` one is left unread, for `form` (or `text`) to read
+ * when the route asks, so a malformed one is the table's 400, not a 500.
+ */
+const TEXT_BODY = {
+	parse: [
+		({ contentType }: { contentType: string }) =>
+			/^\s*multipart\/form-data\s*(?:;|$)/i.test(contentType ?? "")
+				? MULTIPART
+				: undefined,
+		"text",
+	],
+} as const;
 
 /** The part of an Elysia app the sink uses, with routes that come from data. */
 interface Routable {
@@ -102,7 +117,18 @@ class ElysiaHttpRequest implements HttpRequest {
 		return this.native.request.headers.get(name) ?? undefined;
 	}
 	text() {
-		return typeof this.native.body === "string" ? this.native.body : "";
+		const { body, request } = this.native;
+		if (body === MULTIPART) return request.text();
+		return typeof body === "string" ? body : "";
+	}
+	form() {
+		const { body, request } = this.native;
+		if (body !== MULTIPART) {
+			return Promise.reject(
+				new TypeError("The body is not multipart/form-data."),
+			);
+		}
+		return request.formData();
 	}
 	variable(name: string) {
 		return Object.hasOwn(this.native, name)

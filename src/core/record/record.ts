@@ -1,3 +1,4 @@
+import { isFileField } from "../blueprint/files";
 import type {
 	AnyBlueprint,
 	IBlueprint,
@@ -160,6 +161,21 @@ export function declareRecord(
 				source: name,
 				details: { key },
 			});
+		}
+	}
+
+	// A file is not stored, compared nor masked: it is read and passed on.
+	for (const [list, what] of [
+		[sensitive, "sensitive"],
+		[unique, "unique"],
+	] as const) {
+		for (const key of list) {
+			if (isFileField(blueprint.properties[key])) {
+				throw new InvalidRecordDeclaration({
+					source: name,
+					details: `"${key}" holds a file, which cannot be ${what}.`,
+				});
+			}
 		}
 	}
 

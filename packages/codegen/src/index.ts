@@ -43,6 +43,8 @@ export type {
 	ExceptionSpec,
 	FieldSpec,
 	FieldsSpec,
+	FileField,
+	FileOptionsSpec,
 	GenericUseCaseSpec,
 	ImportRef,
 	InlineField,

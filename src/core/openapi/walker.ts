@@ -297,9 +297,14 @@ export function schemaOf(field: BlueprintField, scope: Scope): Schema {
 		});
 	}
 	const raw = rawTypeOf(field.type.schema);
-	const schema = (
+	let schema = (
 		scope.defs === undefined ? plainOf(raw) : hoistedOf(raw, scope.defs)
 	) as Schema;
+	// A file is checked by its property, not by a JSON type; documents
+	// describe it as OpenAPI does, a binary string.
+	if (schema.format === "binary" && schema.type === undefined) {
+		schema = { type: "string", ...schema };
+	}
 	if (field.type.sensitive) schema.writeOnly = true;
 	return schema;
 }
