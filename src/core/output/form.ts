@@ -235,7 +235,7 @@ export async function contentMismatchOf(
 			if (!matches) continue;
 			const bytes = new Uint8Array(await item.slice(0, 32).arrayBuffer());
 			if (matches(bytes)) continue;
-			const message = `Expected the content of a ${type} file, which this file does not start with`;
+			const message = `Expected the content of a file of type ${type}, which this file does not start with`;
 			return {
 				type: "urn:afora:exception:InvalidFileContent",
 				title: "InvalidFileContent",
