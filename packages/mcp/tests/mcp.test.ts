@@ -626,7 +626,9 @@ export const App = applicationOf({ name: "notes", entities: { Note }, repositori
 			app: "src/app.ts#App",
 		});
 		expect(result.isError).toBe(true);
-		expect(result.data).toContain("boom");
+		// Its error is not passed on to the agent: the module may hold secrets.
+		expect(result.data).toContain("import_failed");
+		expect(result.data).not.toContain("boom");
 		expect(
 			(await client.call("afora_extract", { app: "src/missing.ts#App" }))
 				.isError,
