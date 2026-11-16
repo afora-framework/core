@@ -239,3 +239,148 @@ describe("SEC-02: the owner is compared on the value the use case acts on", () =
 	});
 });
 
+class BadResponse extends useCaseOf({
+	name: "BadResponse",
+	blueprint: blueprintOf(() => ({})),
+	response: blueprintOf((ctx) => ({
+		internalBalanceCents: ctx.integer,
+		ownerEmail: ctx.email,
+	})),
+	route: { method: "get", path: "/stats" },
+}) {
+	override async execute() {
+		return { internalBalanceCents: 12.5, ownerEmail: "not-an-email" } as never;
+	}
+}
+class Echo extends useCaseOf({
+	name: "Echo",
+	blueprint: blueprintOf((ctx) => ({ email: ctx.email })),
+	response: Seen,
+	route: { method: "post", path: "/echo" },
+}) {
+	override async execute() {
+		return { actedOn: this.input.email };
+	}
+}
+const Stats = commandOf({
+	name: "Stats",
+	useCases: { bad: BadResponse, echo: Echo },
+});
+
+describe("SEC-12: internal exceptions are not answered as the caller's input", () => {
+	const responseError = async (): Promise<Exception> => {
+		const [operation] = outputOf({ name: "S", commands: [Stats] }).operations;
+		return failure(
+			(operation as (typeof Api.operations)[number]).invoke({}, undefined),
+		);
+	};
+
+	test("SEC-12: InvalidUseCaseResponse is a 500, masked, with no issues", async () => {
+		const error = await responseError();
+		expect(error.name).toBe("InvalidUseCaseResponse");
+		const status = statusOf(error);
+		expect(status).toBe(500);
+		const problem = problemOf(error, { status });
+		expect(problem.detail).toBe("Internal error.");
+		expect(problem).not.toHaveProperty("issues");
+	});
+
+	test("SEC-12: listing it does not expose its issues or message", async () => {
+		const error = await responseError();
+		const statuses = { InvalidUseCaseResponse: 400 };
+		expect(statusOf(error, undefined, statuses)).toBe(400);
+		const problem = problemOf(error, { status: 400, statuses });
+		expect(problem.detail).toBe("Internal error.");
+		expect(problem).not.toHaveProperty("issues");
+	});
+
+	test("SEC-12: debug still shows the detail", async () => {
+		const error = await responseError();
+		const problem = problemOf(error, { status: 500, debug: true });
+		expect(problem.detail).toContain("Invalid UseCase response");
+		expect(problem.trace).toBeDefined();
+	});
+
+	test("SEC-12: an InvalidUseCaseStep raised while running is a masked 500", () => {
+		const error = new InvalidUseCaseStep({
+			source: "Steps",
+			details: {
+				index: 0,
+				reason: "args rejected",
+				code: "invalid_target",
+				issues: [
+					{
+						path: ["secretField"],
+						code: "invalid_value",
+						message: "must be integer",
+						source: "integer",
+					},
+				],
+			},
+		} as never);
+		const status = statusOf(error);
+		expect(status).toBe(500);
+		const problem = problemOf(error, { status });
+		expect(problem.detail).toBe("Internal error.");
+		expect(problem).not.toHaveProperty("issues");
+	});
+
+	test("SEC-12: the caller's invalid input stays a 400 with its issues", () => {
+		const error = new Exception({
+			layer: "use-case" as never,
+			name: "InvalidUseCaseInput",
+			source: "Echo",
+			message: 'Invalid UseCase input: "email" must match format "email".',
+			details: {
+				issues: [
+					{
+						path: ["email"],
+						code: "invalid_value",
+						message: 'must match format "email"',
+						source: "email",
+					},
+				],
+			},
+		});
+		const status = statusOf(error);
+		expect(status).toBe(400);
+		expect(problemOf(error, { status }).issues).toEqual([
+			{
+				path: ["email"],
+				code: "invalid_value",
+				message: 'must match format "email"',
+			},
+		]);
+	});
+
+	test("SEC-12: over HTTP, a bad response is a masked 500 and bad input a 400", async () => {
+		const table = compileRoutes(
+			outputOf({ name: "S", commands: [Stats] }).operations,
+			{},
+			{ output: { name: "S", statuses: {} } },
+			{ source: "test" },
+		);
+		const route = (id: string) => {
+			const found = table.routes.find(({ operation }) => operation.id === id);
+			if (!found) throw new Error(id);
+			return found;
+		};
+		const request = (body: unknown): HttpRequest => ({
+			param: () => undefined,
+			query: () => ({}),
+			header: (name) =>
+				name.toLowerCase() === "content-type" ? "application/json" : undefined,
+			text: () => JSON.stringify(body),
+			variable: () => undefined,
+		});
+		const bad = await route("Stats.bad").handle(request({}));
+		expect(bad.status).toBe(500);
+		const problem = JSON.parse(bad.body as string);
+		expect(problem.detail).toBe("Internal error.");
+		expect(problem).not.toHaveProperty("issues");
+		expect(bad.body as string).not.toContain("internalBalanceCents");
+		const input = await route("Stats.echo").handle(request({ email: "x" }));
+		expect(input.status).toBe(400);
+		expect(JSON.parse(input.body as string).issues).toHaveLength(1);
+	});
+});
