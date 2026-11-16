@@ -14,6 +14,12 @@ export interface ValidMakers {
 	readonly id: () => boolean;
 	/** Whether the date `now` is about to make is one `createdAt` accepts as it is. */
 	readonly createdAt: () => boolean;
+	/**
+	 * An id for the moment `now` has just returned, made as `generateId` would
+	 * make it then, without reading the clock again. Called only right after
+	 * `now`, by the same construction.
+	 */
+	readonly idNow?: () => unknown;
 }
 
 /**

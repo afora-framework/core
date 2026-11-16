@@ -118,3 +118,47 @@ test("what an entity vouches for does not reach the next record", () => {
 		),
 	).toEqual([["id"]]);
 });
+
+/** The unix milliseconds a UUID v7 holds. */
+const millisecondOf = (id: string) =>
+	Number.parseInt(id.replace(/-/g, "").slice(0, 12), 16);
+
+test("an id made with its createdAt holds the same millisecond, from one read of the clock", () => {
+	const reads = Date.now;
+	let count = 0;
+	Date.now = () => {
+		count++;
+		return reads();
+	};
+	try {
+		const user = new User({ name: "Jane" });
+		expect(millisecondOf(user.id)).toBe(Date.parse(user.createdAt));
+		expect(count).toBe(1);
+		const parsed = User.safeParse({ name: "Ann" });
+		if (parsed.issues) throw new Error("expected an entity");
+		expect(millisecondOf(parsed.value.id)).toBe(
+			Date.parse(parsed.value.createdAt),
+		);
+	} finally {
+		Date.now = reads;
+	}
+});
+
+test("an id made without a new createdAt reads the clock itself, never an old moment", () => {
+	const old = new User({ name: "Jane" });
+	const before = Date.now();
+	// A createdAt brought by the value: the id is made now, not at `old`'s time.
+	const user = new User({ name: "Ann", createdAt: old.createdAt });
+	expect(millisecondOf(user.id)).toBeGreaterThanOrEqual(before);
+	expect(user.createdAt).toBe(old.createdAt);
+});
+
+test("with a configured generator, an id made with createdAt comes from it", () => {
+	let made = 0;
+	configure({
+		idGenerator: () =>
+			`0190a6d6-7c4e-7b2a-9f3e-${String(++made).padStart(12, "0")}`,
+	});
+	const user = new User({ name: "Jane" });
+	expect(user.id).toBe("0190a6d6-7c4e-7b2a-9f3e-000000000001");
+});
