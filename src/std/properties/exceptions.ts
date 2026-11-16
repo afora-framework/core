@@ -49,3 +49,11 @@ export const InvalidFileOptions = exceptionOf({
 });
 
 markExported(InvalidFile, InvalidFileOptions);
+
+/** `Url.with({ protocols })` got protocols that are not URL schemes, such as `"https"` without its colon. */
+export const InvalidUrlOptions = exceptionOf({
+	layer: ExceptionLayers.Schema,
+	name: "InvalidUrlOptions",
+	message: ({ reason }: { readonly reason: string }, source) =>
+		`Invalid options for the URL property "${source}": ${reason}`,
+});

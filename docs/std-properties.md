@@ -35,8 +35,10 @@ Every property first checks the type of the value (a string where a string is ex
 | `ctx.slug`  | `Slug`  | any text; stored as lower-case words joined by `-`, up to 255 | slugifies it: `"  Olá Mundo! "` becomes `"ola-mundo"` | unique | `demo-slug`                            |
 | `ctx.email` | `Email` | an email address, up to 254 characters                        | trims and lower-cases it                              |        | `demo@example.com`                     |
 | `ctx.phone` | `Phone` | a phone number in E.164 (`+` and up to 15 digits)             | drops spaces, dots, dashes and parentheses            |        | `+5511999999999`                       |
-| `ctx.url`   | `Url`   | a URL, up to 2048 characters                                  | trims it                                              |        | `https://example.com`                  |
+| `ctx.url`   | `Url`   | an `http:` or `https:` URL, up to 2048 characters             | trims it                                              |        | `https://example.com`                  |
 | `ctx.ip`    | `Ip`    | an IPv4 or IPv6 address                                       | trims it                                              |        | `127.0.0.1`                            |
+
+`Url` accepts only `http:` and `https:` URLs, in any case (`HTTPS://` too): `javascript:`, `data:`, `file:`, `vbscript:` and every other protocol are rejected, so a `Url` is safe to put in a link. `Url.with({ protocols })` lists the protocols accepted instead, each with its colon, and keeps the other options of `with`: `Url.with({ protocols: ["https:", "mailto:"] })`, or `Url.with({ protocols: ["postgres:", "postgresql:"] })` for a connection string in an [environment](environments.md). A protocol that is not a scheme (`"https"`, without its colon) throws `InvalidUrlOptions` when the class is declared. The protocols are checked by a `pattern` in the schema, so OpenAPI documents them.
 
 `Id.generate()` makes a new id with the configured generator: a UUID v7 by default, time-ordered, so ids sort by creation on any runtime. An entity gets its `id` this way; [Runtime](runtime.md) explains how to replace the generator. `Slug` is `unique`, so a record lists every `Slug` key in `options.unique` and a repository gets `findBy<Key>` for it.
 
