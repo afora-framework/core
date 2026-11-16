@@ -67,27 +67,40 @@ export function isScalarKey(blueprint: AnyBlueprint, name: string): boolean {
 }
 
 /**
+ * Whether `status` can be one of the other statuses of a route: a 2xx with
+ * a body (not 204 or 205), a 4xx or a 5xx, except 400 and 500, which every
+ * operation has for its problems.
+ */
+function isChosenStatus(status: unknown): boolean {
+	return (
+		Number.isInteger(status) &&
+		(((status as number) >= 200 &&
+			(status as number) <= 299 &&
+			status !== 204 &&
+			status !== 205) ||
+			((status as number) >= 400 &&
+				(status as number) <= 599 &&
+				status !== 400 &&
+				status !== 500))
+	);
+}
+
+/** Why a status of `statuses` is refused: the message of {@link statusesIssue}. */
+const CHOSEN_STATUSES =
+	"a 2xx with a body (not 204 or 205), a 4xx or a 5xx; not 1xx or 3xx, and not 400 or 500, which every operation keeps for its problems";
+
+/**
  * Why `statuses` cannot be the other statuses of a route whose status is
- * `status` (named `where`), or `undefined`: distinct integers from 200 to
- * 599, except 204 and 304, without `status`.
+ * `status` (named `where`), or `undefined`: distinct statuses that pass
+ * {@link isChosenStatus}, without `status`.
  */
 export function statusesIssue(
 	statuses: unknown,
 	status: number,
 	where: string,
 ): string | undefined {
-	if (
-		!Array.isArray(statuses) ||
-		statuses.some(
-			(value) =>
-				!Number.isInteger(value) ||
-				value < 200 ||
-				value > 599 ||
-				value === 204 ||
-				value === 304,
-		)
-	) {
-		return `Expected ${where} to be a list of statuses from 200 to 599, except 204 and 304 (they send no body).`;
+	if (!Array.isArray(statuses) || !statuses.every(isChosenStatus)) {
+		return `Expected ${where} to be a list of statuses, each ${CHOSEN_STATUSES}.`;
 	}
 	if (new Set(statuses).size !== statuses.length) {
 		return `${where} names a status twice.`;

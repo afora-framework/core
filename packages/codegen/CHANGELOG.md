@@ -4,7 +4,7 @@
 
 ### A status chosen at run time (#116)
 
-- A use case route takes `"statuses": [503]`, the other statuses its `execute` may choose with `withStatus` (in hand-written code, or in the function of a `run` step): checked as `useCaseOf` checks it (`invalid_route` for a status out of 200 to 599, 204, 304, a duplicate or the route `status`), generated and extracted back. `afora.schema.json` has it.
+- A use case route takes `"statuses": [503]`, the other statuses its `execute` may choose with `withStatus` (in hand-written code, or in the function of a `run` step): checked as `useCaseOf` checks it (`invalid_route` for a status that is not a 2xx with a body, a 4xx or a 5xx, for 204, 205, 400, 500, a duplicate or the route `status`), generated and extracted back. `afora.schema.json` has it.
 
 ### Serial ids (#122)
 

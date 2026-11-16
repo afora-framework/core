@@ -57,7 +57,8 @@ export interface RouteFields {
 	/**
 	 * The other statuses `execute` may choose with `withStatus`, each with the
 	 * same response as `status`: `[503]` for a health check that answers 200
-	 * or 503. From 200 to 599, except 204 and 304 (they have no body), and not
+	 * or 503. Each a 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not
+	 * 400 or 500 (every operation keeps them for its problems), and not
 	 * `status` itself. An HTTP sink answers a status it does not list with
 	 * `UndeclaredStatus`.
 	 */

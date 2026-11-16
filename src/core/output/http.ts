@@ -439,9 +439,10 @@ export function compileRoutes(
 					call = { ...call, native: request.native };
 				}
 
-				const response = await operation.invoke(input, call);
 				// The status the use case chose: the route status or one it lists.
-				const chosen = takeStatus(response);
+				const { status: chosen, body: response } = takeStatus(
+					await operation.invoke(input, call),
+				);
 				let sent: number = status;
 				if (chosen !== undefined) {
 					if (chosen !== status && !statuses.includes(chosen)) {

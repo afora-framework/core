@@ -1,12 +1,39 @@
-/** The status each body was given by {@link withStatus}, until it is read. */
-const chosen = new WeakMap<object, number>();
+/** The status and the body of each view {@link withStatus} made. */
+const chosen = new WeakMap<
+	object,
+	{ readonly status: number; readonly body: object }
+>();
 
 /**
- * `body`, the body of a response, itself, marked with the HTTP `status` to
- * send it with, for the `execute` of a use case:
- * `return ok ? body : withStatus(503, body)`. The body is not changed or
- * copied (a frozen one is fine): the status is kept beside it, and the use
- * case takes it when `execute` returns. The use case validates the body
+ * Reads go to the body itself, with the body as the receiver, so that the
+ * getters of a record (backed by its own storage) answer as on the body; a
+ * method read from the view runs on the body too (`toJSON` included).
+ */
+const VIEW: ProxyHandler<object> = {
+	get: (target, key) => {
+		const value = Reflect.get(target, key, target);
+		// An inherited method only: an own value of a frozen body must be
+		// given as it is.
+		return typeof value === "function" &&
+			key !== "constructor" &&
+			!Object.hasOwn(target, key)
+			? (value as (...args: unknown[]) => unknown).bind(target)
+			: value;
+	},
+	has: (target, key) => Reflect.has(target, key),
+	ownKeys: (target) => Reflect.ownKeys(target),
+	getOwnPropertyDescriptor: (target, key) =>
+		Reflect.getOwnPropertyDescriptor(target, key),
+};
+
+/**
+ * A view of `body`, the body of a response, that carries the HTTP `status`
+ * to send it with, for the `execute` of a use case:
+ * `return ok ? body : withStatus(503, body)`. The view is a new value for
+ * each call, typed as the body and reading as it (fields, getters, keys,
+ * `Array.isArray`); the body itself is not changed (a frozen or shared one is
+ * fine) and carries no status, so another call that returns it is not
+ * affected. The use case takes the status and the body when `execute` returns. The use case validates the body
  * against its `response` as usual. The route of the use case declares each
  * status other than its default one in `route.statuses`
  * (`{ method: "get", path: "/health", statuses: [503] }`): an HTTP sink
@@ -38,26 +65,32 @@ export function withStatus<Body extends object>(
 	status: number,
 	body: Body,
 ): Body {
-	chosen.set(body, status);
-	return body;
+	if (typeof body !== "object" || body === null) return body;
+	const view = new Proxy<Body>(body, VIEW as ProxyHandler<Body>);
+	chosen.set(view, { status, body });
+	return view;
 }
 
 /**
  * The status {@link withStatus} gave `value`, or `undefined`. A sink that
- * serves HTTP reads it on what `operation.invoke` resolves with.
+ * serves HTTP reads it on what `operation.invoke` resolves with; a transform
+ * that wraps `invoke` must resolve with that same value for it to survive.
  */
 export function chosenStatusOf(value: unknown): number | undefined {
 	return typeof value === "object" && value !== null
-		? chosen.get(value)
+		? chosen.get(value)?.status
 		: undefined;
 }
 
 /**
- * The status {@link withStatus} gave `value`, or `undefined`, and forgets
- * it: the same object returned again later has no status of its own.
+ * The status {@link withStatus} gave `value` and the body it was given, or
+ * no status and `value` itself.
  */
-export function takeStatus(value: unknown): number | undefined {
-	const status = chosenStatusOf(value);
-	if (status !== undefined) chosen.delete(value as object);
-	return status;
+export function takeStatus(value: unknown): {
+	readonly status: number | undefined;
+	readonly body: unknown;
+} {
+	const mark =
+		typeof value === "object" && value !== null ? chosen.get(value) : undefined;
+	return mark ?? { status: undefined, body: value };
 }

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	chosenStatusOf,
 	compileRoutes,
 	type HttpOptions,
 	type HttpRequest,
@@ -8,16 +9,18 @@ import {
 } from "../../adapters";
 import {
 	blueprintOf,
-	chosenStatusOf,
 	commandOf,
+	ExceptionLayers,
 	entityOf,
 	eventOf,
+	exceptionOf,
 	InvalidOutputStage,
 	InvalidUseCaseDeclaration,
 	listOf,
 	openapi,
 	outputOf,
 	Route,
+	recordOf,
 	useCaseOf,
 	withStatus,
 } from "../../index";
@@ -81,38 +84,143 @@ const routeOf = (id: string, options?: HttpOptions) => {
 };
 
 describe("withStatus", () => {
-	test("gives the body itself, untouched, with the status kept beside it", () => {
-		const body = Object.freeze({ ok: false });
+	test("gives a view of the body for this call: the body itself has no status", () => {
+		const body = Object.freeze({ ok: false, nested: { a: 1 } });
 		const value = withStatus(503, body);
-		expect(value).toBe(body);
+		expect(value).not.toBe(body);
 		expect(value.ok).toBe(false);
-		expect(Object.keys(value)).toEqual(["ok"]);
+		expect(value.nested).toBe(body.nested);
+		expect(Object.keys(value)).toEqual(["ok", "nested"]);
+		expect("ok" in value).toBe(true);
+		expect(JSON.stringify(value)).toBe(JSON.stringify(body));
 		expect(chosenStatusOf(value)).toBe(503);
-		expect(chosenStatusOf({ ok: false })).toBeUndefined();
+		expect(chosenStatusOf(body)).toBeUndefined();
 		expect(chosenStatusOf("text")).toBeUndefined();
+		const list = withStatus(503, [1, 2]);
+		expect(Array.isArray(list)).toBe(true);
+		expect(list.map((item) => item * 2)).toEqual([2, 4]);
+		expect(list).toHaveLength(2);
 	});
 
-	test("the use case takes the status: the same body returned again has none", async () => {
-		const shared = { ok: true, database: { latency: 1 } };
-		class Shared extends useCaseOf({
-			name: "Shared",
-			blueprint: blueprintOf((ctx) => ({ down: ctx.boolean })),
-			response: HealthResponse,
-			route: { method: "get", path: "/shared", statuses: [503] },
-		}) {
-			override async execute() {
-				return this.input.down ? withStatus(503, shared) : shared;
+	test("a record reads through the view: getters, methods and toJSON", () => {
+		const Note = recordOf(
+			blueprintOf((ctx) => ({ title: ctx.string, secret: ctx.password })),
+		);
+		const note = new Note({
+			title: "t",
+			secret:
+				"$argon2id$v=19$m=65536,t=2,p=1$c29tZXNhbHRzb21lc2FsdA$4VbQ3OqJ7xk8Y0mG0iZ1c2k1m2Qe0sQeJ7xk8Y0mG0i",
+		});
+		const view = withStatus(503, note);
+		expect(view.title).toBe("t");
+		expect(view instanceof Note).toBe(true);
+		expect(view.toJSON()).toEqual(note.toJSON());
+		expect(JSON.parse(JSON.stringify(view))).toEqual({
+			title: "t",
+			secret: "********",
+		});
+	});
+
+	const shared = Object.freeze({ ok: true, database: { latency: 1 } });
+	class Shared extends useCaseOf({
+		name: "Shared",
+		blueprint: blueprintOf((ctx) => ({
+			down: ctx.boolean,
+			fail: ctx.optional.boolean,
+			wait: ctx.optional.integer,
+		})),
+		response: HealthResponse,
+		route: { method: "get", path: "/shared", statuses: [503] },
+	}) {
+		override async execute() {
+			const answer = this.input.down ? withStatus(503, shared) : shared;
+			if (this.input.wait) {
+				await new Promise((resolve) => setTimeout(resolve, this.input.wait));
 			}
+			if (this.input.fail) throw new Error("after withStatus");
+			return answer;
 		}
-		const [operation] = outputOf({
+	}
+	const sharedRoute = compileRoutes(
+		outputOf({
 			name: "Shared",
 			commands: [commandOf({ name: "Shared", useCases: { get: Shared } })],
-		}).operations;
-		expect(chosenStatusOf(await operation?.invoke({ down: true }))).toBe(503);
+		}).operations,
+		{},
+		stage,
+		{ source: "test" },
+	).routes[0];
+	const sharedRequest = (query: Record<string, string>) =>
+		(sharedRoute as NonNullable<typeof sharedRoute>).handle(request(query));
+
+	test("a status chosen before a throw does not reach the next call", async () => {
+		const failed = await sharedRequest({ down: "true", fail: "true" });
+		expect(failed.status).toBe(500);
+		const next = await sharedRequest({ down: "false" });
+		expect(next.status).toBe(200);
 		expect(chosenStatusOf(shared)).toBeUndefined();
-		expect(
-			chosenStatusOf(await operation?.invoke({ down: false })),
-		).toBeUndefined();
+	});
+
+	test("concurrent calls returning one shared body keep their own status", async () => {
+		const [a, b] = await Promise.all([
+			sharedRequest({ down: "true", wait: "10" }),
+			sharedRequest({ down: "false", wait: "1" }),
+		]);
+		expect([a.status, b.status]).toEqual([503, 200]);
+		expect(a.body).toBe(b.body);
+	});
+
+	test("steps: a later step that fails leaves no status behind", async () => {
+		const Failing = exceptionOf({
+			layer: ExceptionLayers.UseCase,
+			name: "StepFailed",
+			message: "failed",
+		});
+		const mark = () => withStatus(503, shared);
+		const Steps = useCaseOf({
+			name: "SharedSteps",
+			blueprint: blueprintOf((ctx) => ({ fail: ctx.boolean })),
+			response: HealthResponse,
+			route: { method: "get", path: "/steps", statuses: [503] },
+			errors: [Failing],
+			steps: [
+				{ run: "mark", fn: mark, as: "health" },
+				{ ensure: "false", value: "$input.fail", error: Failing },
+				{ return: "$health" },
+			],
+		});
+		const [operation] = outputOf({
+			name: "Steps",
+			commands: [commandOf({ name: "Steps", useCases: { get: Steps } })],
+		}).operations;
+		await expect(operation?.invoke({ fail: true })).rejects.toMatchObject({
+			name: "StepFailed",
+		});
+		expect(chosenStatusOf(shared)).toBeUndefined();
+		expect(chosenStatusOf(await operation?.invoke({ fail: false }))).toBe(503);
+	});
+
+	test("a list of records as the body", async () => {
+		const Item = recordOf(blueprintOf((ctx) => ({ name: ctx.string })));
+		class Items extends useCaseOf({
+			name: "Items",
+			blueprint: blueprintOf(() => ({})),
+			response: listOf(Item),
+			route: { method: "get", path: "/items", statuses: [206] },
+		}) {
+			override async execute() {
+				return withStatus(206, [new Item({ name: "a" })]);
+			}
+		}
+		const direct = await new Items({}).execute();
+		expect(direct.map((item) => item.name)).toEqual(["a"]);
+		const [operation] = outputOf({
+			name: "Items",
+			commands: [commandOf({ name: "Items", useCases: { list: Items } })],
+		}).operations;
+		const value = await operation?.invoke({});
+		expect(chosenStatusOf(value)).toBe(206);
+		expect(outputValueOf(value)).toEqual([{ name: "a" }]);
 	});
 
 	test("a direct call gives the body only, validated against the response", async () => {
@@ -255,11 +363,24 @@ describe("route.statuses", () => {
 				response: HealthResponse,
 				route: { method: "get", ...route },
 			});
-		for (const statuses of [[204], [304], [199], [600], [2.5], "503"]) {
+		for (const statuses of [
+			[100],
+			[199],
+			[204],
+			[205],
+			[301],
+			[304],
+			[400],
+			[500],
+			[600],
+			[2.5],
+			"503",
+		]) {
 			expect(declare({ statuses })).toThrow(
-				"Expected route.statuses to be a list of statuses from 200 to 599, except 204 and 304",
+				"Expected route.statuses to be a list of statuses, each a 2xx with a body (not 204 or 205), a 4xx or a 5xx; not 1xx or 3xx, and not 400 or 500",
 			);
 		}
+		expect(declare({ statuses: [206, 404, 409, 422, 503] })).not.toThrow();
 		expect(declare({ statuses: [503, 503] })).toThrow(
 			"route.statuses names a status twice.",
 		);
@@ -378,23 +499,39 @@ describe("OpenAPI", () => {
 		);
 	});
 
-	test("a status both chosen and an error gives the response or a problem", () => {
-		const document = output.pipe(
-			openapi({
-				info: { title: "Api", version: "1" },
-				route: { "Monitor.health": { statuses: [500] } },
-			}),
-		) as { paths: Record<string, Record<string, { responses: object }>> };
-		const health = document.paths["/health"]?.get?.responses as Record<
+	test("a status both chosen and a declared error gives the response or a problem", () => {
+		const Locked = exceptionOf({
+			layer: ExceptionLayers.UseCase,
+			name: "Locked",
+			message: "locked",
+		});
+		class Lock extends useCaseOf({
+			name: "Lock",
+			blueprint: blueprintOf(() => ({})),
+			response: HealthResponse,
+			errors: [Locked],
+			route: { method: "get", path: "/lock", statuses: [422] },
+		}) {
+			override async execute() {
+				return { ok: true, database: { latency: 1 } };
+			}
+		}
+		const document = outputOf({
+			name: "Lock",
+			commands: [commandOf({ name: "Lock", useCases: { lock: Lock } })],
+		}).pipe(openapi({ info: { title: "Api", version: "1" } })) as {
+			paths: Record<string, Record<string, { responses: object }>>;
+		};
+		const lock = document.paths["/lock"]?.get?.responses as Record<
 			string,
 			{ description: string; content: Record<string, unknown> }
 		>;
-		expect(Object.keys(health["500"]?.content ?? {})).toEqual([
+		expect(Object.keys(lock["422"]?.content ?? {})).toEqual([
 			"application/json",
 			"application/problem+json",
 		]);
-		expect(health["500"]?.description).toBe(
-			"Internal server error. Chosen by the operation, with the response as its body. Or a problem: Internal error.",
+		expect(lock["422"]?.description).toBe(
+			"Unprocessable content. Chosen by the operation, with the response as its body. Or a problem: Declared error of the operation. Declared: Locked.",
 		);
 	});
 });

@@ -160,7 +160,17 @@ describe("route and access in a spec", () => {
 		expect(
 			codes(edited((s) => (s.useCases.CreateNote.route.status = 500))),
 		).toEqual(["useCases.CreateNote.route.status: invalid_route"]);
-		for (const statuses of [[204], [503, 503], [201], "503"]) {
+		for (const statuses of [
+			[101],
+			[204],
+			[205],
+			[302],
+			[400],
+			[500],
+			[503, 503],
+			[201],
+			"503",
+		]) {
 			expect(
 				codes(edited((s) => (s.useCases.CreateNote.route.statuses = statuses))),
 			).toEqual(["useCases.CreateNote.route.statuses: invalid_route"]);

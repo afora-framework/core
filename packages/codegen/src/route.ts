@@ -140,18 +140,16 @@ export function checkRoute(
 		const status = (route.status as number | undefined) ?? 200;
 		if (
 			!Array.isArray(statuses) ||
-			statuses.some(
+			!statuses.every(
 				(value) =>
-					!Number.isInteger(value) ||
-					value < 200 ||
-					value > 599 ||
-					value === 204 ||
-					value === 304,
+					Number.isInteger(value) &&
+					((value >= 200 && value <= 299 && value !== 204 && value !== 205) ||
+						(value >= 400 && value <= 599 && value !== 400 && value !== 500)),
 			)
 		) {
 			bad(
 				[...path, "statuses"],
-				'"statuses" is a list of statuses from 200 to 599, except 204 and 304 (they send no body), e.g. [503].',
+				'"statuses" is a list of statuses, each a 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not 400 or 500 (kept for problems), e.g. [503].',
 			);
 		} else if (new Set(statuses).size !== statuses.length) {
 			bad([...path, "statuses"], '"statuses" names a status twice.');

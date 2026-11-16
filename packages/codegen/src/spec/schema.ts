@@ -756,11 +756,23 @@ const UseCaseRoute = Type.Object(
 			),
 		),
 		statuses: Type.Optional(
-			Type.Array(Type.Integer({ minimum: 200, maximum: 599 }), {
-				uniqueItems: true,
-				description:
-					"The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. Not 204, 304 or the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500.",
-			}),
+			Type.Array(
+				Type.Integer({
+					minimum: 200,
+					maximum: 599,
+					not: {
+						anyOf: [
+							{ enum: [204, 205, 400, 500] },
+							{ minimum: 300, maximum: 399 },
+						],
+					},
+				}),
+				{
+					uniqueItems: true,
+					description:
+						"The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. A 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not 400 or 500 (kept for problems), nor the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500.",
+				},
+			),
 		),
 		query: Type.Optional(
 			StringList(

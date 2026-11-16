@@ -929,8 +929,10 @@ export abstract class AbstractUseCase<
 								() => (substitute as (input: unknown) => unknown)(input.value),
 							);
 							// A child gives its body only, whatever status it chose.
-							takeStatus(given);
-							const output = parseResponse(Child.response, given);
+							const output = parseResponse(
+								Child.response,
+								takeStatus(given).body,
+							);
 							if (output.issues)
 								invalidValue(output.issues, childSource, "response");
 							collectEvents(Child.response, output.value, state.events);
@@ -959,15 +961,15 @@ export abstract class AbstractUseCase<
 					);
 				};
 				try {
-					const body = await guard(
+					const returned = await guard(
 						{ layer: ExceptionLayers.UseCase, source },
 						() =>
 							span === undefined
 								? perform()
 								: runInSpan(tracer as ITracer, span, perform),
 					);
-					// Taken from the body itself: the parsed value is a copy.
-					const status = takeStatus(body);
+					// The view `withStatus` made carries the status of this call.
+					const { status, body } = takeStatus(returned);
 					const parsed = parseResponse(declaration.response, body);
 					if (parsed.issues) invalidValue(parsed.issues, source, "response");
 					collectEvents(declaration.response, parsed.value, state.events);

@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 545 exports.
+Tier: stable. 544 exports.
 
 ### Access
 
@@ -3290,13 +3290,6 @@ what is checked in the issues and the exception, e.g. the content type.
 The value is typed by a schema whose type is known (`Static`), else as
 `JsonValue`, as for a schema loaded at runtime. See `jsonSchemaIssues`.
 
-### chosenStatusOf
-
-*function* · tier: stable · `import { chosenStatusOf } from "@afora/core"`
-
-The status {@link withStatus} gave `value`, or `undefined`. A sink that
-serves HTTP reads it on what `operation.invoke` resolves with.
-
 ### commandBuilderOf
 
 *function* · tier: stable · `import { commandBuilderOf } from "@afora/core"`
@@ -4154,11 +4147,13 @@ stored.
 
 *function* · tier: stable · `import { withStatus } from "@afora/core"`
 
-`body`, the body of a response, itself, marked with the HTTP `status` to
-send it with, for the `execute` of a use case:
-`return ok ? body : withStatus(503, body)`. The body is not changed or
-copied (a frozen one is fine): the status is kept beside it, and the use
-case takes it when `execute` returns. The use case validates the body
+A view of `body`, the body of a response, that carries the HTTP `status`
+to send it with, for the `execute` of a use case:
+`return ok ? body : withStatus(503, body)`. The view is a new value for
+each call, typed as the body and reading as it (fields, getters, keys,
+`Array.isArray`); the body itself is not changed (a frozen or shared one is
+fine) and carries no status, so another call that returns it is not
+affected. The use case takes the status and the body when `execute` returns. The use case validates the body
 against its `response` as usual. The route of the use case declares each
 status other than its default one in `route.statuses`
 (`{ method: "get", path: "/health", statuses: [503] }`): an HTTP sink
@@ -4225,7 +4220,7 @@ const logged = wrapProvider(inMemoryProvider(), {
 
 ## @afora/core/adapters
 
-Tier: adapters. 73 exports.
+Tier: adapters. 74 exports.
 
 ### ApplicationDescription
 
@@ -4616,6 +4611,14 @@ What a use case depends on, by the name it has in the application.
 *interface* · tier: adapters · `import type { UseCaseDescription } from "@afora/core/adapters"`
 
 A use case: its metadata, fields and what it depends on.
+
+### chosenStatusOf
+
+*function* · tier: adapters · `import { chosenStatusOf } from "@afora/core/adapters"`
+
+The status {@link withStatus} gave `value`, or `undefined`. A sink that
+serves HTTP reads it on what `operation.invoke` resolves with; a transform
+that wraps `invoke` must resolve with that same value for it to survive.
 
 ### coerceTextValues
 

@@ -2200,9 +2200,6 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function checkJsonSchema(schema: unknown, value: unknown, options?: { readonly source?: string; }): JsonValue;",
     "export declare function checkJsonSchema<const Schema extends TSchema>(schema: Schema, value: unknown, options?: { readonly source?: string; }): Static<Schema>;",
   ],
-  "chosenStatusOf": [
-    "export declare function chosenStatusOf(value: unknown): number | undefined;",
-  ],
   "commandBuilderOf": [
     "export declare function commandBuilderOf<const Catalogs extends readonly IUseCaseCatalog[] = [ ]>(...catalogs: Catalogs): CommandBuilder<UseCasePluginContext<Catalogs>>;",
   ],
@@ -3082,6 +3079,9 @@ exports[`adapters entry (contract) 1`] = `
   ],
   "UseCaseDescription": [
     "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly responseList?: Extract<FieldDescription, { readonly kind: "list"; }>; readonly context?: FieldsDescription; readonly refs?: { readonly input?: string; readonly response?: string; readonly context?: string; }; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; readonly generic?: { readonly name: string; readonly version: string; readonly repository: string; readonly options: Readonly<Record<string, unknown>>; }; }",
+  ],
+  "chosenStatusOf": [
+    "export declare function chosenStatusOf(value: unknown): number | undefined;",
   ],
   "coerceTextValues": [
     "export declare function coerceTextValues(blueprint: AnyBlueprint, texts: Readonly<Record<string, string | undefined>>): Record<string, unknown>;",
@@ -7348,10 +7348,26 @@ exports[`afora.json schema 1`] = `
                       "description": "The status of a success.",
                     },
                     "statuses": {
-                      "description": "The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. Not 204, 304 or the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500.",
+                      "description": "The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. A 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not 400 or 500 (kept for problems), nor the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500.",
                       "items": {
                         "maximum": 599,
                         "minimum": 200,
+                        "not": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                204,
+                                205,
+                                400,
+                                500,
+                              ],
+                            },
+                            {
+                              "maximum": 399,
+                              "minimum": 300,
+                            },
+                          ],
+                        },
                         "type": "integer",
                       },
                       "type": "array",
@@ -7633,10 +7649,26 @@ exports[`afora.json schema 1`] = `
                       "description": "The status of a success.",
                     },
                     "statuses": {
-                      "description": "The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. Not 204, 304 or the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500.",
+                      "description": "The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. A 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not 400 or 500 (kept for problems), nor the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500.",
                       "items": {
                         "maximum": 599,
                         "minimum": 200,
+                        "not": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                204,
+                                205,
+                                400,
+                                500,
+                              ],
+                            },
+                            {
+                              "maximum": 399,
+                              "minimum": 300,
+                            },
+                          ],
+                        },
                         "type": "integer",
                       },
                       "type": "array",
