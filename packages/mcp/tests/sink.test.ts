@@ -6,6 +6,7 @@ import {
 	outputOf,
 	StdStages,
 	useCaseOf,
+	withStatus,
 } from "@afora/core";
 import { stageDescriptionOf } from "@afora/core/experimental";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -76,6 +77,27 @@ describe("mcpTools sink", () => {
 		expect(user.email).toBe("ana@example.com");
 		expect(user.password).toBe("********");
 		expect(result.content[0]?.text).not.toContain("argon2");
+	});
+
+	test("a status chosen with withStatus is ignored: the body is the result", async () => {
+		class Health extends useCaseOf({
+			name: "Health",
+			blueprint: blueprintOf(() => ({})),
+			response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+			route: { method: "get", path: "/health", statuses: [503] },
+		}) {
+			override async execute() {
+				return withStatus(503, { ok: false });
+			}
+		}
+		const mcp = outputOf({
+			name: "Health",
+			commands: [commandOf({ name: "Health", useCases: { check: Health } })],
+			pipe: [mcpTools({ name: "health", version: "1.0.0" })],
+		}).build() as McpTools;
+		const result = await mcp.call("health_check", {});
+		expect(result.isError).toBeUndefined();
+		expect(parse(result)).toEqual({ ok: false });
 	});
 
 	test("a declared error is a problem with isError", async () => {

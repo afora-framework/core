@@ -188,6 +188,7 @@ describe("routes of operations", () => {
 			path: "/api/posts/{slug}",
 			parameters: ["slug"],
 			status: 202,
+			statuses: [],
 			headers: {},
 			body: true,
 			query: ["page"],

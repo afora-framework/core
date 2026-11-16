@@ -56,6 +56,13 @@ export const ScopeKey: unique symbol = Symbol("afora.use-case.scope");
  */
 export const OriginKey: unique symbol = Symbol("afora.call.origin");
 
+/**
+ * Key of the options of `command.run` that takes a function to call with
+ * the status the use case chose with `withStatus`, if it chose one: how an
+ * output learns it. Not exported by the package.
+ */
+export const StatusKey: unique symbol = Symbol("afora.call.status");
+
 /** The provider `scope` gives the call in place of `provider`. */
 export function scopedProvider<Provider extends IRepositoryProvider>(
 	scope: ExecutionScope | undefined,

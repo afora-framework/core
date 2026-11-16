@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### A status chosen at run time (#116)
+
+- A tool call of a use case that returns `withStatus(status, body)` gives the body: the status is HTTP only. The guide names `route.statuses`.
+
 ### Serial ids (#122)
 
 - The guide names `"id": "serial"`, an integer the database assigns on `create`, and the providers that assign ids.

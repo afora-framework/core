@@ -369,6 +369,8 @@ export interface RouteSpec {
 	readonly method: string;
 	readonly path?: string;
 	readonly status?: 200 | 201 | 202 | 204;
+	/** The other statuses `execute` may choose with `withStatus`, e.g. `[503]`. */
+	readonly statuses?: readonly number[];
 	readonly query?: readonly string[];
 	readonly headers?: Readonly<Record<string, string>>;
 	readonly cookie?: Readonly<Record<string, string>>;

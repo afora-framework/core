@@ -21,6 +21,7 @@ import {
 	isScalarKey as isScalarInputKey,
 	isScalarSchema,
 	parametersOfPath,
+	statusesIssue,
 } from "../use-case/route";
 import type { RouteCookie } from "../use-case/types/route.interface";
 import { InvalidOutputStage } from "./exceptions";
@@ -101,6 +102,11 @@ export interface RouteOptions {
 			 * @default 200
 			 */
 			readonly status?: RouteStatus;
+			/**
+			 * The other statuses the use case may choose with `withStatus`,
+			 * over the `statuses` of its route; see `RouteFields.statuses`.
+			 */
+			readonly statuses?: readonly number[];
 		} & (
 			| {
 					readonly method?: Exclude<OpenAPIMethod, "delete">;
@@ -358,9 +364,13 @@ export function routeOptionsIssue(
 		for (const [id, entry] of Object.entries(route)) {
 			if (
 				!isObject(entry) ||
-				onlyKeys(entry, ["method", "path", "status", "body"], "route")
+				onlyKeys(
+					entry,
+					["method", "path", "status", "statuses", "body"],
+					"route",
+				)
 			) {
-				return `Expected ${where}.route["${id}"] to be { method?, path?, status?, body? }.`;
+				return `Expected ${where}.route["${id}"] to be { method?, path?, status?, statuses?, body? }.`;
 			}
 			if (
 				entry.method !== undefined &&
@@ -382,6 +392,16 @@ export function routeOptionsIssue(
 				!(SUCCESS_STATUSES as readonly unknown[]).includes(entry.status)
 			) {
 				return `Expected ${where}.route["${id}"].status to be one of ${SUCCESS_STATUSES.join(", ")}.`;
+			}
+			if (entry.statuses !== undefined) {
+				// The status of the use case route is not known here: it is
+				// checked again with the operations.
+				const bad = statusesIssue(
+					entry.statuses,
+					(entry.status as number | undefined) ?? Number.NaN,
+					`${where}.route["${id}"].statuses`,
+				);
+				if (bad) return bad;
 			}
 			if (entry.body !== undefined) {
 				if (typeof entry.body !== "boolean") {
@@ -503,6 +523,11 @@ export interface OperationRoute {
 	readonly parameters: readonly string[];
 	/** The status of a success: `200` unless `route` says otherwise. */
 	readonly status: RouteStatus;
+	/**
+	 * The other statuses a success may have, chosen by the use case with
+	 * `withStatus`: from `route`, else from the use case route.
+	 */
+	readonly statuses: readonly number[];
 	/** The static headers of a success, from `responses`. */
 	readonly headers: { readonly [name: string]: string };
 	/**
@@ -607,11 +632,20 @@ export function operationRoutes(
 				source,
 			);
 		}
+		const status = chosen.status ?? declared?.status ?? 200;
+		const statuses = chosen.statuses ?? declared?.statuses ?? [];
+		if (statuses.includes(status)) {
+			invalid(
+				`${source}.route["${operation.id}"] makes ${status} its status, which its statuses list too: list only the others.`,
+				source,
+			);
+		}
 		routes.set(operation.id, {
 			method,
 			path,
 			parameters,
-			status: chosen.status ?? declared?.status ?? 200,
+			status,
+			statuses,
 			headers: { ...(responses[operation.id]?.headers ?? {}) },
 			// `body` of the use case route is only ever set on a delete.
 			body:
@@ -703,11 +737,34 @@ const STATUS_TEXT: Readonly<Record<number, string>> = {
 	500: "Internal error.",
 };
 
-const SUCCESS_TEXT: Readonly<Record<RouteStatus, string>> = {
+const SUCCESS_TEXT: Readonly<Record<number, string>> = {
 	200: "Success.",
 	201: "Created.",
 	202: "Accepted.",
+	203: "Non-authoritative information.",
 	204: "No content.",
+	206: "Partial content.",
+	207: "Multi-status.",
+	300: "Multiple choices.",
+	301: "Moved permanently.",
+	302: "Found.",
+	303: "See other.",
+	307: "Temporary redirect.",
+	308: "Permanent redirect.",
+	400: "Bad request.",
+	401: "Unauthorized.",
+	403: "Forbidden.",
+	404: "Not found.",
+	409: "Conflict.",
+	410: "Gone.",
+	422: "Unprocessable content.",
+	423: "Locked.",
+	429: "Too many requests.",
+	500: "Internal server error.",
+	501: "Not implemented.",
+	502: "Bad gateway.",
+	503: "Service unavailable.",
+	504: "Gateway timeout.",
 };
 
 function responsesOf(
@@ -761,26 +818,42 @@ function responsesOf(
 	}
 	const withHeaders = (headers: Obj) =>
 		Object.keys(headers).length > 0 ? { headers } : {};
+	const json = { "application/json": { schema: response } };
 	const responses: Obj = {
 		[String(route.status)]: {
 			description: SUCCESS_TEXT[route.status],
 			...withHeaders(successHeaders),
-			...(route.status === 204
-				? {}
-				: { content: { "application/json": { schema: response } } }),
+			...(route.status === 204 ? {} : { content: json }),
 		},
 	};
+	// The statuses `execute` may choose: the same body, as a success.
+	for (const status of route.statuses) {
+		responses[String(status)] = {
+			description: `${SUCCESS_TEXT[status] ?? `Status ${status}.`} Chosen by the operation, with the response as its body.`,
+			...withHeaders(successHeaders),
+			content: json,
+		};
+	}
 	for (const status of [...names.keys()].sort((a, b) => a - b)) {
 		const declared = names.get(status) ?? [];
 		const text = STATUS_TEXT[status] ?? `Error ${status}.`;
-		responses[String(status)] = {
-			description:
-				declared.length > 0
-					? `${text} Declared: ${declared.join(", ")}.`
-					: text,
-			...withHeaders(idHeaders),
-			content: problemContent,
-		};
+		const description =
+			declared.length > 0 ? `${text} Declared: ${declared.join(", ")}.` : text;
+		const chosen = responses[String(status)] as
+			| { description: string; content: Obj }
+			| undefined;
+		// A status both chosen and an error: the response or a problem.
+		responses[String(status)] = chosen
+			? {
+					...chosen,
+					description: `${chosen.description} Or a problem: ${description}`,
+					content: { ...chosen.content, ...problemContent },
+				}
+			: {
+					description,
+					...withHeaders(idHeaders),
+					content: problemContent,
+				};
 	}
 	return responses;
 }
@@ -856,6 +929,7 @@ function requirementOf(requirement: SecurityRequirement): {
  * scalar property; a `delete` with `body: true` sends it as a JSON body,
  * required only when a field left in it is. Responses: the `route` status (`200` by default; `204`
  * without content) with the response schema and the `responses` headers,
+ * the same for each of the route `statuses` (chosen with `withStatus`),
  * `400` and `500` always, and the status of each declared error (`statusOf`:
  * `statuses` of the output, else 422); `requestId` adds its header to all of
  * them. Operations carry no repository dependencies, so `404` and `409`

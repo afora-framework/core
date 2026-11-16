@@ -17,6 +17,24 @@ export const DuplicateOperation = exceptionOf({
 });
 
 /**
+ * A use case chose, with `withStatus`, a status its route does not declare
+ * (neither its status nor one of its `statuses`): the HTTP sink answers a
+ * 500 whose detail is masked, never the undeclared status.
+ */
+export const UndeclaredStatus = exceptionOf({
+	layer: ExceptionLayers.Output,
+	name: "UndeclaredStatus",
+	message: ({
+		status,
+		statuses,
+	}: {
+		readonly status: number;
+		readonly statuses: readonly number[];
+	}) =>
+		`The status ${status} is not declared by the route (${statuses.join(", ")}): add it to route.statuses.`,
+});
+
+/**
  * An operation that declares its `access` was called without an
  * authenticated caller: no credentials, or ones that were not accepted. A
  * 401.

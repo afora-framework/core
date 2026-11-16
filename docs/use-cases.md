@@ -182,6 +182,7 @@ The blueprint stays the only description of the input: a route adds no schema, i
 - **`method`** is `get`, `post`, `put`, `patch` or `delete`, in either case; it is stored in lower case.
 - **`path`** starts with `/`, and a `{name}` segment fills the input key `name`. Without a path, the sink uses its default (`/{command}/{operation}`).
 - **`status`** is the status of a success: `200` (the default), `201`, `202` or `204`.
+- **`statuses`** lists the other statuses `execute` may choose at run time with `withStatus` (see [A status chosen at run time](#a-status-chosen-at-run-time)).
 - **`query`** lists input keys read from the query string. A `get` or `delete` route already reads from the query every key that has no other place, so `query` is for routes with a body.
 - **`headers`** and **`cookie`** map input keys to the header or the cookie each is read from: `{ locale: "accept-language" }`.
 - **`body`** is only for a `delete`: `body: true` reads what is left from a JSON body, as a `post` does, instead of from the query, for a client that sends `DELETE /push/subscriptions` with `{ "endpoint": "https://..." }`. An empty body is `{}`, and the keys the route places elsewhere are still read only from there. Any other method rejects it: a `get` never reads a body, and a `post`, `put` or `patch` always does. The types say so too: `RouteDeclaration` and `RouteSettings` take `body` only with a `delete` method (`RouteBody<Method>`; `RouteFields` is the rest of a route), as do `@Route` and the `route` option of a sink, and the declaration checks it again at run time.
@@ -190,7 +191,52 @@ The blueprint stays the only description of the input: a route adds no schema, i
 
 A key the route places is read only from that place: a value the client sends for it in the body or the query is dropped, so a missing header or cookie leaves the key absent and the blueprint decides whether that is valid. A key read from the path, the query, a header or a cookie arrives as text, so it must be a scalar property of the input (a number or a boolean is converted), and each key has one place. Anything else throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class whose decorator says another route than the one it already has (the same route again is accepted, which is what a class over a base generated from `afora.json` does).
 
-The route is data: `ListPosts.route` is the frozen declaration, `app.describe().useCases.ListPosts.route` and `afora.json` carry it, and a subclass inherits it. It names no server. The use case becomes an operation through a [command](commands.md), and the sink of an [output](outputs.md) (`openapi`, `hono`…) serves or documents it; the `route` option of that sink still overrides the method, path, status and `body` per operation id.
+The route is data: `ListPosts.route` is the frozen declaration, `app.describe().useCases.ListPosts.route` and `afora.json` carry it, and a subclass inherits it. It names no server. The use case becomes an operation through a [command](commands.md), and the sink of an [output](outputs.md) (`openapi`, `hono`…) serves or documents it; the `route` option of that sink still overrides the method, path, status, `statuses` and `body` per operation id.
+
+### A status chosen at run time
+
+A health check answers `200` when its database answers and `503` with the same body when it does not. `execute` says which with `withStatus(status, body)`, and the route declares each status other than its own in `statuses`:
+
+<!-- docs:code continue -->
+```ts
+import { withStatus } from "@afora/core";
+
+const HealthResponse = blueprintOf((ctx) => ({
+	ok: ctx.boolean,
+	database: blueprintOf((ctx) => ({ latency: ctx.integer })),
+}));
+
+async function ping(): Promise<number | undefined> {
+	return 3;
+}
+
+class Health extends useCaseOf({
+	name: "Health",
+	blueprint: blueprintOf(() => ({})),
+	response: HealthResponse,
+	route: { method: "get", path: "/health", statuses: [503] },
+}) {
+	override async execute() {
+		const latency = await ping();
+		const body = {
+			ok: latency !== undefined,
+			database: { latency: latency ?? -1 },
+		};
+		return body.ok ? body : withStatus(503, body);
+	}
+}
+
+// A direct call gives the body only: { ok, database }.
+const { ok } = await new Health({}).execute();
+```
+
+- **The body** is validated against the `response`, and the events of its entities are collected, as for any return. Every status of the route sends the same response.
+- **`statuses`** are each a 2xx with a body (not `204` or `205`), a 4xx or a 5xx, but not `400` or `500`, which every operation keeps for its problems (and documents), so neither a 1xx nor a 3xx; and not the route `status` itself (its default, `200`), which needs no declaration; each one once. Anything else throws `InvalidUseCaseDeclaration`, as the `route` option of a sink throws `InvalidOutputStage`.
+- **Over HTTP**, a sink built on `compileRoutes` (`hono`, `express`, `fastify`, `elysia`) sends the body as JSON with the chosen status. A status the route does not declare is never sent: the sink answers `UndeclaredStatus`, a 500 whose detail is masked. The `openapi` document has one response per status, with the same content.
+- **A 5xx chosen this way is a success**: the response, not a problem. An exception is the way to fail, and its 5xx problem is masked unless the output declares it.
+- **Everywhere else the status is not there**: `execute()` and `command.run` resolve with the body, a use case called as a dependency gives its body, and the `mcp` and `ws` sinks send the body. Only the value `operation.invoke` of an output resolves with carries it, for the sinks that serve HTTP to read (see [Outputs](outputs.md)).
+- **The value** of `withStatus(503, body)` is a view of `body` made for that call, typed as the body: its fields, getters, keys and methods read as on the body, and `Array.isArray` holds for a list. The status belongs to the view, never to the body, which is not changed or copied, so a shared or frozen body is fine: another call that returns the same object, at the same time or after a call that threw, sends its own status. A body is an object or an array, as a response is.
+- **In steps**, a `run` step may return `withStatus(...)` and the `return` step give its result (`{ return: "$health" }`); `afora.json` declares `route.statuses` the same way.
 
 `@Route(method, path?, options?)` (or `@Route(method, options)`) is a standard class decorator, with no `experimentalDecorators` and no metadata reflection; it also works as a legacy TypeScript decorator. Bun runs it as written. Node has no decorator syntax yet, so there the code goes through a compiler (`tsc` with a `target` of `ES2022` or lower, `tsx`, esbuild), or uses the `route` setting, which needs nothing.
 

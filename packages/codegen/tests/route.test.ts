@@ -22,7 +22,10 @@ afterAll(async () => {
 const FIND_TS = `import { Access, Route } from "@afora/core";
 import { FindNoteBase } from "../domain/use-cases";
 
-@Route("GET", "/notes/{id}", { headers: { locale: "accept-language" } })
+@Route("GET", "/notes/{id}", {
+	statuses: [503],
+	headers: { locale: "accept-language" },
+})
 @Access({ scopes: ["notes:read"], context: { userId: "subject" } })
 export class FindNote extends FindNoteBase {
 	override async execute() {
@@ -70,6 +73,7 @@ const notes: Spec = {
 			route: {
 				method: "get",
 				path: "/notes/{id}",
+				statuses: [503],
 				headers: { locale: "accept-language" },
 			},
 			access: { scopes: ["notes:read"], context: { userId: "subject" } },
@@ -156,6 +160,21 @@ describe("route and access in a spec", () => {
 		expect(
 			codes(edited((s) => (s.useCases.CreateNote.route.status = 500))),
 		).toEqual(["useCases.CreateNote.route.status: invalid_route"]);
+		for (const statuses of [
+			[101],
+			[204],
+			[205],
+			[302],
+			[400],
+			[500],
+			[503, 503],
+			[201],
+			"503",
+		]) {
+			expect(
+				codes(edited((s) => (s.useCases.CreateNote.route.statuses = statuses))),
+			).toEqual(["useCases.CreateNote.route.statuses: invalid_route"]);
+		}
 		expect(
 			codes(
 				edited(
@@ -250,6 +269,7 @@ describe("route and access in a spec", () => {
 			path: "/notes",
 			status: 201,
 		});
+		expect(useCases.FindNote.route.statuses).toEqual([503]);
 		expect(useCases.FindNote.access).toEqual({
 			scopes: ["notes:read"],
 			context: { userId: "subject" },
