@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.13 — 2026-11-16
 
 ### A status chosen at run time (#116)
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.13 — 2026-11-16
 
 This release adds per-entity ids (integers and natural keys included), services as dependencies, file uploads, list responses, a status chosen at run time, a body on `DELETE`, the JSON Schema of any field, and a provider wrapper with a spy for tests. Read the behavior changes first: one is a security fix that changes what a request may set.
 
