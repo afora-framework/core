@@ -242,7 +242,19 @@ export async function notifyAll() {
 
 `useApplication()` is typed by augmenting the `Register` interface once in the project, in a file of your own (codegen does not write it, so that two generated applications in one project do not conflict):
 
-<!-- docs:code skip: augments @afora/core, which would retype useApplication() in every other block -->
+<!-- docs:code file: domain/index.ts
+import { applicationOf } from "@afora/core";
+
+export const App = applicationOf({ name: "blog" });
+-->
+
+<!-- docs:code isolated -->
+<!-- docs:code context
+/* block */
+import { useApplication } from "@afora/core";
+
+const app: typeof App = useApplication();
+-->
 ```ts
 import type { App } from "./domain";
 

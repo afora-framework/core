@@ -11,7 +11,15 @@ bun add @afora/core @afora/otel @opentelemetry/api
 
 ## Example
 
-<!-- docs:code skip: Post, Posts, Blog and Api are the declarations of your application -->
+<!-- docs:code context
+// the declarations of your application
+import { blueprintOf, commandOf, entityOf, outputOf, repositoryOf } from "@afora/core";
+
+class Post extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+const Posts = repositoryOf({ entity: Post, actions: ["create"] });
+const Blog = commandOf({ name: "Blog", useCases: (ctx) => ({ publish: ctx.create(Posts) }) });
+const Api = outputOf({ name: "Api", commands: [Blog], pipe: [] });
+-->
 ```ts
 import { applicationOf } from "@afora/core";
 import { otelTracer } from "@afora/otel";
@@ -28,7 +36,7 @@ export const App = applicationOf({
 
 A request to `App.outputs.Api.build()`, on Hono or any HTTP sink, gives one trace:
 
-```
+```text
 command Blog.publish          afora.command=Blog.publish afora.operation=publish afora.outcome=ok
 └─ use-case Publish           afora.use_case=Publish afora.outcome=ok
    └─ repository Post.create  afora.repository=Post afora.method=create afora.use_case=Publish
@@ -44,7 +52,7 @@ command Blog.publish          afora.command=Blog.publish afora.operation=publish
 
 ## In an afora.json
 
-```json
+```json afora
 { "version": 1, "name": "blog", "trace": { "import": "../trace.ts#tracer" } }
 ```
 

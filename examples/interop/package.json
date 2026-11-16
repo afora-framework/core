@@ -3,15 +3,21 @@
 	"private": true,
 	"type": "module",
 	"devDependencies": {
+		"@elysiajs/cors": "^1.4.3",
+		"@hono/node-server": "^2.1.8",
 		"@hono/standard-validator": "^0.4.1",
+		"@hono/zod-validator": "^0.9.1",
 		"@standard-schema/utils": "^0.3.0",
 		"@tanstack/form-core": "^1.33.5",
 		"@trpc/server": "11",
 		"@types/bun": "^1.4.4",
+		"@types/cors": "^2.8.19",
 		"ajv": "8",
+		"cors": "^2.8.6",
 		"drizzle-orm": "0.45.4",
 		"hono": "^4.13.14",
 		"slugify": "^1.6.9",
-		"typebox": "^1"
+		"typebox": "^1",
+		"zod": "^4.6.7"
 	}
 }

@@ -19,7 +19,7 @@ export const App = applicationOf({
 
 One request to an output, on any of the HTTP sinks, is then one trace:
 
-```
+```text
 command Posts.publish                    afora.command=Posts.publish afora.operation=publish
 └─ use-case Publish                      afora.use_case=Publish
    ├─ repository Post.findBySlug         afora.repository=Post afora.method=findBySlug
@@ -62,12 +62,22 @@ The tests of the core (with a `sensitive` field) and of `@afora/otel` check it: 
 
 `ITracer` is two methods; `memoryTracer()` is one, for tests:
 
-<!-- docs:code skip: the application is elided (`/* ... */`), so `app.commands.Posts` has no type here -->
+<!-- docs:code context
+import { blueprintOf, commandOf, useCaseOf } from "@afora/core";
+
+const Title = blueprintOf((ctx) => ({ title: ctx.string }));
+class Publish extends useCaseOf({ name: "Publish", blueprint: Title, response: Title }) {
+	override async execute() {
+		return this.input;
+	}
+}
+const Posts = commandOf({ name: "Posts", useCases: { publish: Publish } });
+-->
 ```ts
-import { memoryTracer } from "@afora/core";
+import { applicationOf, memoryTracer } from "@afora/core";
 
 const tracer = memoryTracer();
-const app = applicationOf({ name: "blog", /* ... */ trace: tracer });
+const app = applicationOf({ name: "blog", commands: { Posts }, trace: tracer });
 await app.commands.Posts.run("publish", { title: "Hi" });
 tracer.spans.map((span) => [span.name, span.parent?.name, span.status]);
 // [["command Posts.publish", undefined, "ok"], ["use-case Publish", "command Posts.publish", "ok"], ...]

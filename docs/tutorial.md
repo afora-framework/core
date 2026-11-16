@@ -72,7 +72,7 @@ bun blog.ts
 #               npx tsx blog.ts
 ```
 
-```
+```text
 POST   /posts       { "title": "Hello", "slug": "hello", "body": "First post." }   -> 201 { "item": { "id": "...", ... } }
 GET    /posts                                                                      -> 200 { "items": [...], "total": 1, ... }
 GET    /posts/{id}                                                                 -> 200 { "item": {...} }
@@ -92,7 +92,7 @@ Four declarations, and what each one is for:
 
 Try what the declarations already guarantee:
 
-```
+```text
 POST /posts  { "title": "Twice", "slug": "hello", "body": "..." }   (the slug exists)
 -> 409 application/problem+json  { "title": "RepositoryUniqueViolation", ... }
 
@@ -273,7 +273,23 @@ A rule that is a plain sequence (find, check, write, return) can also be written
 
 `@Route("POST", "/posts/{slug}/publish")` says where `PublishPost` is served, on the class itself. The input stays described once, by the blueprint: the route only says that the key `slug` comes from the path. A route can read keys from the query, a header or a cookie the same way:
 
-<!-- docs:code skip: fragment, the decorator alone with its options -->
+<!-- docs:code continue -->
+<!-- docs:code context
+/* block */
+class ShowPost extends useCaseOf({
+	name: "ShowPost",
+	blueprint: blueprintOf((ctx) => ({
+		slug: ctx.slug,
+		locale: ctx.string,
+		session: ctx.string,
+	})),
+	response: blueprintOf(() => ({ post: Post })),
+}) {
+	override async execute(): Promise<{ post: Post }> {
+		throw new PostNotFound({ source: "ShowPost" });
+	}
+}
+-->
 ```ts
 @Route("GET", "/posts/{slug}", {
 	headers: { locale: "accept-language" },
@@ -298,7 +314,7 @@ The check runs before the use case, on every server and transport: a caller with
 
 **Who the caller is** comes from the sink. `auth: { jwt }` makes the `hono` sink read a bearer token, and the standard `login`, given `token`, issues one for the user that signed in, with the user's `roles` as its scopes:
 
-```
+```text
 POST /users  { "name": "Ana", "email": "ana@example.com", "password": "Str0ng!Pass", "roles": ["posts:write"] }
 -> 201 { "item": { "email": "ana@example.com", "password": "********", ... } }
 
@@ -331,17 +347,27 @@ Nothing above depends on Hono. To serve the same application on Fastify:
 bun add @afora/fastify fastify   # or: npm install @afora/fastify fastify
 ```
 
-<!-- docs:code skip: fragment, shows the fastify stage that replaces hono({...}) in the pipe above -->
+<!-- docs:code continue -->
 ```ts
 import { fastify } from "@afora/fastify";
 
-// in the pipe, in place of hono({...}):
-fastify({
-	auth: { jwt },
-	docs: { path: "/openapi.json", info: { title: "Blog", version: "1.0.0" } },
+// the same output, with fastify({...}) in place of hono({...}) in its pipe:
+const FastifyApi = outputOf({
+	name: "Api",
+	commands: [Accounts, Blog],
+	statuses: { PostNotFound: 404, NotTheAuthor: 403 },
+	pipe: [
+		fastify({
+			auth: { jwt },
+			docs: {
+				path: "/openapi.json",
+				info: { title: "Blog", version: "1.0.0" },
+			},
+		}),
+	],
 });
 
-await Api.build().listen({ port: 3000 }); // a FastifyInstance: it runs on Node as it is
+await FastifyApi.build().listen({ port: 3000 }); // a FastifyInstance: it runs on Node as it is
 ```
 
 The options are the same and so is every response: the servers share one route table and one test suite. Each takes its own middlewares (CORS, rate limiting, logging) as a second argument. See [HTTP providers](providers.md).

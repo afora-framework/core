@@ -145,7 +145,14 @@ The socket is authenticated once, on the upgrade, and the session carries the re
 
 Topics are private by default, and a topic pattern is not a permission on its own: an entity pushed to `tasks/*` reaches every subscriber of it. Check the topic against the caller with `authorize`:
 
-<!-- docs:code skip: fragment of the open handler above; canFollow stands for your own check -->
+<!-- docs:code continue -->
+<!-- docs:code context
+declare function canFollow(user: string | undefined, topic: string): boolean;
+
+function open(ws: import("bun").ServerWebSocket<{ values: WsValues; session?: WsSession }>) {
+/* block */
+}
+-->
 ```ts
 endpoint.session(ws, {
 	hub,

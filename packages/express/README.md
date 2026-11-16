@@ -68,7 +68,7 @@ const app = Api.build(); // an Express app
 app.listen(3000);
 ```
 
-```
+```text
 GET /api/posts/hello          -> 200 { "post": { "slug": "hello", ... } }
 GET /api/posts/Not%20A%20Slug -> 400 application/problem+json, with "issues"
 GET /openapi.json             -> the OpenAPI 3.1 document of the same routes
@@ -113,7 +113,11 @@ The requests are handled by the route table of the core (`compileRoutes` of `@af
 
 ## Middlewares and your own app
 
-<!-- docs:code skip: fragment: the second argument of the stage; cors is the cors package and tenantOf stands for your code -->
+<!-- docs:code context
+import { express } from "@afora/express";
+
+declare function tenantOf(host: string | undefined): string; // your code
+-->
 ```ts
 import cors from "cors";
 
