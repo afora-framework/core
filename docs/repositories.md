@@ -209,43 +209,75 @@ Without `create`, an id that holds no entity (or a soft-deleted one) throws `Rep
 
 **Providers.** A repository reads and writes through an `IRepositoryProvider` (v2), on plain unmasked values, each call getting a `context` with the `entity`, the repository `name`, its `unique` keys, `env` and, for an entity that expires, `expiry` (`{ key }`). Writing a provider is adapter work: `IRepositoryProvider`, `RepositoryContext`, `RepositoryData`, `ProviderQuery` and `ProviderCapabilities` are imported from `@afora/core/adapters` (see [API tiers](api-tiers.md)).
 
-<!-- docs:code skip: the shape of the interface, its parameters left untyped to read; import the real one from @afora/core/adapters -->
+<!-- docs:code context
+/* block */
+
+// the shape above is the interface, both ways
+const shape = (provider: IRepositoryProvider): Provider => provider;
+const real = (provider: Provider): IRepositoryProvider => provider;
+-->
 ```ts
 import type {
 	IRepositoryProvider,
+	ProviderCapabilities,
+	ProviderIncrementOptions,
+	ProviderMigrationResult,
 	ProviderQuery,
+	ProviderUpdateOptions,
+	RepositoryContext,
 	RepositoryData,
+	SchemaPlan,
 } from "@afora/core/adapters";
+import type { IdValue } from "@afora/core";
 
-interface IRepositoryProvider<Environment = unknown> {
-	findOne(context, query?: ProviderQuery): Promise<RepositoryData | undefined>; // first row after offset
-	findMany(context, query?: ProviderQuery): Promise<readonly RepositoryData[]>;
-	insert(context, data): Promise<void>;
+// the shape of IRepositoryProvider (import the real one)
+interface Provider<Environment = unknown> {
+	findOne(
+		context: RepositoryContext<Environment>,
+		query?: ProviderQuery,
+	): Promise<RepositoryData | undefined>; // first row after offset
+	findMany(
+		context: RepositoryContext<Environment>,
+		query?: ProviderQuery,
+	): Promise<readonly RepositoryData[]>;
+	insert(
+		context: RepositoryContext<Environment>,
+		data: RepositoryData,
+	): Promise<void | { readonly id: IdValue }>; // { id } when it assigned one (capabilities.generatedIds)
 	update(
-		context,
-		data,
-		options?: { expectedVersion?: number }, // capabilities.versioning
+		context: RepositoryContext<Environment>,
+		data: RepositoryData,
+		options?: ProviderUpdateOptions, // { expectedVersion?: number }, capabilities.versioning
 	): Promise<void>;
-	remove(context, id: string): Promise<void>;
-	count(context, query?: ProviderQuery): Promise<number>; // ignores orderBy, limit and offset
+	remove(context: RepositoryContext<Environment>, id: IdValue): Promise<void>;
+	count(
+		context: RepositoryContext<Environment>,
+		query?: ProviderQuery,
+	): Promise<number>; // ignores orderBy, limit and offset
 	increment?(
 		// capabilities.atomic
-		context,
-		id: string,
+		context: RepositoryContext<Environment>,
+		id: IdValue,
 		deltas: Readonly<Record<string, number>>,
-		options?: { set?: RepositoryData; create?: RepositoryData; now?: string },
+		options?: ProviderIncrementOptions, // { set?, create?, now? }
 	): Promise<RepositoryData>; // the row as stored
-	capabilities?: ProviderCapabilities; // e.g. { transactions: true, keyset: true, indexes: true, versioning: true, atomic: true }
+	readonly capabilities?: ProviderCapabilities; // e.g. { transactions: true, keyset: true, indexes: true, versioning: true, atomic: true, generatedIds: true }
 	transaction?<Result>(
 		run: (provider: IRepositoryProvider<Environment>) => Promise<Result>,
 	): Promise<Result>;
 	close?(): void | Promise<void>; // called by app.stop()
+	migrate?(
+		context: RepositoryContext<Environment>,
+		plan: SchemaPlan,
+	): Promise<void | ProviderMigrationResult>; // see Schema evolution
 }
 ```
 
 `context.name` is `<entity name>Repository`, and a provider that keeps one table or collection for each entity keys it by that name or by `recordNameOf(context.entity)`, not by `context.entity.name`: the name of a class changes when the code is minified, and the name declared with `entityOf(blueprint, { name: "User" })` does not (see [Records](records.md)).
 
 A provider that sets `capabilities.versioning` honors `options.expectedVersion` on `update`: it writes only when the stored `version` equals it, in the same atomic step, and throws `RepositoryConcurrencyConflict` otherwise (`RepositoryEntityNotFound` still for an unknown id). One that sets `capabilities.atomic` has `increment`: it adds each delta to its key (a missing value counts as 0) and stores `options.set` (the repository sends `updatedAt`) in one atomic write on a row that is not soft-deleted, and gives the row as stored; when the id holds none it inserts `options.create` as it is, or throws `RepositoryEntityNotFound` without it, and an insert that races with another one still adds the deltas. For an entity that expires (`context.expiry`), a row expired at `options.now` counts as absent, and `create` replaces it. A versioned entity's `version` is one of the deltas, so an increment makes a later `update` with the old version conflict.
+
+A provider that sets `capabilities.generatedIds` assigns the ids of entities declared with `Serial` ([Entities](entities.md#ids-the-database-assigns)): `create` gives `insert` the row without `id`, and the provider stores it with the id the database assigns (an auto-increment, `serial` or identity column) and gives it back as `{ id }`, a number. Every other insert has an `id` and gives nothing. A repository with `create` over a provider without the capability throws `UnsupportedIdentity` (when declared, when an application binds it, or on `app.start()` for a provider made on start), and so does `create` when the provider gives no id.
 
 A provider that sets `capabilities.keyset` also honors `after` on `findMany` (`ProviderQuery`): one value for each order of `orderBy`, those of the last row read, for which it gives only the rows strictly after that position in the same order (missing values first when ascending, last when descending). `count` ignores it. A provider without the capability is never given `after`. `providerContract` runs these cases when the capability is set.
 
@@ -452,6 +484,43 @@ await AuditEvents.count({ withExpired: true }); // every stored event
 
 Every read parses the stored rows against the current blueprint. For an entity that declares `schemaVersion`, `previousNames`, or a key with `fill` or `renamedFrom`, the repository first brings each row up to the current shape: its `upgrade` steps from the stored version (`$v`, 1 when absent), then the renames, fills and keys no longer declared, at any depth; the rows of related entities too. Writes store the current shape and `$v`. `app.migrate({ mode: "check" | "apply" })` rewrites the stored rows for good and moves those of previous names. See [Schema evolution](schema-evolution.md).
 
+## Wrapping a provider
+
+`wrapProvider(provider, { around })` gives a provider that runs `around` around each operation of `provider`, for logs, traces or spies, without writing a provider by hand. `around({ operation, context, args }, next)` gets the operation, its `RepositoryContext` and the arguments after it; `next()` calls the provider and gives what it gives, which `around` returns (or replaces). An error of `next()` rejects the operation unless `around` catches it.
+
+```ts
+import { inMemoryProvider, recordNameOf, wrapProvider } from "@afora/core";
+
+declare const tracer: {
+	startSpan(name: string): { end(status: "ok" | "error"): void };
+};
+
+const traced = wrapProvider(inMemoryProvider(), {
+	async around({ operation, context }, next) {
+		const span = tracer.startSpan(
+			`provider ${recordNameOf(context.entity)}.${operation}`,
+		);
+		try {
+			const result = await next();
+			span.end("ok");
+			return result;
+		} catch (error) {
+			span.end("error");
+			throw error;
+		}
+	},
+});
+```
+
+- The result is typed as `provider` (an `InMemoryProvider` stays one), with no cast. It is a plain frozen object with the same members, not an instance of the class of `provider` (`instanceof` is false), and the members other than the operations are bound to `provider` when it is wrapped.
+- `around` must give what `next()` gives: `next()` is typed with the result of the operation (`ProviderResults`), so forgetting `return` is a type error. Replacing the result takes a cast, `value as Awaited<ReturnType<typeof next>>`, and the value must be what the operation gives (a list for `findMany`, a number for `count`).
+- `operation` is a `ProviderOperation`: `findOne`, `findMany`, `insert`, `update`, `remove`, `count`, `increment` or `migrate`, the operations that take a context. `args` is typed by operation, so a `switch` on it is exhaustive and narrows `args` (`remove` gives `[id]`). They are a `ProviderCall`; the interceptor is a `ProviderInterceptor`.
+- It has the operations `provider` has and no other: `increment`, `migrate`, `transaction` and `close` stay absent when it has none, so what a repository accepts does not change.
+- `capabilities` is read from `provider` on each access, and its other members (methods bound to it, values) are kept. A provider of `providerOf` keeps its name and options.
+- A provider of `providersOf` (`Providers.main`) cannot be wrapped (`InvalidRepositoryDeclaration`): only an application binds it. Wrap the provider before giving it to `providersOf`, or the one `providerFrom`'s `create` gives.
+- The provider a `transaction` gives is wrapped with the same interceptor, so the operations run inside it go through `around` too. `transaction` itself and `close` take no context and are forwarded as they are.
+- Wraps compose, the last one outermost: in `wrapProvider(wrapProvider(dynamo, logs), spans)`, `spans` runs first and its `next()` runs `logs`.
+
 ## Testing a provider
 
 `@afora/core/testing` has a contract test kit for `IRepositoryProvider` implementations. It does not import a test runner: pass the `describe`, `it` and `expect` of yours, and a factory of fresh, empty providers (called once per case).
@@ -466,6 +535,6 @@ declare function myProvider(): IRepositoryProvider; // the provider under test
 providerContract({ describe, it, expect }, () => myProvider());
 ```
 
-It checks `insert`, `findOne`, `findMany`, `update` (which also clears a value that is left out, as `restore` needs), `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints; when it advertises `capabilities.keyset` (or with `{ keyset: true }`), `after`; when it advertises `capabilities.indexes` (or with `{ indexes: true }`), that a query given `index` (with `context.indexes`) answers what the same query without it does, on `findMany`, `count` and `findOne`; and, with `capabilities.expiry` (or `{ expiry: true }`), that `findOne`, `findMany`, `count` and reads after a position leave out rows whose `expiresAt` is at or before `now` (its table needs an `expiresAt` column), that a row without one never expires, that `withExpired` gives them back and that unique keys still count them. Likewise, `capabilities.versioning` (`{ versioning: true }`) runs the cases of `expectedVersion` (a stale version conflicts, two updates with the same one give exactly one conflict, no `expectedVersion` changes nothing), and `capabilities.atomic` (`{ atomic: true }`) those of `increment` (concurrent increments sum up, a missing id with and without `create`, concurrent creates, soft-deleted rows, and an increment of `version` making an update with the old one conflict). The rows of these cases use the columns `version` and `visits` (numbers).
+It checks `insert`, `findOne`, `findMany`, `update` (which also clears a value that is left out, as `restore` needs), `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints; when it advertises `capabilities.keyset` (or with `{ keyset: true }`), `after`; when it advertises `capabilities.indexes` (or with `{ indexes: true }`), that a query given `index` (with `context.indexes`) answers what the same query without it does, on `findMany`, `count` and `findOne`; and, with `capabilities.expiry` (or `{ expiry: true }`), that `findOne`, `findMany`, `count` and reads after a position leave out rows whose `expiresAt` is at or before `now` (its table needs an `expiresAt` column), that a row without one never expires, that `withExpired` gives them back and that unique keys still count them. Likewise, `capabilities.versioning` (`{ versioning: true }`) runs the cases of `expectedVersion` (a stale version conflicts, two updates with the same one give exactly one conflict, no `expectedVersion` changes nothing), and `capabilities.atomic` (`{ atomic: true }`) those of `increment` (concurrent increments sum up, a missing id with and without `create`, concurrent creates, soft-deleted rows, and an increment of `version` making an update with the old one conflict). The rows of these cases use the columns `version` and `visits` (numbers). `capabilities.generatedIds` (`{ generatedIds: true }`) runs the cases of assigned ids (an insert without `id` gives a positive integer, increasing, that finds the row; unique keys still hold; integer ids order, and page after a position, as numbers) on an entity named `Serials`, whose table has an integer `id` the database assigns and the columns `email` (unique) and `name`.
 
 The schema evolution cases (on by default; `{ schemaEvolution: false }` skips them) use only the basic methods, through repositories and `app.migrate`: a row of an older shape read back with its `fill` and `renamedFrom` applied, the backfill in `check` (which writes nothing) and in `apply` (idempotent), and the rows of a previous name moved and then removed with `destructive`. Their entity is named `Accounts` (its previous name `One`; the context of a repository is named `<Name>Repository`, so a provider that finds tables by name finds them under either), with the keys `email`, `name`, `age`, `visits`, `n` and `active` (a boolean). The cases that store the schema version key `$v` (an entity with `schemaVersion`) also run unless `{ schemaVersionKey: false }`, for a provider with no column for it.

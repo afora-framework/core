@@ -121,6 +121,27 @@ shape.match(""); // false
 shape.serialize(); // '{"type":"string","minLength":1}'
 ```
 
+### Files
+
+| Context      | Class / factory | Holds                                                                                       |
+| ------------ | --------------- | ------------------------------------------------------------------------------------------- |
+| `ctx.file`   | `FileProperty`  | any file (a `File`, or any `Blob`), of any type and size                                    |
+| `ctx.fileOf` | `fileOf`        | a file of the media `types` given (`"image/*"` takes any image but SVG), at most `maxBytes` |
+
+A file is what a `multipart/form-data` body sends: an [HTTP sink](outputs.md) reads one for an input that holds a file, and the OpenAPI document describes it as `type: "string", format: "binary"` (with `contentMediaType` when one exact type is accepted). The value is checked to be a `Blob`, its type (without parameters, case aside) to be one of `types`, and its size to be at most `maxBytes`. The type is the one the client declares, not what the bytes are: the [HTTP sinks](outputs.md) also check that a file declared as a PNG, JPEG, GIF, WebP or AVIF starts as one, and a wildcard never takes `image/svg+xml` (a document that can carry scripts), which only its own name in `types` does. Anything else throws `InvalidFile`, whose message is the issue's (`Expected a file`, `Expected a file of type image/png, not "text/plain"`, `Expected a file of at most 5000000 bytes, not 6000000 bytes`), at the key of the file. Options that are not media types or a size throw `InvalidFileOptions` when the property is declared. The file is kept as it is: never read, copied or frozen, so a use case streams it to storage (`file.stream()`, `await file.arrayBuffer()`). A file cannot be `sensitive` or `unique` (`recordOf` throws `InvalidRecordDeclaration`), and an entity cannot hold one, at any depth (`EntityHoldsFile`): an entity is stored, a file is not, so store where the file went (a URL, a storage key). A record's `toJSON` gives the file as it is, and `JSON.stringify` writes a `Blob` as `{}`: respond with what you made of it (a URL, `{ name, type, size }`), not the file. The demo value is an empty file of the first type, made when it is asked for (no `File` is made when a module loads).
+
+```ts
+import { blueprintOf } from "@afora/core";
+
+const UploadMedia = blueprintOf((ctx) => ({
+	file: ctx.fileOf({
+		types: ["image/png", "image/jpeg", "image/webp"],
+		maxBytes: 5_000_000,
+	}),
+	folder: ctx.optional.string,
+}));
+```
+
 ### Enumerations
 
 `ctx.enumOf(values, options?)` (`enumOf`) holds one of a list of strings or numbers, typed as their union; its demo is the first value unless `default` names another, and `{ optional: true }` accepts `undefined`. [Properties](properties.md) has the details.
@@ -166,13 +187,13 @@ Every method that changes a key goes through the record's `set`, so on an entity
 | `Publishable`     | `ctx.publishable`     | `publishedAt?` (a `DateTime`)            | `publish(at?)`, `unpublish()`, `isPublished`     | `publish`, `unpublish`            |
 | `Archivable`      | `ctx.archivable`      | `archivedAt?` (a `DateTime`)             | `archive(at?)`, `restore()`, `isArchived`        | `archive`, `unarchive`            |
 | `Taggable`        | `ctx.taggable`        | `tags?` (a list of strings)              | `tag(...tags)`, `untag(...tags)`, `hasTag(tag)`  | `tag`, `untag`                    |
-| `Ownable`         | `ctx.ownable`         | `ownerId` (an `Id`)                      | `isOwnedBy(id)`, `transferTo(id)`                | the `owner` option of any of them |
+| `Ownable`         | `ctx.ownable`         | `ownerId` (an `OwnerId`)                 | `isOwnedBy(id)`, `transferTo(id)`                | the `owner` option of any of them |
 | `Authenticatable` | `ctx.authenticatable` | `email` (unique), `password` (sensitive) | `change.password(hash)`, `verifyPassword(plain)` | `register`, `login`               |
 
 - **`Publishable`.** `publishedAt` is absent while the record is a draft. `publish(at?)` sets it, to now when `at` is not given, `unpublish()` clears it, and `isPublished` tells which.
 - **`Archivable`.** `archivedAt` is absent while the record is active; `archive(at?)` sets it, `restore()` clears it, `isArchived` tells. It is not soft deletion: an archived entity is still found by every query, and an entity's own `deletedAt` is what `delete` sets on a soft-deleting repository.
 - **`Taggable`.** `tag(...tags)` adds each tag the record does not have yet, so each tag is kept once; `untag(...tags)` removes them; `hasTag(tag)` tells.
-- **`Ownable`.** `ownerId` is the id of who owns the record. `isOwnedBy(id)` compares it, whatever the case of `id`, and `transferTo(id)` changes it. The `owner` option of the standard use cases reads `ownerId` by default.
+- **`Ownable`.** `ownerId` is the id of who owns the record, an `OwnerId`: the id of an entity of any id strategy (text of 1 to 256 characters, a UUID kept in lower case, or a positive integer). `isOwnedBy(id)` compares it, a UUID whatever its case and a number by value (`1` and `"1"` are the same owner), and `transferTo(id)` changes it. The `owner` option of the standard use cases reads `ownerId` by default.
 - **`Authenticatable`.** `email` is unique, so the repository gets `findByEmail`; `password` is a `Password`, a sensitive argon2 hash, changed by `change.password(hash)`. `verifyPassword(plain)` tells whether a plain password matches it.
 
 ```ts

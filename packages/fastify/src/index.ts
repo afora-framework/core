@@ -79,7 +79,24 @@ class FastifyHttpRequest implements HttpRequest {
 		return first(this.native.headers[name]);
 	}
 	text() {
-		return typeof this.native.body === "string" ? this.native.body : "";
+		const { body } = this.native;
+		// A multipart body kept as bytes is read as the text it is: JSON it is not.
+		if (body instanceof Uint8Array) return new TextDecoder().decode(body);
+		return typeof body === "string" ? body : "";
+	}
+	form() {
+		const { body, headers } = this.native;
+		if (!(body instanceof Uint8Array)) {
+			return Promise.reject(
+				new TypeError("The body is not multipart/form-data."),
+			);
+		}
+		// The platform reads the parts: no parser of our own, no dependency.
+		return new Request("http://fastify.local/", {
+			method: "POST",
+			headers: { "content-type": first(headers["content-type"]) ?? "" },
+			body: new Uint8Array(body),
+		}).formData();
 	}
 	variable(name: string) {
 		return (this.native as unknown as Record<string, unknown>)[name];
@@ -140,6 +157,13 @@ export const fastify = sinkOf<FastifyInstance, FastifyOptions, FastifyHooks>({
 			scope.addContentTypeParser(
 				"*",
 				{ parseAs: "string" },
+				(_request, body, done) => done(null, body),
+			);
+			// A multipart body is kept as its bytes, read as FormData by the
+			// routes whose input holds a file.
+			scope.addContentTypeParser(
+				"multipart/form-data",
+				{ parseAs: "buffer" },
 				(_request, body, done) => done(null, body),
 			);
 			for (const middleware of hooks?.middlewares ?? []) {

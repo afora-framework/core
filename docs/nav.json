@@ -23,6 +23,21 @@
 					"type": "guide"
 				},
 				{
+					"title": "Building with an agent",
+					"path": "docs/building-with-an-agent.md",
+					"type": "guide"
+				},
+				{
+					"title": "Storing data: Drizzle and DynamoDB",
+					"path": "docs/storing-data.md",
+					"type": "guide"
+				},
+				{
+					"title": "Real time with WebSockets",
+					"path": "docs/real-time.md",
+					"type": "guide"
+				},
+				{
 					"title": "Testing an application",
 					"path": "docs/testing.md",
 					"type": "guide"
@@ -146,6 +161,11 @@
 				{
 					"title": "A custom stage and sink",
 					"path": "docs/recipes/custom-sink-or-stage.md",
+					"type": "recipe"
+				},
+				{
+					"title": "Uploading a file to a storage",
+					"path": "docs/recipes/file-upload.md",
 					"type": "recipe"
 				},
 				{

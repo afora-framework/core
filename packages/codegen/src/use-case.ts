@@ -10,7 +10,7 @@ import type { Field } from "./model";
 import { checkImport, isImportObject } from "./provider";
 import { checkAccess, checkRoute } from "./route";
 import { type Decl, issue, type Scope } from "./scope";
-import { isIdentifier, isObject } from "./spec/field";
+import { isIdentifier, isListResponseSpec, isObject } from "./spec/field";
 import type { SpecIssue } from "./spec/types";
 
 type Path = readonly (string | number)[];
@@ -167,6 +167,32 @@ export function checkBlueprintRef(
 		),
 	);
 	return undefined;
+}
+
+/**
+ * Checks a `response` written as a list field: a field like any other (its
+ * type, its options), that is a list, not optional, and not of variants.
+ */
+function checkListResponse(
+	value: unknown,
+	path: Path,
+	inline: InlineChecker,
+	issues: SpecIssue[],
+): void {
+	// Checked as the one field of an object, under its own key, so that the
+	// issues keep the path of the response.
+	const key = path.at(-1) as string;
+	const field = inline({ [key]: value }, path.slice(0, -1))?.[key];
+	if (!field) return;
+	if (!field.list || field.optional || field.kind === "variant") {
+		issues.push(
+			issue(
+				path,
+				"invalid_blueprint",
+				'A response is a blueprint (a name or { "fields": {...} }) or a list of a type or of fields: "Article[]", { "type": "Article", "list": { "maxItems": 50 } } or { "fields": {...}, "list": true }. Not optional, nor a list of variants.',
+			),
+		);
+	}
 }
 
 // ---------------------------------------------------------------- exceptions
@@ -530,7 +556,8 @@ function checkGenericUseCase(
 
 /**
  * The \`dependencies\` of a use case, \`key -> name\` of a declared use case,
- * repository or environment, or \`"Logger"\`: gives the valid ones by key.
+ * repository or environment, of a service, or \`"Logger"\`: gives the valid
+ * declarations by key (services and \`Logger\` are not declarations).
  */
 function checkDependencies(
 	decl: Decl,
@@ -560,6 +587,14 @@ function checkDependencies(
 		const target = typeof name === "string" ? scope.decls.get(name) : undefined;
 		// The core's `Logger`: nothing to declare, and no step reads it.
 		if (name === "Logger" && target === undefined) continue;
+		// A service of the top-level `services`: no step reads it either.
+		if (
+			typeof name === "string" &&
+			target === undefined &&
+			scope.serviceNames.has(name)
+		) {
+			continue;
+		}
 		if (
 			target?.kind !== "useCase" &&
 			target?.kind !== "repository" &&
@@ -570,8 +605,8 @@ function checkDependencies(
 					here,
 					target ? "wrong_kind" : "unknown_dependency",
 					target
-						? `"${name}" is a ${target.kind}; a dependency is a use case, a repository, an environment or "Logger".`
-						: `"${String(name)}" is not a declared use case, repository or environment, nor "Logger".`,
+						? `"${name}" is a ${target.kind}; a dependency is a use case, a repository, an environment, a service or "Logger".`
+						: `"${String(name)}" is not a declared use case, repository or environment, a key of "services", nor "Logger".`,
 				),
 			);
 			continue;
@@ -682,7 +717,12 @@ export function checkUseCase(
 		return checkBlueprintRef(spec[key], [...path, key], scope, inline, issues);
 	};
 	const input = blueprint("input");
-	const response = blueprint("response");
+	const listResponse =
+		spec.response !== undefined && isListResponseSpec(spec.response);
+	if (listResponse) {
+		checkListResponse(spec.response, [...path, "response"], inline, issues);
+	}
+	const response = listResponse ? undefined : blueprint("response");
 	const context = blueprint("context");
 	const fieldsOf = (
 		ref: BlueprintRef | undefined,
@@ -697,7 +737,11 @@ export function checkUseCase(
 	const responseFields = fieldsOf(response);
 	const known = {
 		...(inputFields ? { input: Object.keys(inputFields) } : {}),
-		...(responseFields ? { response: Object.keys(responseFields) } : {}),
+		...(listResponse
+			? { response: [], listResponse: true }
+			: responseFields
+				? { response: Object.keys(responseFields) }
+				: {}),
 		...(context === undefined
 			? { context: [] }
 			: contextFields
@@ -873,7 +917,7 @@ function missingInField(
 		}
 		return segment;
 	}
-	if (field.kind === "enum") return segment;
+	if (field.kind === "enum" || field.kind === "file") return segment;
 	const decl = scope.decls.get(field.type);
 	if (decl) {
 		const fields = fieldsOfDecl(decl);

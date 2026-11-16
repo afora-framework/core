@@ -41,6 +41,30 @@ export interface Scope {
 	readonly extended: ReadonlyMap<string, ResolvedSpec>;
 	/** The keys of `publishers`, its own and inherited ones (at any depth, as an application inherits them). */
 	readonly publisherKeys: ReadonlySet<string>;
+	/**
+	 * The names of `services`, its own and inherited ones (at any depth, as an
+	 * application inherits them): the import of the factory for its own,
+	 * `undefined` for an inherited one.
+	 */
+	readonly serviceNames: ReadonlyMap<string, unknown>;
+}
+
+/** Every name of `services` that `resolved` declares or inherits. */
+function serviceNamesOf(
+	resolved: ResolvedSpec,
+	seen: Set<ResolvedSpec>,
+	found: Map<string, unknown>,
+): void {
+	if (seen.has(resolved)) return;
+	seen.add(resolved);
+	for (const child of Object.values(resolved.extends ?? {})) {
+		serviceNamesOf(child, seen, found);
+	}
+	const services = (resolved.spec as unknown as Record<string, unknown>)
+		?.services;
+	if (isObject(services)) {
+		for (const key of Object.keys(services)) found.set(key, undefined);
+	}
 }
 
 /** Every key of `publishers` that `resolved` declares or inherits. */
@@ -301,7 +325,23 @@ export function scopeOf(
 	if (isObject(spec.publishers)) {
 		for (const key of Object.keys(spec.publishers)) publisherKeys.add(key);
 	}
-	return { decls, providerKeys, extended: extendedRefs, publisherKeys };
+	const serviceNames = new Map<string, unknown>();
+	const serviceSeen = new Set<ResolvedSpec>();
+	for (const resolved of extendedRefs.values()) {
+		serviceNamesOf(resolved, serviceSeen, serviceNames);
+	}
+	if (isObject(spec.services)) {
+		for (const [key, value] of Object.entries(spec.services)) {
+			serviceNames.set(key, value);
+		}
+	}
+	return {
+		decls,
+		providerKeys,
+		extended: extendedRefs,
+		publisherKeys,
+		serviceNames,
+	};
 }
 
 /**

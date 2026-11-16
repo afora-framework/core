@@ -113,7 +113,7 @@ function referenceProvider(): IRepositoryProvider {
 				}
 			}
 		};
-		const notFound = (context: RepositoryContext, id: string) =>
+		const notFound = (context: RepositoryContext, id: string | number) =>
 			new RepositoryEntityNotFound({ source: context.name, details: { id } });
 		const read = <R>(run: () => R) => wrap(async () => run());
 		return {

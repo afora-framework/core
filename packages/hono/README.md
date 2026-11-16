@@ -4,6 +4,7 @@ A [Hono](https://hono.dev) sink for [`@afora/core`](../../README.md) outputs. It
 
 ```bash
 bun add @afora/core @afora/hono hono typebox
+# or: npm install @afora/core @afora/hono hono typebox
 ```
 
 `@afora/core`, `hono` (`^4.13.14`) and TypeBox (`^1`) are peer dependencies. The package uses only web APIs, so it runs on Bun, Node >= 22 and Workers.
@@ -37,7 +38,7 @@ const Api = outputOf({
 export default Api.build(); // a Hono app: Bun.serve, Workers and `app.request(...)` all take it
 ```
 
-```
+```text
 POST /api/users/register  { "name": "Ana", "email": "ana@example.com", "plainPassword": "S3cret-pass!" }
 -> 200 { "user": { "name": "Ana", "email": "ana@example.com", "password": "********", ... } }
 
@@ -82,11 +83,11 @@ Invalid options throw `InvalidOutputStage` when the stage is made, and unknown o
 ## Behavior
 
 - **Routes.** `POST {basePath}/{kebab(command)}/{kebab(operation)}` (`/users/change-password`), or the [route the use case declares](../../docs/use-cases.md#routes) with `route` or `@Route`, after the `basePath`; the `route` option changes the method, path and status over both. It is the routing of the `openapi` sink (`operationRoutes` of `@afora/core/adapters`), so the served routes and the document agree.
-- **Input.** `post`, `put` and `patch` read a JSON body (an empty body is `{}`; invalid JSON is a 400 `InvalidRequestBody` problem). `get` and `delete` read the query string, converting a value to a number or boolean when the input field takes one rather than a string; anything else is kept for the blueprint to reject. A `{name}` segment of the path fills the input key `name`, decoded and converted the same way, and wins over a `name` in the body or the query. So do the keys a use case route reads from the query (on a route with a body), from a header or from a cookie. The operation validates the input: a 400 problem with `issues` (`path`, `code`, `message`, no values).
+- **Input.** `post`, `put` and `patch` read a JSON body (an empty body is `{}`; invalid JSON is a 400 `InvalidRequestBody` problem). A `delete` reads one too when its route says `body: true`. `get` and `delete` read the query string otherwise, converting a value to a number or boolean when the input field takes one rather than a string; anything else is kept for the blueprint to reject. A `{name}` segment of the path fills the input key `name`, decoded and converted the same way, and wins over a `name` in the body or the query. So do the keys a use case route reads from the query (on a route with a body), from a header or from a cookie, which are read only from there: a value for one in the body or the query is dropped, so a missing header leaves the key absent. The operation validates the input: a 400 problem with `issues` (`path`, `code`, `message`, no values). An input that holds a file (`ctx.fileOf`) is read from a `multipart/form-data` body (`c.req.formData()`) when one is sent: see [Uploads](../../docs/outputs.md).
 - **Context.** For an operation whose command or use case declares a `context`, each key listed in `context.headers` is read from its header, and each key in `context.variables` from the variable a middleware set (`c.get(name)`); a missing one leaves the key out (so an optional key is `undefined`, a required one a 400 problem). Header values are converted like query values; variables are passed as they are (objects too), and the `context` blueprint validates both. A key cannot come from both.
 - **Access.** An operation whose use case declares an [`access`](../../docs/auth.md) asks the `authenticator` hook who calls, and answers a 401 (`Unauthenticated`) or a 403 (`Forbidden`) problem before the input is validated. Without the hook, such an operation always answers 401.
 - **Success.** The `route` status (`200` by default) with `outputValueOf(response)`: records go through `toJSON`, so sensitive values (a `Password`) are `"********"`. A `204` has no body. The `responses` headers of the operation are added.
-- **Errors.** Status from `statusOf(error, operation, output.statuses)`: the output `statuses` first, then 400 for invalid input or context, 404 for a missing entity, 409 for a unique violation, 422 for an error the use case declares, else 500. The body is `problemOf` with `application/problem+json`; a 5xx says `"Internal error."` unless `debug` is on.
+- **Errors.** Status from `statusOf(error, operation, output.statuses)`: the output `statuses` first, then 400 for invalid input or context, 404 for a missing entity, 409 for a unique violation, 422 for an error the use case declares, else 500. The body is `problemOf` with `application/problem+json`; a 5xx says `"Internal error."` unless `debug` is on or the output declares the exception (its name in `statuses`, or one of the use case `errors`), so `statuses: { PublishFailed: 502 }` keeps its message.
 - **Request id.** With `requestId`, every response of the app (successes, problems, unknown routes, the docs) carries the id in that header: the one the request sent, if it is 1 to 200 visible ASCII characters, else a new `crypto.randomUUID()`.
 - **Unknown routes** are a `404` problem (`urn:afora:exception:NotFound`) instead of Hono's plain text, and anything thrown outside an operation (your own middleware) is a problem too, through `app.onError`.
 
@@ -115,7 +116,7 @@ hono({
 });
 ```
 
-```
+```text
 GET /entries/hello            -> 200, cache-control and x-request-id; input { slug: "hello" }
 PATCH /entries/hello  { "title": "New" }  -> input { slug: "hello", title: "New" }
 DELETE /entries/hello         -> 204, no body
@@ -170,7 +171,7 @@ hono({
 - **Signatures** are HMAC-SHA256 checked with Web Crypto (`crypto.subtle.verify`, which compares in constant time), so it runs on Bun, Node and Workers. Stripe's and standard-webhooks' headers may carry several signatures; any one that matches passes.
 - **Order.** Signature, then JSON (invalid JSON is the usual 400 `InvalidRequestBody`), then `unknownKeys`, then the context from headers, then the operation. Other routes are not affected.
 - **Idempotency.** Verification keeps no state, so a request sent twice (a retry) runs twice. Map the delivery id into the context (`context: { headers: { delivery: "webhook-id" } }`) and let the operation ignore one it has already handled.
-- **Routes.** A webhook operation needs a body: one routed with `get` or `delete`, or an id that is not an operation of the output, throws `InvalidOutputStage` when the app is built.
+- **Routes.** A webhook operation needs a body: one routed with `get`, or with `delete` without `body: true`, or an id that is not an operation of the output, throws `InvalidOutputStage` when the app is built.
 - **OpenAPI.** The document at `docs.path` lists the signature headers of each webhook route as required parameters, adds its `401` response and marks it with `x-afora-webhook: { scheme }`.
 
 `verifyWebhook(options, secrets, { header, body, now? })` is the check on its own, for a route you write by hand: it resolves to `undefined` when the request is signed, or to why not (`"missing_signature"`, `"malformed_signature"`, `"expired"`, `"mismatch"`).
@@ -179,9 +180,26 @@ hono({
 
 Who may call an operation is declared on its use case, with [`access`](../../docs/auth.md), and the core enforces it. The sink only has to say **who is calling**, which is the `authenticator` hook: it gets the request and gives a `Principal` (`{ subject, scopes, claims? }`), or `null` for an anonymous caller.
 
-<!-- docs:code skip: EntryChanges, EntryResponse, Entries and sessions stand for your own declarations -->
+<!-- docs:code context
+import { entityOf } from "@afora/core";
+
+// your own declarations: the entry and the sessions
+class Entry extends entityOf(blueprintOf((ctx) => ({ slug: ctx.slug, title: ctx.text }))) {}
+const EntryChanges = blueprintOf((ctx) => ({ slug: ctx.slug, title: ctx.text }));
+const EntryResponse = blueprintOf(() => ({ entry: Entry }));
+declare const sessions: {
+	find(token: string): Promise<{ userId: string; scopes: string[] } | undefined>;
+};
+-->
 ```ts
-import { Access, outputOf, Route, useCaseOf } from "@afora/core";
+import {
+	Access,
+	blueprintOf,
+	commandOf,
+	outputOf,
+	Route,
+	useCaseOf,
+} from "@afora/core";
 import { hono } from "@afora/hono";
 
 @Route("PATCH", "/entries/{slug}")
@@ -192,8 +210,16 @@ class UpdateEntry extends useCaseOf({
 	response: EntryResponse,
 	context: blueprintOf((ctx) => ({ userId: ctx.id })),
 }) {
-	// this.context.userId is the authenticated caller
+	override async execute() {
+		// this.context.userId is the authenticated caller
+		return { entry: new Entry(this.input) };
+	}
 }
+
+const Entries = commandOf({
+	name: "Entries",
+	useCases: { update: UpdateEntry },
+});
 
 const api = outputOf({
 	name: "Cms",
@@ -224,7 +250,11 @@ const api = outputOf({
 
 A value that is not about access (a tenant resolved from the host, a feature flag) still reaches the context through a middleware and `context.variables`:
 
-<!-- docs:code skip: fragment, tenantOf stands for your code -->
+<!-- docs:code context
+import { hono } from "@afora/hono";
+
+declare function tenantOf(host: string | undefined): string; // your code
+-->
 ```ts
 hono(
 	{ context: { variables: { tenant: "tenant" } } },

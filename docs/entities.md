@@ -2,7 +2,7 @@
 
 An entity is a record with identity, ready to persist. `entityOf` takes a blueprint and the options of `recordOf` (`name` included, which keeps the name of the entity [stable when the code is minified](records.md)), and adds four keys to it, from `std`:
 
-- `id`: an `Id` (UUID v7), generated when the value has none and always listed in `options.unique`.
+- `id`: an `Id` (UUID v7) by default, generated when the value has none and always listed in `options.unique`. The `id` option replaces it for one entity (see [Ids](#ids)).
 - `createdAt`: generated as now when the value has none. The `id` and `createdAt` that `entityOf` makes by default (and the `expiresAt` of an entity that expires) are made only after the rest of the value is known to be valid, so invalid input makes none of them; an entity that nests others gets its id after theirs. A generator set with `configure({ idGenerator })` still makes its id first, and the id is checked.
 - `updatedAt`: absent until the first change, then set to now by each `set` or `change.<key>`, before `onSetAll` and `onSet` run.
 - `deletedAt`: set by `destroy()`, which then runs `onDestroy`. A destroyed entity (`isDeleted`) no longer changes: `set`, `change.<key>` and `destroy` throw `DeletedEntity`.
@@ -100,6 +100,64 @@ for (const event of user.pullEvents()) {
 Each lifecycle option accepts a definition, a readonly list, or a function returning either. Functions are resolved only during their cycle, so definitions may follow the entity class but must exist before constructing instances. `onCreate` queues after base construction and validation only when **both** input `id` and `createdAt` are `undefined`. Supplying either identity field, as when loading persisted data, suppresses creation; parsing plain input follows the same rule. `onUpdate` queues after each valid `set` (including `change.<key>` and equal values) stores the value and `updatedAt`, before `onSetAll` and `onSet`. `onDelete` queues after `deletedAt` is stored, before `onDestroy`. Invalid operations and repeated deletion do not queue lifecycle events. If an existing hook throws after a mutation, its queued events remain.
 
 The consuming layer decides when to drain and execute events. `handle()` propagates handler failures and can be called more than once. There is no automatic execution, dispatcher, retry, or execution-once guarantee.
+
+## Ids
+
+By default the id of an entity is a UUID v7, made when the value has none. The `id` option of `entityOf` gives one entity another strategy, and leaves every other entity as it is:
+
+- `Uuid`: a UUID of any version (a v4 loaded from an existing database), lower-cased. A new entity still gets a UUID v7 from the configured generator.
+- `Key`: a natural key, any text of 1 to 256 characters, never generated: the input must hold it, and building the entity without one reports an issue at `id`. The constructor type requires it too.
+- `Serial`: a positive integer the database assigns as it stores the entity (an auto-increment, `serial` or identity column). See [Ids the database assigns](#ids-the-database-assigns).
+- `idOf(property, generate?)`: any required property, with the function that makes an id when the value has none. Without `generate`, the id is a natural key, as with `Key`.
+
+```ts
+import { blueprintOf, entityOf, idOf, Integer, Key, Uuid } from "@afora/core";
+
+const Named = blueprintOf((ctx) => ({ name: ctx.string }));
+
+class Legacy extends entityOf(Named, { id: Uuid }) {}
+new Legacy({ id: "6f1c2b9e-3d4a-4e8b-9f2a-1c3b5d7e9f0a", name: "Old" }); // kept
+new Legacy({ name: "New" }).id; // a UUID v7
+
+class Setting extends entityOf(Named, { id: Key }) {}
+new Setting({ id: "seo", name: "SEO" }).id; // "seo"
+
+let next = 0;
+class Ticket extends entityOf(Named, { id: idOf(Integer, () => ++next) }) {}
+new Ticket({ name: "First" }).id; // 1, typed number
+```
+
+The properties of `Uuid`, `Key` and `Serial` are exported as `UuidKey`, `TextKey` and `SerialKey`. The property of the strategy takes the place of `Id`: the type of `entity.id`, of `findById`, of `delete(id)` and of the `{id}` of the standard use cases follows it, and an HTTP route reads an integer id from the path as a number. The id stays unique and read-only. An id made by `generate` is validated like any other value; only the default generator, and `Uuid` with it, skip the check of what they just made. The standard `create` use case takes the id in its input when the entity makes none. The subject of a token is text: `refresh` and an `access.context` that reads `subject` (or a claim) turn it into a number where the id or the context key is an integer, so users with integer ids log in, refresh and fill their context; the `ownerId` of `ownable` holds an id of any strategy. Repositories store and resolve references to these entities by their id, a string or a number (`IdValue`, checked with `isIdValue(value)`; `isIdStrategy(value)` tells whether a value was made by `idOf`); the DynamoDB provider still needs a non-empty string id. The class keeps its strategy under the `EntityIdStrategy` symbol, and `app.describe().entities.<Name>.id` gives `{ property, generated }` (`generated` is `"database"` for `Serial`). An `id` not made by `idOf` throws `InvalidIdStrategy`.
+
+### Ids the database assigns
+
+With `id: Serial`, the database gives each new entity its id, a positive integer, when `repository.create` stores it:
+
+```ts
+import { blueprintOf, entityOf, repositoryOf, Serial } from "@afora/core";
+
+class Ticket extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{ id: Serial },
+) {}
+
+const ticket = new Ticket({ title: "First" });
+ticket.id; // undefined: not stored yet
+
+const Tickets = repositoryOf({
+	entity: Ticket,
+	actions: ["create", "findById"],
+});
+const stored = await Tickets.create(ticket); // the same entity
+stored.id; // 1, set by create
+```
+
+- **Before `create`.** An entity built without an id is valid and has none: `id` reads `undefined` (its type stays `number`, the id of a stored entity) and `toJSON()` leaves it out. It equals only itself. An entity loaded from the database, or built with an id, has that id, validated as a positive integer up to `Number.MAX_SAFE_INTEGER`. Until it is created, the repository refuses it with `UnstoredEntity`: to `update`, `delete` (checked before `destroy()`, so the entity is left as it was), `restore` or `increment`, and as an entity held by another one (a field or a list of them), which is stored by its id.
+- **`create`.** The row goes to the provider without `id`; the provider gives back the one the database assigned, validated by `SerialKey`, and `create` sets it on the entity before it returns. An id the entity rejects (one above `Number.MAX_SAFE_INTEGER`, from a `bigint` column, say) throws `UnsupportedIdentity`, and the entity keeps none. A new entity given an id of its own is refused with `UnsupportedIdentity`, by `create` and by `increment` with `create`: a row inserted with its own id leaves the sequence of the database behind, so a later insert would get an id already taken (and an identity column `GENERATED ALWAYS` refuses it). Rows with ids of their own (a seed, a migration) go to the database directly; the in-memory provider, like a database, does not move its sequence past them, so a later `create` can collide with one (`RepositoryUniqueViolation`).
+- **A rolled back `create`.** The id is set on the entity, and its `onCreate` queued, as soon as the insert returns: when the transaction of a command later rolls back, no row holds that id, but the entity keeps it. Build a new entity to try again (`create` refuses one with an id).
+- **Events.** The `onCreate` events of the entity wait for its id: they are queued by `create`, before any event the entity emitted since it was built, so an `onCreate` handler always sees the id. Another event the entity emits before `create` holds the entity itself, not a copy: pulled and handled after `create` (as a use case does), it sees the id; pulled before, it does not.
+- **Providers.** Only a provider with `capabilities.generatedIds` assigns ids: the in-memory provider (one counter per entity that, as a database sequence, never gives an id twice) and the Drizzle provider (SQLite and Postgres). A repository with `create` over another provider, such as DynamoDB's, throws `UnsupportedIdentity` when it is declared, when an application binds it to its provider, or on `app.start()` for a provider made on start. A repository that only reads is accepted.
+- **Use cases.** The standard `create` use case and the `POST` of `resourceOf` do not take the id; the `{id}` of the other routes is read from the path as a number.
 
 ## Records that expire
 

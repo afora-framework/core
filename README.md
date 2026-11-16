@@ -73,7 +73,7 @@ Bun >= 1.4.4 or Node.js >= 22; it also loads in browsers and Workers. TypeBox (`
 A `User` with a masked password and a unique email, a use case written as steps, a transaction, and an HTTP API with an OpenAPI document. Install what it uses:
 
 ```bash
-bun add @afora/core @afora/hono hono typebox
+bun add @afora/core @afora/hono hono typebox   # or: npm install @afora/core @afora/hono hono typebox
 ```
 
 Save this as `quickstart.ts` and run `bun quickstart.ts`. It is the code of `examples/interop/quickstart.ts`, run by `bun run test:interop` (there the imports resolve to the local sources).
@@ -181,7 +181,7 @@ if (import.meta.main) Bun.serve({ fetch: api.fetch });
 
 What it does:
 
-```
+```text
 POST /api/users  { "name": "Ana", "email": "  Ana@Example.COM ", "plainPassword": "Str0ng!Pass" }
 -> 201 { "user": { "id": "...", "name": "Ana", "email": "ana@example.com", "password": "********", ... } }
 
@@ -203,7 +203,7 @@ Everything above except the hashing function is data, so it can be written as an
 
 This is `examples/interop/quickstart.afora.json`, which the same test validates and generates.
 
-```json
+```json afora
 {
 	"version": 1,
 	"name": "accounts",
@@ -312,13 +312,13 @@ export { stages } from "@afora/hono";
 ```
 
 ```bash
-bun add -d @afora/codegen
-bunx afora-codegen generate afora.json --stages ./stages.ts   # writes src/domain/*.ts
+bun add -d @afora/codegen                                      # or: npm install -D @afora/codegen
+bunx afora-codegen generate afora.json --stages ./stages.ts   # writes src/domain/*.ts (npx on Node)
 ```
 
 and serve the application from `src/server.ts` (`bun src/server.ts`):
 
-<!-- docs:code skip: src/server.ts of examples/interop/from-json; ./domain is what afora-codegen generates from the afora.json above -->
+<!-- docs:code tested: examples/interop/from-json/src/server.ts -->
 ```ts
 import { App } from "./domain/index.ts";
 

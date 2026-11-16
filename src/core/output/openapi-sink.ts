@@ -14,15 +14,18 @@ import { toOpenAPI } from "../openapi/openapi";
 import type { OpenAPISchema } from "../openapi/types/openapi.interface";
 import { isProperty } from "../property/is-property";
 import { recordNameOf } from "../record/name";
+import { responsePropertiesOf } from "../use-case/response";
 import {
 	HEADER_NAME,
 	isRoutePath as isPath,
 	isScalarKey as isScalarInputKey,
 	isScalarSchema,
 	parametersOfPath,
+	statusesIssue,
 } from "../use-case/route";
 import type { RouteCookie } from "../use-case/types/route.interface";
 import { InvalidOutputStage } from "./exceptions";
+import { fileKeysOf } from "./form";
 import { PROBLEM_MEDIA_TYPE } from "./problem";
 import { sinkOf } from "./stage";
 import { statusOf } from "./status";
@@ -93,7 +96,6 @@ export interface RouteOptions {
 	 */
 	readonly route?: {
 		readonly [operationId: string]: {
-			readonly method?: OpenAPIMethod;
 			readonly path?: string;
 			/**
 			 * The status of a successful response.
@@ -101,7 +103,29 @@ export interface RouteOptions {
 			 * @default 200
 			 */
 			readonly status?: RouteStatus;
-		};
+			/**
+			 * The other statuses the use case may choose with `withStatus`,
+			 * over the `statuses` of its route; see `RouteFields.statuses`.
+			 */
+			readonly statuses?: readonly number[];
+		} & (
+			| {
+					readonly method?: Exclude<OpenAPIMethod, "delete">;
+					readonly body?: never;
+			  }
+			| {
+					readonly method?: "delete";
+					/**
+					 * Only for a `delete` route: `true` reads the input keys with
+					 * no other place from a JSON body instead of from the query.
+					 * Over the `body` of the use case route. Without `method`, the
+					 * method of the use case route must be `delete`.
+					 *
+					 * @default false
+					 */
+					readonly body?: boolean;
+			  }
+		);
 	};
 	/** Static headers of the successful responses, by operation id. */
 	readonly responses?: {
@@ -302,6 +326,13 @@ function securityIssue(security: unknown, where: string): string | undefined {
 	return undefined;
 }
 
+/** Why `body` cannot be set on a route of `method`: only a `delete` takes it. */
+function bodyIssue(where: string, method: unknown): string {
+	return method === "get"
+		? `${where} is only for a delete route: a get route never reads a body.`
+		: `${where} is only for a delete route: a ${String(method)} route always reads a body.`;
+}
+
 /** The option names of {@link RouteOptions}, for sinks that list their options. */
 export const ROUTE_OPTION_KEYS = [
 	"basePath",
@@ -334,9 +365,13 @@ export function routeOptionsIssue(
 		for (const [id, entry] of Object.entries(route)) {
 			if (
 				!isObject(entry) ||
-				onlyKeys(entry, ["method", "path", "status"], "route")
+				onlyKeys(
+					entry,
+					["method", "path", "status", "statuses", "body"],
+					"route",
+				)
 			) {
-				return `Expected ${where}.route["${id}"] to be { method?, path?, status? }.`;
+				return `Expected ${where}.route["${id}"] to be { method?, path?, status?, statuses?, body? }.`;
 			}
 			if (
 				entry.method !== undefined &&
@@ -358,6 +393,24 @@ export function routeOptionsIssue(
 				!(SUCCESS_STATUSES as readonly unknown[]).includes(entry.status)
 			) {
 				return `Expected ${where}.route["${id}"].status to be one of ${SUCCESS_STATUSES.join(", ")}.`;
+			}
+			if (entry.statuses !== undefined) {
+				// The status of the use case route is not known here: it is
+				// checked again with the operations.
+				const bad = statusesIssue(
+					entry.statuses,
+					(entry.status as number | undefined) ?? Number.NaN,
+					`${where}.route["${id}"].statuses`,
+				);
+				if (bad) return bad;
+			}
+			if (entry.body !== undefined) {
+				if (typeof entry.body !== "boolean") {
+					return `Expected ${where}.route["${id}"].body to be a boolean.`;
+				}
+				if (entry.method !== undefined && entry.method !== "delete") {
+					return bodyIssue(`${where}.route["${id}"].body`, entry.method);
+				}
 			}
 		}
 	}
@@ -471,11 +524,17 @@ export interface OperationRoute {
 	readonly parameters: readonly string[];
 	/** The status of a success: `200` unless `route` says otherwise. */
 	readonly status: RouteStatus;
+	/**
+	 * The other statuses a success may have, chosen by the use case with
+	 * `withStatus`: from `route`, else from the use case route.
+	 */
+	readonly statuses: readonly number[];
 	/** The static headers of a success, from `responses`. */
 	readonly headers: { readonly [name: string]: string };
 	/**
 	 * Whether the input keys with no other place are a JSON body (`post`,
-	 * `put`, `patch`); otherwise they are read from the query.
+	 * `put`, `patch`, and a `delete` with `body: true`); otherwise they are
+	 * read from the query.
 	 */
 	readonly body: boolean;
 	/** The input keys the use case route reads from the query, whatever the method. */
@@ -568,13 +627,40 @@ export function operationRoutes(
 			);
 		}
 		taken.set(key, operation.id);
+		if (chosen.body !== undefined && method !== "delete") {
+			invalid(
+				bodyIssue(`${source}.route["${operation.id}"].body`, method),
+				source,
+			);
+		}
+		// `body` of the use case route is only ever set on a delete.
+		const body =
+			method === "delete"
+				? (chosen.body ?? declared?.body) === true
+				: method !== "get";
+		const files = fileKeysOf(operation.input);
+		if (!body && files.length > 0) {
+			invalid(
+				`${operation.id} is routed to ${method.toUpperCase()} ${path}, whose input is read from the query, but "${files[0]}" is a file, which only a multipart/form-data body sends; route it with method "post"${method === "delete" ? " or give the delete route body: true" : ""}.`,
+				source,
+			);
+		}
+		const status = chosen.status ?? declared?.status ?? 200;
+		const statuses = chosen.statuses ?? declared?.statuses ?? [];
+		if (statuses.includes(status)) {
+			invalid(
+				`${source}.route["${operation.id}"] makes ${status} its status, which its statuses list too: list only the others.`,
+				source,
+			);
+		}
 		routes.set(operation.id, {
 			method,
 			path,
 			parameters,
-			status: chosen.status ?? declared?.status ?? 200,
+			status,
+			statuses,
 			headers: { ...(responses[operation.id]?.headers ?? {}) },
-			body: method !== "get" && method !== "delete",
+			body,
 			query,
 			requestHeaders,
 			cookies,
@@ -660,11 +746,34 @@ const STATUS_TEXT: Readonly<Record<number, string>> = {
 	500: "Internal error.",
 };
 
-const SUCCESS_TEXT: Readonly<Record<RouteStatus, string>> = {
+const SUCCESS_TEXT: Readonly<Record<number, string>> = {
 	200: "Success.",
 	201: "Created.",
 	202: "Accepted.",
+	203: "Non-authoritative information.",
 	204: "No content.",
+	206: "Partial content.",
+	207: "Multi-status.",
+	300: "Multiple choices.",
+	301: "Moved permanently.",
+	302: "Found.",
+	303: "See other.",
+	307: "Temporary redirect.",
+	308: "Permanent redirect.",
+	400: "Bad request.",
+	401: "Unauthorized.",
+	403: "Forbidden.",
+	404: "Not found.",
+	409: "Conflict.",
+	410: "Gone.",
+	422: "Unprocessable content.",
+	423: "Locked.",
+	429: "Too many requests.",
+	500: "Internal server error.",
+	501: "Not implemented.",
+	502: "Bad gateway.",
+	503: "Service unavailable.",
+	504: "Gateway timeout.",
 };
 
 function responsesOf(
@@ -718,26 +827,42 @@ function responsesOf(
 	}
 	const withHeaders = (headers: Obj) =>
 		Object.keys(headers).length > 0 ? { headers } : {};
+	const json = { "application/json": { schema: response } };
 	const responses: Obj = {
 		[String(route.status)]: {
 			description: SUCCESS_TEXT[route.status],
 			...withHeaders(successHeaders),
-			...(route.status === 204
-				? {}
-				: { content: { "application/json": { schema: response } } }),
+			...(route.status === 204 ? {} : { content: json }),
 		},
 	};
+	// The statuses `execute` may choose: the same body, as a success.
+	for (const status of route.statuses) {
+		responses[String(status)] = {
+			description: `${SUCCESS_TEXT[status] ?? `Status ${status}.`} Chosen by the operation, with the response as its body.`,
+			...withHeaders(successHeaders),
+			content: json,
+		};
+	}
 	for (const status of [...names.keys()].sort((a, b) => a - b)) {
 		const declared = names.get(status) ?? [];
 		const text = STATUS_TEXT[status] ?? `Error ${status}.`;
-		responses[String(status)] = {
-			description:
-				declared.length > 0
-					? `${text} Declared: ${declared.join(", ")}.`
-					: text,
-			...withHeaders(idHeaders),
-			content: problemContent,
-		};
+		const description =
+			declared.length > 0 ? `${text} Declared: ${declared.join(", ")}.` : text;
+		const chosen = responses[String(status)] as
+			| { description: string; content: Obj }
+			| undefined;
+		// A status both chosen and an error: the response or a problem.
+		responses[String(status)] = chosen
+			? {
+					...chosen,
+					description: `${chosen.description} Or a problem: ${description}`,
+					content: { ...chosen.content, ...problemContent },
+				}
+			: {
+					description,
+					...withHeaders(idHeaders),
+					content: problemContent,
+				};
 	}
 	return responses;
 }
@@ -777,6 +902,14 @@ function queryParametersOf(
 	});
 }
 
+/** Whether a key of the object `schema` is a file, or a list of files. */
+function hasFile(schema: OpenAPISchema): boolean {
+	return Object.values(schema.properties ?? {}).some(
+		(property) =>
+			property.format === "binary" || property.items?.format === "binary",
+	);
+}
+
 /** `schema` without the keys in `keys` (the path parameters). */
 function withoutKeys(
 	schema: OpenAPISchema,
@@ -810,8 +943,10 @@ function requirementOf(requirement: SecurityRequirement): {
  * The `operationId` is the id with its dot as an underscore (`Users.register`
  * -> `Users_register`), unique or the build throws. `get` and `delete` send
  * the input as query parameters, which needs every input field to be a
- * scalar property. Responses: the `route` status (`200` by default; `204`
+ * scalar property; a `delete` with `body: true` sends it as a JSON body,
+ * required only when a field left in it is. Responses: the `route` status (`200` by default; `204`
  * without content) with the response schema and the `responses` headers,
+ * the same for each of the route `statuses` (chosen with `withStatus`),
  * `400` and `500` always, and the status of each declared error (`statusOf`:
  * `statuses` of the output, else 422); `requestId` adds its header to all of
  * them. Operations carry no repository dependencies, so `404` and `409`
@@ -834,7 +969,13 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 		const records = new Set<AnyRecordClass>();
 		for (const operation of operations) {
 			collectRecords(operation.input.properties, records);
-			collectRecords(operation.response.properties, records);
+			// A list response is collected from its item.
+			collectRecords(
+				responsePropertiesOf(operation.response) ?? {
+					"": operation.response,
+				},
+				records,
+			);
 		}
 		const models: Record<string, BlueprintField> = {};
 		const classes = new Map<string, AnyRecordClass>();
@@ -960,8 +1101,14 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 				...(hasBody && hasInput
 					? {
 							requestBody: {
-								required: true,
-								content: { "application/json": { schema: input } },
+								// A delete may send no body when nothing in it is required.
+								required:
+									method !== "delete" || (input.required ?? []).length > 0,
+								// A file is sent in a multipart body, as its binary string.
+								content: {
+									[hasFile(input) ? "multipart/form-data" : "application/json"]:
+										{ schema: input },
+								},
 							},
 						}
 					: {}),

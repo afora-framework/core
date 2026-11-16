@@ -315,6 +315,21 @@ class Exploding extends AbstractProperty<TString> {
 	}
 }
 
+test("an error without a message from a handler is an issue that is invalid", () => {
+	const Silent = propertyOf({
+		name: "silent",
+		schema: Type.String(),
+		afterHandle: () => {
+			throw new Error("");
+		},
+	});
+	const result = Silent.safeParse("abc");
+	if (!("issues" in result) || !result.issues) throw new Error("expected");
+	const [issue] = result.issues as readonly Issue[];
+	expect(issue?.message).toBe("is invalid");
+	expect(issue?.cause?.is(InvalidPropertyValue)).toBe(true);
+});
+
 test("parse turns an error that is not an Exception, from handle, into an issue", () => {
 	for (const result of [
 		Exploding.safeParse("abc"),
@@ -323,7 +338,11 @@ test("parse turns an error that is not an Exception, from handle, into an issue"
 		if (!("issues" in result) || !result.issues) throw new Error("expected");
 		const [issue] = result.issues as readonly Issue[];
 		expect(issue?.code).toBe("invalid_value");
-		expect(issue?.message).toBe('Invalid value for property "code": internal');
+		expect(issue?.message).toBe("internal");
+		expect(issue?.path).toEqual([]);
+		expect(issue?.cause?.message).toBe(
+			'Invalid value for property "code": internal',
+		);
 		expect(issue?.cause?.is(InvalidPropertyValue)).toBe(true);
 		expect(issue?.cause?.cause).toBeInstanceOf(TypeError);
 	}

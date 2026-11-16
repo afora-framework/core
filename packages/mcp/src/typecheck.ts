@@ -61,7 +61,9 @@ export async function typecheck(
 	}
 	const mine = new Set(files.map((file) => resolve(root, file)));
 	const commands: [string, string[]][] = [
-		["bunx", ["tsc", "--noEmit", "-p", root]],
+		// Never install: `bunx tsc` without TypeScript in the project would
+		// download and run the unrelated `tsc` package of the registry.
+		["bunx", ["--no-install", "tsc", "--noEmit", "-p", root]],
 		["npx", ["--no-install", "tsc", "--noEmit", "-p", root]],
 	];
 	for (const [command, args] of commands) {

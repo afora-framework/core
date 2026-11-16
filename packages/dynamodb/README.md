@@ -4,6 +4,7 @@ A repository provider for [`@afora/core`](../../README.md) on one [DynamoDB](htt
 
 ```bash
 bun add @afora/core typebox @afora/dynamodb @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
+# or: npm install @afora/core typebox @afora/dynamodb @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 ```
 
 `@afora/core` (with the query helpers of `@afora/core/experimental`), `@aws-sdk/client-dynamodb` and `@aws-sdk/lib-dynamodb` (`^3.1164.0`) are peer dependencies.
@@ -81,6 +82,7 @@ This suits repositories of thousands of items, not millions: every other read wi
 - `atomic`: `increment` is one `UpdateItem` (`SET data.views = if_not_exists(data.views, 0) + :d`), conditioned on the item existing, not soft-deleted and not expired. With `create`, a missing id is inserted (a concurrent insert of the same id gets the deltas added instead), an expired item is replaced, and a soft-deleted one is `RepositoryUniqueViolation` on `id`. An increment cannot change a unique key (`InvalidRepositoryQuery`).
 - `expiry`: reads leave out records whose date is at or before `query.now`, unless `withExpired`. Expired items stay in the table and keep their unique values; the `UpdateItem` of `increment` compares the dates as strings, so keep them in UTC ISO 8601 (`toISOString()`, as the entity writes them).
 - `transactions` is **not** a capability: DynamoDB writes up to 100 items at once, without reads in between, so `commandOf({ transaction: true })` cannot run on it.
+- `generatedIds` is **not** a capability: DynamoDB has no auto-increment, so an entity declared with `Serial` ids cannot be created through it (`repositoryOf` with `create` throws `UnsupportedIdentity`). Use UUIDs (the default), `Uuid` or a natural `Key`.
 
 ## Limits
 
@@ -99,7 +101,7 @@ DynamoDB has no schema to change, so `migrate` is a no-op, and a change of an en
 
 `PAY_PER_REQUEST`, string `pk` and `sk`, nothing else. With the AWS CDK:
 
-<!-- docs:code skip: the AWS CDK is not a dependency of this repo; this is the body of a Stack constructor, and handler is your function -->
+<!-- docs:code skip: needs aws-cdk-lib (about 150 MB) for this one block; the CloudFormation below declares the same table -->
 ```ts
 import { RemovalPolicy } from "aws-cdk-lib";
 import { AttributeType, Billing, TableV2 } from "aws-cdk-lib/aws-dynamodb";

@@ -196,7 +196,9 @@ function build(): Catalog {
 					? '{ "enum": ["draft", "published"] } (a field or a property declaration)'
 					: name === "jsonOf"
 						? '"json" for any JSON value; a property made by jsonOf({ schema }) is imported ({ "import": "./file.ts#Property" })'
-						: name,
+						: name === "fileOf"
+							? '{ "file": { "types": ["image/png", "image/*"], "maxBytes": 5000000 } } (a field or a property declaration), read from a multipart/form-data body; "file" for any file'
+							: name,
 		})),
 		recordPlugins: StdRecordPlugins.list.map((plugin) => {
 			const { description, ...rest } = plugin.toJSON();

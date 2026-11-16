@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.0.13 — 2026-11-16
 
 ### Added
 
+- File uploads (#118): an input that holds a file (`ctx.fileOf`) is read from a `multipart/form-data` body with `c.req.formData()`.
 - The package passes `httpProviderContract` of `@afora/core/testing`, with `@afora/fastify`, `@afora/express` and `@afora/elysia`.
 - The option `auth: { jwt: ... }` (experimental) authenticates callers from a JSON Web Token.
 - Hooks, the second argument of `hono(options, hooks)`, for what JSON cannot hold: `authenticator` (who calls, from the request: a `Principal` or `null`), `middlewares` (Hono middlewares run before every route) and `app` (a Hono app to add the routes to). The type `HonoHooks` is exported.

@@ -266,7 +266,9 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `logProviderOf`                    | value | stable       | `@afora/core`              | Reader path: [Logging](logging.md).                                                                                    |
 | `memoryLogProvider`                | value | stable       | `@afora/core`              | Reader path: [Logging](logging.md).                                                                                    |
 | `InvalidOpenAPIModel`              | value | stable       | `@afora/core`              | Exception users catch ([OpenAPI](openapi.md)).                                                                         |
+| `jsonSchemaOf`                     | value | stable       | `@afora/core`              | Reader path: [OpenAPI](openapi.md#json-schema).                                                                        |
 | `toOpenAPI`                        | value | stable       | `@afora/core`              | Reader path: [OpenAPI](openapi.md).                                                                                    |
+| `JSONSchema`                       | type  | stable       | `@afora/core`              | Type on the reader path: [OpenAPI](openapi.md#json-schema).                                                            |
 | `OpenAPIComponents`                | type  | stable       | `@afora/core`              | Type on the reader path: [OpenAPI](openapi.md).                                                                        |
 | `OpenAPIOptions`                   | type  | stable       | `@afora/core`              | Type on the reader path: [OpenAPI](openapi.md).                                                                        |
 | `OpenAPISchema`                    | type  | stable       | `@afora/core`              | Type on the reader path: [OpenAPI](openapi.md).                                                                        |
@@ -626,6 +628,8 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 ## Added after 0.0.9
 
 - **`@afora/core`** (#65): `memoryTracer`, `InvalidTraceDeclaration` and the types `ITracer`, `ITraceSpan`, `TraceAttributes`, `TraceStatus`, `MemoryTracer` and `MemorySpan`: the `trace` of an application, shown to application code in [Tracing](tracing.md) as `log` is in [Logging](logging.md) (`memoryTracer` is stable like `memoryLogProvider`). `ApplicationDescription` (`@afora/core/adapters`) gains `trace`, `{ kind: "opaque" }` when the application has one.
+- **`@afora/core`** (#119): the types `RouteFields` and `RouteBody`, the parts of `RouteDeclaration` and `RouteSettings` that allow `body` only on a `delete` route, stable as the route types are; see [Use cases](use-cases.md#routes).
+- **`@afora/core`** (#116): `withStatus` and `UndeclaredStatus`, a status a use case chooses at run time, shown to application code in [Use cases](use-cases.md#a-status-chosen-at-run-time). **`@afora/core/adapters`** (#116): `chosenStatusOf`, which only a sink that serves HTTP reads (`compileRoutes` does); see [Outputs](outputs.md).
 
 ## Added in 0.0.9
 

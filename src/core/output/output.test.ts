@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Type } from "typebox";
 import {
 	type OperationDescriptor,
 	outputValueOf,
@@ -17,12 +18,14 @@ import {
 	ExceptionLayers,
 	exceptionOf,
 	InvalidCommandContext,
+	InvalidCommandEnvironment,
 	InvalidOutputStage,
 	isOutput,
 	listOf,
 	operationOf,
 	outputOf,
 	Password,
+	propertyOf,
 	recordOf,
 	StdStages,
 	select,
@@ -748,9 +751,112 @@ describe("problemOf", () => {
 		expect(problemOf("text", { status: 500, debug: true }).detail).toBe("text");
 	});
 
+	test("a declared exception keeps its detail at any status", () => {
+		const exception = new Taken({ source: "x" });
+		expect(
+			problemOf(exception, { status: 502, statuses: { Taken: 502 } }).detail,
+		).toBe("taken");
+		expect(
+			problemOf(exception, { status: 500, operation: { errors: [Taken] } })
+				.detail,
+		).toBe("taken");
+		// Made by `exceptionOf`, but not declared by this output.
+		expect(
+			problemOf(exception, { status: 500, statuses: { Other: 502 } }).detail,
+		).toBe("Internal error.");
+		const plain = new Error("db password is hunter2");
+		expect(
+			problemOf(plain, {
+				status: 500,
+				statuses: { Error: 500 },
+				operation: { errors: [Taken] },
+			}).detail,
+		).toBe("Internal error.");
+		const configuration = new InvalidCommandEnvironment({
+			source: "Posts",
+			details: { keys: [], issues: [] },
+		});
+		expect(
+			problemOf(configuration, {
+				status: 500,
+				statuses: { InvalidCommandEnvironment: 500 },
+			}).detail,
+		).toBe("Internal error.");
+
+		// A plain error wrapped by `guard`: its raw message never shows.
+		const wrapped = Exception.from(new Error("postgres://admin:pw@db"), {
+			layer: ExceptionLayers.Repository,
+			source: "Posts",
+		});
+		const statuses = { UnexpectedError: 503, Renamed: 503 };
+		const status = statusOf(wrapped, undefined, statuses);
+		expect(status).toBe(503);
+		const unexpected = problemOf(wrapped, { status, statuses });
+		expect(unexpected.detail).toBe("Internal error.");
+		expect(JSON.stringify(unexpected)).not.toContain("postgres");
+		const renamed = wrapped.propagate({
+			layer: ExceptionLayers.UseCase,
+			source: "Publish",
+			name: "Renamed",
+		});
+		expect(problemOf(renamed, { status: 503, statuses }).detail).toBe(
+			"Internal error.",
+		);
+		// afora's own exception, listed on purpose: its message shows.
+		const duplicate = new DuplicateOperation({
+			source: "Api",
+			details: { id: "Posts.create" },
+		});
+		expect(
+			problemOf(duplicate, {
+				status: 503,
+				statuses: { DuplicateOperation: 503 },
+			}).detail,
+		).toBe('The operation "Posts.create" is declared twice.');
+	});
+
 	test("goes with statusOf", () => {
 		const status = statusOf(invalid);
 		expect(problemOf(invalid, { status }).status).toBe(400);
+	});
+
+	test("the message a handler throws reaches the issue as it is", async () => {
+		const Slug = propertyOf({
+			name: "slug",
+			schema: Type.String(),
+			afterHandle: (value) => {
+				if (!/^[a-z0-9-]+$/.test(value)) {
+					throw new Error("Use lowercase letters, numbers and hyphens.");
+				}
+				return value;
+			},
+		});
+		const Create = useCaseOf({
+			name: "Create",
+			blueprint: blueprintOf(() => ({ slug: Slug })),
+			response: Empty,
+		});
+		class CreatePost extends Create {
+			override async execute() {
+				return {};
+			}
+		}
+		const [create] = outputOf({
+			name: "Api",
+			commands: [
+				commandOf({ name: "Posts", useCases: { create: CreatePost } }),
+			],
+		}).operations as [OperationDescriptor];
+		const error = await create.invoke({ slug: "Not A Slug" }).catch((e) => e);
+		const status = statusOf(error, create);
+		expect(status).toBe(400);
+		expect(problemOf(error, { status }).issues).toEqual([
+			{
+				path: ["slug"],
+				code: "invalid_value",
+				message: "Use lowercase letters, numbers and hyphens.",
+			},
+		]);
 	});
 });
 

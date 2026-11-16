@@ -5,7 +5,7 @@ import { canonicalEntitySchema } from "./entity-schema";
 import { flagOf } from "./graph";
 import { type Field, parseField } from "./model";
 import { type Scope, scopeOf } from "./scope";
-import { isObject } from "./spec/field";
+import { isListResponseSpec, isObject } from "./spec/field";
 import {
 	COLLECTIONS,
 	DEFAULT_OUTPUT_DIR,
@@ -38,9 +38,11 @@ export function canonicalField(field: Field): Json {
 					}
 				: field.kind === "variant"
 					? { variant: canonicalVariant(field) }
-					: { fields: canonicalFields(field.fields) };
+					: field.kind === "file"
+						? { file: canonicalFile(field) }
+						: { fields: canonicalFields(field.fields) };
 	const evolution =
-		field.kind === "inline" || field.kind === "variant"
+		field.kind === "inline" || field.kind === "variant" || field.kind === "file"
 			? {}
 			: {
 					...(field.fill === undefined ? {} : { fill: field.fill }),
@@ -53,6 +55,19 @@ export function canonicalField(field: Field): Json {
 		...evolution,
 		...(field.optional ? { optional: true } : {}),
 		...(field.list ? { list: { ...field.list } } : {}),
+	};
+}
+
+/** The options of a file, in their order: only those given. */
+function canonicalFile(file: {
+	readonly types?: readonly string[];
+	readonly maxBytes?: number;
+	readonly name?: string;
+}): Json {
+	return {
+		...(file.types === undefined ? {} : { types: [...file.types] }),
+		...(file.maxBytes === undefined ? {} : { maxBytes: file.maxBytes }),
+		...(file.name === undefined ? {} : { name: file.name }),
 	};
 }
 
@@ -169,6 +184,10 @@ function canonicalRecord(
 		...(change ? { change } : {}),
 		...(plugins ? { plugins } : {}),
 		...(Object.keys(events).length > 0 ? { events } : {}),
+		...(entity &&
+		(value.id === "uuid" || value.id === "key" || value.id === "serial")
+			? { id: value.id }
+			: {}),
 		...(entity && value.versioned === true ? { versioned: true } : {}),
 		...(expires ? { expires: expires as Json } : {}),
 		...(entity ? canonicalEntitySchema(value) : {}),
@@ -183,6 +202,9 @@ function canonicalProperty(name: string, value: Json): Json {
 			ref: typeof value.ref === "string" ? value.ref : name,
 			import: value.import,
 		};
+	}
+	if (isObject(value.file)) {
+		return { file: canonicalFile(value.file), ...optional };
 	}
 	if (Array.isArray(value.enum)) {
 		return {
@@ -232,6 +254,13 @@ function canonicalException(name: string, value: Json): Json {
 /** A blueprint reference as written: a name stays a name, fields get canonical. */
 function canonicalBlueprintRef(value: unknown): unknown {
 	return isObject(value) ? { fields: fieldsOf(value.fields) } : value;
+}
+
+/** A response: a blueprint, or a list field in its canonical form. */
+function canonicalResponse(value: unknown): unknown {
+	if (!isListResponseSpec(value)) return canonicalBlueprintRef(value);
+	const field = parse(value);
+	return field ? canonicalField(field) : value;
 }
 
 function cloneJson<Value>(value: Value): Value {
@@ -299,10 +328,12 @@ function canonicalRouting(value: Json): Json {
 					: route.method,
 			...(route.path === undefined ? {} : { path: route.path }),
 			...(route.status === undefined ? {} : { status: route.status }),
+			...(route.statuses === undefined ? {} : { statuses: route.statuses }),
 			...(route.query === undefined ? {} : { query: route.query }),
 			...(headers === undefined ? {} : { headers }),
 			...(route.cookie === undefined ? {} : { cookie: route.cookie }),
 			...(route.setCookie === undefined ? {} : { setCookie: route.setCookie }),
+			...(route.body === undefined ? {} : { body: route.body }),
 		};
 	} else if (route !== undefined) out.route = route;
 	if (isObject(access)) {
@@ -356,7 +387,7 @@ function canonicalUseCase(value: Json): Json {
 		...(value.deprecated === true ? { deprecated: true } : {}),
 		...canonicalRouting(value),
 		input: canonicalBlueprintRef(value.input),
-		response: canonicalBlueprintRef(value.response),
+		response: canonicalResponse(value.response),
 		...(value.context === undefined
 			? {}
 			: { context: canonicalBlueprintRef(value.context) }),
@@ -480,6 +511,14 @@ export function normalizeSpec(
 			Object.keys(spec.publishers)
 				.sort()
 				.map((key) => [key, cloneJson((spec.publishers as Json)[key])]),
+		);
+	}
+	// Services by name in order.
+	if (isObject(spec.services) && Object.keys(spec.services).length > 0) {
+		out.services = Object.fromEntries(
+			Object.keys(spec.services)
+				.sort()
+				.map((key) => [key, cloneJson((spec.services as Json)[key])]),
 		);
 	}
 	for (const collection of COLLECTIONS) {
@@ -638,7 +677,9 @@ export function compactSpec(normalized: Spec): Spec {
 			if (!isObject(value)) continue;
 			for (const key of ["input", "response", "context"]) {
 				const ref = value[key];
-				if (isObject(ref)) ref.fields = compactFields(ref.fields);
+				if (key === "response" && isListResponseSpec(ref)) {
+					value[key] = compactField(ref as Json) as unknown as Json;
+				} else if (isObject(ref)) ref.fields = compactFields(ref.fields);
 			}
 			const implementation = value.implementation;
 			if (isObject(implementation) && Array.isArray(implementation.steps)) {

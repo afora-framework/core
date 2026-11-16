@@ -161,30 +161,47 @@ A token is refused, with a 401, when it is malformed, signed with another secret
 
 **Sessions in cookies.** The route of a use case can send keys of its response as cookies, with [`setCookie`](use-cases.md#routes), and read input keys from cookies, with `cookie`. So a browser session is the same three use cases with other routes:
 
-<!-- docs:code skip: entries of the useCases of the command above, and the sink call of its output -->
+<!-- docs:code continue -->
 ```ts
 const sid = { name: "sid" }; // HttpOnly; Secure; SameSite=Lax; Path=/
 const rid = { name: "rid", path: "/refresh", maxAge: 60 * 60 * 24 * 30 };
 
-login: ctx.login(Users, {
-	token,
-	route: { method: "post", path: "/login", setCookie: { token: sid, refreshToken: rid } },
-}),
-refresh: ctx.refresh(Users, {
-	token,
-	route: {
-		method: "post",
-		path: "/refresh",
-		cookie: { refreshToken: "rid" },
-		setCookie: { token: sid, refreshToken: rid },
-	},
-}),
-logout: ctx.logout(Users, {
-	route: { method: "post", path: "/logout", setCookie: { token: sid, refreshToken: rid } },
-}),
+const Session = commandOf({
+	name: "Session",
+	useCases: (ctx) => ({
+		login: ctx.login(Users, {
+			token,
+			route: {
+				method: "post",
+				path: "/login",
+				setCookie: { token: sid, refreshToken: rid },
+			},
+		}),
+		refresh: ctx.refresh(Users, {
+			token,
+			route: {
+				method: "post",
+				path: "/refresh",
+				cookie: { refreshToken: "rid" },
+				setCookie: { token: sid, refreshToken: rid },
+			},
+		}),
+		logout: ctx.logout(Users, {
+			route: {
+				method: "post",
+				path: "/logout",
+				setCookie: { token: sid, refreshToken: rid },
+			},
+		}),
+	}),
+});
 
 // and the sink reads the token from the cookie:
-hono({ auth: { jwt: { secret: { env: "JWT_SECRET" }, issuer: "blog", cookie: "sid" } } });
+hono({
+	auth: {
+		jwt: { secret: { env: "JWT_SECRET" }, issuer: "blog", cookie: "sid" },
+	},
+});
 ```
 
 The tokens then never reach the body, and `logout`, which answers empty tokens, removes both cookies.

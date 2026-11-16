@@ -221,6 +221,25 @@ describe("openapi sink errors", () => {
 		expect(() =>
 			openapi({ info, route: { "Users.login": { method: "head" } } } as never),
 		).toThrow(InvalidOutputStage);
+		expect(() =>
+			openapi({
+				info,
+				// @ts-expect-error: body is only allowed on a delete
+				route: { "Users.login": { method: "get", body: true } },
+			}),
+		).toThrow("a get route never reads a body");
+		expect(() =>
+			openapi({
+				info,
+				// @ts-expect-error: body is only allowed on a delete
+				route: { "Users.login": { method: "patch", body: true } },
+			}),
+		).toThrow("a patch route always reads a body");
+	});
+
+	test("rejects body on a route that is not a delete", () => {
+		const Api = make({ info, route: { "Users.login": { body: true } } });
+		expect(() => Api.build()).toThrow("a post route always reads a body");
 	});
 
 	test("rejects two operations on the same method and path", () => {
@@ -290,9 +309,27 @@ class RemoveEntry extends useCaseOf({
 		return {} as never;
 	}
 }
+class ArchiveEntry extends useCaseOf({
+	name: "ArchiveEntry",
+	blueprint: blueprintOf((ctx) => ({
+		slug: ctx.text,
+		reason: ctx.text,
+		note: ctx.optional.text,
+	})),
+	response: blueprintOf(() => ({})),
+}) {
+	override async execute() {
+		return {} as never;
+	}
+}
 const Entries = commandOf({
 	name: "Entries",
-	useCases: { get: GetEntry, update: UpdateEntry, remove: RemoveEntry },
+	useCases: {
+		get: GetEntry,
+		update: UpdateEntry,
+		remove: RemoveEntry,
+		archive: ArchiveEntry,
+	},
 });
 
 describe("openapi sink routes", () => {
@@ -310,6 +347,11 @@ describe("openapi sink routes", () => {
 						method: "delete",
 						path: "/entries/{slug}",
 						status: 204,
+					},
+					"Entries.archive": {
+						method: "delete",
+						path: "/entries/{slug}/archive",
+						body: true,
 					},
 					"Users.register": { path: "/users", status: 201 },
 				},
@@ -343,7 +385,10 @@ describe("openapi sink routes", () => {
 			description?: string;
 			schema?: unknown;
 		}[];
-		requestBody?: { content: { "application/json": { schema: object } } };
+		requestBody?: {
+			required: boolean;
+			content: { "application/json": { schema: object } };
+		};
 		responses: Record<string, { headers?: object; content?: object }>;
 		security?: unknown;
 	};
@@ -398,6 +443,34 @@ describe("openapi sink routes", () => {
 		expect(removed).toBeDefined();
 		expect(removed?.content).toBeUndefined();
 		expect(op("/api/entries/{slug}", "delete").requestBody).toBeUndefined();
+	});
+
+	test("a delete with body: true documents a JSON body", () => {
+		const archive = op("/api/entries/{slug}/archive", "delete");
+		expect(archive.parameters?.map((p) => [p.name, p.in])).toEqual([
+			["slug", "path"],
+		]);
+		expect(archive.requestBody?.required).toBe(true);
+		const body = archive.requestBody?.content["application/json"].schema as {
+			properties: object;
+			required: string[];
+		};
+		expect(Object.keys(body.properties)).toEqual(["reason", "note"]);
+		expect(body.required).toEqual(["reason"]);
+		// Nothing required left in it: the body may be left out.
+		const optional = outputOf({
+			name: "Blog",
+			commands: [Posts],
+			pipe: [
+				openapi({
+					info,
+					route: { "Posts.list": { method: "delete", body: true } },
+				}),
+			],
+		}).build();
+		const list = optional.paths["/posts/list"]?.delete as Op;
+		expect(list.parameters).toBeUndefined();
+		expect(list.requestBody?.required).toBe(false);
 	});
 
 	test("documents static headers and the request id", () => {
@@ -519,5 +592,94 @@ describe("openapi sink route errors", () => {
 				},
 			}).build(),
 		).toThrow(InvalidOutputStage);
+	});
+});
+
+describe("a list response", () => {
+	class Comment extends entityOf(blueprintOf((ctx) => ({ body: ctx.text }))) {}
+	class Recent extends useCaseOf({
+		name: "Recent",
+		blueprint: blueprintOf((ctx) => ({ page: ctx.optional.integer })),
+		response: listOf(Comment, { maxItems: 20 }),
+		route: { method: "get", path: "/comments" },
+	}) {
+		override async execute() {
+			return [] as never;
+		}
+	}
+	const document = outputOf({
+		name: "Comments",
+		commands: [commandOf({ name: "Comments", useCases: { recent: Recent } })],
+		pipe: [openapi({ info })],
+	}).build();
+
+	test("is an array of its items, whose records are components", async () => {
+		await validated(document);
+		const get = document.paths["/comments"]?.get as {
+			responses: Record<
+				string,
+				{ content: { "application/json": { schema: unknown } } }
+			>;
+		};
+		expect(get.responses["200"]?.content["application/json"].schema).toEqual({
+			type: "array",
+			items: { $ref: "#/components/schemas/Comment" },
+			maxItems: 20,
+		});
+		expect(document.components.schemas).toHaveProperty("Comment");
+		expect(document).toMatchSnapshot();
+	});
+});
+
+describe("an input with a file", () => {
+	class Upload extends useCaseOf({
+		name: "Upload",
+		blueprint: blueprintOf((ctx) => ({
+			folder: ctx.string,
+			file: ctx.fileOf({ types: ["image/png"], maxBytes: 1000 }),
+			extras: ctx.optionalOf(ctx.listOf(ctx.file)),
+			caption: ctx.optional.string,
+		})),
+		response: blueprintOf((ctx) => ({ size: ctx.integer })),
+		route: { method: "post", path: "/media/{folder}" },
+	}) {
+		override async execute() {
+			return { size: this.input.file.size };
+		}
+	}
+	const document = outputOf({
+		name: "Media",
+		commands: [commandOf({ name: "Media", useCases: { upload: Upload } })],
+		pipe: [openapi({ info })],
+	}).build();
+
+	test("is sent as multipart/form-data, each file a binary string", async () => {
+		await validated(document);
+		const operation = document.paths["/media/{folder}"]?.post as {
+			requestBody: { required: boolean; content: Record<string, unknown> };
+		};
+		const body = operation.requestBody;
+		expect(body.required).toBe(true);
+		expect(body.content).toEqual({
+			"multipart/form-data": {
+				schema: {
+					type: "object",
+					properties: {
+						file: {
+							type: "string",
+							format: "binary",
+							contentMediaType: "image/png",
+						},
+						extras: {
+							type: "array",
+							items: { type: "string", format: "binary" },
+						},
+						caption: { type: "string" },
+					},
+					required: ["file"],
+					additionalProperties: false,
+				},
+			},
+		});
 	});
 });

@@ -1,4 +1,7 @@
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { isBuiltin } from "node:module";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { issue } from "./scope";
 import type { SpecIssue } from "./spec/types";
 
@@ -11,6 +14,82 @@ function inside(root: string, path: string): boolean {
 		rel === "" ||
 		(!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel))
 	);
+}
+
+/** The real path of the deepest part of `path` that exists, with the rest appended. */
+function realWithin(path: string): string {
+	let existing = path;
+	const rest: string[] = [];
+	while (!existsSync(existing)) {
+		const parent = dirname(existing);
+		if (parent === existing) return path;
+		rest.unshift(existing.slice(parent.length).replace(/^[\\/]+/, ""));
+		existing = parent;
+	}
+	try {
+		return resolve(realpathSync(existing), ...rest);
+	} catch {
+		return path;
+	}
+}
+
+/** The directories a generated file never goes in: dependencies and version control. */
+const TOOLING_DIRS = new Set(["node_modules", ".git"]);
+
+/** Whether `path` has a segment naming a tooling directory, in any case (APFS and NTFS ignore it). */
+const inTooling = (path: string) =>
+	path.split(/[\\/]/).some((part) => TOOLING_DIRS.has(part.toLowerCase()));
+
+/**
+ * Where a runtime loads the relative module `module` from `from`: Node and
+ * Bun resolve it as a URL, which reads `?` as a query, `#` as a fragment,
+ * `\\` as `/` and `%2e%2e` as `..`, none of which `path.resolve` does.
+ */
+function urlTarget(from: string, module: string): string | undefined {
+	try {
+		const url = new URL(module, pathToFileURL(`${from}${sep}`));
+		url.search = "";
+		url.hash = "";
+		return fileURLToPath(url);
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Why a module cannot be trusted to mean what `path.resolve` says it means.
+ * A runtime resolves a relative module as a URL, where a backslash is a `/`
+ * and `%2e%2e` is `..`, so `./a\\..\\..\\x` leaves the directory whatever
+ * `resolve` says on POSIX; control characters have no place in a module.
+ */
+function specifierProblem(module: string): string | undefined {
+	if (module.includes("\\")) return "has a backslash";
+	if (module.includes("%")) return "has a percent-encoded character";
+	if (/[?#]/.test(module))
+		return 'has a "?" or "#", which a URL reads as a query or a fragment';
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what is refused
+	if (/[\u0000-\u001f\u007f]/.test(module)) return "has a control character";
+	return undefined;
+}
+
+/**
+ * Why a package specifier cannot be trusted to stay a package: a `.` or `..`
+ * segment (`pkg/../../x` resolves from `node_modules/pkg` to anywhere), an
+ * empty segment, or a module built into the runtime (`fs`, `child_process`,
+ * `bun`), which is not a package of the project.
+ */
+function packageProblem(module: string): string | undefined {
+	if (
+		module
+			.split("/")
+			.some((part) => part === "" || part === "." || part === "..")
+	) {
+		return 'has an empty, "." or ".." segment, so it can resolve outside the package';
+	}
+	if (isBuiltin(module) || module === "bun" || module.startsWith("bun/")) {
+		return "is a module built into the runtime";
+	}
+	return undefined;
 }
 
 /** A module that is a file path, not a package: relative, absolute or a URL. */
@@ -40,12 +119,27 @@ export function projectBoundaryIssues(
 	spec: unknown,
 	root: string,
 ): SpecIssue[] {
+	return boundaryIssues(spec, root, root);
+}
+
+/**
+ * `projectBoundaryIssues` for a spec whose file is in `specDir` (a spec it
+ * extends): its `extends` and output directory resolve from there, and
+ * nothing may leave `root`.
+ */
+export function boundaryIssues(
+	spec: unknown,
+	root: string,
+	specDir: string,
+): SpecIssue[] {
 	const issues: SpecIssue[] = [];
 	if (typeof spec !== "object" || spec === null) return issues;
 	const base = resolve(root);
+	const realBase = realWithin(base);
+	const home = resolve(base, specDir);
 	const given = (spec as { output?: { dir?: unknown } }).output?.dir;
 	const outputDir = resolve(
-		base,
+		home,
 		typeof given === "string" ? given : DEFAULT_OUTPUT_DIR,
 	);
 
@@ -55,6 +149,19 @@ export function projectBoundaryIssues(
 		path: readonly (string | number)[],
 		what: string,
 	) => {
+		const problem =
+			specifierProblem(module) ??
+			(isPathModule(module) ? undefined : packageProblem(module));
+		if (problem) {
+			issues.push(
+				issue(
+					path,
+					"outside_project",
+					`${what} "${module}" ${problem}; use a path relative to the project, inside it, or a package of the project.`,
+				),
+			);
+			return;
+		}
 		if (!isPathModule(module)) return;
 		if (!module.startsWith(".")) {
 			issues.push(
@@ -66,7 +173,9 @@ export function projectBoundaryIssues(
 			);
 			return;
 		}
-		if (!inside(base, resolve(from, module))) {
+		const target = resolve(from, module);
+		const loaded = urlTarget(from, module);
+		if (!inside(base, target) || !loaded || !inside(base, loaded)) {
 			issues.push(
 				issue(
 					path,
@@ -74,14 +183,47 @@ export function projectBoundaryIssues(
 					`${what} "${module}" is outside the project directory.`,
 				),
 			);
+		} else if (
+			!inside(realBase, realWithin(target)) ||
+			!inside(realBase, realWithin(loaded))
+		) {
+			issues.push(
+				issue(
+					path,
+					"outside_project",
+					`${what} "${module}" goes through a symbolic link that leaves the project directory.`,
+				),
+			);
 		}
 	};
+
+	// An output.dir that climbs out (`..`, absolute) is `invalid_output` of
+	// validateSpec; what only the disk or the project's layout tells is here.
+	if (typeof given === "string" && inside(base, outputDir)) {
+		const real = realWithin(outputDir);
+		const escapes = !inside(realBase, real);
+		// The directory as written, and where it really is: a link to node_modules counts.
+		const tooling =
+			inTooling(relative(base, outputDir)) ||
+			(!escapes && inTooling(relative(realBase, real)));
+		if (tooling || escapes) {
+			issues.push(
+				issue(
+					["output", "dir"],
+					"outside_project",
+					tooling
+						? `The output directory "${given}" is inside node_modules or .git; generate into a directory of your sources.`
+						: `The output directory "${given}" goes through a symbolic link that leaves the project directory.`,
+				),
+			);
+		}
+	}
 
 	const references = (spec as { extends?: unknown }).extends;
 	if (Array.isArray(references)) {
 		for (const [index, reference] of references.entries()) {
 			if (typeof reference === "string") {
-				check(reference, base, ["extends", index], "The extended spec");
+				check(reference, home, ["extends", index], "The extended spec");
 			}
 		}
 	}

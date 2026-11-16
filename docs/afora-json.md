@@ -9,6 +9,7 @@ This guide is the workflow. The reference of every declaration, option and issue
 ```bash
 bun add @afora/core typebox
 bun add -d @afora/codegen
+# or: npm install @afora/core typebox && npm install -D @afora/codegen
 ```
 
 ```bash
@@ -45,6 +46,20 @@ A repository lists `"increment"` among its actions for atomic counters; the enti
 			"entity": "PageViews",
 			"actions": ["findById", "update", "increment"]
 		}
+	}
+}
+```
+
+## Ids
+
+An entity takes `"id"`, how its ids are made: `"uuid7"` (the default, as when it is left out), `"uuid"` (any UUID version, a v4 from an existing database included; new ones are still v7), `"key"` (a natural key of 1 to 256 characters that the input of `create` must hold, never generated) or `"serial"` (a positive integer the database assigns on `create`, from an auto-increment, serial or identity column; the provider must assign ids, as the in-memory and Drizzle ones do, see [Entities](entities.md#ids-the-database-assigns)). They are generated as `entityOf(..., { id: Uuid })`, `{ id: Key }` and `{ id: Serial }` and extracted back from `describe()`; an entity whose id is a custom `idOf` cannot be extracted (`ExtractionError`). A record does not take it (`unknown_key`), and any other value is `invalid_option`.
+
+```json
+{
+	"entities": {
+		"Setting": { "fields": { "value": "text" }, "id": "key" },
+		"Customer": { "fields": { "name": "text" }, "id": "uuid" },
+		"Ticket": { "fields": { "title": "text" }, "id": "serial" }
 	}
 }
 ```
@@ -102,6 +117,50 @@ A field that holds one of several objects, told apart by the value of one key ([
 
 It is generated as `ctx.variantOf("method", { card: Card, pix: Pix })`, wrapped in `listOf` and `optionalOf`, and extracted back from `describe()`. The validator checks that `key` is a string that is not empty and that `of` has at least one variant (`invalid_variant`), that each name is declared (`unknown_type`) and is a blueprint, a record or an entity (`wrong_kind`), that no variant declares the key, which the field adds (`invalid_variant`, an entity's identity keys and a plugin's keys included), and that a record or an entity is not two variants (`invalid_variant`: an instance is told apart by its class). An entity among the variants needs its repository in the `relations` of the holder's repository, as for any entity field (`missing_relation`). A variant field cannot be an environment variable (`invalid_environment_field`) nor the `orderBy` of an index (`invalid_index`), and `$input.<field>.<key>` in a step is checked against the key and the keys of every variant.
 
+## Files
+
+A field that holds a file ([`fileOf`](std-properties.md#files)) is `"file"` for any file, or `{ "file": { "types": ["image/png", "image/*"], "maxBytes": 5000000 } }`, next to the `type`, `enum`, `fields` and `variant` forms; `{ "file": {} }` is any file too, and `name` names the property. `optional` and `list` apply; `with`, `fill` and `renamedFrom` do not. A property declaration takes the same form, `{ "file": {...}, "optional"?: true }`. It is generated as `ctx.fileOf({ types, maxBytes })` (`fileOf` for a declaration) and extracted back from `describe()`. The validator checks that `types` is a non-empty list of media types, that `maxBytes` is a whole number, 0 or more, and that nothing else is given (`invalid_file`, `unknown_key`); a file cannot be an environment variable (`invalid_environment_field`), a field of an entity, at any depth of fields in place (`entity_file`: store its URL instead), nor `sensitive` or `unique` (`invalid_file`). An HTTP output reads the input of a use case that holds one from a `multipart/form-data` body: see [Outputs](outputs.md).
+
+```json
+{
+	"useCases": {
+		"UploadMedia": {
+			"input": {
+				"fields": {
+					"file": {
+						"file": {
+							"types": ["image/png", "image/jpeg"],
+							"maxBytes": 5000000
+						}
+					},
+					"folder": "string?"
+				}
+			}
+		}
+	}
+}
+```
+
+## A list as the response
+
+The `response` of a use case written in the spec is a blueprint (its name, or `{ "fields": {...} }`), or a list written as a list field, for a use case that [answers an array](use-cases.md#a-list-as-the-response):
+
+```json
+{
+	"useCases": {
+		"RecentArticles": {
+			"input": { "fields": { "limit": "integer" } },
+			"response": { "type": "ArticleSummary", "list": { "maxItems": 50 } },
+			"implementation": {
+				"import": "../handlers/recent-articles.ts#RecentArticles"
+			}
+		}
+	}
+}
+```
+
+`"ArticleSummary[]"` is the same list without bounds, `"string[]"` a list of a property, and `{ "fields": {...}, "list": true }` a list of objects declared in place. It is generated as `listOf(ArticleSummary, { maxItems: 50 })` and extracted back from `describe()`, whose use case has `responseList` (and `response: {}`) for it. The response must be a list, not optional, and not of variants (`invalid_blueprint`); a type it names must be declared (`unknown_type`). A list has no keys, so a `route.setCookie` with it is `invalid_route`.
+
 ## Round trip
 
 `extractSpec(app)` reads `app.describe()` and is the inverse of `generate`: `spec -> generate -> import -> extractSpec` gives back the same spec, and `normalizeSpec` makes the shorthand and object forms of a field compare equal. This holds for code that was generated, and for code written by hand, as long as everything the core cannot describe is mapped to an export (next section). An unmapped piece makes extraction throw an `ExtractionError` naming the key, instead of guessing. `examples/blog` extracts its own spec back in its tests, and `bun run test:roundtrip` proves both directions on complete applications.
@@ -124,6 +183,7 @@ Some things are code, not data: a provider made by hand, a `run` function, the `
 | `commands.<Name>.events`           | the event handler of a command, when it is not a policy                    |
 | `commands.<Name>.onEventError`     | the `onEventError` handler of a command                                    |
 | `publishers.<key>`                 | a publisher of the top-level `publishers`                                  |
+| `services.<name>`                  | the factory of a service of the top-level `services`                       |
 | `entities.<Name>.events.<event>`   | the handler of a lifecycle event of an entity                              |
 | `outputs.<Name>.pipe.<index>`      | a stage written by hand, by its position in the `pipe`                     |
 | `<property name>`                  | the module of a property that cannot be recreated (see the limitations)    |
@@ -149,11 +209,31 @@ A command's `events` can name an event policy of the catalog with JSON options, 
 }
 ```
 
-`realtime.ts` exports the publisher, any object with a `publish(topic, event)` method, such as `export const hub = wsHub();` of [`@afora/ws`](../packages/ws/README.md), whose `{ "sink": "websocket" }` serves the operations and the subscriptions (`--stages @afora/ws`). The generated application gets `publishers: { realtime: hub }`, and a spec that extends this one can name `realtime` too. The validator makes a built-in policy with its options, so what it would throw is an `invalid_event_policy_options` issue; a name outside the catalog is `unknown_event_policy`, a `publisher` that is not a key of `publishers` (own or inherited) `unknown_publisher`, and a publisher that is not an import `invalid_import`. Extraction needs `publishers.<key>` in `imports`.
+`realtime.ts` exports the publisher, any object with a `publish(topic, event)` method, such as `export const hub = wsHub();` of [`@afora/ws`](../packages/ws/README.md), whose `{ "sink": "websocket" }` serves the operations and the subscriptions (`--stages ./stages.ts`, a local module with `export { stages } from "@afora/ws";`). The generated application gets `publishers: { realtime: hub }`, and a spec that extends this one can name `realtime` too. The validator makes a built-in policy with its options, so what it would throw is an `invalid_event_policy_options` issue; a name outside the catalog is `unknown_event_policy`, a `publisher` that is not a key of `publishers` (own or inherited) `unknown_publisher`, and a publisher that is not an import `invalid_import`. Extraction needs `publishers.<key>` in `imports`.
+
+## Services
+
+A use case that needs what is not a repository (a cache, a storage, a client of another API) names a service in its `dependencies`, a key of the top-level `services`, whose value is the factory written by hand that makes it once per call (see [Services](use-cases.md#services)):
+
+```json
+{
+	"services": { "cache": { "import": "../services.ts#cache" } },
+	"useCases": {
+		"GetContent": {
+			"input": { "fields": { "key": "string" } },
+			"response": { "fields": { "value": "string" } },
+			"dependencies": { "cache": "cache" },
+			"implementation": { "import": "../handlers/get-content.ts#GetContent" }
+		}
+	}
+}
+```
+
+`services.ts` exports the factory, `(scope: ServiceScope) => value`, maybe async. The use case is generated with `cache: serviceOf<Awaited<ReturnType<typeof cache>>>("cache")`, so its hand-written `execute` reads `this.dependencies.cache` typed by what the factory returns (imported with `import type`, so loading the use case never loads `services.ts`), and the application with `services: { cache }`. A spec that extends this one can name `cache` too, typed the same when this spec is extended by a relative path or the factory is imported from a package; a factory relative to a spec reached as a package, or one of a spec that an extended spec extends in turn, is not importable from the child, and the service is `unknown` there. Steps do not read a service. A name of `services` must be an identifier other than `Logger` (`invalid_name`) and cannot be the name of a declaration (`duplicate_name`); a dependency that names neither a declaration nor a service is `unknown_dependency`. Extraction needs `services.<name>` in `imports`.
 
 The events come from the lifecycle of the entities. An entity (not a record) declares them by cycle, each one event or a list:
 
-```json
+```json afora:entities
 "Post": {
 	"fields": { "title": "text" },
 	"events": {
@@ -169,7 +249,7 @@ A name alone is an event without a handler, raised to be published; `{ name, han
 
 `"trace"` is the tracer of the application (see [Tracing](tracing.md)), an import of one written by hand, such as `otelTracer()` of [`@afora/otel`](../packages/otel/README.md):
 
-```json
+```json afora
 {
 	"version": 1,
 	"name": "blog",
@@ -183,7 +263,7 @@ A name alone is an event without a handler, raised to be published; `{ name, han
 
 A repository declares its [indexes](repositories.md#indexes) and what it does with a [scan](repositories.md#query-cost) as in TypeScript:
 
-```json
+```json afora:partial
 "repositories": {
 	"Entries": {
 		"entity": "Entry",
@@ -203,7 +283,7 @@ They are generated as `indexes` and `scans` of `repositoryOf`, given by `describ
 
 An entity (not a record) declares when its records expire with `expires`, generated as the [option of `entityOf`](entities.md#records-that-expire) and extracted back from `describe()`:
 
-```json
+```json afora:entities
 "AuditEvent": { "fields": { "action": "text" }, "expires": { "after": { "days": 400 } } },
 "Window": { "fields": { "hits": "integer", "until": "dateTime?" }, "expires": { "at": "until" } }
 ```
@@ -216,7 +296,7 @@ Steps are a sequence with no branching, no loops and no expressions (see [what s
 
 `Reserve` takes stock away from an item, and fits in steps:
 
-```json
+```json afora:useCases
 "Reserve": {
 	"input": { "fields": { "itemId": "id", "quantity": "integer" } },
 	"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] }, "item": "Item" } },
@@ -237,7 +317,7 @@ Steps are a sequence with no branching, no loops and no expressions (see [what s
 
 Then the rule changes: when the stock is short, leave it as it is and answer `back-ordered`. That is a branch, so `Reserve` moves to code. Only `implementation` changes:
 
-```json
+```json afora:useCases
 "Reserve": {
 	"input": { "fields": { "itemId": "id", "quantity": "integer" } },
 	"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] }, "item": "Item" } },
@@ -249,7 +329,27 @@ Then the rule changes: when the stock is short, leave it as it is and answer `ba
 
 `generate` now writes `export abstract class ReserveBase extends useCaseOf({...}) {}` in `src/domain/reserve.use-case.ts` (the file is named after the use case in kebab case), with the declaration above. The class is written once, at the path the spec names (relative to the output directory), and `application.ts` registers it:
 
-<!-- docs:code skip: src/handlers/reserve.ts imports the files afora-codegen generates from the spec above -->
+<!-- docs:code generate
+{
+	"version": 1,
+	"name": "shop",
+	"output": { "dir": "src/domain" },
+	"entities": { "Item": { "fields": { "name": "text", "stock": "integer" }, "change": ["stock"] } },
+	"repositories": { "Items": { "entity": "Item", "actions": ["findById", "update"] } },
+	"exceptions": { "ItemNotFound": { "layer": "use-case" } },
+	"useCases": {
+		"Reserve": {
+			"input": { "fields": { "itemId": "id", "quantity": "integer" } },
+			"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] }, "item": "Item" } },
+			"dependencies": { "items": "Items" },
+			"errors": ["ItemNotFound"],
+			"implementation": { "import": "../handlers/reserve#Reserve" }
+		}
+	}
+}
+-->
+
+<!-- docs:code file: src/handlers/reserve.ts -->
 ```ts
 // src/handlers/reserve.ts
 import { ItemNotFound } from "../domain/exceptions";
@@ -271,7 +371,7 @@ export class Reserve extends ReserveBase {
 
 `this.input`, `this.context` and `this.dependencies` are typed from the declaration, and the response is validated by its blueprint as for steps; throw only the exceptions `errors` lists. A use case in steps that depends on `Reserve` keeps it as it is, `call` included:
 
-```json
+```json afora:useCases
 "PlaceOrder": {
 	"input": { "fields": { "itemId": "id", "quantity": "integer" } },
 	"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] } } },
@@ -291,7 +391,7 @@ The generated `use-cases.ts` imports `Reserve` from `../handlers/reserve` for it
 
 A use case that a [standard use case](std-use-cases.md) covers is declared by naming it and the repository it is for, in place of its input, response and steps:
 
-```json
+```json afora:partial
 "useCases": {
 	"CreatePost": {
 		"generic": "create",
@@ -313,7 +413,7 @@ It generates `export const CreatePost = StdUseCases.context.create(Posts, { name
 
 The use cases that write (all but `get`, `list` and `login`) take the [hooks](std-use-cases.md#before-and-after) too: `before` and `after` are imports, as the `fn` of a `run` step, `dependencies` name declared use cases, repositories, environments or `"Logger"`, as those of a use case written in the spec, and `throws` lists exceptions as `errors` does (a name, or `{ "core": "Name" }`):
 
-```json
+```json afora:useCases
 "CreateEntry": {
 	"generic": "create",
 	"repository": "Entries",
@@ -334,7 +434,7 @@ The validator checks that the use case exists (`unknown_generic`), that the repo
 
 A use case in `afora.json` takes the same `route` and `access` as in TypeScript (see [Routes](use-cases.md#routes) and [Access](auth.md)), beside its description:
 
-```json
+```json afora:partial
 "useCases": {
 	"ListPosts": {
 		"route": {
@@ -360,8 +460,10 @@ A use case in `afora.json` takes the same `route` and `access` as in TypeScript 
 
 - **Generated as settings.** `route` and `access` become the settings of `useCaseOf`, and options of a standard use case; the generator writes no decorators, so the code runs on Node as it is.
 - **Extracted from either form.** `extractSpec` reads what the class declares, whether it was written with the `route` setting or with `@Route` (and `access` or `@Access`). So a hand-written class may keep its decorators: its generated base carries the same declaration, and declaring the same route or access twice is accepted. A different one throws `InvalidUseCaseDeclaration` when the module loads.
+- **A body on `delete`.** `"route": { "method": "delete", "path": "/subscriptions", "body": true }` reads the input keys with no other place from a JSON body instead of the query; `body` on another method is an `invalid_route` issue.
+- **A status chosen at run time.** `"route": { "method": "get", "path": "/health", "statuses": [503] }` declares the other statuses the use case may answer with, each with the same response; an entry that is not a 2xx with a body (not `204` or `205`), a 4xx or a 5xx, that is `400` or `500` (kept for problems), a duplicate or the route `status` is an `invalid_route` issue. The status itself is chosen with `withStatus(503, body)`, in a hand-written `execute` or in the function of a `run` step whose result the `return` step gives (see [A status chosen at run time](use-cases.md#a-status-chosen-at-run-time)).
 - **Checked against the spec.** For a use case written in the spec, each key a route places must be a key of the input (`setCookie`, of the response), no key may have two places, the `owner` of an access must name an input key and its `context` keys must be in the context: `invalid_route` and `invalid_access`. For a standard use case only the shape is checked, since its input follows the repository; the generated code checks the rest when it loads.
-- **The route of a sink still wins.** The `route` option of a `hono` (or `fastify`, `express`, `elysia`, `openapi`) stage, by operation id, overrides the method, path and status, as in TypeScript.
+- **The route of a sink still wins.** The `route` option of a `hono` (or `fastify`, `express`, `elysia`, `openapi`) stage, by operation id, overrides the method, path, status, `statuses` and `body` (a `delete` that reads a JSON body), as in TypeScript.
 - **Tokens.** `login` and `refresh` take `"token": { "secret": { "env": "JWT_SECRET" }, ... }` in `options`, and a sink `"auth": { "jwt": { "secret": { "env": "JWT_SECRET" } } }`; the secret is always the name of an environment variable (see [Tokens and sessions](auth.md#tokens-and-sessions)).
 - **Hooks are code.** The middlewares and the authenticator of a sink are its second argument, which JSON cannot hold. A stage that needs them is written in a file and named with `{ "import": "./stages.ts#api" }`.
 
@@ -381,7 +483,7 @@ export const policies = [
 ];
 ```
 
-- In the CLI, `--providers <module>`, `--stages <module>` and `--policies <module>` take a module that exports `providers` or `stages` (or has it as the default export), an array of those entries. `@afora/drizzle` and `@afora/hono` export their own entries, so `--providers @afora/drizzle --stages @afora/hono` is enough.
+- In the CLI, `--providers <module>`, `--stages <module>` and `--policies <module>` take a module that exports `providers` or `stages` (or has it as the default export), an array of those entries. The flags resolve the module as a file, not a package: `@afora/drizzle` and `@afora/hono` export their own entries, so a local module that re-exports them (`export { providers } from "@afora/drizzle";`, `export { stages } from "@afora/hono";`) passed as `--providers ./providers.ts --stages ./stages.ts` is enough.
 - In code, they are the `providers`, `stages` and `policies` options of `validateSpec(spec, extended, options)` and `generate(spec, extended, options)`.
 - `inMemory` is the only built-in provider, `select` and `openapi` the built-in stages (`StdStages` of `@afora/core`) and `publishEvents` the built-in event policy (`StdEventPolicies`); `catalog()` lists them.
 - `module` is a package or a path relative to the output directory, and `export` is the factory, called with the options object (omitted when there are none). `kind` on a stage entry is optional and checks `transform` or `sink`.

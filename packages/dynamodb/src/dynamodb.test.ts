@@ -4,6 +4,8 @@ import {
 	entityOf,
 	RepositoryUniqueViolation,
 	repositoryOf,
+	Serial,
+	UnsupportedIdentity,
 } from "@afora/core";
 import type { RepositoryContext } from "@afora/core/adapters";
 import { providerContract } from "@afora/core/testing";
@@ -69,6 +71,21 @@ afterAll(async () => {
 			client.send(new DeleteTableCommand({ TableName })).catch(() => {}),
 		),
 	);
+});
+
+// Declaring makes no request: it runs without DynamoDB Local.
+describe("DynamoDB provider and Serial ids", () => {
+	test("a repository creating Serial entities is rejected when declared", () => {
+		class Ticket extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string })),
+			{ id: Serial },
+		) {}
+		const provider = dynamoDbProvider({ table: "tickets", client });
+		expect(provider.capabilities).not.toHaveProperty("generatedIds");
+		expect(() =>
+			repositoryOf({ entity: Ticket, provider, actions: ["create"] }),
+		).toThrow(UnsupportedIdentity);
+	});
 });
 
 describe.skipIf(!endpoint)("DynamoDB provider contract", () => {

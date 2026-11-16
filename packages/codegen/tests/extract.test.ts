@@ -6,17 +6,26 @@ import {
 	entityOf,
 	enumOf,
 	environmentOf,
+	fileOf,
 	Integer,
+	idOf,
 	inMemoryProvider,
+	Key,
 	listOf,
 	optionalOf,
 	propertyOf,
 	recordOf,
 	repositoryOf,
+	Serial,
+	SerialKey,
+	TextKey,
 	toOpenAPI,
+	Uuid,
+	UuidKey,
 } from "@afora/core";
 import { Type } from "typebox";
 import {
+	ExtractionError,
 	extractSpec,
 	generate,
 	normalizeSpec,
@@ -226,6 +235,88 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 		expect(normalizeSpec(extracted)).toEqual(normalizeSpec(spec));
 	});
 
+	test("the id strategies of entities round trip", async () => {
+		const spec: Spec = {
+			version: 1,
+			name: "Ids",
+			output: { dir: "src/domain" },
+			entities: {
+				Setting: { fields: { value: "text" }, id: "key" },
+				Legacy: { fields: { name: "text" }, id: "uuid" },
+				Plain: { fields: { name: "text" }, id: "uuid7" },
+				Ticket: { fields: { title: "text" }, id: "serial" },
+			},
+			repositories: {
+				Settings: { entity: "Setting", actions: ["create", "findById"] },
+				Legacies: { entity: "Legacy", actions: ["create", "findById"] },
+				Tickets: { entity: "Ticket", actions: ["create", "findById"] },
+			},
+		};
+		expect(validateSpec(spec)).toEqual([]);
+		const code = generate(spec).find((file) =>
+			file.path.endsWith("entities.ts"),
+		)?.contents;
+		expect(code).toContain("id: Key");
+		expect(code).toContain("id: Uuid");
+		expect(code).toContain("id: Serial");
+		const dir = await generated({ ".": { spec } });
+		const { App } = await import(join(dir, "src/domain/index.ts"));
+		const setting = await App.repositories.Settings.create({
+			id: "seo",
+			value: "on",
+		});
+		expect((await App.repositories.Settings.findById("seo")).id).toBe(
+			setting.id,
+		);
+		const v4 = "6f1c2b9e-3d4a-4e8b-9f2a-1c3b5d7e9f0a";
+		await App.repositories.Legacies.create({ id: v4, name: "old" });
+		expect((await App.repositories.Legacies.findById(v4)).name).toBe("old");
+		const ticket = await App.repositories.Tickets.create({ title: "First" });
+		expect(ticket.id).toBe(1);
+		expect((await App.repositories.Tickets.findById(1)).title).toBe("First");
+		const extracted = extractSpec(App);
+		expect(extracted.entities?.Setting?.id).toBe("key");
+		expect(extracted.entities?.Legacy?.id).toBe("uuid");
+		expect(extracted.entities?.Ticket?.id).toBe("serial");
+		expect(extracted.entities?.Plain?.id).toBeUndefined();
+		expect(normalizeSpec(extracted)).toEqual(normalizeSpec(spec));
+	});
+
+	test("a custom idOf cannot be extracted, even on the property of Key or Uuid", () => {
+		const Named = blueprintOf((ctx) => ({ name: ctx.string }));
+		const extract = (id: unknown) =>
+			extractSpec(
+				applicationOf({
+					name: "Ids",
+					entities: { Thing: entityOf(Named, { id: id as typeof Key }) },
+				}),
+			);
+		expect(extract(Key).entities?.Thing?.id).toBe("key");
+		expect(extract(Uuid).entities?.Thing?.id).toBe("uuid");
+		expect(extract(Serial).entities?.Thing?.id).toBe("serial");
+		for (const custom of [
+			idOf(SerialKey),
+			idOf(TextKey),
+			idOf(UuidKey, () => crypto.randomUUID()),
+			idOf(Integer, () => 1),
+		]) {
+			expect(() => extract(custom)).toThrow(ExtractionError);
+		}
+	});
+
+	test("an id other than uuid7, uuid, key or serial is invalid", () => {
+		const spec = {
+			version: 1,
+			name: "Ids",
+			entities: { Ticket: { fields: { title: "text" }, id: "increment" } },
+		} as unknown as Spec;
+		expect(validateSpec(spec).map((issue) => issue.path)).toContainEqual([
+			"entities",
+			"Ticket",
+			"id",
+		]);
+	});
+
 	test("the shorthand is used where it says the same", async () => {
 		const dir = await generated({ ".": { spec: blogSpec } });
 		const domain = await import(join(dir, "src/domain/index.ts"));
@@ -247,6 +338,84 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 });
 
 describe("hand-written application -> extractSpec -> generate", () => {
+	test("keeps file fields and file properties (fileOf)", async () => {
+		const Avatar = fileOf({ types: ["image/png", "image/*"], maxBytes: 1000 });
+		const Upload = blueprintOf((ctx) => ({
+			avatar: Avatar,
+			any: ctx.file,
+			cover: ctx.fileOf({ maxBytes: 10 }),
+			extras: ctx.optionalOf(ctx.listOf(ctx.fileOf({ types: ["text/plain"] }))),
+		}));
+		const App = applicationOf({
+			name: "files",
+			properties: { Avatar },
+			blueprints: { Upload },
+			provider: inMemoryProvider(),
+		});
+		const spec = extractSpec(App);
+		expect(validateSpec(spec)).toEqual([]);
+		expect(spec.properties?.Avatar).toEqual({
+			file: { types: ["image/png", "image/*"], maxBytes: 1000 },
+		});
+		expect(spec.blueprints?.Upload?.fields).toEqual({
+			avatar: "Avatar",
+			any: "file",
+			cover: { file: { maxBytes: 10 } },
+			extras: { file: { types: ["text/plain"] }, optional: true, list: true },
+		});
+		const dir = await generated({ ".": { spec } });
+		const domain = await import(join(dir, "src/domain/index.ts"));
+		expect(toOpenAPI({ Upload: domain.Upload })).toEqual(toOpenAPI({ Upload }));
+	});
+
+	test("rejects an entity holding a file, and a sensitive or unique file", () => {
+		const issues = validateSpec({
+			version: 1,
+			properties: { Avatar: { file: { types: ["image/png"] } } },
+			records: {
+				Upload: {
+					fields: { file: "file", title: "string" },
+					sensitive: ["file"],
+					unique: ["title"],
+				},
+			},
+			entities: {
+				Profile: {
+					fields: {
+						avatar: "Avatar",
+						nested: { fields: { file: { file: {} } } },
+						name: "string",
+					},
+				},
+			},
+		} as unknown as Spec);
+		expect(issues.map((found) => [found.path.join("."), found.code])).toEqual([
+			["entities.Profile.fields.avatar", "entity_file"],
+			["entities.Profile.fields.nested", "entity_file"],
+			["records.Upload.sensitive.0", "invalid_file"],
+		]);
+	});
+
+	test("rejects file options that are not media types or a size", () => {
+		const issues = validateSpec({
+			version: 1,
+			blueprints: {
+				Upload: {
+					fields: {
+						a: { file: { types: ["png"] } },
+						b: { file: { maxBytes: -1 } },
+						c: { file: { other: 1 } },
+					},
+				},
+			},
+		} as unknown as Spec);
+		expect(issues.map((found) => [found.path.join("."), found.code])).toEqual([
+			["blueprints.Upload.fields.a.file.types", "invalid_file"],
+			["blueprints.Upload.fields.b.file.maxBytes", "invalid_file"],
+			["blueprints.Upload.fields.c.file.other", "unknown_key"],
+		]);
+	});
+
 	test("gives the same OpenAPI schemas", async () => {
 		const Age = Integer.with({ min: 0, max: 150 });
 		const Status = enumOf(["draft", "published"]);

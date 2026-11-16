@@ -34,6 +34,19 @@ export function isDeclarationName(text: string): boolean {
 	return /^[A-Z][A-Za-z0-9]*$/.test(text);
 }
 
+/**
+ * Whether the `response` of a use case is written as a list field
+ * (`"Article[]"`, `{ "type": "Article", "list": true }`,
+ * `{ "fields": {...}, "list": true }`) rather than as a blueprint (a name, or
+ * `{ "fields": {...} }`).
+ */
+export function isListResponseSpec(value: unknown): boolean {
+	if (typeof value === "string") return !isDeclarationName(value);
+	return (
+		isObject(value) && !Object.keys(value).every((key) => key === "fields")
+	);
+}
+
 /** Whether `key` can be written unquoted as the key of an object. */
 export function isIdentifier(key: string): boolean {
 	return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key);

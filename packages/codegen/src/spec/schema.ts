@@ -38,6 +38,30 @@ const WithOptions = Type.Record(Type.String(), Type.Unknown(), {
 
 const FieldRef = Type.Ref("#/$defs/Field");
 
+/** What a file accepts, as `fileOf` takes it. */
+const FileOptions = Type.Object(
+	{
+		types: Type.Optional(
+			Type.Array(
+				Type.String({
+					pattern: "^[^\\s/]+/[^\\s/]+$",
+					description: 'A media type, "image/png", or "image/*" for any image.',
+				}),
+				{ minItems: 1 },
+			),
+		),
+		maxBytes: Type.Optional(
+			Type.Integer({ minimum: 0, description: "The largest size, in bytes." }),
+		),
+		name: Type.Optional(Type.String({ minLength: 1 })),
+	},
+	{
+		additionalProperties: false,
+		description:
+			"A file (fileOf), sent in a multipart/form-data body: the media types it accepts and its largest size. {} takes any file.",
+	},
+);
+
 /** `fill` and `renamedFrom` of a type or enum field (not a list). */
 const Evolution = {
 	fill: Type.Optional(
@@ -89,6 +113,10 @@ export const fieldDefinition = Type.Union(
 				...Evolution,
 				...Modifiers,
 			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{ file: FileOptions, ...Modifiers },
 			{ additionalProperties: false },
 		),
 		Type.Object(
@@ -175,6 +203,10 @@ const Property = Type.Union(
 			{ additionalProperties: false },
 		),
 		Type.Object(
+			{ file: FileOptions, optional: Type.Optional(Type.Boolean()) },
+			{ additionalProperties: false },
+		),
+		Type.Object(
 			{
 				opaque: Type.Literal(true),
 				ref: Type.Optional(
@@ -192,7 +224,7 @@ const Property = Type.Union(
 	],
 	{
 		description:
-			"A custom property: `base` + `with` (a refined Std property), an `enum`, or an `opaque` import of a hand-written property.",
+			"A custom property: `base` + `with` (a refined Std property), an `enum`, a `file`, or an `opaque` import of a hand-written property.",
 	},
 );
 
@@ -289,6 +321,15 @@ const Publishers = Type.Record(
 	{
 		description:
 			'Where event policies publish, by key (applicationOf({ publishers })): a publisher written by hand, { "import": "./realtime.ts#hub" }.',
+	},
+);
+
+const Services = Type.Record(
+	Type.String({ pattern: PUBLISHER_KEY }),
+	ImportRef,
+	{
+		description:
+			'The services of the use cases, by name (applicationOf({ services })): the factory written by hand that makes the value of each per call, { "import": "./services.ts#cache" }. A use case names one in its dependencies.',
 	},
 );
 
@@ -422,6 +463,20 @@ const RecordDeclaration = Type.Object(
 			),
 		),
 		events: Type.Optional(EntityEvents),
+		id: Type.Optional(
+			Type.Union(
+				[
+					Type.Literal("uuid7"),
+					Type.Literal("uuid"),
+					Type.Literal("key"),
+					Type.Literal("serial"),
+				],
+				{
+					description:
+						'Entities only: how ids are made. "uuid7" (default) generates and accepts UUID v7; "uuid" accepts any UUID version (v4 from an existing database) and generates v7; "key" is a natural key (1 to 256 characters) the input must hold, never generated; "serial" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds.',
+				},
+			),
+		),
 		versioned: Type.Optional(
 			Type.Boolean({
 				description:
@@ -732,6 +787,25 @@ const UseCaseRoute = Type.Object(
 				{ default: 200, description: "The status of a success." },
 			),
 		),
+		statuses: Type.Optional(
+			Type.Array(
+				Type.Integer({
+					minimum: 200,
+					maximum: 599,
+					not: {
+						anyOf: [
+							{ enum: [204, 205, 400, 500] },
+							{ minimum: 300, maximum: 399 },
+						],
+					},
+				}),
+				{
+					uniqueItems: true,
+					description:
+						"The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. A 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not 400 or 500 (kept for problems), nor the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500.",
+				},
+			),
+		),
 		query: Type.Optional(
 			StringList(
 				"Scalar input keys read from the query string. A get or delete already reads from the query every key with no other place.",
@@ -755,11 +829,18 @@ const UseCaseRoute = Type.Object(
 					"Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie.",
 			}),
 		),
+		body: Type.Optional(
+			Type.Boolean({
+				default: false,
+				description:
+					"Only on a delete: true reads the input keys with no other place from a JSON body instead of the query (an empty body is {}). A get never reads a body, and a post, put or patch always does.",
+			}),
+		),
 	},
 	{
 		additionalProperties: false,
 		description:
-			"Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status.",
+			"Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status, statuses and body.",
 	},
 );
 
@@ -855,12 +936,15 @@ const WrittenUseCaseDeclaration = Type.Object(
 		route: Type.Optional(UseCaseRoute),
 		access: Type.Optional(UseCaseAccess),
 		input: BlueprintRef,
-		response: BlueprintRef,
+		response: Type.Union([BlueprintRef, FieldRef], {
+			description:
+				'A blueprint, or a list written as a field: "Article[]", { "type": "Article", "list": { "maxItems": 50 } } or { "fields": {...}, "list": true }. The use case then answers an array.',
+		}),
 		context: Type.Optional(BlueprintRef),
 		dependencies: Type.Optional(
 			Type.Record(Type.String({ pattern: KEY }), Type.String(), {
 				description:
-					"Key -> name of a declared use case, repository or environment.",
+					'Key -> name of a declared use case, repository or environment, a key of "services", or "Logger".',
 			}),
 		),
 		errors: Type.Optional(
@@ -1027,6 +1111,7 @@ export const specSchema = Type.Object(
 			),
 		),
 		publishers: Type.Optional(Publishers),
+		services: Type.Optional(Services),
 		properties: Type.Optional(
 			Names(Property, "Custom properties, by PascalCase name."),
 		),

@@ -10,12 +10,12 @@ import {
 import { canonicalExpires } from "../entity-expires";
 import { canonicalEntitySchema } from "../entity-schema";
 import { fieldsOfDecl, orderOf, typesIn } from "../graph";
-import { type Field, parseFields } from "../model";
+import { type Field, parseField, parseFields } from "../model";
 import { defaultMessageOf, normalizeSpec } from "../normalize";
 import { pipeKindOf } from "../output";
 import { isImportObject, parseImportRef } from "../provider";
 import { type Decl, type Scope, scopeOf } from "../scope";
-import { isIdentifier, isObject } from "../spec/field";
+import { isIdentifier, isListResponseSpec, isObject } from "../spec/field";
 import {
 	type CodegenOptions,
 	DEFAULT_OUTPUT_DIR,
@@ -103,6 +103,9 @@ type Json = unknown;
 // ---------------------------------------------------------------- literals
 
 function keyDoc(key: string): string {
+	// `__proto__: v` (quoted or not) sets the prototype of an object literal;
+	// a computed key defines the own property JSON.parse gave.
+	if (key === "__proto__") return `[${JSON.stringify(key)}]`;
 	return isIdentifier(key) ? key : JSON.stringify(key);
 }
 
@@ -213,6 +216,8 @@ class Emitter {
 	readonly extended = new Map<string, Set<string>>();
 	readonly opaque: Doc[] = [];
 	readonly opaqueImports = new Map<string, Map<string, string>>();
+	/** The locals of `opaqueImports` used only as types (`typeof x`), by module. */
+	readonly typeOnly = new Map<string, Set<string>>();
 
 	constructor(
 		readonly file: string,
@@ -229,7 +234,12 @@ class Emitter {
 	bind(module: string, exported: string, taken: ReadonlySet<string>): string {
 		const names = this.opaqueImports.get(module) ?? new Map<string, string>();
 		this.opaqueImports.set(module, names);
-		for (const [local, name] of names) if (name === exported) return local;
+		for (const [local, name] of names) {
+			if (name !== exported) continue;
+			// Bound as a value too: no longer only a type.
+			this.typeOnly.get(module)?.delete(local);
+			return local;
+		}
 		const used = new Set<string>(taken);
 		for (const imported of this.opaqueImports.values()) {
 			for (const local of imported.keys()) used.add(local);
@@ -237,6 +247,26 @@ class Emitter {
 		let local = exported;
 		for (let n = 2; used.has(local); n++) local = `${exported}${n}`;
 		names.set(local, exported);
+		return local;
+	}
+
+	/**
+	 * Like `bind`, for a binding used only in a type: imported with `type`, so
+	 * that loading the file does not load the module, unless it is also
+	 * bound as a value.
+	 */
+	bindType(
+		module: string,
+		exported: string,
+		taken: ReadonlySet<string>,
+	): string {
+		const known = this.opaqueImports.get(module);
+		const bound = [...(known ?? [])].find(([, name]) => name === exported);
+		if (bound) return bound[0];
+		const local = this.bind(module, exported, taken);
+		const types = this.typeOnly.get(module) ?? new Set<string>();
+		types.add(local);
+		this.typeOnly.set(module, types);
 		return local;
 	}
 
@@ -269,13 +299,34 @@ function withOptions(options: unknown): Doc | undefined {
 
 /** `fill` and `renamedFrom` of a field, as options of `with`. */
 function evolutionOptions(field: Field): Record<string, unknown> {
-	if (field.kind === "inline" || field.kind === "variant") return {};
+	if (
+		field.kind === "inline" ||
+		field.kind === "variant" ||
+		field.kind === "file"
+	)
+		return {};
 	return {
 		...(field.fill === undefined ? {} : { fill: field.fill }),
 		...(field.renamedFrom === undefined
 			? {}
 			: { renamedFrom: field.renamedFrom }),
 	};
+}
+
+/** The arguments of `fileOf` for a file: its options, none when it takes any file. */
+function fileArgs(file: {
+	readonly types?: readonly string[];
+	readonly maxBytes?: number;
+	readonly name?: string;
+}): Doc[] {
+	const options: [string, Doc][] = [];
+	if (file.types !== undefined)
+		options.push(["types", literal([...file.types])]);
+	if (file.maxBytes !== undefined) {
+		options.push(["maxBytes", literal(file.maxBytes)]);
+	}
+	if (file.name !== undefined) options.push(["name", literal(file.name)]);
+	return options.length > 0 ? [objectDoc(options)] : [];
 }
 
 /** The property a field names, without optional or list. */
@@ -293,6 +344,10 @@ function itemDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 		]);
 		const evolution = withOptions(evolutionOptions(field));
 		return evolution ? [made, ".with(", evolution, ")"] : made;
+	}
+	if (field.kind === "file") {
+		ctx.used = true;
+		return call("ctx.fileOf", fileArgs(field));
 	}
 	if (field.kind === "inline") return blueprintDoc(field.fields, e, false);
 	if (field.kind === "variant") {
@@ -397,6 +452,8 @@ function propertyDoc(decl: Decl, e: Emitter): Doc {
 			literal(spec.enum),
 			...(options.length > 0 ? [objectDoc(options)] : []),
 		]);
+	} else if (typeof spec.file === "object" && spec.file !== null) {
+		expression = call(e.use("fileOf"), fileArgs(spec.file));
 	} else {
 		const base = spec.base as string;
 		const root = /^[a-z]/.test(base)
@@ -444,6 +501,13 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 					"]",
 				]),
 			],
+		]);
+	}
+	const id = entity ? decl.spec.id : undefined;
+	if (id === "uuid" || id === "key" || id === "serial") {
+		options.push([
+			"id",
+			e.use(id === "uuid" ? "Uuid" : id === "key" ? "Key" : "Serial"),
 		]);
 	}
 	if (entity && decl.spec.versioned === true) {
@@ -586,6 +650,15 @@ interface Providers {
 	readonly taken: ReadonlySet<string>;
 	/** The keys of `providers` in scope, and where an inherited one is imported from. */
 	readonly keys: ReadonlyMap<string, { readonly from?: string }>;
+	/**
+	 * Where the factory of a service of a directly extended spec is imported
+	 * from, seen from this output directory; absent when it cannot be reached
+	 * (a nested spec, or a module relative to the output of a package).
+	 */
+	readonly inheritedServices: ReadonlyMap<
+		string,
+		{ readonly module: string; readonly name: string }
+	>;
 }
 
 /** `Providers.<key>`, the storage imported from this spec or the extended one. */
@@ -754,6 +827,45 @@ function blueprintRefDoc(ref: unknown, e: Emitter): Doc {
 	return blueprintDoc(fields, e, false);
 }
 
+/**
+ * `response`: a blueprint, or the list a list field says, made with `listOf`
+ * outside of a blueprint (so with the exports of the properties, not `ctx`).
+ */
+function responseDoc(ref: unknown, e: Emitter): Doc {
+	if (!isListResponseSpec(ref)) return blueprintRefDoc(ref, e);
+	const field = parseField(ref, [], []) as Field;
+	let item: Doc;
+	if (field.kind === "inline") item = blueprintDoc(field.fields, e, false);
+	else if (field.kind === "enum") {
+		const options: [string, Doc][] = [];
+		if (field.name !== undefined) options.push(["name", literal(field.name)]);
+		if (field.default !== undefined) {
+			options.push(["default", literal(field.default)]);
+		}
+		item = call(e.use("enumOf"), [
+			literal([...field.values]),
+			...(options.length > 0 ? [objectDoc(options)] : []),
+		]);
+	} else if (field.kind === "file") {
+		item = call(e.use("fileOf"), fileArgs(field));
+	} else {
+		const type = (field as Extract<Field, { kind: "type" }>).type;
+		const root = /^[a-z]/.test(type)
+			? e.use((stdProperty(type) as { export: string }).export)
+			: e.ref(type);
+		const options = withOptions((field as { with?: unknown }).with);
+		item = options ? callWithObject(`${root}.with`, options) : root;
+	}
+	const bounds = Object.entries(field.list ?? {});
+	return bounds.length > 0
+		? callHuggingLast(
+				e.use("listOf"),
+				[item],
+				bounds.map(([key, value]) => [key, literal(value)] as const),
+			)
+		: call(e.use("listOf"), [item]);
+}
+
 /** A step as the class expression the TypeScript form takes: classes and functions in place of names. */
 function stepDoc(
 	step: Record<string, unknown>,
@@ -876,7 +988,7 @@ function useCaseDoc(
 	const props: [string, Doc][] = [
 		["name", literal(decl.name)],
 		["blueprint", blueprintRefDoc(spec.input, e)],
-		["response", blueprintRefDoc(spec.response, e)],
+		["response", responseDoc(spec.response, e)],
 	];
 	if (spec.context !== undefined) {
 		props.push(["context", blueprintRefDoc(spec.context, e)]);
@@ -895,7 +1007,9 @@ function useCaseDoc(
 							// `Logger` is the core's, unless the spec declares its own.
 							name === "Logger" && !scope.decls.has(name)
 								? e.use("Logger")
-								: useCaseRefDoc(name, e, scope, providers),
+								: !scope.decls.has(name) && scope.serviceNames.has(name)
+									? serviceDoc(name, e, scope, providers)
+									: useCaseRefDoc(name, e, scope, providers),
 						] as const,
 				),
 				false,
@@ -980,6 +1094,69 @@ function useCaseRefDoc(
 		return e.bind(module, exported, taken);
 	}
 	return e.ref(name);
+}
+
+/**
+ * A service of the top-level \`services\`, typed by what its factory makes:
+ * \`serviceOf<Awaited<ReturnType<typeof cache>>>("cache")\`. One inherited from
+ * an extended spec is \`unknown\` (its factory is imported there).
+ */
+function serviceDoc(
+	name: string,
+	e: Emitter,
+	scope: Scope,
+	providers: Providers,
+): string {
+	const factory = scope.serviceNames.get(name);
+	const serviceOf = e.use("serviceOf");
+	const { module, name: exported } =
+		factory === undefined
+			? (providers.inheritedServices.get(name) ?? {})
+			: (parseImportRef((factory as { import: string }).import) as {
+					module: string;
+					name: string;
+				});
+	if (module === undefined || exported === undefined) {
+		return `${serviceOf}(${JSON.stringify(name)})`;
+	}
+	const local = e.bindType(module, exported, providers.taken);
+	return `${serviceOf}<Awaited<ReturnType<typeof ${local}>>>(${JSON.stringify(name)})`;
+}
+
+/**
+ * The factories of the services of the directly extended specs, by name (a
+ * later spec winning a name, as an application does), with the module seen
+ * from this output directory: a package as it is, a path relative to the
+ * output of the extended spec joined to where that output is imported from.
+ * A relative module of a spec reached as a package is not importable from
+ * here, nor is a service of a spec it extends in turn: those are left out.
+ */
+function inheritedServicesOf(
+	scope: Scope,
+	extendedInfo: ReadonlyMap<string, { readonly from: string }>,
+): Map<string, { module: string; name: string }> {
+	const found = new Map<string, { module: string; name: string }>();
+	for (const [ref, resolved] of scope.extended) {
+		const declared = (resolved.spec as { services?: unknown }).services;
+		if (typeof declared !== "object" || declared === null) continue;
+		const { from } = extendedInfo.get(ref) as { from: string };
+		for (const [name, factory] of Object.entries(declared)) {
+			found.delete(name);
+			const parsed = parseImportRef((factory as { import?: unknown })?.import);
+			if (parsed === undefined) continue;
+			if (!parsed.module.startsWith(".")) {
+				found.set(name, parsed);
+				continue;
+			}
+			if (!from.startsWith(".")) continue;
+			const joined = posix.normalize(posix.join(from, parsed.module));
+			found.set(name, {
+				module: joined.startsWith(".") ? joined : `./${joined}`,
+				name: parsed.name,
+			});
+		}
+	}
+	return found;
 }
 
 /** A hand-written function or stage, imported as it is. */
@@ -1132,10 +1309,14 @@ function compareSpecifiers(left: string, right: string): number {
 	return a.length - b.length;
 }
 
-function importDoc(names: Iterable<string>, from: string): Doc {
+function importDoc(
+	names: Iterable<string>,
+	from: string,
+	typeOnly = false,
+): Doc {
 	const sorted = [...names].sort(compareSpecifiers);
 	return group([
-		"import {",
+		typeOnly ? "import type {" : "import {",
 		indent([line, join([",", line], sorted)]),
 		ifBreak(","),
 		line,
@@ -1308,6 +1489,7 @@ export function generate(
 							},
 				]),
 		),
+		inheritedServices: inheritedServicesOf(scope, extendedInfo),
 	};
 
 	const emitters = new Map<string, Emitter>();
@@ -1407,10 +1589,14 @@ export function generate(
 			imports.push([info.from, importDoc(names, info.from)]);
 		}
 		for (const [mod, names] of e.opaqueImports) {
-			const specifiers = [...names].map(([local, exported]) =>
-				local === exported ? local : `${exported} as ${local}`,
-			);
-			imports.push([mod, importDoc(specifiers, mod)]);
+			const types = e.typeOnly.get(mod) ?? new Set<string>();
+			const allTypes = [...names.keys()].every((local) => types.has(local));
+			const specifiers = [...names].map(([local, exported]) => {
+				const specifier =
+					local === exported ? local : `${exported} as ${local}`;
+				return types.has(local) && !allTypes ? `type ${specifier}` : specifier;
+			});
+			imports.push([mod, importDoc(specifiers, mod, allTypes)]);
 		}
 		return imports
 			.sort(([a], [b]) => compareSources(a, b))
@@ -1492,6 +1678,20 @@ export function generate(
 				Object.entries(publishers).map(
 					([key, publisher]) =>
 						[key, importedDoc(publisher, app, providers)] as const,
+				),
+				false,
+				true,
+			),
+		]);
+	}
+	const services = (spec as { services?: Record<string, unknown> }).services;
+	if (services && Object.keys(services).length > 0) {
+		props.push([
+			"services",
+			objectDoc(
+				Object.entries(services).map(
+					([key, factory]) =>
+						[key, importedDoc(factory, app, providers)] as const,
 				),
 				false,
 				true,

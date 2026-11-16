@@ -1,6 +1,33 @@
 # Changelog
 
-## Unreleased
+## 0.0.13 — 2026-11-16
+
+### A status chosen at run time (#116)
+
+- A use case route takes `"statuses": [503]`, the other statuses its `execute` may choose with `withStatus` (in hand-written code, or in the function of a `run` step): checked as `useCaseOf` checks it (`invalid_route` for a status that is not a 2xx with a body, a 4xx or a 5xx, for 204, 205, 400, 500, a duplicate or the route `status`), generated and extracted back. `afora.schema.json` has it.
+
+### File fields (#118)
+
+- A field or a property declaration `{ "file": { "types": ["image/png"], "maxBytes": 5000000 } }` (and the Std `"file"`), generated as `ctx.fileOf(...)` / `fileOf(...)`, extracted back and checked (`invalid_file`; not an environment variable); `afora.schema.json` has it. New types `FileField` and `FileOptionsSpec`. An entity holding a file is `entity_file`, a sensitive or unique file `invalid_file`.
+
+### Serial ids (#122)
+
+- An entity takes `"id": "serial"`, a positive integer the database assigns on `create`, generated as `{ id: Serial }` and extracted back; `afora.schema.json` has it.
+
+### Security: the project boundary (#69)
+
+- `projectBoundaryIssues` reports `outside_project` for the specifiers that escaped it: a package path with a `.` or `..` segment (`pkg/../../../x`, which resolves from `node_modules/pkg` to outside the project, for an `import` and for an `extends`), a backslash or a percent-encoded character in any module (Node and Bun resolve an import as a URL, so `./a\..\..\x` and `./%2e%2e/x` climb out although `path.resolve` keeps them inside on POSIX), control characters, a module built into the runtime (`child_process`, `fs`, `bun`: a `run` step could call `execSync`), a relative module or `extends` that goes through a symlink leaving the project, and an `output.dir` in `node_modules` or `.git`.
+- A relative module is also resolved as the URL a runtime loads, and must land inside the project: a `?` or `#` in a module is refused (`../../../evil.ts?/../project/x.ts` is a folder to `path.resolve` and `../../../evil.ts` to Node and Bun). The `node_modules` and `.git` check of `output.dir` ignores case (`Node_Modules`, `.GIT`) and also applies to where a symlinked `output.dir` really is.
+- `resolveExtended(spec, file, { root })`: with `root`, each spec reached by a path, at any depth, must pass the boundary check from its own directory (its `extends`, `import`s and `output.dir`), or `SpecLoadError` is thrown before what it extends is read. A spec reached as a package is not checked.
+- `generate` writes a `__proto__` key of a JSON value (a provider's options, say) as the computed key `["__proto__"]`, so it stays an own property, as `JSON.parse` gave it, instead of setting the prototype of the object.
+
+### A list as the response (#117)
+
+- The `response` of a use case written in the spec can be a list field: `"Article[]"`, `{ "type": "Article", "list": { "maxItems": 50 } }`, `"string[]"` or `{ "fields": {...}, "list": true }`, generated as `listOf(...)` and extracted back from `describe()` (`responseList`). It must be a list, not optional, and not of variants (`invalid_blueprint`); a `route.setCookie` with it is `invalid_route`. `afora.schema.json` describes it.
+
+### Services (#115)
+
+- A top-level `"services": { "cache": { "import": "../services.ts#cache" } }` names the factory of each service of the application, generated as `applicationOf({ services })`. A use case names one in its `dependencies` (`{ "cache": "cache" }`), generated as `serviceOf<Awaited<ReturnType<typeof cache>>>("cache")`, with the factory imported by `import type`, so a hand-written `execute` reads it typed by what the factory returns. One inherited from a spec extended by a relative path, or whose factory comes from a package, is typed the same; one whose factory cannot be imported from the child (relative to a spec reached as a package, or of a nested extended spec) is `unknown`. Issues: `invalid_services`, `invalid_name` (also for a service named `Logger`), `duplicate_name` (a service named like a declaration) and `invalid_import`. `extractSpec` needs `imports["services.<name>"]`. `afora.schema.json` describes it.
 
 ### Imported use cases as dependencies (#64)
 

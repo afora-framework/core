@@ -25,6 +25,7 @@ import type {
 	EntityIdentityKey,
 	EntityStorageSettings,
 } from "./types/entity.interface";
+import type { IdValue } from "./types/id.interface";
 
 /** The keys every entity has, which only the entity itself changes. */
 export const ENTITY_IDENTITY_KEYS: readonly EntityIdentityKey[] = Object.freeze(
@@ -49,6 +50,12 @@ export const RESERVED_ENTITY_KEYS: readonly string[] = Object.freeze([
 
 /** How the entities of a class make their id and timestamps, set by `entityOf`. */
 export const EntityClock = Symbol("entityClock");
+
+/**
+ * The id strategy of a class made by `entityOf` with an `id` option (made by
+ * `idOf`); a class without one has none.
+ */
+export const EntityIdStrategy = Symbol("entityIdStrategy");
 
 /** The unique keys of a class made by `entityOf`, as `options.unique` lists them. */
 export const EntityUniqueKeys = Symbol("entityUniqueKeys");
@@ -120,9 +127,17 @@ export function storeEntityVersion(entity: object, version: number): void {
 	);
 }
 
-/** What the statics of a class made by `entityOf` hold under `EntityClock`. */
-interface EntityClockSettings {
-	readonly generateId: () => string;
+/**
+ * What the statics of a class made by `entityOf` hold under `EntityClock`;
+ * an entity whose id is a natural key has no `generateId`.
+ */
+export interface EntityClockSettings {
+	readonly generateId: (() => unknown) | undefined;
+	/**
+	 * Whether the database assigns the id as it stores the entity (`Serial`):
+	 * an entity built without one has none until `repository.create`.
+	 */
+	readonly assignedIds?: boolean;
 	readonly now: () => string;
 	/** When what the two above make is known to be valid (see `MakesValid`). */
 	readonly makesValid?: ValidMakers;
@@ -158,12 +173,12 @@ export const EntityComplete = Symbol("entityComplete");
  * checked.
  */
 export function completeOf(
-	clock: { readonly generateId: () => string; readonly now: () => string },
+	clock: EntityClockSettings,
 	lifetime: number | undefined,
 ): Complete {
 	return (handled) => {
 		if (handled.createdAt === undefined) handled.createdAt = clock.now();
-		if (handled.id === undefined) handled.id = clock.generateId();
+		if (handled.id === undefined) handled.id = clock.generateId?.();
 		if (lifetime !== undefined && handled[EXPIRES_AT] === undefined) {
 			const created = handled.createdAt;
 			const start = typeof created === "string" ? Date.parse(created) : NaN;
@@ -178,10 +193,47 @@ export function completeOf(
 
 /** The identity of `entity`, as its members expose it. */
 function identityOf(entity: object): {
-	readonly id: string;
+	readonly id: IdValue;
 	readonly deletedAt?: string;
 } {
-	return entity as { readonly id: string; readonly deletedAt?: string };
+	return entity as { readonly id: IdValue; readonly deletedAt?: string };
+}
+
+/**
+ * Whether the entities of `entityClass` are built without an id: they make
+ * their own, or the database assigns it (`Serial`); not those whose id is a
+ * natural key (an `idOf` with no `generate`).
+ */
+export function generatesIds(entityClass: unknown): boolean {
+	if (typeof entityClass !== "function") return false;
+	const clock = (entityClass as unknown as Partial<Clocked>)[EntityClock];
+	return typeof clock?.generateId === "function" || clock?.assignedIds === true;
+}
+
+/**
+ * Whether the database assigns the ids of the entities of `entityClass` as
+ * it stores them (`Serial`), which only a provider with
+ * `capabilities.generatedIds` does.
+ */
+export function assignsIdsOnInsert(entityClass: unknown): boolean {
+	return (
+		typeof entityClass === "function" &&
+		(entityClass as unknown as Partial<Clocked>)[EntityClock]?.assignedIds ===
+			true
+	);
+}
+
+/** The new entities whose id the database is still to assign, and whose `onCreate` waits for it. */
+const awaitingId = new WeakSet<object>();
+
+/**
+ * Sets `id`, the one the database assigned as it stored `entity`, as its id,
+ * then queues its `onCreate`, which waited for it, before any event queued
+ * since it was built. @internal
+ */
+export function assignEntityId(entity: object, id: IdValue): void {
+	storeRecordValue(entity as AbstractEntity<IBlueprintCollection>, "id", id);
+	if (awaitingId.delete(entity)) enqueueLifecycle(entity, "onCreate", true);
 }
 
 /** How the class of `entity` makes its id and timestamps. */
@@ -269,7 +321,8 @@ function withIdentity(
 		createdAt: undefined,
 		...value,
 	};
-	identity.id = id === undefined && !idLater ? clock.generateId() : id;
+	// Without a generator, a missing id stays missing, for the record to report.
+	identity.id = id === undefined && !idLater ? clock.generateId?.() : id;
 	identity.createdAt = created;
 	if (unversioned) identity[ENTITY_VERSION_KEY] = 1;
 	if (expiring && !expiresLater) {
@@ -310,7 +363,11 @@ export abstract class AbstractEntity<
 		);
 		const input = value as { id?: unknown; createdAt?: unknown };
 		if (input.id === undefined && input.createdAt === undefined) {
-			enqueueLifecycle(this, "onCreate");
+			// An id the database assigns: `onCreate` waits for it, so that no
+			// event of it is ever handled without one.
+			if (identityOf(this).id === undefined && assignsIdsOnInsert(new.target)) {
+				awaitingId.add(this);
+			} else enqueueLifecycle(this, "onCreate");
 		}
 	}
 
@@ -329,12 +386,18 @@ export abstract class AbstractEntity<
 		return identityOf(this).deletedAt !== undefined;
 	}
 
-	/** Whether `other` is an entity of the same declaration, with the same `id`. */
+	/**
+	 * Whether `other` is an entity of the same declaration, with the same `id`;
+	 * an entity whose id the database is still to assign equals only itself.
+	 */
 	equals(other: unknown): boolean {
+		if (other === this) return true;
+		const { id } = identityOf(this);
 		return (
 			other instanceof AbstractEntity &&
 			other[Meta].blueprint === this[Meta].blueprint &&
-			identityOf(other).id === identityOf(this).id
+			id !== undefined &&
+			identityOf(other).id === id
 		);
 	}
 

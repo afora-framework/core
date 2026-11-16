@@ -48,7 +48,7 @@ Dependencies default to `{}`. Each dependency function creates a fresh child, re
 
 Events from managed children move to the parent when each child finishes, including on failure and when the parent's response omits the child result. Then the validated parent response is traversed through declared records, entities, nested blueprints and lists. Repeated object references are visited once; separately emitted duplicate events are preserved. Child events follow completion order, followed by remaining response events. No handlers run automatically. `pullEvents()` immediately drains the queue, which remains available after failure. Invalid responses are not drained. Overrides contribute events from their returned entities; hidden operations inside an override must expose their events separately.
 
-In an application with a `log`, each execution, each repository call made through it and a failure, once, are logged. A use case that logs itself declares `Logger` as a dependency (`dependencies: { logger: Logger }`) and gets an `ILogger`, which `execute` can replace like any dependency; see [Logging](logging.md).
+In an application with a `log`, each execution, each repository call made through it and a failure, once, are logged. A use case that logs itself declares `Logger` as a dependency (`dependencies: { logger: Logger }`) and gets an `ILogger`, which `execute` can replace like any dependency; see [Logging](logging.md). A cache, a storage or a client of another API is a dependency too, a service the application gives per call: see [Services](#services).
 
 ## Context and metadata
 
@@ -97,6 +97,33 @@ With a declared `context`, the second constructor argument is required by type a
 A child called through a dependency function receives its parent's context narrowed to the keys of its own `context` blueprint and validated by it. A child with no context gets none; a child that declares one under a parent without context fails with `InvalidUseCaseContext`. Overrides passed to `execute` keep the signature `(input) => response`.
 
 The class gets the frozen statics `context`, `description`, `tags`, `deprecated`, `errors`, `route` (see [Routes](#routes)) and `access` (see [Access](auth.md)), beside `useCaseName`, `blueprint`, `response` and `dependencies`. `context` is a non-optional blueprint, `tags` are distinct non-empty strings, and `errors` are distinct classes made by `exceptionOf`; anything else throws `InvalidUseCaseDeclaration`. `errors` documents what to expect and changes nothing at runtime: an exception that is not listed still propagates.
+
+## A list as the response
+
+The `response` is an object blueprint, or a list made by `listOf`: the use case then answers an array, without a wrapper object.
+
+```ts
+import { blueprintOf, listOf, useCaseOf } from "@afora/core";
+
+const ArticleSummary = blueprintOf((ctx) => ({
+	slug: ctx.slug,
+	title: ctx.text,
+}));
+
+class RecentArticles extends useCaseOf({
+	name: "RecentArticles",
+	blueprint: blueprintOf((ctx) => ({ limit: ctx.integer })),
+	response: listOf(ArticleSummary, { maxItems: 50 }),
+}) {
+	override async execute() {
+		return [{ slug: "hello", title: "Hello" }].slice(0, this.input.limit);
+	}
+}
+
+const articles = await new RecentArticles({ limit: 10 }).execute();
+```
+
+The list validates the array and each item, with its bounds (`minItems`, `maxItems`); an invalid item is an `InvalidUseCaseResponse` whose issue paths start with the index (`[1, "title"]`, read `"1.title"` in the message). Its items may be blueprints, records, entities or properties, and the events of the entities in it are collected as for any response. The array is frozen and typed read-only: `UseCaseResponse<typeof RecentArticles>`, a dependency function and the `execute` of a steps use case give `readonly { slug: string; title: string }[]` (an override of `execute` keeps the type it returns). HTTP outputs send the array as the JSON body, OpenAPI documents it as `type: array` with the items, and the MCP and WebSocket sinks send it as is. A list has no keys, so `route.setCookie` is rejected with it at declaration; respond with a blueprint (`{ items, token }`) to set a cookie or to add paging later. The response must not be optional.
 
 ## Routes
 
@@ -155,18 +182,116 @@ The blueprint stays the only description of the input: a route adds no schema, i
 - **`method`** is `get`, `post`, `put`, `patch` or `delete`, in either case; it is stored in lower case.
 - **`path`** starts with `/`, and a `{name}` segment fills the input key `name`. Without a path, the sink uses its default (`/{command}/{operation}`).
 - **`status`** is the status of a success: `200` (the default), `201`, `202` or `204`.
+- **`statuses`** lists the other statuses `execute` may choose at run time with `withStatus` (see [A status chosen at run time](#a-status-chosen-at-run-time)).
 - **`query`** lists input keys read from the query string. A `get` or `delete` route already reads from the query every key that has no other place, so `query` is for routes with a body.
 - **`headers`** and **`cookie`** map input keys to the header or the cookie each is read from: `{ locale: "accept-language" }`.
-- **What is left** is the JSON body of a `post`, `put` or `patch`, and the query of a `get` or `delete`.
+- **`body`** is only for a `delete`: `body: true` reads what is left from a JSON body, as a `post` does, instead of from the query, for a client that sends `DELETE /push/subscriptions` with `{ "endpoint": "https://..." }`. An empty body is `{}`, and the keys the route places elsewhere are still read only from there. Any other method rejects it: a `get` never reads a body, and a `post`, `put` or `patch` always does. The types say so too: `RouteDeclaration` and `RouteSettings` take `body` only with a `delete` method (`RouteBody<Method>`; `RouteFields` is the rest of a route), as do `@Route` and the `route` option of a sink, and the declaration checks it again at run time.
+- **What is left** is the JSON body of a `post`, `put` or `patch` (or of a `delete` with `body: true`), and the query of a `get` or `delete`.
 - **`setCookie`** maps keys of the _response_ to cookies: `{ token: { name: "sid" } }` sends the `token` of the response as the cookie `sid` and leaves it out of the body. A cookie is `{ name, httpOnly?, secure?, sameSite?, path?, domain?, maxAge? }`, by default `HttpOnly; Secure; SameSite=Lax; Path=/`. An empty text removes the cookie, and an absent value sets none. The key must be a scalar key of the response.
 
-A key read from the path, the query, a header or a cookie arrives as text, so it must be a scalar property of the input (a number or a boolean is converted), and each key has one place. Anything else throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class whose decorator says another route than the one it already has (the same route again is accepted, which is what a class over a base generated from `afora.json` does).
+A key the route places is read only from that place: a value the client sends for it in the body or the query is dropped, so a missing header or cookie leaves the key absent and the blueprint decides whether that is valid. A key read from the path, the query, a header or a cookie arrives as text, so it must be a scalar property of the input (a number or a boolean is converted), and each key has one place. Anything else throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class whose decorator says another route than the one it already has (the same route again is accepted, which is what a class over a base generated from `afora.json` does).
 
-The route is data: `ListPosts.route` is the frozen declaration, `app.describe().useCases.ListPosts.route` and `afora.json` carry it, and a subclass inherits it. It names no server. The use case becomes an operation through a [command](commands.md), and the sink of an [output](outputs.md) (`openapi`, `hono`…) serves or documents it; the `route` option of that sink still overrides the method, path and status per operation id.
+The route is data: `ListPosts.route` is the frozen declaration, `app.describe().useCases.ListPosts.route` and `afora.json` carry it, and a subclass inherits it. It names no server. The use case becomes an operation through a [command](commands.md), and the sink of an [output](outputs.md) (`openapi`, `hono`…) serves or documents it; the `route` option of that sink still overrides the method, path, status, `statuses` and `body` per operation id.
+
+### A status chosen at run time
+
+A health check answers `200` when its database answers and `503` with the same body when it does not. `execute` says which with `withStatus(status, body)`, and the route declares each status other than its own in `statuses`:
+
+<!-- docs:code continue -->
+```ts
+import { withStatus } from "@afora/core";
+
+const HealthResponse = blueprintOf((ctx) => ({
+	ok: ctx.boolean,
+	database: blueprintOf((ctx) => ({ latency: ctx.integer })),
+}));
+
+async function ping(): Promise<number | undefined> {
+	return 3;
+}
+
+class Health extends useCaseOf({
+	name: "Health",
+	blueprint: blueprintOf(() => ({})),
+	response: HealthResponse,
+	route: { method: "get", path: "/health", statuses: [503] },
+}) {
+	override async execute() {
+		const latency = await ping();
+		const body = {
+			ok: latency !== undefined,
+			database: { latency: latency ?? -1 },
+		};
+		return body.ok ? body : withStatus(503, body);
+	}
+}
+
+// A direct call gives the body only: { ok, database }.
+const { ok } = await new Health({}).execute();
+```
+
+- **The body** is validated against the `response`, and the events of its entities are collected, as for any return. Every status of the route sends the same response.
+- **`statuses`** are each a 2xx with a body (not `204` or `205`), a 4xx or a 5xx, but not `400` or `500`, which every operation keeps for its problems (and documents), so neither a 1xx nor a 3xx; and not the route `status` itself (its default, `200`), which needs no declaration; each one once. Anything else throws `InvalidUseCaseDeclaration`, as the `route` option of a sink throws `InvalidOutputStage`.
+- **Over HTTP**, a sink built on `compileRoutes` (`hono`, `express`, `fastify`, `elysia`) sends the body as JSON with the chosen status. A status the route does not declare is never sent: the sink answers `UndeclaredStatus`, a 500 whose detail is masked. The `openapi` document has one response per status, with the same content.
+- **A 5xx chosen this way is a success**: the response, not a problem. An exception is the way to fail, and its 5xx problem is masked unless the output declares it.
+- **Everywhere else the status is not there**: `execute()` and `command.run` resolve with the body, a use case called as a dependency gives its body, and the `mcp` and `ws` sinks send the body. Only the value `operation.invoke` of an output resolves with carries it, for the sinks that serve HTTP to read (see [Outputs](outputs.md)).
+- **The value** of `withStatus(503, body)` is a view of `body` made for that call, typed as the body: its fields, getters, keys and methods read as on the body, and `Array.isArray` holds for a list. The status belongs to the view, never to the body, which is not changed or copied, so a shared or frozen body is fine: another call that returns the same object, at the same time or after a call that threw, sends its own status. A body is an object or an array, as a response is.
+- **In steps**, a `run` step may return `withStatus(...)` and the `return` step give its result (`{ return: "$health" }`); `afora.json` declares `route.statuses` the same way.
 
 `@Route(method, path?, options?)` (or `@Route(method, options)`) is a standard class decorator, with no `experimentalDecorators` and no metadata reflection; it also works as a legacy TypeScript decorator. Bun runs it as written. Node has no decorator syntax yet, so there the code goes through a compiler (`tsc` with a `target` of `ES2022` or lower, `tsx`, esbuild), or uses the `route` setting, which needs nothing.
 
 `UseCaseInput`, `UseCaseResponse` and `UseCaseDependencies` extract a declaration's types. `isUseCase` identifies instances; `isUseCaseClass` identifies concrete declarations with a prototype `execute`. UseCases carry their own kind and cannot be used as fields of ordinary data blueprints. Validation errors carry `details.issues`; errors crossing an execution boundary preserve their cause and gain a `UseCase` trace frame using the declared name.
+
+## Services
+
+What is not a repository, an environment or another use case (a cache, a file storage, a client of another API, the `waitUntil` of a Worker) is a service: a name and the type of its value, made by `serviceOf`. A use case declares it among its `dependencies`, and an application gives its value per call with `services`, by the same name:
+
+```ts
+import {
+	applicationOf,
+	blueprintOf,
+	environmentOf,
+	serviceOf,
+	useCaseOf,
+} from "@afora/core";
+
+interface CacheClient {
+	get(key: string): Promise<string | null>;
+}
+const Cache = serviceOf<CacheClient>("cache");
+
+const Env = environmentOf(blueprintOf((ctx) => ({ CACHE_URL: ctx.url })));
+// A client written by hand, and one in memory for tests.
+declare function remoteCache(url: string): CacheClient;
+const memoryCache = (): CacheClient => ({ get: async () => null });
+
+class GetContent extends useCaseOf({
+	name: "GetContent",
+	blueprint: blueprintOf((ctx) => ({ key: ctx.string })),
+	response: blueprintOf((ctx) => ({ value: ctx.optional.string })),
+	dependencies: { cache: Cache },
+}) {
+	override async execute({ cache = this.dependencies.cache } = {}) {
+		return { value: (await cache.get(this.input.key)) ?? undefined };
+	}
+}
+
+const App = applicationOf({
+	name: "content",
+	environments: { Env },
+	useCases: { GetContent },
+	// Once per call: the scope has the context, principal, logger, environments and native request.
+	services: { cache: (scope) => remoteCache(scope.environment(Env).CACHE_URL) },
+});
+
+await new App.useCases.GetContent({ key: "home" }).execute();
+// In a test, without an application:
+await new GetContent({ key: "home" }).execute({ cache: memoryCache() });
+```
+
+The factory of a service gets a `ServiceScope`: its `name`, the `context` of the call (the command's, else the use case's), the `principal` an output authenticated, the `logger` of the call, `environment(Env)` for the variables of an environment, and `native`, the request of the sink that received the call (with Hono, its context, so `scope.native.executionCtx.waitUntil` on Workers; `undefined` for a call made in process). A factory may be async, so the factories of the services a use case declares run when its `execute` starts, before the implementation: `this.dependencies.cache` is the value itself, read without `await`. Each runs once per call, and the use cases a call runs (a command operation and its child use cases) share its value. A factory that throws fails the call.
+
+`execute({ cache })` replaces the value for that execution with any value other than `undefined`; its child use cases still get the application's. A use case that reads a service no application gives, and that `execute` was not given, throws `ServiceNotBound` (`details.service` names it); one that does not read it runs. A service is made when `execute` starts, so reading it before or after (`new GetContent(input).dependencies.cache`) throws `ServiceOutsideExecution`. An application with a use case that declares a service missing from its `services` (its own, or inherited from the applications it `extends`) throws `UnregisteredUseCaseDependency` at declaration, and `describe()` reports the dependency as `{ kind: "service", ref: "cache" }`. `isService(value)` tells a declaration of `serviceOf` apart. Steps do not read services: a service is for a hand-written `execute`. In afora.json, the top-level `services` names the factory of each (see [afora.json](afora-json.md)).
 
 ## Steps
 
@@ -255,7 +380,19 @@ There are no operators or interpolation: anything computed goes through `run`. T
 
 **The args of `run` are not checked at run time unless it declares `params`.** `fn` is any function, so without `params` it gets the resolved values as they are, whatever its parameters say (only [`strictSteps`](#strict-steps) checks them, at compile time, and only in TypeScript). `params` is a blueprint whose keys match the `args` by position: the args are parsed before `fn` is called, `fn` gets the values as the keys handled them (an `email` trimmed and lowercased), and a rejected arg throws `InvalidUseCaseStep` with `code: "invalid_args"`, the key in the message and the issues in `details.issues`; `fn` does not run. The number of args must equal the number of keys (checked at declaration for a list, while the steps run for a reference). Declare it whenever `fn` relies on what it gets. In an `afora.json` it is required: a `run` with `args` and no `params` is the error `run_without_params` of `afora-codegen check`, of `generate` and of the [MCP server](../packages/mcp/README.md)'s validation, since no compile step there knows the parameters of `fn` (a `run` without `args` needs none). In TypeScript `useCaseOf` does not require it: with [`strictSteps`](#strict-steps) the parameters of `fn` are checked at compile time, and that is the check for hand-written code; `params` adds the check at run time on top. A use case written without `params` is still extracted by `extractSpec`, but the spec it gives fails validation until `params` is declared:
 
-<!-- docs:code skip: one step of a steps list, not a module -->
+<!-- docs:code continue -->
+<!-- docs:code context
+class HashOnly extends useCaseOf({
+	name: "HashOnly",
+	blueprint: RegisterInput,
+	response: blueprintOf((ctx) => ({ hash: ctx.string })),
+	steps: [
+/* block */
+		,
+		{ return: { hash: "$hash" } },
+	],
+}) {}
+-->
 ```ts
 {
 	run: "hashPassword",
@@ -285,9 +422,10 @@ There are no operators or interpolation: anything computed goes through `run`. T
 
 With `strictSteps: true`, TypeScript checks the steps written inline in `useCaseOf` as it checks a hand-written `execute`. The steps are read in order, each against the values in scope: the input, the context, the environments and the results of the earlier steps, typed (`find` gives what the repository method returns, `build` the instance, `change` the record, `invoke` and `run` what the method or function returns, awaited, `call` the response of the use case). An `ensure: "exists"` on a bound name removes `undefined` from it for the steps after.
 
-<!-- docs:code skip: shows the type error strictSteps reports, so it does not compile on purpose -->
+<!-- docs:code continue -->
+<!-- docs:code expect-error: Type '"$input.emial"' is not assignable to type '"$input.email" | "$input.plainPassword" | "$input.name"'. Did you mean '"$input.email"'? -->
 ```ts
-class Register extends useCaseOf({
+class StrictRegister extends useCaseOf({
 	name: "Register",
 	blueprint: RegisterInput,
 	response: UserResponse,
@@ -295,7 +433,7 @@ class Register extends useCaseOf({
 	errors: [UserAlreadyExists],
 	strictSteps: true,
 	steps: [
-		// Type '"$input.emial"' is not assignable to type '"$input.name" | "$input.email" | "$input.plainPassword"'.
+		// Type '"$input.emial"' is not assignable to type '"$input.email" | "$input.plainPassword" | "$input.name"'. Did you mean '"$input.email"'?
 		{ find: "users.findByEmail", args: ["$input.emial"], as: "existing" },
 		// ...
 	],

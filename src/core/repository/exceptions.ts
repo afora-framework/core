@@ -1,3 +1,4 @@
+import type { IdValue } from "../entity/types/id.interface";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { exceptionOf } from "../exception/exception";
 import type { Issue } from "../parse/types/parse.interface";
@@ -57,7 +58,7 @@ export const InvalidStoredSchemaVersion = exceptionOf({
 			current,
 			reason,
 		}: {
-			readonly id: string;
+			readonly id: IdValue;
 			readonly stored: unknown;
 			readonly current: number;
 			readonly reason?: string;
@@ -107,7 +108,7 @@ export const RepositoryUsedOutsideApplication = exceptionOf({
 export const RepositoryEntityNotFound = exceptionOf({
 	layer: ExceptionLayers.Repository,
 	name: "RepositoryEntityNotFound",
-	message: ({ id }: { readonly id: string }, source) =>
+	message: ({ id }: { readonly id: IdValue }, source) =>
 		`"${source}" holds no entity of id "${id}".`,
 });
 
@@ -125,7 +126,7 @@ export const RepositoryConcurrencyConflict = exceptionOf({
 			id,
 			expected,
 		}: {
-			readonly id: string;
+			readonly id: IdValue;
 			readonly expected: number;
 			readonly actual?: number;
 		},
@@ -148,4 +149,30 @@ export const InvalidRepositoryIncrement = exceptionOf({
 		readonly reason: string;
 		readonly issues: readonly Issue[];
 	}) => reason,
+});
+
+/**
+ * The entity has ids the database assigns (`Serial`) and the provider does
+ * not assign them (no `capabilities.generatedIds`), or gave no valid id for
+ * an entity it inserted; `source` is the repository name, or the
+ * application whose provider is made on start.
+ */
+export const UnsupportedIdentity = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "UnsupportedIdentity",
+	message: ({ reason }: { readonly entity: string; readonly reason: string }) =>
+		reason,
+});
+
+/**
+ * An entity whose id the database assigns (`Serial`) was given to a
+ * repository before `create` stored it, so it has no id yet: to `update`,
+ * `delete`, `restore` or `increment`, or held by another entity (stored by
+ * its id). `source` is the repository name, or the name of the entity held.
+ */
+export const UnstoredEntity = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "UnstoredEntity",
+	message: ({ reason }: { readonly entity: string; readonly reason: string }) =>
+		reason,
 });

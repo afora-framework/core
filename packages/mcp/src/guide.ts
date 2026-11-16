@@ -51,10 +51,14 @@ a file of your own.
   \`with\` applies to each item of a list and only takes options valid for the type (min/max/pattern for strings,
   min/max/exclusiveMin/exclusiveMax/multipleOf for numbers, plus title/description/examples/deprecated/readOnly/writeOnly/default).
 - Enum: \`{ "enum": ["a", "b"] }\`. Nested object in place: \`{ "fields": { "lat": "number", "lng": "number" } }\`.
+- File (an upload, read from a multipart/form-data body): \`"file"\` for any file, or
+  \`{ "file": { "types": ["image/png", "image/*"], "maxBytes": 5000000 } }\`; \`optional\` and \`list\` apply. Only the
+  input of a post, put or patch route (or a delete with body: true) can hold one, at the top level. An entity cannot
+  hold a file (store its URL instead), and a file cannot be sensitive or unique.
 - One of several objects (variantOf): \`{ "variant": { "key": "type", "of": { "click": "Click", "visit": { "fields": { "path": "string" } } } } }\`.
   Each value of \`of\` is a declared blueprint, record or entity, or fields in place; none declares \`key\`, which the field
   adds with the name of the variant (\`{ "type": "click", ... }\`). \`optional\` and \`list\` apply; an entity among them needs a relation.
-- A property of your own: \`{ "base": "integer", "with": {...} }\`, \`{ "enum": [...] }\`, or
+- A property of your own: \`{ "base": "integer", "with": {...} }\`, \`{ "enum": [...] }\`, \`{ "file": {...} }\`, or
   \`{ "opaque": true, "import": "./my-property" }\` for a hand-written one (imported as it is).
 
 ## Rules the validator enforces
@@ -65,6 +69,10 @@ a file of your own.
   \`"versioned": true\`, which adds that identity key (optimistic concurrency: \`update\` throws \`RepositoryConcurrencyConflict\`,
   a 409, when someone else wrote the entity since it was read). No record member names
   (\`toJSON\`, \`set\`, \`onSet\`...); see \`reservedRecordKeys\` in the catalog. \`blueprint\` and \`options\` are valid fields.
+- An entity's ids are UUID v7 by default. \`"id": "uuid"\` accepts any UUID version (existing v4 rows) and still
+  generates v7; \`"id": "key"\` is a natural key (1 to 256 characters) the input of \`create\` must hold;
+  \`"id": "serial"\` is a positive integer the database assigns on \`create\` (auto-increment, serial or identity column),
+  which needs a provider that assigns ids (in memory, Drizzle; not DynamoDB).
 - \`unique\`, \`sensitive\`, \`change\` must name fields (or keys of its plugins); \`change\` cannot name an identity key.
   \`password\` is always sensitive and \`slug\` always unique; \`id\` is always unique.
 - \`plugins\`: Std record plugins (publishable, archivable, taggable, ownable, authenticatable); their keys cannot be declared again.
@@ -125,8 +133,10 @@ a file of your own.
 \`\`\`
 
 - \`exceptions\`: \`{ layer, message? }\`; \`layer\` is one of \`exceptionLayers\` of \`afora_catalog\`; the message is "<Name>." when omitted.
-- \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`. \`dependencies\` map a key to a use case, repository
-  or environment, or to \`"Logger"\` for the logger of the application (an \`ILogger\`; no step reads it). \`errors\` are declared exceptions or exceptions exported by @afora/core (\`coreExceptions\` of \`afora_catalog\`).
+- \`useCases\`: \`input\`, \`response\` and \`context\` (optional) are a blueprint name or \`{ "fields": {...} }\`; \`response\` can also be a list field (\`"Article[]"\`, \`{ "type": "Article", "list": { "maxItems": 50 } }\`), and the use case answers an array. \`dependencies\` map a key to a use case, repository
+  or environment, to \`"Logger"\` for the logger of the application (an \`ILogger\`; no step reads it), or to a key of the top-level
+  \`"services": { "cache": { "import": "../services.ts#cache" } }\`: a factory written by hand, \`(scope: ServiceScope) => value\`, run once per call
+  (no step reads it; a hand-written \`execute\` gets \`this.dependencies.cache\`, typed by what the factory returns). \`errors\` are declared exceptions or exceptions exported by @afora/core (\`coreExceptions\` of \`afora_catalog\`).
 - \`implementation\` is \`{ "steps": [...] }\` (generated complete, no hand-written file) or \`{ "import": "../handlers/x.ts#Name" }\`:
   \`afora_generate\` writes \`abstract class <Name>Base\` in \`<kebab-name>.use-case.ts\` of output.dir (\`RegisterUser\` -> \`register-user.use-case.ts\`);
   write \`class Name extends <Name>Base\` with \`execute\` at that path, importing the base from that file. Any use case can list an imported one
@@ -190,7 +200,7 @@ a file of your own.
 - \`outputs\`: \`commands\` are declared commands; \`statuses\` maps an exception name (declared or exported by @afora/core) to a status from 400 to 599;
   \`pipe\` is transforms and, last, at most one sink, each \`{ "transform" | "sink": name, "options"?: {...JSON} }\` with a name from the \`stages\` of
   \`afora_catalog\` (\`select\`, \`openapi\`, plus the ones given to the server with \`--stages\`), or \`{ "import": "./stages.ts#auth" }\` for a stage written by hand.
-- \`afora_extract\` needs \`imports\` for \`publishers.<key>\`, \`commands.<Name>.events\` (a handler, not a policy), \`commands.<Name>.onEventError\` and \`outputs.<Name>.pipe.<index>\` (hand-written ones).
+- \`afora_extract\` needs \`imports\` for \`publishers.<key>\`, \`services.<name>\`, \`commands.<Name>.events\` (a handler, not a policy), \`commands.<Name>.onEventError\` and \`outputs.<Name>.pipe.<index>\` (hand-written ones).
 
 ## Routes and access
 
@@ -207,8 +217,10 @@ A use case says where it is served and who may call it, next to its input (not i
 \`\`\`
 
 - \`route\`: \`method\` (get, post, put, patch, delete), \`path\` (a \`{name}\` segment fills the input key \`name\`), \`status\` (200, 201, 202, 204),
+  \`statuses\` (the other statuses execute may choose with \`withStatus(status, body)\`, same response, e.g. \`[503]\`; a 2xx with a body, a 4xx or a 5xx; not 204, 205, 400, 500 or \`status\`),
   \`query\` (input keys read from the query; a get or delete already reads the rest from it), \`headers\` and \`cookie\` (\`{ inputKey: name }\`),
-  \`setCookie\` (\`{ responseKey: { "name": "sid" } }\`: sent as a cookie, left out of the body). The input stays the only description of what
+  \`setCookie\` (\`{ responseKey: { "name": "sid" } }\`: sent as a cookie, left out of the body), \`body\` (delete only: \`true\` reads the rest
+  from a JSON body instead of the query). The input stays the only description of what
   the use case takes: a route adds no fields. A key read from the path, the query, a header or a cookie must be a scalar and has one place.
 - \`access\`: \`{ "public": true }\`, or an authenticated caller (\`{}\`) with \`scopes\` (all of them), that is the \`owner\` (\`{ "input": "userId" }\`:
   that input key equals the caller), and whose values fill the \`context\` (\`{ "userId": "subject" }\`, also \`"scopes"\` and \`"claims.<name>"\`; the

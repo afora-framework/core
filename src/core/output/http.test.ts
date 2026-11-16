@@ -13,8 +13,10 @@ import {
 	ExceptionLayers,
 	exceptionOf,
 	InvalidOutputStage,
+	listOf,
 	outputOf,
 	Route,
+	recordOf,
 	Unauthenticated,
 	useCaseOf,
 } from "../../index";
@@ -160,6 +162,31 @@ describe("compileRoutes", () => {
 			session: "s 1",
 			title: "T",
 		});
+	});
+
+	test("a key read from a header, a cookie or the route query never comes from the body", async () => {
+		const result = await routeOf(table(), "Posts.change").handle(
+			request({
+				params: { slug: "a" },
+				query: { page: "1" },
+				body: { title: "T", locale: "evil", session: "evil", page: 9 },
+			}),
+		);
+		expect(result.status).toBe(201);
+		expect(JSON.parse(result.body as string)).toEqual({
+			slug: "a",
+			page: 1,
+			title: "T",
+		});
+		const missing = await routeOf(table(), "Posts.change").handle(
+			request({ params: { slug: "a" }, body: { title: "T", page: 9 } }),
+		);
+		expect(missing.status).toBe(400);
+		expect(
+			JSON.parse(missing.body as string).issues.map(
+				(issue: { path: unknown[] }) => issue.path,
+			),
+		).toEqual([["page"]]);
 	});
 
 	test("a get reads the query, coerced; a 204 has no body", async () => {
@@ -327,5 +354,418 @@ describe("compileRoutes", () => {
 		expect(httpOptionsIssue({ basePath: 1 } as never, "x")).toContain(
 			"x.basePath",
 		);
+	});
+});
+
+describe("a delete route with body: true", () => {
+	class Unsubscribe extends useCaseOf({
+		name: "Unsubscribe",
+		blueprint: blueprintOf((ctx) => ({
+			channel: ctx.string,
+			endpoint: ctx.string,
+			page: ctx.optional.integer,
+			limit: ctx.optional.integer,
+		})),
+		response: blueprintOf((ctx) => ({
+			channel: ctx.string,
+			endpoint: ctx.string,
+			page: ctx.optional.integer,
+			limit: ctx.optional.integer,
+		})),
+		route: {
+			method: "delete",
+			path: "/subscriptions/{channel}",
+			query: ["page"],
+			body: true,
+		},
+	}) {
+		override async execute() {
+			return this.input;
+		}
+	}
+	class Purge extends useCaseOf({
+		name: "Purge",
+		blueprint: blueprintOf((ctx) => ({ before: ctx.optional.integer })),
+		response: blueprintOf((ctx) => ({ before: ctx.optional.integer })),
+		route: { method: "delete", path: "/subscriptions", body: true },
+	}) {
+		override async execute() {
+			return this.input;
+		}
+	}
+	const Push = commandOf({
+		name: "Push",
+		useCases: { unsubscribe: Unsubscribe, purge: Purge },
+	});
+	const pushed = outputOf({ name: "Push", commands: [Push] });
+	const routes = (options: HttpOptions = {}) =>
+		compileRoutes(pushed.operations, options, stage, { source: "test" });
+
+	test("reads the keys with no other place from a JSON body", async () => {
+		const result = await routeOf(routes(), "Push.unsubscribe").handle(
+			request({
+				params: { channel: "web" },
+				query: { page: "2", limit: "9" },
+				body: { endpoint: "https://push.example/1", channel: "x", limit: 5 },
+			}),
+		);
+		expect(result.status).toBe(200);
+		// The path and the route query win over the body; other query keys are not read.
+		expect(JSON.parse(result.body as string)).toEqual({
+			channel: "web",
+			endpoint: "https://push.example/1",
+			page: 2,
+			limit: 5,
+		});
+	});
+
+	test("the route query key is not read from the body", async () => {
+		const result = await routeOf(routes(), "Push.unsubscribe").handle(
+			request({
+				params: { channel: "web" },
+				body: { endpoint: "e", page: 9 },
+			}),
+		);
+		expect(JSON.parse(result.body as string)).toEqual({
+			channel: "web",
+			endpoint: "e",
+		});
+	});
+
+	test("an empty body is {}, and invalid JSON a 400", async () => {
+		const purge = routeOf(routes(), "Push.purge");
+		const empty = await purge.handle(request({ body: "" }));
+		expect(empty.status).toBe(200);
+		expect(JSON.parse(empty.body as string)).toEqual({});
+		const notJson = await purge.handle(request({ body: "{nope" }));
+		expect(JSON.parse(notJson.body as string)).toMatchObject({
+			title: "InvalidRequestBody",
+			status: 400,
+		});
+	});
+
+	test("without it, a delete reads the query", async () => {
+		const result = await routeOf(
+			routes({ route: { "Push.purge": { body: false } } }),
+			"Push.purge",
+		).handle(request({ query: { before: "7" }, body: { before: 1 } }));
+		expect(JSON.parse(result.body as string)).toEqual({ before: 7 });
+	});
+
+	test("the sink route sets it, on a delete only", async () => {
+		const result = await routeOf(
+			table({ route: { "Posts.remove": { body: true } } }, () => ({
+				subject: "u",
+				scopes: ["posts:write"],
+			})),
+			"Posts.remove",
+		).handle(
+			request({ params: { slug: "a" }, query: { slug: "q" }, body: "" }),
+		);
+		expect(result.status).toBe(204);
+		expect(() => table({ route: { "Posts.change": { body: true } } })).toThrow(
+			"a put route always reads a body",
+		);
+		expect(() =>
+			// @ts-expect-error: body is only allowed on a delete
+			table({ route: { "Posts.remove": { method: "get", body: true } } }),
+		).toThrow(InvalidOutputStage);
+		expect(
+			httpOptionsIssue(
+				// @ts-expect-error: body is only allowed on a delete
+				{ route: { "Posts.list": { method: "get", body: true } } },
+				"x",
+			),
+		).toContain("a get route never reads a body");
+		expect(
+			httpOptionsIssue(
+				{ route: { "Posts.list": { body: "yes" } } } as never,
+				"x",
+			),
+		).toContain('x.route["Posts.list"].body to be a boolean');
+	});
+
+	test("the use case route takes it on a delete only", () => {
+		for (const [method, reason] of [
+			["get", "a get route never reads a body"],
+			["post", "a post route always reads a body"],
+		] as const) {
+			expect(() =>
+				useCaseOf({
+					name: "Bad",
+					blueprint: blueprintOf((ctx) => ({ id: ctx.string })),
+					response: blueprintOf(() => ({})),
+					// @ts-expect-error: body is only allowed on a delete
+					route: { method, body: true },
+				}),
+			).toThrow(reason);
+		}
+	});
+});
+
+describe("a list response", () => {
+	class Item extends recordOf(
+		blueprintOf((ctx) => ({ title: ctx.string, secret: ctx.string })),
+		{ sensitive: ["secret"] },
+	) {}
+	class Recent extends useCaseOf({
+		name: "Recent",
+		blueprint: blueprintOf((ctx) => ({ count: ctx.integer })),
+		response: listOf(Item),
+		route: { method: "get", path: "/recent" },
+	}) {
+		override async execute() {
+			return Array.from(
+				{ length: this.input.count },
+				(_, index) => new Item({ title: `T${index}`, secret: "hunter22" }),
+			);
+		}
+	}
+	const Feed = outputOf({
+		name: "Feed",
+		commands: [commandOf({ name: "Feed", useCases: { recent: Recent } })],
+	});
+
+	test("is sent as a JSON array, sensitive values masked", async () => {
+		const routes = compileRoutes(
+			Feed.operations,
+			{},
+			{ output: { name: "Feed", statuses: Feed.statuses } },
+			{ source: "test" },
+		);
+		const result = await routeOf(routes, "Feed.recent").handle(
+			request({ query: { count: "2" } }),
+		);
+		expect(result.status).toBe(200);
+		const body = JSON.parse(result.body as string);
+		expect(body).toHaveLength(2);
+		expect(body[0].title).toBe("T0");
+		expect(body[0].secret).not.toBe("hunter22");
+	});
+});
+
+describe("an input with a file", () => {
+	class Upload extends useCaseOf({
+		name: "Upload",
+		blueprint: blueprintOf((ctx) => ({
+			folder: ctx.string,
+			file: ctx.fileOf({ types: ["image/*"], maxBytes: 16 }),
+			count: ctx.optional.integer,
+			tags: ctx.list.optional.integer,
+			items: ctx.optionalOf(
+				listOf(blueprintOf((ctx) => ({ name: ctx.string }))),
+			),
+		})),
+		response: blueprintOf((ctx) => ({
+			folder: ctx.string,
+			name: ctx.string,
+			size: ctx.integer,
+			count: ctx.optional.integer,
+			tags: ctx.list.optional.integer,
+			items: ctx.list.optional.string,
+		})),
+		route: { method: "post", path: "/media/{folder}" },
+	}) {
+		override async execute() {
+			const { file, items, ...rest } = this.input;
+			return {
+				...rest,
+				name: file.name,
+				size: file.size,
+				...(items ? { items: items.map((item) => item.name) } : {}),
+			};
+		}
+	}
+	const Media = outputOf({
+		name: "Media",
+		commands: [commandOf({ name: "Media", useCases: { upload: Upload } })],
+	});
+	const routes = compileRoutes(
+		Media.operations,
+		{},
+		{ output: { name: "Media", statuses: Media.statuses } },
+		{ source: "test" },
+	);
+	const upload = routeOf(routes, "Media.upload");
+	const formRequest = (
+		entries: [string, string | File][],
+		withForm = true,
+	): HttpRequest => {
+		const form = new FormData();
+		for (const [key, value] of entries) form.append(key, value);
+		return {
+			param: (name) => (name === "folder" ? "docs" : undefined),
+			query: () => ({}),
+			header: (name) =>
+				name === "content-type" ? "multipart/form-data; boundary=x" : undefined,
+			text: () => {
+				throw new Error("text is not read");
+			},
+			...(withForm ? { form: async () => form } : {}),
+		};
+	};
+	/** A PNG of `size` bytes: its signature, then zeros. */
+	const png = (size: number) => {
+		const bytes = new Uint8Array(size);
+		bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].slice(0, size));
+		return new File([bytes], "a.png", { type: "image/png" });
+	};
+
+	test("reads the parts: files as they are, text coerced, repeated keys as a list, JSON for objects", async () => {
+		const result = await upload.handle(
+			formRequest([
+				["folder", "from-body"],
+				["file", png(10)],
+				["count", "2"],
+				["tags", "1"],
+				["tags", "2"],
+				["items", '[{"name":"x"},{"name":"y"}]'],
+			]),
+		);
+		expect(result.status).toBe(200);
+		expect(JSON.parse(result.body as string)).toEqual({
+			folder: "docs",
+			name: "a.png",
+			size: 10,
+			count: 2,
+			tags: [1, 2],
+			items: ["x", "y"],
+		});
+	});
+
+	test("rejects a file of another type, or too large, with an issue at its key", async () => {
+		for (const file of [
+			new File(["a"], "a.txt", { type: "text/plain" }),
+			png(17),
+		]) {
+			const result = await upload.handle(formRequest([["file", file]]));
+			expect(result.status).toBe(400);
+			const { issues } = JSON.parse(result.body as string);
+			expect(issues.map((issue: { path: unknown }) => issue.path)).toEqual([
+				["file"],
+			]);
+		}
+	});
+
+	test("a multipart body on a server without form is a 415; JSON still reads the other keys", async () => {
+		const unsupported = await upload.handle(
+			formRequest([["file", png(1)]], false),
+		);
+		expect(unsupported.status).toBe(415);
+		expect(JSON.parse(unsupported.body as string).title).toBe(
+			"UnsupportedMediaType",
+		);
+		const json = await upload.handle({
+			...request({ body: { count: 1 } }),
+			param: () => "docs",
+		});
+		expect(json.status).toBe(400);
+		expect(
+			JSON.parse(json.body as string).issues.map(
+				(issue: { path: unknown }) => issue.path,
+			),
+		).toEqual([["file"]]);
+	});
+
+	test("a multipart body that cannot be read is a 400", async () => {
+		const result = await upload.handle({
+			...formRequest([]),
+			form: async () => {
+				throw new TypeError("bad");
+			},
+		});
+		expect(result.status).toBe(400);
+		expect(JSON.parse(result.body as string).title).toBe("InvalidRequestBody");
+	});
+
+	test("refuses an image whose first bytes are not of its declared type", async () => {
+		const fake = new File(["<svg onload=alert(1)>"], "a.png", {
+			type: "image/png",
+		});
+		const result = await upload.handle(formRequest([["file", fake]]));
+		expect(result.status).toBe(400);
+		const problem = JSON.parse(result.body as string);
+		expect(problem.title).toBe("InvalidFileContent");
+		expect(
+			problem.issues.map((issue: { path: unknown }) => issue.path),
+		).toEqual([["file"]]);
+	});
+
+	test("walks the parts once, and caps them with maxParts (413)", async () => {
+		const many: [string, string][] = Array.from({ length: 20_000 }, (_, i) => [
+			i % 2 === 0 ? "tags" : `x${i}`,
+			"1",
+		]);
+		const started = performance.now();
+		const capped = await upload.handle(formRequest(many));
+		expect(capped.status).toBe(413);
+		expect(JSON.parse(capped.body as string).title).toBe("TooManyParts");
+		const lifted = compileRoutes(
+			Media.operations,
+			{ maxParts: 30_000 },
+			{ output: { name: "Media", statuses: Media.statuses } },
+			{ source: "test" },
+		);
+		const read = await routeOf(lifted, "Media.upload").handle(
+			formRequest([["file", png(10)], ...many]),
+		);
+		// One undeclared key is kept, for the blueprint to reject.
+		expect(read.status).toBe(400);
+		const { issues } = JSON.parse(read.body as string);
+		expect(issues.map((issue: { path: unknown }) => issue.path)).toEqual([
+			["x1"],
+		]);
+		expect(performance.now() - started).toBeLessThan(1_000);
+		expect(httpOptionsIssue({ maxParts: 0 }, "test")).toBe(
+			"Expected test.maxParts to be a whole number, 1 or more.",
+		);
+	});
+
+	test("an exception of the server reading the body is a 500", async () => {
+		const Broken = exceptionOf({
+			layer: ExceptionLayers.Output,
+			name: "BodyGone",
+			message: "the body was read before",
+		});
+		const result = await upload.handle({
+			...formRequest([]),
+			form: async () => {
+				throw new Broken({ source: "test" });
+			},
+		});
+		expect(result.status).toBe(500);
+		expect(JSON.parse(result.body as string).title).toBe("BodyGone");
+	});
+
+	test("a get route, or a delete without a body, cannot take a file", () => {
+		for (const route of [
+			{ method: "get", path: "/media" },
+			{ method: "delete", path: "/media" },
+		] as const) {
+			class Bad extends useCaseOf({
+				name: "Bad",
+				blueprint: blueprintOf((ctx) => ({ file: ctx.file })),
+				response: blueprintOf(() => ({})),
+				route,
+			}) {
+				override async execute() {
+					return {};
+				}
+			}
+			const bad = outputOf({
+				name: "Bad",
+				commands: [commandOf({ name: "Bad", useCases: { bad: Bad } })],
+			});
+			expect(() =>
+				compileRoutes(
+					bad.operations,
+					{},
+					{ output: { name: "Bad", statuses: bad.statuses } },
+					{ source: "test" },
+				),
+			).toThrow(
+				/"file" is a file, which only a multipart\/form-data body sends/,
+			);
+		}
 	});
 });

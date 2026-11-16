@@ -58,6 +58,8 @@ const HANDLING: Record<string, string> = {
 	DuplicateOperation: `${DECLARATION} Give each operation its own id.`,
 	Forbidden:
 		"An output answers 403. In your own code, check the scopes or the owner before calling, or let it through.",
+	EntityHoldsFile:
+		"Store where the file went (a URL, a storage key) in the entity, and keep the file in the input of the use case.",
 	ImmutableEntityKey: `${BUG} The identity keys are set by the entity and the repository.`,
 	IncompatibleRecordPlugin:
 		"Install the plugin version the catalog reference asks for, or update the reference.",
@@ -71,10 +73,13 @@ const HANDLING: Record<string, string> = {
 	InvalidCommandEnvironment:
 		"Configuration, not input (an output answers 500): fix the `env` given to the call or the environment blueprint.",
 	InvalidEntityExpiry: DECLARATION,
+	InvalidIdStrategy: DECLARATION,
 	InvalidEntitySchemaVersion: DECLARATION,
 	InvalidEnvironment:
 		"Set or fix the variable named in the message; validate environments at start (`app.start()`) so it fails before serving.",
 	InvalidEventPolicy: DECLARATION,
+	InvalidFile: INPUT,
+	InvalidFileOptions: DECLARATION,
 	InvalidJsonData: INPUT,
 	InvalidJsonSchema:
 		"Fix the schema; for a schema loaded at runtime, check it when it is saved, not when it is used.",
@@ -122,12 +127,17 @@ const HANDLING: Record<string, string> = {
 	ReservedBlueprintKey: DECLARATION,
 	ReservedEntityKey: DECLARATION,
 	ReservedRecordKey: `${DECLARATION} Rename the key or the member.`,
+	ServiceNotBound: `${BUG} Give the service in the \`services\` of the application, or as an override of \`execute\` in a test.`,
+	ServiceOutsideExecution: `${BUG} Read the service inside \`execute\`.`,
 	SchemaLockMismatch: `${START} \`details.problems\` lists each entity; add \`previousNames\` or raise \`schemaVersion\`.`,
 	SyncVerifyUnsupported:
 		"Use `await password.verify(input)`, or configure a hasher with `verifySync`.",
 	Unauthenticated: "An output answers 401.",
 	UndeclaredBlueprintProperty: DECLARATION,
+	UndeclaredStatus: `${BUG} An HTTP sink answers a masked 500: add the status to \`route.statuses\`, or return another one.`,
 	UndeclaredRecordProperty: `${INPUT} The value is rejected, never trimmed: drop the key before building the record.`,
+	UnstoredEntity: `${BUG} Create the entity first: \`create\` gives it the id the database assigns.`,
+	UnsupportedIdentity: `${DECLARATION} Give the repository a provider with \`capabilities.generatedIds\` (in memory, Drizzle), or another id strategy than \`Serial\`.`,
 	UnknownCommandOperation:
 		"An output answers 404. In your own code, call an operation the command declares.",
 	UnknownRecordPlugin: DECLARATION,

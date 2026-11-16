@@ -8,6 +8,7 @@ import {
 	commandOf,
 	entityOf,
 	repositoryOf,
+	Serial,
 	useCaseOf,
 } from "@afora/core";
 import type {
@@ -45,12 +46,20 @@ function contractDatabase() {
 		Accounts: accountTable("accounts"),
 		One: accountTable("one"),
 		Two: accountTable("two"),
+		Serials: sqliteTable("serials", {
+			id: integer("id").primaryKey({ autoIncrement: true }),
+			email: text("email").unique(),
+			name: text("name"),
+		}),
 	};
 	for (const table of ["accounts", "one", "two"]) {
 		sqlite.run(
 			`CREATE TABLE ${table} (id TEXT PRIMARY KEY, email TEXT UNIQUE, name TEXT, age INTEGER, active INTEGER, address TEXT, tags TEXT, "group" INTEGER, n INTEGER, visits INTEGER, version INTEGER, deletedAt TEXT, expiresAt TEXT, schema_version INTEGER)`,
 		);
 	}
+	sqlite.run(
+		"CREATE TABLE serials (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, name TEXT)",
+	);
 	return { db: drizzle(sqlite), tables };
 }
 
@@ -198,6 +207,56 @@ describe("repositoryOf", () => {
 		await expect(Lost.count()).rejects.toMatchObject({
 			name: "InvalidRepositoryDeclaration",
 		});
+	});
+
+	it("stores Serial entities with the ids the database assigns", async () => {
+		const sqlite = new Database(":memory:");
+		sqlite.run(
+			"CREATE TABLE tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, createdAt TEXT NOT NULL, updatedAt TEXT, deletedAt TEXT, title TEXT NOT NULL)",
+		);
+		const tickets = sqliteTable("tickets", {
+			id: integer("id").primaryKey({ autoIncrement: true }),
+			createdAt: text("createdAt").notNull(),
+			updatedAt: text("updatedAt"),
+			deletedAt: text("deletedAt"),
+			title: text("title").notNull(),
+		});
+		class Ticket extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string })),
+			{ id: Serial, change: ["title"] },
+		) {}
+		const Tickets = repositoryOf({
+			entity: Ticket,
+			provider: drizzleProvider({
+				db: drizzle(sqlite),
+				tables: { Ticket: tickets },
+			}),
+			actions: ["create", "findById", "update", "delete", "findCursor"],
+		});
+		const made: number[] = [];
+		for (let index = 1; index <= 11; index++) {
+			made.push((await Tickets.create({ title: `T${index}` })).id);
+		}
+		expect(made).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+		const found = await Tickets.findById(2);
+		expect(found?.title).toBe("T2");
+		await Tickets.update((found as Ticket).change.title("Two"));
+		expect((await Tickets.findById(2))?.title).toBe("Two");
+		await Tickets.delete(11);
+		// AUTOINCREMENT never gives an id twice.
+		expect((await Tickets.create({ title: "T12" })).id).toBe(12);
+		const pages: number[][] = [];
+		let after: string | undefined;
+		do {
+			const page = await Tickets.findCursor({ limit: 4, after });
+			pages.push(page.items.map((ticket) => ticket.id));
+			after = page.next;
+		} while (after !== undefined);
+		expect(pages).toEqual([
+			[1, 2, 3, 4],
+			[5, 6, 7, 8],
+			[9, 10, 12],
+		]);
 	});
 
 	it("pages by cursor over the database", async () => {

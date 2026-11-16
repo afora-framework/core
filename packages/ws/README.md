@@ -4,18 +4,38 @@ A WebSocket sink for [`@afora/core`](../../README.md) outputs. It serves the ope
 
 ```bash
 bun add @afora/core @afora/ws typebox
+# or: npm install @afora/core @afora/ws typebox
 ```
 
 `@afora/core` and TypeBox (`^1`) are peer dependencies. The package uses only web APIs, so it runs on Bun, Node >= 22 and Workers.
 
 ## Example
 
-<!-- docs:code skip: two files in one block, and CreatePost and ListPosts stand for your use cases -->
+<!-- docs:code file: realtime.ts -->
 ```ts
 // realtime.ts
 import { wsHub } from "@afora/ws";
 export const hub = wsHub();
+```
 
+<!-- docs:code file: app.ts -->
+<!-- docs:code context
+// your use cases
+import { blueprintOf, useCaseOf } from "@afora/core";
+
+const Title = blueprintOf((ctx) => ({ title: ctx.string }));
+class CreatePost extends useCaseOf({ name: "CreatePost", blueprint: Title, response: Title }) {
+	override async execute() {
+		return this.input;
+	}
+}
+class ListPosts extends useCaseOf({ name: "ListPosts", blueprint: blueprintOf(() => ({})), response: blueprintOf(() => ({})) }) {
+	override async execute() {
+		return {};
+	}
+}
+-->
+```ts
 // app.ts
 import { applicationOf, commandOf, outputOf, publishEvents } from "@afora/core";
 import { websocket } from "@afora/ws";
@@ -47,7 +67,7 @@ export const App = applicationOf({
 });
 ```
 
-```
+```text
 → { "id": 1, "subscribe": "posts" }
 ← { "id": 1, "subscribed": "posts" }
 
@@ -67,7 +87,11 @@ Build the endpoint once (`App.outputs.Live.build()`), then give each socket a se
 
 **Bun**
 
-<!-- docs:code skip: fragment: App is the application above, WsSession the session type of @afora/ws -->
+<!-- docs:code context
+import type { WsSession } from "@afora/ws";
+import { App } from "./app";
+import { hub } from "./realtime";
+-->
 ```ts
 const endpoint = App.outputs.Live.build();
 
@@ -93,7 +117,16 @@ Bun.serve<{ values: Record<string, string | undefined>; session?: WsSession }>({
 
 **Hono** (`upgradeWebSocket` from `hono/bun` or `hono/cloudflare-workers`; on Node, `@hono/node-ws`)
 
-<!-- docs:code skip: fragment: app is your Hono app and upgradeWebSocket comes from hono/bun, hono/cloudflare-workers or @hono/node-ws -->
+<!-- docs:code context
+import type { WsSession } from "@afora/ws";
+import { Hono } from "hono";
+import { upgradeWebSocket } from "hono/bun";
+import { App } from "./app";
+import { hub } from "./realtime";
+
+const app = new Hono(); // your Hono app
+const endpoint = App.outputs.Live.build();
+-->
 ```ts
 app.get(
 	"/ws",
@@ -115,9 +148,29 @@ app.get(
 
 **Workers**
 
-<!-- docs:code skip: fragment: the body of a Cloudflare Workers fetch handler, whose WebSocketPair type is not in this repo -->
+<!-- docs:code isolated -->
+<!-- docs:code context
+import { App } from "./app";
+import { hub } from "./realtime";
+
+// the Workers types this block uses (from @cloudflare/workers-types in a Workers project)
+declare global {
+	const WebSocketPair: new () => { 0: WebSocket; 1: WebSocket & { accept(): void } };
+	interface ResponseInit {
+		webSocket?: WebSocket;
+	}
+}
+const endpoint = App.outputs.Live.build();
+
+export default {
+	async fetch(request: Request): Promise<Response> {
+		const values = { "x-user": request.headers.get("x-user") ?? undefined };
+/* block */
+	},
+};
+-->
 ```ts
-const [client, server] = Object.values(new WebSocketPair());
+const { 0: client, 1: server } = new WebSocketPair();
 server.accept();
 const session = endpoint.session(server, { hub, values });
 server.addEventListener("message", (event) => session.message(event.data));
@@ -150,7 +203,7 @@ Invalid options throw `InvalidOutputStage` when the stage is made.
 | `{ id?, unsubscribe: topic }`   | `{ id, unsubscribed: topic }`                                               |
 | (an event published to a topic) | `{ topic, event: { name, command, operation, entity } }` to its subscribers |
 
-- **Calls.** `op` is an operation id. The input is validated by the operation (a 400 problem with `issues`), the response goes through `outputValueOf` (sensitive values masked), and an error is `problemOf` with the status of `statusOf` and the output `statuses`. An unknown `op` is a 404 `NotFound` problem.
+- **Calls.** `op` is an operation id. The input is validated by the operation (a 400 problem with `issues`), the response goes through `outputValueOf` (sensitive values masked), and an error is `problemOf` with the status of `statusOf` and the output `statuses`; a 5xx says `"Internal error."` unless `debug` is on or the output declares the exception. An unknown `op` is a 404 `NotFound` problem.
 - **`id`** is a non-empty string or a number, echoed in the reply; `null` when the request had none.
 - **Invalid messages.** Text that is not UTF-8 or JSON, a frame that is not an object, an unknown key, not exactly one of `op`, `subscribe` and `unsubscribe`, `input` without `op`, or a message over `maxMessageBytes`: a 400 problem `InvalidWsMessage`, whose `detail` says why.
 - **Subscriptions.** A topic must match `subscriptions.topics`, then `authorize(topic, values)` of the session, if given (ownership, roles): otherwise a 403 `WsTopicForbidden`. A session without a hub, or `handle`, answers a 501 `WsSubscriptionsUnavailable`. The output `statuses` can change these three statuses.
@@ -165,7 +218,7 @@ Invalid options throw `InvalidOutputStage` when the stage is made.
 
 ## Catalog
 
-`WsStages` is `stageCatalogOf(websocket)` (from `@afora/core/adapters`), and `stages` are the entries codegen reads to resolve `{ "sink": "websocket" }` in an `afora.json` (`--stages @afora/ws`):
+`WsStages` is `stageCatalogOf(websocket)` (from `@afora/core/adapters`), and `stages` are the entries codegen reads to resolve `{ "sink": "websocket" }` in an `afora.json`. The CLIs read `--stages` as a file, so re-export them from a module of the project (`export { stages } from "@afora/ws";` in `stages.ts`) and pass `--stages ./stages.ts`:
 
 ```ts
 import { stages } from "@afora/ws";

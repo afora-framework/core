@@ -1,4 +1,11 @@
-import { type AnyApplication, Std } from "@afora/core";
+import {
+	type AnyApplication,
+	EntityIdStrategy,
+	Key,
+	Serial,
+	Std,
+	Uuid,
+} from "@afora/core";
 import type {
 	ApplicationDescription,
 	FieldDescription,
@@ -29,7 +36,8 @@ export interface ExtractOptions {
 	 * a standard use case `useCases.<Name>.before` and `.after`, a command with a handler
 	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, the handler of
 	 * an entity event `entities.<Name>.events.<event>`, a publisher
-	 * `publishers.<key>`, a tracer `trace`, and a stage
+	 * `publishers.<key>`, the factory of a service `services.<name>`, a tracer
+	 * `trace`, and a stage
 	 * written by hand `outputs.<Name>.pipe.<index>`, all `"./file.ts#export"`.
 	 */
 	readonly imports?: Readonly<Record<string, string>>;
@@ -222,6 +230,21 @@ class Extraction {
 			case "optional":
 				return { ...this.property(lineage.base), optional: true };
 			case "factory": {
+				if (lineage.factory === "fileOf") {
+					const { types, maxBytes, name, optional } = lineage.args as {
+						types?: readonly string[];
+						maxBytes?: number;
+						name?: string;
+						optional?: boolean;
+					};
+					return {
+						kind: "file",
+						optional: optional === true,
+						...(types === undefined ? {} : { types: [...types] }),
+						...(maxBytes === undefined ? {} : { maxBytes }),
+						...(name === undefined ? {} : { name }),
+					};
+				}
 				if (lineage.factory !== "enumOf") return this.opaqueFor(property);
 				const {
 					values,
@@ -356,12 +379,44 @@ class Extraction {
 				...(field.optional ? { optional: true } : {}),
 			};
 		}
+		if (field.kind === "file") {
+			return {
+				file: {
+					...(field.types === undefined ? {} : { types: [...field.types] }),
+					...(field.maxBytes === undefined ? {} : { maxBytes: field.maxBytes }),
+					...(field.name === undefined ? {} : { name: field.name }),
+				},
+				...(field.optional ? { optional: true } : {}),
+			};
+		}
 		return {
 			opaque: true,
 			ref: name,
 			import: this.options.imports?.[name] ?? "./opaque",
 		};
 	}
+}
+
+/**
+ * The `id` of the spec of the entity `name`, from the strategy its class
+ * holds: `uuid`, `key` or `serial` for the strategies `Uuid`, `Key` and
+ * `Serial` themselves; any other `idOf` cannot be named in a spec.
+ */
+function idSpecOf(
+	entity: unknown,
+	name: string,
+): { readonly id?: "uuid" | "key" | "serial" } {
+	const strategy =
+		typeof entity === "function"
+			? (entity as { readonly [EntityIdStrategy]?: unknown })[EntityIdStrategy]
+			: undefined;
+	if (strategy === undefined) return {};
+	if (strategy === Uuid) return { id: "uuid" };
+	if (strategy === Key) return { id: "key" };
+	if (strategy === Serial) return { id: "serial" };
+	throw new ExtractionError(
+		`The id of the entity "${name}" is made by a custom idOf, which a spec cannot name: use Uuid, Key or Serial, or leave the entity out of the spec.`,
+	);
 }
 
 function importFor(
@@ -440,6 +495,7 @@ export function extractSpec(
 	);
 	const entities = entries(description.entities, (value, name) => ({
 		...(record(["", value])[1] as Record<string, unknown>),
+		...idSpecOf(app.entities[name], name),
 		...(value.versioned === true ? { versioned: true } : {}),
 		...(value.expires === undefined
 			? {}
@@ -619,9 +675,12 @@ export function extractSpec(
 			...(value.deprecated ? { deprecated: true } : {}),
 			...routing(value),
 			input: value.refs?.input ?? { fields: extraction.json(value.input) },
-			response: value.refs?.response ?? {
-				fields: extraction.json(value.response),
-			},
+			// A list response is written as the list field it is.
+			response: value.responseList
+				? canonicalField(extraction.field(value.responseList))
+				: (value.refs?.response ?? {
+						fields: extraction.json(value.response),
+					}),
 			...(value.context === undefined
 				? {}
 				: {
@@ -753,6 +812,21 @@ export function extractSpec(
 				},
 			]),
 	);
+	// Its own services: inherited ones belong to the spec it extends.
+	const services = Object.fromEntries(
+		Object.entries(description.services ?? {})
+			.filter(([, { from }]) => from === description.name)
+			.map(([key]) => [
+				key,
+				{
+					import: importFor(
+						options.imports,
+						`services.${key}`,
+						`The factory of the service "${key}"`,
+					),
+				},
+			]),
+	);
 	const spec: Json = {
 		version: 1,
 		name: description.name,
@@ -789,6 +863,7 @@ export function extractSpec(
 					},
 				}),
 		...(Object.keys(publishers).length > 0 ? { publishers } : {}),
+		...(Object.keys(services).length > 0 ? { services } : {}),
 		...(Object.keys(allProperties).length > 0
 			? { properties: allProperties }
 			: {}),

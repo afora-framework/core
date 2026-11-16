@@ -1,3 +1,4 @@
+import type { IdValue } from "../entity/types/id.interface";
 import { declaredRecordNameOf } from "../record/name";
 import {
 	InvalidRepositoryDeclaration,
@@ -15,7 +16,8 @@ import type {
 
 /**
  * The provider of `inMemoryProvider`: it runs transactions, reads by cursor,
- * honors expected versions, increments atomically and leaves expired records out.
+ * honors expected versions, increments atomically, leaves expired records
+ * out and assigns `Serial` ids.
  */
 export type InMemoryProvider = IRepositoryProvider & {
 	readonly capabilities: {
@@ -24,10 +26,11 @@ export type InMemoryProvider = IRepositoryProvider & {
 		readonly versioning: true;
 		readonly atomic: true;
 		readonly expiry: true;
+		readonly generatedIds: true;
 	};
 };
 
-type Table = Map<string, RepositoryData>;
+type Table = Map<IdValue, RepositoryData>;
 /** By declared name (a string), or by entity class for an entity without one. */
 type Tables = Map<string | object, Table>;
 
@@ -50,8 +53,8 @@ function tableKeyOf(entity: object): string | object {
 }
 
 /** The id of a stored value. */
-function idOf(data: RepositoryData): string {
-	return data.id as string;
+function idOf(data: RepositoryData): IdValue {
+	return data.id as IdValue;
 }
 
 /** Stored rows are private and replaced, never mutated, so copying the maps isolates a snapshot. */
@@ -61,8 +64,15 @@ function snapshotOf(tables: Tables): Tables {
 
 const copy = (data: RepositoryData): RepositoryData => structuredClone(data);
 
+/**
+ * The last id assigned in each table, shared by every scope of a provider:
+ * as a database sequence, a transaction rolled back does not give its ids
+ * back.
+ */
+type Counters = Map<string | object, number>;
+
 /** A scope over `initial`: the provider, and how to end it. */
-function scopeOf(initial: Tables, root: boolean) {
+function scopeOf(initial: Tables, root: boolean, counters: Counters) {
 	let tables = initial;
 	let held: Promise<void> | undefined;
 	let closed = false;
@@ -116,6 +126,7 @@ function scopeOf(initial: Tables, root: boolean) {
 			versioning: true,
 			atomic: true,
 			expiry: true,
+			generatedIds: true,
 		}),
 		findOne: (context, query = {}) =>
 			whenIdle(() => {
@@ -135,6 +146,24 @@ function scopeOf(initial: Tables, root: boolean) {
 		insert: (context, data) =>
 			whenIdle(() => {
 				const table = tableOf(context);
+				// No id: the next one of the table's sequence. As in a database,
+				// a row inserted with an id of its own does not move it.
+				if (data.id === undefined) {
+					const key = tableKeyOf(context.entity);
+					const next = (counters.get(key) ?? 0) + 1;
+					counters.set(key, next);
+					const row: Record<string, unknown> = { id: next, ...data };
+					row.id = next;
+					if (table.has(next)) {
+						throw new RepositoryUniqueViolation({
+							source: context.name,
+							details: { key: "id" },
+						});
+					}
+					assertUnique(context, row);
+					table.set(next, copy(row));
+					return { id: next };
+				}
 				if (table.has(idOf(data))) {
 					throw new RepositoryUniqueViolation({
 						source: context.name,
@@ -143,6 +172,7 @@ function scopeOf(initial: Tables, root: boolean) {
 				}
 				assertUnique(context, data);
 				table.set(idOf(data), copy(data));
+				return undefined;
 			}),
 		update: (context, data, options = {}) =>
 			whenIdle(() => {
@@ -234,7 +264,7 @@ function scopeOf(initial: Tables, root: boolean) {
 				held = new Promise<void>((resolve) => {
 					release = resolve;
 				});
-				return scopeOf(snapshotOf(tables), false);
+				return scopeOf(snapshotOf(tables), false, counters);
 			});
 			try {
 				const result = await run(child.provider);
@@ -270,6 +300,7 @@ export function inMemoryProvider(): InMemoryProvider {
 	return providerOf({
 		name: "inMemory",
 		options: {},
-		create: () => scopeOf(new Map(), true).provider as InMemoryProvider,
+		create: () =>
+			scopeOf(new Map(), true, new Map()).provider as InMemoryProvider,
 	});
 }

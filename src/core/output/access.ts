@@ -4,6 +4,7 @@ import type {
 	AccessDeclaration,
 	Principal,
 } from "../use-case/types/access.interface";
+import { coerceTextValues } from "./coerce";
 import { Forbidden, InvalidOutputStage, Unauthenticated } from "./exceptions";
 import type { OperationCallOptions } from "./types/output.interface";
 
@@ -104,7 +105,10 @@ export function accessGuardOf(
 		for (const [key, read] of fills) {
 			const value = read(principal);
 			if (value === undefined) delete filled[key];
-			else filled[key] = value;
+			// A subject or a claim is text; the key it fills may be a number.
+			else if (typeof value === "string" && context) {
+				filled[key] = coerceTextValues(context, { [key]: value })[key];
+			} else filled[key] = value;
 		}
 		return { context: filled };
 	};

@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.0.13 — 2026-11-16
+
+### Ids the database assigns (#122)
+
+- The provider does not advertise `capabilities.generatedIds`: a repository with `create` of an entity declared with `Serial` throws `UnsupportedIdentity` when it is declared. The README says so.
 
 ### Added
 

@@ -4,6 +4,7 @@ A repository provider for [`@afora/core`](../../README.md) on [Drizzle ORM](http
 
 ```bash
 bun add @afora/core typebox drizzle-orm @afora/drizzle
+# or: npm install @afora/core typebox drizzle-orm @afora/drizzle
 ```
 
 `@afora/core` and `drizzle-orm` (`^0.45.4`) are peer dependencies. SQLite and Postgres databases are supported, with any Drizzle driver. MySQL is not (the provider relies on `RETURNING` and `NULLS FIRST/LAST`).
@@ -12,6 +13,7 @@ bun add @afora/core typebox drizzle-orm @afora/drizzle
 
 `schema.ts`:
 
+<!-- docs:code file: schema.ts -->
 ```ts
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
@@ -30,6 +32,7 @@ export const tables = { User: users };
 
 `db.ts`:
 
+<!-- docs:code file: db.ts -->
 ```ts
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
@@ -39,7 +42,7 @@ export const db = drizzle(new Database("app.db"));
 
 `app.ts`:
 
-<!-- docs:code skip: imports ./db and ./schema, the two files above -->
+<!-- docs:code file: app.ts -->
 ```ts
 import {
 	applicationOf,
@@ -81,7 +84,7 @@ export const Users = repositoryOf({
 export const App = applicationOf({
 	name: "app",
 	provider,
-	repositories: [Users],
+	repositories: { Users },
 });
 
 // Once the application binds it, the repository is reached through it.
@@ -119,14 +122,20 @@ await users.findPage({
 
 A repository's `indexes` (see [Indexes](../../docs/repositories.md#indexes)) reach the provider as `context.indexes`, and the index that serves a query as `query.index`. The provider takes them and gives the same rows: the SQL is the same, and the database picks its own index for the `WHERE` and `ORDER BY`. It does not create them, so declare the matching SQL index next to the table, with the `where` keys first and the `orderBy` key last:
 
-<!-- docs:code skip: excerpt, the columns of the table are the ones above -->
 ```ts
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable(
 	"users",
 	{
-		/* ...the columns above */
+		id: text("id").primaryKey(),
+		createdAt: text("createdAt").notNull(),
+		updatedAt: text("updatedAt"),
+		deletedAt: text("deletedAt"),
+		name: text("name").notNull(),
+		email: text("email").notNull().unique(),
+		age: integer("age"),
+		address: text("address", { mode: "json" }),
 	},
 	// indexes: { byAge: { where: ["age"], orderBy: "name" } }
 	(table) => [index("users_by_age").on(table.age, table.name)],
@@ -145,6 +154,22 @@ With soft deletion, a partial index (``.where(sql`"deletedAt" IS NULL`)``) keeps
 
 - A versioned entity (`entityOf(blueprint, { versioned: true })`) needs an integer `version` column. `update` with an expected version runs `UPDATE ... WHERE id = ? AND version = ?` with `RETURNING`: no row while the id exists is a `RepositoryConcurrencyConflict` (with the stored version as `actual`). The check and the write are one statement, so it holds across connections.
 - `increment` runs `UPDATE ... SET views = coalesce(views, 0) + ?, updatedAt = ? WHERE id = ? AND deletedAt IS NULL RETURNING *`, and with `create`, `INSERT ... ON CONFLICT (id) DO UPDATE SET ...` with the same `SET` (on SQLite and Postgres alike), so two calls creating the same id both count. A soft-deleted row is not incremented: without `create` it is `RepositoryEntityNotFound`, with it `RepositoryUniqueViolation` on `id`. For an entity that expires, an expired row is not incremented either: the `UPDATE` adds the expiry condition, and the upsert's `SET` replaces every column with the inserted row (`CASE WHEN <alive> THEN ... ELSE excluded.<column> END`).
+
+## Ids the database assigns
+
+`capabilities.generatedIds` is true, on SQLite and Postgres. An entity declared with `entityOf(blueprint, { id: Serial })` ([Entities](../../docs/entities.md#ids-the-database-assigns)) is inserted without its `id`, and `INSERT ... RETURNING id` gives the one the database assigned, which `create` sets on the entity. The `id` column must assign it: `integer("id").primaryKey({ autoIncrement: true })` on SQLite (`INTEGER PRIMARY KEY AUTOINCREMENT`; without `AUTOINCREMENT` SQLite may give the id of a deleted row again), and `serial("id").primaryKey()` or `integer("id").primaryKey().generatedAlwaysAsIdentity()` on Postgres. A `bigint` (or `bigserial`) id comes back as a number up to `Number.MAX_SAFE_INTEGER`; one above it is refused with `UnsupportedIdentity` instead of rounded to another id. `update`, soft deletion and `restore` never set the `id` column, so a `GENERATED ALWAYS` identity column works. `create` refuses a new entity given an id of its own (`UnsupportedIdentity`): it would leave the sequence behind. Integer ids order and page by cursor as numbers.
+
+```ts
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
+export const tickets = sqliteTable("tickets", {
+	id: integer("id").primaryKey({ autoIncrement: true }),
+	createdAt: text("createdAt").notNull(),
+	updatedAt: text("updatedAt"),
+	deletedAt: text("deletedAt"),
+	title: text("title").notNull(),
+});
+```
 
 ## Transactions
 
@@ -182,7 +207,7 @@ export const providers = [
 ];
 ```
 
-so `afora-codegen generate --providers @afora/drizzle` accepts
+so with a module of the project that re-exports it (`export { providers } from "@afora/drizzle";` in `providers.ts`; the CLI reads `--providers` as a file), `afora-codegen generate --providers ./providers.ts` accepts
 
 ```json
 {

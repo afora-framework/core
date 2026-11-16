@@ -51,9 +51,11 @@ The hash it gives must be a PHC string of argon2 (`$argon2id$v=19$m=...,t=...,p=
 
 ## Ids
 
-`Id.generate()`, and every entity that gets an `id`, use a UUID v7 (RFC 9562): 48 bits of Unix milliseconds, then a counter for ids made in the same millisecond, then random bits. Ids sort in creation order, within one process too, which keeps database indexes compact and makes `findCursor` over `id` follow creation.
+By default, `Id.generate()` and every entity that gets an `id` use a UUID v7 (RFC 9562): 48 bits of Unix milliseconds, then a counter for ids made in the same millisecond, then random bits. Ids sort in creation order, within one process too, which keeps database indexes compact and makes `findCursor` over `id` follow creation.
 
-Replace the generator with `configure({ idGenerator })`. Its ids must still be UUID v7, since `Id` accepts nothing else; an id made by a generator you configured is validated as any value would be. In tests, a generator that counts makes ids you can predict:
+An entity can take another id strategy of its own with the `id` option of `entityOf`: `Uuid` (any UUID version, still generated as v7), `Key` (a natural key the input must hold), `Serial` (a positive integer the database assigns on `create`, through a provider with `capabilities.generatedIds`) or `idOf(property, generate?)`. See [Entities](entities.md#ids). The other entities keep UUID v7. No runtime service makes a `Serial` id: the generator is not called for it.
+
+Replace the generator with `configure({ idGenerator })`. It makes the ids of the entities with the default id and of those declared with `Uuid`; for the default, its ids must still be UUID v7, since `Id` accepts nothing else. An id made by a generator you configured is validated as any value would be. In tests, a generator that counts makes ids you can predict:
 
 ```ts
 import { configure, Id, resetRuntime } from "@afora/core";
@@ -77,11 +79,23 @@ resetRuntime(); // the default hasher and generator again, and the id clock rest
 
 ## Deploying
 
+<!-- docs:code file: api.ts
+import { commandOf, outputOf } from "@afora/core";
+import { hono } from "@afora/hono";
+
+const Health = commandOf({ name: "Health", useCases: {} });
+export const api = outputOf({ name: "Api", commands: [Health], pipe: [hono()] }).build();
+-->
+<!-- docs:code file: hasher.ts
+import type { PasswordHasher } from "@afora/core";
+
+export declare const hasher: PasswordHasher;
+-->
+
 An output built with an HTTP provider is a server object of that framework: a Hono app, a Fastify instance, an Express app or an Elysia app. Deploying it is deploying that framework's app. With [`@afora/hono`](../packages/hono/README.md), the one that runs everywhere, and `api` the built output of `./api.ts` (as in the [docs index](README.md)):
 
 **Bun.**
 
-<!-- docs:code skip: imports the application of the page, `./api`, which is not a file here -->
 ```ts
 import { api } from "./api";
 
@@ -90,7 +104,6 @@ Bun.serve({ fetch: api.fetch, port: 3000 });
 
 **Node.** With `@hono/node-server`, and `tsx` (or a build step) to run TypeScript:
 
-<!-- docs:code skip: @hono/node-server is not installed in this repository -->
 ```ts
 import { serve } from "@hono/node-server";
 import { api } from "./api";
@@ -100,7 +113,6 @@ serve({ fetch: api.fetch, port: 3000 });
 
 **Workers.** The app is the default export; configure a hasher if the API hashes passwords, and read variables from the bindings:
 
-<!-- docs:code skip: imports the application of the page, `./api`, which is not a file here -->
 ```ts
 import { configure } from "@afora/core";
 import { api } from "./api";

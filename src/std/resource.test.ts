@@ -1,14 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import { compileRoutes, type HttpRequest } from "../adapters";
 import {
+	type AnyCommand,
 	applicationOf,
 	blueprintOf,
 	commandOf,
 	entityOf,
+	Integer,
+	idOf,
 	inMemoryProvider,
+	Key,
 	outputOf,
 	repositoryOf,
 	resourceOf,
+	Serial,
 	UseCaseUnavailable,
 } from "../index";
 
@@ -176,5 +181,125 @@ describe("resourceOf", () => {
 			path: "/posts",
 			status: 201,
 		});
+	});
+});
+
+describe("resourceOf, with other ids", () => {
+	function serve(Blog: AnyCommand) {
+		const Api = outputOf({ name: "Api", commands: [Blog] });
+		const table = compileRoutes(
+			Api.operations,
+			{ basePath: "/api" },
+			{ output: { name: "Api", statuses: Api.statuses } },
+			{ source: "test" },
+		);
+		return async (
+			index: number,
+			given: { id?: string; body?: unknown },
+		): Promise<{ status?: number; json: Record<string, never> }> => {
+			const request: HttpRequest = {
+				param: () => given.id,
+				query: () => ({}),
+				header: () => undefined,
+				text: () => JSON.stringify(given.body ?? {}),
+			};
+			const result = await table.routes[index]?.handle(request);
+			return {
+				status: result?.status,
+				json: JSON.parse(result?.body ?? "null"),
+			};
+		};
+	}
+
+	test("a natural key is part of the input of create", async () => {
+		class Setting extends entityOf(
+			blueprintOf((ctx) => ({ value: ctx.text })),
+			{ id: Key, change: ["value"] },
+		) {}
+		const Settings = repositoryOf({
+			entity: Setting,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findPage", "create", "update", "delete"],
+		});
+		const Site = commandOf({
+			name: "Site",
+			useCases: resourceOf(Settings, { path: "/settings" }),
+		});
+		const { item } = await Site.run("create", { id: "seo", value: "on" });
+		expect(item.id).toBe("seo");
+		// @ts-expect-error the id of a natural key is required
+		await Site.run("create", { value: "off" }).catch(() => {});
+		expect((await Site.run("get", { id: "seo" })).item.value).toBe("on");
+		await Site.run("update", { id: "seo", value: "off" });
+		expect((await Site.run("get", { id: "seo" })).item.value).toBe("off");
+
+		const call = serve(Site);
+		expect(
+			(await call(0, { body: { id: "profile", value: "x" } })).status,
+		).toBe(201);
+		expect((await call(0, { body: { value: "x" } })).status).toBe(400);
+		expect((await call(1, { id: "profile" })).json.item).toMatchObject({
+			id: "profile",
+		});
+		expect((await call(4, { id: "seo" })).status).toBe(200);
+	});
+
+	test("an integer id in the path is read as a number", async () => {
+		let next = 0;
+		class Ticket extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.text })),
+			{ id: idOf(Integer, () => ++next), change: ["title"] },
+		) {}
+		const Tickets = repositoryOf({
+			entity: Ticket,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findPage", "create", "update", "delete"],
+		});
+		const Desk = commandOf({
+			name: "Desk",
+			useCases: resourceOf(Tickets, { path: "/tickets" }),
+		});
+		const call = serve(Desk);
+		const created = await call(0, { body: { title: "First" } });
+		expect(created.status).toBe(201);
+		expect(created.json.item).toMatchObject({ id: 1, title: "First" });
+		expect((await call(1, { id: "1" })).json.item).toMatchObject({ id: 1 });
+		expect(
+			(await call(3, { id: "1", body: { title: "Renamed" } })).json.item,
+		).toMatchObject({ id: 1, title: "Renamed" });
+		expect((await call(1, { id: "abc" })).status).toBe(400);
+		expect((await call(4, { id: "1" })).status).toBe(200);
+		expect((await call(1, { id: "1" })).status).toBe(404);
+	});
+
+	test("a Serial id is assigned on create and read as a number in the path", async () => {
+		class Ticket extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.text })),
+			{ id: Serial, change: ["title"] },
+		) {}
+		const Tickets = repositoryOf({
+			entity: Ticket,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findPage", "create", "update", "delete"],
+		});
+		const Desk = commandOf({
+			name: "Desk",
+			useCases: resourceOf(Tickets, { path: "/tickets" }),
+		});
+		const { item } = await Desk.run("create", { title: "First" });
+		expect(item.id).toBe(1);
+
+		const call = serve(Desk);
+		const created = await call(0, { body: { title: "Second" } });
+		expect(created.status).toBe(201);
+		expect(created.json.item).toMatchObject({ id: 2, title: "Second" });
+		expect((await call(1, { id: "2" })).json.item).toMatchObject({ id: 2 });
+		expect(
+			(await call(3, { id: "2", body: { title: "Renamed" } })).json.item,
+		).toMatchObject({ id: 2, title: "Renamed" });
+		expect((await call(1, { id: "0" })).status).toBe(400);
+		expect((await call(1, { id: "abc" })).status).toBe(400);
+		expect((await call(4, { id: "2" })).status).toBe(200);
+		expect((await call(1, { id: "2" })).status).toBe(404);
 	});
 });

@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { outputOf, StdStages } from "@afora/core";
+import {
+	blueprintOf,
+	commandOf,
+	listOf,
+	outputOf,
+	StdStages,
+	useCaseOf,
+	withStatus,
+} from "@afora/core";
 import { stageDescriptionOf } from "@afora/core/experimental";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -71,6 +79,27 @@ describe("mcpTools sink", () => {
 		expect(result.content[0]?.text).not.toContain("argon2");
 	});
 
+	test("a status chosen with withStatus is ignored: the body is the result", async () => {
+		class Health extends useCaseOf({
+			name: "Health",
+			blueprint: blueprintOf(() => ({})),
+			response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+			route: { method: "get", path: "/health", statuses: [503] },
+		}) {
+			override async execute() {
+				return withStatus(503, { ok: false });
+			}
+		}
+		const mcp = outputOf({
+			name: "Health",
+			commands: [commandOf({ name: "Health", useCases: { check: Health } })],
+			pipe: [mcpTools({ name: "health", version: "1.0.0" })],
+		}).build() as McpTools;
+		const result = await mcp.call("health_check", {});
+		expect(result.isError).toBeUndefined();
+		expect(parse(result)).toEqual({ ok: false });
+	});
+
 	test("a declared error is a problem with isError", async () => {
 		const mcp = build();
 		const result = await mcp.call("users_login", {
@@ -81,6 +110,23 @@ describe("mcpTools sink", () => {
 		const problem = parse(result);
 		expect(problem.title).toBe("InvalidCredentials");
 		expect(problem.status).toBe(401);
+	});
+
+	test("a declared error mapped to a 5xx keeps its detail", async () => {
+		const { Users, Posts } = blog();
+		const mcp = outputOf({
+			name: "Blog",
+			commands: [Users, Posts],
+			statuses: { InvalidCredentials: 503 },
+			pipe: [mcpTools({ name: "blog", version: "1.0.0" })],
+		}).build() as McpTools;
+		const result = await mcp.call("users_login", {
+			email: ana.email,
+			plainPassword: "nope",
+		});
+		const problem = parse(result);
+		expect(problem.status).toBe(503);
+		expect(problem.detail).not.toBe("Internal error.");
 	});
 
 	test("invalid input is a 400 with issues; unknown tool is a 404", async () => {
@@ -160,5 +206,28 @@ describe("mcpTools sink", () => {
 		});
 		expect(failed.isError).toBe(true);
 		await client.close();
+	});
+});
+
+describe("mcpTools with a list response", () => {
+	test("the text content is the JSON array", async () => {
+		const Item = blueprintOf((ctx) => ({ title: ctx.string }));
+		class Recent extends useCaseOf({
+			name: "Recent",
+			blueprint: blueprintOf(() => ({})),
+			response: listOf(Item),
+		}) {
+			override async execute() {
+				return [{ title: "a" }, { title: "b" }];
+			}
+		}
+		const mcp = outputOf({
+			name: "Feed",
+			commands: [commandOf({ name: "Feed", useCases: { recent: Recent } })],
+			pipe: [mcpTools({ name: "feed", version: "1.0.0" })],
+		}).build() as McpTools;
+		const result = await mcp.call("feed_recent", {});
+		expect(result.isError).toBeUndefined();
+		expect(parse(result)).toEqual([{ title: "a" }, { title: "b" }]);
 	});
 });

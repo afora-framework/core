@@ -2,6 +2,7 @@ import type { AnyBlueprint } from "../../blueprint/types/blueprint.interface";
 import type { AnyCommand } from "../../command/types/command.interface";
 import type { JsonValue } from "../../json";
 import type { Kind } from "../../symbols/kind";
+import type { AnyUseCaseResponse } from "../../use-case/response";
 import type {
 	AccessDeclaration,
 	Principal,
@@ -19,11 +20,13 @@ export type OutputStatuses = Readonly<Record<string, number>>;
  * The call of an operation: `context` is what the command (or use case)
  * declares, and `principal` is who calls, as the sink authenticated it
  * (`null` or absent for an anonymous caller). An operation with an `access`
- * checks the principal before it runs.
+ * checks the principal before it runs. `native` is the native request of the
+ * sink (e.g. the Hono context), given to the factories of services.
  */
 export interface OperationCallOptions {
 	readonly context?: unknown;
 	readonly principal?: Principal | null;
+	readonly native?: unknown;
 }
 
 /**
@@ -47,7 +50,8 @@ export interface OperationDescriptor {
 	readonly tags: readonly string[];
 	readonly deprecated: boolean;
 	readonly input: AnyBlueprint;
-	readonly response: AnyBlueprint;
+	/** An object blueprint, or a list made by `listOf`. */
+	readonly response: AnyUseCaseResponse;
 	/** The command context, else the use case one. */
 	readonly context?: AnyBlueprint;
 	/** The `errors` of the use case. */
@@ -61,6 +65,9 @@ export interface OperationDescriptor {
 	/**
 	 * `command.run(name, input, { context })`, after the check of `access`:
 	 * it rejects with `Unauthenticated` or `Forbidden` before anything runs.
+	 * When the use case chose a status with `withStatus`, the body it
+	 * resolves with carries it: a sink that serves HTTP reads it with
+	 * `chosenStatusOf`, the others ignore it.
 	 */
 	invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>;
 }
@@ -265,10 +272,14 @@ export interface Problem {
 }
 
 /**
- * What `problemOf` takes: the HTTP `status` of the problem and `debug`, which
- * adds the `trace` and the real `detail` of a 5xx.
+ * What `problemOf` takes: the HTTP `status` of the problem, `debug`, which
+ * adds the `trace` and the real `detail` of a 5xx, and what the output
+ * declares (`statuses`, the `operation` and its `errors`): the `detail` of a
+ * declared exception is kept at any status.
  */
 export interface ProblemOptions {
 	readonly status: number;
 	readonly debug?: boolean;
+	readonly statuses?: OutputStatuses;
+	readonly operation?: Pick<OperationDescriptor, "errors">;
 }

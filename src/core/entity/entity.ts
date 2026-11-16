@@ -1,5 +1,6 @@
 import type { TSchema } from "typebox";
 import { blueprintFromProperties } from "../blueprint/blueprint";
+import { filePathOf } from "../blueprint/files";
 import { isRecordClass } from "../blueprint/record-field";
 import type {
 	AnyBlueprint,
@@ -23,7 +24,9 @@ import {
 	ENTITY_MEMBERS,
 	ENTITY_VERSION_KEY,
 	EntityClock,
+	type EntityClockSettings,
 	EntityComplete,
+	EntityIdStrategy,
 	EntityLifetime,
 	EntitySettings,
 	EntityUniqueKeys,
@@ -37,12 +40,15 @@ import {
 	EntityEventSettings,
 } from "./event";
 import {
+	EntityHoldsFile,
 	ImmutableEntityKey,
 	InvalidEntityExpiry,
 	InvalidEntitySchemaVersion,
+	InvalidIdStrategy,
 	ReservedEntityKey,
 } from "./exceptions";
-import { validMakersOf } from "./trust";
+import { isIdStrategy, vouchedIdsOf } from "./id";
+import { type ValidMakers, validMakersOf } from "./trust";
 import type {
 	EntityBuilder,
 	EntityBuilderSettings,
@@ -66,10 +72,11 @@ export function entityBuilderOf<
 	settings: EntityBuilderSettings<Identity, Catalogs>,
 ): EntityBuilder<Identity, RecordPluginContext<Catalogs>> {
 	const { identity, generateId, now, expiresAt, plugins: catalogs } = settings;
-	const clock = Object.freeze({
+	const makesValid = validMakersOf(settings);
+	const clock: EntityClockSettings = Object.freeze({
 		generateId,
 		now,
-		makesValid: validMakersOf(settings),
+		makesValid,
 	});
 	const context = pluginContextOf(catalogs ?? []);
 
@@ -77,8 +84,13 @@ export function entityBuilderOf<
 		blueprint: AnyBlueprint,
 		options: EntityOptions<IBlueprintCollection> = {},
 	) => {
+		const [ownIdentity, ownClock] = withIdStrategy(
+			identity as AnyBlueprint,
+			clock,
+			options,
+		);
 		const lifetime = lifetimeOf(blueprint, options);
-		const complete = completeOf(clock, lifetime);
+		const complete = completeOf(ownClock, lifetime);
 		const expiring = lifetime !== undefined;
 		const versioned = options.versioned === true;
 		const added = [
@@ -103,6 +115,13 @@ export function entityBuilderOf<
 				throw new ReservedEntityKey({ source: "entity", details: { key } });
 			}
 		}
+		const file = filePathOf(blueprint.properties);
+		if (file) {
+			throw new EntityHoldsFile({
+				source: options.name ?? "entity",
+				details: { path: file },
+			});
+		}
 		for (const key of options.change ?? []) {
 			if (
 				(ENTITY_IDENTITY_KEYS as readonly string[]).includes(key) ||
@@ -114,7 +133,7 @@ export function entityBuilderOf<
 
 		const DeclaredEntity = declareRecord(
 			AbstractEntity,
-			identity.join(
+			ownIdentity.join(
 				...(versioned ? [VersionIdentity] : []),
 				...(expiring
 					? [
@@ -134,8 +153,13 @@ export function entityBuilderOf<
 			context,
 		);
 		Object.defineProperty(DeclaredEntity, IdentifiedRecord, { value: true });
-		Object.defineProperty(DeclaredEntity, EntityClock, { value: clock });
+		Object.defineProperty(DeclaredEntity, EntityClock, { value: ownClock });
 		Object.defineProperty(DeclaredEntity, EntityClassBrand, { value: true });
+		if (options.id !== undefined) {
+			Object.defineProperty(DeclaredEntity, EntityIdStrategy, {
+				value: options.id,
+			});
+		}
 		Object.defineProperty(DeclaredEntity, EntityUniqueKeys, {
 			value: (
 				DeclaredEntity as unknown as AnyRecordClass & {
@@ -168,6 +192,49 @@ export function entityBuilderOf<
 		return DeclaredEntity;
 	}) as unknown as EntityBuilder<Identity, RecordPluginContext<Catalogs>>;
 }
+
+/**
+ * The identity and the clock of an entity declared with `options`: those of
+ * its builder, or, with an `id` strategy, its property as the `id` of the
+ * identity and its `generate` as the maker of ids, vouched for only when the
+ * strategy is. Throws `InvalidIdStrategy` for an `id` not made by `idOf`.
+ */
+function withIdStrategy(
+	identity: AnyBlueprint,
+	clock: EntityClockSettings,
+	options: EntityOptions<IBlueprintCollection>,
+): readonly [AnyBlueprint, EntityClockSettings] {
+	const { id } = options;
+	if (id === undefined) return [identity, clock];
+	if (!isIdStrategy(id)) {
+		throw new InvalidIdStrategy({
+			source: options.name ?? "entity",
+			details: { reason: "expected the id option to be made by idOf." },
+		});
+	}
+	const assignedIds = id.generatedBy === "database";
+	const vouched = assignedIds ? always : vouchedIdsOf(id);
+	const makesValid: ValidMakers = {
+		// An id the database assigns is left out until then.
+		id: vouched ?? never,
+		createdAt: clock.makesValid?.createdAt ?? never,
+	};
+	return [
+		blueprintFromProperties([], {
+			...identity.properties,
+			id: id.property,
+		}) as AnyBlueprint,
+		Object.freeze({
+			generateId: id.generate,
+			...(assignedIds ? { assignedIds } : {}),
+			now: clock.now,
+			makesValid,
+		}),
+	];
+}
+
+const never = () => false;
+const always = () => true;
 
 /** Whether `value` is a class made by `entityOf`, or one extending it. */
 export function isEntityClass(

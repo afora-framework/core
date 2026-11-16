@@ -12,7 +12,9 @@ httpProviderContract(
 				method: request.method as "GET",
 				url: `${url.pathname}${url.search}`,
 				headers: Object.fromEntries(request.headers),
-				...(request.body ? { payload: await request.text() } : {}),
+				...(request.body
+					? { payload: Buffer.from(await request.arrayBuffer()) }
+					: {}),
 			});
 			const headers = new Headers();
 			for (const [name, value] of Object.entries(response.headers)) {

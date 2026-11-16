@@ -1,7 +1,9 @@
+import { providers as drizzleProviders } from "@afora/drizzle";
 import { createServer } from "@afora/mcp";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { stages } from "../catalogs.ts";
+import type { Db } from "./storage.ts";
 
 /** One step of a run: a tool call, or a resource the agent read. */
 export type RecordedCall =
@@ -27,10 +29,19 @@ export interface McpSession {
 
 /**
  * The afora MCP server for `project`, connected in memory to an MCP client:
- * the same server `afora-mcp` runs, with the Hono sink in its stages catalog.
+ * the same server `afora-mcp` runs, with the Hono sink in its stages catalog
+ * and, for a run on SQLite, the `drizzle` provider of `@afora/drizzle` in its
+ * providers catalog (`afora-mcp --providers @afora/drizzle`).
  */
-export async function connectMcp(project: string): Promise<McpSession> {
-	const server = await createServer({ project, stages });
+export async function connectMcp(
+	project: string,
+	db: Db = "memory",
+): Promise<McpSession> {
+	const server = await createServer({
+		project,
+		stages,
+		...(db === "sqlite" ? { providers: drizzleProviders } : {}),
+	});
 	const [clientTransport, serverTransport] =
 		InMemoryTransport.createLinkedPair();
 	const client = new Client({ name: "agent-built", version: "1.0.0" });

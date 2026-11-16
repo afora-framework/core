@@ -1,6 +1,8 @@
+import { ExceptionLayers, exceptionOf } from "@afora/core";
 import {
 	type Authenticator,
 	compileRoutes,
+	type FormParts,
 	HTTP_OPTION_KEYS,
 	type HttpOptions,
 	type HttpRequest,
@@ -63,14 +65,8 @@ function first(value: unknown): string | undefined {
 	return typeof value === "string" ? value : undefined;
 }
 
-/** The body as text: as sent, unless a parser of the app already read it. */
-function textOf(request: Request): string | Promise<string> {
-	const parsed: unknown = request.body;
-	if (typeof parsed === "string") return parsed;
-	if (parsed instanceof Uint8Array) return new TextDecoder().decode(parsed);
-	if (parsed !== undefined && parsed !== null && request.readableEnded) {
-		return JSON.stringify(parsed);
-	}
+/** The bytes of the body, read from the stream. */
+function bytesOf(request: Request): Promise<Uint8Array> {
 	return new Promise((resolve, reject) => {
 		const chunks: Uint8Array[] = [];
 		request.on("data", (chunk: Uint8Array) => chunks.push(chunk));
@@ -83,10 +79,54 @@ function textOf(request: Request): string | Promise<string> {
 				bytes.set(chunk, at);
 				at += chunk.byteLength;
 			}
-			resolve(new TextDecoder().decode(bytes));
+			resolve(bytes);
 		});
 		request.on("error", reject);
 	});
+}
+
+/** The body as text: as sent, unless a parser of the app already read it. */
+function textOf(request: Request): string | Promise<string> {
+	const parsed: unknown = request.body;
+	if (typeof parsed === "string") return parsed;
+	if (parsed instanceof Uint8Array) return new TextDecoder().decode(parsed);
+	if (parsed !== undefined && parsed !== null && request.readableEnded) {
+		return JSON.stringify(parsed);
+	}
+	return bytesOf(request).then((bytes) => new TextDecoder().decode(bytes));
+}
+
+/**
+ * A `multipart/form-data` body that a parser of the app (multer,
+ * `express.text()`...) read before the route: there is nothing left to read,
+ * so the server is misconfigured (a 500). Mount the afora routes before
+ * that parser, or keep the bytes with `express.raw()`.
+ */
+export const MultipartBodyAlreadyRead = exceptionOf({
+	layer: ExceptionLayers.Output,
+	name: "MultipartBodyAlreadyRead",
+	message:
+		"A parser of the app read the multipart/form-data body before the afora route: mount the afora routes before it (multer, express.text()...), or keep the bytes with express.raw().",
+});
+
+/**
+ * The `multipart/form-data` body, read by the platform (`Request.formData`):
+ * from the bytes a raw parser of the app kept, else from the stream. A body
+ * another parser already took (multer, say) cannot be read again:
+ * `MultipartBodyAlreadyRead`.
+ */
+async function formOf(request: Request): Promise<FormParts> {
+	const parsed: unknown = request.body;
+	let bytes: Uint8Array;
+	if (parsed instanceof Uint8Array) bytes = parsed;
+	else if (request.readableEnded || (parsed !== undefined && parsed !== null)) {
+		throw new MultipartBodyAlreadyRead({ source: "express" });
+	} else bytes = await bytesOf(request);
+	return new globalThis.Request("http://express.local/", {
+		method: "POST",
+		headers: { "content-type": first(request.headers["content-type"]) ?? "" },
+		body: new Uint8Array(bytes),
+	}).formData();
 }
 
 /** An Express request, as the route table reads it: one object per request, no closures. */
@@ -110,6 +150,9 @@ class ExpressHttpRequest implements HttpRequest {
 	}
 	text() {
 		return textOf(this.native);
+	}
+	form() {
+		return formOf(this.native);
 	}
 	variable(name: string) {
 		return Object.hasOwn(this.response.locals, name)

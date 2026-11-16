@@ -226,6 +226,34 @@ describe("applicationOf useCases and exceptions", () => {
 		).toBeDefined();
 	});
 
+	test("a list response: its records must be registered, and it is described as a list", () => {
+		const Held = Public.recordOf(Input, { name: "Held" });
+		const Listed = concrete(
+			useCaseOf({
+				name: "Listed",
+				blueprint: Empty,
+				response: Public.listOf(Held, { minItems: 1 }),
+			}),
+		);
+		expect(() =>
+			applicationOf({ name: "x", useCases: { Listed } } as never),
+		).toThrow(UnregisteredApplicationReference);
+		const app = applicationOf({
+			name: "x",
+			records: { Held },
+			useCases: { Listed },
+		} as never) as { describe(): { useCases: Record<string, unknown> } };
+		const described = app.describe().useCases.Listed as Record<string, unknown>;
+		expect(described.response).toEqual({});
+		expect(described.responseList).toEqual({
+			kind: "list",
+			item: { kind: "record", ref: "Held", optional: false },
+			optional: false,
+			minItems: 1,
+		});
+		expect(described).not.toHaveProperty("refs");
+	});
+
 	test("errors must be registered, unless the package exports them", () => {
 		const { Taken: _taken, ...none } = { Taken };
 		expect(() =>

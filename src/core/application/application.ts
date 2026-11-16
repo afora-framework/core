@@ -18,6 +18,7 @@ import {
 } from "../command/command";
 import type { AnyCommand } from "../command/types/command.interface";
 import {
+	EntityIdStrategy,
 	EntitySettings,
 	identityKeysOf,
 	isVersionedEntityClass,
@@ -25,6 +26,7 @@ import {
 import { isEntityClass } from "../entity/entity";
 import { eventHasHandler, lifecycleEventsOf } from "../entity/event";
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
+import type { IdStrategy } from "../entity/types/id.interface";
 import {
 	type AnyEnvironment,
 	InvalidEnvironment,
@@ -56,7 +58,7 @@ import {
 	logProviderNameOf,
 	silentLogger,
 } from "../logger/logger";
-import { plainOf } from "../openapi/openapi";
+import { plainOf } from "../openapi/walker";
 import { isOutput, outputOf } from "../output/output";
 import { stageDescriptionOf } from "../output/stage";
 import type { AnyOutput } from "../output/types/output.interface";
@@ -65,7 +67,7 @@ import { type PropertyLineage, propertyLineageOf } from "../property/lineage";
 import { declaredRecordNameOf, recordNameOf } from "../record/name";
 import { pluginsOf } from "../record/plugin";
 import { providerDescriptionOf } from "../repository/provider";
-import { isRepository } from "../repository/repository";
+import { assertGeneratedIds, isRepository } from "../repository/repository";
 import {
 	bindRepository,
 	inspectRepository,
@@ -84,6 +86,13 @@ import {
 	type ITracer,
 } from "../tracing/tracing";
 import { useCaseOriginOf } from "../use-case/plugin";
+import { responsePropertiesOf } from "../use-case/response";
+import {
+	ApplicationServicesKey,
+	isService,
+	type ServiceFactories,
+	type ServiceFactory,
+} from "../use-case/service";
 import { describeSteps } from "../use-case/steps/describe";
 import { interpretedStepsOf } from "../use-case/steps/run";
 import { type AnyUseCaseClass, isUseCaseClass } from "../use-case/use-case";
@@ -290,6 +299,61 @@ function publishersOf(
 		}
 	}
 	return { publishers: Object.freeze(merged), origins };
+}
+
+/** The service factories each application binds (inherited ones included), for `extends`. */
+const serviceSettings = new WeakMap<object, ServiceFactories>();
+/** The application that declared each service of an application, by name. */
+const serviceOrigins = new WeakMap<object, Readonly<Record<string, string>>>();
+
+/**
+ * The services of an application: those of the applications it extends,
+ * then its own, a later one winning a name; with the application that
+ * declared each.
+ */
+function servicesOf(
+	name: string,
+	declared: unknown,
+	extended: readonly AnyApplication[],
+): {
+	readonly services: ServiceFactories;
+	readonly origins: Record<string, string>;
+} {
+	const merged: Record<string, ServiceFactory> = {};
+	const origins: Record<string, string> = {};
+	for (const other of extended) {
+		Object.assign(merged, serviceSettings.get(other));
+		Object.assign(origins, serviceOrigins.get(other));
+	}
+	if (declared !== undefined) {
+		if (
+			typeof declared !== "object" ||
+			declared === null ||
+			Array.isArray(declared)
+		) {
+			invalid(
+				name,
+				"Expected `services` to be an object of service factories by name.",
+			);
+		}
+		for (const [key, factory] of Object.entries(declared)) {
+			if (!/^[A-Za-z_$][\w$]*$/.test(key)) {
+				invalid(
+					name,
+					`Expected the service name "${key}" to be an identifier.`,
+				);
+			}
+			if (typeof factory !== "function") {
+				invalid(
+					name,
+					`Expected the service "${key}" to be a function that makes its value.`,
+				);
+			}
+			merged[key] = factory as ServiceFactory;
+			origins[key] = name;
+		}
+	}
+	return { services: Object.freeze(merged), origins };
 }
 
 /** Whether `value` is a declaration of `collection`'s kind. */
@@ -620,7 +684,11 @@ function validateOutputs(source: string, registry: Registry): void {
 }
 
 /** Checks the use cases of the resolved set: dependencies, records and errors. */
-function validateUseCases(source: string, registry: Registry): void {
+function validateUseCases(
+	source: string,
+	registry: Registry,
+	services: ServiceFactories,
+): void {
 	const registered = new Set<object>([
 		...[...registry.records.values()].map((entry) => entry.key),
 		...[...registry.entities.values()].map((entry) => entry.key),
@@ -634,30 +702,42 @@ function validateUseCases(source: string, registry: Registry): void {
 	for (const entry of registry.useCases.values()) {
 		const UseCase = entry.value as AnyUseCaseClass;
 		for (const [key, dependency] of Object.entries(UseCase.dependencies)) {
-			// `Logger` is the core's own: nothing to register.
+			// `Logger` is the core's own: nothing to register. A service is
+			// bound by name in `services`.
 			const found = isLoggerDeclaration(dependency)
 				? true
-				: isUseCaseClass(dependency)
-					? useCases.has(dependency)
-					: isEnvironment(dependency)
-						? environments.has(dependency)
-						: repositories.has(
-								(inspectRepository(dependency) as RepositoryInspection).state,
-							);
+				: isService(dependency)
+					? Object.hasOwn(services, dependency.name)
+					: isUseCaseClass(dependency)
+						? useCases.has(dependency)
+						: isEnvironment(dependency)
+							? environments.has(dependency)
+							: repositories.has(
+									(inspectRepository(dependency) as RepositoryInspection).state,
+								);
 			if (!found) {
 				throw new UnregisteredUseCaseDependency({
 					source,
-					details: { useCase: `"${entry.name}"`, dependency: `"${key}"` },
+					details: {
+						useCase: `"${entry.name}"`,
+						dependency: isService(dependency)
+							? `"${key}" (the service "${dependency.name}", not in its services)`
+							: `"${key}"`,
+					},
 				});
 			}
 		}
-		for (const [part, blueprint] of [
-			["blueprint", UseCase.blueprint],
-			["response", UseCase.response],
-			["context", UseCase.context],
+		for (const [part, properties] of [
+			["blueprint", UseCase.blueprint.properties],
+			// A list response is walked as the one field it is.
+			[
+				"response",
+				responsePropertiesOf(UseCase.response) ?? { "": UseCase.response },
+			],
+			["context", UseCase.context?.properties],
 		] as const) {
-			if (blueprint === undefined) continue;
-			for (const record of recordsIn(blueprint.properties)) {
+			if (properties === undefined) continue;
+			for (const record of recordsIn(properties as IBlueprintCollection)) {
 				if (registered.has(record)) continue;
 				throw new UnregisteredApplicationReference({
 					source,
@@ -866,6 +946,23 @@ function fieldsDescriptionOf(
 	);
 }
 
+/** `{ id }` of an entity declared with an `id` option, else nothing. */
+function idDescriptionOf(entity: unknown): Pick<RecordDescription, "id"> {
+	const strategy = (entity as { readonly [EntityIdStrategy]?: IdStrategy })[
+		EntityIdStrategy
+	];
+	if (strategy === undefined) return {};
+	return {
+		id: {
+			property: (strategy.property.type as { readonly name: string }).name,
+			generated:
+				strategy.generatedBy === "database"
+					? "database"
+					: strategy.generate !== undefined,
+		},
+	};
+}
+
 function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 	const Record = entry.value as {
 		readonly blueprint: AnyBlueprint;
@@ -919,6 +1016,7 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 		plugins,
 		...(Object.keys(events).length > 0 ? { events } : {}),
 		...(expires === undefined ? {} : { expires }),
+		...(entry.collection === "entities" ? idDescriptionOf(Record) : {}),
 		...(entry.collection === "entities" && isVersionedEntityClass(Record)
 			? { versioned: true }
 			: {}),
@@ -940,6 +1038,7 @@ function describeRegistry(
 	named: ReadonlyMap<string, NamedProvider>,
 	log: Required<LogSettings> | "opaque" | undefined,
 	publishers: Readonly<Record<string, string>>,
+	services: Readonly<Record<string, string>>,
 	traced: boolean,
 ): ApplicationDescription {
 	const scope: Scope = {
@@ -979,6 +1078,7 @@ function describeRegistry(
 	// The classes and dependencies among the options of a plugin, by name; the rest as it is.
 	const describeOption = (value: unknown): unknown => {
 		if (isLoggerDeclaration(value)) return "Logger";
+		if (isService(value)) return value.name;
 		if (isUseCaseClass(value)) return useCaseRefs.get(value);
 		if (isEnvironment(value)) return environmentRefs.get(value);
 		if (isRepository(value)) {
@@ -1099,6 +1199,13 @@ function describeRegistry(
 						Object.entries(publishers).map(([key, from]) => [key, { from }]),
 					),
 				}),
+		...(Object.keys(services).length === 0
+			? {}
+			: {
+					services: Object.fromEntries(
+						Object.entries(services).map(([key, from]) => [key, { from }]),
+					),
+				}),
 		properties: each("properties", (entry) => ({
 			from: entry.from,
 			...propertyDescriptionOf(entry.value as BlueprintField, scope),
@@ -1156,7 +1263,17 @@ function describeRegistry(
 				...(UseCase.route === undefined ? {} : { route: UseCase.route }),
 				...(UseCase.access === undefined ? {} : { access: UseCase.access }),
 				input: fieldsDescriptionOf(UseCase.blueprint.properties, scope),
-				response: fieldsDescriptionOf(UseCase.response.properties, scope),
+				...(isBlueprintList(UseCase.response)
+					? {
+							response: {},
+							responseList: fieldDescriptionOf(
+								UseCase.response,
+								scope,
+							) as Extract<FieldDescription, { readonly kind: "list" }>,
+						}
+					: {
+							response: fieldsDescriptionOf(UseCase.response.properties, scope),
+						}),
 				...(UseCase.context === undefined
 					? {}
 					: {
@@ -1164,7 +1281,9 @@ function describeRegistry(
 						}),
 				...refsOf({
 					input: UseCase.blueprint,
-					response: UseCase.response,
+					response: isBlueprintList(UseCase.response)
+						? undefined
+						: UseCase.response,
 					context: UseCase.context,
 				}),
 				errors: UseCase.errors.map((Thrown) => {
@@ -1178,23 +1297,28 @@ function describeRegistry(
 						key,
 						isLoggerDeclaration(dependency)
 							? { kind: "logger", ref: "Logger" }
-							: isUseCaseClass(dependency)
-								? {
-										kind: "use-case",
-										ref: useCaseRefs.get(dependency) as string,
-									}
-								: isEnvironment(dependency)
+							: isService(dependency)
+								? { kind: "service", ref: dependency.name }
+								: isUseCaseClass(dependency)
 									? {
-											kind: "environment",
-											ref: environmentRefs.get(dependency) as string,
+											kind: "use-case",
+											ref: useCaseRefs.get(dependency) as string,
 										}
-									: {
-											kind: "repository",
-											ref: repositories.get(
-												(inspectRepository(dependency) as RepositoryInspection)
-													.state,
-											) as string,
-										},
+									: isEnvironment(dependency)
+										? {
+												kind: "environment",
+												ref: environmentRefs.get(dependency) as string,
+											}
+										: {
+												kind: "repository",
+												ref: repositories.get(
+													(
+														inspectRepository(
+															dependency,
+														) as RepositoryInspection
+													).state,
+												) as string,
+											},
 					]),
 				),
 				implementation: describeImplementation(UseCase),
@@ -1395,7 +1519,13 @@ export function applicationOf<
 	}
 	const registry = resolve(settings);
 	validate(name, registry);
-	validateUseCases(name, registry);
+	const { services, origins: serviceFrom } = servicesOf(
+		name,
+		settings.services,
+		extended,
+	);
+	const hasServices = Object.keys(services).length > 0;
+	validateUseCases(name, registry, services);
 	validateCommands(name, registry);
 	validateOutputs(name, registry);
 
@@ -1563,7 +1693,8 @@ export function applicationOf<
 		bindsProviders ||
 		logger !== undefined ||
 		tracer !== undefined ||
-		hasPublishers;
+		hasPublishers ||
+		hasServices;
 
 	const collection = (key: ApplicationCollectionKey) =>
 		Object.freeze(
@@ -1586,6 +1717,21 @@ export function applicationOf<
 		bound.set(entry.value, repository);
 		boundByState.set(entry.key, repository);
 		repositories[entry.name] = repository;
+		// A provider made on start is checked once it exists.
+		const through = providerOfRepository(repository);
+		if (
+			through !== undefined &&
+			!isDeferredProvider(through) &&
+			(inspectRepository(repository) as RepositoryInspection).actions.includes(
+				"create",
+			)
+		) {
+			assertGeneratedIds(
+				name,
+				(inspectRepository(repository) as RepositoryInspection).entity,
+				through,
+			);
+		}
 	}
 
 	// A use case is bound once: a subclass whose dependencies are the bound
@@ -1604,7 +1750,9 @@ export function applicationOf<
 				key,
 				isUseCaseClass(dependency)
 					? bindUseCase(dependency)
-					: isEnvironment(dependency) || isLoggerDeclaration(dependency)
+					: isEnvironment(dependency) ||
+							isLoggerDeclaration(dependency) ||
+							isService(dependency)
 						? dependency
 						: (boundByState.get(
 								(inspectRepository(dependency) as RepositoryInspection).state,
@@ -1618,6 +1766,8 @@ export function applicationOf<
 			Object.defineProperty(Bound, ApplicationLoggerKey, { value: logger });
 		if (tracer)
 			Object.defineProperty(Bound, ApplicationTracerKey, { value: tracer });
+		if (hasServices)
+			Object.defineProperty(Bound, ApplicationServicesKey, { value: services });
 		return Bound as unknown as AnyUseCaseClass;
 	};
 	const useCases: Record<string, unknown> = {};
@@ -1771,6 +1921,17 @@ export function applicationOf<
 					)
 					.map(([key]) => key),
 			);
+			for (const repository of Object.values(repositories)) {
+				const inspection = inspectRepository(
+					repository,
+				) as RepositoryInspection;
+				if (
+					providerOfRepository(repository) === instance &&
+					inspection.actions.includes("create")
+				) {
+					assertGeneratedIds(name, inspection.entity, made);
+				}
+			}
 		}
 		started = true;
 	};
@@ -1859,6 +2020,7 @@ export function applicationOf<
 				named,
 				isLogFactory(declaredLog) ? "opaque" : log?.settings,
 				origins,
+				serviceFrom,
 				tracer !== undefined,
 			),
 		get started() {
@@ -1961,5 +2123,7 @@ export function applicationOf<
 	if (declaredLog !== undefined) logSettings.set(application, declaredLog);
 	if (tracer !== undefined) traceSettings.set(application, tracer);
 	publisherOrigins.set(application, Object.freeze(origins));
+	serviceSettings.set(application, services);
+	serviceOrigins.set(application, Object.freeze(serviceFrom));
 	return application as never;
 }

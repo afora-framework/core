@@ -13,10 +13,12 @@ const ROUTE_KEYS = [
 	"method",
 	"path",
 	"status",
+	"statuses",
 	"query",
 	"headers",
 	"cookie",
 	"setCookie",
+	"body",
 ];
 const COOKIE_KEYS = [
 	"name",
@@ -32,6 +34,8 @@ const COOKIE_KEYS = [
 export interface KnownKeys {
 	readonly input?: readonly string[];
 	readonly response?: readonly string[];
+	/** The response is a list, which has no keys. */
+	readonly listResponse?: boolean;
 	readonly context?: readonly string[];
 }
 
@@ -59,7 +63,7 @@ export function checkRoute(
 	if (!isObject(route)) {
 		bad(
 			path,
-			'"route" is { "method", "path"?, "status"?, "query"?, "headers"?, "cookie"?, "setCookie"? }.',
+			'"route" is { "method", "path"?, "status"?, "statuses"?, "query"?, "headers"?, "cookie"?, "setCookie"?, "body"? }.',
 		);
 		return;
 	}
@@ -79,6 +83,20 @@ export function checkRoute(
 		!METHODS.includes(route.method.toLowerCase())
 	) {
 		bad([...path, "method"], `"method" is one of ${METHODS.join(", ")}.`);
+	}
+	if (route.body !== undefined) {
+		const method =
+			typeof route.method === "string" ? route.method.toLowerCase() : "";
+		if (typeof route.body !== "boolean") {
+			bad([...path, "body"], '"body" must be a boolean.');
+		} else if (METHODS.includes(method) && method !== "delete") {
+			bad(
+				[...path, "body"],
+				method === "get"
+					? '"body" is only for a delete route: a get route never reads a body.'
+					: `"body" is only for a delete route: a ${method} route always reads a body.`,
+			);
+		}
 	}
 	const placed = new Map<string, string>();
 	const place = (key: string, where: string, at: Path) => {
@@ -117,6 +135,31 @@ export function checkRoute(
 	) {
 		bad([...path, "status"], `"status" is one of ${STATUSES.join(", ")}.`);
 	}
+	if (route.statuses !== undefined) {
+		const statuses = route.statuses;
+		const status = (route.status as number | undefined) ?? 200;
+		if (
+			!Array.isArray(statuses) ||
+			!statuses.every(
+				(value) =>
+					Number.isInteger(value) &&
+					((value >= 200 && value <= 299 && value !== 204 && value !== 205) ||
+						(value >= 400 && value <= 599 && value !== 400 && value !== 500)),
+			)
+		) {
+			bad(
+				[...path, "statuses"],
+				'"statuses" is a list of statuses, each a 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not 400 or 500 (kept for problems), e.g. [503].',
+			);
+		} else if (new Set(statuses).size !== statuses.length) {
+			bad([...path, "statuses"], '"statuses" names a status twice.');
+		} else if (statuses.includes(status)) {
+			bad(
+				[...path, "statuses"],
+				`"statuses" names ${status}, the status of the route: list only the others.`,
+			);
+		}
+	}
 	if (route.query !== undefined) {
 		if (
 			!Array.isArray(route.query) ||
@@ -149,6 +192,13 @@ export function checkRoute(
 	if (route.setCookie !== undefined) {
 		if (!isObject(route.setCookie)) {
 			bad([...path, "setCookie"], '"setCookie" maps response keys to cookies.');
+			return;
+		}
+		if (known.listResponse) {
+			bad(
+				[...path, "setCookie"],
+				'"setCookie" sends response keys, and a list response has none: respond with a blueprint to set cookies.',
+			);
 			return;
 		}
 		for (const [key, cookie] of Object.entries(route.setCookie)) {

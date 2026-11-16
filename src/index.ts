@@ -70,6 +70,7 @@ export type {
 	BlueprintHelpers,
 	BlueprintInput,
 	BlueprintListOptions,
+	BlueprintListValue,
 	BlueprintPluginContext,
 	BlueprintSchema,
 	BlueprintSource,
@@ -118,6 +119,7 @@ export type {
 	CommandUseCasesOption,
 } from "./core/command/types/command.interface";
 export {
+	EntityIdStrategy,
 	EntitySettings,
 	EntityUniqueKeys,
 } from "./core/entity/abstract-entity";
@@ -133,19 +135,24 @@ export type {
 export { eventOf } from "./core/entity/event";
 export {
 	DeletedEntity,
+	EntityHoldsFile,
 	ImmutableEntityKey,
 	InvalidEntityExpiry,
 	InvalidEntitySchemaVersion,
+	InvalidIdStrategy,
 	ReservedEntityKey,
 } from "./core/entity/exceptions";
+export { idOf, isIdStrategy, isIdValue } from "./core/entity/id";
 export type {
 	DeclaredEntityInstance,
 	EntityBuilder,
 	EntityBuilderSettings,
 	EntityConstructor,
+	EntityConstructorWithId,
 	EntityDuration,
 	EntityExpires,
 	EntityIdentityKey,
+	EntityIdOptions,
 	EntityInput,
 	EntityOptions,
 	EntityProperties,
@@ -159,6 +166,13 @@ export type {
 	IEntityVersion,
 	VersionedIdentity,
 } from "./core/entity/types/entity.interface";
+export type {
+	IdentityWithId,
+	IdStrategy,
+	IdValue,
+	IdValueOf,
+	RequiredIdInput,
+} from "./core/entity/types/id.interface";
 export { EntityVersion } from "./core/entity/version";
 export type {
 	AnyEnvironment,
@@ -222,7 +236,9 @@ export {
 	memoryLogProvider,
 } from "./core/logger/logger";
 export { InvalidOpenAPIModel } from "./core/openapi/exceptions";
+export { jsonSchemaOf } from "./core/openapi/json-schema";
 export { toOpenAPI } from "./core/openapi/openapi";
+export type { JSONSchema } from "./core/openapi/types/json-schema.interface";
 export type {
 	OpenAPIComponents,
 	OpenAPIOptions,
@@ -233,6 +249,7 @@ export {
 	Forbidden,
 	InvalidOutputStage,
 	Unauthenticated,
+	UndeclaredStatus,
 } from "./core/output/exceptions";
 export type {
 	OpenAPIDocument,
@@ -353,6 +370,8 @@ export {
 	RepositoryEntityNotFound,
 	RepositoryUniqueViolation,
 	RepositoryUsedOutsideApplication,
+	UnstoredEntity,
+	UnsupportedIdentity,
 } from "./core/repository/exceptions";
 export {
 	type InMemoryProvider,
@@ -381,6 +400,7 @@ export type {
 export type {
 	AnyRepository,
 	AnyRepositoryEntity,
+	EntityIdOf,
 	EntityIncrementKeyOf,
 	EntityInstanceOf,
 	EntityKeyOf,
@@ -401,6 +421,13 @@ export type {
 	SchemaMigrationOptions,
 	SchemaMigrationReport,
 } from "./core/repository/types/schema.interface";
+export type {
+	ProviderCall,
+	ProviderInterceptor,
+	ProviderOperation,
+	ProviderResults,
+} from "./core/repository/types/wrap.interface";
+export { wrapProvider } from "./core/repository/wrap";
 export type {
 	ISchema,
 	ISchemaType,
@@ -423,6 +450,8 @@ export {
 	IncompatibleUseCasePlugin,
 	InvalidUseCasePlugin,
 	InvalidUseCaseStep,
+	ServiceNotBound,
+	ServiceOutsideExecution,
 	UnknownUseCasePlugin,
 	UseCaseEntityConflict,
 	UseCaseEntityNotFound,
@@ -434,6 +463,23 @@ export {
 	isUseCaseCatalog,
 	useCaseCatalogOf,
 } from "./core/use-case/plugin-catalog";
+export type {
+	AnyUseCaseResponse,
+	ResponseBlueprint,
+	ResponseOf,
+	ResponseSetting,
+	ResponseValue,
+	UseCaseOutput,
+} from "./core/use-case/response";
+export type {
+	AnyService,
+	ServiceDeclaration,
+	ServiceFactory,
+	ServiceScope,
+	ServiceValueOf,
+} from "./core/use-case/service";
+export { isService, serviceOf } from "./core/use-case/service";
+export { withStatus } from "./core/use-case/status";
 export type {
 	CheckedSteps,
 	StepReferencesOf,
@@ -474,7 +520,9 @@ export type {
 	UseCaseTargetInfo,
 } from "./core/use-case/types/plugin.interface";
 export type {
+	RouteBody,
 	RouteDeclaration,
+	RouteFields,
 	RouteSettings,
 } from "./core/use-case/types/route.interface";
 export type {
@@ -513,11 +561,25 @@ export { Email, Ip, Phone, Url } from "./std/properties/contact";
 export type { EnumClass } from "./std/properties/enum";
 export { enumOf } from "./std/properties/enum";
 export {
+	InvalidFile,
+	InvalidFileOptions,
 	InvalidJsonData,
 	InvalidJsonSchema,
 } from "./std/properties/exceptions";
+export type { FileClass, FileOptions, TFile } from "./std/properties/file";
+export { FileProperty, fileOf } from "./std/properties/file";
 export { SchemaProperty } from "./std/properties/headless";
-export { Id, Slug } from "./std/properties/identity";
+export {
+	Id,
+	Key,
+	OwnerId,
+	Serial,
+	SerialKey,
+	Slug,
+	TextKey,
+	Uuid,
+	UuidKey,
+} from "./std/properties/identity";
 export type { JsonClass, JsonValue } from "./std/properties/json";
 export {
 	checkJsonSchema,

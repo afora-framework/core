@@ -38,6 +38,12 @@ A standard use case (`ctx.update(Tasks)`, or one of `resourceOf`) needs actions 
 
 `details.reason` says what. Common causes: a `useCases` key that is not an identifier, a pipe with a sink that is not last, `statuses` that is not a map from exception name to a number between 400 and 599, two operations on one route, a path parameter that is not a scalar key of the input. See [Commands](commands.md) and [Outputs](outputs.md).
 
+### EntityHoldsFile
+
+> `"avatar" of entity "User" holds a file, which an entity cannot store: store where the file went (a URL, a storage key) instead.`
+
+A blueprint with `ctx.file` or `ctx.fileOf(...)` was given to `entityOf`. A file belongs to the input of a use case: take it there, put it in a storage (a [service](use-cases.md#services) is the place for its client), and store the URL or key on the entity. A file can be neither `sensitive` nor `unique` either (`InvalidRecordDeclaration`). See [Files](std-properties.md#files).
+
 ## Using records and use cases
 
 ### UndeclaredRecordProperty
@@ -67,6 +73,12 @@ An instance runs once, including when it failed, and a second or concurrent `exe
 ### InvalidUseCaseDependencies
 
 The overrides given to `execute` name a dependency the use case does not declare, give the wrong kind of value for one (a function for a use case, an object of methods for a repository), or a dependency was called after `execute` ended (do not keep a dependency function in a variable that outlives the call). See [Use cases](use-cases.md) and the [recipe](recipes/override-repository-method.md).
+
+### ServiceNotBound, ServiceOutsideExecution
+
+> `The service "cache" is not bound: give it in the services of an application, or as an override of execute.`
+
+A use case read `this.dependencies.cache`, a [service](use-cases.md#services), and nothing gave it a value: run the use case through an application whose `services` has the name (`app.run`, an output), or pass it to `execute({ cache })` in a test. `ServiceOutsideExecution` means it was read before `execute` started or after it ended (a callback that outlived the call, a constructor): a service is made for one call, so read it inside `execute`.
 
 ### RepositoryUsedOutsideApplication
 
@@ -112,6 +124,10 @@ The entity is `versioned` and someone wrote it between your read and your `updat
 
 A query the repository cannot run: for example a sensitive key as an order of a cursor. `details.reason` says which.
 
+### UnsupportedIdentity, UnstoredEntity
+
+The entity has ids the database assigns (`entityOf(blueprint, { id: Serial })`). `UnsupportedIdentity` means its provider cannot assign them: `@afora/dynamodb` has no auto-increment, so a repository with `create` is refused when it is declared or bound; use the default UUID ids, `Uuid` or `Key` there. It is also what `create` throws when a new `Serial` entity was given an id of its own. `UnstoredEntity` means an entity built in memory, with no id yet, was given to `update`, `delete`, `restore` or `increment`, or held by another entity: `create` it first, and use the entity `create` gives back. See [Ids the database assigns](entities.md#ids-the-database-assigns).
+
 ## Environment and startup
 
 ### InvalidEnvironment, InvalidApplicationEnvironment
@@ -140,7 +156,35 @@ A use case with an `access` was called without a caller (401), or by one who lac
 
 ### A 400 with `undeclared_key`, or a body that is rejected
 
-The HTTP sink validates the body with the blueprint, so extra keys are rejected. The body of the response has `issues` with `path`, `code` and `message` (no values). A 500 hides its detail unless the sink has `debug: true`.
+The HTTP sink validates the body with the blueprint, so extra keys are rejected. The body of the response has `issues` with `path`, `code` and `message` (no values).
+
+### A 500 that says only `"Internal error."`
+
+A 5xx hides its detail unless the sink has `debug: true` or the output declares the exception: list it in the output's `statuses` (`{ PaymentFailed: 502 }`) or in the operation's `errors`, and its message is sent at any status. `UnexpectedError` (an error that is not an exception), the environment errors, `InvalidUseCaseResponse` and `UndeclaredStatus` are never shown, even when listed. See [Outputs](outputs.md).
+
+### UndeclaredStatus
+
+> `The status 503 is not declared by the route (200): add it to route.statuses.`
+
+A use case returned `withStatus(503, body)` and its route does not list `503`. The sink answers a 500 instead of a status the document does not describe. Add it: `route: { method: "get", path: "/health", statuses: [503] }`. See [A status chosen at run time](use-cases.md#a-status-chosen-at-run-time).
+
+### A header, cookie or query key that ignores the body
+
+A key the route reads from a header, a cookie or its `query` is read only from there: a value sent for it in the body (or, on a `get` or `delete`, in the query string) is dropped, so a client cannot choose it by leaving the header out. A missing header leaves the key absent, and a required key is then a 400. Send the header, or take the key out of `headers` and `cookie`. See [Routes](use-cases.md#routes).
+
+### Uploads: 415, 413, `InvalidFileContent`
+
+- **415 `UnsupportedMediaType`.** The request is `multipart/form-data` and the server's adapter cannot read forms. The four HTTP packages of afora all can; a sink of your own needs `request.form()`.
+- **413 `TooManyParts`.** The body has more parts than `maxParts` (1000 by default), an option of every HTTP sink.
+- **400 `InvalidFileContent`.** A file declared as a PNG, JPEG, GIF, WebP or AVIF does not start with the bytes of that format: it is something else renamed.
+- **400 with an issue at the file's key.** The type is not among `types`, or the file is larger than `maxBytes` (`InvalidFile`). The size of the whole body is the server's limit to set (Fastify's `bodyLimit`, 1 MiB by default).
+- **500 `MultipartBodyAlreadyRead`** (Express). A parser such as multer or `express.text()` read the body first: mount the afora routes before it, or keep the bytes with `express.raw()`.
+
+See [Files](std-properties.md#files) and [Outputs](outputs.md).
+
+## Testing
+
+**`spyOn` on a repository method throws.** A repository is frozen on purpose: it is shared by every use case and application that names it, so a patched method would leak into other tests. Spy on the provider instead, with `spyProvider` of `@afora/core/testing`, or replace the method for one call with `execute({ Users: { findById: ... } })`. See [Spying on the database](testing.md#spying-on-the-database).
 
 ## Issue codes of `safeParse`
 
@@ -150,21 +194,21 @@ The HTTP sink validates the body with the blueprint, so extra keys are rejected.
 
 Each problem of a spec prints as `path: [code] message`, then `N problems.`, and the exit code is 1. The full list of commands is in the [CLI reference](cli.md); these are the codes that surprise people.
 
-| Code or message                                                       | Meaning and fix                                                                                                                                                                                                                  |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `outside_project`                                                     | A path in the spec (`extends`, an `import`, a module of a catalog) is absolute, a URL, or climbs out of the project directory. Use a path relative to the project, inside it, or a package.                                      |
-| `import_cycle`                                                        | The generated files would import each other in a loop through a hand-written module that holds several classes or functions. Move the class or function to a module of its own.                                                  |
-| `file_collision`                                                      | Two use cases would be generated as the same file name (file names are lowercase kebab-case, so `GetURL` and `GetUrl` collide). Rename one.                                                                                      |
-| `generated_file`                                                      | An `import` points at a file the generator writes in `output.dir` (`./greet.use-case`, `./use-cases`...), which it would overwrite. Move the hand-written code to a file of another name and import that.                        |
-| `unknown_provider`, `unknown_stage`, `unknown_event_policy`           | The spec names a provider, stage or event policy that is not in the catalog. Pass the catalog with `--providers`, `--stages` or `--policies`, or fix the name. `inMemory`, `select`, `openapi` and `publishEvents` are built in. |
-| `stage_kind_mismatch`, `sink_not_last`                                | A transform where a sink is expected, or a sink that is not the last stage of a pipe.                                                                                                                                            |
-| `unknown_exception`                                                   | A `statuses` or `errors` entry names an exception that is neither declared in the spec nor exported by `@afora/core`.                                                                                                            |
-| `refused <path>: exists and does not start with the generated banner` | `generate` will not overwrite a file you wrote. Move it, or delete it if it is stale; generated files carry a banner and are rewritten freely.                                                                                   |
-| `refused <path>: resolves outside the project (symlink)`              | Generated paths stay inside the project and are never symbolic links.                                                                                                                                                            |
-| `<file> does not export an application named <Name>`                  | `extract` and `schema` take `<file.ts>#ExportName` and the export must be an application (it has `describe()`).                                                                                                                  |
-| `extract needs <file.ts>#ExportName`                                  | The `#Export` part is missing.                                                                                                                                                                                                   |
-| `<file> does not exist: write it with afora-codegen schema lock`      | `schema check` with no lock file. Run `schema lock` once and commit `afora.lock.json`.                                                                                                                                           |
-| `Not written: declare what the changes need, or pass --force.`        | `schema lock` refused to replace a lock over a change that needs a `fill`, `renamedFrom`, `previousNames` or `upgrade` step. Add it, or pass `--force` if you mean it.                                                           |
+| Code or message                                                       | Meaning and fix                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `outside_project`                                                     | A path in the spec (`extends`, an `import`, a module of a catalog) is absolute, a URL, climbs out of the project directory (also through a symlink, a backslash, a `?`, a percent-encoded `..` or a package path such as `pkg/../../x`), or is a module built into the runtime (`fs`, `child_process`); or `output.dir` is in `node_modules` or `.git`. Use a path relative to the project, inside it, or a package. |
+| `import_cycle`                                                        | The generated files would import each other in a loop through a hand-written module that holds several classes or functions. Move the class or function to a module of its own.                                                                                                                                                                                                                                      |
+| `file_collision`                                                      | Two use cases would be generated as the same file name (file names are lowercase kebab-case, so `GetURL` and `GetUrl` collide). Rename one.                                                                                                                                                                                                                                                                          |
+| `generated_file`                                                      | An `import` points at a file the generator writes in `output.dir` (`./greet.use-case`, `./use-cases`...), which it would overwrite. Move the hand-written code to a file of another name and import that.                                                                                                                                                                                                            |
+| `unknown_provider`, `unknown_stage`, `unknown_event_policy`           | The spec names a provider, stage or event policy that is not in the catalog. Pass the catalog with `--providers`, `--stages` or `--policies`, or fix the name. `inMemory`, `select`, `openapi` and `publishEvents` are built in.                                                                                                                                                                                     |
+| `stage_kind_mismatch`, `sink_not_last`                                | A transform where a sink is expected, or a sink that is not the last stage of a pipe.                                                                                                                                                                                                                                                                                                                                |
+| `unknown_exception`                                                   | A `statuses` or `errors` entry names an exception that is neither declared in the spec nor exported by `@afora/core`.                                                                                                                                                                                                                                                                                                |
+| `refused <path>: exists and does not start with the generated banner` | `generate` will not overwrite a file you wrote. Move it, or delete it if it is stale; generated files carry a banner and are rewritten freely.                                                                                                                                                                                                                                                                       |
+| `refused <path>: resolves outside the project (symlink)`              | Generated paths stay inside the project and are never symbolic links.                                                                                                                                                                                                                                                                                                                                                |
+| `<file> does not export an application named <Name>`                  | `extract` and `schema` take `<file.ts>#ExportName` and the export must be an application (it has `describe()`).                                                                                                                                                                                                                                                                                                      |
+| `extract needs <file.ts>#ExportName`                                  | The `#Export` part is missing.                                                                                                                                                                                                                                                                                                                                                                                       |
+| `<file> does not exist: write it with afora-codegen schema lock`      | `schema check` with no lock file. Run `schema lock` once and commit `afora.lock.json`.                                                                                                                                                                                                                                                                                                                               |
+| `Not written: declare what the changes need, or pass --force.`        | `schema lock` refused to replace a lock over a change that needs a `fill`, `renamedFrom`, `previousNames` or `upgrade` step. Add it, or pass `--force` if you mean it.                                                                                                                                                                                                                                               |
 
 The `afora-mcp` tools return the same issues, and a write that would leave the spec invalid writes nothing. Everything it writes stays inside `--project`.
 

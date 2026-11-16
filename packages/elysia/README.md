@@ -68,7 +68,7 @@ const app = Api.build(); // an Elysia app
 app.listen(3000);
 ```
 
-```
+```text
 GET /api/posts/hello          -> 200 { "post": { "slug": "hello", ... } }
 GET /api/posts/Not%20A%20Slug -> 400 application/problem+json, with "issues"
 GET /openapi.json             -> the OpenAPI 3.1 document of the same routes
@@ -104,16 +104,20 @@ Invalid options throw `InvalidOutputStage` when the stage is made, and unknown o
 
 The requests are handled by the route table of the core (`compileRoutes` of `@afora/core/adapters`), shared by every afora sink that serves HTTP, so they all answer the same way. This package only routes and sends. The behavior is described once, in [Outputs](../../docs/outputs.md); in short:
 
-- **Input.** `post`, `put` and `patch` read a JSON body, `get` and `delete` the query string. Over it come the keys the [route of the use case](../../docs/use-cases.md#routes) places: `{name}` segments of the path, and the query keys, headers and cookies it declares. Text is converted to the numbers and booleans the input takes, and the blueprint of the use case validates it: a 400 problem with `issues`.
+- **Input.** `post`, `put` and `patch` read a JSON body, `get` and `delete` the query string (a `delete` with `body: true` in its route reads a JSON body). Over it come the keys the [route of the use case](../../docs/use-cases.md#routes) places: `{name}` segments of the path, and the query keys, headers and cookies it declares. Text is converted to the numbers and booleans the input takes, and the blueprint of the use case validates it: a 400 problem with `issues`. An input that holds a file (`ctx.fileOf`) is read from a `multipart/form-data` body when one is sent: see [Uploads](../../docs/outputs.md).
 - **Access.** An operation whose use case declares an [`access`](../../docs/auth.md) asks the `authenticator` hook (or `auth`) who calls, and answers a 401 or a 403 problem before the input is validated. With neither, such an operation always answers 401.
 - **Success.** The status of the route (`200` by default) with the response as JSON; records go through `toJSON`, so sensitive values are masked. A `204` has no body. The keys a route sends with `setCookie` leave the body and become `set-cookie` headers.
-- **Errors.** `application/problem+json`, with the status of `statusOf`: the `statuses` of the output first, then 400, 401, 403, 404, 409, 422 for a declared error, else 500, whose detail is `"Internal error."` unless `debug` is on.
+- **Errors.** `application/problem+json`, with the status of `statusOf`: the `statuses` of the output first, then 400, 401, 403, 404, 409, 422 for a declared error, else 500. The detail of a 5xx is `"Internal error."` unless `debug` is on or the output declares the exception (its name in `statuses`, or one of the use case `errors`).
 - **Unknown routes** are a 404 problem and anything thrown outside an operation is a problem too, unless you gave the `app`.
-- **The body.** The routes carry no Elysia schema: the blueprint of each use case validates the input, once. The body reaches the route table as the text that was sent (`parse: "text"`).
+- **The body.** The routes carry no Elysia schema: the blueprint of each use case validates the input, once. The body reaches the route table as the text that was sent (`parse: "text"`). A `multipart/form-data` body is left unread by the parser and read when the route asks: as `FormData` for the routes whose input holds a file (a malformed one is a 400 `InvalidRequestBody`), as text by the others (so it is the same 400 as any body that is not JSON).
 
 ## Middlewares and your own app
 
-<!-- docs:code skip: fragment: the second argument of the stage; @elysiajs/cors is not a dependency of this repo and tenantOf stands for your code -->
+<!-- docs:code context
+import { elysia } from "@afora/elysia";
+
+declare function tenantOf(host: string | undefined): string; // your code
+-->
 ```ts
 import { cors } from "@elysiajs/cors";
 
@@ -145,7 +149,7 @@ export { stages } from "@afora/elysia";
 ```
 
 ```bash
-bunx afora-codegen generate --stages ./stages.ts
+bunx afora-codegen generate --stages ./stages.ts  # npx on Node
 ```
 
 ## Testing a sink

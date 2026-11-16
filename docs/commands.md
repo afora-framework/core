@@ -62,7 +62,34 @@ The keys of `useCases` are the operation names: identifiers holding concrete use
 
 `commandBuilderOf(...catalogs)` gives a `commandOf` whose `useCases` may also be a function of the use case plugins of the catalogs (see [Use cases](use-cases.md#plugins)), each called with a repository; classes written by hand go beside them. The function runs once, at declaration, and a plugin that cannot make its use case throws `UseCaseUnavailable` there. A later catalog wins a name; anything that is not a catalog throws `InvalidCommandDeclaration`.
 
-<!-- docs:code skip: get and publish stand for use case plugins written as in Use cases > Plugins -->
+<!-- docs:code context
+import {
+	blueprintOf,
+	commandBuilderOf,
+	entityOf,
+	repositoryOf,
+	StdUseCases,
+	useCaseCatalogOf,
+	useCaseOf,
+} from "@afora/core";
+
+// plugins written as in Use cases > Plugins; the standard ones stand in for them
+const { get, publish } = StdUseCases.plugins;
+class Post extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string, status: ctx.string })),
+	{ change: ["title", "status"], plugins: (ctx) => [ctx.publishable] },
+) {}
+const Posts = repositoryOf({ entity: Post, actions: ["findById", "update"] });
+class MyUseCase extends useCaseOf({
+	name: "MyUseCase",
+	blueprint: blueprintOf((ctx) => ({ id: ctx.id })),
+	response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+}) {
+	override async execute() {
+		return { ok: true };
+	}
+}
+-->
 ```ts
 const commandOf = commandBuilderOf(useCaseCatalogOf(get, publish));
 
@@ -73,6 +100,21 @@ const Blog = commandOf({
 		publish: ctx.publish(Posts), // a type error if Post is not publishable
 		custom: MyUseCase,
 	}),
+});
+```
+
+The type error is real: a plugin that needs a record plugin the entity lacks does not type-check (and throws `UseCaseUnavailable` if the call is forced):
+
+<!-- docs:code expect-error: MissingRecordPlugin<"publishable"> -->
+```ts
+import { blueprintOf, commandOf, entityOf, repositoryOf } from "@afora/core";
+
+class Draft extends entityOf(blueprintOf((ctx) => ({ title: ctx.string }))) {}
+const Drafts = repositoryOf({ entity: Draft, actions: ["findById", "update"] });
+
+commandOf({
+	name: "Drafts",
+	useCases: (ctx) => ({ publish: ctx.publish(Drafts) }), // MissingRecordPlugin<"publishable">
 });
 ```
 

@@ -1,10 +1,19 @@
 import { jwtOf, jwtOptionsIssue } from "../auth/jwt";
 import { Exception } from "../exception/exception";
 import { HEADER_NAME } from "../use-case/route";
+import { takeStatus } from "../use-case/status";
 import type { Principal } from "../use-case/types/access.interface";
 import type { RouteCookie } from "../use-case/types/route.interface";
 import { coerceTextValues } from "./coerce";
-import { InvalidOutputStage } from "./exceptions";
+import { InvalidOutputStage, UndeclaredStatus } from "./exceptions";
+import {
+	contentMismatchOf,
+	DEFAULT_MAX_PARTS,
+	fileKeysOf,
+	formInputOf,
+	isMultipart,
+	TooManyParts,
+} from "./form";
 import {
 	type OpenAPISinkOptions,
 	type OperationRoute,
@@ -21,6 +30,7 @@ import type {
 	Authenticator,
 	CompiledRoute,
 	CompileRoutesSettings,
+	FormParts,
 	HttpOptions,
 	HttpRequest,
 	HttpResult,
@@ -50,6 +60,7 @@ export const HTTP_OPTION_KEYS = [
 	...ROUTE_OPTION_KEYS,
 	"docs",
 	"debug",
+	"maxParts",
 	"context",
 	"auth",
 ] as const;
@@ -67,6 +78,14 @@ export function httpOptionsIssue(
 	if (routing) return routing;
 	if (given.debug !== undefined && typeof given.debug !== "boolean") {
 		return `Expected ${where}.debug to be a boolean.`;
+	}
+	if (
+		given.maxParts !== undefined &&
+		(typeof given.maxParts !== "number" ||
+			!Number.isInteger(given.maxParts) ||
+			given.maxParts < 1)
+	) {
+		return `Expected ${where}.maxParts to be a whole number, 1 or more.`;
 	}
 	const { docs, context, auth } = given;
 	if (auth !== undefined) {
@@ -213,11 +232,18 @@ function cookieWriterOf(cookie: RouteCookie): (value: string) => string {
  * the result as is. Everything a request needs is decided here, so a call
  * only reads, coerces and runs:
  *
- * - The input is the JSON body of a `post`, `put` or `patch` and the query
- *   of a `get` or `delete`, with the keys the route reads elsewhere over it:
- *   `{name}` segments of the path, and the query keys, headers and cookies
- *   the use case route declares. Text is coerced to the numbers and booleans
- *   the input takes; the operation validates it (a 400 problem with `issues`).
+ * - The input is the JSON body of a `post`, `put` or `patch` (or of a
+ *   `delete` with `body: true`) and the query of a `get` or `delete`, with
+ *   the keys the route reads elsewhere over it: `{name}` segments of the path, and the query keys, headers and cookies
+ *   the use case route declares, which are only read from there (a key the
+ *   body or the query sends for them is dropped). Text is coerced to the
+ *   numbers and booleans the input takes; the operation validates it (a 400
+ *   problem with `issues`).
+ * - An input that holds a file (`format: "binary"`, as `fileOf`) is read
+ *   from a `multipart/form-data` body when the request sends one: files as
+ *   they are, text coerced, objects as JSON text, repeated keys as a list.
+ *   A server whose requests have no `form` answers it with 415. A JSON body
+ *   still works for its other keys.
  * - The context comes from `context.headers` (coerced) and
  *   `context.variables` (as is); a missing one leaves the key out.
  * - An operation with an `access` other than `public` asks
@@ -225,6 +251,9 @@ function cookieWriterOf(cookie: RouteCookie): (value: string) => string {
  *   it is a 401.
  * - Success is the route status with the response as JSON (sensitive values
  *   masked by `toJSON`), or no body for `204`, plus the `responses` headers.
+ *   A use case that returns `withStatus(status, body)` sends the body with
+ *   that status, when the route declares it (its status or one of its
+ *   `statuses`); any other is an `UndeclaredStatus`, a masked 500.
  *   Errors are `application/problem+json`, with the status of `statusOf`
  *   (the output `statuses` first). `requestId` puts the request id on every
  *   result, `notFound` and `failure` included.
@@ -252,6 +281,7 @@ export function compileRoutes(
 	}
 	const routes = operationRoutes(operations, options, source);
 	const debug = options.debug === true;
+	const maxParts = options.maxParts ?? DEFAULT_MAX_PARTS;
 	const contextHeaders = options.context?.headers ?? {};
 	const contextVariables = options.context?.variables ?? {};
 	const requestIdHeader = requestIdHeaderOf(options);
@@ -296,23 +326,35 @@ export function compileRoutes(
 			)
 				? fallback
 				: statusOf(error, operation, output.statuses);
-		return problem(problemOf(error, { status, debug }), status, request);
+		return problem(
+			problemOf(error, {
+				status,
+				debug,
+				statuses: output.statuses,
+				operation,
+			}),
+			status,
+			request,
+		);
 	};
 	const failure: RouteTable["failure"] = (error, given) =>
 		fail(error, given?.operation, given?.request, given?.status);
 
 	const compiled: CompiledRoute[] = operations.map((operation) => {
 		const route = routes.get(operation.id) as OperationRoute;
-		const { method, path, parameters, status, body } = route;
+		const { method, path, parameters, status, statuses, body } = route;
 		const queryKeys = body ? route.query : [];
 		const headerKeys = Object.entries(route.requestHeaders);
 		const cookieKeys = Object.entries(route.cookies);
-		const placed =
-			parameters.length +
-				queryKeys.length +
-				headerKeys.length +
-				cookieKeys.length >
-			0;
+		// The keys the route reads from the path, the route query, headers
+		// and cookies: only ever from there, never from the body or the query.
+		const placedKeys = [
+			...parameters,
+			...queryKeys,
+			...headerKeys.map(([key]) => key),
+			...cookieKeys.map(([key]) => key),
+		];
+		const placed = placedKeys.length > 0;
 		const declared = operation.context
 			? Object.keys(operation.context.properties)
 			: [];
@@ -327,15 +369,18 @@ export function compileRoutes(
 		const setCookies = Object.entries(route.setCookies).map(
 			([key, cookie]) => [key, cookieWriterOf(cookie)] as const,
 		);
-		const successHeaders = Object.freeze(
-			status === 204
-				? { ...route.headers }
-				: { "content-type": JSON_TYPE, ...route.headers },
-		);
+		const jsonHeaders = Object.freeze({
+			"content-type": JSON_TYPE,
+			...route.headers,
+		});
+		const successHeaders =
+			status === 204 ? Object.freeze({ ...route.headers }) : jsonHeaders;
 
 		const readsCookies = cookieKeys.length > 0;
 		const authenticates = guarded && authenticator !== undefined;
 		const hasContext = operation.context !== undefined;
+		// An input with a file is read from a multipart body when one is sent.
+		const takesFiles = body && fileKeysOf(operation.input).length > 0;
 
 		const handle = async (request: HttpRequest): Promise<HttpResult> => {
 			try {
@@ -355,7 +400,60 @@ export function compileRoutes(
 				}
 
 				let input: unknown;
-				if (body) {
+				if (takesFiles && isMultipart(request.header("content-type"))) {
+					if (request.form === undefined) {
+						return problem(
+							{
+								type: "urn:afora:exception:UnsupportedMediaType",
+								title: "UnsupportedMediaType",
+								status: 415,
+								detail: "This server does not read multipart/form-data bodies.",
+							},
+							415,
+							request,
+						);
+					}
+					let form: FormParts;
+					try {
+						form = await request.form();
+					} catch (error) {
+						// The server says why it could not read the body (it was
+						// already read, say): its own error, a 500 unless the
+						// output maps it.
+						if (error instanceof Exception) {
+							return fail(error, operation, request, 500);
+						}
+						return problem(
+							{
+								type: "urn:afora:exception:InvalidRequestBody",
+								title: "InvalidRequestBody",
+								status: 400,
+								detail: "The request body is not valid multipart/form-data.",
+							},
+							400,
+							request,
+						);
+					}
+					let parts: Record<string, unknown>;
+					try {
+						parts = formInputOf(operation.input, form, maxParts);
+					} catch (error) {
+						if (!(error instanceof TooManyParts)) throw error;
+						return problem(
+							{
+								type: "urn:afora:exception:TooManyParts",
+								title: "TooManyParts",
+								status: 413,
+								detail: error.message,
+							},
+							413,
+							request,
+						);
+					}
+					const mismatch = await contentMismatchOf(parts);
+					if (mismatch) return problem(mismatch, 400, request);
+					input = parts;
+				} else if (body) {
 					const text = await request.text();
 					try {
 						input = text.trim() === "" ? {} : JSON.parse(text);
@@ -389,8 +487,12 @@ export function compileRoutes(
 							texts[key] = cookies.get(name);
 					}
 					for (const name of parameters) texts[name] = request.param(name);
-					// What the route places wins over the body or the query.
-					input = { ...input, ...coerceTextValues(operation.input, texts) };
+					// What the route places replaces the body or the query: a header
+					// or cookie that is absent leaves its key absent, not sent by
+					// the client in the body.
+					const rest: Record<string, unknown> = { ...input };
+					for (const key of placedKeys) delete rest[key];
+					input = { ...rest, ...coerceTextValues(operation.input, texts) };
 				}
 
 				let call: OperationCallOptions | undefined;
@@ -411,33 +513,51 @@ export function compileRoutes(
 						? { context: values, principal: principal ?? null }
 						: { context: values };
 				} else if (guarded) call = { principal: principal ?? null };
+				// The native request, for the factories of services.
+				if (request.native !== undefined) {
+					call = { ...call, native: request.native };
+				}
 
-				const response = await operation.invoke(input, call);
+				// The status the use case chose: the route status or one it lists.
+				const { status: chosen, body: response } = takeStatus(
+					await operation.invoke(input, call),
+				);
+				let sent: number = status;
+				if (chosen !== undefined) {
+					if (chosen !== status && !statuses.includes(chosen)) {
+						throw new UndeclaredStatus({
+							source: operation.id,
+							details: { status: chosen, statuses: [status, ...statuses] },
+						});
+					}
+					sent = chosen;
+				}
+				const headers = sent === status ? successHeaders : jsonHeaders;
 				if (setCookies.length === 0) {
 					return {
-						status,
-						headers: headersOf(successHeaders, request),
+						status: sent,
+						headers: headersOf(headers, request),
 						cookies: NO_COOKIES,
-						body: status === 204 ? null : (JSON.stringify(response) ?? "null"),
+						body: sent === 204 ? null : (JSON.stringify(response) ?? "null"),
 					};
 				}
 				// The keys sent as cookies leave the body.
 				const value = outputValueOf(response);
-				const sent: string[] = [];
+				const written: string[] = [];
 				if (isObject(value)) {
 					for (const [key, write] of setCookies) {
 						const cookie = value[key];
 						delete value[key];
 						if (cookie !== undefined && cookie !== null) {
-							sent.push(write(String(cookie)));
+							written.push(write(String(cookie)));
 						}
 					}
 				}
 				return {
-					status,
-					headers: headersOf(successHeaders, request),
-					cookies: sent,
-					body: status === 204 ? null : (JSON.stringify(value) ?? "null"),
+					status: sent,
+					headers: headersOf(headers, request),
+					cookies: written,
+					body: sent === 204 ? null : (JSON.stringify(value) ?? "null"),
 				};
 			} catch (error) {
 				return fail(error, operation, request);

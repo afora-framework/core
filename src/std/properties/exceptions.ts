@@ -28,3 +28,24 @@ export const InvalidJsonSchema = exceptionOf({
 });
 
 markExported(InvalidJsonData, InvalidJsonSchema);
+
+/**
+ * A value a file property (`FileProperty`, `fileOf`) rejects: not a file, of
+ * a media type it does not accept, or larger than its `maxBytes`. Its
+ * message is the issue's, so `statusOf` gives 400 with the issue at the key.
+ */
+export const InvalidFile = exceptionOf({
+	layer: ExceptionLayers.Property,
+	name: "InvalidFile",
+	message: ({ reason }: { readonly reason: string }) => reason,
+});
+
+/** Options of `fileOf` that are not valid: `types` not media types, or `maxBytes` not a size. */
+export const InvalidFileOptions = exceptionOf({
+	layer: ExceptionLayers.Schema,
+	name: "InvalidFileOptions",
+	message: ({ reason }: { readonly reason: string }, source) =>
+		`Invalid options for the file property "${source}": ${reason}`,
+});
+
+markExported(InvalidFile, InvalidFileOptions);

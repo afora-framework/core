@@ -1,6 +1,8 @@
 import { isCommand } from "../command/command";
 import type { AnyCommand } from "../command/types/command.interface";
 import { Kind } from "../symbols/kind";
+import { type CallOrigin, OriginKey, StatusKey } from "../use-case/scope";
+import { withStatus } from "../use-case/status";
 import type { AnyUseCaseClass } from "../use-case/use-case";
 import { accessGuardOf } from "./access";
 import { DuplicateOperation, InvalidOutputStage } from "./exceptions";
@@ -95,6 +97,33 @@ export function operationOf(
 	});
 }
 
+/**
+ * `run` with who calls and the native request of `options`, for the
+ * factories of services (see `serviceOf`).
+ */
+function withOrigin(
+	run: { readonly context?: unknown } | undefined,
+	options: OperationCallOptions | undefined,
+):
+	| { readonly context?: unknown; readonly [OriginKey]?: CallOrigin }
+	| undefined {
+	if (
+		options === undefined ||
+		(options.principal === undefined && options.native === undefined)
+	) {
+		return run;
+	}
+	return {
+		...run,
+		[OriginKey]: {
+			...(options.principal === undefined
+				? {}
+				: { principal: options.principal }),
+			...(options.native === undefined ? {} : { native: options.native }),
+		},
+	};
+}
+
 /** The operations of one command, in declaration order. */
 function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 	return (command.operations as readonly string[]).map((name) => {
@@ -102,11 +131,29 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 		const context = command.context ?? UseCase.context;
 		const description = UseCase.description ?? command.description;
 		const id = `${command.commandName}.${name}`;
-		const run = command.run as (
+		const runCommand = command.run as (
+			op: string,
+			input: unknown,
+			options?: {
+				context?: unknown;
+				[StatusKey]?: (status: number) => void;
+			},
+		) => Promise<unknown>;
+		// The body, or a view of it by `withStatus` when the use case chose a status.
+		const run = async (
 			op: string,
 			input: unknown,
 			options?: { context?: unknown },
-		) => Promise<unknown>;
+		): Promise<unknown> => {
+			let status: number | undefined;
+			const value = await runCommand(op, input, {
+				...options,
+				[StatusKey]: (chosen) => {
+					status = chosen;
+				},
+			});
+			return status === undefined ? value : withStatus(status, value as object);
+		};
 		// Made once: a call only compares the caller with what was declared.
 		const guard =
 			UseCase.access === undefined
@@ -133,13 +180,13 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 			meta: Object.freeze({}),
 			invoke: guard
 				? async (input: unknown, options?: OperationCallOptions) =>
-						run(name, input, guard(input, options))
+						run(name, input, withOrigin(guard(input, options), options))
 				: (input: unknown, options?: OperationCallOptions) =>
 						run(
 							name,
 							input,
-							options && "principal" in options
-								? { context: options.context }
+							options && ("principal" in options || "native" in options)
+								? withOrigin({ context: options.context }, options)
 								: options,
 						),
 		});

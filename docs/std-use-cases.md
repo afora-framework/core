@@ -98,7 +98,24 @@ It is only a shortcut for `(ctx) => ({ create: ctx.create(Posts, { route: { meth
 
 Each operation needs its repository actions (`create`; `findById` for `get`; `findPage` for `list`; `findById` and `update`; `findById` and `delete`), and a repository that lacks one throws `UseCaseUnavailable` when the command is declared. For anything more an operation needs (`omit`, `owner`, hooks, another name), write that one with `ctx` and spread the rest, since the result is a function of `ctx`:
 
-<!-- docs:code skip: a fragment of the settings of commandOf -->
+<!-- docs:code continue -->
+<!-- docs:code context
+import { useCaseOf } from "@afora/core";
+
+class PublishPost extends useCaseOf({
+	name: "PublishPost",
+	blueprint: blueprintOf((ctx) => ({ id: ctx.id })),
+	response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+}) {
+	override async execute() {
+		return { ok: true };
+	}
+}
+const Edited = commandOf({
+	name: "Edited",
+/* block */
+});
+-->
 ```ts
 useCases: (ctx) => ({
 	...resourceOf(Posts, { path: "/posts", actions: ["get", "list", "delete"] })(ctx),

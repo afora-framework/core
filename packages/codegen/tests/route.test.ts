@@ -22,7 +22,10 @@ afterAll(async () => {
 const FIND_TS = `import { Access, Route } from "@afora/core";
 import { FindNoteBase } from "../domain/use-cases";
 
-@Route("GET", "/notes/{id}", { headers: { locale: "accept-language" } })
+@Route("GET", "/notes/{id}", {
+	statuses: [503],
+	headers: { locale: "accept-language" },
+})
 @Access({ scopes: ["notes:read"], context: { userId: "subject" } })
 export class FindNote extends FindNoteBase {
 	override async execute() {
@@ -70,6 +73,7 @@ const notes: Spec = {
 			route: {
 				method: "get",
 				path: "/notes/{id}",
+				statuses: [503],
 				headers: { locale: "accept-language" },
 			},
 			access: { scopes: ["notes:read"], context: { userId: "subject" } },
@@ -81,7 +85,7 @@ const notes: Spec = {
 		RemoveNote: {
 			generic: "delete",
 			repository: "Notes",
-			route: { method: "delete", path: "/notes/{id}", status: 204 },
+			route: { method: "delete", path: "/notes/{id}", status: 204, body: true },
 			access: { scopes: ["notes:write"] },
 		},
 		Login: {
@@ -156,6 +160,21 @@ describe("route and access in a spec", () => {
 		expect(
 			codes(edited((s) => (s.useCases.CreateNote.route.status = 500))),
 		).toEqual(["useCases.CreateNote.route.status: invalid_route"]);
+		for (const statuses of [
+			[101],
+			[204],
+			[205],
+			[302],
+			[400],
+			[500],
+			[503, 503],
+			[201],
+			"503",
+		]) {
+			expect(
+				codes(edited((s) => (s.useCases.CreateNote.route.statuses = statuses))),
+			).toEqual(["useCases.CreateNote.route.statuses: invalid_route"]);
+		}
 		expect(
 			codes(
 				edited(
@@ -164,6 +183,20 @@ describe("route and access in a spec", () => {
 				),
 			),
 		).toEqual(["useCases.CreateNote.route.setCookie.nope: invalid_route"]);
+		expect(
+			codes(edited((s) => (s.useCases.CreateNote.route.body = true))),
+		).toEqual(["useCases.CreateNote.route.body: invalid_route"]);
+		expect(
+			codes(
+				edited((s) => {
+					s.useCases.FindNote.route.body = false;
+					s.useCases.RemoveNote.route.body = "yes";
+				}),
+			),
+		).toEqual([
+			"useCases.FindNote.route.body: invalid_route",
+			"useCases.RemoveNote.route.body: invalid_route",
+		]);
 		expect(
 			codes(edited((s) => (s.useCases.CreateNote.route.verb = "x"))),
 		).toEqual(["useCases.CreateNote.route.verb: unknown_key"]);
@@ -218,7 +251,7 @@ describe("route and access in a spec", () => {
 		);
 		expect(useCases).toContain('access: { owner: { input: "ownerId" } }');
 		expect(useCases).toContain(
-			'route: { method: "delete", path: "/notes/{id}", status: 204 }',
+			'route: { method: "delete", path: "/notes/{id}", status: 204, body: true }',
 		);
 		expect(useCases).toContain('secret: { env: "NOTES_JWT_SECRET" }');
 		expect(useCases).not.toContain("@Route");
@@ -236,11 +269,13 @@ describe("route and access in a spec", () => {
 			path: "/notes",
 			status: 201,
 		});
+		expect(useCases.FindNote.route.statuses).toEqual([503]);
 		expect(useCases.FindNote.access).toEqual({
 			scopes: ["notes:read"],
 			context: { userId: "subject" },
 		});
 		expect(useCases.RemoveNote.route.status).toBe(204);
+		expect(useCases.RemoveNote.route.body).toBe(true);
 		expect(useCases.Login.access).toEqual({ public: true });
 		expect(Object.keys(useCases.Login.response.properties)).toEqual([
 			"user",

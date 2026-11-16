@@ -9,7 +9,13 @@ import {
 	eventOf,
 	exceptionOf,
 	guard,
+	type IdValue,
+	type InMemoryProvider,
+	Integer,
+	idOf,
+	inMemoryProvider,
 	type JsonValue,
+	Key,
 	listOf,
 	Meta,
 	openapi,
@@ -21,8 +27,10 @@ import {
 	type RecordValue,
 	recordOf,
 	repositoryOf,
+	Serial,
 	type StandardSchemaV1,
 	variantOf,
+	wrapProvider,
 } from "@afora/core";
 import type { IRepositoryProvider } from "@afora/core/adapters";
 import { type SliceMask, sliceOf } from "@afora/core/experimental";
@@ -261,10 +269,12 @@ user.pullEvents();
 
 // UseCase declarations retain inference and abstract contracts across compiler versions.
 import {
+	listOf as listOfOperations,
 	type UseCaseDependencies,
 	type UseCaseInput,
 	type UseCaseResponse,
 	useCaseOf,
+	withStatus,
 } from "@afora/core";
 
 const OperationInput = blueprintOf((ctx) => ({ name: ctx.string }));
@@ -324,6 +334,41 @@ useCaseOf({
 });
 // @ts-expect-error unknown override
 operation.execute({ unknown: async () => ({}) });
+
+// A list as the response: execute resolves with a read-only array of the items.
+const ListOperationBase = useCaseOf({
+	name: "ListOperation",
+	blueprint: OperationInput,
+	response: listOfOperations(OperationUser),
+});
+class ListOperation extends ListOperationBase {
+	override async execute() {
+		return [new OperationUser(this.input)];
+	}
+}
+export const listResponseMatches: Equals<
+	UseCaseResponse<typeof ListOperation>,
+	readonly OperationUser[]
+> = true;
+export const listExecuteMatches: Equals<
+	Awaited<ReturnType<InstanceType<typeof ListOperationBase>["execute"]>>,
+	readonly OperationUser[]
+> = true;
+
+// A status chosen at run time: execute accepts withStatus, a call gives the body.
+class StatusOperation extends ListOperationBase {
+	override async execute() {
+		const body = [new OperationUser(this.input)];
+		return body.length > 1 ? body : withStatus(503, body);
+	}
+}
+export const statusExecuteMatches: Equals<
+	Awaited<ReturnType<StatusOperation["execute"]>>,
+	OperationUser[]
+> = true;
+export const statusIsBody: OperationUser[] = withStatus(503, [
+	new OperationUser({ name: "a" }),
+]);
 
 // Record plugins
 import {
@@ -421,6 +466,18 @@ export type AddressMask = SliceMask<typeof Address.properties>;
 declare const runner: ContractRunner;
 declare const makeProvider: () => IRepositoryProvider;
 providerContract(runner, makeProvider, { transactions: false });
+
+// wrapProvider keeps the type of the provider; args are typed by operation.
+const wrapped = wrapProvider(inMemoryProvider(), {
+	async around(call, next) {
+		if (call.operation === "remove") {
+			const id: IdValue = call.args[0];
+			void id;
+		}
+		return next();
+	},
+});
+export const wrappedType: Equals<typeof wrapped, InMemoryProvider> = true;
 
 // Queries, steps, commands and outputs (1.0).
 class ClubMember extends entityOf(
@@ -691,3 +748,33 @@ useCaseOf({
 	// @ts-expect-error a route has no such method
 	route: { method: "head" },
 });
+
+// Per-entity id strategies: the id type follows the strategy; a natural key is required.
+class Setting extends entityOf(
+	blueprintOf((ctx) => ({ value: ctx.string })),
+	{ id: Key },
+) {}
+export const settingId: string = new Setting({ id: "seo", value: "on" }).id;
+// @ts-expect-error: the input of an entity with a natural key holds its id.
+new Setting({ value: "on" });
+class Ticket extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{
+		id: idOf(Integer, () => 1),
+	},
+) {}
+export const ticketId: number = new Ticket({ title: "a" }).id;
+// Ids the database assigns: built without one, typed as the stored number.
+class Numbered extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{ id: Serial },
+) {}
+export const numberedId: number = new Numbered({ title: "a" }).id;
+export const numberedRepository = repositoryOf({
+	entity: Numbered,
+	actions: ["create", "findById"],
+});
+export const numberedFind: Equals<
+	Parameters<typeof numberedRepository.findById>[0],
+	number
+> = true;

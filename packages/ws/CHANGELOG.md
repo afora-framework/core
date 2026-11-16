@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.0.13 — 2026-11-16
+
+### A status chosen at run time (#116)
+
+- A call of a use case that returns `withStatus(status, body)` replies with the body as its `value`: the status is HTTP only.
 
 ### Added
 

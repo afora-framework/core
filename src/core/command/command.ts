@@ -34,12 +34,23 @@ import {
 	startSpan,
 } from "../tracing/tracing";
 import { isUseCaseCatalog } from "../use-case/plugin-catalog";
-import { type ExecutionScope, ScopeKey } from "../use-case/scope";
+import {
+	type CallOrigin,
+	type ExecutionScope,
+	OriginKey,
+	ScopeKey,
+	StatusKey,
+} from "../use-case/scope";
+import { serviceFactoriesOf } from "../use-case/service";
 import type {
 	IUseCaseCatalog,
 	UseCasePluginContext,
 } from "../use-case/types/plugin.interface";
-import { type AnyUseCaseClass, isUseCaseClass } from "../use-case/use-case";
+import {
+	type AnyUseCaseClass,
+	executionStatusOf,
+	isUseCaseClass,
+} from "../use-case/use-case";
 import {
 	CommandEventFailed,
 	InvalidCommandContext,
@@ -384,10 +395,13 @@ function declareCommand<
 	const perform = async (
 		op: string,
 		input: unknown,
-		options: { context?: unknown; env?: unknown } | undefined,
+		options:
+			| { context?: unknown; env?: unknown; [OriginKey]?: CallOrigin }
+			| undefined,
 		keepSpan: boolean,
 	): Promise<{
 		value: unknown;
+		status: number | undefined;
 		events: EntityEvent[];
 		context: unknown;
 		env: () => Readonly<Record<string, unknown>>;
@@ -450,20 +464,35 @@ function declareCommand<
 				overrides === undefined || overrides.byEnvironment.size === 0
 					? scope?.environments
 					: overrides.byEnvironment;
-			if (!environmentsOfCall && !logger && !tracer) return scope;
+			// The services of the call, made once for every use case it runs.
+			const services = serviceFactoriesOf(UseCase) !== undefined;
+			if (!environmentsOfCall && !logger && !tracer && !services) return scope;
 			return {
 				...scope,
 				providers: scope?.providers ?? new Map(),
 				...(environmentsOfCall ? { environments: environmentsOfCall } : {}),
 				...(logger ? { logger } : {}),
 				...(tracer ? { tracer, ...(span ? { span } : {}) } : {}),
+				...(services
+					? {
+							services: new Map(),
+							context: callContext,
+							...(options?.[OriginKey] === undefined
+								? {}
+								: { origin: options[OriginKey] }),
+						}
+					: {}),
 			};
 		};
 		const run = async (declared: ExecutionScope | undefined) => {
 			const scope = withEnvironments(declared);
 			const useCase = new UseCase(input, { context: given, [ScopeKey]: scope });
 			const value = await useCase.execute();
-			return { value, events: useCase.pullEvents() };
+			return {
+				value,
+				status: executionStatusOf(useCase),
+				events: useCase.pullEvents(),
+			};
 		};
 		const provider = providerOfCall();
 		const started = clock();
@@ -540,6 +569,7 @@ function declareCommand<
 		) {
 			const {
 				value,
+				status,
 				events: raised,
 				context: callContext,
 				env,
@@ -547,6 +577,12 @@ function declareCommand<
 				tracer,
 				span,
 			} = await perform(op, input, options, true);
+			// The status the use case chose, for the output that asked for it.
+			if (status !== undefined) {
+				(options as { [StatusKey]?: (status: number) => void } | undefined)?.[
+					StatusKey
+				]?.(status);
+			}
 			const call = {
 				operation: op,
 				raised,

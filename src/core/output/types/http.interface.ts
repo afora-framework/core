@@ -27,6 +27,14 @@ export interface HttpOptions extends RouteOptions {
 	 */
 	readonly debug?: boolean;
 	/**
+	 * The most parts a `multipart/form-data` body may have (files and text
+	 * together); more is a 413 problem. Only routes whose input holds a file
+	 * read such a body.
+	 *
+	 * @default 1000
+	 */
+	readonly maxParts?: number;
+	/**
 	 * The context of an operation, by context key: from request headers
 	 * (`{ headers: { locale: "accept-language" } }`) and from values a
 	 * middleware of the server set for the request
@@ -52,6 +60,14 @@ export interface HttpOptions extends RouteOptions {
 	};
 }
 
+/**
+ * What the route table reads of a `FormData`: its parts, in order, each a
+ * name and a value (text or a `File`). A `FormData` of any runtime is one.
+ */
+export interface FormParts {
+	entries(): Iterable<readonly [string, unknown]>;
+}
+
 /** A request, as the server of a sink gives it to the route table. */
 export interface HttpRequest {
 	/** The value of the `{name}` segment of the path, decoded. */
@@ -62,6 +78,12 @@ export interface HttpRequest {
 	header(name: string): string | undefined;
 	/** The body, as text. Called at most once, and only by routes with a body. */
 	text(): string | Promise<string>;
+	/**
+	 * The `multipart/form-data` body, as `FormData`. Called at most once, in
+	 * place of `text`, by a route whose input holds a file when the request
+	 * says it sends one; a server without it answers such a request with 415.
+	 */
+	form?(): Promise<FormParts>;
 	/** A value a middleware of the server set for this request, by name. */
 	variable?(name: string): unknown;
 	/** The request of the server itself, for an authenticator that needs it. */

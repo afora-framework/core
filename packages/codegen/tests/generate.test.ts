@@ -359,3 +359,29 @@ describe("fidelity to hand-written code", () => {
 		expect(generated.Post.options).toEqual(Post.options);
 	});
 });
+
+describe("values of the spec in generated code", () => {
+	test("a __proto__ key stays an own property, as JSON.parse gave it", () => {
+		const spec = JSON.parse(
+			'{"version":1,"entities":{"Note":{"fields":{"title":"string"}}},"repositories":{"Notes":{"entity":"Note","actions":["create"]}},"provider":{"use":"memory","options":{"__proto__":{"admin":true},"label":"app"}}}',
+		) as Spec;
+		const files = generate(
+			spec,
+			{},
+			{
+				providers: [
+					{ name: "memory", module: "../providers", export: "memoryProvider" },
+				],
+			},
+		);
+		const app = files.find((file) => file.path.endsWith("/application.ts"));
+		expect(app?.contents).toContain(
+			'memoryProvider({ ["__proto__"]: { admin: true }, label: "app" })',
+		);
+		const options = new Function(
+			'return { ["__proto__"]: { admin: true }, label: "app" };',
+		)();
+		expect(Object.getPrototypeOf(options)).toBe(Object.prototype);
+		expect(Object.keys(options)).toEqual(["__proto__", "label"]);
+	});
+});

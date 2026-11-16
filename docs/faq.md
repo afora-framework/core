@@ -65,6 +65,42 @@ By default, yes (`deletion: "hard"`). With `deletion: "soft"` it stores `deleted
 
 Once an application binds it to its provider, the module-level repository throws `RepositoryUsedOutsideApplication`, so it cannot read another store by mistake. Use `app.repositories.X` or `app.run(UseCase, input)`. See [Applications](applications.md).
 
+## Building an API
+
+**Why does a 500 say only `"Internal error."`, and how do I show a message?**
+
+An error nobody declared may carry anything (a SQL fragment, a path), so a 5xx hides its detail unless the sink has `debug: true`. An exception the output lists in `statuses` (`{ PaymentFailed: 502 }`), or one the operation declares in its `errors`, keeps its message at any status: listing it is the decision to show it. A few are never shown, even when listed, such as `InvalidEnvironment` and `InvalidUseCaseResponse`. See [Outputs](outputs.md).
+
+**Can an id be an integer, or a key of my own?**
+
+Yes, per entity. UUID v7 is the default; `entityOf(blueprint, { id: Uuid })` accepts a UUID of any version, `{ id: Key }` takes a natural key from the input, `{ id: Serial }` lets the database assign an integer (in memory and Drizzle; not DynamoDB), and `idOf(property, generate?)` builds any other strategy. See [Entities](entities.md#ids).
+
+**Can a use case answer a list, or another status than its route's?**
+
+Both. `response: listOf(Item)` makes the body an array, each item validated and masked ([Use cases](use-cases.md#a-list-as-the-response)). `return withStatus(503, body)` answers another status with the same body, if the route lists it in `statuses` ([A status chosen at run time](use-cases.md#a-status-chosen-at-run-time)).
+
+**How do I accept a file upload?**
+
+Give the input a file field, `ctx.fileOf({ types: ["image/*"], maxBytes: 5_000_000 })` (or `ctx.file` for any file), and route it with `post`, `put` or `patch`. Every HTTP sink reads it from a `multipart/form-data` body, checks its type and size (and, for common images, its first bytes), and the OpenAPI document describes the form. An entity cannot hold a file: store where it went. See [Files](std-properties.md#files).
+
+**Can a `DELETE` take a body?**
+
+Yes, with `route: { method: "delete", path, body: true }`; without it, the input of a `delete` comes from the path and the query, as before. See [Routes](use-cases.md#routes).
+
+**Where does a cache, a storage or a client of another API go?**
+
+In a service: `serviceOf<Cache>("cache")` among the dependencies of a use case, and `applicationOf({ services: { cache: (scope) => ... } })` to make it, once per call, with the context, the caller and the request at hand. A test replaces it as any dependency, `execute({ cache })`. See [Services](use-cases.md#services).
+
+**How do I get the JSON Schema of an entity, for something that is not OpenAPI?**
+
+`jsonSchemaOf(User)` gives a standalone draft 2020-12 document for any property, blueprint, list, record or entity. See [JSON Schema](openapi.md#json-schema).
+
+## Testing
+
+**Why can't I `spyOn` a repository method?**
+
+A repository is frozen, because one repository is shared by every use case and application that names it, and a patched method would leak into other tests. Spy on the provider under it with `spyProvider` of `@afora/core/testing`: it records each call and can make one fail, even behind an HTTP sink. For a direct call, `execute({ Users: { findById: ... } })` replaces a method for that call only. See [Testing an application](testing.md#spying-on-the-database).
+
 ## Performance
 
 **Is it fast?**

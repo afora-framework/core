@@ -38,6 +38,18 @@ export interface EnumField extends FieldModifiers, FieldEvolution {
 	readonly default?: EnumValue;
 }
 
+/** What a file accepts (`fileOf`): its media types (`"image/*"` takes any image) and its largest size. */
+export interface FileOptionsSpec {
+	readonly types?: readonly string[];
+	readonly maxBytes?: number;
+	readonly name?: string;
+}
+
+/** A field holding a file, sent in a `multipart/form-data` body (`fileOf`). */
+export interface FileField extends FieldModifiers {
+	readonly file: FileOptionsSpec;
+}
+
 /** A nested object, declared in place. */
 export interface InlineField extends FieldModifiers {
 	readonly fields: Readonly<Record<string, FieldSpec>>;
@@ -66,12 +78,13 @@ export type FieldSpec =
 	| string
 	| TypeField
 	| EnumField
+	| FileField
 	| InlineField
 	| VariantField;
 
 export type FieldsSpec = Readonly<Record<string, FieldSpec>>;
 
-/** A custom property: a Std/declared property with options, an enum, or an import. */
+/** A custom property: a Std/declared property with options, an enum, a file, or an import. */
 export type PropertySpec =
 	| {
 			readonly base: string;
@@ -82,6 +95,10 @@ export type PropertySpec =
 			readonly enum: readonly EnumValue[];
 			readonly name?: string;
 			readonly default?: EnumValue;
+			readonly optional?: boolean;
+	  }
+	| {
+			readonly file: FileOptionsSpec;
 			readonly optional?: boolean;
 	  }
 	| {
@@ -106,6 +123,13 @@ export interface RecordSpec {
 	readonly plugins?: readonly string[];
 	/** Entities only: the events each lifecycle cycle raises. */
 	readonly events?: EntityEventsSpec;
+	/**
+	 * Entities only: how its ids are made. `uuid7` (the default) generates and
+	 * accepts UUID v7; `uuid` accepts any UUID version and generates v7; `key`
+	 * is a natural key (1 to 256 characters) the input must hold; `serial` is
+	 * a positive integer the database assigns on create.
+	 */
+	readonly id?: EntityIdSpec;
 	/** Entities only: a `version` identity key checked by `update`. */
 	readonly versioned?: boolean;
 	/** Entities only: when their records expire, which reads then leave out. */
@@ -117,6 +141,9 @@ export interface RecordSpec {
 	/** Entities only: the names the entity had before. */
 	readonly previousNames?: readonly string[];
 }
+
+/** The id strategies a spec can name; `uuid7` is the default. */
+export type EntityIdSpec = "uuid7" | "uuid" | "key" | "serial";
 
 /**
  * When the records of an entity expire: `after` a duration from `createdAt`
@@ -359,12 +386,16 @@ export interface RouteSpec {
 	readonly method: string;
 	readonly path?: string;
 	readonly status?: 200 | 201 | 202 | 204;
+	/** The other statuses `execute` may choose with `withStatus`, e.g. `[503]`. */
+	readonly statuses?: readonly number[];
 	readonly query?: readonly string[];
 	readonly headers?: Readonly<Record<string, string>>;
 	readonly cookie?: Readonly<Record<string, string>>;
 	readonly setCookie?: Readonly<
 		Record<string, Readonly<Record<string, unknown>>>
 	>;
+	/** Only on a `delete`: read the keys with no other place from a JSON body. */
+	readonly body?: boolean;
 }
 
 /** Who may call a use case: the `access` of `useCaseOf`. */
@@ -384,9 +415,14 @@ export interface UseCaseSpec {
 	readonly route?: RouteSpec;
 	readonly access?: AccessSpec;
 	readonly input: BlueprintRefSpec;
-	readonly response: BlueprintRefSpec;
+	/**
+	 * A blueprint, or a list written as a field: `"Article[]"`,
+	 * `{ "type": "Article", "list": { "maxItems": 50 } }` or
+	 * `{ "fields": {...}, "list": true }`.
+	 */
+	readonly response: BlueprintRefSpec | FieldSpec;
 	readonly context?: BlueprintRefSpec;
-	/** Key -> name of a use case, repository or environment. */
+	/** Key -> name of a use case, repository or environment, of a service (a key of `services`), or `"Logger"`. */
 	readonly dependencies?: Readonly<Record<string, string>>;
 	/** Declared exceptions or core exceptions (by class name) a caller should expect. */
 	readonly errors?: readonly string[];
@@ -484,6 +520,12 @@ export interface Spec {
 	readonly trace?: ImportRef;
 	/** Where event policies publish (`applicationOf({ publishers })`), by camelCase key: a publisher written by hand. */
 	readonly publishers?: Readonly<Record<string, ImportRef>>;
+	/**
+	 * The services of the use cases (`applicationOf({ services })`), by name:
+	 * the factory of each, written by hand, that makes its value per call. A
+	 * use case names one in its `dependencies`.
+	 */
+	readonly services?: Readonly<Record<string, ImportRef>>;
 	readonly properties?: Readonly<Record<string, PropertySpec>>;
 	readonly blueprints?: Readonly<Record<string, BlueprintSpec>>;
 	readonly records?: Readonly<Record<string, RecordSpec>>;

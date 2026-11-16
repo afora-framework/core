@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 495 exports.
+Tier: stable. 552 exports.
 
 ### Access
 
@@ -126,6 +126,12 @@ Any repository, whatever its entity, actions and environment.
 
 Any class made by `entityOf`, or extending one, that a repository holds.
 
+### AnyService
+
+*type* · tier: stable · `import type { AnyService } from "@afora/core"`
+
+Any service made by {@link serviceOf}.
+
 ### AnyUseCaseClass
 
 *interface* · tier: stable · `import type { AnyUseCaseClass } from "@afora/core"`
@@ -137,6 +143,12 @@ A concrete UseCase declaration, usable as a dependency.
 *type* · tier: stable · `import type { AnyUseCasePlugin } from "@afora/core"`
 
 Any use case plugin.
+
+### AnyUseCaseResponse
+
+*type* · tier: stable · `import type { AnyUseCaseResponse } from "@afora/core"`
+
+The `response` of a use case: an object blueprint or a list.
 
 ### ApplicationAlreadyStarted
 
@@ -284,6 +296,12 @@ instance of the record, e.g. `{ author: { name: "Jane" } }`.
 The bounds of a list field, as `ctx.listOf(item, { minItems, maxItems })`
 takes them: the fewest and the most items it accepts.
 
+### BlueprintListValue
+
+*type* · tier: stable · `import type { BlueprintListValue } from "@afora/core"`
+
+The value of a list, e.g. `Article[]` for `listOf(Article)`.
+
 ### BlueprintPluginContext
 
 *type* · tier: stable · `import type { BlueprintPluginContext } from "@afora/core"`
@@ -335,7 +353,7 @@ called, as `ctx.number({ min: 1 })`, for the subclass `Property.with` makes.
 
 What `useCaseOf` takes as `steps`: the steps, inferred as a tuple, each
 checked against the values in scope, and the `return` against what the
-response blueprint (the collection `Response`) takes. Steps that are not a tuple (built at
+response (the collection `Response`, or a list) takes. Steps that are not a tuple (built at
 run time) are checked only when the use case is declared.
 
 ### CommandBuilder
@@ -529,14 +547,16 @@ A collection of dependencies as a use case receives them: each one as {@link * D
 *type* · tier: stable · `import type { DependencyOf } from "@afora/core"`
 
 What a use case gets for a dependency: a function for a use case, the
-repository itself, the variables of an environment, or an `ILogger`.
+repository itself, the variables of an environment, an `ILogger`, or the
+value of a service.
 
 ### DependencyOverrides
 
 *type* · tier: stable · `import type { DependencyOverrides } from "@afora/core"`
 
 What `execute` takes to replace dependencies: a function for a use case,
-some of the methods of a repository, or the variables of an environment.
+some of the methods of a repository, the variables of an environment, or
+the value of a service.
 
 ### DuplicateApplicationDeclaration
 
@@ -575,6 +595,14 @@ What an entity builder needs: the identity fields, and how to make an id and a t
 
 What `entityOf` returns: a record class with identity.
 
+### EntityConstructorWithId
+
+*type* · tier: stable · `import type { EntityConstructorWithId } from "@afora/core"`
+
+What `entityOf` returns for an entity with an `id` option: as
+`EntityConstructor`, built from `Input` (which holds the id when the
+strategy makes none). Kept apart so that the default costs no more.
+
 ### EntityDuration
 
 *interface* · tier: stable · `import type { EntityDuration } from "@afora/core"`
@@ -610,6 +638,33 @@ change, and `onDelete` when it is destroyed.
 
 `after` a duration from `createdAt` (stored as `expiresAt`), or `at` the
 date held by a key of the blueprint, `Key`.
+
+### EntityHoldsFile
+
+*const* · tier: stable · `import { EntityHoldsFile } from "@afora/core"`
+
+The blueprint of an entity holds a file (`fileOf`), at `details.path`: an
+entity is stored, and a file is not. Store where the file went (a URL, a
+key of the storage) instead. `source` is the entity name.
+
+### EntityIdOf
+
+*type* · tier: stable · `import type { EntityIdOf } from "@afora/core"`
+
+The type of the ids of the entities of `Entity`: a string, unless its `id` option says otherwise.
+
+### EntityIdOptions
+
+*interface* · tier: stable · `import type { EntityIdOptions } from "@afora/core"`
+
+How an entity gets its id.
+
+### EntityIdStrategy
+
+*const* · tier: stable · `import { EntityIdStrategy } from "@afora/core"`
+
+The id strategy of a class made by `entityOf` with an `id` option (made by
+`idOf`); a class without one has none.
 
 ### EntityIdentityKey
 
@@ -877,6 +932,24 @@ required date and time, as `createdAt`.
 
 `Identity`, with `expiresAt` when `Expires` is `{ after }`.
 
+### FileClass
+
+*type* · tier: stable · `import type { FileClass } from "@afora/core"`
+
+A class declared with `fileOf`.
+
+### FileOptions
+
+*interface* · tier: stable · `import type { FileOptions } from "@afora/core"`
+
+What `fileOf` takes.
+
+### FileProperty
+
+*const* · tier: stable · `import { FileProperty } from "@afora/core"`
+
+Any file (a `File` or a `Blob`), of any type and size; `fileOf` for limits.
+
 ### Forbidden
 
 *const* · tier: stable · `import { Forbidden } from "@afora/core"`
@@ -1097,6 +1170,33 @@ A UUID v7, time-ordered, so ids sort by creation.
 
 Makes a new id, as a UUID v7 string.
 
+### IdStrategy
+
+*interface* · tier: stable · `import type { IdStrategy } from "@afora/core"`
+
+How the entities of one class get their id, made by `idOf`: `property`
+validates it, and `generate`, when `Generated` is `true`, makes it for an
+entity built without one. When `Generated` is `"database"` (`Serial`),
+the database assigns it: `repository.create` sets it on the entity.
+
+### IdValue
+
+*type* · tier: stable · `import type { IdValue } from "@afora/core"`
+
+The value of an id at run time: a string, or a number a database assigns.
+
+### IdValueOf
+
+*type* · tier: stable · `import type { IdValueOf } from "@afora/core"`
+
+The value `Property` gives, the type of the ids it validates.
+
+### IdentityWithId
+
+*type* · tier: stable · `import type { IdentityWithId } from "@afora/core"`
+
+`Identity`, with the property of the strategy `Id` as its `id`.
+
 ### ImmutableEntityKey
 
 *const* · tier: stable · `import { ImmutableEntityKey } from "@afora/core"`
@@ -1109,7 +1209,8 @@ A key of the identity of an entity is changed by `set`, or listed in
 *type* · tier: stable · `import type { InMemoryProvider } from "@afora/core"`
 
 The provider of `inMemoryProvider`: it runs transactions, reads by cursor,
-honors expected versions, increments atomically and leaves expired records out.
+honors expected versions, increments atomically, leaves expired records
+out and assigns `Serial` ids.
 
 ### IncompatibleRecordPlugin
 
@@ -1198,6 +1299,28 @@ A variable of the environment is missing or rejected by its blueprint.
 
 `eventPolicyOf`, a policy's options or a catalog got something it cannot use; `details.reason` says what.
 
+### InvalidFile
+
+*const* · tier: stable · `import { InvalidFile } from "@afora/core"`
+
+A value a file property (`FileProperty`, `fileOf`) rejects: not a file, of
+a media type it does not accept, or larger than its `maxBytes`. Its
+message is the issue's, so `statusOf` gives 400 with the issue at the key.
+
+### InvalidFileOptions
+
+*const* · tier: stable · `import { InvalidFileOptions } from "@afora/core"`
+
+Options of `fileOf` that are not valid: `types` not media types, or `maxBytes` not a size.
+
+### InvalidIdStrategy
+
+*const* · tier: stable · `import { InvalidIdStrategy } from "@afora/core"`
+
+`idOf` was given something other than a required property, or a
+`generate` that is not a function; or the `id` option of `entityOf` is not
+a strategy made by `idOf`. `source` is `idOf` or the entity name.
+
 ### InvalidJsonData
 
 *const* · tier: stable · `import { InvalidJsonData } from "@afora/core"`
@@ -1222,7 +1345,7 @@ A schema given to `jsonOf` or `checkJsonSchema` that is not a JSON Schema (draft
 
 *const* · tier: stable · `import { InvalidOpenAPIModel } from "@afora/core"`
 
-`toOpenAPI` is given something that is not a field: a property, blueprint, list, record or entity.
+`toOpenAPI` or `jsonSchemaOf` is given something that is not a field: a property, blueprint, list, record or entity.
 
 ### InvalidOutputStage
 
@@ -1374,6 +1497,13 @@ it is, e.g. `["addresses", 0, "zip"]`, empty for the value itself.
 
 Why a value was rejected.
 
+### JSONSchema
+
+*interface* · tier: stable · `import type { JSONSchema } from "@afora/core"`
+
+A JSON Schema (draft 2020-12) document: what `jsonSchemaOf` gives, its
+`$schema` set and the records it holds under `$defs`.
+
 ### JsonClass
 
 *type* · tier: stable · `import type { JsonClass } from "@afora/core"`
@@ -1394,6 +1524,14 @@ For JSON of a known shape, `jsonOf({ schema })`.
 *type* · tier: stable · `import type { JsonValue } from "@afora/core"`
 
 A value JSON can hold, as `JSON.parse` gives it.
+
+### Key
+
+*const* · tier: stable · `import { Key } from "@afora/core"`
+
+The `id` option of an entity whose id is a natural key: any text of 1 to
+256 characters, never generated, so the input of the entity must hold it,
+e.g. `entityOf(Setting, { id: Key })` and `new Setting({ id: "seo", ... })`.
 
 ### ListMaker
 
@@ -1585,7 +1723,8 @@ The options of the `openapi` sink.
 The call of an operation: `context` is what the command (or use case)
 declares, and `principal` is who calls, as the sink authenticated it
 (`null` or absent for an anonymous caller). An operation with an `access`
-checks the principal before it runs.
+checks the principal before it runs. `native` is the native request of the
+sink (e.g. the Hono context), given to the factories of services.
 
 ### OperationPatch
 
@@ -1661,6 +1800,14 @@ An HTTP-style status by exception name.
 *const* · tier: stable · `import { Ownable } from "@afora/core"`
 
 An `ownerId`, with `isOwnedBy` and `transferTo`.
+
+### OwnerId
+
+*class* · tier: stable · `import { OwnerId } from "@afora/core"`
+
+The id of an entity of any id strategy, held by another record (as
+`ownerId`): text of 1 to 256 characters, a UUID kept in lower case, or a
+positive integer.
 
 ### ParseResult
 
@@ -1765,12 +1912,26 @@ A required property got `undefined`; `source` is the property name.
 The value a property holds: the value of its schema, or `undefined` too
 when it is optional. `Value` is the value of the schema, as in `ISchema`.
 
+### ProviderCall
+
+*type* · tier: stable · `import type { ProviderCall } from "@afora/core"`
+
+One call to a provider, as `around` gets it: the `operation`, its
+`context` and the arguments after it (`args`), typed by operation, so a
+`switch` on `operation` narrows `args`.
+
 ### ProviderFactory
 
 *interface* · tier: stable · `import type { ProviderFactory } from "@afora/core"`
 
 A provider an application creates when it starts, from the variables of
 its environments: what `providerFrom` makes.
+
+### ProviderInterceptor
+
+*interface* · tier: stable · `import type { ProviderInterceptor } from "@afora/core"`
+
+What `wrapProvider` runs around each operation of a provider.
 
 ### ProviderNotBound
 
@@ -1779,6 +1940,15 @@ its environments: what `providerFrom` makes.
 A repository read or wrote through a provider of `providersOf` made by
 `providerFrom` outside an application: an application that registers the
 storage makes it on start, and its bound repositories use it.
+
+### ProviderOperation
+
+*type* · tier: stable · `import type { ProviderOperation } from "@afora/core"`
+
+The operations of an `IRepositoryProvider` that take a `RepositoryContext`
+first: the ones `wrapProvider` hands to `around`. `transaction` and `close`
+take none and are not intercepted (the provider a transaction gives is
+wrapped with the same interceptor).
 
 ### ProviderOption
 
@@ -1791,6 +1961,12 @@ JSON values retained in provider descriptors, including explicit import referenc
 *type* · tier: stable · `import type { ProviderOptions } from "@afora/core"`
 
 The JSON options of a named provider, as its description keeps them.
+
+### ProviderResults
+
+*type* · tier: stable · `import type { ProviderResults } from "@afora/core"`
+
+What each operation of a provider gives, once awaited.
 
 ### ProviderSettings
 
@@ -2152,6 +2328,12 @@ What `forEachPage` did.
 
 Equality, or membership in a list. Conditions on different keys are ANDed.
 
+### RequiredIdInput
+
+*type* · tier: stable · `import type { RequiredIdInput } from "@afora/core"`
+
+`{ readonly id: ... }`, required, when the strategy `Id` makes no id.
+
 ### ReservedBlueprintKey
 
 *const* · tier: stable · `import { ReservedBlueprintKey } from "@afora/core"`
@@ -2190,6 +2372,33 @@ The options of `resourceOf`.
 
 The use cases of `resourceOf`, by operation: the standard ones, with no option but their route and access.
 
+### ResponseBlueprint
+
+*type* · tier: stable · `import type { ResponseBlueprint } from "@afora/core"`
+
+The `response` declared for `Output`: the list itself, or the blueprint of the fields.
+
+### ResponseOf
+
+*type* · tier: stable · `import type { ResponseOf } from "@afora/core"`
+
+The value of a `response`: of a list, a read-only array of its items
+(e.g. `readonly Article[]`, frozen at run time); of a blueprint, its object.
+
+### ResponseSetting
+
+*type* · tier: stable · `import type { ResponseSetting } from "@afora/core"`
+
+What the `response` setting takes for `Output`: the blueprint of its fields,
+or the list it is. Written as a union so that `Output` is inferred from
+either.
+
+### ResponseValue
+
+*type* · tier: stable · `import type { ResponseValue } from "@afora/core"`
+
+The value a use case whose response gives `Output` resolves with.
+
 ### RestoreMaker
 
 *type* · tier: stable · `import type { RestoreMaker } from "@afora/core"`
@@ -2204,14 +2413,30 @@ Says where a use case is served over HTTP, on the class itself:
 
 ```ts
 
+### RouteBody
+
+*type* · tier: stable · `import type { RouteBody } from "@afora/core"`
+
+The `body` of a route of `Method`: a `delete` may read a JSON body
+(`body: true`); any other method takes no `body`, since a `get` never reads
+one and a `post`, `put` or `patch` always does.
+
 ### RouteDeclaration
 
-*interface* · tier: stable · `import type { RouteDeclaration } from "@afora/core"`
+*type* · tier: stable · `import type { RouteDeclaration } from "@afora/core"`
 
 Where a use case is served over HTTP, as data: declared with the `route`
 setting of `useCaseOf` or with `@Route`, and read by the sinks that serve
 or document HTTP. The blueprint of the use case stays the only description
-of its input: a route only says where each key comes from.
+of its input: a route only says where each key comes from. `body` is only
+allowed on a `delete` (see {@link RouteBody}).
+
+### RouteFields
+
+*interface* · tier: stable · `import type { RouteFields } from "@afora/core"`
+
+What a route says besides its method and `body`: the shared part of
+{@link RouteDeclaration} and {@link RouteSettings}.
 
 ### RouteOptions
 
@@ -2222,7 +2447,7 @@ sinks that serve HTTP, so the served routes and the document agree.
 
 ### RouteSettings
 
-*interface* · tier: stable · `import type { RouteSettings } from "@afora/core"`
+*type* · tier: stable · `import type { RouteSettings } from "@afora/core"`
 
 What the `route` setting and `@Route` take: a {@link RouteDeclaration}
 whose method may be written in upper case.
@@ -2294,6 +2519,69 @@ The options of `select`.
 The type of a property declared `sensitive`, as `Password`, so that the
 type of `toJSON` masks the keys holding it.
 
+### Serial
+
+*const* · tier: stable · `import { Serial } from "@afora/core"`
+
+The `id` option of an entity whose id is a positive integer the database
+assigns as it stores the entity (an auto-increment, serial or identity
+column), e.g. `entityOf(Ticket, { id: Serial })`. A new entity has no id
+(`id` reads `undefined`) until `repository.create` stores it and sets the
+one the database gave; only a provider with `capabilities.generatedIds`
+can create it.
+
+### SerialKey
+
+*class* · tier: stable · `import { SerialKey } from "@afora/core"`
+
+A positive integer the database assigns: an auto-increment, serial or
+identity column; at most `Number.MAX_SAFE_INTEGER`.
+
+### ServiceDeclaration
+
+*interface* · tier: stable · `import type { ServiceDeclaration } from "@afora/core"`
+
+A service a use case depends on by name, made by {@link serviceOf}: a
+cache, a storage, a client of another API. An application gives its value
+per call (`applicationOf({ services })`); `execute` can replace it.
+
+### ServiceFactory
+
+*type* · tier: stable · `import type { ServiceFactory } from "@afora/core"`
+
+Makes the value of a service for a call; may be async.
+
+### ServiceNotBound
+
+*const* · tier: stable · `import { ServiceNotBound } from "@afora/core"`
+
+A use case read a service (see `serviceOf`) that nothing gives it: no
+application binds the name in its `services`, and `execute` was not given a
+value for it. `details.service` is the name of the service.
+
+### ServiceOutsideExecution
+
+*const* · tier: stable · `import { ServiceOutsideExecution } from "@afora/core"`
+
+A use case read a service (see `serviceOf`) before its `execute` started or
+after it ended: a service is made when `execute` starts, so it is read
+inside `execute`. `details.service` is the name of the service.
+
+### ServiceScope
+
+*interface* · tier: stable · `import type { ServiceScope } from "@afora/core"`
+
+What the factory of a service gets, once per call: the name of the
+service, the context of the call and who calls, its logger, the variables
+of an environment, and what the sink that received the call gives as
+`native` (the Hono context, a Request), if any.
+
+### ServiceValueOf
+
+*type* · tier: stable · `import type { ServiceValueOf } from "@afora/core"`
+
+The value a service gives a use case.
+
 ### Slug
 
 *class* · tier: stable · `import { Slug } from "@afora/core"`
@@ -2348,7 +2636,7 @@ done.
 *const* · tier: stable · `import { Std } from "@afora/core"`
 
 The standard properties, for blueprints to pick from, and the factories
-`enumOf` and `jsonOf`, as `ctx.enumOf(["draft", "published"])`.
+`enumOf`, `jsonOf` and `fileOf`, as `ctx.enumOf(["draft", "published"])`.
 
 ### StdCreateOptions
 
@@ -2560,6 +2848,12 @@ Any string.
 
 The hasher in use cannot verify without waiting; use `verify` instead.
 
+### TFile
+
+*type* · tier: stable · `import type { TFile } from "@afora/core"`
+
+The schema of a file: `format: "binary"`, which OpenAPI documents as a binary string.
+
 ### TagMaker
 
 *type* · tier: stable · `import type { TagMaker } from "@afora/core"`
@@ -2577,6 +2871,12 @@ The hasher in use cannot verify without waiting; use `verify` instead.
 *const* · tier: stable · `import { Text } from "@afora/core"`
 
 A string that is not blank once trimmed.
+
+### TextKey
+
+*class* · tier: stable · `import { TextKey } from "@afora/core"`
+
+Any text of 1 to 256 characters, kept as given: a natural key, e.g. `profile`.
 
 ### TraceAttributes
 
@@ -2633,6 +2933,14 @@ A record is given a key its blueprint does not declare, in its value or by
 `set`; `key` is its path, e.g. `address.extra`, and `source` the record name.
 `issues` has every issue found of a value, this one first (not enumerable).
 
+### UndeclaredStatus
+
+*const* · tier: stable · `import { UndeclaredStatus } from "@afora/core"`
+
+A use case chose, with `withStatus`, a status its route does not declare
+(neither its status nor one of its `statuses`): the HTTP sink answers a
+500 whose detail is masked, never the undeclared status.
+
 ### UniqueMark
 
 *type* · tier: stable · `import type { UniqueMark } from "@afora/core"`
@@ -2676,6 +2984,24 @@ The entity, relations or environments of a repository are not registered in the 
 
 A dependency of a use case of the application (a use case, repository or environment) is not registered in it.
 
+### UnstoredEntity
+
+*const* · tier: stable · `import { UnstoredEntity } from "@afora/core"`
+
+An entity whose id the database assigns (`Serial`) was given to a
+repository before `create` stored it, so it has no id yet: to `update`,
+`delete`, `restore` or `increment`, or held by another entity (stored by
+its id). `source` is the repository name, or the name of the entity held.
+
+### UnsupportedIdentity
+
+*const* · tier: stable · `import { UnsupportedIdentity } from "@afora/core"`
+
+The entity has ids the database assigns (`Serial`) and the provider does
+not assign them (no `capabilities.generatedIds`), or gave no valid id for
+an entity it inserted; `source` is the repository name, or the
+application whose provider is made on start.
+
 ### UpdateMaker
 
 *type* · tier: stable · `import type { UpdateMaker } from "@afora/core"`
@@ -2705,7 +3031,7 @@ A URL of up to 2048 characters, trimmed.
 *type* · tier: stable · `import type { UseCaseCollection } from "@afora/core"`
 
 The `dependencies` of a use case, by name: use case classes, repositories,
-environments or the {@link Logger }.
+environments, the {@link Logger } or services.
 
 ### UseCaseCompilation
 
@@ -2748,7 +3074,8 @@ environment or an {@link ILogger} (see {@link DependencyOf}).
 *type* · tier: stable · `import type { UseCaseDependency } from "@afora/core"`
 
 What a use case can depend on: another use case, a repository made by
-`repositoryOf`, an environment made by `environmentOf`, or `Logger`.
+`repositoryOf`, an environment made by `environmentOf`, `Logger`, or a
+service made by `serviceOf`.
 
 ### UseCaseEntityConflict
 
@@ -2795,6 +3122,13 @@ any options.
 The second argument of the constructor of a use case: `{ context }`,
 required when the use case declares a context, not accepted otherwise.
 
+### UseCaseOutput
+
+*type* · tier: stable · `import type { UseCaseOutput } from "@afora/core"`
+
+What the `response` of a use case says it gives: the fields of an object
+blueprint, or a list made by `listOf` (e.g. `listOf(Article)`).
+
 ### UseCasePluginDescriptor
 
 *interface* · tier: stable · `import type { UseCasePluginDescriptor } from "@afora/core"`
@@ -2818,7 +3152,7 @@ What `useCasePluginOf` takes, after the name.
 *type* · tier: stable · `import type { UseCaseResponse } from "@afora/core"`
 
 The value `execute` of a use case class resolves with: the value of its
-`response` blueprint.
+`response` blueprint, or an array of the items of its `response` list.
 
 ### UseCaseSettings
 
@@ -2873,6 +3207,21 @@ What `compile` gets of the repository a use case is made for.
 A use case plugin cannot make its use case for a repository: the
 repository lacks an action, the entity lacks a record plugin, or an option
 names what the entity does not have. `source` is the plugin name.
+
+### Uuid
+
+*const* · tier: stable · `import { Uuid } from "@afora/core"`
+
+The `id` option of an entity whose ids are UUIDs of any version (a v4
+loaded from an existing database included), lower-cased; a new entity
+still gets a UUID v7 from the configured generator, e.g.
+`entityOf(Legacy, { id: Uuid })`.
+
+### UuidKey
+
+*class* · tier: stable · `import { UuidKey } from "@afora/core"`
+
+A UUID of any version, in lower case.
 
 ### VersionedIdentity
 
@@ -3170,6 +3519,28 @@ error.message; // "There is no user 42."
 error.layer; // ExceptionLayers.UseCase
 ```
 
+### fileOf
+
+*function* · tier: stable · `import { fileOf } from "@afora/core"`
+
+A file, as `multipart/form-data` gives it (a `File`, or any `Blob`):
+checked to be one, of one of `types` (`image/*` takes any image but SVG)
+and of at most `maxBytes`, and kept as it is, never copied or read. The
+type is the one the client declares; the HTTP sinks check that the first
+bytes of a PNG, JPEG, GIF, WebP or AVIF match it. Its schema is
+`format: "binary"`, so an HTTP sink reads `multipart/form-data` for an
+input that holds one and OpenAPI documents it as a binary string. A file
+cannot be `sensitive` or `unique`; a record's `toJSON` gives it as it is,
+and `JSON.stringify` writes a `Blob` as `{}`.
+
+**Example**
+
+```ts
+import { fileOf } from "@afora/core";
+
+const Avatar = fileOf({ types: ["image/png", "image/jpeg"], maxBytes: 5_000_000 });
+```
+
 ### guard
 
 *function* · tier: stable · `import { guard } from "@afora/core"`
@@ -3206,6 +3577,30 @@ Whether `value`, a record, an entity or a class of them, has `plugin`
 (given or by name), applied to it or required by one of its plugins; a
 record of the plugin's own class has it too.
 
+### idOf
+
+*function* · tier: stable · `import { idOf } from "@afora/core"`
+
+How the entities of one class get their id, for the `id` option of
+`entityOf`: `property` validates it (it replaces the `id` of the identity
+and stays unique) and `generate`, when given, makes it for an entity built
+without one. Without `generate`, the id is a natural key: the input of the
+entity must hold it, or building it reports an issue at `id`.
+
+**Example**
+
+```ts
+import { blueprintOf, entityOf, idOf, Integer } from "@afora/core";
+
+let next = 0;
+class Ticket extends entityOf(
+	blueprintOf((ctx) => ({ title: ctx.string })),
+	{ id: idOf(Integer, () => ++next) },
+) {}
+
+new Ticket({ title: "First" }).id; // 1
+```
+
 ### inMemoryProvider
 
 *function* · tier: stable · `import { inMemoryProvider } from "@afora/core"`
@@ -3235,6 +3630,18 @@ Whether `value` is an entity, an instance of a class made by `entityOf`.
 
 Whether `value` is a class made by `entityOf`, or one extending it.
 
+### isIdStrategy
+
+*function* · tier: stable · `import { isIdStrategy } from "@afora/core"`
+
+Whether `value` is an id strategy, made by `idOf`.
+
+### isIdValue
+
+*function* · tier: stable · `import { isIdValue } from "@afora/core"`
+
+Whether `value` can be an id: a string, or a finite number.
+
 ### isOutput
 
 *function* · tier: stable · `import { isOutput } from "@afora/core"`
@@ -3246,6 +3653,12 @@ Whether `value` is an output made by `outputOf`.
 *function* · tier: stable · `import { isProviderFactory } from "@afora/core"`
 
 Whether `value` was made by `providerFrom`.
+
+### isService
+
+*function* · tier: stable · `import { isService } from "@afora/core"`
+
+Whether `value` is a service made by {@link serviceOf}.
 
 ### isUseCase
 
@@ -3299,6 +3712,31 @@ there is none. For schemas known at runtime only, e.g. loaded from a
 database: TypeBox checks the value by walking the schema, compiling
 nothing. Throws `InvalidJsonSchema` when `schema` is not a JSON Schema.
 
+### jsonSchemaOf
+
+*function* · tier: stable · `import { jsonSchemaOf } from "@afora/core"`
+
+The JSON Schema (draft 2020-12) of a property, blueprint, list, variant,
+record or entity, as a standalone document: what an AI client, a form or
+any JSON Schema validator reads. It is `toOpenAPI` in the JSON Schema
+dialect: each record held inside is defined once under `$defs`, by its
+name, and referenced as `{ $ref: "#/$defs/Address" }` (so is the schema
+of a property with an `$id`, without it, so the document is
+self-contained), a read-only key is not `required`, and a variant is
+`oneOf` without the OpenAPI `discriminator`. Sensitive keys are
+`writeOnly`, the identity of an entity `readOnly`, optional keys left out
+of `required`, and objects closed with `additionalProperties: false`.
+
+**Example**
+
+```ts
+import { blueprintOf, jsonSchemaOf } from "@afora/core";
+
+const Post = blueprintOf((ctx) => ({ title: ctx.string, tags: ctx.list.string }));
+jsonSchemaOf(Post);
+// { $schema: "https://json-schema.org/draft/2020-12/schema", type: "object", ... }
+```
+
 ### listOf
 
 *function* · tier: stable · `import { listOf } from "@afora/core"`
@@ -3345,8 +3783,10 @@ parameter, the input key `name` (a scalar), left out of the body or query.
 The `operationId` is the id with its dot as an underscore (`Users.register`
 -> `Users_register`), unique or the build throws. `get` and `delete` send
 the input as query parameters, which needs every input field to be a
-scalar property. Responses: the `route` status (`200` by default; `204`
+scalar property; a `delete` with `body: true` sends it as a JSON body,
+required only when a field left in it is. Responses: the `route` status (`200` by default; `204`
 without content) with the response schema and the `responses` headers,
+the same for each of the route `statuses` (chosen with `withStatus`),
 `400` and `500` always, and the status of each declared error (`statusOf`:
 `statuses` of the output, else 422); `requestId` adds its header to all of
 them. Operations carry no repository dependencies, so `404` and `409`
@@ -3636,6 +4076,29 @@ spread the rest: `(ctx) => ({ ...resourceOf(Posts, options)(ctx), create: ctx.cr
 Keeps the operations that match every given option: `tags` (any of),
 `operations` (ids to keep) and `exclude` (ids to drop).
 
+### serviceOf
+
+*function* · tier: stable · `import { serviceOf } from "@afora/core"`
+
+Declares a service named `name`, a dependency of use cases whose value an
+application gives per call: `dependencies: { cache: Cache }` makes
+`this.dependencies.cache` a `Value`. A use case reads it as it is (no
+`await`): the factories of the services it declares run before its
+`execute`, once per call.
+
+**Throws** {
+
+**Example**
+
+```ts
+import { serviceOf } from "@afora/core";
+
+interface CacheClient {
+	get(key: string): Promise<string | null>;
+}
+const Cache = serviceOf<CacheClient>("cache");
+```
+
 ### stripUndeclared
 
 *function* · tier: stable · `import { stripUndeclared } from "@afora/core"`
@@ -3748,9 +4211,84 @@ class (an entity too): the value is then an instance of it, told apart by
 its class, and the key is only in what is given, in `toJSON` and in what is
 stored.
 
+### withStatus
+
+*function* · tier: stable · `import { withStatus } from "@afora/core"`
+
+A view of `body`, the body of a response, that carries the HTTP `status`
+to send it with, for the `execute` of a use case:
+`return ok ? body : withStatus(503, body)`. The view is a new value for
+each call, typed as the body and reading as it (fields, getters, keys,
+`Array.isArray`); the body itself is not changed (a frozen or shared one is
+fine) and carries no status, so another call that returns it is not
+affected. The use case takes the status and the body when `execute` returns. The use case validates the body
+against its `response` as usual. The route of the use case declares each
+status other than its default one in `route.statuses`
+(`{ method: "get", path: "/health", statuses: [503] }`): an HTTP sink
+answers an undeclared one with `UndeclaredStatus`, a masked 500. Every
+status sends the body as a success, 5xx included (not a problem). A direct
+call (`execute()`), a use case called as a dependency and the sinks that
+do not speak HTTP (`mcp`, `ws`) get the body only.
+
+**Example**
+
+```ts
+import { blueprintOf, useCaseOf, withStatus } from "@afora/core";
+
+declare function ping(): Promise<boolean>;
+
+class Health extends useCaseOf({
+	name: "Health",
+	blueprint: blueprintOf(() => ({})),
+	response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+	route: { method: "get", path: "/health", statuses: [503] },
+}) {
+	override async execute() {
+		const ok = await ping();
+		return ok ? { ok } : withStatus(503, { ok });
+	}
+}
+```
+
+### wrapProvider
+
+*function* · tier: stable · `import { wrapProvider } from "@afora/core"`
+
+A provider that runs `interceptor.around` around each operation of
+`provider` taking a context (`ProviderOperation`), for logs, traces or
+spies. It has the operations `provider` has and no other (`increment`,
+`migrate`, `transaction` and `close` stay absent when it has none), its
+`capabilities` (read live) and its other members; the provider a
+`transaction` gives is wrapped with the same interceptor; `close` is
+forwarded as it is. Wraps compose: the last one runs first.
+
+The wrapper is a plain frozen object (`instanceof` the class of
+`provider` is false) and the other members are bound when it is made.
+`around` must give what `next()` gives (or another value of the
+operation's result, `ProviderResults[operation]`).
+
+**Throws** {
+
+**Example**
+
+```ts
+import { inMemoryProvider, wrapProvider } from "@afora/core";
+
+const logged = wrapProvider(inMemoryProvider(), {
+  async around({ operation, context }, next) {
+    try {
+      return await next();
+    } catch (error) {
+      console.error(`${context.name}.${operation} failed`, error);
+      throw error;
+    }
+  },
+});
+```
+
 ## @afora/core/adapters
 
-Tier: adapters. 73 exports.
+Tier: adapters. 75 exports.
 
 ### ApplicationDescription
 
@@ -3827,6 +4365,13 @@ What a key of a blueprint, record or environment holds.
 *type* · tier: adapters · `import type { FieldsDescription } from "@afora/core/adapters"`
 
 The fields of a blueprint, record or entity in a description, by name.
+
+### FormParts
+
+*interface* · tier: adapters · `import type { FormParts } from "@afora/core/adapters"`
+
+What the route table reads of a `FormData`: its parts, in order, each a
+name and a value (text or a `File`). A `FormData` of any runtime is one.
 
 ### HTTP_OPTION_KEYS
 
@@ -3915,8 +4460,10 @@ An RFC 9457 problem.
 
 *interface* · tier: adapters · `import type { ProblemOptions } from "@afora/core/adapters"`
 
-What `problemOf` takes: the HTTP `status` of the problem and `debug`, which
-adds the `trace` and the real `detail` of a 5xx.
+What `problemOf` takes: the HTTP `status` of the problem, `debug`, which
+adds the `trace` and the real `detail` of a 5xx, and what the output
+declares (`statuses`, the `operation` and its `errors`): the `detail` of a
+declared exception is kept at any status.
 
 ### PropertyDescription
 
@@ -4140,6 +4687,14 @@ What a use case depends on, by the name it has in the application.
 
 A use case: its metadata, fields and what it depends on.
 
+### chosenStatusOf
+
+*function* · tier: adapters · `import { chosenStatusOf } from "@afora/core/adapters"`
+
+The status {@link withStatus} gave `value`, or `undefined`. A sink that
+serves HTTP reads it on what `operation.invoke` resolves with; a transform
+that wraps `invoke` must resolve with that same value for it to survive.
+
 ### coerceTextValues
 
 *function* · tier: adapters · `import { coerceTextValues } from "@afora/core/adapters"`
@@ -4159,11 +4714,18 @@ any server: the sink routes each `method` and `path` to `handle` and sends
 the result as is. Everything a request needs is decided here, so a call
 only reads, coerces and runs:
 
-- The input is the JSON body of a `post`, `put` or `patch` and the query
-  of a `get` or `delete`, with the keys the route reads elsewhere over it:
-  `{name}` segments of the path, and the query keys, headers and cookies
-  the use case route declares. Text is coerced to the numbers and booleans
-  the input takes; the operation validates it (a 400 problem with `issues`).
+- The input is the JSON body of a `post`, `put` or `patch` (or of a
+  `delete` with `body: true`) and the query of a `get` or `delete`, with
+  the keys the route reads elsewhere over it: `{name}` segments of the path, and the query keys, headers and cookies
+  the use case route declares, which are only read from there (a key the
+  body or the query sends for them is dropped). Text is coerced to the
+  numbers and booleans the input takes; the operation validates it (a 400
+  problem with `issues`).
+- An input that holds a file (`format: "binary"`, as `fileOf`) is read
+  from a `multipart/form-data` body when the request sends one: files as
+  they are, text coerced, objects as JSON text, repeated keys as a list.
+  A server whose requests have no `form` answers it with 415. A JSON body
+  still works for its other keys.
 - The context comes from `context.headers` (coerced) and
   `context.variables` (as is); a missing one leaves the key out.
 - An operation with an `access` other than `public` asks
@@ -4171,6 +4733,9 @@ only reads, coerces and runs:
   it is a 401.
 - Success is the route status with the response as JSON (sensitive values
   masked by `toJSON`), or no body for `204`, plus the `responses` headers.
+  A use case that returns `withStatus(status, body)` sends the body with
+  that status, when the route declares it (its status or one of its
+  `statuses`); any other is an `UndeclaredStatus`, a masked 500.
   Errors are `application/problem+json`, with the status of `statusOf`
   (the output `statuses` first). `requestId` puts the request id on every
   result, `notFound` and `failure` included.
@@ -4217,7 +4782,9 @@ routing of the `openapi` sink and of the sinks that serve HTTP.
 *function* · tier: adapters · `import { outputValueOf } from "@afora/core/adapters"`
 
 The JSON a sink sends: `JSON.parse(JSON.stringify(value))`. Every record
-goes through its `toJSON`, so sensitive values are always masked.
+goes through its `toJSON`, so sensitive values are always masked. A
+status chosen with `withStatus` is not part of the value: a sink that does
+not speak HTTP ignores it.
 
 ### problemOf
 
@@ -4225,8 +4792,9 @@ goes through its `toJSON`, so sensitive values are always masked.
 
 An RFC 9457 problem for `error`. `issues` (`path`, `code`, `message`; no
 values or causes) is present only for a 400, `trace` only with `debug`,
-and the `detail` of a 5xx is `"Internal error."` unless `debug` is set, so
-internal messages do not leak.
+and the `detail` of a 5xx is `"Internal error."` unless `debug` is set or
+the output declares the exception (its name in `statuses`, or a class of
+`operation.errors`, except afora's internal ones), so internal messages do not leak.
 
 ### requestIdHeaderOf
 
@@ -4618,7 +5186,7 @@ who asks, in the `UseCaseUnavailable` it throws. Throws a `TypeError` when
 
 ## @afora/core/testing
 
-Tier: testing. 7 exports.
+Tier: testing. 10 exports.
 
 ### ContractRunner
 
@@ -4645,6 +5213,18 @@ A publisher that keeps what it is given, for tests.
 What {@link providerContract} takes: which optional groups of cases to run,
 each defaulting to what the provider advertises in `capabilities`, except the
 schema evolution ones.
+
+### ProviderSpy
+
+*interface* · tier: testing · `import type { ProviderSpy } from "@afora/core/testing"`
+
+The members `spyProvider` adds to the provider it wraps.
+
+### SpiedCall
+
+*interface* · tier: testing · `import type { SpiedCall } from "@afora/core/testing"`
+
+One call a `spyProvider` recorded.
 
 ### httpProviderContract
 
@@ -4681,3 +5261,29 @@ A publisher for `applicationOf({ publishers })` in tests: it keeps each
 Registers the behavior every `IRepositoryProvider` v2 must have. Pass the
 `describe`, `it` and `expect` of your runner and a factory of fresh, empty
 providers (called once per case).
+
+### spyProvider
+
+*function* · tier: testing · `import { spyProvider } from "@afora/core/testing"`
+
+A provider for tests that forwards to `provider` and records each call
+of an operation taking a context (`{ operation, entity, args }`, read
+with `calls`), and can make one fail (`fail`). It is the provider itself
+(the same type, with the members of `ProviderSpy`), so it goes where a
+provider goes: `applicationOf({ provider })` or `repositoryOf({ provider })`.
+Repositories are frozen, so this is how a test sees what reaches the
+database, also behind an HTTP sink. Built on `wrapProvider`.
+
+**Throws** {
+
+**Example**
+
+```ts
+import { inMemoryProvider } from "@afora/core";
+import { spyProvider } from "@afora/core/testing";
+
+const spy = spyProvider(inMemoryProvider());
+// applicationOf({ ..., provider: spy }), then a request
+const reads = spy.calls("Project", "findMany").length;
+spy.fail("Setting", "count", new Error("down"), { times: 1 });
+```

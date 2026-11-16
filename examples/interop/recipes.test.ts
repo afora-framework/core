@@ -6,6 +6,7 @@ import { Product, Sku } from "./recipes/custom-property.ts";
 import { countingProvider } from "./recipes/custom-provider.ts";
 import { Listed } from "./recipes/custom-sink-or-stage.ts";
 import { appWith } from "./recipes/domain-events.ts";
+import { appWith as uploadsWith } from "./recipes/file-upload.ts";
 import {
 	EmailTaken,
 	fakeMembers,
@@ -27,6 +28,7 @@ test("recipes: each page shows the code of its file", async () => {
 		"custom-provider",
 		"custom-sink-or-stage",
 		"override-repository-method",
+		"file-upload",
 	];
 	for (const name of names) {
 		const source = (await read(`./recipes/${name}.ts`)).trim();
@@ -159,5 +161,48 @@ describe("override a repository method in a test", () => {
 		});
 
 		expect(member.email).toBe("ana@example.com");
+	});
+});
+
+describe("file upload to a storage service", () => {
+	const stored = new Map<string, Blob>();
+	const api = uploadsWith({
+		put: async (key, file) => {
+			stored.set(key, file);
+			return `https://cdn.example.com/${key}`;
+		},
+	}).outputs.Api.build();
+	const upload = (file: File) => {
+		const form = new FormData();
+		form.set("avatar", file);
+		return api.request("/users/u1/avatar", { method: "PUT", body: form });
+	};
+
+	it("stores the file through the service and answers its URL", async () => {
+		const png = new Uint8Array(40);
+		png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+		const response = await upload(
+			new File([png], "me.png", { type: "image/png" }),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			url: "https://cdn.example.com/avatars/u1",
+			bytes: 40,
+		});
+		expect(stored.get("avatars/u1")?.size).toBe(40);
+	});
+
+	it("refuses another type, and a file that only claims to be a PNG", async () => {
+		const text = await upload(
+			new File(["hello"], "a.txt", { type: "text/plain" }),
+		);
+		const disguised = await upload(
+			new File(["hello"], "me.png", { type: "image/png" }),
+		);
+
+		expect(text.status).toBe(400);
+		expect(disguised.status).toBe(400);
+		expect((await disguised.json()).title).toBe("InvalidFileContent");
 	});
 });

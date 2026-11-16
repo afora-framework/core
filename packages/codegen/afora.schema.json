@@ -301,6 +301,24 @@
 			},
 			"description": "Where event policies publish, by key (applicationOf({ publishers })): a publisher written by hand, { \"import\": \"./realtime.ts#hub\" }."
 		},
+		"services": {
+			"type": "object",
+			"patternProperties": {
+				"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+					"type": "object",
+					"required": ["import"],
+					"properties": {
+						"import": {
+							"type": "string",
+							"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+							"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"description": "The services of the use cases, by name (applicationOf({ services })): the factory written by hand that makes the value of each per call, { \"import\": \"./services.ts#cache\" }. A use case names one in its dependencies."
+		},
 		"properties": {
 			"type": "object",
 			"patternProperties": {
@@ -367,6 +385,41 @@
 						},
 						{
 							"type": "object",
+							"required": ["file"],
+							"properties": {
+								"file": {
+									"type": "object",
+									"properties": {
+										"types": {
+											"type": "array",
+											"items": {
+												"type": "string",
+												"pattern": "^[^\\s/]+/[^\\s/]+$",
+												"description": "A media type, \"image/png\", or \"image/*\" for any image."
+											},
+											"minItems": 1
+										},
+										"maxBytes": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "The largest size, in bytes."
+										},
+										"name": {
+											"type": "string",
+											"minLength": 1
+										}
+									},
+									"additionalProperties": false,
+									"description": "A file (fileOf), sent in a multipart/form-data body: the media types it accepts and its largest size. {} takes any file."
+								},
+								"optional": {
+									"type": "boolean"
+								}
+							},
+							"additionalProperties": false
+						},
+						{
+							"type": "object",
 							"required": ["opaque", "import"],
 							"properties": {
 								"opaque": {
@@ -385,7 +438,7 @@
 							"additionalProperties": false
 						}
 					],
-					"description": "A custom property: `base` + `with` (a refined Std property), an `enum`, or an `opaque` import of a hand-written property."
+					"description": "A custom property: `base` + `with` (a refined Std property), an `enum`, a `file`, or an `opaque` import of a hand-written property."
 				}
 			},
 			"additionalProperties": false,
@@ -682,6 +735,27 @@
 							},
 							"additionalProperties": false,
 							"description": "Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name (\"created\"), raised for a policy such as publishEvents, or { \"name\": \"created\", \"handler\": { \"import\": \"./events.ts#onCreated\" } }."
+						},
+						"id": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "uuid7"
+								},
+								{
+									"type": "string",
+									"const": "uuid"
+								},
+								{
+									"type": "string",
+									"const": "key"
+								},
+								{
+									"type": "string",
+									"const": "serial"
+								}
+							],
+							"description": "Entities only: how ids are made. \"uuid7\" (default) generates and accepts UUID v7; \"uuid\" accepts any UUID version (v4 from an existing database) and generates v7; \"key\" is a natural key (1 to 256 characters) the input must hold, never generated; \"serial\" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds."
 						},
 						"versioned": {
 							"type": "boolean",
@@ -1039,6 +1113,27 @@
 							},
 							"additionalProperties": false,
 							"description": "Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name (\"created\"), raised for a policy such as publishEvents, or { \"name\": \"created\", \"handler\": { \"import\": \"./events.ts#onCreated\" } }."
+						},
+						"id": {
+							"anyOf": [
+								{
+									"type": "string",
+									"const": "uuid7"
+								},
+								{
+									"type": "string",
+									"const": "uuid"
+								},
+								{
+									"type": "string",
+									"const": "key"
+								},
+								{
+									"type": "string",
+									"const": "serial"
+								}
+							],
+							"description": "Entities only: how ids are made. \"uuid7\" (default) generates and accepts UUID v7; \"uuid\" accepts any UUID version (v4 from an existing database) and generates v7; \"key\" is a natural key (1 to 256 characters) the input must hold, never generated; \"serial\" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds."
 						},
 						"versioned": {
 							"type": "boolean",
@@ -1452,6 +1547,27 @@
 											"default": 200,
 											"description": "The status of a success."
 										},
+										"statuses": {
+											"type": "array",
+											"items": {
+												"type": "integer",
+												"minimum": 200,
+												"maximum": 599,
+												"not": {
+													"anyOf": [
+														{
+															"enum": [204, 205, 400, 500]
+														},
+														{
+															"minimum": 300,
+															"maximum": 399
+														}
+													]
+												}
+											},
+											"uniqueItems": true,
+											"description": "The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. A 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not 400 or 500 (kept for problems), nor the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500."
+										},
 										"query": {
 											"type": "array",
 											"items": {
@@ -1530,10 +1646,15 @@
 												}
 											},
 											"description": "Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie."
+										},
+										"body": {
+											"type": "boolean",
+											"default": false,
+											"description": "Only on a delete: true reads the input keys with no other place from a JSON body instead of the query (an empty body is {}). A get never reads a body, and a post, put or patch always does."
 										}
 									},
 									"additionalProperties": false,
-									"description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status."
+									"description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status, statuses and body."
 								},
 								"access": {
 									"anyOf": [
@@ -1626,29 +1747,37 @@
 								"response": {
 									"anyOf": [
 										{
-											"type": "string",
-											"pattern": "^[A-Z][A-Za-z0-9]*$",
-											"description": "The name of a declared blueprint."
-										},
-										{
-											"type": "object",
-											"required": ["fields"],
-											"properties": {
-												"fields": {
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[A-Z][A-Za-z0-9]*$",
+													"description": "The name of a declared blueprint."
+												},
+												{
 													"type": "object",
-													"patternProperties": {
-														"^[A-Za-z_$][A-Za-z0-9_$]*$": {
-															"$ref": "#/$defs/Field"
+													"required": ["fields"],
+													"properties": {
+														"fields": {
+															"type": "object",
+															"patternProperties": {
+																"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+																	"$ref": "#/$defs/Field"
+																}
+															},
+															"additionalProperties": false,
+															"description": "Fields by key."
 														}
 													},
-													"additionalProperties": false,
-													"description": "Fields by key."
+													"additionalProperties": false
 												}
-											},
-											"additionalProperties": false
+											],
+											"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+										},
+										{
+											"$ref": "#/$defs/Field"
 										}
 									],
-									"description": "A blueprint by name (\"RegisterInput\") or declared in place ({ \"fields\": {...} })."
+									"description": "A blueprint, or a list written as a field: \"Article[]\", { \"type\": \"Article\", \"list\": { \"maxItems\": 50 } } or { \"fields\": {...}, \"list\": true }. The use case then answers an array."
 								},
 								"context": {
 									"anyOf": [
@@ -1684,7 +1813,7 @@
 											"type": "string"
 										}
 									},
-									"description": "Key -> name of a declared use case, repository or environment."
+									"description": "Key -> name of a declared use case, repository or environment, a key of \"services\", or \"Logger\"."
 								},
 								"errors": {
 									"type": "array",
@@ -2175,6 +2304,27 @@
 											"default": 200,
 											"description": "The status of a success."
 										},
+										"statuses": {
+											"type": "array",
+											"items": {
+												"type": "integer",
+												"minimum": 200,
+												"maximum": 599,
+												"not": {
+													"anyOf": [
+														{
+															"enum": [204, 205, 400, 500]
+														},
+														{
+															"minimum": 300,
+															"maximum": 399
+														}
+													]
+												}
+											},
+											"uniqueItems": true,
+											"description": "The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. A 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not 400 or 500 (kept for problems), nor the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500."
+										},
 										"query": {
 											"type": "array",
 											"items": {
@@ -2253,10 +2403,15 @@
 												}
 											},
 											"description": "Scalar response keys sent as cookies instead of in the body. An empty text removes the cookie."
+										},
+										"body": {
+											"type": "boolean",
+											"default": false,
+											"description": "Only on a delete: true reads the input keys with no other place from a JSON body instead of the query (an empty body is {}). A get never reads a body, and a post, put or patch always does."
 										}
 									},
 									"additionalProperties": false,
-									"description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch, and the query of a get or delete. The route option of a sink overrides method, path and status."
+									"description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status, statuses and body."
 								},
 								"access": {
 									"anyOf": [
@@ -2655,6 +2810,65 @@
 							"type": "string",
 							"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
 							"description": "The key that held the value in rows stored before the key was renamed: moved on read and in app.migrate. Not for list fields."
+						},
+						"optional": {
+							"type": "boolean",
+							"description": "The key may be absent."
+						},
+						"list": {
+							"anyOf": [
+								{
+									"type": "boolean"
+								},
+								{
+									"type": "object",
+									"properties": {
+										"minItems": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"maxItems": {
+											"type": "integer",
+											"minimum": 0
+										}
+									},
+									"additionalProperties": false,
+									"description": "Bounds of a list."
+								}
+							],
+							"description": "A list of the type (the options in `with` apply to each item). `true` or { minItems, maxItems }."
+						}
+					},
+					"additionalProperties": false
+				},
+				{
+					"type": "object",
+					"required": ["file"],
+					"properties": {
+						"file": {
+							"type": "object",
+							"properties": {
+								"types": {
+									"type": "array",
+									"items": {
+										"type": "string",
+										"pattern": "^[^\\s/]+/[^\\s/]+$",
+										"description": "A media type, \"image/png\", or \"image/*\" for any image."
+									},
+									"minItems": 1
+								},
+								"maxBytes": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "The largest size, in bytes."
+								},
+								"name": {
+									"type": "string",
+									"minLength": 1
+								}
+							},
+							"additionalProperties": false,
+							"description": "A file (fileOf), sent in a multipart/form-data body: the media types it accepts and its largest size. {} takes any file."
 						},
 						"optional": {
 							"type": "boolean",

@@ -5,6 +5,8 @@ import { recordFieldOf } from "../blueprint/record-field";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
 import { isBlueprintVariant } from "../blueprint/variant";
 import {
+	assignEntityId,
+	assignsIdsOnInsert,
 	EntityClock,
 	EntitySettings,
 	EntityUniqueKeys,
@@ -15,7 +17,9 @@ import {
 import { isEntity, isEntityClass } from "../entity/entity";
 import { enqueueLifecycle } from "../entity/event";
 import { InvalidEntitySchemaVersion } from "../entity/exceptions";
+import { isIdValue } from "../entity/id";
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
+import type { IdValue } from "../entity/types/id.interface";
 import {
 	type EnvironmentDependencies,
 	isEnvironment,
@@ -44,6 +48,8 @@ import {
 	InvalidRepositoryQuery,
 	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
+	UnstoredEntity,
+	UnsupportedIdentity,
 } from "./exceptions";
 import { inMemoryProvider } from "./in-memory";
 import { planQuery } from "./plan";
@@ -145,11 +151,48 @@ type RepositoryOfProvider<
 	? RepositoryType<Entity, Actions, Environment>
 	: RepositoryType<Entity, Actions, Environment, false>;
 
-/** Stores each entity a record holds as its id. */
+/**
+ * Stores each entity a record holds as its id; throws `UnstoredEntity` for
+ * one whose id the database is still to assign.
+ */
 const REFERENCES: RecordDataOptions = {
-	reference: (record) =>
-		isEntity(record) ? (record as unknown as { id: string }).id : undefined,
+	reference: (record) => {
+		if (!isEntity(record)) return undefined;
+		const { id } = record as unknown as { readonly id?: IdValue };
+		if (id === undefined) {
+			const name = recordNameOf(record.constructor);
+			throw new UnstoredEntity({
+				source: name,
+				details: {
+					entity: name,
+					reason: `A ${name} held by another entity has no id yet: create it first, so the database assigns the id it is stored by.`,
+				},
+			});
+		}
+		return id;
+	},
 };
+
+/**
+ * The id of `data`, the value of an entity given to `action`; throws
+ * `UnstoredEntity` when the entity has none yet (its id is assigned by the
+ * database, on `create`).
+ */
+function storedIdOf(
+	self: Internal,
+	data: RepositoryData,
+	action: string,
+): IdValue {
+	if (data.id !== undefined) return data.id as IdValue;
+	const name = recordNameOf(self.context.entity);
+	throw new UnstoredEntity({
+		source: self.context.name,
+		details: {
+			entity: name,
+			reason: `"${self.context.name}" cannot ${action} a ${name} that has no id yet: create gives it the id the database assigns.`,
+		},
+	});
+}
 
 /**
  * A repository: the base of every class `repositoryOf` makes. Its methods are
@@ -606,9 +649,83 @@ const create = action(async (self, input: unknown) => {
 		input instanceof Entity
 			? input
 			: new (Entity as unknown as new (value: unknown) => object)(input);
-	await self.provider.insert(self.context, self.dataOf(entity));
+	const data = self.dataOf(entity);
+	if (!assignsIdsOnInsert(Entity)) {
+		await self.provider.insert(self.context, data);
+		return entity;
+	}
+	if (data.id !== undefined) rejectGivenId(self, data.id as IdValue);
+	// The database assigns the id: the row goes without one, and the entity
+	// gets the one it gave, before anything reads its events.
+	assertGeneratedIds(self.context.name, Entity, self.provider);
+	const { id: _id, ...row } = data;
+	const result = await self.provider.insert(self.context, row);
+	const id = (result as { readonly id?: unknown } | undefined)?.id;
+	if (!isIdValue(id)) {
+		throw new UnsupportedIdentity({
+			source: self.context.name,
+			details: {
+				entity: recordNameOf(Entity),
+				reason: `The provider inserted ${recordNameOf(Entity)} and gave no id for it: an insert of an entity whose ids the database assigns gives { id }.`,
+			},
+		});
+	}
+	try {
+		assignEntityId(entity, id);
+	} catch (cause) {
+		throw new UnsupportedIdentity({
+			source: self.context.name,
+			details: {
+				entity: recordNameOf(Entity),
+				reason: `The provider inserted ${recordNameOf(Entity)} and gave the id ${String(id)}, which its id property rejects.`,
+			},
+			cause,
+		});
+	}
 	return entity;
 });
+
+/**
+ * Throws `UnsupportedIdentity` for `id`, given for a new entity whose ids
+ * the database assigns: a row inserted with its own id would leave the
+ * sequence of the database behind (the next ids it gives would clash), and
+ * an identity column `GENERATED ALWAYS` refuses it.
+ */
+function rejectGivenId(self: Internal, id: IdValue): never {
+	const name = recordNameOf(self.context.entity);
+	throw new UnsupportedIdentity({
+		source: self.context.name,
+		details: {
+			entity: name,
+			reason: `The ids of ${name} are assigned by the database (Serial): a new ${name} is created without one, and ${JSON.stringify(id)} was given.`,
+		},
+	});
+}
+
+/**
+ * Throws `UnsupportedIdentity` when the ids of `entity` are assigned by the
+ * database (`Serial`) and `provider` does not assign them
+ * (`capabilities.generatedIds`). @internal
+ */
+export function assertGeneratedIds(
+	source: string,
+	entity: unknown,
+	provider: IRepositoryProvider,
+): void {
+	if (
+		!assignsIdsOnInsert(entity) ||
+		provider.capabilities?.generatedIds === true
+	)
+		return;
+	const name = recordNameOf(entity as object);
+	throw new UnsupportedIdentity({
+		source,
+		details: {
+			entity: name,
+			reason: `The ids of ${name} are assigned by the database (Serial), and the provider does not assign ids (capabilities.generatedIds).`,
+		},
+	});
+}
 
 /** The current date and time, by the clock of the entity class of `context`. */
 function nowOf(context: RepositoryContext): string {
@@ -655,8 +772,14 @@ async function write(
 }
 
 /** `entity` stored as `data` says; its version moves to the one written. */
-async function writeEntity(self: Internal, entity: unknown): Promise<void> {
-	const written = await write(self, self.dataOf(entity));
+async function writeEntity(
+	self: Internal,
+	entity: unknown,
+	action = "update",
+): Promise<void> {
+	const data = self.dataOf(entity);
+	storedIdOf(self, data, action);
+	const written = await write(self, data);
 	if (written.version !== undefined && isEntity(entity)) {
 		storeEntityVersion(entity, written.version as number);
 	}
@@ -742,7 +865,7 @@ function deltasOf(
  */
 function createdOf(
 	context: RepositoryContext,
-	id: string,
+	id: IdValue,
 	input: unknown,
 	deltas: Readonly<Record<string, number>>,
 ): object {
@@ -781,7 +904,7 @@ function renamedFromOf(field: BlueprintField | undefined): string | undefined {
  */
 async function bringUpRenamed(
 	self: Internal,
-	id: string,
+	id: IdValue,
 	deltas: Readonly<Record<string, number>>,
 ): Promise<void> {
 	const { context } = self;
@@ -833,8 +956,9 @@ async function bringUpRenamed(
 const increment = action(
 	async (self, target: unknown, deltas: unknown, options: unknown) => {
 		const { context } = self;
-		const id =
-			typeof target === "string" ? target : (self.dataOf(target).id as string);
+		const id = isIdValue(target)
+			? target
+			: storedIdOf(self, self.dataOf(target), "increment");
 		const checked = deltasOf(context, deltas);
 		if (options !== undefined && !isPlainObject(options)) {
 			invalid(context.name, "Expected the options of increment as an object.");
@@ -842,6 +966,10 @@ const increment = action(
 		const versioned = isVersionedEntityClass(context.entity);
 		if (versioned) assertVersioning(self);
 		const { create } = (options ?? {}) as { readonly create?: unknown };
+		// The row it would create holds the id given, which the database must assign.
+		if (create !== undefined && assignsIdsOnInsert(context.entity)) {
+			rejectGivenId(self, id);
+		}
 		const created =
 			create === undefined
 				? undefined
@@ -868,7 +996,7 @@ const increment = action(
 const remove = action(async (self, target: unknown) => {
 	const { context } = self;
 	let entity = target;
-	if (typeof target === "string") {
+	if (isIdValue(target)) {
 		const data = await self.provider.findOne(
 			context,
 			equals(self, "id", target),
@@ -882,23 +1010,26 @@ const remove = action(async (self, target: unknown) => {
 		entity = await self.hydrate(data);
 	}
 	const data = self.dataOf(entity);
+	// Checked before `destroy`, which would change the entity for nothing.
+	storedIdOf(self, data, "delete");
 	const destroyable = entity as {
 		readonly isDeleted: boolean;
 		destroy(): void;
 	};
 	if (!destroyable.isDeleted) destroyable.destroy();
 	if (stateOf(self).deletion === "soft") {
-		await writeEntity(self, entity);
+		await writeEntity(self, entity, "delete");
 	} else {
-		await self.provider.remove(context, data.id as string);
+		await self.provider.remove(context, data.id as IdValue);
 	}
 	return entity;
 });
 
 const restore = action(async (self, target: unknown) => {
 	const { context } = self;
-	const id =
-		typeof target === "string" ? target : (self.dataOf(target).id as string);
+	const id = isIdValue(target)
+		? target
+		: storedIdOf(self, self.dataOf(target), "restore");
 	const data = await self.provider.findOne(context, {
 		...equals(self, "id", id),
 		withDeleted: true,
@@ -1209,6 +1340,14 @@ export function repositoryOf<
 		const [kind, implementation] = method;
 		if (kind === "restore" && deletion !== "soft") {
 			invalid(name, '"restore" needs deletion to be "soft".');
+		}
+		// A provider of `providersOf` is checked by the application binding it.
+		if (
+			kind === "create" &&
+			settings.provider !== undefined &&
+			(provider as { readonly [Kind]?: unknown })[Kind] !== "provider-slot"
+		) {
+			assertGeneratedIds(name, entity, provider);
 		}
 		// A provider of `providersOf` may only exist once an application starts.
 		if (
