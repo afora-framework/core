@@ -181,19 +181,25 @@ hono({
 Who may call an operation is declared on its use case, with [`access`](../../docs/auth.md), and the core enforces it. The sink only has to say **who is calling**, which is the `authenticator` hook: it gets the request and gives a `Principal` (`{ subject, scopes, claims? }`), or `null` for an anonymous caller.
 
 <!-- docs:code context
-import { type AnyCommand, entityOf } from "@afora/core";
+import { entityOf } from "@afora/core";
 
-// your own declarations
+// your own declarations: the entry and the sessions
 class Entry extends entityOf(blueprintOf((ctx) => ({ slug: ctx.slug, title: ctx.text }))) {}
 const EntryChanges = blueprintOf((ctx) => ({ slug: ctx.slug, title: ctx.text }));
 const EntryResponse = blueprintOf(() => ({ entry: Entry }));
-declare const Entries: AnyCommand;
 declare const sessions: {
 	find(token: string): Promise<{ userId: string; scopes: string[] } | undefined>;
 };
 -->
 ```ts
-import { Access, blueprintOf, outputOf, Route, useCaseOf } from "@afora/core";
+import {
+	Access,
+	blueprintOf,
+	commandOf,
+	outputOf,
+	Route,
+	useCaseOf,
+} from "@afora/core";
 import { hono } from "@afora/hono";
 
 @Route("PATCH", "/entries/{slug}")
@@ -209,6 +215,11 @@ class UpdateEntry extends useCaseOf({
 		return { entry: new Entry(this.input) };
 	}
 }
+
+const Entries = commandOf({
+	name: "Entries",
+	useCases: { update: UpdateEntry },
+});
 
 const api = outputOf({
 	name: "Cms",

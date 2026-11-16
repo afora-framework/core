@@ -103,6 +103,21 @@ const Blog = commandOf({
 });
 ```
 
+The type error is real: a plugin that needs a record plugin the entity lacks does not type-check (and throws `UseCaseUnavailable` if the call is forced):
+
+<!-- docs:code expect-error: MissingRecordPlugin<"publishable"> -->
+```ts
+import { blueprintOf, commandOf, entityOf, repositoryOf } from "@afora/core";
+
+class Draft extends entityOf(blueprintOf((ctx) => ({ title: ctx.string }))) {}
+const Drafts = repositoryOf({ entity: Draft, actions: ["findById", "update"] });
+
+commandOf({
+	name: "Drafts",
+	useCases: (ctx) => ({ publish: ctx.publish(Drafts) }), // MissingRecordPlugin<"publishable">
+});
+```
+
 In an application, register commands under `commands: { Users }` (keyed by `commandName`, else `InvalidApplicationDeclaration`); every use case of every command must be in `useCases` (`UnregisteredApplicationReference`, `details: { command, useCase }`), except those a use case plugin made, which the command registers itself under their `useCaseName`. With a `provider`, `app.commands.Users` (or `app.command(Users)`) is the same command rebuilt over the bound use cases, memoized, with the same settings; the transaction check runs again against the bound providers and throws `InvalidCommandDeclaration` at `applicationOf`. Every environment of a command must be in `environments` (`UnregisteredApplicationReference`, `details: { command }`), and the rebuilt command keeps them. `app.describe().commands` gives each command's operations (`{ ref }` of the use case), `transaction`, `environments` (by name, only when it declares any), `events` (a policy made by `eventPolicyOf` appears as `{ kind: "policy", name, options }`, any other handler as `{ kind: "opaque" }`) and `onEventError` (only when set).
 
 `run(op, input, options)` does this:

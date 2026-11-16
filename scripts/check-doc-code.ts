@@ -1,7 +1,8 @@
 /**
  * Checks every code block of README.md, docs/** (except docs/plans/** and the
  * generated docs/reference/api.md) and packages/* /README.md (issue #93). Every
- * fence names its language, and every block is checked or skipped with a reason:
+ * fence (of backticks or tildes) names its language, and every block is checked
+ * or skipped with a reason:
  *
  * - `ts` / `typescript`: type-checked, all in one TypeScript program (fast).
  *   Compiler options follow the root tsconfig.json (top-level await allowed).
@@ -50,7 +51,8 @@
  * `context` is hidden code put around the block: before it, or around the line
  * `/* block *\/` when it has one (to check a fragment where it belongs). A
  * block with a context stands alone: a later `continue` goes on from the
- * checked block before it. Page
+ * checked block before it. Hidden code may not hold a `@ts-` directive, and a
+ * context may not put the block inside a string, a template or a comment. Page
  * markers can sit anywhere on the page:
  *
  *     <!-- docs:code file: src/api.ts
@@ -72,6 +74,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
+import ts from "typescript-language-service";
 import {
 	checkVirtualModules,
 	entryPoints,
@@ -384,15 +387,33 @@ for (const file of files) {
 			if (!marker[3]) {
 				const body: string[] = [];
 				let j = i + 1;
+				let unclosed = false;
 				while (j < lines.length && (lines[j] as string).trim() !== "-->") {
-					body.push(lines[j] as string);
+					const line = lines[j] as string;
+					// a fence, another comment or a `-->` that is not alone: the comment was left open
+					if (/^\s*(`{3,}|~{3,}|<!--)/.test(line) || line.includes("-->")) {
+						unclosed = true;
+						break;
+					}
+					body.push(line);
 					j++;
 				}
-				if (j >= lines.length)
+				if (unclosed || j >= lines.length) {
 					problem(
 						file,
 						i + 1,
-						"docs:code comment is never closed with a `-->` line",
+						`docs:code ${kind} is not closed: end it with a line holding only \`-->\`${j < lines.length ? ` (line ${j + 1} comes first)` : ""}`,
+					);
+					pending = [];
+					continue;
+				}
+				// 6: hidden code cannot turn the checker off
+				const directive = body.findIndex((line) => /@ts-/.test(line));
+				if (directive >= 0)
+					problem(
+						file,
+						i + 2 + directive,
+						"hidden code may not hold a `@ts-` directive",
 					);
 				found.body = body;
 				i = j;
@@ -411,7 +432,7 @@ for (const file of files) {
 			else problem(file, i + 1, `unknown docs:code marker \`${kind}\``);
 			continue;
 		}
-		const open = /^(\s*)(```+)\s*(.*?)\s*$/.exec(text);
+		const open = /^(\s*)(`{3,}|~{3,})\s*(.*?)\s*$/.exec(text);
 		if (!open) {
 			if (pending.length > 0 && text.trim() !== "") {
 				problem(
@@ -430,7 +451,11 @@ for (const file of files) {
 		const lang = (info[0] ?? "").toLowerCase();
 		const body: string[] = [];
 		let j = i + 1;
-		while (j < lines.length && !/^\s*```+\s*$/.test(lines[j] as string)) {
+		const fence = open[2] as string;
+		const close = new RegExp(
+			`^\\s*${fence[0] === "~" ? "~" : "`"}{${fence.length},}\\s*$`,
+		);
+		while (j < lines.length && !close.test(lines[j] as string)) {
 			body.push((lines[j] as string).slice(indent));
 			j++;
 		}
@@ -511,6 +536,12 @@ for (const file of files) {
 				const at = lines.findIndex((l) => l.trim() === "/* block */");
 				before.push(...(at < 0 ? lines : lines.slice(0, at)));
 				if (at >= 0) after.push(...lines.slice(at + 1));
+				if (!blockIsCode(before, after))
+					problem(
+						file,
+						context.line,
+						"docs:code context puts the block inside a string or a comment",
+					);
 			}
 			const append = (target: TsModule) => {
 				const contextLine = context?.line ?? fenceLine;
@@ -593,8 +624,7 @@ for (const file of files) {
 						"docs:code expect-error needs the text of the error",
 					);
 				module.expectError = expectError.arg ?? "";
-				count.expectError++;
-				last = undefined;
+				count.expectError++; // a wrong block is not built on
 			} else if (!context) last = module; // a block with a context stands alone
 			continue;
 		}
@@ -647,6 +677,28 @@ for (const file of files) {
 			(pending[0] as Marker).line,
 			"docs:code marker is not right before a fence",
 		);
+}
+
+/**
+ * Whether the block lands in code: with an identifier in its place, the
+ * context parses to a module holding that identifier (not inside a string,
+ * a template or a comment, where the block would not be checked).
+ */
+function blockIsCode(before: string[], after: string[]): boolean {
+	const name = "__docs_code_block__";
+	const source = ts.createSourceFile(
+		"context.ts",
+		[...before, name, ...after].join("\n"),
+		ts.ScriptTarget.Latest,
+		true,
+	);
+	let found = false;
+	const visit = (node: ts.Node) => {
+		if (ts.isIdentifier(node) && node.text === name) found = true;
+		else ts.forEachChild(node, visit);
+	};
+	visit(source);
+	return found;
 }
 
 function checkTested(
