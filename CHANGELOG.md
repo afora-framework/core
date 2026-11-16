@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Security fixes from an audit of 27.0.0-rc.2. Every finding has a regression test named `SEC-<n>`. The breaking ones change the standard use cases and `Url` before the contract freezes, as blocking issues of the 27.0 milestone (see [Release candidates](VERSIONING.md#release-candidates)).
+Security fixes from an audit of 27.0.0-rc.1. Every finding has a regression test named `SEC-<n>`. The breaking ones change the standard use cases, `Url` and the reserved keys of a blueprint before the contract freezes, as blocking issues of the 27.0 milestone (see [Release candidates](VERSIONING.md#release-candidates)).
 
 ### Security
 
@@ -14,7 +14,11 @@ Security fixes from an audit of 27.0.0-rc.2. Every finding has a regression test
 - `InvalidUseCaseResponse` and `InvalidUseCaseStep` are answered as a 500 whose `detail` is `"Internal error."` with no `issues`, instead of a 400 that listed the paths of the server's own response. Every internal exception is a 500 from `statusOf`, and `problemOf` masks its `detail` and drops its `issues` at any status, even one chosen by `statuses`, unless `debug` is set. Client errors (`InvalidUseCaseInput`, `InvalidUseCaseContext`, `InvalidRecordValue`…) are still a 400 with their issues. (SEC-12)
 - `login` takes as long for an unknown email as for a known one: it verifies the password against a dummy hash, made once by the configured hasher on first use, so the time no longer tells which emails are registered. (SEC-11)
 - `restore` takes `owner`: a caller no longer brings back another owner's deleted entity. The docs said a deleted entity could not be read to check its owner; it can, with `withDeleted`. (SEC-08)
-<!-- SEC-PARSE -->
+- **Breaking.** `Url` (`ctx.url`) rejects the protocols `javascript:`, `data:`, `vbscript:` and `file:`, which run script or read local files in a link, however they are written (any case, after leading spaces and control characters, with tabs or newlines inside: the check matches the protocol the URL parser reads). Every other URL that parses is still accepted (`https:`, `postgres:`, `redis:`, `memory:`, `mailto:`…). `Url.with({ protocols: ["https:"] })` accepts only the protocols it lists; protocols that are not schemes throw the new `InvalidUrlOptions` when the class is declared. The check is a `pattern` in the schema, so OpenAPI documents it. `Url` is now a class, and `UrlOptions` is exported. See Migration below. (SEC-13)
+- **Breaking.** A blueprint cannot declare `__proto__`, `constructor` or `prototype`: `blueprintOf` and `join` throw `ReservedBlueprintKey`. A blueprint declaring `__proto__` let the input set the prototype of the value `safeParse` gave. See Migration below. (SEC-16)
+- `ctx.json`, `jsonOf`, `jsonSchemaIssues` and `checkJsonSchema` reject a value nested more than 1000 deep (`invalid_value`, `is nested too deeply`), before a schema walks it. The check copied its ancestors at every level, so a 31 KB body nested 15000 deep took over a second; it now runs in linear time. Cycles are still `is circular`. (SEC-04)
+- A record keeps a frozen copy of the plain objects and arrays a property gives it (`ctx.json`, `jsonOf`, a property with an object schema), as [Records](docs/records.md) already promised: changing the object passed in no longer changes the record. Other objects (a `File`) are kept as they are; `blueprint.safeParse` still hands back the caller's value, unfrozen. (SEC-14)
+- Parsing no longer reads a value only `Object.prototype` gives: after `Object.prototype.role = "admin"`, a key `role` the input lacks stays absent, as does a hole of a list that `Array.prototype` would fill, and the tag of a variant; a record's getter does the same. Values from a class's own prototype, such as getters, are still read, so class instances stay valid input. (SEC-15)
 - `@afora/codegen` / `@afora/mcp`: a relative module or `extends` is checked against every file a runtime may load for it (an added extension, the `.ts` of a `.js`, a directory's `index.*` or `package.json` entry, the `afora.json` of an extended directory), not only the path as written; any of them that is a symbolic link out of the project is `outside_project`. (SEC-05)
 - `@afora/codegen` / `@afora/mcp`: the `output.dir` of a spec extended by a path, at any depth, is held to the rules of `output.dir` from its own directory; the generated code imported the extended application from wherever it pointed. (SEC-06)
 - `@afora/codegen` / `@afora/mcp`: `output.dir` is refused in `node_modules` or `.git` however a file system may fold its name (`node_moduleſ`, fullwidth letters, combining marks), and `confinePath` / `writeGenerated` refuse to write there. (SEC-17)
@@ -110,7 +114,30 @@ After:
 list: ctx.list(Posts, { maxLimit: 500 }),
 	await Blog.run("list", { limit: 500 });
 ```
-<!-- SEC-PARSE-MIGRATION -->
+**`Url` and the four protocols.** A `Url` that held a `data:`, `file:`, `javascript:` or `vbscript:` URL lists the protocols it accepts. Before:
+
+```ts
+const Image = blueprintOf((ctx) => ({ src: ctx.url })); // "data:image/png;base64,..." was accepted
+```
+
+After:
+
+```ts
+const ImageUrl = Url.with({ protocols: ["https:", "data:"] });
+const Image = blueprintOf(() => ({ src: ImageUrl }));
+```
+
+**Reserved blueprint keys.** A key named `__proto__`, `constructor` or `prototype` is renamed. Before:
+
+```ts
+const Doc = blueprintOf((ctx) => ({ prototype: ctx.string }));
+```
+
+After:
+
+```ts
+const Doc = blueprintOf((ctx) => ({ prototypeName: ctx.string }));
+```
 
 ## 27.0.0-rc.2 — 2026-11-16
 
