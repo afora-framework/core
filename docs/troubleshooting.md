@@ -152,7 +152,7 @@ A variable is missing or its value is rejected by the blueprint of the environme
 
 ### Unauthenticated, Forbidden
 
-A use case with an `access` was called without a caller (401), or by one who lacks a scope or is not the owner (403, `details.reason` is `"scope"` or `"owner"`). A sink that has no authentication configured passes no principal, so it answers 401 on every operation with an `access` other than `public`: configure the sink's `auth`. See [Access](auth.md).
+A use case with an `access` was called without a caller (401), or by one who lacks a scope or is not the owner (403, `details.reason` is `"scope"` or `"owner"`). The owner is compared after the property of the input key handles the value (an `Email` trimmed and lowercased, a `Slug` slugified), with the caller's subject or claim as it was issued: an `"owner"` 403 for a caller who is the owner usually means the token carries `Ana@Example.com` where the input key holds `ana@example.com`, so issue the claim in that form. A sink that has no authentication configured passes no principal, so it answers 401 on every operation with an `access` other than `public`: configure the sink's `auth`. See [Access](auth.md).
 
 ### A 400 with `undeclared_key`, or a body that is rejected
 
@@ -160,7 +160,7 @@ The HTTP sink validates the body with the blueprint, so extra keys are rejected.
 
 ### A 500 that says only `"Internal error."`
 
-A 5xx hides its detail unless the sink has `debug: true` or the output declares the exception: list it in the output's `statuses` (`{ PaymentFailed: 502 }`) or in the operation's `errors`, and its message is sent at any status. `UnexpectedError` (an error that is not an exception), the environment errors, `InvalidUseCaseResponse` and `UndeclaredStatus` are never shown, even when listed. See [Outputs](outputs.md).
+A 5xx hides its detail unless the sink has `debug: true` or the output declares the exception: list it in the output's `statuses` (`{ PaymentFailed: 502 }`) or in the operation's `errors`, and its message is sent at any status. `UnexpectedError` (an error that is not an exception), the environment errors, `InvalidUseCaseResponse`, `InvalidUseCaseStep` and `UndeclaredStatus` are never shown, even when listed: they describe the server, so they are a 500 without `issues` even when they carry some (a response that does not fit its blueprint is not the caller's mistake). See [Outputs](outputs.md).
 
 ### UndeclaredStatus
 
