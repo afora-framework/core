@@ -8,6 +8,7 @@ import type {
 } from "../parse/types/parse.interface";
 import {
 	checksOfSchema,
+	compiledTypeOf,
 	describeError,
 	errorsOfSchema,
 	type SchemaError,
@@ -334,6 +335,36 @@ const declared = new WeakSet<object>();
  */
 export function declarePipeline(prototype: object): void {
 	declared.add(prototype);
+}
+
+/**
+ * What a definition checks, when checking is all it does: declared by
+ * `propertyOf` with no step, a schema made by `schemaOf`, and a value kept as
+ * it is. Its parse is then exactly: `undefined` is taken when `optional` (and
+ * dropped) or rejected, and any other value is kept when `schema` accepts it.
+ * `undefined` for a definition that does more.
+ * @internal
+ */
+export function checkOnlyOf(
+	definition: AbstractDefineProperty<TSchema>,
+): { readonly schema: TSchema; readonly optional: boolean } | undefined {
+	const pipeline = definition as unknown as Pipeline;
+	if (
+		pipeline.parse !== AbstractDefineProperty.prototype.parse ||
+		!declared.has(Object.getPrototypeOf(definition)) ||
+		pipeline.handle !== PASS.handle ||
+		pipeline.preHandle !== PASS.preHandle ||
+		pipeline.afterHandle !== PASS.afterHandle ||
+		Object.hasOwn(definition, "preHandle") ||
+		Object.hasOwn(definition, "afterHandle")
+	) {
+		return undefined;
+	}
+	const { optional, schema } = pipeline.type;
+	const type = compiledTypeOf(schema);
+	return type === undefined
+		? undefined
+		: { schema: type, optional: !!optional };
 }
 
 /**
