@@ -274,6 +274,7 @@ import {
 	type UseCaseInput,
 	type UseCaseResponse,
 	useCaseOf,
+	withStatus,
 } from "@afora/core";
 
 const OperationInput = blueprintOf((ctx) => ({ name: ctx.string }));
@@ -353,6 +354,21 @@ export const listExecuteMatches: Equals<
 	Awaited<ReturnType<InstanceType<typeof ListOperationBase>["execute"]>>,
 	readonly OperationUser[]
 > = true;
+
+// A status chosen at run time: execute accepts withStatus, a call gives the body.
+class StatusOperation extends ListOperationBase {
+	override async execute() {
+		const body = [new OperationUser(this.input)];
+		return body.length > 1 ? body : withStatus(503, body);
+	}
+}
+export const statusExecuteMatches: Equals<
+	Awaited<ReturnType<StatusOperation["execute"]>>,
+	OperationUser[]
+> = true;
+export const statusIsBody: OperationUser[] = withStatus(503, [
+	new OperationUser({ name: "a" }),
+]);
 
 // Record plugins
 import {

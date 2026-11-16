@@ -1,10 +1,11 @@
 import { jwtOf, jwtOptionsIssue } from "../auth/jwt";
 import { Exception } from "../exception/exception";
 import { HEADER_NAME } from "../use-case/route";
+import { isWithStatus } from "../use-case/status";
 import type { Principal } from "../use-case/types/access.interface";
 import type { RouteCookie } from "../use-case/types/route.interface";
 import { coerceTextValues } from "./coerce";
-import { InvalidOutputStage } from "./exceptions";
+import { InvalidOutputStage, UndeclaredStatus } from "./exceptions";
 import {
 	type OpenAPISinkOptions,
 	type OperationRoute,
@@ -227,6 +228,9 @@ function cookieWriterOf(cookie: RouteCookie): (value: string) => string {
  *   it is a 401.
  * - Success is the route status with the response as JSON (sensitive values
  *   masked by `toJSON`), or no body for `204`, plus the `responses` headers.
+ *   A use case that returns `withStatus(status, body)` sends the body with
+ *   that status, when the route declares it (its status or one of its
+ *   `statuses`); any other is an `UndeclaredStatus`, a masked 500.
  *   Errors are `application/problem+json`, with the status of `statusOf`
  *   (the output `statuses` first). `requestId` puts the request id on every
  *   result, `notFound` and `failure` included.
@@ -314,7 +318,7 @@ export function compileRoutes(
 
 	const compiled: CompiledRoute[] = operations.map((operation) => {
 		const route = routes.get(operation.id) as OperationRoute;
-		const { method, path, parameters, status, body } = route;
+		const { method, path, parameters, status, statuses, body } = route;
 		const queryKeys = body ? route.query : [];
 		const headerKeys = Object.entries(route.requestHeaders);
 		const cookieKeys = Object.entries(route.cookies);
@@ -341,11 +345,12 @@ export function compileRoutes(
 		const setCookies = Object.entries(route.setCookies).map(
 			([key, cookie]) => [key, cookieWriterOf(cookie)] as const,
 		);
-		const successHeaders = Object.freeze(
-			status === 204
-				? { ...route.headers }
-				: { "content-type": JSON_TYPE, ...route.headers },
-		);
+		const jsonHeaders = Object.freeze({
+			"content-type": JSON_TYPE,
+			...route.headers,
+		});
+		const successHeaders =
+			status === 204 ? Object.freeze({ ...route.headers }) : jsonHeaders;
 
 		const readsCookies = cookieKeys.length > 0;
 		const authenticates = guarded && authenticator !== undefined;
@@ -434,32 +439,51 @@ export function compileRoutes(
 					call = { ...call, native: request.native };
 				}
 
-				const response = await operation.invoke(input, call);
+				let response = await operation.invoke(input, call);
+				// The status the use case chose: the route status or one it lists.
+				let sent: number = status;
+				if (isWithStatus(response)) {
+					if (
+						response.status !== status &&
+						!statuses.includes(response.status)
+					) {
+						throw new UndeclaredStatus({
+							source: operation.id,
+							details: {
+								status: response.status,
+								statuses: [status, ...statuses],
+							},
+						});
+					}
+					sent = response.status;
+					response = response.body;
+				}
+				const headers = sent === status ? successHeaders : jsonHeaders;
 				if (setCookies.length === 0) {
 					return {
-						status,
-						headers: headersOf(successHeaders, request),
+						status: sent,
+						headers: headersOf(headers, request),
 						cookies: NO_COOKIES,
-						body: status === 204 ? null : (JSON.stringify(response) ?? "null"),
+						body: sent === 204 ? null : (JSON.stringify(response) ?? "null"),
 					};
 				}
 				// The keys sent as cookies leave the body.
 				const value = outputValueOf(response);
-				const sent: string[] = [];
+				const written: string[] = [];
 				if (isObject(value)) {
 					for (const [key, write] of setCookies) {
 						const cookie = value[key];
 						delete value[key];
 						if (cookie !== undefined && cookie !== null) {
-							sent.push(write(String(cookie)));
+							written.push(write(String(cookie)));
 						}
 					}
 				}
 				return {
-					status,
-					headers: headersOf(successHeaders, request),
-					cookies: sent,
-					body: status === 204 ? null : (JSON.stringify(value) ?? "null"),
+					status: sent,
+					headers: headersOf(headers, request),
+					cookies: written,
+					body: sent === 204 ? null : (JSON.stringify(value) ?? "null"),
 				};
 			} catch (error) {
 				return fail(error, operation, request);

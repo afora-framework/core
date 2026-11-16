@@ -66,6 +66,38 @@ export function isScalarKey(blueprint: AnyBlueprint, name: string): boolean {
 	return isProperty(field) && isScalarSchema(toOpenAPI(field) as OpenAPISchema);
 }
 
+/**
+ * Why `statuses` cannot be the other statuses of a route whose status is
+ * `status` (named `where`), or `undefined`: distinct integers from 200 to
+ * 599, except 204 and 304, without `status`.
+ */
+export function statusesIssue(
+	statuses: unknown,
+	status: number,
+	where: string,
+): string | undefined {
+	if (
+		!Array.isArray(statuses) ||
+		statuses.some(
+			(value) =>
+				!Number.isInteger(value) ||
+				value < 200 ||
+				value > 599 ||
+				value === 204 ||
+				value === 304,
+		)
+	) {
+		return `Expected ${where} to be a list of statuses from 200 to 599, except 204 and 304 (they send no body).`;
+	}
+	if (new Set(statuses).size !== statuses.length) {
+		return `${where} names a status twice.`;
+	}
+	if (statuses.includes(status)) {
+		return `${where} names ${status}, the status of the route: list only the others.`;
+	}
+	return undefined;
+}
+
 type Obj = Record<string, unknown>;
 function isObject(value: unknown): value is Obj {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -75,6 +107,7 @@ const ROUTE_KEYS = [
 	"method",
 	"path",
 	"status",
+	"statuses",
 	"query",
 	"headers",
 	"cookie",
@@ -144,7 +177,7 @@ export function routeDeclarationOf(
 	response: AnyUseCaseResponse,
 ): RouteDeclaration | string {
 	if (!isObject(route)) {
-		return "Expected route to be { method, path?, status?, query?, headers?, cookie?, setCookie?, body? }.";
+		return "Expected route to be { method, path?, status?, statuses?, query?, headers?, cookie?, setCookie?, body? }.";
 	}
 	for (const key of Object.keys(route)) {
 		if (!ROUTE_KEYS.includes(key)) return `route has no option "${key}".`;
@@ -154,7 +187,8 @@ export function routeDeclarationOf(
 	if (!(ROUTE_METHODS as readonly unknown[]).includes(method)) {
 		return `Expected route.method to be one of ${ROUTE_METHODS.join(", ")}.`;
 	}
-	const { path, status, query, headers, cookie, setCookie, body } = route;
+	const { path, status, statuses, query, headers, cookie, setCookie, body } =
+		route;
 	if (body !== undefined) {
 		if (typeof body !== "boolean") {
 			return "Expected route.body to be a boolean.";
@@ -192,6 +226,14 @@ export function routeDeclarationOf(
 		!(ROUTE_SUCCESS_STATUSES as readonly unknown[]).includes(status)
 	) {
 		return `Expected route.status to be one of ${ROUTE_SUCCESS_STATUSES.join(", ")}.`;
+	}
+	if (statuses !== undefined) {
+		const bad = statusesIssue(
+			statuses,
+			(status as number | undefined) ?? 200,
+			"route.statuses",
+		);
+		if (bad) return bad;
 	}
 	if (query !== undefined) {
 		if (!Array.isArray(query) || query.some((key) => typeof key !== "string")) {
@@ -249,6 +291,9 @@ export function routeDeclarationOf(
 		method: method as RouteMethod,
 		...(path === undefined ? {} : { path: path as string }),
 		...(status === undefined ? {} : { status: status as RouteSuccessStatus }),
+		...(statuses === undefined
+			? {}
+			: { statuses: Object.freeze([...(statuses as number[])]) }),
 		...(body === undefined ? {} : { body: body as boolean }),
 		...(query === undefined
 			? {}

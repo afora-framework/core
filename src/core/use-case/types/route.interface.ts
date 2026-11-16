@@ -55,6 +55,14 @@ export interface RouteFields {
 	 */
 	readonly status?: RouteSuccessStatus;
 	/**
+	 * The other statuses `execute` may choose with `withStatus`, each with the
+	 * same response as `status`: `[503]` for a health check that answers 200
+	 * or 503. From 200 to 599, except 204 and 304 (they have no body), and not
+	 * `status` itself. An HTTP sink answers a status it does not list with
+	 * `UndeclaredStatus`.
+	 */
+	readonly statuses?: readonly number[];
+	/**
 	 * Scalar input keys read from the query string. A `get` or `delete` route
 	 * reads from the query every key that has no other place, so this is for
 	 * the routes with a body.

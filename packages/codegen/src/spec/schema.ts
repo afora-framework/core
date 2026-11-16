@@ -755,6 +755,13 @@ const UseCaseRoute = Type.Object(
 				{ default: 200, description: "The status of a success." },
 			),
 		),
+		statuses: Type.Optional(
+			Type.Array(Type.Integer({ minimum: 200, maximum: 599 }), {
+				uniqueItems: true,
+				description:
+					"The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. Not 204, 304 or the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500.",
+			}),
+		),
 		query: Type.Optional(
 			StringList(
 				"Scalar input keys read from the query string. A get or delete already reads from the query every key with no other place.",
@@ -789,7 +796,7 @@ const UseCaseRoute = Type.Object(
 	{
 		additionalProperties: false,
 		description:
-			"Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status and body.",
+			"Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status, statuses and body.",
 	},
 );
 

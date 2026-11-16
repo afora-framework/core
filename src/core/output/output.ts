@@ -1,7 +1,8 @@
 import { isCommand } from "../command/command";
 import type { AnyCommand } from "../command/types/command.interface";
 import { Kind } from "../symbols/kind";
-import { type CallOrigin, OriginKey } from "../use-case/scope";
+import { type CallOrigin, OriginKey, StatusKey } from "../use-case/scope";
+import { withStatus } from "../use-case/status";
 import type { AnyUseCaseClass } from "../use-case/use-case";
 import { accessGuardOf } from "./access";
 import { DuplicateOperation, InvalidOutputStage } from "./exceptions";
@@ -130,11 +131,29 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 		const context = command.context ?? UseCase.context;
 		const description = UseCase.description ?? command.description;
 		const id = `${command.commandName}.${name}`;
-		const run = command.run as (
+		const runCommand = command.run as (
+			op: string,
+			input: unknown,
+			options?: {
+				context?: unknown;
+				[StatusKey]?: (status: number) => void;
+			},
+		) => Promise<unknown>;
+		// The body, or `withStatus` of it when the use case chose a status.
+		const run = async (
 			op: string,
 			input: unknown,
 			options?: { context?: unknown },
-		) => Promise<unknown>;
+		): Promise<unknown> => {
+			let status: number | undefined;
+			const value = await runCommand(op, input, {
+				...options,
+				[StatusKey]: (chosen) => {
+					status = chosen;
+				},
+			});
+			return status === undefined ? value : withStatus(status, value);
+		};
 		// Made once: a call only compares the caller with what was declared.
 		const guard =
 			UseCase.access === undefined

@@ -213,6 +213,7 @@ A use case says where it is served and who may call it, next to its input (not i
 \`\`\`
 
 - \`route\`: \`method\` (get, post, put, patch, delete), \`path\` (a \`{name}\` segment fills the input key \`name\`), \`status\` (200, 201, 202, 204),
+  \`statuses\` (the other statuses execute may choose with \`withStatus(status, body)\`, same response, e.g. \`[503]\`; not 204, 304 or \`status\`),
   \`query\` (input keys read from the query; a get or delete already reads the rest from it), \`headers\` and \`cookie\` (\`{ inputKey: name }\`),
   \`setCookie\` (\`{ responseKey: { "name": "sid" } }\`: sent as a cookie, left out of the body), \`body\` (delete only: \`true\` reads the rest
   from a JSON body instead of the query). The input stays the only description of what

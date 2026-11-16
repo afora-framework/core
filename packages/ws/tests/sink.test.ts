@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { InvalidOutputStage, outputOf, StdStages } from "@afora/core";
+import {
+	blueprintOf,
+	commandOf,
+	InvalidOutputStage,
+	outputOf,
+	StdStages,
+	useCaseOf,
+	withStatus,
+} from "@afora/core";
 import { stageDescriptionOf } from "@afora/core/experimental";
 import { stages, type WsReply, WsStages, websocket, wsHub } from "../src/index";
 import { fakeSocket, realtime, Upstream } from "./fixture";
@@ -27,6 +35,28 @@ describe("websocket sink: handle", () => {
 			title: "Hi",
 			author: "ana",
 			secret: "********",
+		});
+	});
+
+	test("a status chosen with withStatus is ignored: the body is the value", async () => {
+		class Health extends useCaseOf({
+			name: "Health",
+			blueprint: blueprintOf(() => ({})),
+			response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+			route: { method: "get", path: "/health", statuses: [503] },
+		}) {
+			override async execute() {
+				return withStatus(503, { ok: false });
+			}
+		}
+		const endpoint = outputOf({
+			name: "Health",
+			commands: [commandOf({ name: "Health", useCases: { check: Health } })],
+			pipe: [websocket()],
+		}).build();
+		expect(await endpoint.handle({ id: 1, op: "Health.check" })).toEqual({
+			id: 1,
+			value: { ok: false },
 		});
 	});
 

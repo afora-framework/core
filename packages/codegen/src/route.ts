@@ -13,6 +13,7 @@ const ROUTE_KEYS = [
 	"method",
 	"path",
 	"status",
+	"statuses",
 	"query",
 	"headers",
 	"cookie",
@@ -62,7 +63,7 @@ export function checkRoute(
 	if (!isObject(route)) {
 		bad(
 			path,
-			'"route" is { "method", "path"?, "status"?, "query"?, "headers"?, "cookie"?, "setCookie"?, "body"? }.',
+			'"route" is { "method", "path"?, "status"?, "statuses"?, "query"?, "headers"?, "cookie"?, "setCookie"?, "body"? }.',
 		);
 		return;
 	}
@@ -133,6 +134,33 @@ export function checkRoute(
 		!STATUSES.includes(route.status as number)
 	) {
 		bad([...path, "status"], `"status" is one of ${STATUSES.join(", ")}.`);
+	}
+	if (route.statuses !== undefined) {
+		const statuses = route.statuses;
+		const status = (route.status as number | undefined) ?? 200;
+		if (
+			!Array.isArray(statuses) ||
+			statuses.some(
+				(value) =>
+					!Number.isInteger(value) ||
+					value < 200 ||
+					value > 599 ||
+					value === 204 ||
+					value === 304,
+			)
+		) {
+			bad(
+				[...path, "statuses"],
+				'"statuses" is a list of statuses from 200 to 599, except 204 and 304 (they send no body), e.g. [503].',
+			);
+		} else if (new Set(statuses).size !== statuses.length) {
+			bad([...path, "statuses"], '"statuses" names a status twice.');
+		} else if (statuses.includes(status)) {
+			bad(
+				[...path, "statuses"],
+				`"statuses" names ${status}, the status of the route: list only the others.`,
+			);
+		}
 	}
 	if (route.query !== undefined) {
 		if (

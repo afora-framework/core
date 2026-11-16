@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### A status chosen at run time (#116)
+
+- A use case route takes `"statuses": [503]`, the other statuses its `execute` may choose with `withStatus` (in hand-written code, or in the function of a `run` step): checked as `useCaseOf` checks it (`invalid_route` for a status out of 200 to 599, 204, 304, a duplicate or the route `status`), generated and extracted back. `afora.schema.json` has it.
+
 ### Serial ids (#122)
 
 - An entity takes `"id": "serial"`, a positive integer the database assigns on `create`, generated as `{ id: Serial }` and extracted back; `afora.schema.json` has it.
