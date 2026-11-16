@@ -48,7 +48,7 @@ import type {
 } from "../use-case/types/plugin.interface";
 import {
 	type AnyUseCaseClass,
-	chosenStatusOf,
+	executionStatusOf,
 	isUseCaseClass,
 } from "../use-case/use-case";
 import {
@@ -490,7 +490,7 @@ function declareCommand<
 			const value = await useCase.execute();
 			return {
 				value,
-				status: chosenStatusOf(useCase),
+				status: executionStatusOf(useCase),
 				events: useCase.pullEvents(),
 			};
 		};

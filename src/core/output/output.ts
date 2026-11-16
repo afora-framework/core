@@ -139,7 +139,7 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 				[StatusKey]?: (status: number) => void;
 			},
 		) => Promise<unknown>;
-		// The body, or `withStatus` of it when the use case chose a status.
+		// The body, marked by `withStatus` when the use case chose a status.
 		const run = async (
 			op: string,
 			input: unknown,
@@ -152,7 +152,8 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 					status = chosen;
 				},
 			});
-			return status === undefined ? value : withStatus(status, value);
+			// `value` is the copy the use case validated, made for this call.
+			return status === undefined ? value : withStatus(status, value as object);
 		};
 		// Made once: a call only compares the caller with what was declared.
 		const guard =

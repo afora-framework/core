@@ -8,18 +8,17 @@ import {
 } from "../../adapters";
 import {
 	blueprintOf,
+	chosenStatusOf,
 	commandOf,
 	entityOf,
 	eventOf,
 	InvalidOutputStage,
 	InvalidUseCaseDeclaration,
-	isWithStatus,
 	listOf,
 	openapi,
 	outputOf,
 	Route,
 	useCaseOf,
-	type WithStatus,
 	withStatus,
 } from "../../index";
 
@@ -82,22 +81,44 @@ const routeOf = (id: string, options?: HttpOptions) => {
 };
 
 describe("withStatus", () => {
-	test("is a frozen value that only says the status and the body", () => {
-		const value = withStatus(503, { ok: false });
-		expect(isWithStatus(value)).toBe(true);
-		expect(isWithStatus({ ok: false })).toBe(false);
-		expect(Object.isFrozen(value)).toBe(true);
-		const { status, body } = value as unknown as {
-			status: number;
-			body: unknown;
-		};
-		expect([status, body]).toEqual([503, { ok: false }]);
+	test("gives the body itself, untouched, with the status kept beside it", () => {
+		const body = Object.freeze({ ok: false });
+		const value = withStatus(503, body);
+		expect(value).toBe(body);
+		expect(value.ok).toBe(false);
+		expect(Object.keys(value)).toEqual(["ok"]);
+		expect(chosenStatusOf(value)).toBe(503);
+		expect(chosenStatusOf({ ok: false })).toBeUndefined();
+		expect(chosenStatusOf("text")).toBeUndefined();
+	});
+
+	test("the use case takes the status: the same body returned again has none", async () => {
+		const shared = { ok: true, database: { latency: 1 } };
+		class Shared extends useCaseOf({
+			name: "Shared",
+			blueprint: blueprintOf((ctx) => ({ down: ctx.boolean })),
+			response: HealthResponse,
+			route: { method: "get", path: "/shared", statuses: [503] },
+		}) {
+			override async execute() {
+				return this.input.down ? withStatus(503, shared) : shared;
+			}
+		}
+		const [operation] = outputOf({
+			name: "Shared",
+			commands: [commandOf({ name: "Shared", useCases: { get: Shared } })],
+		}).operations;
+		expect(chosenStatusOf(await operation?.invoke({ down: true }))).toBe(503);
+		expect(chosenStatusOf(shared)).toBeUndefined();
+		expect(
+			chosenStatusOf(await operation?.invoke({ down: false })),
+		).toBeUndefined();
 	});
 
 	test("a direct call gives the body only, validated against the response", async () => {
 		const down = await new Health({ up: false }).execute();
 		expect(down).toEqual({ ok: false, database: { latency: 3 } });
-		expect(isWithStatus(down)).toBe(false);
+		expect(chosenStatusOf(down)).toBeUndefined();
 		class Wrong extends useCaseOf({
 			name: "Wrong",
 			blueprint: blueprintOf(() => ({})),
@@ -157,7 +178,9 @@ describe("withStatus", () => {
 	});
 
 	test("command.run gives the body, invoke the status with it", async () => {
-		expect(await Monitor.run("health", { up: false })).toEqual({
+		const ran = await Monitor.run("health", { up: false });
+		expect(chosenStatusOf(ran)).toBeUndefined();
+		expect(ran).toEqual({
 			ok: false,
 			database: { latency: 3 },
 		});
@@ -165,14 +188,13 @@ describe("withStatus", () => {
 			({ id }) => id === "Monitor.health",
 		);
 		const down = await operation?.invoke({ up: false });
-		expect(isWithStatus(down)).toBe(true);
-		expect(down).toMatchObject({ status: 503 });
+		expect(chosenStatusOf(down)).toBe(503);
 		expect(outputValueOf(down)).toEqual({
 			ok: false,
 			database: { latency: 3 },
 		});
 		const up = await operation?.invoke({ up: true });
-		expect(isWithStatus(up)).toBe(false);
+		expect(chosenStatusOf(up)).toBeUndefined();
 	});
 
 	test("steps choose a status with a run step that returns it", async () => {
@@ -204,9 +226,7 @@ describe("withStatus", () => {
 			name: "Steps",
 			commands: [commandOf({ name: "Steps", useCases: { probe: Probe } })],
 		}).operations;
-		expect(await operation?.invoke({ up: false })).toMatchObject({
-			status: 503,
-		});
+		expect(chosenStatusOf(await operation?.invoke({ up: false }))).toBe(503);
 	});
 
 	test("types: execute accepts it and a direct call gives the body", () => {
@@ -215,11 +235,9 @@ describe("withStatus", () => {
 			Awaited<ReturnType<typeof call>>,
 			{ ok: boolean; database: { latency: number } }
 		> = true;
-		const wrapped: WithStatus<{ ok: boolean }> = withStatus(503, {
-			ok: false,
-		});
-		const asBody: { ok: boolean } = wrapped;
-		expect([body, asBody.ok === undefined]).toEqual([true, true]);
+		const marked: { ok: boolean } = withStatus(503, { ok: false });
+		const list: readonly number[] = withStatus(503, [1]);
+		expect([body, marked.ok, list[0]]).toEqual([true, false, 1]);
 	});
 });
 

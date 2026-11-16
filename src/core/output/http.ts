@@ -1,7 +1,7 @@
 import { jwtOf, jwtOptionsIssue } from "../auth/jwt";
 import { Exception } from "../exception/exception";
 import { HEADER_NAME } from "../use-case/route";
-import { isWithStatus } from "../use-case/status";
+import { takeStatus } from "../use-case/status";
 import type { Principal } from "../use-case/types/access.interface";
 import type { RouteCookie } from "../use-case/types/route.interface";
 import { coerceTextValues } from "./coerce";
@@ -439,24 +439,18 @@ export function compileRoutes(
 					call = { ...call, native: request.native };
 				}
 
-				let response = await operation.invoke(input, call);
+				const response = await operation.invoke(input, call);
 				// The status the use case chose: the route status or one it lists.
+				const chosen = takeStatus(response);
 				let sent: number = status;
-				if (isWithStatus(response)) {
-					if (
-						response.status !== status &&
-						!statuses.includes(response.status)
-					) {
+				if (chosen !== undefined) {
+					if (chosen !== status && !statuses.includes(chosen)) {
 						throw new UndeclaredStatus({
 							source: operation.id,
-							details: {
-								status: response.status,
-								statuses: [status, ...statuses],
-							},
+							details: { status: chosen, statuses: [status, ...statuses] },
 						});
 					}
-					sent = response.status;
-					response = response.body;
+					sent = chosen;
 				}
 				const headers = sent === status ? successHeaders : jsonHeaders;
 				if (setCookies.length === 0) {

@@ -478,8 +478,7 @@ export type {
 	ServiceValueOf,
 } from "./core/use-case/service";
 export { isService, serviceOf } from "./core/use-case/service";
-export type { WithStatus } from "./core/use-case/status";
-export { isWithStatus, withStatus } from "./core/use-case/status";
+export { chosenStatusOf, withStatus } from "./core/use-case/status";
 export type {
 	CheckedSteps,
 	StepReferencesOf,

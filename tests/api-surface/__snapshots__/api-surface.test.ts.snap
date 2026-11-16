@@ -656,9 +656,6 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) StageDescription": [
     "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; } | { readonly kind: "opaque"; };",
   ],
-  "(internal) StatusEnvelope": [
-    "interface StatusEnvelope { readonly [Kind]: "status"; readonly status: number; readonly body: unknown; }",
-  ],
   "(internal) StdTokenOptions": [
     "export interface StdTokenOptions extends DescribedJwtOptions { readonly refresh?: { readonly expiresIn: number; }; readonly scopes?: readonly string[]; readonly scopesFrom?: string; readonly claims?: { readonly [claim: string]: string; }; }",
   ],
@@ -769,9 +766,6 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) WriteStep": [
     "type WriteStep<Step, Method, Scope> = ValueStep<Step, "value", FirstParameter<Method>, ResultOf<Method>, Scope>;",
-  ],
-  "(internal) statusBrand": [
-    "statusBrand: unique symbol",
   ],
   "Access": [
     "export declare function Access(access: AccessDeclaration): UseCaseDecorator;",
@@ -2189,9 +2183,6 @@ exports[`exports of the package and their declarations 1`] = `
   "VersionedIdentity": [
     "export type VersionedIdentity<Identity extends IEntityIdentity, Versioned extends boolean> = Versioned extends true ? Identity & IEntityVersion : Identity;",
   ],
-  "WithStatus": [
-    "export type WithStatus<Body> = Body & { readonly [statusBrand]: number; };",
-  ],
   "applicationOf": [
     "export declare function applicationOf<const Name extends string, const Extended extends readonly AnyApplication[] = readonly [ ], const Properties extends ApplicationCollections["properties"] = Record<never, never>, const Blueprints extends ApplicationCollections["blueprints"] = Record<never, never>, const Records extends ApplicationCollections["records"] = Record<never, never>, const Entities extends ApplicationCollections["entities"] = Record<never, never>, const Environments extends ApplicationCollections["environments"] = Record<never, never>, const Repositories extends ApplicationCollections["repositories"] = Record<never, never>, const UseCases extends ApplicationCollections["useCases"] = Record<never, never>, const Commands extends ApplicationCollections["commands"] = Record<never, never>, const Outputs extends ApplicationCollections["outputs"] = Record<never, never>, const Exceptions extends ApplicationCollections["exceptions"] = Record<never, never>>(settings: ApplicationSettings<Name, Extended, { properties: Properties; blueprints: Blueprints; records: Records; entities: Entities; environments: Environments; repositories: Repositories; useCases: UseCases; commands: Commands; outputs: Outputs; exceptions: Exceptions; }>): IApplication<Name, MergedCollections<{ properties: Properties; blueprints: Blueprints; records: Records; entities: Entities; environments: Environments; repositories: Repositories; useCases: UseCases; commands: Commands; outputs: Outputs; exceptions: Exceptions; }, Extended>>;",
   ],
@@ -2208,6 +2199,9 @@ exports[`exports of the package and their declarations 1`] = `
   "checkJsonSchema": [
     "export declare function checkJsonSchema(schema: unknown, value: unknown, options?: { readonly source?: string; }): JsonValue;",
     "export declare function checkJsonSchema<const Schema extends TSchema>(schema: Schema, value: unknown, options?: { readonly source?: string; }): Static<Schema>;",
+  ],
+  "chosenStatusOf": [
+    "export declare function chosenStatusOf(value: unknown): number | undefined;",
   ],
   "commandBuilderOf": [
     "export declare function commandBuilderOf<const Catalogs extends readonly IUseCaseCatalog[] = [ ]>(...catalogs: Catalogs): CommandBuilder<UseCasePluginContext<Catalogs>>;",
@@ -2291,9 +2285,6 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "isUseCasePlugin": [
     "export declare function isUseCasePlugin(value: unknown): value is AnyUseCasePlugin;",
-  ],
-  "isWithStatus": [
-    "export declare function isWithStatus(value: unknown): value is StatusEnvelope;",
   ],
   "jsonLogProvider": [
     "export declare function jsonLogProvider(): ILogProvider;",
@@ -2420,7 +2411,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function variantOf<const Key extends string, const Variants extends BlueprintVariants>(key: Key, variants: Variants): IBlueprintVariant<Key, Variants>;",
   ],
   "withStatus": [
-    "export declare function withStatus<Body>(status: number, body: Body): WithStatus<Body>;",
+    "export declare function withStatus<Body extends object>(status: number, body: Body): Body;",
   ],
   "wrapProvider": [
     "export declare function wrapProvider<Provider extends IRepositoryProvider>(provider: Provider, interceptor: ProviderInterceptor<ProviderEnvironmentOf<Provider>>): Provider;",

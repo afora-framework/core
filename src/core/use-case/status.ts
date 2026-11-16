@@ -1,33 +1,19 @@
-import { Kind } from "../symbols/kind";
-
-declare const statusBrand: unique symbol;
-
-/**
- * What {@link withStatus} gives: the body of a response with the status to
- * send it with. Typed as the body itself (plus a brand that exists only in
- * types), so that `execute` keeps the response type for its callers; at run
- * time it is a wrapper that only the use case reads, so return it, never
- * read from it.
- */
-export type WithStatus<Body> = Body & { readonly [statusBrand]: number };
-
-/** What `withStatus` holds at run time. */
-interface StatusEnvelope {
-	readonly [Kind]: "status";
-	readonly status: number;
-	readonly body: unknown;
-}
+/** The status each body was given by {@link withStatus}, until it is read. */
+const chosen = new WeakMap<object, number>();
 
 /**
- * The body of a response with the HTTP `status` to send it with, for the
- * `execute` of a use case: `return ok ? body : withStatus(503, body)`. The
- * use case validates the body against its `response` as usual. The route of
- * the use case declares each status other than its default one in
- * `route.statuses` (`{ method: "get", path: "/health", statuses: [503] }`):
- * an HTTP sink answers an undeclared one with `UndeclaredStatus`, a masked
- * 500. Every status sends the body as a success, 5xx included (not a
- * problem). A direct call (`execute()`), a use case called as a dependency
- * and the sinks that do not speak HTTP (`mcp`, `ws`) get the body only.
+ * `body`, the body of a response, itself, marked with the HTTP `status` to
+ * send it with, for the `execute` of a use case:
+ * `return ok ? body : withStatus(503, body)`. The body is not changed or
+ * copied (a frozen one is fine): the status is kept beside it, and the use
+ * case takes it when `execute` returns. The use case validates the body
+ * against its `response` as usual. The route of the use case declares each
+ * status other than its default one in `route.statuses`
+ * (`{ method: "get", path: "/health", statuses: [503] }`): an HTTP sink
+ * answers an undeclared one with `UndeclaredStatus`, a masked 500. Every
+ * status sends the body as a success, 5xx included (not a problem). A direct
+ * call (`execute()`), a use case called as a dependency and the sinks that
+ * do not speak HTTP (`mcp`, `ws`) get the body only.
  *
  * @example
  * ```ts
@@ -48,32 +34,30 @@ interface StatusEnvelope {
  * }
  * ```
  */
-export function withStatus<Body>(status: number, body: Body): WithStatus<Body> {
-	return Object.freeze({
-		[Kind]: "status",
-		status,
-		body,
-	} satisfies StatusEnvelope) as unknown as WithStatus<Body>;
-}
-
-/** Whether `value` was made by {@link withStatus}. */
-export function isWithStatus(value: unknown): value is StatusEnvelope {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		(value as { [Kind]?: unknown })[Kind] === "status"
-	);
+export function withStatus<Body extends object>(
+	status: number,
+	body: Body,
+): Body {
+	chosen.set(body, status);
+	return body;
 }
 
 /**
- * The status and the body of `value`: those {@link withStatus} gave it, or
- * no status and `value` itself.
+ * The status {@link withStatus} gave `value`, or `undefined`. A sink that
+ * serves HTTP reads it on what `operation.invoke` resolves with.
  */
-export function unwrapStatus(value: unknown): {
-	readonly status: number | undefined;
-	readonly body: unknown;
-} {
-	return isWithStatus(value)
-		? { status: value.status, body: value.body }
-		: { status: undefined, body: value };
+export function chosenStatusOf(value: unknown): number | undefined {
+	return typeof value === "object" && value !== null
+		? chosen.get(value)
+		: undefined;
+}
+
+/**
+ * The status {@link withStatus} gave `value`, or `undefined`, and forgets
+ * it: the same object returned again later has no status of its own.
+ */
+export function takeStatus(value: unknown): number | undefined {
+	const status = chosenStatusOf(value);
+	if (status !== undefined) chosen.delete(value as object);
+	return status;
 }

@@ -65,9 +65,9 @@ export interface OperationDescriptor {
 	/**
 	 * `command.run(name, input, { context })`, after the check of `access`:
 	 * it rejects with `Unauthenticated` or `Forbidden` before anything runs.
-	 * When the use case chose a status with `withStatus`, it resolves with
-	 * `withStatus(status, body)`: a sink reads it with `isWithStatus` (HTTP)
-	 * or keeps the body (`outputValueOf` does).
+	 * When the use case chose a status with `withStatus`, the body it
+	 * resolves with carries it: a sink that serves HTTP reads it with
+	 * `chosenStatusOf`, the others ignore it.
 	 */
 	invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>;
 }

@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 546 exports.
+Tier: stable. 545 exports.
 
 ### Access
 
@@ -3183,16 +3183,6 @@ A UUID of any version, in lower case.
 
 `Identity`, with `version` when `Versioned` is `true`.
 
-### WithStatus
-
-*type* · tier: stable · `import type { WithStatus } from "@afora/core"`
-
-What {@link withStatus} gives: the body of a response with the status to
-send it with. Typed as the body itself (plus a brand that exists only in
-types), so that `execute` keeps the response type for its callers; at run
-time it is a wrapper that only the use case reads, so return it, never
-read from it.
-
 ### applicationOf
 
 *function* · tier: stable · `import { applicationOf } from "@afora/core"`
@@ -3299,6 +3289,13 @@ with every issue in `details.issues` (a 400 for `statusOf`). `source` names
 what is checked in the issues and the exception, e.g. the content type.
 The value is typed by a schema whose type is known (`Static`), else as
 `JsonValue`, as for a schema loaded at runtime. See `jsonSchemaIssues`.
+
+### chosenStatusOf
+
+*function* · tier: stable · `import { chosenStatusOf } from "@afora/core"`
+
+The status {@link withStatus} gave `value`, or `undefined`. A sink that
+serves HTTP reads it on what `operation.invoke` resolves with.
 
 ### commandBuilderOf
 
@@ -3626,12 +3623,6 @@ concrete, or a subclass of one.
 *function* · tier: stable · `import { isUseCasePlugin } from "@afora/core"`
 
 Whether `value` is a plugin made by `useCasePluginOf`.
-
-### isWithStatus
-
-*function* · tier: stable · `import { isWithStatus } from "@afora/core"`
-
-Whether `value` was made by {@link withStatus}.
 
 ### jsonLogProvider
 
@@ -4163,15 +4154,18 @@ stored.
 
 *function* · tier: stable · `import { withStatus } from "@afora/core"`
 
-The body of a response with the HTTP `status` to send it with, for the
-`execute` of a use case: `return ok ? body : withStatus(503, body)`. The
-use case validates the body against its `response` as usual. The route of
-the use case declares each status other than its default one in
-`route.statuses` (`{ method: "get", path: "/health", statuses: [503] }`):
-an HTTP sink answers an undeclared one with `UndeclaredStatus`, a masked
-500. Every status sends the body as a success, 5xx included (not a
-problem). A direct call (`execute()`), a use case called as a dependency
-and the sinks that do not speak HTTP (`mcp`, `ws`) get the body only.
+`body`, the body of a response, itself, marked with the HTTP `status` to
+send it with, for the `execute` of a use case:
+`return ok ? body : withStatus(503, body)`. The body is not changed or
+copied (a frozen one is fine): the status is kept beside it, and the use
+case takes it when `execute` returns. The use case validates the body
+against its `response` as usual. The route of the use case declares each
+status other than its default one in `route.statuses`
+(`{ method: "get", path: "/health", statuses: [503] }`): an HTTP sink
+answers an undeclared one with `UndeclaredStatus`, a masked 500. Every
+status sends the body as a success, 5xx included (not a problem). A direct
+call (`execute()`), a use case called as a dependency and the sinks that
+do not speak HTTP (`mcp`, `ws`) get the body only.
 
 **Example**
 
@@ -4705,9 +4699,9 @@ routing of the `openapi` sink and of the sinks that serve HTTP.
 *function* · tier: adapters · `import { outputValueOf } from "@afora/core/adapters"`
 
 The JSON a sink sends: `JSON.parse(JSON.stringify(value))`. Every record
-goes through its `toJSON`, so sensitive values are always masked. The
-value an operation resolves with `withStatus` gives its body: a sink that
-does not speak HTTP ignores the status.
+goes through its `toJSON`, so sensitive values are always masked. A
+status chosen with `withStatus` is not part of the value: a sink that does
+not speak HTTP ignores it.
 
 ### problemOf
 

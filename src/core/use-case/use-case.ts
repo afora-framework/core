@@ -72,7 +72,7 @@ import {
 	type ServiceScope,
 	serviceFactoriesOf,
 } from "./service";
-import { unwrapStatus } from "./status";
+import { takeStatus } from "./status";
 import { freezeData } from "./steps/references";
 import { executeSteps } from "./steps/run";
 import type { CheckedSteps } from "./steps/types/check.interface";
@@ -924,17 +924,13 @@ export abstract class AbstractUseCase<
 							const input = Child.blueprint.safeParse(value);
 							if (input.issues)
 								invalidValue(input.issues, childSource, "input");
-							// A child gives its body only, whatever status it chose.
-							const output = parseResponse(
-								Child.response,
-								unwrapStatus(
-									await guard(
-										{ layer: ExceptionLayers.UseCase, source: childSource },
-										() =>
-											(substitute as (input: unknown) => unknown)(input.value),
-									),
-								).body,
+							const given = await guard(
+								{ layer: ExceptionLayers.UseCase, source: childSource },
+								() => (substitute as (input: unknown) => unknown)(input.value),
 							);
+							// A child gives its body only, whatever status it chose.
+							takeStatus(given);
+							const output = parseResponse(Child.response, given);
 							if (output.issues)
 								invalidValue(output.issues, childSource, "response");
 							collectEvents(Child.response, output.value, state.events);
@@ -963,13 +959,15 @@ export abstract class AbstractUseCase<
 					);
 				};
 				try {
-					const { status, body } = unwrapStatus(
-						await guard({ layer: ExceptionLayers.UseCase, source }, () =>
+					const body = await guard(
+						{ layer: ExceptionLayers.UseCase, source },
+						() =>
 							span === undefined
 								? perform()
 								: runInSpan(tracer as ITracer, span, perform),
-						),
 					);
+					// Taken from the body itself: the parsed value is a copy.
+					const status = takeStatus(body);
 					const parsed = parseResponse(declaration.response, body);
 					if (parsed.issues) invalidValue(parsed.issues, source, "response");
 					collectEvents(declaration.response, parsed.value, state.events);
@@ -1013,7 +1011,7 @@ export abstract class AbstractUseCase<
 	 * declared ones for this call: a function for a use case, some methods of a
 	 * repository, the variables of an environment. An implementation may
 	 * return `withStatus(status, body)` to choose the HTTP status of the
-	 * response; the call still resolves with the body.
+	 * response; the call resolves with the validated body, without it.
 	 *
 	 * @throws {@link UseCaseAlreadyExecuted} when this instance already executed.
 	 * @throws {@link InvalidUseCaseDependencies} when an override names an undeclared dependency or is of the wrong kind.
@@ -1303,7 +1301,7 @@ export function isUseCaseClass(value: unknown): value is AnyUseCaseClass {
  * The status the last `execute` of `useCase` chose with `withStatus`, or
  * `undefined`. Internal: read by the command that runs it for an output.
  */
-export function chosenStatusOf(useCase: object): number | undefined {
+export function executionStatusOf(useCase: object): number | undefined {
 	return states.get(useCase)?.status;
 }
 
