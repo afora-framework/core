@@ -6,7 +6,7 @@
 
 - You need only to validate some data at an edge and nothing else. Zod, Valibot or TypeBox alone are smaller for that, and afora's fields already work in anything that takes [Standard Schema](standard-schema.md).
 - Your app is mostly a thin layer over a database with no rules of its own, and you already have an ORM and a router you are happy with.
-- You need a stable API today. afora is before 1.0: anything may break, and every break is marked **Breaking.** in the [CHANGELOG](../CHANGELOG.md) with a migration. See [Stability](#stability-and-versioning) below.
+- You need a framework with years of stable releases behind it. 27.0 is afora's first stable release: its contract is frozen from the release candidate on, but it has no track record yet. See [Stability](#stability-and-versioning) below.
 - You need a framework that also does views, jobs, queues and sessions. afora models the domain and serves it; the rest is yours to pick.
 
 **What is it good at?**
@@ -115,7 +115,7 @@ Validation of invalid input collects every issue, and that path is held to the s
 
 **Is it stable?**
 
-Before 1.0 (`0.0.x`) anything may break, and each break is listed in the CHANGELOG as **Breaking.** with a before/after migration. After 1.0 a break waits for a major, and none is planned. A minor adds features, a patch fixes bugs. What is covered: the documented behavior, every export of `@afora/core`, `/adapters` and `/testing`, the format of descriptors, the issue `code` values and `afora.json` (`version: 1`). What is not: the text of error messages (match on the class, the layer or the `code`), anything in `@afora/core/experimental`, internal modules and benchmark numbers. The full policy is [VERSIONING.md](../VERSIONING.md), and [API tiers](api-tiers.md) gives the tier of each export.
+From 27.0 on, yes. Versions are `YY.minor.patch`: the major is the year of the cycle (27 for 2027) and is raised at most once a year, and only a major may break the contract, after a deprecation (`@deprecated`, a warning once per process, a CHANGELOG entry). A minor adds features, a patch fixes bugs, so `^27.0.0` is safe. The release candidates (`27.0.0-rc.N`, on the `next` dist-tag) already have the frozen contract and take only fixes. Before 27.0 (`0.0.x`) anything could break, and each break is listed in the CHANGELOG as **Breaking.** with a before/after migration. What is covered: the documented behavior, every export of `@afora/core`, `/adapters` and `/testing`, the format of descriptors, the issue `code` values and `afora.json` (`version: 1`). What is not: the text of error messages (match on the class, the layer or the `code`), anything in `@afora/core/experimental`, internal modules and benchmark numbers. The full policy is [VERSIONING.md](../VERSIONING.md), and [API tiers](api-tiers.md) gives the tier of each export.
 
 **Where do I import from?**
 
