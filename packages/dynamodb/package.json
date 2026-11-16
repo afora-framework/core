@@ -47,7 +47,7 @@
 		"test": "bun test"
 	},
 	"devDependencies": {
-		"@aws-sdk/client-dynamodb": "^3.1164.0",
+		"@aws-sdk/client-dynamodb": "^3.1169.0",
 		"@aws-sdk/lib-dynamodb": "^3.1164.0",
 		"@types/bun": "^1.4.4"
 	},
