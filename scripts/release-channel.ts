@@ -19,7 +19,7 @@
  *   bun scripts/release-channel.ts detect        # the job detect of release.yml
  *   bun scripts/release-channel.ts prepare --channel rc [--version <v>] [--date YYYY-MM-DD]
  *       # prepare-release.yml: preparedVersion, datedChangelog, setVersion, bun install
- *   bun scripts/release-channel.ts section <v>   # the section of <v> in CHANGELOG.md
+ *   bun scripts/release-channel.ts section <v> [--link-base <url>]   # the section of <v> in CHANGELOG.md
  *
  * `detect` reads BRANCH, RUN_NUMBER, EVENT and BEFORE from the environment;
  * `prepare` reads --branch, else BRANCH, else the current branch. Both ask
@@ -496,6 +496,21 @@ export function preparedVersion(input: PrepareInput): Prepared {
 	const current = parseOrThrow(pkgVersion);
 	const released = new Set(input.tags.map((tag) => tag.replace(/^v/, "")));
 	const explicit = input.explicit?.trim();
+	// A version bumped but never published would be skipped: its tag (or, for a
+	// release that failed halfway, the dist-tag that holds it) tells.
+	const published =
+		released.has(pkgVersion) ||
+		Object.values(input.distTags ?? {}).includes(pkgVersion);
+	if (
+		!explicit &&
+		!published &&
+		current.kind !== "alpha" &&
+		current.kind !== "zero"
+	) {
+		throw new Error(
+			`${pkgVersion} is bumped but not released yet; merge the release pull request first, or pass --version`,
+		);
+	}
 
 	const version = explicit
 		? explicit
@@ -620,12 +635,53 @@ function emptySection(version: string, previous: string | undefined): string {
 	return previous ? `No changes since ${previous}.` : "No changes of its own.";
 }
 
+/** The anchor of a heading, as GitHub and scripts/check-doc-links.ts make it. */
+const slugOf = (heading: string) =>
+	heading
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}\s_-]/gu, "")
+		.trim()
+		.replace(/\s/g, "-");
+
+/**
+ * For a stable version, the candidates it went through since the previous
+ * stable: the prereleases of the same version among the headings of `tail`,
+ * up to the first stable one, linked to their sections.
+ */
+function sinceSummary(version: string, tail: string): string | undefined {
+	const parsed = parseOrThrow(version);
+	if (parsed.kind !== "stable") return undefined;
+	const candidates: string[] = [];
+	let previous: string | undefined;
+	for (const match of tail.matchAll(/^## (\S+)([^\n]*)$/gm)) {
+		const heading = `${match[1]}${match[2]}`.trim();
+		const other = parseVersion(match[1] as string);
+		if (!other) continue;
+		if (other.kind === "stable" || other.kind === "zero") {
+			previous = match[1];
+			break;
+		}
+		if (triple(other) === version) {
+			candidates.unshift(
+				`[${match[1]}](#${slugOf(heading.replace(/`/g, ""))})`,
+			);
+		}
+	}
+	if (candidates.length === 0) return undefined;
+	const list =
+		candidates.length === 1
+			? candidates[0]
+			: `${candidates.slice(0, -1).join(", ")} and ${candidates.at(-1)}`;
+	return `Since ${previous ?? "the first release"}, it went through ${list}; their sections below list the changes.`;
+}
+
 /**
  * The changelog with its `## Unreleased` section dated as `## <version> —
  * <date>`. Without one (or with an empty one), a short section is written
  * instead, before the first `## ` heading, which says that a prerelease is a
  * candidate with no changes since the previous version; `note` is added to
- * it. Entries are never dropped. Throws when `version` already has a section.
+ * it. A stable version after candidates opens with a "Since <previous stable>"
+ * line that links to their sections. Entries are never dropped. Throws when `version` already has a section.
  */
 export function datedChangelog(
 	text: string,
@@ -649,21 +705,32 @@ export function datedChangelog(
 		const rest = text.slice(after);
 		const next = rest.search(/^## /m);
 		const body = next === -1 ? rest : rest.slice(0, next);
-		if (body.trim()) {
-			return `${text.slice(0, start)}${heading}\n${rest}`;
-		}
 		const tail = rest.slice(body.length);
-		const section = `${heading}\n\n${short(firstVersionHeading(tail))}\n`;
+		const since = sinceSummary(version, tail);
+		if (body.trim()) {
+			const summary = since ? `\n${since}\n` : "";
+			return `${text.slice(0, start)}${heading}\n${summary}${rest}`;
+		}
+		const section = `${heading}\n\n${short(firstVersionHeading(tail))}\n${since ? `\n${since}\n` : ""}`;
 		return `${text.slice(0, start)}${section}${tail ? `\n${tail}` : ""}`;
 	}
-	const section = `${heading}\n\n${short(firstVersionHeading(text))}\n`;
+	const since = sinceSummary(version, text);
+	const section = `${heading}\n\n${short(firstVersionHeading(text))}\n${since ? `\n${since}\n` : ""}`;
 	const first = text.search(/^## /m);
 	if (first === -1) return `${text.trimEnd()}\n\n${section}`;
 	return `${text.slice(0, first)}${section}\n${text.slice(first)}`;
 }
 
-/** The body of the `## <version>` section of a changelog, trimmed. */
-export function changelogSection(text: string, version: string): string {
+/**
+ * The body of the `## <version>` section of a changelog, trimmed. With
+ * `linkBase` (the URL of the changelog), links to its headings become
+ * absolute, for a pull request body.
+ */
+export function changelogSection(
+	text: string,
+	version: string,
+	{ linkBase }: { readonly linkBase?: string } = {},
+): string {
 	const heading = new RegExp(
 		`^## v?${escaped(version)}(?:\\s[^\\n]*)?$`,
 		"m",
@@ -673,7 +740,8 @@ export function changelogSection(text: string, version: string): string {
 	}
 	const rest = text.slice(heading.index + heading[0].length);
 	const next = rest.search(/^## /m);
-	return (next === -1 ? rest : rest.slice(0, next)).trim();
+	const body = (next === -1 ? rest : rest.slice(0, next)).trim();
+	return linkBase ? body.replaceAll("](#", `](${linkBase}#`) : body;
 }
 
 function isDate(date: string): boolean {
@@ -927,7 +995,7 @@ const USAGE = `usage: bun scripts/release-channel.ts
   set-version <v>              setVersion alone (the publish of the Next)
   detect                       the job detect of release.yml
   prepare --channel <rc|beta|stable|patch> [--version <v>] [--date YYYY-MM-DD] [--branch <b>] [--no-install]
-  section <v>                  the section of <v> in CHANGELOG.md`;
+  section <v> [--link-base <url>]   the section of <v> in CHANGELOG.md`;
 
 async function main(args: string[]) {
 	const [command, version, ...flags] = args;
@@ -941,8 +1009,14 @@ async function main(args: string[]) {
 	if (command === "detect") return emit(await detect());
 	if (command === "prepare") return emit(await prepare(args.slice(1)));
 	if (command === "section" && version) {
+		const [flag, linkBase] = flags;
+		if (flag !== undefined && (flag !== "--link-base" || !linkBase)) {
+			throw new Error("usage: section <v> [--link-base <url>]");
+		}
 		console.log(
-			changelogSection(readFileSync("CHANGELOG.md", "utf8"), version),
+			changelogSection(readFileSync("CHANGELOG.md", "utf8"), version, {
+				linkBase,
+			}),
 		);
 		return;
 	}
