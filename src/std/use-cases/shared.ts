@@ -177,11 +177,14 @@ export interface Owner {
 /**
  * The option `owner: { key?, context }`: `key` (`ownerId` by default) holds
  * the owner, an id or an entity, and `context` names the context key with
- * the id of the caller.
+ * the id of the caller. `key: "id"` says the entity is the caller itself (a
+ * user, an account): its own id is compared with the context; `self: false`
+ * refuses it, for a use case that makes the entity.
  */
 export function ownerOf(
 	target: UseCaseTargetInfo,
 	options: Options,
+	{ self = true }: { readonly self?: boolean } = {},
 ): Owner | undefined {
 	const { owner } = options;
 	if (owner === undefined) return undefined;
@@ -196,6 +199,19 @@ export function ownerOf(
 		);
 	}
 	const plan = target.field((owner.key as string | undefined) ?? "ownerId");
+	if (plan.key === "id") {
+		if (!self) {
+			target.unavailable(
+				'owner.key "id" compares an entity with the caller, so it cannot make one',
+			);
+		}
+		return {
+			plan,
+			context: owner.context,
+			field: plan.field,
+			reference: "$item.id",
+		};
+	}
 	if (plan.identity || plan.optional) {
 		target.unavailable(`owner.key "${plan.key}" must be a required key`);
 	}

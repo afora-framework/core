@@ -554,6 +554,8 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `Ip`                               | value | stable       | `@afora/core`              | Std property or helper ([Properties](properties.md)).                                                                  |
 | `Phone`                            | value | stable       | `@afora/core`              | Std property or helper ([Properties](properties.md)).                                                                  |
 | `Url`                              | value | stable       | `@afora/core`              | Std property or helper ([Properties](properties.md)).                                                                  |
+| `UrlOptions`                       | type  | stable       | `@afora/core`              | Std property or helper ([Properties](properties.md)).                                                                  |
+| `InvalidUrlOptions`                | value | stable       | `@afora/core`              | Std property or helper ([Properties](properties.md)).                                                                  |
 | `EnumClass`                        | type  | stable       | `@afora/core`              | Std property or helper ([Properties](properties.md)).                                                                  |
 | `enumOf`                           | value | stable       | `@afora/core`              | Std property or helper ([Properties](properties.md)).                                                                  |
 | `InvalidJsonData`                  | value | stable       | `@afora/core`              | Std property or helper ([Properties](properties.md)).                                                                  |

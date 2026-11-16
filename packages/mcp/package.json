@@ -30,7 +30,8 @@
 		"./package.json": "./package.json"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"LICENSE"
 	],
 	"bin": {
 		"afora-mcp": "dist/bin.js"

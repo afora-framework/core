@@ -264,13 +264,14 @@ hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
       slug: typeof Slug;
       email: PropertyClass<TString, string>;
       phone: PropertyClass<TString, string>;
-      url: PropertyClass<TString, string>;
+      url: typeof Url;
       ip: PropertyClass<TUnion<[TString, TString]>, string>;
       password: typeof Password;
       string: PropertyClass<TString, string>;
       text: PropertyClass<TString, string>;
       number: PropertyClass<TNumber, number>;
-      ... 9 more ...;
+      integer: PropertyClass<TInteger, number>;
+      ... 8 more ...;
       file: PropertyClass<...>;
   }, {
       ...;
@@ -400,7 +401,7 @@ exports[`source mode experience errors 1`] = `
   TS2820 L13:40 repositoryOf({ entity: User, actions: [‸"findManyByEmail"] });
     Type '"findManyByEmail"' is not assignable to type 'RepositoryAction<typeof User>'. Did you mean '"findByEmail"'?
   TS2339 L14:32 blueprintOf((ctx) => ({ a: ctx.‸nope }));
-    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 14 more ...; file: PropertyClass<...>; }, { ...; }> & { ...; }]>'.
+    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: typeof Url; ... 14 more ...; file: PropertyClass<...>; }, { ...; }> & { ...; }]>'.
   TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
     Type '"missing"' is not assignable to type '"n"'."
 `;
@@ -669,9 +670,10 @@ hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
       slug: typeof import("<root>/dist/index").Slug;
       email: import("<root>/dist/index").PropertyClass<TString, string>;
       phone: import("<root>/dist/index").PropertyClass<TString, string>;
-      url: import("<root>/dist/index").PropertyClass<TString, string>;
+      url: typeof import("<root>/dist/index").Url;
       ip: import("<root>/dist/index").PropertyClass<TUnion<[TString, TString]>, string>;
-      ... 13 more ...;
+      password: typeof import("<root>/dist/index").Password;
+      ... 12 more ...;
       file: import("<root>/dist/index").PropertyClass<TUnsafe<...>, File>;
   }, {
       ...;
@@ -801,7 +803,7 @@ exports[`package mode experience errors 1`] = `
   TS2820 L13:40 repositoryOf({ entity: User, actions: [‸"findManyByEmail"] });
     Type '"findManyByEmail"' is not assignable to type 'RepositoryAction<typeof User>'. Did you mean '"findByEmail"'?
   TS2339 L14:32 blueprintOf((ctx) => ({ a: ctx.‸nope }));
-    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 14 more ...; file: PropertyClass<...>; }, { ...; }> & { ...; }]>'.
+    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: typeof Url; ... 14 more ...; file: PropertyClass<...>; }, { ...; }> & { ...; }]>'.
   TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
     Type '"missing"' is not assignable to type '"n"'."
 `;

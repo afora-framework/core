@@ -1,6 +1,14 @@
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import {
+	dirname,
+	extname,
+	isAbsolute,
+	join,
+	relative,
+	resolve,
+	sep,
+} from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { issue } from "./scope";
 import type { SpecIssue } from "./spec/types";
@@ -8,13 +16,14 @@ import type { SpecIssue } from "./spec/types";
 const DEFAULT_OUTPUT_DIR = "src/domain";
 
 /** Whether `path` is `root` or inside it. */
-function inside(root: string, path: string): boolean {
+export function isInside(root: string, path: string): boolean {
 	const rel = relative(root, path);
 	return (
 		rel === "" ||
 		(!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel))
 	);
 }
+const inside = isInside;
 
 /** The real path of the deepest part of `path` that exists, with the rest appended. */
 function realWithin(path: string): string {
@@ -36,9 +45,87 @@ function realWithin(path: string): string {
 /** The directories a generated file never goes in: dependencies and version control. */
 const TOOLING_DIRS = new Set(["node_modules", ".git"]);
 
-/** Whether `path` has a segment naming a tooling directory, in any case (APFS and NTFS ignore it). */
-const inTooling = (path: string) =>
-	path.split(/[\\/]/).some((part) => TOOLING_DIRS.has(part.toLowerCase()));
+/**
+ * A path segment folded at least as far as a file system may compare it:
+ * case (APFS and NTFS ignore it), compatibility forms (`ſ` is `s`, a
+ * fullwidth `ｍ` is `m`) and combining marks. Folding too far only refuses more.
+ */
+const fold = (part: string) =>
+	part
+		.normalize("NFKD")
+		.replace(/\p{M}/gu, "")
+		.toLowerCase()
+		.replace(/\u0131/g, "i");
+
+/**
+ * Whether `path` has a segment naming a tooling directory (`node_modules`,
+ * `.git`), however a case-insensitive file system may spell it.
+ */
+export const inTooling = (path: string) =>
+	path.split(/[\\/]/).some((part) => TOOLING_DIRS.has(fold(part)));
+
+/** The extensions a runtime tries after a relative module, in place of none. */
+const MODULE_EXTENSIONS = [
+	".ts",
+	".tsx",
+	".mts",
+	".cts",
+	".js",
+	".jsx",
+	".mjs",
+	".cjs",
+	".json",
+];
+
+/** A `.js` module is loaded from its TypeScript source when only that exists (Bun, TypeScript). */
+const SOURCE_OF: Readonly<Record<string, readonly string[]>> = {
+	".js": [".ts", ".tsx"],
+	".jsx": [".tsx"],
+	".mjs": [".mts"],
+	".cjs": [".cts"],
+};
+
+/** The files a runtime may load for the relative module at `path`, before a `package.json` says more. */
+function moduleFiles(path: string): string[] {
+	const extension = extname(path);
+	return [
+		path,
+		...MODULE_EXTENSIONS.map((ext) => path + ext),
+		...(SOURCE_OF[extension] ?? []).map(
+			(ext) => path.slice(0, -extension.length) + ext,
+		),
+		...MODULE_EXTENSIONS.map((ext) => join(path, `index${ext}`)),
+		join(path, "package.json"),
+	];
+}
+
+/** The entry points a directory's `package.json` names (`main`, `module`, every string of `exports`). */
+function manifestEntries(manifest: string): string[] {
+	let pkg: unknown;
+	try {
+		pkg = JSON.parse(readFileSync(manifest, "utf8"));
+	} catch {
+		return [];
+	}
+	if (typeof pkg !== "object" || pkg === null) return [];
+	const entries: string[] = [];
+	const collect = (value: unknown, depth: number): void => {
+		if (typeof value === "string") entries.push(value);
+		else if (typeof value === "object" && value !== null && depth < 8) {
+			for (const item of Object.values(value)) collect(item, depth + 1);
+		}
+	};
+	const { main, module, exports } = pkg as Record<string, unknown>;
+	collect(main, 0);
+	collect(module, 0);
+	collect(exports, 0);
+	return entries;
+}
+
+/** The spec file an `extends` path reads: a directory means its `afora.json`. */
+export function specFileOf(path: string): string {
+	return path.endsWith(".json") ? path : resolve(path, "afora.json");
+}
 
 /**
  * Where a runtime loads the relative module `module` from `from`: Node and
@@ -119,18 +206,29 @@ export function projectBoundaryIssues(
 	spec: unknown,
 	root: string,
 ): SpecIssue[] {
-	return boundaryIssues(spec, root, root);
+	return issuesOf(spec, root, root, false);
 }
 
 /**
  * `projectBoundaryIssues` for a spec whose file is in `specDir` (a spec it
  * extends): its `extends` and output directory resolve from there, and
- * nothing may leave `root`.
+ * nothing may leave `root`. Its output directory is held to every rule of
+ * one (relative, no `..`, inside `root`), since `validateSpec` only checks
+ * the spec it is given.
  */
 export function boundaryIssues(
 	spec: unknown,
 	root: string,
 	specDir: string,
+): SpecIssue[] {
+	return issuesOf(spec, root, specDir, true);
+}
+
+function issuesOf(
+	spec: unknown,
+	root: string,
+	specDir: string,
+	confineOutput: boolean,
 ): SpecIssue[] {
 	const issues: SpecIssue[] = [];
 	if (typeof spec !== "object" || spec === null) return issues;
@@ -143,11 +241,51 @@ export function boundaryIssues(
 		typeof given === "string" ? given : DEFAULT_OUTPUT_DIR,
 	);
 
+	/** Whether a file that exists at `path` is, or is under, a link that leaves the project. */
+	const linkLeaves = (path: string): boolean => {
+		try {
+			lstatSync(path);
+		} catch {
+			return false;
+		}
+		try {
+			return !inside(realBase, realpathSync(path));
+		} catch {
+			// A dangling link: where it would lead is not known, so it is not followed.
+			return true;
+		}
+	};
+
+	/**
+	 * Whether the module at `path` reaches outside the project through a link:
+	 * the path as written (or its deepest existing directory), or any file a
+	 * runtime may load for it.
+	 */
+	const leavesByLink = (
+		path: string,
+		files: (path: string) => readonly string[],
+	): boolean => {
+		if (!inside(realBase, realWithin(path))) return true;
+		for (const file of files(path)) {
+			if (linkLeaves(file)) return true;
+			if (file.endsWith(`${sep}package.json`) && existsSync(file)) {
+				const dir = dirname(file);
+				for (const entry of manifestEntries(file)) {
+					const target = resolve(dir, entry);
+					if (!inside(base, target)) return true;
+					if (moduleFiles(target).some(linkLeaves)) return true;
+				}
+			}
+		}
+		return false;
+	};
+
 	const check = (
 		module: string,
 		from: string,
 		path: readonly (string | number)[],
 		what: string,
+		files: (path: string) => readonly string[] = moduleFiles,
 	) => {
 		const problem =
 			specifierProblem(module) ??
@@ -184,8 +322,8 @@ export function boundaryIssues(
 				),
 			);
 		} else if (
-			!inside(realBase, realWithin(target)) ||
-			!inside(realBase, realWithin(loaded))
+			leavesByLink(target, files) ||
+			(loaded !== target && leavesByLink(loaded, files))
 		) {
 			issues.push(
 				issue(
@@ -197,25 +335,45 @@ export function boundaryIssues(
 		}
 	};
 
-	// An output.dir that climbs out (`..`, absolute) is `invalid_output` of
-	// validateSpec; what only the disk or the project's layout tells is here.
-	if (typeof given === "string" && inside(base, outputDir)) {
-		const real = realWithin(outputDir);
-		const escapes = !inside(realBase, real);
-		// The directory as written, and where it really is: a link to node_modules counts.
-		const tooling =
-			inTooling(relative(base, outputDir)) ||
-			(!escapes && inTooling(relative(realBase, real)));
-		if (tooling || escapes) {
-			issues.push(
-				issue(
-					["output", "dir"],
-					"outside_project",
-					tooling
-						? `The output directory "${given}" is inside node_modules or .git; generate into a directory of your sources.`
-						: `The output directory "${given}" goes through a symbolic link that leaves the project directory.`,
-				),
-			);
+	// For the spec checked first, an output.dir that climbs out (`..`,
+	// absolute) is `invalid_output` of validateSpec; a spec it extends is not
+	// validated on its own, so here it is refused like any other way out.
+	if (typeof given === "string") {
+		const climbs =
+			isAbsolute(given) ||
+			given.startsWith("/") ||
+			given.startsWith("\\") ||
+			/(^|[\\/])\.\.([\\/]|$)/.test(given) ||
+			!inside(base, outputDir);
+		if (climbs) {
+			if (confineOutput) {
+				issues.push(
+					issue(
+						["output", "dir"],
+						"outside_project",
+						`The output directory "${given}" is not a relative directory inside the project directory (no "..").`,
+					),
+				);
+			}
+		} else {
+			const real = realWithin(outputDir);
+			const escapes = !inside(realBase, real);
+			// The directory as written, and where it really is: a link to node_modules counts.
+			const tooling =
+				inTooling(given) ||
+				inTooling(relative(base, outputDir)) ||
+				(!escapes && inTooling(relative(realBase, real)));
+			if (tooling || escapes) {
+				issues.push(
+					issue(
+						["output", "dir"],
+						"outside_project",
+						tooling
+							? `The output directory "${given}" is inside node_modules or .git; generate into a directory of your sources.`
+							: `The output directory "${given}" goes through a symbolic link that leaves the project directory.`,
+					),
+				);
+			}
 		}
 	}
 
@@ -223,7 +381,14 @@ export function boundaryIssues(
 	if (Array.isArray(references)) {
 		for (const [index, reference] of references.entries()) {
 			if (typeof reference === "string") {
-				check(reference, home, ["extends", index], "The extended spec");
+				check(
+					reference,
+					home,
+					["extends", index],
+					"The extended spec",
+					// What is read: the path, or the afora.json of a directory.
+					(path) => [path, specFileOf(path)],
+				);
 			}
 		}
 	}

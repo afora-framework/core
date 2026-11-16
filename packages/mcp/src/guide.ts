@@ -151,12 +151,16 @@ a file of your own.
   starts with $; or an object/array of values. No expressions: compute with \`run\`.
 - A standard use case needs none of that: \`{ "generic": "create", "repository": "Posts", "options": {...} }\` is a use case made for a
   declared repository, its input, response and steps following the entity. Prefer it for create, get, list, update, delete, restore
-  (soft deletion), publish/unpublish, archive/unarchive, tag/untag (entities with those plugins), register and login (authenticatable):
+  (soft deletion), publish/unpublish, archive/unarchive, tag/untag (entities with those plugins), register, login and changePassword
+  (authenticatable; changePassword takes \`{ id, currentPassword, password }\`, and \`update\` never takes a sensitive key such as \`password\`,
+  so leave \`update\` out for an entity whose only change key is one):
   \`useCases\` of \`afora_catalog\` lists each with the \`actions\` the repository needs, the \`plugins\` the entity needs and its \`options\`.
-  Inputs take \`id\` (not \`postId\`), the keys of the entity (an entity it holds as \`<key>Id\`) and a plain \`password\` for a password key.
+  Inputs take \`id\` (not \`postId\`), the keys of the entity (an entity it holds as \`<key>Id\`) and a plain \`password\` for a password key (create, register).
   Options: \`as\` (the response key, "item" by default), \`owner\` (\`{ "key"?, "context" }\`: the caller, whose id is in that context key,
-  owns the entity), \`errors\` (\`{ "notFound" | "conflict" | "invalid" | "owner": an exception name }\`), and \`omit\`, \`values\`
-  (create, register), \`set\` (publish, archive...), \`orderBy\` (list). \`description\`, \`tags\` and \`deprecated\` go beside \`generic\`.
+  owns the entity; \`"key": "id"\` when the entity is the caller, as a user changing itself, not for create and register; restore with
+  \`owner\` needs the action \`exists\`), \`errors\` (\`{ "notFound" | "conflict" | "invalid" | "owner": an exception name }\`), and \`omit\`,
+  \`values\`, \`relations\` (create, register: \`{ "<key>": { "shared": true } }\` lets the input name an entity of another owner),
+  \`set\` (publish, archive...), \`orderBy\` and \`maxLimit\` (list: the largest \`limit\`, 100 by default). \`description\`, \`tags\` and \`deprecated\` go beside \`generic\`.
   The ones that write (all but get, list, login) also take \`before\` and \`after\` (\`{ "import": "./file.ts#fn" }\`, run before and
   after the write; \`before\` may give back the input to write), \`dependencies\` (key -> declared name, for them) and \`throws\`
   (the exceptions they throw). Write steps only for what no standard use case does, nor its \`before\`/\`after\`.

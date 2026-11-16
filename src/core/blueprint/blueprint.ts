@@ -77,10 +77,24 @@ export function blueprintFromProperties(
 	return create(plugins, { ...properties });
 }
 
+/**
+ * Keys no blueprint declares: as keys of a parsed value they would reach its
+ * prototype (`value.__proto__ = input`) or look like a class.
+ */
+const PROTOTYPE_KEYS = ["__proto__", "constructor", "prototype"] as const;
+
 function create(
 	plugins: readonly IBlueprintPlugin[],
 	properties: IBlueprintCollection,
 ): IBlueprint<IBlueprintCollection> {
+	for (const key of PROTOTYPE_KEYS) {
+		if (Object.hasOwn(properties, key)) {
+			throw new ReservedBlueprintKey({
+				source: "blueprint",
+				details: { key },
+			});
+		}
+	}
 	const shape: Record<string, TSchema> = {};
 	for (const [key, field] of Object.entries(properties)) {
 		properties[key] = fieldOf(field);
@@ -103,9 +117,12 @@ function create(
 		join: ((...others: readonly AnyBlueprint[]) =>
 			create(
 				[blueprint, ...others].flatMap((source) => source.plugins),
-				Object.assign(
-					{},
-					...[blueprint, ...others].map((source) => source.properties),
+				// `fromEntries`, not `Object.assign`, so that a `__proto__` key stays a key
+				// (and is rejected) instead of setting the prototype.
+				Object.fromEntries(
+					[blueprint, ...others].flatMap((source) =>
+						Object.entries(source.properties),
+					),
 				),
 			)) as IBlueprint<IBlueprintCollection>["join"],
 	} as IBlueprint<IBlueprintCollection>;

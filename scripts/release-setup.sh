@@ -23,8 +23,11 @@ ENVIRONMENT=npm
 # core first, then the packages that depend on it (mcp depends on codegen)
 DIRS=(. packages/codegen packages/mcp packages/hono packages/fastify packages/express packages/elysia packages/ws packages/drizzle packages/dynamodb packages/otel)
 
-# npm trust needs npm >= 11.10; the npm of the local Node may be older
-npm_() { npx -y npm@11 "$@"; }
+# npm trust needs npm >= 11.10; the npm of the local Node may be older. An exact
+# version, not a range: this npm logs in and publishes, so a new release of it
+# is not picked up without a change here.
+NPM_VERSION=11.21.2
+npm_() { npx -y "npm@$NPM_VERSION" "$@"; }
 name_of() { node -p "require('./$1/package.json').name"; }
 confirm() {
 	local answer
