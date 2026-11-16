@@ -6,6 +6,10 @@
 
 - **Breaking.** `blueprint.safeParse`, `listOf(...).safeParse`, `~standard.validate` of a blueprint, list or variant, and the `input` of a use case give a new object or array made for that call that is **not frozen**: it is typed read-only as before, belongs to the caller, and changing it changes neither the input nor any other result. Records and entities still freeze every object and array they keep, at any depth (so `record.tags.push(x)` still throws), as do their `toJSON()`, the value of an environment, the context of a use case and its response. This is an exception to the rule of the release candidate (only fixes until 27.0.0), taken before the contract freezes: on JavaScriptCore (Bun), freezing an array costs about 75 ns per item (76 µs for 1,000 items, where copying them takes 1 µs; `Object.seal` and `Object.preventExtensions` are as costly), which was about 45% of `blueprint.safeParse` on a list of 1,000 objects, while on V8 it costs nothing. A value handed to the caller is a copy of its own, so freezing it guarded nothing; what is shared stays frozen. See Migration below.
 
+### Changed
+
+- **Performance.** A collection whose fields are all properties parsing through their definition (no nested blueprint, list, record or variant) is parsed by one loop over their parsers, the path of an issue made only when there is one; the values and issues are the same, which a differential test checks against the general path on generated inputs. With the change above, `blueprint.safeParse` on valid input takes, on Bun, 62% less time on a list of 1,000 objects (183 → 69 µs), 51% less on the nested user, 63% less on the union of 12 events and 16–26% less on a flat object; on Node, 20% less on the list and 20–31% less on a flat object. `bench:guard` no longer needs its own limit for `large-list valid` (0.44x of Zod 4, was 1.0x).
+
 ### Migration
 
 Code that relied on the result of a blueprint being frozen (an `Object.isFrozen` check, or a `TypeError` expected when it is changed) freezes it itself, or makes a record of it, which keeps its values frozen.

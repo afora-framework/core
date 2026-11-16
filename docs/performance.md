@@ -134,10 +134,9 @@ BENCH_NODE_BINS="$(mise where node@22)/bin/node:$(mise where node@24)/bin/node" 
 
 **The guard.** `bun run bench:guard` times `blueprint.safeParse` and Zod 4 `safeParse` on each of the fourteen cases, taking turns in one process, and fails when afora is over the limit of a case, as a multiple of Zod 4. It compares a ratio measured in one process, so it does not depend on the machine, and it takes about 75 seconds. The limit is in `bench/guard.limits.ts`:
 
-| Case               | Limit | Why                                                                                                 |
-| ------------------ | ----: | --------------------------------------------------------------------------------------------------- |
-| every other case   | 1.15x | afora is at or below Zod 4 there, and 15% is the noise of a shared runner.                          |
-| `large-list valid` | 1.25x | afora is level with Zod 4 (about 1.0x): freezing 1,000 objects and their array is most of the time. |
+| Case       | Limit | Why                                                                        |
+| ---------- | ----: | -------------------------------------------------------------------------- |
+| every case | 1.15x | afora is at or below Zod 4 there, and 15% is the noise of a shared runner. |
 
 A limit is where afora is plus room for noise, never room for a regression. It is raised only for a cost that is wanted, with the reason written next to it, and the pull request says why. When the guard fails, run it again to rule out noise, then find what the change costs. Run it when you touch `src/core/parse`, `src/core/property`, `src/core/schema` or the constructor of a record.
 

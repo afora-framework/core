@@ -6,12 +6,7 @@
 /** For a case with no entry below: afora is at or below Zod 4, and 15% is noise. */
 export const GUARD_DEFAULT = 1.15;
 
-export const GUARD_LIMITS: Record<string, { limit: number; why: string }> = {
-	"large-list valid": {
-		limit: 1.25,
-		why: "afora is level with Zod 4 here (about 1.0x): freezing 1,000 objects and their array is most of the time. The limit is that plus noise.",
-	},
-};
+export const GUARD_LIMITS: Record<string, { limit: number; why: string }> = {};
 
 /**
  * The same for `Entity.safeParse` (a class extending `entityOf(...)`, which
