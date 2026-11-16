@@ -36,6 +36,8 @@ The terms afora uses, in alphabetical order. Each entry is short and points to t
 
 **experimental.** The tier of `@afora/core/experimental`: it may change in any release. See [API tiers](api-tiers.md).
 
+**id strategy.** How an entity gets its `id`, given by the `id` option of `entityOf`: UUID v7 by default, `Uuid` (any UUID version), `Key` (a natural key from the input), `Serial` (an integer the database assigns), or one made with `idOf(property, generate?)`. See [Entities](entities.md#ids).
+
 **identity keys.** The keys an entity adds to its blueprint: `id`, `createdAt`, `updatedAt`, `deletedAt` (and `expiresAt` or `version` when declared). They are read-only, and a blueprint cannot declare them. See [Entities](entities.md).
 
 **issue.** One problem found by `safeParse` or `~standard.validate`: a `code`, a `path`, a `message` and a `source`. They are collected, never thrown. See [Standard Schema](standard-schema.md).
@@ -66,15 +68,21 @@ The terms afora uses, in alphabetical order. Each entry is short and points to t
 
 **sensitive.** A key or property that `toJSON` masks as `"********"` at any depth. `Password` is always sensitive. See [Records](records.md).
 
+**service.** A dependency of a use case that is neither a use case, a repository nor an environment: a cache, a storage, a client of another API. Declared with `serviceOf<T>(name)` and made by the application (`applicationOf({ services })`), once per call. See [Use cases](use-cases.md#services).
+
 **sink.** The last stage of an output, which builds something concrete from the operations (`hono(...)`, `openapi(...)`, `mcpTools`, or one you write with `sinkOf`). See [Outputs](outputs.md) and the [custom stage recipe](recipes/custom-sink-or-stage.md).
 
 **spec.** The content of an `afora.json`. Also what `afora-codegen extract` prints for an application. See [afora.json](afora-json.md).
+
+**spy provider.** `spyProvider(provider)` of `@afora/core/testing`: a provider for tests that forwards to another, records each call and can make one fail. Built on `wrapProvider`. See [Testing an application](testing.md#spying-on-the-database).
 
 **stable.** The tier of `@afora/core` that the contract of [VERSIONING.md](../VERSIONING.md) covers, with adapters and testing. See [API tiers](api-tiers.md).
 
 **stage.** One step of the pipe of an output: a transform (changes or drops operations) or a sink (builds the result). A stage is a name plus JSON options. See [Outputs](outputs.md).
 
 **std.** The standard library part of afora: ready-made properties (`Id`, `Slug`, `Email`, `Password`...), `blueprintOf`, `entityOf`, the standard use cases and the record plugins. `core` holds the generic machinery and never imports from `std`. See [Properties](properties.md) and [Standard use cases](std-use-cases.md).
+
+**status (chosen at run time).** A status other than its route's that a use case answers with, by returning `withStatus(status, body)`. The route lists it in `statuses`. See [Use cases](use-cases.md#a-status-chosen-at-run-time).
 
 **step.** One element of the `steps` of a use case: plain data (`find`, `ensure`, `build`, `create`, `run`...) that the use case interprets instead of a hand-written `execute`. The same steps are valid in TypeScript and in JSON. See [Use cases](use-cases.md#steps).
 
@@ -87,3 +95,5 @@ The terms afora uses, in alphabetical order. Each entry is short and points to t
 **use case.** An operation with an input blueprint, a response blueprint and dependencies (other use cases, repositories, environments) injected into `execute`. An instance runs once. See [Use cases](use-cases.md).
 
 **variant.** A field that is one of several blueprints told apart by a key (`variantOf("type", { click: Click, view: View })`). See [Blueprints](blueprints.md#one-of-several-blueprints).
+
+**wrapped provider.** A provider made by `wrapProvider(provider, { around })`, which runs `around` around each operation of another one, for logs, traces and spies, and is typed as the provider it wraps. See [Repositories](repositories.md#wrapping-a-provider).

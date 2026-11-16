@@ -78,20 +78,27 @@ Both answer `POST /users` with a 201 and refuse a second user with the same emai
 
 ## What moves where
 
-| With Hono + Zod                                          | With afora                                                                                                               |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| A Zod schema per request body                            | A **blueprint**: `blueprintOf((ctx) => ({ email: ctx.email }))`. Each field is a property that validates and normalizes. |
-| `z.infer<typeof Schema>`                                 | Inferred from the blueprint: `this.input`, the entity class, the response.                                               |
-| An object from the database                              | An **entity**: a class whose values were validated when it was built and change only through `change.<key>`.             |
-| The handler body                                         | A **use case**: `execute` with typed input, context and dependencies, runnable with no server.                           |
-| `app.post("/users", ...)`                                | The `route` of the use case (or `@Route`), served by an output. The path is declared once and documented from it.        |
-| `zValidator("json", Schema)`                             | Nothing: the input is validated by the blueprint of the use case, on every transport.                                    |
-| `const { password, ...safe } = user` in each handler     | Nothing: a sensitive property is masked by `toJSON()`, at any depth, whoever serializes.                                 |
-| `if (exists) return c.json({...}, 409)`                  | `unique: ["email"]`: the repository enforces it and the output answers 409.                                              |
-| `return c.json({ error }, 4xx)`                          | `throw new MyError(...)`, an exception with a layer; the output maps it to a status as `application/problem+json`.       |
-| An auth middleware that reads the token and checks roles | `access: { scopes: [...] }` on the use case, enforced before it runs; the middleware only says who the caller is.        |
-| `@hono/zod-openapi`, kept in step by hand                | The `docs` option: the document is built from the same declarations as the routes.                                       |
-| `app.use(cors())`, a rate limiter                        | The same middlewares, given to the sink: `hono(options, { middlewares: [cors()] })`.                                     |
+| With Hono + Zod                                          | With afora                                                                                                                                                       |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A Zod schema per request body                            | A **blueprint**: `blueprintOf((ctx) => ({ email: ctx.email }))`. Each field is a property that validates and normalizes.                                         |
+| `z.infer<typeof Schema>`                                 | Inferred from the blueprint: `this.input`, the entity class, the response.                                                                                       |
+| An object from the database                              | An **entity**: a class whose values were validated when it was built and change only through `change.<key>`.                                                     |
+| The handler body                                         | A **use case**: `execute` with typed input, context and dependencies, runnable with no server.                                                                   |
+| `app.post("/users", ...)`                                | The `route` of the use case (or `@Route`), served by an output. The path is declared once and documented from it.                                                |
+| `zValidator("json", Schema)`                             | Nothing: the input is validated by the blueprint of the use case, on every transport.                                                                            |
+| `const { password, ...safe } = user` in each handler     | Nothing: a sensitive property is masked by `toJSON()`, at any depth, whoever serializes.                                                                         |
+| `if (exists) return c.json({...}, 409)`                  | `unique: ["email"]`: the repository enforces it and the output answers 409.                                                                                      |
+| `return c.json({ error }, 4xx)`                          | `throw new MyError(...)`, an exception with a layer; the output maps it to a status as `application/problem+json`.                                               |
+| An auth middleware that reads the token and checks roles | `access: { scopes: [...] }` on the use case, enforced before it runs; the middleware only says who the caller is.                                                |
+| `@hono/zod-openapi`, kept in step by hand                | The `docs` option: the document is built from the same declarations as the routes.                                                                               |
+| `return c.json(items)`, each item shaped by hand         | `response: listOf(PostSummary)`: every item validated and masked, documented as an array ([Use cases](use-cases.md#a-list-as-the-response)).                     |
+| `return c.json(body, 503)`                               | `return withStatus(503, body)`, with `503` in the route's `statuses`; the document lists both responses ([Use cases](use-cases.md#a-status-chosen-at-run-time)). |
+| `throw new HTTPException(502, { message })`              | An exception the output lists, `statuses: { PaymentFailed: 502 }`, keeps its message at a 5xx; one it does not list is masked.                                   |
+| `await c.req.parseBody()`, then checking the file        | `ctx.fileOf({ types: ["image/*"], maxBytes })` in the blueprint: read from `multipart/form-data`, type and size checked ([Files](std-properties.md#files)).      |
+| `c.get("cache")`, set by a middleware                    | `serviceOf<Cache>("cache")` as a dependency, given by `applicationOf({ services })` per call ([Services](use-cases.md#services)).                                |
+| `z.toJSONSchema(Schema)`                                 | `jsonSchemaOf(User)`: the JSON Schema of any field, record or entity ([OpenAPI](openapi.md#json-schema)).                                                        |
+| Mocking the database client in a test                    | `spyProvider(provider)` records each call and can make one fail; `execute({ Users: {...} })` replaces a dependency ([Testing](testing.md)).                      |
+| `app.use(cors())`, a rate limiter                        | The same middlewares, given to the sink: `hono(options, { middlewares: [cors()] })`.                                                                             |
 
 ## What changes in how you think
 
