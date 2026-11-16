@@ -1,6 +1,6 @@
 {
 	"name": "@afora/fastify",
-	"version": "27.0.0-rc.2",
+	"version": "27.0.0-rc.3",
 	"description": "A Fastify sink for afora outputs: one route per operation, problem+json errors, sensitive data masked, declared access enforced and an optional OpenAPI document.",
 	"keywords": [
 		"afora",
@@ -53,7 +53,7 @@
 		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=27.0.0-rc.2",
+		"@afora/core": ">=27.0.0-rc.3",
 		"fastify": "^5.12.8",
 		"typebox": "^1"
 	}

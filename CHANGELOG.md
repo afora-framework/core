@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 27.0.0-rc.3 — 2026-11-16
 
-Security fixes from an audit of 27.0.0-rc.1. Every finding has a regression test named `SEC-<n>`. The breaking ones change the standard use cases, `Url` and the reserved keys of a blueprint before the contract freezes, as blocking issues of the 27.0 milestone (see [Release candidates](VERSIONING.md#release-candidates)).
+The third candidate of 27.0.0: security fixes from an audit of 27.0.0-rc.1 (#165). Every finding has a regression test named `SEC-<n>`. The breaking ones change the standard use cases, `Url` and the reserved keys of a blueprint before the contract freezes, as blocking issues of the 27.0 milestone (see [Release candidates](VERSIONING.md#release-candidates)).
 
 ### Security
 

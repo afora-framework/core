@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 27.0.0-rc.3 — 2026-11-16
 
 ### Security
 
