@@ -164,21 +164,22 @@ describe("the standard use cases in a command", () => {
 		expect(taken.name).toBe("EmailTaken");
 	});
 
-	test("update changes only what the input gives, a password included", async () => {
+	test("update changes only what the input gives, never a password", async () => {
 		const ana = (await Users.findByEmail("ana@example.com")) as User;
 		const renamed = await Accounts.run("rename", { id: ana.id, name: "Ana B" });
 		expect(renamed.user.name).toBe("Ana B");
 		expect(await renamed.user.verifyPassword(strong)).toBe(true);
 		const changed = await Accounts.run("rename", {
 			id: ana.id,
+			// @ts-expect-error: a sensitive key is not an input of update
 			password: "Other@456",
-		});
-		expect(changed.user.name).toBe("Ana B");
-		expect(await changed.user.verifyPassword("Other@456")).toBe(true);
+		}).catch((error) => error);
+		expect(changed.name).toBe("InvalidUseCaseInput");
+		const stored = (await Users.findByEmail("ana@example.com")) as User;
+		expect(await stored.verifyPassword(strong)).toBe(true);
 		expectTypeOf<CommandInput<typeof Accounts, "rename">>().toEqualTypeOf<{
 			readonly id: string;
 			readonly name?: string | undefined;
-			readonly password?: string | undefined;
 		}>();
 	});
 
@@ -391,9 +392,8 @@ describe("what a repository and its entity lack", () => {
 			"exceptionOf",
 		);
 		expect(make("get", Posts, { as: "not valid" })).toContain("identifier");
-		expect(make("restore", Posts, { owner: { context: "userId" } })).toContain(
-			'no option "owner"',
-		);
+		// a deleted entity is read with its owner by exists, which Posts lacks
+		expect(make("restore", Posts, { owner })).toContain('the action "exists"');
 		// the repository of the author cannot load it
 		const Writers = repositoryOf({ entity: User, actions: ["create"] });
 		const Drafts = repositoryOf({
