@@ -1,5 +1,13 @@
 # Changelog
 
+## 27.0.0-rc.2 — 2026-11-16
+
+The second candidate of 27.0.0: faster parsing of entities and of blueprints without handlers, with no change to the API, the values or the issues (#161).
+
+### Changed
+
+- **Performance.** A `date-time` or `date` string in the form `toISOString` writes (and `YYYY-MM-DD`) is checked by comparing its characters, without TypeBox's regular expressions; any other string is left to TypeBox, so exactly the same strings are accepted, and an application that replaces the format with `Format.Set` keeps its own check. `CreatedAt.safeParse` goes from 266 to 44 ns on Bun, and an entity read back from a stored row (its `id` and `createdAt` given) takes about 40% less time. An entity that makes both its `createdAt` and its id reads the clock once, and with the default generator its UUID v7 holds the millisecond of its `createdAt`. A blueprint whose fields only check their value against a schema, with no handler, is checked by one compiled check of the whole value once it has parsed 8 values; a value it rejects takes the usual path, so the issues are the same. Against 0.0.13, `blueprint.safeParse` on valid input is 1.9x faster on the small object without transforms and 2.7x (Bun) / 1.5x (Node) on a list of 1,000 objects, and `Entity.safeParse` on that small object goes from 604 to 369 ns on Bun.
+
 ## 27.0.0-rc.1 — 2026-11-16
 
 The first release candidate of 27.0, the first stable release. It has the API of 0.0.13 with one breaking change, taken before the contract freezes: the value `safeParse` gives is no longer frozen (records and entities still are; see [Behavior changes](#behavior-changes) and [Migration](#migration)). It is published under the `rc` dist-tag (`npm i @afora/core@rc`). From here until 27.0.0, only fixes go in: the contract described in [VERSIONING.md](VERSIONING.md) (the stable entry, `/adapters`, `/testing`, the Standard Schema behavior and the issue codes) is frozen, and anything that would change it waits for 28.0.
@@ -17,7 +25,6 @@ The first release candidate of 27.0, the first stable release. It has the API of
 
 - Every package is versioned `27.0.0-rc.1`, and needs `@afora/core >=27.0.0-rc.1`: a prerelease does not satisfy a plain range such as `>=0.0.13`, so the packages of the candidate name it.
 - **Performance.** A collection whose fields are all properties parsing through their definition (no nested blueprint, list, record or variant) is parsed by one loop over their parsers, the path of an issue made only when there is one; the values and issues are the same, which a differential test checks against the general path on generated inputs. With the change above, `blueprint.safeParse` on valid input takes, on Bun, 62% less time on a list of 1,000 objects (183 → 69 µs), 51% less on the nested user, 63% less on the union of 12 events and 16–26% less on a flat object; on Node, 20% less on the list and 20–31% less on a flat object. `bench:guard` no longer needs its own limit for `large-list valid` (0.44x of Zod 4, was 1.0x).
-- **Performance.** A `date-time` or `date` string in the form `toISOString` writes (and `YYYY-MM-DD`) is checked by comparing its characters, without TypeBox's regular expressions; any other string is left to TypeBox, so exactly the same strings are accepted, and an application that replaces the format with `Format.Set` keeps its own check. `CreatedAt.safeParse` goes from 266 to 44 ns on Bun, and an entity read back from a stored row (its `id` and `createdAt` given) takes about 40% less time. An entity that makes both its `createdAt` and its id reads the clock once, and with the default generator its UUID v7 holds the millisecond of its `createdAt`. A blueprint whose fields only check their value against a schema, with no handler, is checked by one compiled check of the whole value once it has parsed 8 values; a value it rejects takes the usual path, so the issues are the same. Against 0.0.13, `blueprint.safeParse` on valid input is 1.9x faster on the small object without transforms and 2.7x (Bun) / 1.5x (Node) on a list of 1,000 objects, and `Entity.safeParse` on that small object goes from 604 to 369 ns on Bun.
 
 ### Migration
 
