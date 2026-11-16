@@ -5,6 +5,7 @@ updates:
       - /
       - /examples/interop
       - /examples/blog
+      - /examples/agent-built
       - /tests/types-compat
       - /bench
     schedule:

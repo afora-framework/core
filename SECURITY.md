@@ -2,7 +2,13 @@
 
 ## Supported versions
 
-afora is in `0.x`: only the latest published version of `@afora/core` and of each `@afora/*` package receives security fixes.
+All the `@afora/*` packages share one version and follow [VERSIONING.md](VERSIONING.md). Security fixes go to:
+
+- the latest stable release (the `latest` dist-tag);
+- the newest patch of each maintained `release/<YY>.<minor>` line (the `release-<YY>.<minor>` dist-tag), which receives only fixes;
+- an open release candidate (the `rc` dist-tag), whose fix ships as the next candidate (`27.0.0-rc.2` after `27.0.0-rc.1`).
+
+Older patches of a line, betas and the Next (`next`, published from `dev`) get no fixes of their own: upgrade to a version above.
 
 ## Reporting a vulnerability
 

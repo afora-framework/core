@@ -32,7 +32,8 @@
 	},
 	"files": [
 		"dist",
-		"afora.schema.json"
+		"afora.schema.json",
+		"LICENSE"
 	],
 	"bin": {
 		"afora-codegen": "dist/cli.js"
