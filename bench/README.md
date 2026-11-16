@@ -59,7 +59,7 @@ If a library is used here in a way that is slower than it has to be, open a pull
 
 ## What CI holds
 
-`bun run bench:guard` times `blueprint.safeParse` and Zod 4 `safeParse` on every case, taking turns in one process, and fails when afora is over the limit of the case as a multiple of Zod 4. It compares a ratio, so it does not depend on the machine. Each contender runs for 400 ms (the warm-up of a row, `warmUp` in `harness.ts`) before its first round, so that no ratio is taken on code the engine has not optimized yet; it takes about 75 seconds. The limits and the reason for each are in `guard.limits.ts`.
+`bun run bench:guard` times `blueprint.safeParse` and Zod 4 `safeParse` on every case, taking turns in one process, and fails when afora is over the limit of the case as a multiple of Zod 4. It compares a ratio, so it does not depend on the machine. Each contender runs for 400 ms (the warm-up of a row, `warmUp` in `harness.ts`) before its first round, so that no ratio is taken on code the engine has not optimized yet; it takes about 75 seconds. The ratio of a case is the median, over its nine rounds, of the two times of a round, timed back to back, so a moment the machine is slow weighs on both sides of one ratio. The log starts with the CPU and the cost of a `Date.now()`, which tell runners apart: a cost that does not follow the speed of the CPU (the clock an entity reads) gives another ratio on another kind of runner. `BENCH_GUARD_SLOWDOWN=2 bun run bench:guard -- --only no-transform` runs each guarded call twice, a 2x regression, and the guard has to fail. The limits and the reason for each are in `guard.limits.ts`.
 
 Two more checks run on a pull request (`.github/workflows/bench-compare.yml`):
 
