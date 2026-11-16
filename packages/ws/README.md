@@ -4,6 +4,7 @@ A WebSocket sink for [`@afora/core`](../../README.md) outputs. It serves the ope
 
 ```bash
 bun add @afora/core @afora/ws typebox
+# or: npm install @afora/core @afora/ws typebox
 ```
 
 `@afora/core` and TypeBox (`^1`) are peer dependencies. The package uses only web APIs, so it runs on Bun, Node >= 22 and Workers.
@@ -165,7 +166,7 @@ Invalid options throw `InvalidOutputStage` when the stage is made.
 
 ## Catalog
 
-`WsStages` is `stageCatalogOf(websocket)` (from `@afora/core/adapters`), and `stages` are the entries codegen reads to resolve `{ "sink": "websocket" }` in an `afora.json` (`--stages @afora/ws`):
+`WsStages` is `stageCatalogOf(websocket)` (from `@afora/core/adapters`), and `stages` are the entries codegen reads to resolve `{ "sink": "websocket" }` in an `afora.json`. The CLIs read `--stages` as a file, so re-export them from a module of the project (`export { stages } from "@afora/ws";` in `stages.ts`) and pass `--stages ./stages.ts`:
 
 ```ts
 import { stages } from "@afora/ws";

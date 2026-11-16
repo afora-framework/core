@@ -4,6 +4,7 @@ A repository provider for [`@afora/core`](../../README.md) on [Drizzle ORM](http
 
 ```bash
 bun add @afora/core typebox drizzle-orm @afora/drizzle
+# or: npm install @afora/core typebox drizzle-orm @afora/drizzle
 ```
 
 `@afora/core` and `drizzle-orm` (`^0.45.4`) are peer dependencies. SQLite and Postgres databases are supported, with any Drizzle driver. MySQL is not (the provider relies on `RETURNING` and `NULLS FIRST/LAST`).
@@ -198,7 +199,7 @@ export const providers = [
 ];
 ```
 
-so `afora-codegen generate --providers @afora/drizzle` accepts
+so with a module of the project that re-exports it (`export { providers } from "@afora/drizzle";` in `providers.ts`; the CLI reads `--providers` as a file), `afora-codegen generate --providers ./providers.ts` accepts
 
 ```json
 {

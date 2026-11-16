@@ -281,6 +281,8 @@ A rule that is a plain sequence (find, check, write, return) can also be written
 })
 ```
 
+A `delete` route reads its input from the path and the query by default; `route: { method: "delete", path: "/posts/{slug}", body: true }` reads the keys that have no other place from a JSON body instead, for a client that sends one.
+
 The decorator names no server, and it is optional sugar: `route: { method: "post", path: "/posts/{slug}/publish" }` in the settings of `useCaseOf` is the same declaration, and needs no decorator support. Bun runs decorators as written; on Node use `tsx` (or any compiler), or the setting. See [Routes](use-cases.md#routes).
 
 In the command, `publish: PublishPost` sits beside the standard operations: `resourceOf(...)(ctx)` is spread, so a command mixes the two freely.
@@ -313,7 +315,9 @@ The ready-made tokens are [experimental](auth.md#tokens-and-sessions); the decla
 
 ## 7. Errors and statuses
 
-`PublishPost` throws `PostNotFound` and `NotTheAuthor`. Each is an exception with a layer, and the output decides its status: `statuses: { PostNotFound: 404, NotTheAuthor: 403 }`. Without an entry, an error a use case declares is a 422, a missing entity a 404, a unique violation a 409, invalid input a 400 with one issue per field, and anything unexpected a 500 whose detail is hidden. See [Outputs](outputs.md).
+`PublishPost` throws `PostNotFound` and `NotTheAuthor`. Each is an exception with a layer, and the output decides its status: `statuses: { PostNotFound: 404, NotTheAuthor: 403 }`. Without an entry, an error a use case declares is a 422, a missing entity a 404, a unique violation a 409, invalid input a 400 with one issue per field, and anything unexpected a 500 whose detail is hidden. An exception you list in `statuses` keeps its message even at a 5xx (`statuses: { PaymentFailed: 502 }`), since listing it is the decision to show it. See [Outputs](outputs.md).
+
+A status can also be a success the use case picks at run time: `return withStatus(202, body)` answers `202` with the same response blueprint, once the route lists it in `statuses: [202]` ([Use cases](use-cases.md#a-status-chosen-at-run-time)).
 
 ## 8. The document
 
@@ -344,7 +348,10 @@ The options are the same and so is every response: the servers share one route t
 
 ## Where to go next
 
-- A real database: `provider: drizzleProvider(...)` in an [application](applications.md), with [`@afora/drizzle`](../packages/drizzle/README.md).
+- A real database: [Storing data](storing-data.md) moves this application to SQL with [`@afora/drizzle`](../packages/drizzle/README.md), or to DynamoDB.
+- [Testing an application](testing.md): the API without a server, and `spyProvider` to count reads or make the database fail.
+- More in a use case: a [list as the response](use-cases.md#a-list-as-the-response) (`response: listOf(PostSummary)`), [file uploads](std-properties.md#files) with `ctx.fileOf({ types: ["image/*"] })`, and [services](use-cases.md#services) (a cache, a storage, another API's client) given by the application.
+- [Real time](real-time.md): the same operations over a WebSocket, with domain events pushed to subscribers.
 - [Standard use cases](std-use-cases.md): ownership, soft deletion, publishing, tags.
 - [Commands](commands.md): transactions and domain events.
 - [afora.json](afora-json.md): the same application as data, and the [MCP server](../packages/mcp/README.md) that lets an agent build it.

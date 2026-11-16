@@ -64,12 +64,15 @@ A property validates one value, a blueprint is a shape made of properties, a rec
 
 ## Tutorial and guides
 
-| Page                                              | For                                                                              |
-| ------------------------------------------------- | -------------------------------------------------------------------------------- |
-| [Tutorial](tutorial.md)                           | Building an API step by step, on Bun or Node.                                    |
-| [Coming from Hono + Zod](coming-from-hono-zod.md) | The same endpoint before and after, what moves where, and what you can keep.     |
-| [afora.json](afora-json.md)                       | Writing the application as data, by hand or with an agent.                       |
-| [Testing an application](testing.md)              | Testing records, use cases, an application and its HTTP API, without a database. |
+| Page                                                | For                                                                              |
+| --------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [Tutorial](tutorial.md)                             | Building an API step by step, on Bun or Node.                                    |
+| [Coming from Hono + Zod](coming-from-hono-zod.md)   | The same endpoint before and after, what moves where, and what you can keep.     |
+| [afora.json](afora-json.md)                         | Writing the application as data, by hand or with an agent.                       |
+| [Building with an agent](building-with-an-agent.md) | An agent that writes the application through `@afora/mcp`, and what you review.  |
+| [Storing data](storing-data.md)                     | Moving from memory to SQL with Drizzle, or to DynamoDB, and what each can do.    |
+| [Real time](real-time.md)                           | Serving operations and pushing domain events over a WebSocket.                   |
+| [Testing an application](testing.md)                | Testing records, use cases, an application and its HTTP API, without a database. |
 
 ## Concepts
 
@@ -109,6 +112,7 @@ Short answers to common tasks, each with code that `bun run test:interop` runs.
 - [A custom property](recipes/custom-property.md)
 - [A custom provider](recipes/custom-provider.md)
 - [A custom stage and sink](recipes/custom-sink-or-stage.md)
+- [Uploading a file to a storage](recipes/file-upload.md)
 - [Overriding a repository method in a test](recipes/override-repository-method.md)
 
 ## Packages
