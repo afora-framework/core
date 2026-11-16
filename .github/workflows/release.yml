@@ -231,3 +231,38 @@ jobs:
       contents: write
       pull-requests: write
     uses: $/.github/workflows/bench.yml
+
+  site-values:
+    name: Version on the website (afora CMS)
+    # Only a release that npm now serves as latest (a stable on main, or a
+    # patch of the newest line), once its tag and GitHub release exist: it sets
+    # coreVersion in afora CMS's site-values entry, and publishing it rebuilds
+    # getafora.com. It checks out nothing and runs no code of the repository.
+    # CMS_TOKEN is an API token of afora CMS limited to the site-values type
+    # (Tokens de API, "Limitar a tipos de conteúdo"); CMS_API_URL is the CMS's
+    # origin, without /admin/v1. Without the token the job only warns.
+    needs: [detect, publish, release]
+    if: needs.detect.outputs.dist-tag == 'latest'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Set coreVersion in site-values
+        # data replaces every field of the entry: read it, change coreVersion,
+        # send it all back. The entry stays published. Repeating it is harmless.
+        run: |
+          set -euo pipefail
+          if [ -z "$CMS_TOKEN" ] || [ -z "$CMS_API_URL" ]; then
+            echo "::warning::CMS_TOKEN or CMS_API_URL is not set: the website keeps its version until it is set"
+            exit 0
+          fi
+          entry="${CMS_API_URL%/}/admin/v1/entries/site-values"
+          auth="Authorization: Bearer $CMS_TOKEN"
+          body=$(curl --fail-with-body -sS --retry 3 -H "$auth" "$entry" \
+            | jq -c --arg v "$VERSION" '{data: (.data + {coreVersion: $v})}')
+          curl --fail-with-body -sS --retry 3 -X PATCH -H "$auth" \
+            -H 'Content-Type: application/json' -d "$body" "$entry" \
+            | jq '{slug, status, data}'
+        env:
+          VERSION: ${{ needs.detect.outputs.version }}
+          CMS_TOKEN: ${{ secrets.CMS_TOKEN }}
+          CMS_API_URL: ${{ vars.CMS_API_URL }}
