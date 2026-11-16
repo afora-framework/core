@@ -166,6 +166,8 @@ Later majors can use the same flow (`28.0.0-rc.1`).
 
 Releases are automatic. All the `@afora/*` packages share one version. [CONTRIBUTING.md](CONTRIBUTING.md#releases) has the steps.
 
+`gh workflow run prepare-release.yml -f channel=rc` (or `beta`, `stable`, `patch`) prepares a release up to the pull request that publishes it: see [Prepare a release in one command](CONTRIBUTING.md#prepare-a-release-in-one-command).
+
 1. In a pull request, run `bun run release:version <version>`: it sets the version in `package.json` and in every `packages/*/package.json` (and, for a prerelease, the peer ranges on `@afora/core`), then runs `bun install` to update `bun.lock`. Date the release in `CHANGELOG.md`.
 2. Merge it to `main` (or to `release/<YY>.<minor>` for a patch of an older line). `.github/workflows/release.yml` reads the version and refuses one that is not `0.0.<n>` (before 27.0) or `<YY>.<minor>.<patch>` with an optional `-alpha.<n>`, `-beta.<n>` or `-rc.<n>`, with `YY` at 27 or more. If the version has no tag, it runs CI, publishes the packages to npm with provenance under the dist-tag of its [channel](#channels), then creates the `v<version>` tag and the GitHub release.
 
