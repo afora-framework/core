@@ -1,6 +1,7 @@
 import type { Static, TSchema } from "typebox";
 import Compile from "typebox/compile";
 import { Locale, Settings } from "typebox/system";
+import { fastFormatOf } from "./formats";
 import type { ISchema, ISchemaType } from "./types/schema.interface";
 
 /** Keywords kept as they are: the types, and the references between schemas. */
@@ -712,11 +713,18 @@ abstract class AbstractSchema<
 {
 	private validator?: ISchemaType<SchemaType, Value>;
 	private shapeValidator?: ISchemaType<TSchema>;
+	/** The fast check of its format, or `null`; looked up when it is compiled. */
+	private fast?: ((value: string) => boolean) | null;
 
 	constructor(protected readonly _type: SchemaType) {}
 
 	match(value: unknown): value is Value {
-		return this.type.Check(value);
+		const validator = this.type;
+		const fast = this.fast as ((value: string) => boolean) | null;
+		return (
+			(fast !== null && typeof value === "string" && fast(value)) ||
+			validator.Check(value)
+		);
 	}
 
 	matchShape(value: unknown): boolean {
@@ -727,7 +735,17 @@ abstract class AbstractSchema<
 	/** `match` and `matchShape` as functions that go straight to the compiled checks. */
 	checks(): SchemaChecks {
 		const validator = this.type;
+		const fast = this.fast as ((value: string) => boolean) | null;
 		const shape = shapeOf(this._type) as { readonly type?: unknown };
+		// A date or a date and time in the form it almost always comes in is
+		// checked without TypeBox; anything else is TypeBox's to judge.
+		if (fast !== null) {
+			return {
+				match: (value) =>
+					(typeof value === "string" && fast(value)) || validator.Check(value),
+				matchShape: (value) => typeof value === "string",
+			};
+		}
 		// The shape of a string alone is what TypeBox compiles it to.
 		if (shape.type === "string" && Object.keys(shape).length === 1) {
 			return {
@@ -750,10 +768,14 @@ abstract class AbstractSchema<
 	}
 
 	get type(): ISchemaType<SchemaType, Value> {
-		this.validator ??= Compile(this._type) as unknown as ISchemaType<
-			SchemaType,
-			Value
-		>;
+		if (this.validator === undefined) {
+			this.validator = Compile(this._type) as unknown as ISchemaType<
+				SchemaType,
+				Value
+			>;
+			// The compiled check took the format function in use now; so does this.
+			this.fast = fastFormatOf(this._type) ?? null;
+		}
 		return this.validator;
 	}
 }
