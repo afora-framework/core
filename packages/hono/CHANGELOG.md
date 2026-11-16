@@ -1,5 +1,9 @@
 # Changelog
 
+## 27.0.0-rc.1 — 2026-11-16
+
+The first release candidate of 27.0, with the API of 0.0.13; it needs `@afora/core >=27.0.0-rc.1`. See the [root CHANGELOG](../../CHANGELOG.md).
+
 ## 0.0.13 — 2026-11-16
 
 ### Added

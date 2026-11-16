@@ -1,6 +1,6 @@
 {
 	"name": "@afora/elysia",
-	"version": "0.0.13",
+	"version": "27.0.0-rc.1",
 	"description": "An Elysia sink for afora outputs: one route per operation, problem+json errors, sensitive data masked, declared access enforced and an optional OpenAPI document.",
 	"keywords": [
 		"afora",
@@ -52,7 +52,7 @@
 		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.9",
+		"@afora/core": ">=27.0.0-rc.1",
 		"elysia": "^2.0.0-rc.4",
 		"typebox": "^1"
 	}

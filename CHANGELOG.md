@@ -1,5 +1,13 @@
 # Changelog
 
+## 27.0.0-rc.1 — 2026-11-16
+
+The first release candidate of 27.0, the first stable release. It has the API of 0.0.13, published under the `next` dist-tag (`npm i @afora/core@next`). From here until 27.0.0, only fixes go in: the contract described in [VERSIONING.md](VERSIONING.md) (the stable entry, `/adapters`, `/testing`, the Standard Schema behavior and the issue codes) is frozen, and anything that would change it waits for 28.0.
+
+### Changed
+
+- Every package is versioned `27.0.0-rc.1`, and needs `@afora/core >=27.0.0-rc.1`: a prerelease does not satisfy a plain range such as `>=0.0.13`, so the packages of the candidate name it.
+
 ## 0.0.13 — 2026-11-16
 
 This release adds per-entity ids (integers and natural keys included), services as dependencies, file uploads, list responses, a status chosen at run time, a body on `DELETE`, the JSON Schema of any field, and a provider wrapper with a spy for tests. Read the behavior changes first: one is a security fix that changes what a request may set.
