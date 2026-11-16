@@ -33,6 +33,15 @@ function now(): string {
 }
 
 /**
+ * An id for the millisecond `now` has just read: a UUID v7 of that moment
+ * with the default generator, which saves a second read of the clock and
+ * gives the id the time of `createdAt`; the configured generator otherwise.
+ */
+function idNow(): string {
+	return makesDefaultIds() ? uuidv7(lastMillisecond) : generateId();
+}
+
+/**
  * An entity of `blueprint`: a record with an `id` (a UUID v7, in
  * `options.unique`) and a `createdAt`, both made when missing from its value,
  * an `updatedAt` set by each change, and a `deletedAt` set by `destroy`, after
@@ -63,15 +72,6 @@ function now(): string {
  * user.destroy().isDeleted; // true
  * ```
  */
-/**
- * An id for the millisecond `now` has just read: a UUID v7 of that moment
- * with the default generator, which saves a second read of the clock and
- * gives the id the time of `createdAt`; the configured generator otherwise.
- */
-function idNow(): string {
-	return makesDefaultIds() ? uuidv7(lastMillisecond) : generateId();
-}
-
 export const entityOf = entityBuilderOf(
 	vouching(
 		{
