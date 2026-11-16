@@ -1,13 +1,16 @@
 /**
- * Builds the brief with Claude without afora: the same brief and model, no
- * tools, asked for one Hono + Zod file (on bun:sqlite with `--db sqlite`).
- * Each run is written to baseline/runs/<name>/app.ts, with the prompt, the
- * raw answer and its run.json beside it.
+ * Builds the brief with Claude without afora, on the same footing as an afora
+ * run: the same tool loop (scripts/loop.ts), model, effort and turns, with
+ * tools to write and read the files of its project, type-check them and send
+ * requests to its app (scripts/workspace.ts), in place of the afora MCP tools.
+ * Each run is written to baseline/runs/<name>/: app.ts and any file it wrote,
+ * transcript.jsonl, tool-calls.json, prompts.md and run.json.
  *
- *   bun scripts/build-baseline.ts [--runs 5] [--brief 2] [--db memory|sqlite] [--model claude-opus-5-5] [--effort high]
+ *   bun scripts/build-baseline.ts [--runs 5] [--brief 2] [--db memory|sqlite] [--model claude-opus-5-5] [--effort high] [--max-turns 60]
  *
  * scripts/eval.ts runs it for N runs per model, brief and database.
  */
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -18,73 +21,68 @@ import {
 	isBriefVersion,
 } from "../eval/invariants.ts";
 import {
-	baseParams,
 	clientOrExit,
 	type ModelOptions,
 	modelOptions,
 	runNames,
 	writeRunJson,
 } from "./claude.ts";
+import { toolLoop } from "./loop.ts";
 import { baselineInstructions } from "./prompts.ts";
 import { briefText, type Db, isDb } from "./storage.ts";
+import { BASELINE_TOOL_DEFINITIONS, baselineTools } from "./workspace.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 
-/** The code of the first ```ts block of the answer. */
-export function codeOf(text: string): string | undefined {
-	const match = /```(?:ts|typescript)\n([\s\S]*?)```/.exec(text);
-	return match?.[1];
-}
-
-/** One baseline run: the brief, database and model it is built with. */
+/** One baseline run: the brief, database, model and turns it is built with. */
 export interface BaselineRun {
 	readonly options: ModelOptions;
 	readonly brief: BriefVersion;
 	readonly db: Db;
+	readonly maxTurns: number;
 }
 
 /**
- * Asks for the file and writes it. A run whose answer has no code (cut off,
- * refused, no block) keeps its directory without app.ts, and the evaluation
- * counts it as failing every invariant; an API error is thrown.
+ * Runs the loop in `dir`. A run that ends without app.ts keeps its
+ * directory, and the evaluation counts it as failing every invariant; an API
+ * error is thrown.
  */
 export async function buildBaselineRun(
 	client: Anthropic,
-	{ options, brief: version, db }: BaselineRun,
+	{ options, brief: version, db, maxTurns }: BaselineRun,
 	dir: string,
-): Promise<{ stop: string; wrote: boolean }> {
+): Promise<{ turns: number; calls: number; stop: string; wrote: boolean }> {
 	await mkdir(dir, { recursive: true });
+	// `check` type-checks the project with this tsconfig
+	await writeFile(
+		join(dir, "tsconfig.json"),
+		`${JSON.stringify({ extends: "../../../tsconfig.json", include: ["**/*.ts"], exclude: ["node_modules"] }, null, "\t")}\n`,
+	);
 	const brief = await briefText(version, db);
-	const system = baselineInstructions(db);
+	const system = baselineInstructions(db, version);
 	await writeRunJson(dir, { brief: version, db, ...options });
 	await writeFile(
 		join(dir, "prompts.md"),
-		`# Prompts\n\nModel \`${options.model}\`, effort \`${options.effort}\`, run by \`scripts/build-baseline.ts\`.\n\n## System\n\n${system}\n\n## User\n\n${brief}\n`,
+		`# Prompts\n\nModel \`${options.model}\`, effort \`${options.effort}\`, run by \`scripts/build-baseline.ts\`.\n\n## System\n\n${system}\n\n## Tools\n\n${BASELINE_TOOL_DEFINITIONS.map((tool) => `- \`${tool.name}\`: ${tool.description}`).join("\n")}\n\n## User\n\n${brief}\n`,
 	);
-	const message = await client.beta.messages
-		.stream({
-			...baseParams(options),
-			system,
-			messages: [{ role: "user", content: brief }],
-		})
-		.finalMessage();
-	const text = message.content
-		.filter(
-			(block): block is Anthropic.Beta.BetaTextBlock => block.type === "text",
-		)
-		.map((block) => block.text)
-		.join("\n");
-	await writeFile(join(dir, "answer.md"), `${text}\n`);
-	const code = message.stop_reason === "end_turn" ? codeOf(text) : undefined;
-	const stop =
-		message.stop_reason !== "end_turn"
-			? (message.stop_reason ?? "unknown")
-			: code
-				? "end_turn"
-				: "no code block";
-	await writeRunJson(dir, { brief: version, db, ...options, stop });
-	if (code) await writeFile(join(dir, "app.ts"), code);
-	return { stop, wrote: code !== undefined };
+	const result = await toolLoop({
+		client,
+		options,
+		system,
+		tools: BASELINE_TOOL_DEFINITIONS,
+		brief,
+		maxTurns,
+		dir,
+		call: baselineTools(dir, db),
+	});
+	const wrote = existsSync(join(dir, "app.ts"));
+	await writeRunJson(dir, {
+		brief: version,
+		db,
+		...options,
+		stop: wrote ? result.stop : `${result.stop}, no app.ts`,
+	});
+	return { ...result, wrote };
 }
 
 if (import.meta.main) {
@@ -96,9 +94,11 @@ if (import.meta.main) {
 			db: { type: "string", default: "memory" },
 			model: { type: "string" },
 			effort: { type: "string" },
+			"max-turns": { type: "string", default: "60" },
 		},
 	});
 	const client = clientOrExit("build-baseline");
+	const maxTurns = Number(values["max-turns"]);
 	const options = modelOptions(values);
 	const count = Number(values.runs);
 	const brief = Number(values.brief);
@@ -116,7 +116,7 @@ if (import.meta.main) {
 		try {
 			const { stop, wrote } = await buildBaselineRun(
 				client,
-				{ options, brief, db },
+				{ options, brief, db, maxTurns },
 				dir,
 			);
 			console.log(

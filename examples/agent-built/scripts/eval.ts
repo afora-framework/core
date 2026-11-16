@@ -9,9 +9,10 @@
  * Without ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) it exits 1 before any
  * run, unless --dry-run. A run that hits an API error is retried from scratch
  * (its directory removed) up to 3 times, then left out and reported; a run
- * that ends without a working app stays, and fails the evaluation.
+ * that fails for any other reason, or ends without a working app, stays and
+ * fails the evaluation.
  */
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
@@ -22,6 +23,7 @@ import { clientOrExit, stampOf } from "./claude.ts";
 import { connectMcp } from "./mcp.ts";
 import {
 	baselineAnswerChars,
+	baselineTurns,
 	estimateRun,
 	type Job,
 	jobName,
@@ -37,6 +39,7 @@ import {
 import { baselineInstructions } from "./prompts.ts";
 import { readCalls, replay } from "./replay.ts";
 import { briefText, type Db } from "./storage.ts";
+import { BASELINE_TOOL_DEFINITIONS } from "./workspace.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const ATTEMPTS = 3;
@@ -58,12 +61,14 @@ async function rowsOf(plan: Plan): Promise<PlanRow[]> {
 		await rm(dir, { recursive: true, force: true });
 	}
 	const answer = await baselineAnswerChars();
+	const baselineToolsChars = JSON.stringify(BASELINE_TOOL_DEFINITIONS).length;
 	const fixedAfora = new Map<Db, number>();
 	for (const db of plan.dbs) {
 		if (!plan.sides.includes("afora")) break;
 		const dir = await mkdtemp(join(tmpdir(), "afora-estimate-"));
 		const mcp = await connectMcp(dir, db);
 		try {
+			// brief 2 instructions: brief 3 ones are a sentence shorter
 			const system = await systemPrompt(mcp, db);
 			const tools = JSON.stringify(await toolsOf(mcp));
 			fixedAfora.set(db, system.length + tools.length);
@@ -81,16 +86,18 @@ async function rowsOf(plan: Plan): Promise<PlanRow[]> {
 					side === "afora"
 						? { fixed: (fixedAfora.get(db) ?? 0) + text.length, turns }
 						: {
-								fixed: baselineInstructions(db).length + text.length,
-								turns: [],
-								answer,
+								fixed:
+									baselineInstructions(db, brief).length +
+									baselineToolsChars +
+									text.length,
+								turns: baselineTurns(answer),
 							};
 				rows.push({
 					side,
 					brief,
 					db,
 					runs: plan.runs * plan.models.length,
-					estimate: estimateRun(side, shape),
+					estimate: estimateRun(shape),
 				});
 			}
 		}
@@ -98,44 +105,76 @@ async function rowsOf(plan: Plan): Promise<PlanRow[]> {
 	return rows;
 }
 
-/** Makes one run, retrying it from scratch on an API error. */
-async function makeRun(
+/** Where runs are written, and how long to wait between attempts (tests change both). */
+export interface MakeRunSettings {
+	readonly root?: string;
+	readonly backoffMs?: number;
+}
+
+/** Whether an error comes from the Claude API (or the network on the way to it). */
+export const isApiError = (error: unknown): boolean =>
+	error instanceof Anthropic.APIError;
+
+/** Adds `"error"` to the run.json of a run that failed for another reason than the API. */
+async function markFailed(dir: string, reason: string): Promise<void> {
+	const file = join(dir, "run.json");
+	let json: Record<string, unknown> = {};
+	try {
+		json = JSON.parse(await readFile(file, "utf8"));
+	} catch {}
+	await mkdir(dir, { recursive: true });
+	await writeFile(file, `${JSON.stringify({ ...json, error: reason })}\n`);
+}
+
+/**
+ * Makes one run. An API error (the API answered with an error, or could not
+ * be reached) starts it again from scratch, up to ATTEMPTS times, then the
+ * run is left out (undefined). Any other failure keeps the run, with the
+ * error in its run.json: it is a run that failed, counted as failing every
+ * invariant, not one to make again.
+ */
+export async function makeRun(
 	client: Anthropic,
-	plan: Plan,
+	plan: Pick<Plan, "effort" | "maxTurns">,
 	job: Job,
 	name: string,
+	{ root = ROOT, backoffMs = 5_000 }: MakeRunSettings = {},
 ): Promise<string | undefined> {
 	const parent = job.side === "afora" ? "runs" : "baseline/runs";
-	const dir = join(ROOT, parent, name);
+	const dir = join(root, parent, name);
 	const options = { model: job.model, effort: plan.effort };
+	const run = {
+		options,
+		brief: job.brief,
+		db: job.db,
+		maxTurns: plan.maxTurns,
+	};
 	for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
 		try {
 			if (job.side === "afora") {
-				const { calls, turns, stop } = await buildAgentRun(
-					client,
-					{ options, brief: job.brief, db: job.db, maxTurns: plan.maxTurns },
-					dir,
-				);
+				const { calls, turns, stop } = await buildAgentRun(client, run, dir);
 				return `${calls} tool calls in ${turns} turns, stopped on ${stop}`;
 			}
-			const { stop, wrote } = await buildBaselineRun(
+			const { calls, turns, stop, wrote } = await buildBaselineRun(
 				client,
-				{ options, brief: job.brief, db: job.db },
+				run,
 				dir,
 			);
-			return wrote ? "wrote app.ts" : `no app.ts (${stop})`;
+			return `${calls} tool calls in ${turns} turns, stopped on ${stop}${wrote ? "" : " (no app.ts)"}`;
 		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error);
+			if (!isApiError(error)) {
+				await markFailed(dir, reason);
+				console.error(
+					`${parent}/${name}: failed, kept as a failing run: ${reason}`,
+				);
+				return `failed: ${reason}`;
+			}
 			await rm(dir, { recursive: true, force: true });
-			const reason =
-				error instanceof Anthropic.APIError
-					? `API error ${error.status}: ${error.message}`
-					: error instanceof Error
-						? error.message
-						: String(error);
 			console.error(
-				`${parent}/${name}: attempt ${attempt}/${ATTEMPTS} failed: ${reason}`,
+				`${parent}/${name}: attempt ${attempt}/${ATTEMPTS}: API error ${(error as { status?: number }).status ?? "(no status)"}: ${reason}`,
 			);
-			if (attempt < ATTEMPTS) await Bun.sleep(5_000 * attempt);
+			if (attempt < ATTEMPTS) await Bun.sleep(backoffMs * attempt);
 		}
 	}
 	return undefined;

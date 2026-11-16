@@ -164,18 +164,15 @@ export function jobName(job: Job, stamp: string): string {
 export const tokens = (text: string | number): number =>
 	Math.ceil((typeof text === "number" ? text : text.length) / 4);
 
-/** Assumed, not measured: what the model thinks before each answer. */
-export const THINKING_PER_AGENT_TURN = 1_000;
-export const THINKING_PER_BASELINE = 8_000;
+/** Assumed, not measured: what the model thinks before each tool call. */
+export const THINKING_PER_TURN = 1_000;
 
-/** What the estimate of one run of a side is made from, in characters. */
+/** What the estimate of one run is made from, in characters. */
 export interface RunShape {
 	/** System prompt, tool definitions and brief: sent with every request. */
 	readonly fixed: number;
-	/** Per turn of an afora run: the tool call written, and its result read. */
+	/** Per turn: the tool call written, and its result read. */
 	readonly turns: readonly { readonly call: number; readonly result: number }[];
-	/** The answer of a baseline run (its code). */
-	readonly answer?: number;
 }
 
 export interface Estimate {
@@ -186,29 +183,38 @@ export interface Estimate {
 }
 
 /**
- * The tokens of one run of this shape. An afora run sends one request per
- * turn, each with the fixed part and the turns before it (the conversation
- * grows), plus a last request that ends the run; a baseline run sends one.
+ * The tokens of one run of this shape, on either side: one request per turn,
+ * each with the fixed part and the turns before it (the conversation grows),
+ * plus a last request that ends the run.
  */
-export function estimateRun(side: Side, shape: RunShape): Estimate {
+export function estimateRun(shape: RunShape): Estimate {
 	const fixed = tokens(shape.fixed);
-	if (side === "baseline") {
-		return {
-			requests: 1,
-			input: fixed,
-			output: tokens(shape.answer ?? 0) + THINKING_PER_BASELINE,
-		};
-	}
 	let input = 0;
 	let output = 0;
 	let history = 0;
 	for (const turn of [...shape.turns, { call: 200, result: 0 }]) {
 		input += fixed + history;
-		const written = tokens(turn.call) + THINKING_PER_AGENT_TURN;
+		const written = tokens(turn.call) + THINKING_PER_TURN;
 		output += written;
 		history += written + tokens(turn.result);
 	}
 	return { requests: shape.turns.length + 1, input, output };
+}
+
+/**
+ * The turns of a baseline run, assumed (no scripted baseline run exists to
+ * measure): write app.ts, check, smoke a few requests, then once more after a
+ * fix. `answer` is the size of app.ts.
+ */
+export function baselineTurns(
+	answer: number,
+): { call: number; result: number }[] {
+	const round = [
+		{ call: answer, result: 100 },
+		{ call: 50, result: 500 },
+		{ call: 1_500, result: 4_000 },
+	];
+	return [...round, ...round];
 }
 
 /** The reference runs the shape of a run is measured on. */
@@ -292,6 +298,6 @@ export function planText(plan: Plan, rows: readonly PlanRow[]): string {
 		"By side, brief and database, over every model:",
 		...lines.map((line) => `  ${line}`),
 		"",
-		`Rough: ~4 characters a token, prompts measured on this checkout, an afora run shaped like runs/claude-code-2 (its tool calls and results, replayed), a baseline answer like baseline/runs/claude-code-2/app.ts, and assumed thinking (${format(THINKING_PER_AGENT_TURN)} tokens per agent turn, ${format(THINKING_PER_BASELINE)} per baseline answer). Most input tokens of an afora run are cache reads of the system prompt and the conversation so far.`,
+		`Rough: ~4 characters a token, prompts measured on this checkout, an afora run shaped like runs/claude-code-2 (its tool calls and results, replayed), a baseline run assumed to write a file like baseline/runs/claude-code-2/app.ts, check it and smoke it twice (6 tool calls), and assumed thinking (${format(THINKING_PER_TURN)} tokens per turn). Most input tokens are cache reads of the system prompt and the conversation so far.`,
 	].join("\n");
 }

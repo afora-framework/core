@@ -13,7 +13,7 @@
  *
  * scripts/eval.ts runs it for N runs per model, brief and database.
  */
-import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import Anthropic from "@anthropic-ai/sdk";
@@ -23,14 +23,14 @@ import {
 	isBriefVersion,
 } from "../eval/invariants.ts";
 import {
-	baseParams,
 	clientOrExit,
 	type ModelOptions,
 	modelOptions,
 	runNames,
 	writeRunJson,
 } from "./claude.ts";
-import { connectMcp, type McpSession, type RecordedCall } from "./mcp.ts";
+import { toolLoop } from "./loop.ts";
+import { connectMcp, type McpSession } from "./mcp.ts";
 import { agentInstructions } from "./prompts.ts";
 import { briefText, type Db, isDb, writeDbModule } from "./storage.ts";
 
@@ -40,10 +40,11 @@ const ROOT = resolve(import.meta.dir, "..");
 export async function systemPrompt(
 	mcp: McpSession,
 	db: Db = "memory",
+	brief: BriefVersion = CURRENT_BRIEF,
 ): Promise<string> {
 	const guide = await mcp.readResource("afora://spec/guide");
 	const catalog = await mcp.readResource("afora://catalog");
-	return `${agentInstructions(db)}\n\n<resource uri="afora://spec/guide">\n${guide}\n</resource>\n\n<resource uri="afora://catalog">\n${catalog}\n</resource>`;
+	return `${agentInstructions(db, brief)}\n\n<resource uri="afora://spec/guide">\n${guide}\n</resource>\n\n<resource uri="afora://catalog">\n${catalog}\n</resource>`;
 }
 
 export async function toolsOf(
@@ -83,79 +84,32 @@ export async function buildAgentRun(
 	await writeRunJson(dir, { brief: version, db, ...options });
 	if (db === "sqlite") await writeDbModule(dir);
 	const mcp = await connectMcp(dir, db);
-	const calls: RecordedCall[] = [];
-	const transcript = join(dir, "transcript.jsonl");
-	const log = (entry: unknown) =>
-		appendFile(transcript, `${JSON.stringify(entry)}\n`);
 	try {
-		const system = await systemPrompt(mcp, db);
+		const system = await systemPrompt(mcp, db, version);
 		const tools = await toolsOf(mcp);
 		await writeFile(
 			join(dir, "prompts.md"),
 			`# Prompts\n\nModel \`${options.model}\`, effort \`${options.effort}\`, run by \`scripts/build-with-agent.ts\`.\n\n## System\n\n${system}\n\n## User\n\n${brief}\n`,
 		);
-		const messages: Anthropic.Beta.BetaMessageParam[] = [
-			{ role: "user", content: brief },
-		];
-		await log({ role: "user", content: brief });
-		let stop = "max-turns";
-		let turn = 0;
-		for (; turn < maxTurns; turn++) {
-			const message = await client.beta.messages
-				.stream({ ...baseParams(options), system, tools, messages })
-				.finalMessage();
-			await log({
-				role: "assistant",
-				content: message.content,
-				stop_reason: message.stop_reason,
-				usage: message.usage,
-			});
-			if (message.stop_reason === "refusal") {
-				stop = "refusal";
-				break;
-			}
-			if (message.stop_reason === "max_tokens") {
-				// a tool input cut off here can still parse; never run it
-				stop = "max_tokens";
-				break;
-			}
-			messages.push({ role: "assistant", content: message.content });
-			if (message.stop_reason === "pause_turn") continue;
-			const uses = message.content.filter(
-				(block): block is Anthropic.Beta.BetaToolUseBlock =>
-					block.type === "tool_use",
-			);
-			if (uses.length === 0) {
-				stop = message.stop_reason ?? "end_turn";
-				break;
-			}
-			const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
-			for (const use of uses) {
-				const args = (use.input ?? {}) as Record<string, unknown>;
-				const result = await mcp.callTool(use.name, args);
-				calls.push({
-					tool: use.name,
-					arguments: args,
-					isError: result.isError,
-				});
-				results.push({
-					type: "tool_result",
-					tool_use_id: use.id,
-					content: result.text,
-					...(result.isError ? { is_error: true } : {}),
-				});
-			}
-			messages.push({ role: "user", content: results });
-			await log({ role: "user", content: results });
-		}
-		await writeRunJson(dir, { brief: version, db, ...options, stop });
-		return { turns: turn + 1, calls: calls.length, stop };
+		const result = await toolLoop({
+			client,
+			options,
+			system,
+			tools,
+			brief,
+			maxTurns,
+			dir,
+			call: (name, args) => mcp.callTool(name, args),
+		});
+		await writeRunJson(dir, {
+			brief: version,
+			db,
+			...options,
+			stop: result.stop,
+		});
+		return result;
 	} finally {
 		await mcp.close();
-		await writeFile(
-			join(dir, "tool-calls.json"),
-			`${JSON.stringify(calls, null, "\t")}\n`,
-		);
 	}
 }
 

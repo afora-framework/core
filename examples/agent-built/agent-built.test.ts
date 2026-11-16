@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { extractSpec, generate, loadSpec, normalizeSpec } from "@afora/codegen";
+import Anthropic from "@anthropic-ai/sdk";
 import { Hono } from "hono";
 import { z } from "zod";
 import { stages } from "./catalogs.ts";
@@ -14,6 +15,7 @@ import {
 	invariantsOf,
 } from "./eval/invariants.ts";
 import {
+	evaluateBaseline,
 	groupsOf,
 	type RunResult,
 	rateOf,
@@ -21,21 +23,33 @@ import {
 	runEval,
 } from "./eval/run.ts";
 import { formatRate, wilson } from "./eval/stats.ts";
+import { isApiError, makeRun } from "./scripts/eval.ts";
 import { connectMcp, type RecordedCall } from "./scripts/mcp.ts";
 import {
+	baselineTurns,
 	estimateRun,
 	jobName,
 	jobsOf,
 	planOf,
-	THINKING_PER_BASELINE,
+	THINKING_PER_TURN,
 } from "./scripts/plan.ts";
-import { agentInstructions, baselineInstructions } from "./scripts/prompts.ts";
+import {
+	AGENT_INSTRUCTIONS,
+	agentInstructions,
+	BASELINE_TOOLS,
+	baselineInstructions,
+	CONTRACT_LINE,
+} from "./scripts/prompts.ts";
 import { readCalls, replay } from "./scripts/replay.ts";
 import {
 	briefText,
 	MEMORY_SENTENCE,
 	SQLITE_SENTENCE,
 } from "./scripts/storage.ts";
+import {
+	BASELINE_TOOL_DEFINITIONS,
+	baselineTools,
+} from "./scripts/workspace.ts";
 import { App } from "./src/domain";
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper reading JSON bodies
@@ -543,24 +557,24 @@ describe("the plan of the scripted evaluation", () => {
 		expect(() => planOf(["--unknown"], {})).toThrow();
 	});
 
-	test("the estimate grows with the conversation of an afora run; a baseline is one request", () => {
+	test("the estimate grows with the conversation; both sides run the same loop", () => {
 		const turns = [
 			{ call: 400, result: 4_000 },
 			{ call: 400, result: 4_000 },
 		];
-		const afora = estimateRun("afora", { fixed: 40_000, turns });
-		expect(afora.requests).toBe(3);
+		const run = estimateRun({ fixed: 40_000, turns });
+		expect(run.requests).toBe(3);
 		// 3 requests of the fixed part (10,000 tokens), then the history
-		expect(afora.input).toBeGreaterThan(30_000 + 2 * 1_000);
-		const baseline = estimateRun("baseline", {
-			fixed: 4_000,
-			turns: [],
-			answer: 40_000,
-		});
-		expect(baseline).toEqual({
+		expect(run.input).toBeGreaterThan(30_000 + 2 * 1_000);
+		expect(run.output).toBe(
+			2 * (100 + THINKING_PER_TURN) + 50 + THINKING_PER_TURN,
+		);
+		const baseline = estimateRun({ fixed: 4_000, turns: baselineTurns(8_000) });
+		expect(baseline.requests).toBe(7);
+		expect(estimateRun({ fixed: 4_000, turns: [] })).toEqual({
 			requests: 1,
 			input: 1_000,
-			output: 10_000 + THINKING_PER_BASELINE,
+			output: 50 + THINKING_PER_TURN,
 		});
 	});
 });
@@ -593,6 +607,7 @@ describe("RESULTS.md", () => {
 			brief: 3,
 			db: "sqlite",
 			model,
+			effort: "high",
 			scripted: true,
 			checks: [],
 			passed: {
@@ -611,14 +626,18 @@ describe("RESULTS.md", () => {
 			run("baseline", 1, "m-a", { undeclared: false }),
 			run("baseline", 2, "m-a", {}),
 			run("baseline", 1, "m-b", { concurrency: false }),
+			{ ...run("baseline", 3, "m-b", {}), effort: "max" },
 		];
 		const groups = groupsOf(results);
 		expect(
-			groups.map((g) => `${g.model}/${g.brief}/${g.db}/${g.implementation}`),
+			groups.map(
+				(g) => `${g.model}/${g.effort}/${g.brief}/${g.db}/${g.implementation}`,
+			),
 		).toEqual([
-			"m-a/3/sqlite/afora",
-			"m-a/3/sqlite/baseline",
-			"m-b/3/sqlite/baseline",
+			"m-a/high/3/sqlite/afora",
+			"m-a/high/3/sqlite/baseline",
+			"m-b/high/3/sqlite/baseline",
+			"m-b/max/3/sqlite/baseline",
 		]);
 		const baseline = groups[1]?.runs ?? [];
 		expect(rateOf(baseline, "undeclared")).toMatchObject({
@@ -629,7 +648,7 @@ describe("RESULTS.md", () => {
 		const markdown = resultsMarkdown(results);
 		expect(markdown).toContain("## Scripted runs");
 		expect(markdown).toContain(
-			"| m-a | 3 | sqlite | baseline | 2 | 2/2 (100%; 34%–100%) | 1/2 (50%; 9%–91%) |",
+			"| m-a | high | 3 | sqlite | baseline | 2 | 2/2 (100%; 34%–100%) | 1/2 (50%; 9%–91%) |",
 		);
 		expect(markdown).not.toContain("None yet");
 	});
@@ -667,6 +686,39 @@ describe("on SQLite", () => {
 		expect(agentInstructions("sqlite")).not.toContain('"inMemory"');
 		expect(baselineInstructions("sqlite")).toContain("bun:sqlite");
 		expect(baselineInstructions("sqlite")).not.toContain("in memory");
+	});
+
+	test("both sides get the same contract line and a loop with tools; brief 2 keeps its instructions, brief 3 names no guarantee on either side", () => {
+		expect(agentInstructions("memory", 2)).toBe(AGENT_INSTRUCTIONS);
+		for (const db of ["memory", "sqlite"] as const) {
+			for (const brief of [2, 3] as const) {
+				expect(agentInstructions(db, brief)).toContain(CONTRACT_LINE);
+				expect(baselineInstructions(db, brief)).toContain(CONTRACT_LINE);
+				for (const tool of BASELINE_TOOLS) {
+					expect(baselineInstructions(db, brief)).toContain(tool);
+				}
+			}
+			for (const text of [
+				agentInstructions(db, 3),
+				baselineInstructions(db, 3),
+			]) {
+				for (const guarantee of [
+					"rejects undeclared",
+					"masks",
+					"sensitive",
+					"problem+json",
+					"unique",
+					"transaction",
+					"409",
+					"5xx",
+				]) {
+					expect(text).not.toContain(guarantee);
+				}
+			}
+		}
+		expect(BASELINE_TOOL_DEFINITIONS.map((tool) => tool.name)).toEqual([
+			...BASELINE_TOOLS,
+		]);
 	});
 
 	test("the MCP server offers the drizzle provider to a run on SQLite, and only to it", async () => {
@@ -744,4 +796,173 @@ describe("on SQLite", () => {
 			sqlite.close();
 		}
 	}, 120_000);
+});
+
+describe("the baseline's tools", () => {
+	// three levels down, like baseline/runs/<name>, so its tsconfig extends ours
+	const project = resolve(".tmp/tools/baseline/project");
+	const write = (content: string) =>
+		call("write_file", { path: "app.ts", content });
+	const call = baselineTools(project, "memory", { smokeTimeoutMs: 5_000 });
+
+	test("write and read files inside the project only, type-check them, and smoke the app", async () => {
+		await rm(project, { recursive: true, force: true });
+		await mkdir(project, { recursive: true });
+		await Bun.write(
+			join(project, "tsconfig.json"),
+			JSON.stringify({
+				extends: "../../../../tsconfig.json",
+				include: ["**/*.ts"],
+				exclude: ["node_modules"],
+			}),
+		);
+		for (const path of ["../escape.ts", "/tmp/x.ts", "node_modules/x.ts"]) {
+			expect((await call("write_file", { path, content: "" })).isError).toBe(
+				true,
+			);
+		}
+		expect((await call("smoke", { requests: [] })).text).toContain("no app.ts");
+		expect(
+			(
+				await write(
+					await readFile("baseline/runs/claude-code-2/app.ts", "utf8"),
+				)
+			).isError,
+		).toBe(false);
+		expect((await call("list_files", {})).text).toBe("app.ts\ntsconfig.json");
+		expect((await call("read_file", { path: "app.ts" })).text).toContain(
+			"export default app",
+		);
+		expect(await call("check", {})).toEqual({
+			isError: false,
+			text: "No diagnostics.",
+		});
+		const smoke = await call("smoke", {
+			requests: [
+				{
+					method: "POST",
+					path: "/api/organizers",
+					body: {
+						name: "Ana",
+						email: "ana@example.com",
+						password: "Tick3t!pass",
+					},
+				},
+				{ path: "/api/events/nope" },
+			],
+		});
+		expect(smoke.isError).toBe(false);
+		const answers = JSON.parse(smoke.text);
+		expect(answers.map((a: { status: number }) => a.status)).toEqual([
+			201, 401,
+		]);
+
+		await write(
+			"const n: number = 'one';\nexport default { fetch: () => new Promise<Response>(() => {}) };\n",
+		);
+		const check = await call("check", {});
+		expect(check.isError).toBe(true);
+		expect(check.text).toContain("TS2322");
+		const hung = await call("smoke", { requests: [{ path: "/" }] });
+		expect(hung).toEqual({
+			isError: true,
+			text: "The app did not answer within 5 seconds.",
+		});
+	}, 60_000);
+});
+
+describe("failures of the harness", () => {
+	const root = resolve(".tmp/test-make");
+	const throwing = (error: unknown) =>
+		({
+			beta: {
+				messages: {
+					stream: () => ({ finalMessage: () => Promise.reject(error) }),
+				},
+			},
+		}) as unknown as Parameters<typeof makeRun>[0];
+	const job = {
+		side: "baseline" as const,
+		model: "m",
+		brief: 2 as const,
+		db: "memory" as const,
+		index: 1,
+	};
+	const plan = { effort: "high" as const, maxTurns: 3 };
+
+	test("an API error is retried from scratch, then the run is left out", async () => {
+		await rm(root, { recursive: true, force: true });
+		let calls = 0;
+		const client = {
+			beta: {
+				messages: {
+					stream: () => {
+						calls++;
+						return {
+							finalMessage: () =>
+								Promise.reject(
+									new Anthropic.APIConnectionError({ message: "down" }),
+								),
+						};
+					},
+				},
+			},
+		} as unknown as Parameters<typeof makeRun>[0];
+		expect(isApiError(new Anthropic.APIConnectionError({ message: "x" }))).toBe(
+			true,
+		);
+		expect(
+			await makeRun(client, plan, job, "api", { root, backoffMs: 1 }),
+		).toBe(undefined);
+		expect(calls).toBe(3);
+		expect(existsSync(join(root, "baseline/runs/api"))).toBe(false);
+	});
+
+	test("any other failure keeps the run, which then fails every invariant", async () => {
+		const outcome = await makeRun(
+			throwing(new TypeError("the harness broke")),
+			plan,
+			job,
+			"broken",
+			{ root, backoffMs: 1 },
+		);
+		expect(outcome).toBe("failed: the harness broke");
+		const json = JSON.parse(
+			await readFile(join(root, "baseline/runs/broken/run.json"), "utf8"),
+		);
+		expect(json).toMatchObject({
+			brief: 2,
+			scripted: true,
+			error: "the harness broke",
+		});
+		const result = await evaluateBaseline("broken", { root });
+		expect(result.error).toContain("the harness broke");
+		expect(Object.values(result.passed)).toEqual(
+			invariantsOf(2).map(() => false),
+		);
+	});
+
+	test("an evaluation that takes too long fails the run", async () => {
+		const dir = join(root, "baseline/runs/slow");
+		await mkdir(dir, { recursive: true });
+		await Bun.write(
+			join(dir, "run.json"),
+			JSON.stringify({
+				brief: 2,
+				db: "memory",
+				model: "m",
+				effort: "high",
+				scripted: true,
+			}),
+		);
+		await Bun.write(
+			join(dir, "app.ts"),
+			"export default { fetch: () => new Promise<Response>(() => {}) };\n",
+		);
+		const started = Date.now();
+		const result = await evaluateBaseline("slow", { root, timeoutMs: 3_000 });
+		expect(Date.now() - started).toBeLessThan(15_000);
+		expect(result.error).toBe("The evaluation timed out after 3 seconds.");
+		expect(Object.values(result.passed).every((ok) => ok === false)).toBe(true);
+	}, 30_000);
 });
