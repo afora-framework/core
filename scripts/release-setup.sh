@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Prepares npm so that .github/workflows/release.yml publishes on its own when a
-# pull request that bumps the version is merged to main:
+# pull request that bumps the version is merged to main (and the Next on every
+# push to dev, and the patches of release/<YY>.<minor>):
 #
 #   1. logs in to npm (the trust commands need a login with 2FA, not a token);
 #   2. publishes by hand, without provenance, the packages that do not exist on
@@ -32,8 +33,12 @@ confirm() {
 }
 
 VERSION="$(node -p 'require("./package.json").version')"
+# the dist-tags of the channels (VERSIONING.md, scripts/release-channel.ts); a
+# patch of a maintenance line behind latest is not published from here
 case "$VERSION" in
-*-*) DIST_TAG=next ;;
+*-alpha.*) DIST_TAG=next ;;
+*-beta.*) DIST_TAG=beta ;;
+*-rc.*) DIST_TAG=rc ;;
 *) DIST_TAG=latest ;;
 esac
 

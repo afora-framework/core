@@ -1,6 +1,11 @@
 # Changelog
 
-## 27.0.0-rc.2 — unreleased
+## Unreleased
+
+### Added
+
+- **Release channels.** Besides `latest` (stable), each version goes to the npm dist-tag of its channel: `-rc.<n>` to `rc`, `-beta.<n>` to `beta`, and the Next, `<base>-alpha.<n>`, to `next`, published on its own on every push to `dev` that changes the code (`npm install @afora/core@next`). Patches of an older line are published from `release/<YY>.<minor>` branches, to `latest` when they are the newest version and to the `release-<YY>.<minor>` dist-tag otherwise. No dist-tag moves backwards. `bun run release:version <v>` sets the version of every package and the peer ranges on `@afora/core`: `>=<v>` for a prerelease, `^<v>` for a stable version. See [Channels](VERSIONING.md#channels).
+- **Prepare release.** `gh workflow run prepare-release.yml -f channel=rc` (or `beta`, `stable`, `patch`) prepares a release up to the pull request that publishes it: it computes the version of the channel (the next candidate, the stable of a candidate, the next patch of a `release/<YY>.<minor>` branch, or a version given, checked against the scheme, the tags and the dist-tags; a version bumped but never published is refused, so none is skipped), writes it in every package, dates the `## Unreleased` sections of the changelogs (a stable after candidates links to their sections since the previous stable), and opens the bump pull request, with auto-merge once CI passes, and the pull request `dev` → `main` titled `Release <version>`, whose merge publishes and stays with a human unless `auto_merge_release` is checked. Locally, `bun scripts/release-channel.ts prepare --channel <channel>` does the same writes. It needs a GitHub App (Contents, Pull requests and Workflows: Read and write; or a fine-grained token) set up once; see [CONTRIBUTING.md](CONTRIBUTING.md#prepare-a-release-in-one-command).
 
 ### Behavior changes
 
@@ -27,7 +32,7 @@ if (!result.issues) Object.freeze(result.value); // when a frozen value is neede
 
 ## 27.0.0-rc.1 — 2026-11-16
 
-The first release candidate of 27.0, the first stable release. It has the API of 0.0.13, published under the `next` dist-tag (`npm i @afora/core@next`). From here until 27.0.0, only fixes go in: the contract described in [VERSIONING.md](VERSIONING.md) (the stable entry, `/adapters`, `/testing`, the Standard Schema behavior and the issue codes) is frozen, and anything that would change it waits for 28.0.
+The first release candidate of 27.0, the first stable release. It has the API of 0.0.13, published under the `rc` dist-tag (`npm i @afora/core@rc`). From here until 27.0.0, only fixes go in: the contract described in [VERSIONING.md](VERSIONING.md) (the stable entry, `/adapters`, `/testing`, the Standard Schema behavior and the issue codes) is frozen, and anything that would change it waits for 28.0.
 
 ### Changed
 

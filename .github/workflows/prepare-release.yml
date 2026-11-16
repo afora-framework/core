@@ -1,0 +1,282 @@
+name: Prepare release
+
+# Prepares a release up to the pull request that publishes it:
+#
+#   gh workflow run prepare-release.yml -f channel=rc
+#
+# 1. On the base (dev, or release/<YY>.<minor> for a patch), runs
+#    `bun scripts/release-channel.ts prepare`: it computes the version of the
+#    channel (preparedVersion: the next rc, beta, stable or patch, or the version
+#    given), writes it in every package.json with the peer ranges, runs
+#    `bun install` and dates the `## Unreleased` sections of the changelogs.
+# 2. Commits it as `chore: release <version>` on chore/release-<version> and opens
+#    the bump pull request against the base, with the CHANGELOG section as its
+#    body. With auto_merge_bump, it merges by itself once CI passes.
+# 3. From dev only: opens (or updates) the pull request dev -> main titled
+#    "Release <version>". Merging it publishes (release.yml). With
+#    auto_merge_release, auto-merge is enabled on it, but only once the bump pull
+#    request has landed in dev: the job waits for it (up to 45 minutes), so that
+#    main can never be merged without the version. When the bump is not merged
+#    by then (auto_merge_bump off, a review pending, CI red), the release pull
+#    request is still opened if dev is ahead of main, and auto-merge is left to
+#    a human.
+#    A patch has no such pull request: merging the bump into release/<YY>.<minor>
+#    publishes it.
+#
+# The pull requests are opened with a GitHub App token (RELEASE_APP_CLIENT_ID and
+# RELEASE_APP_PRIVATE_KEY), or else a fine-grained token (RELEASE_TOKEN): those
+# made with GITHUB_TOKEN would not run CI. CONTRIBUTING.md#releases has the setup.
+# That token is used only to push and to call the API; the checkout keeps no
+# credentials. When a step fails after the push and before the bump pull request
+# exists, the pushed branch is deleted, so that a new run is not refused.
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: The channel of the release
+        type: choice
+        options: [rc, beta, stable, patch]
+        default: rc
+        required: true
+      version:
+        description: A version instead of the computed one (checked the same way)
+        type: string
+        required: false
+      base:
+        description: The branch to bump (release/<YY>.<minor> for a patch)
+        type: string
+        default: dev
+        required: true
+      auto_merge_bump:
+        description: Merge the bump pull request once CI passes
+        type: boolean
+        default: true
+      auto_merge_release:
+        description: Merge the release pull request (dev -> main, which publishes) once CI passes
+        type: boolean
+        default: false
+
+# GITHUB_TOKEN reads only; every write goes through the token of the App (or RELEASE_TOKEN)
+permissions: {}
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare ${{ inputs.channel }} from ${{ inputs.base }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      VERSION_INPUT: ${{ inputs.version }}
+      BASE: ${{ inputs.base }}
+      AUTO_MERGE_BUMP: ${{ inputs.auto_merge_bump }}
+      AUTO_MERGE_RELEASE: ${{ inputs.auto_merge_release }}
+      HAS_APP: ${{ secrets.RELEASE_APP_CLIENT_ID != '' && secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+      HAS_PAT: ${{ secrets.RELEASE_TOKEN != '' }}
+    steps:
+      - name: Check the inputs and the credentials
+        run: |
+          # before checking out the base; prepare checks the channel against it
+          case "$BASE" in
+            dev | release/*) ;;
+            *) echo "::error::the base is dev or release/<YY>.<minor>, not $BASE"; exit 1 ;;
+          esac
+          if [ "$HAS_APP" != true ] && [ "$HAS_PAT" != true ]; then
+            echo "::error::no token to open the pull requests: add the secrets RELEASE_APP_CLIENT_ID and RELEASE_APP_PRIVATE_KEY (a GitHub App with Contents, Pull requests and Workflows: Read and write), or RELEASE_TOKEN (a fine-grained token with the same three permissions). See CONTRIBUTING.md#releases."
+            exit 1
+          fi
+
+      - name: Token of the GitHub App
+        id: app
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          # a pull request dev -> main that changes .github/workflows needs it to merge
+          permission-workflows: write
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.base }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+
+      - id: prepare
+        name: Compute the version, write it and date the changelogs
+        # Refuses a channel or base outside the scheme, a version behind
+        # package.json, already tagged or behind its dist-tag on npm, and a beta
+        # after an rc of the same version.
+        run: |
+          # the tags from the API: the checkout keeps no credentials for git
+          TAGS="$(gh api --paginate "repos/$GITHUB_REPOSITORY/tags" --jq '.[].name' | paste -sd, -)"
+          export TAGS
+          args=(prepare --channel "$CHANNEL")
+          if [ -n "$VERSION_INPUT" ]; then args+=(--version "$VERSION_INPUT"); fi
+          bun scripts/release-channel.ts "${args[@]}"
+        env:
+          BRANCH: ${{ inputs.base }}
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Refuse a release already in progress
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.RELEASE_TOKEN }}
+          VERSION: ${{ steps.prepare.outputs.version }}
+        run: |
+          branch="chore/release-$VERSION"
+          if gh api "repos/$GITHUB_REPOSITORY/branches/$branch" --silent 2>/dev/null; then
+            echo "::error::the branch $branch already exists; delete it or merge its pull request first"
+            exit 1
+          fi
+          open="$(gh pr list --head "$branch" --state open --json url --jq '.[].url')"
+          if [ -n "$open" ]; then
+            echo "::error::a pull request for $VERSION is already open: $open"
+            exit 1
+          fi
+
+      - id: bump
+        name: Commit, push and open the bump pull request
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.RELEASE_TOKEN }}
+          VERSION: ${{ steps.prepare.outputs.version }}
+          DIST_TAG: ${{ steps.prepare.outputs.dist-tag }}
+          PUBLISH_BRANCH: ${{ steps.prepare.outputs.publish-branch }}
+        run: |
+          branch="chore/release-$VERSION"
+          remote="https://x-access-token:$GH_TOKEN@${GITHUB_SERVER_URL#https://}/$GITHUB_REPOSITORY.git"
+          pushed=false
+          url=""
+          # A failure after the push and before the pull request exists deletes the
+          # branch, so that the refusal above does not block a new run.
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ] && [ "$pushed" = true ] && [ -z "$url" ]; then
+              echo "::warning::deleting $branch, pushed by this failed run"
+              git push -q "$remote" --delete "$branch" || echo "::warning::could not delete $branch; delete it by hand"
+            fi
+          }
+          trap cleanup EXIT
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add -A
+          git commit -q -F - <<EOF
+          chore: release $VERSION
+
+          Prepared by the prepare-release workflow (channel $CHANNEL, base $BASE):
+          the version of every package and the peers on @afora/core, bun.lock,
+          and the changelogs dated. Published to the $DIST_TAG dist-tag once on
+          $PUBLISH_BRANCH.
+          EOF
+          git push -q "$remote" "HEAD:refs/heads/$branch"
+          pushed=true
+
+          notes="$(bun scripts/release-channel.ts section "$VERSION" --link-base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$branch/CHANGELOG.md")"
+          if [ "$PUBLISH_BRANCH" = "$BASE" ]; then
+            next="Merging this pull request publishes $VERSION to the npm dist-tag \`$DIST_TAG\` (release.yml runs on $BASE)."
+          else
+            next="Merging this pull request puts $VERSION on $BASE. The pull request $BASE → $PUBLISH_BRANCH, \"Release $VERSION\", publishes it to the npm dist-tag \`$DIST_TAG\`."
+          fi
+          {
+            echo "Bumps every package to \`$VERSION\` (channel \`$CHANNEL\`) and dates the changelogs. $next"
+            echo
+            echo "## $VERSION"
+            echo
+            echo "$notes"
+            echo
+            echo "---"
+            echo "Opened by the prepare-release workflow, run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+          } > "$RUNNER_TEMP/bump.md"
+          url="$(gh pr create --base "$BASE" --head "$branch" --title "chore: release $VERSION" --body-file "$RUNNER_TEMP/bump.md")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Bump pull request: $url" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$AUTO_MERGE_BUMP" = true ]; then
+            if gh pr merge --auto --merge "$url"; then
+              echo "auto-merge=true" >> "$GITHUB_OUTPUT"
+              echo "Auto-merge is on: it merges once the required checks pass." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::warning::auto-merge could not be enabled on $url: turn on \"Allow auto-merge\" and require the CI checks on $BASE (CONTRIBUTING.md#releases). Merge it by hand."
+            fi
+          fi
+
+      - name: Wait for the bump to land in dev
+        id: wait
+        # only to enable auto-merge on the release pull request safely: before
+        # the bump is in dev, merging dev into main would publish nothing new
+        if: inputs.base == 'dev' && steps.bump.outputs.auto-merge == 'true' && inputs.auto_merge_release
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.RELEASE_TOKEN }}
+          URL: ${{ steps.bump.outputs.url }}
+        run: |
+          deadline=$(( $(date +%s) + 45 * 60 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            state="$(gh pr view "$URL" --json state --jq .state)"
+            case "$state" in
+              MERGED) echo "merged=true" >> "$GITHUB_OUTPUT"; exit 0 ;;
+              CLOSED) echo "::error::$URL was closed without being merged"; exit 1 ;;
+            esac
+            # a failed check never lets auto-merge go through: stop instead of waiting
+            failed="$(gh pr view "$URL" --json statusCheckRollup --jq '[.statusCheckRollup[] | select((.conclusion // .state // "") as $c | ["FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED"] | index($c)) | (.name // .context)] | join(", ")')"
+            if [ -n "$failed" ]; then
+              echo "::error::checks failed on the bump pull request $URL ($failed); fix them, merge it, then merge the release pull request by hand"
+              exit 1
+            fi
+            sleep 30
+          done
+          echo "::warning::$URL was not merged within 45 minutes; the release pull request is opened without auto-merge"
+
+      - name: Open or update the release pull request (dev -> main)
+        if: inputs.base == 'dev'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || secrets.RELEASE_TOKEN }}
+          VERSION: ${{ steps.prepare.outputs.version }}
+          DIST_TAG: ${{ steps.prepare.outputs.dist-tag }}
+          BUMP_URL: ${{ steps.bump.outputs.url }}
+          BUMP_MERGED: ${{ steps.wait.outputs.merged }}
+        run: |
+          title="Release $VERSION"
+          {
+            echo "Merging this pull request into \`main\` publishes \`$VERSION\` to the npm dist-tag \`$DIST_TAG\` (the channel \`channelOf\` gives it on main), then tags \`v$VERSION\` and creates its GitHub release (.github/workflows/release.yml)."
+            echo
+            echo "The version comes from the bump pull request $BUMP_URL: check that it is merged into \`dev\` before merging this one."
+            echo
+            echo "## $VERSION"
+            echo
+            bun scripts/release-channel.ts section "$VERSION" --link-base "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/dev/CHANGELOG.md"
+          } > "$RUNNER_TEMP/release.md"
+
+          existing="$(gh pr list --base main --head dev --state open --json url --jq '.[0].url // empty')"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$title" --body-file "$RUNNER_TEMP/release.md"
+            url="$existing"
+          elif [ "$(gh api "repos/$GITHUB_REPOSITORY/compare/main...dev" --jq .ahead_by)" -gt 0 ]; then
+            url="$(gh pr create --base main --head dev --title "$title" --body-file "$RUNNER_TEMP/release.md")"
+          else
+            echo "::warning::dev has nothing that main lacks yet; open the release pull request (dev -> main, \"$title\") once the bump is merged, or run this step again"
+            exit 0
+          fi
+          echo "Release pull request: $url" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$AUTO_MERGE_RELEASE" = true ]; then
+            if [ "$BUMP_MERGED" = true ]; then
+              if gh pr merge --auto --merge "$url"; then
+                echo "Auto-merge is on for the release: it publishes once the required checks pass." >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo "::warning::auto-merge could not be enabled on $url; merge it by hand"
+              fi
+            else
+              echo "::warning::the bump is not in dev yet, so auto-merge is not enabled on $url; merge it by hand after the bump"
+            fi
+          fi

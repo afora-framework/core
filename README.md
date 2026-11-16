@@ -66,7 +66,7 @@ An HTTP backend written by an agent (or in a hurry) tends to break the same few 
 bun add @afora/core typebox   # or: npm install @afora/core typebox
 ```
 
-Bun >= 1.4.4 or Node.js >= 22; it also loads in browsers and Workers. TypeBox (`typebox`, `^1`) is a peer dependency. How passwords are hashed and ids made on each runtime, and how to replace them with `configure`: [Runtime](docs/runtime.md).
+Bun >= 1.4.4 or Node.js >= 22; it also loads in browsers and Workers. Besides the stable release, `@afora/core@rc`, `@beta` and `@next` (the newest `dev`) install the other [channels](VERSIONING.md#channels). TypeBox (`typebox`, `^1`) is a peer dependency. How passwords are hashed and ids made on each runtime, and how to replace them with `configure`: [Runtime](docs/runtime.md).
 
 ## Quick start
 
@@ -365,7 +365,7 @@ afora validates and transforms faster than Zod 4 on most of the fourteen measure
 
 ![Validations per second on the body of an API request, Node v24.22.2](bench/results/chart.svg)
 
-afora 0.0.11 on Bun 1.4.4, Node v22.23.4 and Node v24.22.2, AMD EPYC 9V74 80-Core Processor; generated from `bench/results/latest.json`. Every case, runtime and library, and how it is measured: [Performance](docs/performance.md).
+afora 0.0.13 on Bun 1.4.4, Node v22.23.4 and Node v24.22.2, AMD EPYC 9V74 80-Core Processor; generated from `bench/results/latest.json`. Every case, runtime and library, and how it is measured: [Performance](docs/performance.md).
 
 <!-- bench:end -->
 
