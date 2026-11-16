@@ -82,6 +82,43 @@ Both are exceptions of the `Output` layer, served as `application/problem+json` 
 
 With `security.schemes` in the options of the sink, an operation with an `access` gets its `security` from the declaration: the `default` scheme, else the only scheme, with the declared `scopes`. `{ public: true }` is `security: []` under a `default`. Each such operation documents a `401`, and a `403` when it declares `scopes` or an `owner`. An entry in `security.operations` still documents an operation by hand, but `false` on an operation with an `access` throws `InvalidOutputStage`: the document would call public what the output refuses.
 
+## Changing a password
+
+`update` never takes the `password` of an `authenticatable` entity, nor any sensitive key: a `PATCH /users/{id}` that took it would let any caller who can reach it set another user's password. `changePassword` is the use case for it: it asks for the current password, checks it with `verifyPassword` and throws `UseCaseInvalidCredentials` (401, the error of `login`) when it does not match, then stores the hash of the new one, checked by the password rules (`InvalidUseCaseInput`, a 400).
+
+```ts
+import { blueprintOf, commandOf, entityOf, repositoryOf } from "@afora/core";
+
+class User extends entityOf(
+	blueprintOf((ctx) => ({ name: ctx.text })),
+	{
+		change: ["name"],
+		plugins: (ctx) => [ctx.authenticatable],
+	},
+) {}
+const Users = repositoryOf({
+	entity: User,
+	actions: ["findById", "findByEmail", "create", "update"],
+});
+
+const self = { key: "id", context: "userId" } as const; // the user is the caller
+const Account = commandOf({
+	name: "Account",
+	useCases: (ctx) => ({
+		rename: ctx.update(Users, { owner: self }), // { id, name? }: no password
+		changePassword: ctx.changePassword(Users, {
+			owner: self,
+			access: { context: { userId: "subject" } },
+			route: { method: "post", path: "/users/{id}/password" },
+		}),
+	}),
+});
+```
+
+`owner: { key: "id", context }` compares the id of the entity with the caller, so a user changes only their own password; the access `context: { userId: "subject" }` fills that context from the token. `change.password` stays on the entity, for a reset flow written by hand (a token sent by email, say).
+
+**Login does not tell which emails exist.** When the email is unknown, `login` still verifies the password given against a hash of a password nobody has, made once by the configured hasher on the first such login (not at import), and answers the same `UseCaseInvalidCredentials`, so the time of the answer is the same for a known and an unknown email.
+
 ## Tokens and sessions
 
 **Experimental.** What follows is imported from `@afora/core/experimental` or marked as such, and may change in any release (see [API tiers](api-tiers.md)). The declaration of access above is stable; how a caller gets and presents a token is what may still move.
