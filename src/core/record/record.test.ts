@@ -144,6 +144,24 @@ test("each value goes through its field's handlers, at any depth", () => {
 	expect(Object.isFrozen(record.tags)).toBe(true);
 });
 
+test("a record freezes what it keeps, even a value a blueprint handled first", () => {
+	const parsed = UserBlueprint.safeParse(user);
+	if (parsed.issues) throw new Error("expected a value");
+	// What the blueprint gives is the caller's: not frozen.
+	expect(Object.isFrozen(parsed.value.tags)).toBe(false);
+
+	const record = new User(parsed.value);
+	expect(Object.isFrozen(record.tags)).toBe(true);
+	expect(Object.isFrozen(record.address)).toBe(true);
+	expect(() => (record.tags as string[]).push("b")).toThrow(TypeError);
+	// Changing the caller's copy does not reach the record.
+	(parsed.value.tags as string[]).push("b");
+	expect(record.tags).toEqual(["a"]);
+
+	record.update("address", { street: "Side St", zip: "1" });
+	expect(Object.isFrozen(record.address)).toBe(true);
+});
+
 test("drops the keys left undefined", () => {
 	const record = new User({ ...user, nickname: undefined });
 

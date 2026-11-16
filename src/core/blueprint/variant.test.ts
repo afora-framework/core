@@ -47,7 +47,7 @@ test("a value is handled by the variant its key names, with the key first", () =
 		last: { type: "signup", email: "jane@example.com", name: "Jane" },
 	});
 	expect(Object.keys(value.last)).toEqual(["type", "email", "name"]);
-	expect(Object.isFrozen(value.last)).toBe(true);
+	expect(Object.isFrozen(value.last)).toBe(false);
 	// The value is told apart by its key.
 	if (value.last.type === "signup") {
 		const email: string = value.last.email;

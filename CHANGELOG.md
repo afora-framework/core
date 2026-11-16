@@ -1,5 +1,26 @@
 # Changelog
 
+## 27.0.0-rc.2 — unreleased
+
+### Behavior changes
+
+- **Breaking.** `blueprint.safeParse`, `listOf(...).safeParse`, `~standard.validate` of a blueprint, list or variant, and the `input` of a use case give a new object or array made for that call that is **not frozen**: it is typed read-only as before, belongs to the caller, and changing it changes neither the input nor any other result. Records and entities still freeze every object and array they keep, at any depth (so `record.tags.push(x)` still throws), as do their `toJSON()`, the value of an environment, the context of a use case and its response. This is an exception to the rule of the release candidate (only fixes until 27.0.0), taken before the contract freezes: on JavaScriptCore (Bun), freezing an array costs about 75 ns per item (76 µs for 1,000 items, where copying them takes 1 µs; `Object.seal` and `Object.preventExtensions` are as costly), which was about 45% of `blueprint.safeParse` on a list of 1,000 objects, while on V8 it costs nothing. A value handed to the caller is a copy of its own, so freezing it guarded nothing; what is shared stays frozen. See Migration below.
+
+### Migration
+
+Code that relied on the result of a blueprint being frozen (an `Object.isFrozen` check, or a `TypeError` expected when it is changed) freezes it itself, or makes a record of it, which keeps its values frozen.
+
+```ts
+// before
+const result = Order.safeParse(body);
+if (!result.issues) Object.isFrozen(result.value); // true
+
+// after
+const result = Order.safeParse(body);
+if (!result.issues) Object.freeze(result.value); // when a frozen value is needed
+// or keep it in a record: new OrderRecord(result.value) freezes what it keeps, at any depth
+```
+
 ## 27.0.0-rc.1 — 2026-11-16
 
 The first release candidate of 27.0, the first stable release. It has the API of 0.0.13, published under the `next` dist-tag (`npm i @afora/core@next`). From here until 27.0.0, only fixes go in: the contract described in [VERSIONING.md](VERSIONING.md) (the stable entry, `/adapters`, `/testing`, the Standard Schema behavior and the issue codes) is frozen, and anything that would change it waits for 28.0.

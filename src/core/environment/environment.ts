@@ -7,6 +7,7 @@ import type {
 } from "../blueprint/types/blueprint.interface";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { exceptionOf } from "../exception/exception";
+import { parseField } from "../parse/parse";
 import type { Issue } from "../parse/types/parse.interface";
 import { isProperty } from "../property/is-property";
 import { Kind } from "../symbols/kind";
@@ -145,8 +146,9 @@ function parseEnvironment(
 		const variable = variables[key];
 		if (variable !== undefined) declared[key] = convert(field, variable);
 	}
-	const parsed = blueprint.safeParse(declared);
-	if (!parsed.issues) return Object.freeze(parsed.value);
+	// An environment is loaded once and shared, so its value is frozen at every depth.
+	const parsed = parseField(blueprint, declared, [], "blueprint", true);
+	if (!parsed.issues) return parsed.value;
 
 	const issues: readonly Issue[] = parsed.issues;
 	throw new InvalidEnvironment({

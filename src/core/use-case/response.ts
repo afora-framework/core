@@ -60,17 +60,21 @@ export function isUseCaseResponse(value: unknown): value is AnyUseCaseResponse {
 }
 
 /**
- * `value` handled by `response`: the object a blueprint gives, or the frozen
- * array a list gives, or the issues that reject it (item paths start with the
- * index, e.g. `[1, "title"]`).
+ * `value` handled by `response`: the frozen object a blueprint gives, or the
+ * frozen array a list gives, or the issues that reject it (item paths start
+ * with the index, e.g. `[1, "title"]`).
  */
 export function parseResponse(
 	response: AnyUseCaseResponse,
 	value: unknown,
 ): ParseResult<unknown> {
-	return isBlueprintList(response)
-		? parseField(response, value, [], "list")
-		: response.safeParse(value);
+	return parseField(
+		response,
+		value,
+		[],
+		isBlueprintList(response) ? "list" : "blueprint",
+		true,
+	);
 }
 
 /**

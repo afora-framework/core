@@ -20,6 +20,7 @@ import {
 	silentLogger,
 	writeLog,
 } from "../logger/logger";
+import { parseField } from "../parse/parse";
 import { isRepository } from "../repository/repository";
 import { findState, type RepositoryState } from "../repository/state";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
@@ -241,7 +242,13 @@ function callEnvironment(
 			Object.assign(merged, base);
 			continue;
 		}
-		const parsed = environment.blueprint.safeParse({ ...base, ...picked });
+		const parsed = parseField(
+			environment.blueprint,
+			{ ...base, ...picked },
+			[],
+			"blueprint",
+			true,
+		);
 		if (parsed.issues) {
 			throw new InvalidCommandEnvironment({
 				source,
@@ -256,7 +263,7 @@ function callEnvironment(
 				cause: parsed.issues.find((issue) => issue.cause)?.cause,
 			});
 		}
-		const value = Object.freeze(parsed.value as Record<string, unknown>);
+		const value = parsed.value as Readonly<Record<string, unknown>>;
 		byEnvironment.set(environment, value);
 		Object.assign(merged, value);
 	}

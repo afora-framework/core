@@ -27,6 +27,13 @@ test("reads only the declared variables, validated", () => {
 	>();
 });
 
+test("the loaded value is frozen, since it is shared", () => {
+	const environment = environmentOf(Variables, {
+		source: () => ({ DATABASE_URL: "https://db.example.com" }),
+	});
+	expect(Object.isFrozen(environment.load())).toBe(true);
+});
+
 test("reads the source once, on the first load", () => {
 	let reads = 0;
 	const environment = environmentOf(Variables, {

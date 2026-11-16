@@ -6,9 +6,11 @@ Every field implements Standard Schema V1 (`vendor: "afora"`), so any library th
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
 | property class (`Slug`, `propertyOf`, `optionalOf(Property)`)      | the handled value: `Slug` turns `"Olá Mundo"` into `"ola-mundo"`                   |
 | blueprint (and `optionalOf(blueprint)`, which accepts `undefined`) | the handled object, nested records as instances                                    |
-| list (`listOf`)                                                    | a frozen array of the handled items                                                |
+| list (`listOf`)                                                    | an array of the handled items                                                      |
 | variant (`variantOf`)                                              | the handled object of the variant the key names, with the key first                |
 | record class (`recordOf`, subclasses included)                     | an instance of the class; a plain object for a nested record field becomes one too |
+
+The object or array a blueprint, a list or a variant gives is made for that call and belongs to the caller: it is typed read-only but not frozen, and changing it changes neither the input nor any other result. A record freezes what it keeps (see [Records](records.md)), so to hold a value nobody can change, make a record of it.
 
 ```ts
 import { sValidator } from "@hono/standard-validator";
@@ -65,7 +67,7 @@ if (result.issues) {
 		console.log(issue.path, issue.code, issue.message); // ["addresses", 0, "zip"] "invalid_value" ...
 	}
 } else {
-	result.value; // handled and frozen
+	result.value; // handled: a copy of its own, typed read-only
 }
 ```
 
