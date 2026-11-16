@@ -1,3 +1,5 @@
+import { type TSchema, Type } from "typebox";
+import Compile from "typebox/compile";
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import { recordFieldOf } from "../blueprint/record-field";
@@ -15,7 +17,11 @@ import {
 	AbstractProperty,
 	parsingDefinitionOf,
 } from "../property/abstract-property";
-import { parserOf, takeRejectionIssues } from "../property/define-property";
+import {
+	checkOnlyOf,
+	parserOf,
+	takeRejectionIssues,
+} from "../property/define-property";
 import { isProperty } from "../property/is-property";
 import type { AnyPropertyConstructor } from "../property/types/property-collection.type";
 import { recordNameOf } from "../record/name";
@@ -115,6 +121,70 @@ interface Collection {
 	 * value.
 	 */
 	parsers: readonly Parser[] | null | undefined;
+	/**
+	 * One compiled check of a whole value, when every field only checks its
+	 * value against a schema; `null` when one does more. Made once the
+	 * collection has parsed `COMPILE_AFTER` values, so that a collection
+	 * parsed once or twice (a configuration, an environment) does not pay for
+	 * compiling it.
+	 */
+	whole: { Check(value: unknown): boolean } | null | undefined;
+	/** How many values the collection parsed before `whole` was made. */
+	seen: number;
+}
+
+/** How many values a collection parses before its whole check is compiled. */
+const COMPILE_AFTER = 8;
+
+/**
+ * Formats TypeBox checks slowly, or that a schema checks faster on its own
+ * (see `formats.ts`): a whole check holding one would be slower, not faster.
+ */
+const SLOW_FORMATS = new Set([
+	"date-time",
+	"date",
+	"time",
+	"duration",
+	"uri",
+	"uri-reference",
+	"uri-template",
+	"iri",
+	"iri-reference",
+	"hostname",
+	"idn-hostname",
+	"idn-email",
+	"regex",
+]);
+
+/** Whether `schema` checks a format of `SLOW_FORMATS` anywhere in it. */
+function hasSlowFormat(schema: unknown): boolean {
+	if (typeof schema !== "object" || schema === null) return false;
+	if (Array.isArray(schema)) return schema.some(hasSlowFormat);
+	const { format } = schema as { format?: unknown };
+	if (typeof format === "string" && SLOW_FORMATS.has(format)) return true;
+	return Object.values(schema).some(hasSlowFormat);
+}
+
+/**
+ * The whole check of `collection`, worked out once: an object of the schemas
+ * of its fields, optional where the field is, with no other key. `null` when
+ * a field is not a property that only checks its value.
+ */
+function wholeOf(
+	collection: Collection,
+): { Check(value: unknown): boolean } | null {
+	const fields: Record<string, TSchema> = {};
+	for (let index = 0; index < collection.steps.length; index++) {
+		const step = collection.steps[index] as Step;
+		if (step.kind !== PROPERTY) return null;
+		const property = step.property as AnyPropertyConstructor;
+		if ((property.safeParse as unknown) !== DECLARED_SAFE_PARSE) return null;
+		const check = checkOnlyOf(parsingDefinitionOf(property));
+		if (check === undefined || hasSlowFormat(check.schema)) return null;
+		const name = collection.names[index] as string;
+		fields[name] = check.optional ? Type.Optional(check.schema) : check.schema;
+	}
+	return Compile(Type.Object(fields, { additionalProperties: false }));
 }
 
 /**
@@ -237,6 +307,8 @@ function collectionOf(properties: IBlueprintCollection): Collection {
 			names: fields.map(([name]) => name),
 			steps: fields.map(([, field]) => keptStepOf(field)),
 			parsers: undefined,
+			whole: undefined,
+			seen: 0,
 		};
 		collections.set(properties, collection);
 	}
@@ -376,6 +448,33 @@ function collectionAt(
 
 	const { properties, names, steps } = collection;
 	let rejected = false;
+
+	// Every field a property that only checks its value, and nothing vouched,
+	// completed or tagged: one compiled check of the whole value, which keeps
+	// each value as it is. A value it rejects takes the paths below, which
+	// find its issues.
+	if (
+		specialized &&
+		vouched === undefined &&
+		complete === undefined &&
+		tag === undefined
+	) {
+		let { whole } = collection;
+		if (whole === undefined && ++collection.seen >= COMPILE_AFTER) {
+			whole = wholeOf(collection);
+			collection.whole = whole;
+		}
+		if (whole && isPlainObject(value) && whole.Check(value)) {
+			const source = value as Record<string, unknown>;
+			const handled: Record<string, unknown> = {};
+			for (let index = 0; index < names.length; index++) {
+				const name = names[index] as string;
+				const item = source[name];
+				if (item !== undefined) handled[name] = item;
+			}
+			return run.freeze ? Object.freeze(handled) : handled;
+		}
+	}
 
 	const keys = Object.keys(value);
 
