@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- A relative `{ "import" }` or `extends` is refused (`outside_project`) when any file a runtime may load for it (`x`, `x.ts`…`x.json`, `x.ts` for `x.js`, `x/index.*`, the entry points of `x/package.json`, `x/afora.json` for an `extends`) is a symbolic link that leaves the project; `resolveExtended(..., { root })` also checks the real path of each spec file it reads. (SEC-05)
+- `boundaryIssues` (run by `resolveExtended` on each spec it reaches by a path) refuses an `output.dir` that is absolute, has a `..` or leaves the project. (SEC-06)
+- `output.dir` in a folded spelling of `node_modules` or `.git` (`node_moduleſ`, fullwidth letters, combining marks) is `outside_project`; `confinePath` refuses paths in `node_modules` or `.git`, so `writeGenerated` refuses the file. (SEC-17)
+
+### Added
+
+- The standard use cases of `@afora/core` take new options, and a spec can declare them: `changePassword` (`as`, `owner`, the hooks), `relations` on `create` and `register`, `maxLimit` on `list`, `owner` on `restore`, and `owner.key: "id"`.
+- `validateSpec` refuses at declaration what the core refuses: `owner.key: "id"` on `create`/`register`, `restore` with `owner` without the `exists` action, a `maxLimit` that is not a whole number of at least 1, a malformed `relations` (`invalid_generic_option`); an `update` whose change keys are all sensitive, or whose owner key is one of its change keys (new code `generic_unavailable`).
+
 ## 27.0.0-rc.2 — 2026-11-16
 
 A candidate of 27.0.0, with no changes since 27.0.0-rc.1. See the [root CHANGELOG](../../CHANGELOG.md).
