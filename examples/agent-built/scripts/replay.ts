@@ -7,11 +7,16 @@
  */
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { connectMcp, type RecordedCall } from "./mcp.ts";
+import { connectMcp, type RecordedCall, type ToolResult } from "./mcp.ts";
+import { type Db, writeDbModule } from "./storage.ts";
 
 export interface ReplayOptions {
 	/** Run tsc after each `afora_generate`, as the agent did. Off by default: it does not change the files. */
 	readonly typecheck?: boolean;
+	/** The database of the run: `sqlite` writes the harness's src/db.ts and offers the drizzle provider. */
+	readonly db?: Db;
+	/** Called with each call and its result, in order. */
+	readonly onResult?: (call: RecordedCall, result: ToolResult) => void;
 }
 
 export async function readCalls(file: string): Promise<RecordedCall[]> {
@@ -29,7 +34,9 @@ export async function replay(
 ): Promise<void> {
 	await rm(dir, { recursive: true, force: true });
 	await mkdir(dir, { recursive: true });
-	const mcp = await connectMcp(dir);
+	const db = options.db ?? "memory";
+	if (db === "sqlite") await writeDbModule(dir);
+	const mcp = await connectMcp(dir, db);
 	try {
 		for (const [index, call] of calls.entries()) {
 			if ("resource" in call) continue; // reading changes nothing
@@ -38,6 +45,7 @@ export async function replay(
 					? { ...call.arguments, typecheck: false }
 					: call.arguments;
 			const result = await mcp.callTool(call.tool, args);
+			options.onResult?.(call, result);
 			if (result.isError !== call.isError) {
 				throw new Error(
 					`Call ${index} (${call.tool}) ${result.isError ? "failed" : "succeeded"} on replay but ${call.isError ? "failed" : "succeeded"} in the run: ${result.text.slice(0, 500)}`,
