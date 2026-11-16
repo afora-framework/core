@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- `generate` trims the trailing `/` of `output.dir` in linear time; the regular expression it went through took seconds on a long run of `/` not at the end. The trailing `/` of an `import` module is trimmed without a regular expression too (that one was not reachable: the module is normalized first).
+
 ## 27.0.0-rc.3 — 2026-11-16
 
 ### Security

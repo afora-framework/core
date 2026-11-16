@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- Every open code scanning alert is closed. Regular expressions that took quadratic time on crafted input now run in linear time: the route key of `openapi` on a path with many `{` (paths are validated before, so it was not reachable), the trailing `/` of `output.dir` in `@afora/codegen` (and of an import module, not reachable either), and the parser of `tsc` output in `@afora/mcp`, which took seconds on a long line repeating `(0,0): error TS0: `.
+- Repository: Dependabot proposes a new version only once it is 7 days old (security updates are not delayed), so a compromised release is usually pulled before it reaches a pull request. `release.yml` calls `ci.yml` and `bench.yml` with GitHub's self-repository syntax (`uses: $/...`). The docs scripts escape `\` in Markdown table cells and every regular expression character in export names.
+
 ## 27.0.0-rc.3 — 2026-11-16
 
 The third candidate of 27.0.0: security fixes from an audit of 27.0.0-rc.1 (#165). Every finding has a regression test named `SEC-<n>`. The breaking ones change the standard use cases, `Url` and the reserved keys of a blueprint before the contract freezes, as blocking issues of the 27.0 milestone (see [Release candidates](VERSIONING.md#release-candidates)).
