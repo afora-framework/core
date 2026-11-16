@@ -195,6 +195,66 @@ const UNNAMED: {
 	},
 ];
 
+/**
+ * Problems the HTTP layer of an output (`compileRoutes`, used by every HTTP
+ * sink) answers on its own, before any use case runs: they have no class and
+ * never reach your code, only the client. Sink-specific exceptions are listed
+ * with their package.
+ */
+const HTTP_PROBLEMS: {
+	name: string;
+	status: number;
+	when: string;
+	handling: string;
+}[] = [
+	{
+		name: "InvalidRequestBody",
+		status: 400,
+		when: "The body is not valid JSON, or a `multipart/form-data` body cannot be read (malformed, no boundary), or a multipart body reaches a route without a file field.",
+		handling:
+			"A client mistake: send valid JSON, or a well-formed multipart body to a route that takes a file.",
+	},
+	{
+		name: "UnsupportedMediaType",
+		status: 415,
+		when: "A `multipart/form-data` body reaches a sink whose request adapter has no `form()`.",
+		handling:
+			"Serve the route with a sink that reads multipart (hono, express, fastify, elysia all do), or send JSON.",
+	},
+	{
+		name: "TooManyParts",
+		status: 413,
+		when: "A `multipart/form-data` body has more parts than `maxParts` (1000 by default, in the HTTP options).",
+		handling:
+			"A client sending too many parts. Raise `maxParts` only if the route needs it; limit the body size in the server or proxy too.",
+	},
+	{
+		name: "InvalidFileContent",
+		status: 400,
+		when: "A file declared as PNG, JPEG, GIF, WebP or AVIF does not start with the bytes of that type; the issue is at the key of the file.",
+		handling:
+			"A client mistake (or a disguised file): send a file whose content matches its type.",
+	},
+];
+
+/** Exceptions a sink package declares and throws itself, by package. */
+const SINK_EXCEPTIONS: {
+	name: string;
+	from: string;
+	status: number;
+	when: string;
+	handling: string;
+}[] = [
+	{
+		name: "MultipartBodyAlreadyRead",
+		from: "@afora/express",
+		status: 500,
+		when: "Another parser of the Express app (multer, `express.text()`...) read a `multipart/form-data` body before the afora route.",
+		handling:
+			"A server misconfiguration: mount the afora routes before that parser, or keep the bytes with `express.raw()`.",
+	},
+];
+
 interface Row {
 	name: string;
 	tier: Tier;
@@ -376,6 +436,41 @@ function render(): string {
 				cell(unnamed.when),
 				String(statusFor(unnamed.name, unnamed.layer, unnamed.issues)),
 				cell(unnamed.handling),
+			]),
+		),
+	);
+	out.push(
+		"",
+		"## Answered by the HTTP layer",
+		"",
+		"An HTTP sink answers these problems itself, before any use case runs. They are not exceptions your code can catch: only the client sees them, as problem+json with this `title`.",
+		"",
+		...table(
+			["Title", "Status", "When it is answered", "How to handle it"],
+			HTTP_PROBLEMS.map((problem) => [
+				`\`${problem.name}\``,
+				String(problem.status),
+				cell(problem.when),
+				cell(problem.handling),
+			]),
+		),
+		"",
+		"## Thrown by a sink package",
+		"",
+		...table(
+			[
+				"Exception",
+				"Package",
+				"When it is thrown",
+				"Status",
+				"How to handle it",
+			],
+			SINK_EXCEPTIONS.map((sink) => [
+				`\`${sink.name}\``,
+				`\`${sink.from}\``,
+				cell(sink.when),
+				String(sink.status),
+				cell(sink.handling),
 			]),
 		),
 	);

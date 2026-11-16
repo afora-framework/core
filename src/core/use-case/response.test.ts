@@ -40,6 +40,7 @@ describe("a list as the response", () => {
 		expect(items).toEqual([{ title: "Article 0" }, { title: "Article 1" }]);
 		expect(Array.isArray(items)).toBe(true);
 		expect(Object.isFrozen(items)).toBe(true);
+		expect(Object.isFrozen(items[0])).toBe(true);
 		expect(Recent.response.item).toBe(Summary);
 	});
 

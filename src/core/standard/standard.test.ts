@@ -198,7 +198,8 @@ test("a blueprint gives the handled object, records as instances", () => {
 
 	expect(value.slug).toBe("ola-mundo");
 	expect(value.author).toBeInstanceOf(Author);
-	expect(Object.isFrozen(value)).toBe(true);
+	// A copy the caller owns; the record inside it keeps its own state.
+	expect(Object.isFrozen(value)).toBe(false);
 });
 
 test("a blueprint reports every issue with its path", () => {
@@ -254,12 +255,12 @@ test("the Standard Schema does not leak into what is spread or listed", () => {
 	expect(Object.keys(Tags)).not.toContain("~standard");
 });
 
-test("a list gives a frozen array of handled items", () => {
+test("a list gives an array of handled items, a copy the caller owns", () => {
 	const result = run(Tags, [" abc ", "defg"]);
 	if (result.issues) throw new Error("expected a value");
 
 	expect(result.value).toEqual(["abc", "defg"]);
-	expect(Object.isFrozen(result.value)).toBe(true);
+	expect(Object.isFrozen(result.value)).toBe(false);
 	expect(run(Tags, "abc")).toHaveProperty("issues");
 	expect(run(Tags, ["a"])).toMatchObject({
 		issues: [{ path: [0] }],

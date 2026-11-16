@@ -101,11 +101,65 @@ interface Step {
 	variants: Map<string, Collection | AnyRecordClass> | undefined;
 }
 
+/** What a property's definition does to a value: the handled value, or `REJECTED`. */
+type Parser = (value: unknown) => unknown;
+
 /** The fields of a collection of properties, in order: the name and the step of each. */
 interface Collection {
 	readonly properties: IBlueprintCollection;
 	readonly names: readonly string[];
 	readonly steps: readonly Step[];
+	/**
+	 * The parser of each field, in order, when every field is a property that
+	 * parses through its definition; `null` when one is not. Made on the first
+	 * value.
+	 */
+	parsers: readonly Parser[] | null | undefined;
+}
+
+/**
+ * Whether a collection whose fields are all plain properties is parsed by
+ * one loop over their parsers. Turned off only by tests, which compare it
+ * with the general path.
+ */
+let specialized = true;
+
+/**
+ * Turns the specialized paths of the parse on or off, and gives what it was.
+ * For tests only.
+ * @internal
+ */
+export function setSpecializedParse(on: boolean): boolean {
+	const was = specialized;
+	specialized = on;
+	return was;
+}
+
+/** The parser of a step that is a property parsing through its definition, or `null`. */
+function plainParserOf(step: Step): Parser | null {
+	if (step.kind !== PROPERTY) return null;
+	const property = step.property as AnyPropertyConstructor;
+	if ((property.safeParse as unknown) !== DECLARED_SAFE_PARSE) return null;
+	if (step.parser === undefined) {
+		step.parser = parserOf(parsingDefinitionOf(property)) ?? null;
+	}
+	return step.parser;
+}
+
+/** The parsers of `collection`, worked out on its first value. */
+function parsersOf(collection: Collection): readonly Parser[] | null {
+	let { parsers } = collection;
+	if (parsers === undefined) {
+		const found: Parser[] = [];
+		for (const step of collection.steps) {
+			const parser = plainParserOf(step);
+			if (parser === null) break;
+			found.push(parser);
+		}
+		parsers = found.length === collection.steps.length ? found : null;
+		collection.parsers = parsers;
+	}
+	return parsers;
 }
 
 function stepOf(field: BlueprintField | undefined): Step {
@@ -182,6 +236,7 @@ function collectionOf(properties: IBlueprintCollection): Collection {
 			properties,
 			names: fields.map(([name]) => name),
 			steps: fields.map(([, field]) => keptStepOf(field)),
+			parsers: undefined,
 		};
 		collections.set(properties, collection);
 	}
@@ -200,10 +255,16 @@ interface Run {
 	/** The keys from that value to the one being handled, by depth. */
 	readonly keys: (string | number)[];
 	issues: Issue[] | undefined;
+	/**
+	 * Whether the objects and arrays made are frozen: those a record keeps
+	 * are, since they are its state; those handed to the caller are a copy of
+	 * its own. Freezing an array takes about 75 ns per item on JavaScriptCore.
+	 */
+	readonly freeze: boolean;
 }
 
-function runOf(base: Path, source: string): Run {
-	return { source, base, keys: [], issues: undefined };
+function runOf(base: Path, source: string, freeze: boolean): Run {
+	return { source, base, keys: [], issues: undefined, freeze };
 }
 
 /** The path of the value `run` is handling at `depth`. */
@@ -239,15 +300,17 @@ function resultOf<Output>(run: Run, handled: unknown): ParseResult<Output> {
  * `value` handled by each field of `properties`, or every issue found: each
  * key `properties` does not declare, then those of each field, in order. Keys
  * left `undefined` are dropped. `path` is where `value` is, and `source` who
- * is parsing it, e.g. a record name.
+ * is parsing it, e.g. a record name. With `freeze`, the objects and arrays
+ * made are frozen, at every depth.
  */
 export function parseCollection(
 	properties: IBlueprintCollection,
 	value: unknown,
 	path: Path,
 	source: string,
+	freeze = false,
 ): ParseResult<Readonly<Record<string, unknown>>> {
-	const run = runOf(path, source);
+	const run = runOf(path, source, freeze);
 	return resultOf(run, collectionAt(collectionOf(properties), value, run, 0));
 }
 
@@ -269,12 +332,14 @@ export type Complete = (
  * needs of `properties` is looked up on the first value and kept, instead of
  * on every one. For what parses many values of one shape, a blueprint or a
  * record class. The values of the keys in `vouched` are kept as they are,
- * unchecked: for what the caller made itself and knows to be valid.
+ * unchecked: for what the caller made itself and knows to be valid. With
+ * `freeze`, the objects and arrays made are frozen, at every depth.
  * @internal
  */
 export function collectionParserOf(
 	properties: IBlueprintCollection,
 	source: string,
+	freeze = false,
 ): (
 	value: unknown,
 	vouched?: readonly string[],
@@ -283,7 +348,7 @@ export function collectionParserOf(
 	let collection: Collection | undefined;
 	return (value, vouched, complete) => {
 		collection ??= collectionOf(properties);
-		const run = runOf(ROOT, source);
+		const run = runOf(ROOT, source, freeze);
 		return resultOf(
 			run,
 			collectionAt(collection, value, run, 0, vouched, undefined, complete),
@@ -313,6 +378,36 @@ function collectionAt(
 	let rejected = false;
 
 	const keys = Object.keys(value);
+
+	// Every field a plain property, and nothing vouched, completed or tagged:
+	// one loop over the parsers, with the path only made for an issue.
+	if (
+		specialized &&
+		vouched === undefined &&
+		complete === undefined &&
+		tag === undefined
+	) {
+		const parsers = parsersOf(collection);
+		if (parsers !== null && declaresEvery(properties, names, keys)) {
+			const source = value as Record<string, unknown>;
+			const handled: Record<string, unknown> = {};
+			for (let index = 0; index < names.length; index++) {
+				const name = names[index] as string;
+				const item = (parsers[index] as Parser)(source[name]);
+				if (item === REJECTED) {
+					rejected = true;
+					run.keys[depth] = name;
+					run.issues ??= [];
+					takeRejectionIssues(pathOf(run, depth + 1), run.issues);
+				} else if (item !== undefined) {
+					handled[name] = item;
+				}
+			}
+			if (rejected) return REJECTED;
+			return run.freeze ? Object.freeze(handled) : handled;
+		}
+	}
+
 	for (let index = 0; index < keys.length; index++) {
 		const name = keys[index] as string;
 		// A value written in the order of the blueprint has each key in its place.
@@ -375,27 +470,44 @@ function collectionAt(
 		}
 	}
 
-	return rejected ? REJECTED : Object.freeze(handled);
+	if (rejected) return REJECTED;
+	return run.freeze ? Object.freeze(handled) : handled;
 }
 
 /**
  * `value` handled by `field`, or every issue found: a property runs its
  * handlers, a blueprint each of its fields, a list each of its items, and a
  * record keeps an instance of its class, and makes one of a plain object.
- * `path` is where `value` is, and `source` who is parsing it.
+ * `path` is where `value` is, and `source` who is parsing it. With `freeze`,
+ * the objects and arrays made are frozen, at every depth.
  */
 export function parseField(
 	field: BlueprintField | undefined,
 	value: unknown,
 	path: Path,
 	source: string,
+	freeze = false,
 ): ParseResult<unknown> {
-	const run = runOf(path, source);
+	const run = runOf(path, source, freeze);
 	return resultOf(run, fieldAt(keptStepOf(field), value, run, 0));
 }
 
 /** The `safeParse` of a property that does not declare one. */
 const DECLARED_SAFE_PARSE: unknown = AbstractProperty.safeParse;
+
+/** Whether every key of `keys` is declared by `properties`, whose fields are `names`. */
+function declaresEvery(
+	properties: IBlueprintCollection,
+	names: readonly string[],
+	keys: readonly string[],
+): boolean {
+	for (let index = 0; index < keys.length; index++) {
+		const name = keys[index] as string;
+		// A value written in the order of the blueprint has each key in its place.
+		if (name !== names[index] && !Object.hasOwn(properties, name)) return false;
+	}
+	return true;
+}
 
 /**
  * `parseField` for the value `run` is handling at `depth`: the handled value,
@@ -455,7 +567,8 @@ function fieldAt(step: Step, value: unknown, run: Run, depth: number): unknown {
 				if (handled === REJECTED) rejected = true;
 				else items.push(handled);
 			}
-			return rejected ? REJECTED : Object.freeze(items);
+			if (rejected) return REJECTED;
+			return run.freeze ? Object.freeze(items) : items;
 		}
 
 		case BLUEPRINT: {

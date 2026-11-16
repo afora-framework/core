@@ -168,7 +168,10 @@ function constructionOf(record: {
 		const { properties } = record[Meta].blueprint;
 		checkMembers(record, properties);
 		const source = recordNameOf(Class);
-		construction = { source, parse: collectionParserOf(properties, source) };
+		construction = {
+			source,
+			parse: collectionParserOf(properties, source, true),
+		};
 		constructions.set(Class, construction);
 	}
 	return construction;
@@ -474,7 +477,7 @@ export function storeRecordValue(
 
 	const current = values.get(record) as Readonly<Record<string, unknown>>;
 	const previous = current[key];
-	const result = parseField(properties[key], value, [key], source);
+	const result = parseField(properties[key], value, [key], source, true);
 	if (result.issues) throw exceptionOfIssues(result.issues, source);
 	const next = result.value;
 

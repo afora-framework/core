@@ -84,6 +84,7 @@ const Accounts = commandOf({
 	name: "Accounts",
 	useCases: (ctx) => ({
 		register: ctx.register(Users, {
+			values: { roles: ["posts:write"] }, // set here, never taken from the body
 			route: { method: "post", path: "/users", status: 201 },
 		}),
 		login: ctx.login(Users, {
@@ -97,11 +98,13 @@ const Accounts = commandOf({
 const Blog = commandOf({
 	name: "Blog",
 	useCases: (ctx) => ({
-		...resourceOf(Posts, {
-			path: "/posts",
-			actions: ["create", "get", "list"],
-			access: { create: { scopes: ["posts:write"] } },
-		})(ctx),
+		...resourceOf(Posts, { path: "/posts", actions: ["get", "list"] })(ctx),
+		create: ctx.create(Posts, {
+			owner: { key: "authorId", context: "userId" }, // the caller is the author
+			values: { published: false }, // a new post is a draft
+			access: { scopes: ["posts:write"], context: { userId: "subject" } },
+			route: { method: "post", path: "/posts", status: 201 },
+		}),
 		publish: PublishPost,
 	}),
 });

@@ -73,7 +73,8 @@ describe("use cases", () => {
 		expect(isUseCaseClass(LeafBase)).toBe(false);
 		expect(isUseCaseClass(User)).toBe(false);
 		expect(Leaf.useCaseName).toBe("CreateUser");
-		expect(Object.isFrozen(op.input)).toBe(true);
+		// The input is a copy the use case owns: not frozen, but not reassignable.
+		expect(Object.isFrozen(op.input)).toBe(false);
 		expect(() => Object.assign(op, { input: {} })).toThrow();
 		expect(() => new Leaf({ name: 4 } as never)).toThrow(
 			/^Invalid UseCase input: "name" /,
