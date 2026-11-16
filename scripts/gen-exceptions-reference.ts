@@ -369,7 +369,8 @@ const layerTitle = (layer: ExceptionLayers): string =>
 	(Object.entries(ExceptionLayers).find(([, value]) => value === layer)?.[0] ??
 		layer) as string;
 
-const cell = (text: string) => text.replace(/\|/g, "\\|");
+// `\` is escaped too: a `\` before a `|` would otherwise turn its `\|` back into a column break.
+const cell = (text: string) => text.replace(/[\\|]/g, "\\$&");
 
 /** A Markdown table with its columns padded, as Biome formats one, so `bun run fmt` leaves it as it is. */
 function table(header: string[], rows: string[][]): string[] {

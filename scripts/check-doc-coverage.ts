@@ -62,8 +62,10 @@ const referenceText = existsSync(apiReference)
 	? codeOnly(readFileSync(apiReference, "utf8"))
 	: "";
 
+const escapeRegExp = (text: string) =>
+	text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const mentions = (text: string, name: string) =>
-	new RegExp(`(?<![\\w$])${name.replace(/\$/g, "\\$")}(?![\\w$])`).test(text);
+	new RegExp(`(?<![\\w$])${escapeRegExp(name)}(?![\\w$])`).test(text);
 
 interface Miss {
 	values: string[];

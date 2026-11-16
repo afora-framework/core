@@ -1055,6 +1055,7 @@ export class Shout extends ShoutBase {
 			["../handlers/all/index.ts", "../handlers/all"],
 			["../handlers/all.js", "../handlers/all.ts"],
 			["../handlers/all.mts", "../handlers/./all"],
+			["../handlers/all/", "../handlers//all"],
 		]) {
 			const copy: Draft = JSON.parse(JSON.stringify(composed));
 			copy.useCases.Greet.implementation = { import: `${greet}#Greet` };

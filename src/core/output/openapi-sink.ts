@@ -617,8 +617,9 @@ export function operationRoutes(
 				);
 			}
 		}
-		// `/a/{x}` and `/a/{y}` match the same requests.
-		const key = `${method} ${path.replace(/\{[^}]*\}/g, "{}")}`;
+		// `/a/{x}` and `/a/{y}` match the same requests. `[^{}]` keeps the scan
+		// linear on a path of many `{` with no `}`.
+		const key = `${method} ${path.replace(/\{[^{}]*\}/g, "{}")}`;
 		const other = taken.get(key);
 		if (other !== undefined) {
 			invalid(
