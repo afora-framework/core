@@ -816,6 +816,15 @@ export function rawTypeOf<SchemaType extends TSchema>(
 		: (schema.type.Type() as SchemaType);
 }
 
+/**
+ * The TypeBox schema of `schema` when it is made by `schemaOf`, whose check is
+ * exactly the compiled check of that schema; `undefined` for any other.
+ * @internal
+ */
+export function compiledTypeOf(schema: ISchema<TSchema>): TSchema | undefined {
+	return schema instanceof AbstractSchema ? rawTypeOf(schema) : undefined;
+}
+
 /** A schema class declared with `schemaOf`. */
 export interface SchemaClass<SchemaType extends TSchema> {
 	new (type?: SchemaType): ISchema<SchemaType>;
