@@ -181,7 +181,7 @@ if (import.meta.main) Bun.serve({ fetch: api.fetch });
 
 What it does:
 
-```
+```text
 POST /api/users  { "name": "Ana", "email": "  Ana@Example.COM ", "plainPassword": "Str0ng!Pass" }
 -> 201 { "user": { "id": "...", "name": "Ana", "email": "ana@example.com", "password": "********", ... } }
 
@@ -203,7 +203,7 @@ Everything above except the hashing function is data, so it can be written as an
 
 This is `examples/interop/quickstart.afora.json`, which the same test validates and generates.
 
-```json
+```json afora
 {
 	"version": 1,
 	"name": "accounts",
@@ -318,7 +318,7 @@ bunx afora-codegen generate afora.json --stages ./stages.ts   # writes src/domai
 
 and serve the application from `src/server.ts` (`bun src/server.ts`):
 
-<!-- docs:code skip: src/server.ts of examples/interop/from-json; ./domain is what afora-codegen generates from the afora.json above -->
+<!-- docs:code tested: examples/interop/from-json/src/server.ts -->
 ```ts
 import { App } from "./domain/index.ts";
 

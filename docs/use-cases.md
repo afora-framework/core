@@ -380,7 +380,19 @@ There are no operators or interpolation: anything computed goes through `run`. T
 
 **The args of `run` are not checked at run time unless it declares `params`.** `fn` is any function, so without `params` it gets the resolved values as they are, whatever its parameters say (only [`strictSteps`](#strict-steps) checks them, at compile time, and only in TypeScript). `params` is a blueprint whose keys match the `args` by position: the args are parsed before `fn` is called, `fn` gets the values as the keys handled them (an `email` trimmed and lowercased), and a rejected arg throws `InvalidUseCaseStep` with `code: "invalid_args"`, the key in the message and the issues in `details.issues`; `fn` does not run. The number of args must equal the number of keys (checked at declaration for a list, while the steps run for a reference). Declare it whenever `fn` relies on what it gets. In an `afora.json` it is required: a `run` with `args` and no `params` is the error `run_without_params` of `afora-codegen check`, of `generate` and of the [MCP server](../packages/mcp/README.md)'s validation, since no compile step there knows the parameters of `fn` (a `run` without `args` needs none). In TypeScript `useCaseOf` does not require it: with [`strictSteps`](#strict-steps) the parameters of `fn` are checked at compile time, and that is the check for hand-written code; `params` adds the check at run time on top. A use case written without `params` is still extracted by `extractSpec`, but the spec it gives fails validation until `params` is declared:
 
-<!-- docs:code skip: one step of a steps list, not a module -->
+<!-- docs:code continue -->
+<!-- docs:code context
+class HashOnly extends useCaseOf({
+	name: "HashOnly",
+	blueprint: RegisterInput,
+	response: blueprintOf((ctx) => ({ hash: ctx.string })),
+	steps: [
+/* block */
+		,
+		{ return: { hash: "$hash" } },
+	],
+}) {}
+-->
 ```ts
 {
 	run: "hashPassword",
@@ -410,9 +422,10 @@ There are no operators or interpolation: anything computed goes through `run`. T
 
 With `strictSteps: true`, TypeScript checks the steps written inline in `useCaseOf` as it checks a hand-written `execute`. The steps are read in order, each against the values in scope: the input, the context, the environments and the results of the earlier steps, typed (`find` gives what the repository method returns, `build` the instance, `change` the record, `invoke` and `run` what the method or function returns, awaited, `call` the response of the use case). An `ensure: "exists"` on a bound name removes `undefined` from it for the steps after.
 
-<!-- docs:code skip: shows the type error strictSteps reports, so it does not compile on purpose -->
+<!-- docs:code continue -->
+<!-- docs:code expect-error: Type '"$input.emial"' is not assignable to type '"$input.email" | "$input.plainPassword" | "$input.name"'. Did you mean '"$input.email"'? -->
 ```ts
-class Register extends useCaseOf({
+class StrictRegister extends useCaseOf({
 	name: "Register",
 	blueprint: RegisterInput,
 	response: UserResponse,
@@ -420,7 +433,7 @@ class Register extends useCaseOf({
 	errors: [UserAlreadyExists],
 	strictSteps: true,
 	steps: [
-		// Type '"$input.emial"' is not assignable to type '"$input.name" | "$input.email" | "$input.plainPassword"'.
+		// Type '"$input.emial"' is not assignable to type '"$input.email" | "$input.plainPassword" | "$input.name"'. Did you mean '"$input.email"'?
 		{ find: "users.findByEmail", args: ["$input.emial"], as: "existing" },
 		// ...
 	],

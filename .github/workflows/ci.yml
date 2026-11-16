@@ -66,7 +66,7 @@ jobs:
       - run: bun run test:blog
       - run: bun run test:agent-built
       - run: bun run docs:links
-      # every ts block of README.md, docs/ and the package READMEs type-checks (or is skipped with a reason)
+      # every code block of README.md, docs/ and the package READMEs is type-checked, validated or checked (or skipped with a reason)
       - run: bun run docs:code
       # docs/reference/api.md and exceptions.md are what the JSDoc gives; every export is on a page
       - run: bun run build

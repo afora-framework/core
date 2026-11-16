@@ -68,7 +68,7 @@ const app = Api.build(); // a FastifyInstance
 await app.listen({ port: 3000 });
 ```
 
-```
+```text
 GET /api/posts/hello          -> 200 { "post": { "slug": "hello", ... } }
 GET /api/posts/Not%20A%20Slug -> 400 application/problem+json, with "issues"
 GET /openapi.json             -> the OpenAPI 3.1 document of the same routes
@@ -113,8 +113,18 @@ The requests are handled by the route table of the core (`compileRoutes` of `@af
 
 ## Middlewares and your own app
 
-<!-- docs:code skip: fragment: the second argument of the stage; tenantOf stands for your code -->
+<!-- docs:code context
+import { fastify } from "@afora/fastify";
+
+declare function tenantOf(host: string | undefined): string; // your code
+-->
 ```ts
+declare module "fastify" {
+	interface FastifyRequest {
+		tenant?: string; // set by the middleware, read by context.variables
+	}
+}
+
 fastify(
 	{ context: { variables: { tenant: "tenant" } } },
 	{

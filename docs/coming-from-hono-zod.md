@@ -8,7 +8,20 @@ Registering a user: a unique email, a hashed password that must never be in a re
 
 **Hono + Zod**
 
-<!-- docs:code skip: the Hono + Zod side of the comparison; zod and db belong to the reader, not to this repo -->
+<!-- docs:code context
+// the database client of the reader
+declare const db: {
+	users: {
+		findByEmail(email: string): Promise<{ id: string } | undefined>;
+		create(data: { name: string; email: string; password: string }): Promise<{
+			id: string;
+			name: string;
+			email: string;
+			password: string;
+		}>;
+	};
+};
+-->
 ```ts
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
@@ -112,7 +125,7 @@ Both answer `POST /users` with a 201 and refuse a second user with the same emai
 - **Hono.** The output builds a Hono app: mount it (`main.route("/", api)`), add routes beside it, give it your middlewares, deploy it where you deploy Hono. `hono(options, { app })` adds the routes to an app you already have.
 - **Your routes, for now.** Every afora field is a [Standard Schema](standard-schema.md), so a blueprint works in a route you write by hand with `@hono/standard-validator`, as a Zod schema does. You can move one endpoint at a time:
 
-<!-- docs:code skip: types of @hono/standard-validator and hono resolve to two installed copies of hono in the checker; the same code is type-checked by examples/interop (interop.test.ts) -->
+<!-- docs:code continue -->
 ```ts
 import { sValidator } from "@hono/standard-validator";
 import { Hono } from "hono";

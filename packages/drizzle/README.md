@@ -13,6 +13,7 @@ bun add @afora/core typebox drizzle-orm @afora/drizzle
 
 `schema.ts`:
 
+<!-- docs:code file: schema.ts -->
 ```ts
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
@@ -31,6 +32,7 @@ export const tables = { User: users };
 
 `db.ts`:
 
+<!-- docs:code file: db.ts -->
 ```ts
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
@@ -40,7 +42,7 @@ export const db = drizzle(new Database("app.db"));
 
 `app.ts`:
 
-<!-- docs:code skip: imports ./db and ./schema, the two files above -->
+<!-- docs:code file: app.ts -->
 ```ts
 import {
 	applicationOf,
@@ -82,7 +84,7 @@ export const Users = repositoryOf({
 export const App = applicationOf({
 	name: "app",
 	provider,
-	repositories: [Users],
+	repositories: { Users },
 });
 
 // Once the application binds it, the repository is reached through it.
@@ -120,14 +122,20 @@ await users.findPage({
 
 A repository's `indexes` (see [Indexes](../../docs/repositories.md#indexes)) reach the provider as `context.indexes`, and the index that serves a query as `query.index`. The provider takes them and gives the same rows: the SQL is the same, and the database picks its own index for the `WHERE` and `ORDER BY`. It does not create them, so declare the matching SQL index next to the table, with the `where` keys first and the `orderBy` key last:
 
-<!-- docs:code skip: excerpt, the columns of the table are the ones above -->
 ```ts
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable(
 	"users",
 	{
-		/* ...the columns above */
+		id: text("id").primaryKey(),
+		createdAt: text("createdAt").notNull(),
+		updatedAt: text("updatedAt"),
+		deletedAt: text("deletedAt"),
+		name: text("name").notNull(),
+		email: text("email").notNull().unique(),
+		age: integer("age"),
+		address: text("address", { mode: "json" }),
 	},
 	// indexes: { byAge: { where: ["age"], orderBy: "name" } }
 	(table) => [index("users_by_age").on(table.age, table.name)],

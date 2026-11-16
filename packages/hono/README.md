@@ -38,7 +38,7 @@ const Api = outputOf({
 export default Api.build(); // a Hono app: Bun.serve, Workers and `app.request(...)` all take it
 ```
 
-```
+```text
 POST /api/users/register  { "name": "Ana", "email": "ana@example.com", "plainPassword": "S3cret-pass!" }
 -> 200 { "user": { "name": "Ana", "email": "ana@example.com", "password": "********", ... } }
 
@@ -116,7 +116,7 @@ hono({
 });
 ```
 
-```
+```text
 GET /entries/hello            -> 200, cache-control and x-request-id; input { slug: "hello" }
 PATCH /entries/hello  { "title": "New" }  -> input { slug: "hello", title: "New" }
 DELETE /entries/hello         -> 204, no body
@@ -180,9 +180,20 @@ hono({
 
 Who may call an operation is declared on its use case, with [`access`](../../docs/auth.md), and the core enforces it. The sink only has to say **who is calling**, which is the `authenticator` hook: it gets the request and gives a `Principal` (`{ subject, scopes, claims? }`), or `null` for an anonymous caller.
 
-<!-- docs:code skip: EntryChanges, EntryResponse, Entries and sessions stand for your own declarations -->
+<!-- docs:code context
+import { type AnyCommand, entityOf } from "@afora/core";
+
+// your own declarations
+class Entry extends entityOf(blueprintOf((ctx) => ({ slug: ctx.slug, title: ctx.text }))) {}
+const EntryChanges = blueprintOf((ctx) => ({ slug: ctx.slug, title: ctx.text }));
+const EntryResponse = blueprintOf(() => ({ entry: Entry }));
+declare const Entries: AnyCommand;
+declare const sessions: {
+	find(token: string): Promise<{ userId: string; scopes: string[] } | undefined>;
+};
+-->
 ```ts
-import { Access, outputOf, Route, useCaseOf } from "@afora/core";
+import { Access, blueprintOf, outputOf, Route, useCaseOf } from "@afora/core";
 import { hono } from "@afora/hono";
 
 @Route("PATCH", "/entries/{slug}")
@@ -193,7 +204,10 @@ class UpdateEntry extends useCaseOf({
 	response: EntryResponse,
 	context: blueprintOf((ctx) => ({ userId: ctx.id })),
 }) {
-	// this.context.userId is the authenticated caller
+	override async execute() {
+		// this.context.userId is the authenticated caller
+		return { entry: new Entry(this.input) };
+	}
 }
 
 const api = outputOf({
@@ -225,7 +239,11 @@ const api = outputOf({
 
 A value that is not about access (a tenant resolved from the host, a feature flag) still reaches the context through a middleware and `context.variables`:
 
-<!-- docs:code skip: fragment, tenantOf stands for your code -->
+<!-- docs:code context
+import { hono } from "@afora/hono";
+
+declare function tenantOf(host: string | undefined): string; // your code
+-->
 ```ts
 hono(
 	{ context: { variables: { tenant: "tenant" } } },
