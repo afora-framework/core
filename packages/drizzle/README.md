@@ -4,6 +4,7 @@ A repository provider for [`@afora/core`](../../README.md) on [Drizzle ORM](http
 
 ```bash
 bun add @afora/core typebox drizzle-orm @afora/drizzle
+# or: npm install @afora/core typebox drizzle-orm @afora/drizzle
 ```
 
 `@afora/core` and `drizzle-orm` (`^0.45.4`) are peer dependencies. SQLite and Postgres databases are supported, with any Drizzle driver. MySQL is not (the provider relies on `RETURNING` and `NULLS FIRST/LAST`).

@@ -4,6 +4,7 @@ A WebSocket sink for [`@afora/core`](../../README.md) outputs. It serves the ope
 
 ```bash
 bun add @afora/core @afora/ws typebox
+# or: npm install @afora/core @afora/ws typebox
 ```
 
 `@afora/core` and TypeBox (`^1`) are peer dependencies. The package uses only web APIs, so it runs on Bun, Node >= 22 and Workers.

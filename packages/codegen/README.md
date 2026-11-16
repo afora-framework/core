@@ -5,6 +5,7 @@ Describe a domain in an `afora.json` and generate the idiomatic [`@afora/core`](
 ```bash
 bun add @afora/core typebox
 bun add -d @afora/codegen
+# or: npm install @afora/core typebox && npm install -D @afora/codegen
 ```
 
 `@afora/core` and TypeBox (`typebox: ^1`) are peer dependencies. Generated files use the application's dependencies; codegen does not generate a package manifest.

@@ -4,6 +4,7 @@ A repository provider for [`@afora/core`](../../README.md) on one [DynamoDB](htt
 
 ```bash
 bun add @afora/core typebox @afora/dynamodb @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
+# or: npm install @afora/core typebox @afora/dynamodb @aws-sdk/client-dynamodb @aws-sdk/lib-dynamodb
 ```
 
 `@afora/core` (with the query helpers of `@afora/core/experimental`), `@aws-sdk/client-dynamodb` and `@aws-sdk/lib-dynamodb` (`^3.1164.0`) are peer dependencies.

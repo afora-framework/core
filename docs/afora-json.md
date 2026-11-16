@@ -9,6 +9,7 @@ This guide is the workflow. The reference of every declaration, option and issue
 ```bash
 bun add @afora/core typebox
 bun add -d @afora/codegen
+# or: npm install @afora/core typebox && npm install -D @afora/codegen
 ```
 
 ```bash

@@ -73,7 +73,7 @@ Bun >= 1.4.4 or Node.js >= 22; it also loads in browsers and Workers. TypeBox (`
 A `User` with a masked password and a unique email, a use case written as steps, a transaction, and an HTTP API with an OpenAPI document. Install what it uses:
 
 ```bash
-bun add @afora/core @afora/hono hono typebox
+bun add @afora/core @afora/hono hono typebox   # or: npm install @afora/core @afora/hono hono typebox
 ```
 
 Save this as `quickstart.ts` and run `bun quickstart.ts`. It is the code of `examples/interop/quickstart.ts`, run by `bun run test:interop` (there the imports resolve to the local sources).
@@ -312,8 +312,8 @@ export { stages } from "@afora/hono";
 ```
 
 ```bash
-bun add -d @afora/codegen
-bunx afora-codegen generate afora.json --stages ./stages.ts   # writes src/domain/*.ts
+bun add -d @afora/codegen                                      # or: npm install -D @afora/codegen
+bunx afora-codegen generate afora.json --stages ./stages.ts   # writes src/domain/*.ts (npx on Node)
 ```
 
 and serve the application from `src/server.ts` (`bun src/server.ts`):

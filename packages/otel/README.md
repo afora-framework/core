@@ -4,6 +4,7 @@
 
 ```bash
 bun add @afora/core @afora/otel @opentelemetry/api
+# or: npm install @afora/core @afora/otel @opentelemetry/api
 ```
 
 `@afora/core` and `@opentelemetry/api` (`^1.9.0`) are peer dependencies. Set up an OpenTelemetry SDK as usual (`@opentelemetry/sdk-node`, an exporter); the package itself uses only the API, so it runs on Bun, Node >= 22 and Workers.

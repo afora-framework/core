@@ -145,7 +145,7 @@ export { stages } from "@afora/express";
 ```
 
 ```bash
-bunx afora-codegen generate --stages ./stages.ts
+bunx afora-codegen generate --stages ./stages.ts  # npx on Node
 ```
 
 ## Testing a sink

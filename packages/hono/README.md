@@ -4,6 +4,7 @@ A [Hono](https://hono.dev) sink for [`@afora/core`](../../README.md) outputs. It
 
 ```bash
 bun add @afora/core @afora/hono hono typebox
+# or: npm install @afora/core @afora/hono hono typebox
 ```
 
 `@afora/core`, `hono` (`^4.13.14`) and TypeBox (`^1`) are peer dependencies. The package uses only web APIs, so it runs on Bun, Node >= 22 and Workers.
