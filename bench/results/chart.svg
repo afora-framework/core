@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 488" width="800" height="488" role="img" aria-labelledby="title desc" font-family="'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
 <title id="title">Validations per second: API request body (an order with 5 items), valid input</title>
-<desc id="desc">Typia: 1.47M per second; TypeBox: 1.09M per second; Ajv: 952.4k per second; afora: 423.2k per second; Zod: 298.4k per second; Valibot: 280.1k per second; Effect Schema: 156.9k per second; Joi: 64.2k per second; ArkType: 34.7k per second; Yup: 20.0k per second.</desc>
+<desc id="desc">Typia: 1.26M per second; TypeBox: 863.5k per second; Ajv: 849.6k per second; afora: 386.0k per second; Valibot: 235.0k per second; Zod: 215.4k per second; Effect Schema: 113.9k per second; Joi: 51.8k per second; ArkType: 30.7k per second; Yup: 16.6k per second.</desc>
 <style>
 	.paper { fill: #f4f1ea; }
 	.ink, .title, .name.strong, .value { fill: #131512; }
@@ -73,33 +73,33 @@
 <line class="axis" x1="152" y1="96" x2="152" y2="398"/>
 <text class="name" x="138" y="116.5" text-anchor="end">Typia</text>
 <path class="bar other checks" d="M152,104 h428 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-428 z"/>
-<text class="value" x="598" y="116.5">1.47M/s<tspan class="muted"> · checks only</tspan></text>
+<text class="value" x="598" y="116.5">1.26M/s<tspan class="muted"> · checks only</tspan></text>
 <text class="name" x="138" y="146.5" text-anchor="end">TypeBox</text>
-<path class="bar other checks" d="M152,134 h313.7 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-313.7 z"/>
-<text class="value" x="483.7" y="146.5">1.09M/s<tspan class="muted"> · checks only</tspan></text>
+<path class="bar other checks" d="M152,134 h291.2 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-291.2 z"/>
+<text class="value" x="461.2" y="146.5">863.5k/s<tspan class="muted"> · checks only</tspan></text>
 <text class="name" x="138" y="176.5" text-anchor="end">Ajv</text>
-<path class="bar other checks" d="M152,164 h273.9 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-273.9 z"/>
-<text class="value" x="443.9" y="176.5">952.4k/s<tspan class="muted"> · checks only</tspan></text>
+<path class="bar other checks" d="M152,164 h286.3 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-286.3 z"/>
+<text class="value" x="456.3" y="176.5">849.6k/s<tspan class="muted"> · checks only</tspan></text>
 <text class="name strong" x="138" y="206.5" text-anchor="end">afora</text>
-<path class="bar" fill="url(#afora)" d="M152,194 h117.2 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-117.2 z"/>
-<text class="value strong" x="287.2" y="206.5">423.2k/s</text>
-<text class="name" x="138" y="236.5" text-anchor="end">Zod</text>
-<path class="bar other" d="M152,224 h80.3 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-80.3 z"/>
-<text class="value" x="250.3" y="236.5">298.4k/s</text>
-<text class="name" x="138" y="266.5" text-anchor="end">Valibot</text>
-<path class="bar other" d="M152,254 h74.9 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-74.9 z"/>
-<text class="value" x="244.9" y="266.5">280.1k/s</text>
+<path class="bar" fill="url(#afora)" d="M152,194 h125.7 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-125.7 z"/>
+<text class="value strong" x="295.7" y="206.5">386.0k/s</text>
+<text class="name" x="138" y="236.5" text-anchor="end">Valibot</text>
+<path class="bar other" d="M152,224 h73.4 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-73.4 z"/>
+<text class="value" x="243.4" y="236.5">235.0k/s</text>
+<text class="name" x="138" y="266.5" text-anchor="end">Zod</text>
+<path class="bar other" d="M152,254 h66.6 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-66.6 z"/>
+<text class="value" x="236.6" y="266.5">215.4k/s</text>
 <text class="name" x="138" y="296.5" text-anchor="end">Effect Schema</text>
-<path class="bar other" d="M152,284 h38.4 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-38.4 z"/>
-<text class="value" x="208.4" y="296.5">156.9k/s</text>
+<path class="bar other" d="M152,284 h31.5 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-31.5 z"/>
+<text class="value" x="201.5" y="296.5">113.9k/s</text>
 <text class="name" x="138" y="326.5" text-anchor="end">Joi</text>
-<path class="bar other" d="M152,314 h11 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-11 z"/>
-<text class="value" x="181" y="326.5">64.2k/s</text>
+<path class="bar other" d="M152,314 h9.9 a8,8 0 0 1 8,8 a8,8 0 0 1 -8,8 h-9.9 z"/>
+<text class="value" x="179.9" y="326.5">51.8k/s</text>
 <text class="name" x="138" y="356.5" text-anchor="end">ArkType</text>
-<path class="bar other" d="M152,344 h5.2 a5.15,5.15 0 0 1 5.15,5.15 a5.15,5.15 0 0 1 -5.15,5.15 h-5.2 z"/>
-<text class="value" x="172.3" y="356.5">34.7k/s</text>
+<path class="bar other" d="M152,344 h5.3 a5.3,5.3 0 0 1 5.3,5.3 a5.3,5.3 0 0 1 -5.3,5.3 h-5.3 z"/>
+<text class="value" x="172.6" y="356.5">30.7k/s</text>
 <text class="name" x="138" y="386.5" text-anchor="end">Yup</text>
-<path class="bar other" d="M152,374 h3 a2.95,2.95 0 0 1 2.95,2.95 a2.95,2.95 0 0 1 -2.95,2.95 h-3 z"/>
-<text class="value" x="167.9" y="386.5">20.0k/s</text>
-<text class="foot mono" x="32" y="422">afora 27.0.0-rc.1 blueprint.safeParse · "checks only": no transforms, given the already-clean value</text>
+<path class="bar other" d="M152,374 h2.9 a2.85,2.85 0 0 1 2.85,2.85 a2.85,2.85 0 0 1 -2.85,2.85 h-2.9 z"/>
+<text class="value" x="167.7" y="386.5">16.6k/s</text>
+<text class="foot mono" x="32" y="422">afora 27.0.0-rc.3 blueprint.safeParse · "checks only": no transforms, given the already-clean value</text>
 </svg>
