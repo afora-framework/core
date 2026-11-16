@@ -11,7 +11,12 @@ import {
 	writeGenerated,
 } from "@afora/codegen";
 import { type TSchema, Type } from "typebox";
-import { describeApp, extractFromApp, ToolError } from "./extract";
+import {
+	applicationOf,
+	describeApp,
+	extractFromApp,
+	ToolError,
+} from "./extract";
 import {
 	projectDifferences,
 	projectViewOfDescription,
@@ -217,7 +222,7 @@ export const tools: readonly ToolDefinition[] = [
 					app: Type.Optional(
 						Type.String({
 							description:
-								'An application to read, as a path inside the project and an export name: "src/app.ts#App". Defaults to the --app the server was started with, else afora.json.',
+								'An application to read, as a path inside the project and an export name: "src/app.ts#App" (a .ts, .tsx, .mts, .js or .mjs module, not in node_modules or .git; when the server was started with --app, only that module). Defaults to the --app the server was started with, else afora.json.',
 						}),
 					),
 					compare: Type.Optional(
@@ -247,7 +252,7 @@ export const tools: readonly ToolDefinition[] = [
 					'`app` names an application, and `source` is "file": give one of them.',
 				);
 			}
-			const app = typeof args.app === "string" ? args.app : project.app;
+			const app = applicationOf(project.root, args.app, project.app);
 			if (source === "app" && !app) {
 				throw new ToolError(
 					'No application is known. Pass `app` ("src/app.ts#App") or start the server with --app.',
@@ -312,7 +317,7 @@ export const tools: readonly ToolDefinition[] = [
 					app: Type.Optional(
 						Type.String({
 							description:
-								'Path inside the project and export name, e.g. "src/app.ts#App". Defaults to the --app the server was started with.',
+								'Path inside the project and export name, e.g. "src/app.ts#App" (a .ts, .tsx, .mts, .js or .mjs module, not in node_modules or .git; when the server was started with --app, only that module). Defaults to the --app the server was started with.',
 						}),
 					),
 					outputDir: Type.Optional(
@@ -332,7 +337,7 @@ export const tools: readonly ToolDefinition[] = [
 		),
 		readOnly: true,
 		async handle(args, project) {
-			const app = typeof args.app === "string" ? args.app : project.app;
+			const app = applicationOf(project.root, args.app, project.app);
 			if (!app) {
 				throw new ToolError(
 					'Pass `app` ("src/app.ts#App") or start the server with --app.',

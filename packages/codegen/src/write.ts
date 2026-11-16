@@ -8,6 +8,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
+import { inTooling } from "./boundary";
 import { BANNER, type GeneratedFile } from "./generate";
 import { GENERATED_FILES, USE_CASE_FILE_SUFFIX } from "./use-case-files";
 
@@ -62,7 +63,8 @@ async function realWithin(path: string): Promise<string> {
 /**
  * Where `path` is under `root`, if it is safe to write there: inside the
  * directory (no `..`, not absolute outside it), not through a symlink that
- * leaves it, and not a symlink itself.
+ * leaves it, not a symlink itself, and not in `node_modules` or `.git`
+ * (however a case-insensitive file system spells them, or through a link).
  */
 export async function confinePath(
 	root: string,
@@ -77,8 +79,15 @@ export async function confinePath(
 	if (!inside(base, absolute)) {
 		return { ok: false, reason: "outside the project directory" };
 	}
-	if (!inside(realBase, await realWithin(absolute))) {
+	const real = await realWithin(absolute);
+	if (!inside(realBase, real)) {
 		return { ok: false, reason: "resolves outside the project (symlink)" };
+	}
+	if (
+		inTooling(relative(base, absolute)) ||
+		inTooling(relative(realBase, real))
+	) {
+		return { ok: false, reason: "inside node_modules or .git" };
 	}
 	if ((await exists(absolute))?.isSymbolicLink()) {
 		return { ok: false, reason: "is a symbolic link" };
