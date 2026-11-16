@@ -23,18 +23,31 @@ export const Phone = propertyOf({
 	preHandle: (value) => value.replace(/[\s().-]/g, ""),
 });
 
-/** The protocols `Url` accepts unless `Url.with({ protocols })` says others. */
-const WEB_PROTOCOLS = ["http:", "https:"] as const;
+/** The protocols `Url` rejects unless `Url.with({ protocols })` lists them: they run script or read local files. */
+const UNSAFE_PROTOCOLS = [
+	"javascript:",
+	"data:",
+	"vbscript:",
+	"file:",
+] as const;
 
 /** A URL scheme with its colon, as `URL.protocol` gives it: `https:`, `mailto:`. */
 const PROTOCOL = /^[a-z][a-z0-9+.-]*:$/i;
 
+/** What the URL parser drops before the scheme: C0 controls and spaces. */
+const LEADING = "[\\x00-\\x20]*";
+
+/** What the URL parser drops anywhere in the scheme: tabs and newlines. */
+const DROPPED = "[\\t\\n\\r]*";
+
 /**
- * A pattern that a string matches when it starts with one of `protocols`,
- * in any case: the URL parser lowercases the scheme, and a string that does
- * not start with it as written (`" java\tscript:"`) never matches.
+ * A pattern of the start of a URL whose protocol, as `new URL(value).protocol`
+ * reads it, is one of `protocols`: in any case, after the C0 controls and
+ * spaces the parser drops before it, and with the tabs and newlines it drops
+ * inside it (`" Java\tScript:"` is `javascript:`). Equivalent to comparing
+ * the parsed protocol, for a value the `url` format accepts.
  */
-function protocolPattern(protocols: readonly string[], source: string): string {
+function protocolsAt(protocols: readonly string[], source: string): string {
 	if (protocols.length === 0) {
 		throw new InvalidUrlOptions({
 			source,
@@ -58,17 +71,28 @@ function protocolPattern(protocols: readonly string[], source: string): string {
 						? char
 						: `[${char}]`,
 			)
-			.join("");
+			.join(DROPPED);
 	});
-	return `^(?:${alternatives.join("|")}):`;
+	return `${LEADING}(?:${alternatives.join("|")})${DROPPED}:`;
+}
+
+/** A pattern that a URL matches when its protocol is one of `protocols`. */
+function allowedPattern(protocols: readonly string[], source: string): string {
+	return `^${protocolsAt(protocols, source)}`;
+}
+
+/** A pattern that a URL matches when its protocol is none of `protocols`. */
+function deniedPattern(protocols: readonly string[], source: string): string {
+	return `^(?!${protocolsAt(protocols, source)})`;
 }
 
 /** What `Url.with` takes: the options of any string property, and `protocols`. */
 export type UrlOptions = PropertyOptions<Type.TString, string> & {
 	/**
 	 * The protocols accepted, each with its colon (`["https:", "mailto:"]`),
-	 * in place of those of the class it narrows (`http:` and `https:` for
-	 * `Url`).
+	 * and only those: an allowlist that replaces the protocols of the class it
+	 * narrows (every protocol but `javascript:`, `data:`, `vbscript:` and
+	 * `file:` for `Url`).
 	 */
 	readonly protocols?: readonly string[];
 };
@@ -87,7 +111,7 @@ function urlWith<Base extends AnyPropertyConstructor>(
 		{},
 		Object.getOwnPropertyDescriptors(rawTypeOf(base.schema)),
 	) as TSchema & { pattern?: string };
-	schema.pattern = protocolPattern(protocols, base.name);
+	schema.pattern = allowedPattern(protocols, base.name);
 	const SchemaConstructor = schemaOf(base.name, schema);
 	const Widened = derivePropertyOf(Base, {
 		...base,
@@ -104,17 +128,17 @@ function urlWith<Base extends AnyPropertyConstructor>(
 }
 
 /**
- * A URL of up to 2048 characters, trimmed, whose protocol is `http:` or
- * `https:`. `Url.with({ protocols: ["https:", "mailto:"] })` accepts others
- * (and only those): `javascript:`, `data:`, `file:`... are rejected unless
- * listed.
+ * A URL of up to 2048 characters, trimmed, of any protocol but `javascript:`,
+ * `data:`, `vbscript:` and `file:` (in any case, however written).
+ * `Url.with({ protocols: ["https:", "mailto:"] })` accepts only the
+ * protocols it lists, instead.
  */
 export class Url extends propertyOf({
 	name: "url",
 	schema: Type.String({
 		format: "url",
 		maxLength: 2048,
-		pattern: protocolPattern(WEB_PROTOCOLS, "url"),
+		pattern: deniedPattern(UNSAFE_PROTOCOLS, "url"),
 	}),
 	default: "https://example.com",
 	preHandle: (value) => value.trim(),

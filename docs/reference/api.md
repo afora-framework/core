@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 552 exports.
+Tier: stable. 554 exports.
 
 ### Access
 
@@ -1445,6 +1445,12 @@ was written by newer code), or an `upgrade` step did not give an object.
 
 The `trace` of an application is not a tracer (`ITracer`).
 
+### InvalidUrlOptions
+
+*const* · tier: stable · `import { InvalidUrlOptions } from "@afora/core"`
+
+`Url.with({ protocols })` got protocols that are not URL schemes, such as `"https"` without its colon.
+
 ### InvalidUseCaseDeclaration
 
 *const* · tier: stable · `import { InvalidUseCaseDeclaration } from "@afora/core"`
@@ -2338,7 +2344,9 @@ Equality, or membership in a list. Conditions on different keys are ANDed.
 
 *const* · tier: stable · `import { ReservedBlueprintKey } from "@afora/core"`
 
-A plugin declares a key the blueprint context reserves; `source` is the plugin name.
+A plugin declares a key the blueprint context reserves (`source` is the
+plugin name), or a blueprint declares `__proto__`, `constructor` or
+`prototype` (`source` is `"blueprint"`).
 
 ### ReservedEntityKey
 
@@ -3016,9 +3024,18 @@ When a record was last updated; absent until it is.
 
 ### Url
 
-*const* · tier: stable · `import { Url } from "@afora/core"`
+*class* · tier: stable · `import { Url } from "@afora/core"`
 
-A URL of up to 2048 characters, trimmed.
+A URL of up to 2048 characters, trimmed, of any protocol but `javascript:`,
+`data:`, `vbscript:` and `file:` (in any case, however written).
+`Url.with({ protocols: ["https:", "mailto:"] })` accepts only the
+protocols it lists, instead.
+
+### UrlOptions
+
+*type* · tier: stable · `import type { UrlOptions } from "@afora/core"`
+
+What `Url.with` takes: the options of any string property, and `protocols`.
 
 ### UseCaseAlreadyExecuted
 

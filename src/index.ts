@@ -557,6 +557,7 @@ export { Std } from "./std/blueprint-plugin";
 export { commandOf } from "./std/command";
 export { entityOf } from "./std/entity";
 export { StdEventPolicies } from "./std/event-policies";
+export type { UrlOptions } from "./std/properties/contact";
 export { Email, Ip, Phone, Url } from "./std/properties/contact";
 export type { EnumClass } from "./std/properties/enum";
 export { enumOf } from "./std/properties/enum";
@@ -565,6 +566,7 @@ export {
 	InvalidFileOptions,
 	InvalidJsonData,
 	InvalidJsonSchema,
+	InvalidUrlOptions,
 } from "./std/properties/exceptions";
 export type { FileClass, FileOptions, TFile } from "./std/properties/file";
 export { FileProperty, fileOf } from "./std/properties/file";

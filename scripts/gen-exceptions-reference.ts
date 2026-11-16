@@ -86,6 +86,7 @@ const HANDLING: Record<string, string> = {
 	InvalidJwtOptions: `${DECLARATION} Set the secret in the environment.`,
 	InvalidLogDeclaration: DECLARATION,
 	InvalidTraceDeclaration: DECLARATION,
+	InvalidUrlOptions: DECLARATION,
 	InvalidOpenAPIModel: DECLARATION,
 	InvalidOutputStage: DECLARATION,
 	InvalidPropertyValue:
