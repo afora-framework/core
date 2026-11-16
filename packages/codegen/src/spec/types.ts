@@ -438,11 +438,16 @@ export interface UseCaseSpec {
  * returns and does follows the repository and its entity.
  */
 export interface GenericUseCaseSpec {
-	/** The standard use case: `create`, `list`, `publish`... */
+	/** The standard use case: `create`, `list`, `publish`, `changePassword`... */
 	readonly generic: string;
 	/** The name of a declared repository. */
 	readonly repository: string;
-	/** Its options, as JSON; exceptions in `errors` by name, or `{ "core": "Name" }`. */
+	/**
+	 * Its options, as JSON; exceptions in `errors` by name, or `{ "core": "Name" }`.
+	 * Among them `owner` (`{ key?, context }`, `key: "id"` for an entity that is
+	 * the caller), `relations` (`create`, `register`: `{ <key>: { shared: true } }`)
+	 * and `maxLimit` (`list`, 100 by default).
+	 */
 	readonly options?: Readonly<Record<string, unknown>>;
 	readonly description?: string;
 	readonly tags?: readonly string[];
