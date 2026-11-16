@@ -183,3 +183,20 @@ These names come as a plain `Exception`: check them with `error.is("Name")` or `
 | `InvalidUseCaseContext`  | `use-case` | The context of a call does not fit the context blueprint of the use case.                                                            | 400    | Invalid input from the caller. An output answers it as a 400 problem+json with the `issues`; in your own code, read `details.issues`. |
 | `InvalidUseCaseResponse` | `use-case` | What a use case returns does not fit its response blueprint.                                                                         | 400    | A mistake in the use case: fix what it returns. It carries `issues`, so `statusOf` gives 400; map it with `statuses` to answer 500.   |
 | `UnexpectedError`        | `use-case` | An error that is not an `Exception`, wrapped by `Exception.from` (by `guard`, a use case or a command); the original is its `cause`. | 500    | An output answers 500 and logs it. Find the cause and throw a declared exception instead.                                             |
+
+## Answered by the HTTP layer
+
+An HTTP sink answers these problems itself, before any use case runs. They are not exceptions your code can catch: only the client sees them, as problem+json with this `title`.
+
+| Title                  | Status | When it is answered                                                                                                                                            | How to handle it                                                                                                              |
+| ---------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `InvalidRequestBody`   | 400    | The body is not valid JSON, or a `multipart/form-data` body cannot be read (malformed, no boundary), or a multipart body reaches a route without a file field. | A client mistake: send valid JSON, or a well-formed multipart body to a route that takes a file.                              |
+| `UnsupportedMediaType` | 415    | A `multipart/form-data` body reaches a sink whose request adapter has no `form()`.                                                                             | Serve the route with a sink that reads multipart (hono, express, fastify, elysia all do), or send JSON.                       |
+| `TooManyParts`         | 413    | A `multipart/form-data` body has more parts than `maxParts` (1000 by default, in the HTTP options).                                                            | A client sending too many parts. Raise `maxParts` only if the route needs it; limit the body size in the server or proxy too. |
+| `InvalidFileContent`   | 400    | A file declared as PNG, JPEG, GIF, WebP or AVIF does not start with the bytes of that type; the issue is at the key of the file.                               | A client mistake (or a disguised file): send a file whose content matches its type.                                           |
+
+## Thrown by a sink package
+
+| Exception                  | Package          | When it is thrown                                                                                                         | Status | How to handle it                                                                                              |
+| -------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
+| `MultipartBodyAlreadyRead` | `@afora/express` | Another parser of the Express app (multer, `express.text()`...) read a `multipart/form-data` body before the afora route. | 500    | A server misconfiguration: mount the afora routes before that parser, or keep the bytes with `express.raw()`. |
