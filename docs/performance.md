@@ -28,58 +28,58 @@ afora does more per value than a checker: it normalizes, collects every issue, a
 
 ![Validations per second on the body of an API request, Node v24.22.2](../bench/results/chart.svg)
 
-Time of each library as a multiple of afora `blueprint.safeParse` on the same case: above 1.00x it is slower than afora, below it is faster. TypeBox, Ajv and Typia only check, they do not transform. afora 27.0.0-rc.3, Bun 1.4.4, Node v22.23.4 and Node v24.22.2, AMD EPYC 9V74 80-Core Processor; generated from `bench/results/latest.json`.
+Time of each library as a multiple of afora `blueprint.safeParse` on the same case: above 1.00x it is slower than afora, below it is faster. TypeBox, Ajv and Typia only check, they do not transform. afora 27.0.0-rc.4, Bun 1.4.4, Node v22.23.4 and Node v24.22.2, AMD EPYC 9V74 80-Core Processor; generated from `bench/results/latest.json`.
 
 | Node 24                                                  |    afora | TypeBox |   Ajv | Typia |   Zod | Valibot | ArkType | Effect Schema |    Yup |    Joi |
 | -------------------------------------------------------- | -------: | ------: | ----: | ----: | ----: | ------: | ------: | ------------: | -----: | -----: |
-| Small flat object, valid                                 | 328.1 ns |   0.20x | 0.20x | 0.21x | 1.67x |   2.66x |  13.19x |         3.48x | 14.97x | 10.32x |
-| Small flat object, invalid                               | 739.5 ns |   7.99x | 0.13x | 0.53x | 2.85x |   2.21x |  24.42x |         3.68x | 58.31x |  6.75x |
-| Nested user (address, 5 tags max, 10 addresses), valid   |  2383 ns |   0.14x | 0.21x | 0.16x | 1.66x |   1.39x |  16.77x |         3.90x | 26.45x |  7.82x |
-| Nested user (address, 5 tags max, 10 addresses), invalid |  3593 ns |   9.43x | 0.17x | 0.88x | 1.91x |   1.33x |  21.82x |         3.83x | 41.32x |  6.85x |
-| API request body (an order with 5 items), valid          |  2591 ns |   0.45x | 0.45x | 0.31x | 1.79x |   1.64x |  12.57x |         3.39x | 23.27x |  7.46x |
-| API request body (an order with 5 items), invalid        |  4413 ns |   5.07x | 0.15x | 0.94x | 2.03x |   1.27x |  15.97x |         2.99x | 33.29x |  5.53x |
-| List of 1,000 items, valid                               | 169.2 µs |   0.08x | 0.13x | 0.09x | 0.93x |   3.33x |  25.51x |         4.60x | 36.01x | 10.46x |
-| List of 1,000 items, invalid                             | 170.8 µs |  23.77x | 0.14x | 0.23x | 0.95x |   3.27x |  32.36x |         4.73x | 38.52x | 10.33x |
-| Union of 4 variants (12 events), valid                   | 876.8 ns |   0.46x | 0.57x | 0.47x | 4.16x |  13.61x |   1.59x |        11.40x | 90.19x | 88.30x |
-| Union of 4 variants (12 events), invalid                 |  4329 ns |  10.50x | 0.12x | 0.55x | 1.46x |   3.45x |   5.77x |         3.09x | 26.51x | 30.31x |
-| 6 levels of nesting, valid                               |  1110 ns |   0.07x | 0.10x | 0.07x | 0.91x |   1.29x |  14.88x |         4.22x | 20.55x |  5.88x |
-| 6 levels of nesting, invalid                             |  1721 ns |  15.86x | 0.08x | 1.27x | 1.70x |   1.46x |  20.58x |         4.14x | 42.43x |  5.67x |
-| Small flat object, checks only, valid                    | 183.3 ns |   0.35x | 0.37x | 0.37x | 1.20x |   3.93x |   0.62x |         3.62x | 24.55x | 16.91x |
-| Small flat object, checks only, invalid                  | 727.7 ns |   8.03x | 0.13x | 0.54x | 2.48x |   2.09x |  19.60x |         3.21x | 59.10x |  6.54x |
+| Small flat object, valid                                 | 319.2 ns |   0.21x | 0.21x | 0.22x | 1.67x |   2.78x |  13.59x |         3.55x | 15.54x | 10.53x |
+| Small flat object, invalid                               | 698.3 ns |   8.34x | 0.13x | 0.58x | 3.01x |   2.46x |  25.81x |         3.88x | 61.61x |  6.96x |
+| Nested user (address, 5 tags max, 10 addresses), valid   |  2381 ns |   0.14x | 0.22x | 0.15x | 1.65x |   1.43x |  16.87x |         3.79x | 27.37x |  7.74x |
+| Nested user (address, 5 tags max, 10 addresses), invalid |  3529 ns |   9.81x | 0.16x | 0.89x | 1.91x |   1.41x |  22.16x |         3.97x | 41.64x |  6.87x |
+| API request body (an order with 5 items), valid          |  2662 ns |   0.43x | 0.44x | 0.29x | 1.73x |   1.62x |  12.17x |         3.22x | 22.51x |  7.20x |
+| API request body (an order with 5 items), invalid        |  4517 ns |   4.98x | 0.15x | 0.92x | 1.99x |   1.22x |  15.76x |         2.91x | 32.56x |  5.41x |
+| List of 1,000 items, valid                               | 167.7 µs |   0.08x | 0.13x | 0.09x | 0.96x |   3.49x |  25.50x |         4.63x | 37.37x | 10.49x |
+| List of 1,000 items, invalid                             | 171.9 µs |  23.60x | 0.14x | 0.23x | 0.97x |   3.55x |  33.30x |         4.64x | 37.48x | 10.28x |
+| Union of 4 variants (12 events), valid                   | 875.6 ns |   0.47x | 0.57x | 0.47x | 4.14x |  15.18x |   1.57x |        11.25x | 91.57x | 87.76x |
+| Union of 4 variants (12 events), invalid                 |  4339 ns |  10.52x | 0.13x | 0.57x | 1.48x |   3.59x |   5.77x |         2.71x | 26.43x | 30.02x |
+| 6 levels of nesting, valid                               |  1105 ns |   0.06x | 0.10x | 0.07x | 0.91x |   1.29x |  14.88x |         4.30x | 20.58x |  5.91x |
+| 6 levels of nesting, invalid                             |  1651 ns |  16.55x | 0.08x | 1.33x | 1.82x |   1.49x |  21.61x |         4.34x | 43.83x |  5.87x |
+| Small flat object, checks only, valid                    | 181.5 ns |   0.37x | 0.37x | 0.39x | 1.21x |   3.87x |   0.64x |         3.59x | 24.56x | 17.10x |
+| Small flat object, checks only, invalid                  | 656.2 ns |   8.90x | 0.14x | 0.61x | 2.81x |   2.48x |  21.79x |         3.59x | 65.31x |  7.33x |
 
 | Bun                                                      |    afora | TypeBox |   Ajv | Typia |   Zod | Valibot | ArkType | Effect Schema |     Yup |     Joi |
 | -------------------------------------------------------- | -------: | ------: | ----: | ----: | ----: | ------: | ------: | ------------: | ------: | ------: |
-| Small flat object, valid                                 | 251.1 ns |   0.18x | 0.21x | 0.19x | 1.88x |   1.02x |  11.81x |         2.85x |  23.45x |  12.04x |
-| Small flat object, invalid                               | 621.7 ns |   5.97x | 0.21x | 1.08x | 1.41x |   0.90x |  14.71x |         2.41x |  37.05x |   7.73x |
-| Nested user (address, 5 tags max, 10 addresses), valid   |  1741 ns |   0.13x | 0.24x | 0.09x | 2.25x |   1.05x |  10.88x |         3.66x |  42.86x |   9.18x |
-| Nested user (address, 5 tags max, 10 addresses), invalid |  2610 ns |   8.85x | 0.20x | 1.14x | 1.85x |   1.08x |  15.55x |         3.19x |  45.64x |   8.45x |
-| API request body (an order with 5 items), valid          |  1720 ns |   0.38x | 0.39x | 0.56x | 2.44x |   1.35x |   9.57x |         3.59x |  40.89x |   9.51x |
-| API request body (an order with 5 items), invalid        |  3047 ns |   4.83x | 0.16x | 1.12x | 2.13x |   1.07x |  12.24x |         2.49x |  41.42x |   7.68x |
-| List of 1,000 items, valid                               |  93.8 µs |   0.06x | 0.16x | 0.04x | 2.86x |   1.27x |  19.51x |         4.36x |  79.31x |  13.22x |
-| List of 1,000 items, invalid                             |  97.0 µs |  26.76x | 0.18x | 0.55x | 2.82x |   1.31x |  31.16x |         4.30x |  82.97x |  13.67x |
-| Union of 4 variants (12 events), valid                   | 509.6 ns |   0.48x | 0.68x | 0.76x | 8.32x |   9.99x |   1.26x |        11.51x | 166.97x | 134.57x |
-| Union of 4 variants (12 events), invalid                 |  3015 ns |  10.49x | 0.14x | 0.77x | 1.88x |   2.04x |   3.99x |         2.45x |  34.41x |  37.67x |
-| 6 levels of nesting, valid                               | 711.1 ns |   0.03x | 0.11x | 0.06x | 2.08x |   1.43x |  12.10x |         3.39x |  39.56x |   8.10x |
-| 6 levels of nesting, invalid                             |  1214 ns |  14.88x | 0.09x | 1.34x | 1.76x |   1.40x |  16.34x |         3.11x |  47.08x |   7.89x |
-| Small flat object, checks only, valid                    |  95.5 ns |   0.47x | 0.56x | 0.48x | 3.17x |   1.60x |   0.59x |         3.55x |  55.78x |  24.13x |
-| Small flat object, checks only, invalid                  | 619.5 ns |   6.09x | 0.21x | 1.09x | 1.32x |   0.81x |  10.76x |         1.84x |  37.00x |   7.24x |
+| Small flat object, valid                                 | 246.8 ns |   0.18x | 0.21x | 0.20x | 1.96x |   1.03x |  12.44x |         2.92x |  24.34x |  12.87x |
+| Small flat object, invalid                               | 642.2 ns |   6.10x | 0.21x | 1.05x | 1.43x |   0.90x |  14.58x |         2.39x |  37.75x |   8.43x |
+| Nested user (address, 5 tags max, 10 addresses), valid   |  1779 ns |   0.13x | 0.22x | 0.08x | 2.26x |   1.04x |  11.51x |         3.74x |  42.34x |   9.74x |
+| Nested user (address, 5 tags max, 10 addresses), invalid |  2707 ns |   8.86x | 0.19x | 1.18x | 1.96x |   1.09x |  15.39x |         3.23x |  47.19x |   8.82x |
+| API request body (an order with 5 items), valid          |  1756 ns |   0.42x | 0.37x | 0.53x | 2.54x |   1.33x |   9.70x |         3.60x |  43.83x |   9.97x |
+| API request body (an order with 5 items), invalid        |  3175 ns |   4.88x | 0.15x | 1.11x | 2.18x |   1.05x |  12.13x |         2.54x |  41.21x |   8.13x |
+| List of 1,000 items, valid                               |  93.2 µs |   0.06x | 0.16x | 0.04x | 2.86x |   1.29x |  19.73x |         4.58x |  84.34x |  13.53x |
+| List of 1,000 items, invalid                             |  98.8 µs |  27.74x | 0.17x | 0.58x | 2.92x |   1.28x |  31.56x |         4.43x |  80.65x |  13.88x |
+| Union of 4 variants (12 events), valid                   | 522.7 ns |   0.48x | 0.63x | 0.74x | 8.36x |   9.15x |   1.20x |        11.14x | 176.79x | 127.33x |
+| Union of 4 variants (12 events), invalid                 |  3028 ns |  10.88x | 0.14x | 0.76x | 1.99x |   2.09x |   3.99x |         2.50x |  34.89x |  38.18x |
+| 6 levels of nesting, valid                               | 707.7 ns |   0.03x | 0.11x | 0.06x | 2.26x |   1.46x |  12.54x |         3.41x |  42.11x |   9.08x |
+| 6 levels of nesting, invalid                             |  1126 ns |  16.66x | 0.10x | 1.49x | 1.91x |   1.53x |  18.45x |         3.43x |  52.23x |   8.57x |
+| Small flat object, checks only, valid                    |  94.9 ns |   0.48x | 0.56x | 0.52x | 3.23x |   1.65x |   0.59x |         3.65x |  57.12x |  24.19x |
+| Small flat object, checks only, invalid                  | 652.6 ns |   6.01x | 0.21x | 1.04x | 1.35x |   0.78x |  10.42x |         1.90x |  36.29x |   7.44x |
 
 | Node 22                                                  |    afora | TypeBox |   Ajv | Typia |   Zod | Valibot | ArkType | Effect Schema |     Yup |    Joi |
 | -------------------------------------------------------- | -------: | ------: | ----: | ----: | ----: | ------: | ------: | ------------: | ------: | -----: |
-| Small flat object, valid                                 | 332.0 ns |   0.20x | 0.19x | 0.20x | 1.70x |   1.26x |  13.30x |         3.13x |  15.63x |  9.97x |
-| Small flat object, invalid                               | 688.5 ns |   8.22x | 0.14x | 0.63x | 2.86x |   0.97x |  26.33x |         4.00x | 114.23x |  6.91x |
-| Nested user (address, 5 tags max, 10 addresses), valid   |  2315 ns |   0.16x | 0.27x | 0.16x | 1.69x |   1.43x |  17.30x |         3.84x |  32.68x |  7.79x |
-| Nested user (address, 5 tags max, 10 addresses), invalid |  3485 ns |   9.74x | 0.21x | 0.90x | 2.01x |   1.37x |  23.25x |         3.55x |  63.42x |  6.96x |
-| API request body (an order with 5 items), valid          |  2507 ns |   0.42x | 0.51x | 0.29x | 1.81x |   1.72x |  13.15x |         3.19x |  28.83x |  7.63x |
-| API request body (an order with 5 items), invalid        |  4245 ns |   5.12x | 0.18x | 0.93x | 2.10x |   1.32x |  16.12x |         2.81x |  53.21x |  5.71x |
-| List of 1,000 items, valid                               | 163.4 µs |   0.07x | 0.15x | 0.08x | 1.01x |   1.56x |  27.36x |         4.46x |  47.84x | 10.25x |
-| List of 1,000 items, invalid                             | 166.5 µs |  23.81x | 0.17x | 0.25x | 1.03x |   1.59x |  37.24x |         4.48x |  50.52x | 10.22x |
-| Union of 4 variants (12 events), valid                   | 814.9 ns |   0.50x | 0.67x | 0.50x | 4.46x |   8.99x |   2.12x |        11.70x | 115.94x | 92.52x |
-| Union of 4 variants (12 events), invalid                 |  4033 ns |  11.04x | 0.14x | 0.59x | 1.63x |   2.15x |   6.37x |         2.93x |  37.74x | 31.41x |
-| 6 levels of nesting, valid                               |  1078 ns |   0.07x | 0.11x | 0.07x | 0.91x |   1.34x |  15.20x |         3.90x |  24.07x |  6.10x |
-| 6 levels of nesting, invalid                             |  1613 ns |  16.48x | 0.09x | 1.47x | 1.77x |   1.54x |  22.61x |         4.33x |  71.67x |  5.98x |
-| Small flat object, checks only, valid                    | 166.4 ns |   0.38x | 0.39x | 0.39x | 1.43x |   1.75x |   0.85x |         3.59x |  29.00x | 18.74x |
-| Small flat object, checks only, invalid                  | 669.9 ns |   8.58x | 0.14x | 0.65x | 2.53x |   0.90x |  21.27x |         3.47x | 116.26x |  6.91x |
+| Small flat object, valid                                 | 319.4 ns |   0.20x | 0.20x | 0.20x | 1.70x |   1.32x |  13.40x |         3.25x |  16.85x | 10.62x |
+| Small flat object, invalid                               | 664.9 ns |   8.67x | 0.15x | 0.63x | 2.99x |   1.00x |  27.30x |         4.19x | 119.56x |  7.10x |
+| Nested user (address, 5 tags max, 10 addresses), valid   |  2342 ns |   0.16x | 0.27x | 0.16x | 1.67x |   1.45x |  17.17x |         3.88x |  32.37x |  7.79x |
+| Nested user (address, 5 tags max, 10 addresses), invalid |  3353 ns |  10.28x | 0.22x | 0.92x | 2.07x |   1.43x |  23.91x |         3.95x |  65.63x |  7.10x |
+| API request body (an order with 5 items), valid          |  2488 ns |   0.42x | 0.51x | 0.28x | 1.83x |   1.72x |  13.47x |         3.31x |  29.20x |  8.00x |
+| API request body (an order with 5 items), invalid        |  4394 ns |   5.00x | 0.18x | 0.90x | 2.03x |   1.27x |  15.71x |         2.65x |  51.77x |  5.40x |
+| List of 1,000 items, valid                               | 161.6 µs |   0.07x | 0.15x | 0.08x | 1.04x |   1.61x |  27.97x |         4.62x |  46.28x | 10.24x |
+| List of 1,000 items, invalid                             | 165.0 µs |  24.16x | 0.17x | 0.24x | 1.04x |   1.59x |  37.00x |         4.58x |  49.82x | 10.45x |
+| Union of 4 variants (12 events), valid                   | 811.5 ns |   0.50x | 0.67x | 0.52x | 4.52x |   8.80x |   2.15x |        11.66x | 116.92x | 94.77x |
+| Union of 4 variants (12 events), invalid                 |  4159 ns |  10.87x | 0.14x | 0.59x | 1.61x |   2.12x |   6.22x |         2.96x |  37.31x | 30.84x |
+| 6 levels of nesting, valid                               |  1089 ns |   0.07x | 0.11x | 0.08x | 0.90x |   1.33x |  15.22x |         4.01x |  25.00x |  6.25x |
+| 6 levels of nesting, invalid                             |  1638 ns |  16.28x | 0.09x | 1.45x | 1.82x |   1.53x |  22.41x |         4.33x |  70.30x |  6.13x |
+| Small flat object, checks only, valid                    | 163.0 ns |   0.43x | 0.40x | 0.40x | 1.41x |   1.79x |   0.87x |         3.79x |  31.26x | 19.25x |
+| Small flat object, checks only, invalid                  | 687.8 ns |   8.52x | 0.14x | 0.64x | 2.60x |   0.88x |  20.78x |         3.41x | 114.64x |  6.92x |
 
 <!-- bench:end -->
 
