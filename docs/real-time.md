@@ -83,7 +83,7 @@ export const App = applicationOf({
 });
 ```
 
-The options are JSON, so the same output can be written in an [`afora.json`](afora-json.md) (`{ "sink": "websocket", "options": { ... } }`, with `--stages @afora/ws`).
+The options are JSON, so the same output can be written in an [`afora.json`](afora-json.md) (`{ "sink": "websocket", "options": { ... } }`, with a local module that re-exports the stages, `export { stages } from "@afora/ws";`, given as `--stages ./stages.ts`).
 
 ## 3. Accepting sockets
 
@@ -141,7 +141,7 @@ Input is validated as on HTTP, an error is the same `application/problem+json` b
 The socket is authenticated once, on the upgrade, and the session carries the result. Two ways:
 
 - **Values.** Pass what you trust in `values` (a header of the upgrade, the subject of a verified token), and fill the context of the operations from them with the `context` option: `websocket({ context: { userId: "x-user" } })`. The client never chooses its context.
-- **A principal.** `endpoint.session(ws, { hub, principal })` with the `Principal` your upgrade authenticated: every operation that declares an [`access`](auth.md) is checked against it, as on HTTP. Without one, those operations answer 401.
+- **A principal.** `endpoint.session(ws, { hub, principal })` with the `Principal` your upgrade authenticated: every operation that declares an [`access`](auth.md) is checked against it, as on HTTP. With neither a principal nor an `authenticator` hook (`websocket(options, { authenticator })`), those operations answer 401.
 
 Topics are private by default, and a topic pattern is not a permission on its own: an entity pushed to `tasks/*` reaches every subscriber of it. Check the topic against the caller with `authorize`:
 

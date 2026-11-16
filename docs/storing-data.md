@@ -145,7 +145,7 @@ What changes from SQL:
 
 - **Unique keys** are marker items written in the same `TransactWriteItems` as the entity, so they hold under concurrent writers without an index.
 - **Reads.** By id and by a unique key, a read is a direct lookup. Any other `where` reads the partition of the repository and filters in memory, which suits thousands of items, not millions. `findCursor` by id pages in DynamoDB.
-- **No transactions across calls**, and **no `Serial` ids**: a command with `transaction: true`, or a repository with `create` over a `Serial` entity, is refused when it is declared or bound.
+- **No transactions**, and **no `Serial` ids**: a command with `transaction: true`, or a repository with `create` over a `Serial` entity, is refused when it is declared or bound.
 
 The table definition, its limits (400 KB per item, 100 items per write) and the retry options are in the [package README](../packages/dynamodb/README.md#single-table-layout).
 

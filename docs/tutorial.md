@@ -281,7 +281,7 @@ A rule that is a plain sequence (find, check, write, return) can also be written
 })
 ```
 
-A `delete` route reads its input from the query by default; `route: { method: "delete", path: "/posts/{slug}", body: true }` reads it from a JSON body instead, for a client that sends one.
+A `delete` route reads its input from the path and the query by default; `route: { method: "delete", path: "/posts/{slug}", body: true }` reads the keys that have no other place from a JSON body instead, for a client that sends one.
 
 The decorator names no server, and it is optional sugar: `route: { method: "post", path: "/posts/{slug}/publish" }` in the settings of `useCaseOf` is the same declaration, and needs no decorator support. Bun runs decorators as written; on Node use `tsx` (or any compiler), or the setting. See [Routes](use-cases.md#routes).
 

@@ -67,7 +67,7 @@ await mcp.server().connect(transport);
 - Errors answer `isError: true` with the RFC 9457 problem as JSON text; its `status` comes from `statusOf` (the output `statuses` first), and the `detail` of a 5xx is `"Internal error."` unless the output declares the exception. Invalid input is a 400 with `issues`, an unknown tool a 404.
 - Context: `context: { token: "authorization" }` fills `context.token` from the value named `authorization` in `extra.values` of `call(name, args, extra)`. With `register`/`server()`, the values are the HTTP headers of the request (lower-case) and the string entries of the request `_meta`.
 - The result is `{ tools, call(name, args, extra?), register(server), server() }`: `register` installs `tools/list` and `tools/call` on a low-level SDK `Server`, `server()` returns a new one with the `tools` capability.
-- For codegen, `stages` and `McpStages` are exported (`--stages @afora/mcp`): `{ name: "mcpTools", module: "@afora/mcp", export: "mcpTools", kind: "sink" }`.
+- For codegen, `stages` and `McpStages` are exported (re-export them from a module of the project, `export { stages } from "@afora/mcp";`, and pass `--stages ./stages.ts`; the CLIs read the flag as a file): `{ name: "mcpTools", module: "@afora/mcp", export: "mcpTools", kind: "sink" }`.
 
 ## A project written in code
 

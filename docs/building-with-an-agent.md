@@ -26,7 +26,7 @@ Any MCP client that starts a stdio server takes the same command:
 }
 ```
 
-The server runs on Node (`npx @afora/mcp`) as well. Two tools need Bun on the `PATH` either way: `afora_extract` and `afora_project` import your TypeScript in a Bun subprocess, and `afora_generate` type-checks with `bunx --no-install tsc`. The flags are in the [command line reference](cli.md#afora-mcp).
+The server runs on Node (`npx @afora/mcp`) as well. Importing your TypeScript needs Bun on the `PATH`: `afora_extract` does it, and `afora_project` when it is given an application (`--app` or `app`). `afora_generate` type-checks with `bunx --no-install tsc`, or `npx --no-install tsc` when there is no Bun. The flags are in the [command line reference](cli.md#afora-mcp).
 
 ## 2. Ask for a change
 
@@ -40,7 +40,7 @@ Ask in domain terms: "a blog with users who sign up with an email and a password
 | 4    | `afora_spec_validate`                    | Every issue, each with a path and a stable `code`.                                                                        |
 | 5    | `afora_generate`                         | The TypeScript, written into `output.dir`, and the type errors of the generated files, which the agent fixes in the spec. |
 
-Since a spec is written only when it is valid, the agent cannot leave `afora.json` half broken between two calls. A rule that does not fit a declaration goes in a function the spec imports (`{ "import": "./rules.ts#canPublish" }`): see [When steps are not enough](afora-json.md#when-steps-are-not-enough).
+The server never writes an invalid `afora.json`, so the agent cannot leave it half broken between two calls. A rule that does not fit a declaration goes in a function the spec imports (`{ "import": "./rules.ts#canPublish" }`): see [When steps are not enough](afora-json.md#when-steps-are-not-enough).
 
 ## 3. Review it
 
@@ -53,15 +53,15 @@ Behavior you add by hand lives in files of your own: extend a generated class, o
 
 ## 4. Keep it honest in CI
 
-Three checks keep the spec, the code and the database in step. With Bun (`npx` in place of `bunx` on Node):
+Three checks keep the spec, the code and the database in step. With Bun (`npx` in place of `bunx` on Node; `schema check` imports TypeScript, so Node >= 22.18, where type stripping is on by default):
 
 ```bash
 bunx afora-codegen check                                       # the spec is valid
-bunx afora-codegen generate && git diff --exit-code            # the committed code is what the spec gives
+bunx afora-codegen generate && test -z "$(git status --porcelain)"  # the committed code is what the spec gives
 bunx afora-codegen schema check src/domain/application.ts#App  # a change to an entity declares what its stored rows need
 ```
 
-The second line fails when someone edited a generated file or the spec without generating again. The third compares the entities with the committed `afora.lock.json` ([Schema evolution](schema-evolution.md#from-commit-to-production)).
+The second line fails when someone edited a generated file or the spec without generating again, including when `generate` writes a file that was never committed. The third compares the entities with the committed `afora.lock.json` ([Schema evolution](schema-evolution.md#from-commit-to-production)).
 
 ## 5. Providers and servers the spec can name
 

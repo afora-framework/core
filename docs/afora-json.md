@@ -209,7 +209,7 @@ A command's `events` can name an event policy of the catalog with JSON options, 
 }
 ```
 
-`realtime.ts` exports the publisher, any object with a `publish(topic, event)` method, such as `export const hub = wsHub();` of [`@afora/ws`](../packages/ws/README.md), whose `{ "sink": "websocket" }` serves the operations and the subscriptions (`--stages @afora/ws`). The generated application gets `publishers: { realtime: hub }`, and a spec that extends this one can name `realtime` too. The validator makes a built-in policy with its options, so what it would throw is an `invalid_event_policy_options` issue; a name outside the catalog is `unknown_event_policy`, a `publisher` that is not a key of `publishers` (own or inherited) `unknown_publisher`, and a publisher that is not an import `invalid_import`. Extraction needs `publishers.<key>` in `imports`.
+`realtime.ts` exports the publisher, any object with a `publish(topic, event)` method, such as `export const hub = wsHub();` of [`@afora/ws`](../packages/ws/README.md), whose `{ "sink": "websocket" }` serves the operations and the subscriptions (`--stages ./stages.ts`, a local module with `export { stages } from "@afora/ws";`). The generated application gets `publishers: { realtime: hub }`, and a spec that extends this one can name `realtime` too. The validator makes a built-in policy with its options, so what it would throw is an `invalid_event_policy_options` issue; a name outside the catalog is `unknown_event_policy`, a `publisher` that is not a key of `publishers` (own or inherited) `unknown_publisher`, and a publisher that is not an import `invalid_import`. Extraction needs `publishers.<key>` in `imports`.
 
 ## Services
 
@@ -463,7 +463,7 @@ export const policies = [
 ];
 ```
 
-- In the CLI, `--providers <module>`, `--stages <module>` and `--policies <module>` take a module that exports `providers` or `stages` (or has it as the default export), an array of those entries. `@afora/drizzle` and `@afora/hono` export their own entries, so `--providers @afora/drizzle --stages @afora/hono` is enough.
+- In the CLI, `--providers <module>`, `--stages <module>` and `--policies <module>` take a module that exports `providers` or `stages` (or has it as the default export), an array of those entries. The flags resolve the module as a file, not a package: `@afora/drizzle` and `@afora/hono` export their own entries, so a local module that re-exports them (`export { providers } from "@afora/drizzle";`, `export { stages } from "@afora/hono";`) passed as `--providers ./providers.ts --stages ./stages.ts` is enough.
 - In code, they are the `providers`, `stages` and `policies` options of `validateSpec(spec, extended, options)` and `generate(spec, extended, options)`.
 - `inMemory` is the only built-in provider, `select` and `openapi` the built-in stages (`StdStages` of `@afora/core`) and `publishEvents` the built-in event policy (`StdEventPolicies`); `catalog()` lists them.
 - `module` is a package or a path relative to the output directory, and `export` is the factory, called with the options object (omitted when there are none). `kind` on a stage entry is optional and checks `transform` or `sink`.

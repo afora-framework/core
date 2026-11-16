@@ -199,7 +199,7 @@ export const providers = [
 ];
 ```
 
-so `afora-codegen generate --providers @afora/drizzle` accepts
+so with a module of the project that re-exports it (`export { providers } from "@afora/drizzle";` in `providers.ts`; the CLI reads `--providers` as a file), `afora-codegen generate --providers ./providers.ts` accepts
 
 ```json
 {
