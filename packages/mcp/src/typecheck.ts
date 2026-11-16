@@ -22,7 +22,12 @@ export type TypecheckResult =
 	  }
 	| { readonly ran: false; readonly reason: string };
 
-const DIAGNOSTIC = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/;
+/**
+ * The `(line,col): error TSxxxx: ` of a diagnostic line, whose path is what
+ * comes before it and message what comes after. Not anchored: a lazy `^(.+?)`
+ * before it backtracks in quadratic time on a line that repeats the pattern.
+ */
+const DIAGNOSTIC = /\((\d+),(\d+)\): error (TS\d+): /;
 
 /** Parses the output of `tsc --noEmit` (default, non-pretty format). */
 export function parseDiagnostics(
@@ -31,14 +36,15 @@ export function parseDiagnostics(
 	const found: (Diagnostic & { path: string })[] = [];
 	for (const text of output.split(/\r?\n/)) {
 		const match = DIAGNOSTIC.exec(text);
-		if (match) {
+		if (match && match.index > 0) {
+			const path = text.slice(0, match.index);
 			found.push({
-				path: match[1] as string,
-				file: match[1] as string,
-				line: Number(match[2]),
-				column: Number(match[3]),
-				code: match[4] as string,
-				message: match[5] as string,
+				path,
+				file: path,
+				line: Number(match[1]),
+				column: Number(match[2]),
+				code: match[3] as string,
+				message: text.slice(match.index + match[0].length),
 			});
 		} else if (/^\s+\S/.test(text) && found.length > 0) {
 			const last = found[found.length - 1] as { message: string };

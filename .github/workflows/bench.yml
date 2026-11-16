@@ -51,7 +51,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: bench
-      # writes bench/results/latest.json and history/<version>.json, RESULTS.md, the chart and the block of README.md
+      # writes bench/results/latest.json and history/<version>.json, RESULTS.md, the chart and the blocks of README.md and docs/performance.md
       - run: bun run.ts
         working-directory: bench
         env:
@@ -61,7 +61,7 @@ jobs:
       - id: diff
         name: Did the results change
         run: |
-          if git diff --quiet -- bench README.md; then
+          if git diff --quiet -- bench README.md docs/performance.md; then
             echo "The results did not change."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -75,6 +75,7 @@ jobs:
             bench/results
             bench/RESULTS.md
             README.md
+            docs/performance.md
           if-no-files-found: error
           retention-days: 7
           overwrite: true
@@ -108,7 +109,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add bench/results bench/RESULTS.md README.md
+          git add bench/results bench/RESULTS.md README.md docs/performance.md
           git commit -m "docs(bench): results of $version on the GitHub runner"
           git push -q "$remote" "HEAD:refs/heads/$branch"
           gh pr create --repo "$GITHUB_REPOSITORY" --base dev --head "$branch" \

@@ -53,10 +53,11 @@ function dependencyNames(decl: Decl): string[] {
 
 /** A module path without a trailing `/` or the extension of a script (`.ts`, `.js`, `.mts`...). */
 function withoutExtension(module: string): string {
-	return posix
-		.normalize(module)
-		.replace(/(.)\/+$/, "$1")
-		.replace(/\.[cm]?[jt]sx?$/, "");
+	// `normalize` folds repeated `/`, so at most one trails (kept on `/` alone).
+	const normal = posix.normalize(module);
+	const trimmed =
+		normal.length > 1 && normal.endsWith("/") ? normal.slice(0, -1) : normal;
+	return trimmed.replace(/\.[cm]?[jt]sx?$/, "");
 }
 
 /**

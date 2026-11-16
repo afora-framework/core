@@ -10,6 +10,10 @@ updates:
       - /bench
     schedule:
       interval: weekly
+    # new versions wait a week (security updates do not), so a compromised
+    # release is usually pulled from the registry before it is proposed
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: chore
       include: scope
@@ -26,5 +30,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # new versions wait a week (security updates do not), so a compromised
+    # release is usually pulled from the registry before it is proposed
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: ci

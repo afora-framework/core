@@ -84,7 +84,7 @@ jobs:
   ci:
     needs: detect
     if: needs.detect.outputs.publish == 'true' && !inputs.dry-run
-    uses: ./.github/workflows/ci.yml
+    uses: $/.github/workflows/ci.yml
 
   build:
     name: Build and pack the packages
@@ -230,4 +230,4 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: ./.github/workflows/bench.yml
+    uses: $/.github/workflows/bench.yml

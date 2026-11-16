@@ -1,5 +1,11 @@
 # Changelog
 
+## 27.0.0-rc.4 — 2026-11-16
+
+### Security
+
+- The parser of `tsc` output reads a diagnostic line in linear time; a line repeating `(0,0): error TS0: ` took seconds.
+
 ## 27.0.0-rc.3 — 2026-11-16
 
 ### Security

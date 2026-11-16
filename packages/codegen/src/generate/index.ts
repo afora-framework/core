@@ -1375,9 +1375,9 @@ export function generate(
 		(decl) => decl.via === undefined,
 	);
 	const { order } = orderOf(own, scope);
-	const dir = (spec.output?.dir ?? DEFAULT_OUTPUT_DIR)
-		.replace(/^\.\//, "")
-		.replace(/\/+$/, "");
+	// Trailing `/` trimmed in a loop: `/\/+$/` is quadratic on a run of `/` not at the end.
+	let dir = (spec.output?.dir ?? DEFAULT_OUTPUT_DIR).replace(/^\.\//, "");
+	while (dir.endsWith("/")) dir = dir.slice(0, -1);
 
 	// One file for each kind, but kinds that need each other share the later file.
 	const home = new Map<KindFile, KindFile>(
