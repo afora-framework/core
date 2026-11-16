@@ -107,7 +107,7 @@ const HANDLING: Record<string, string> = {
 	InvalidUseCaseDeclaration: DECLARATION,
 	InvalidUseCaseDependencies: BUG,
 	InvalidUseCasePlugin: DECLARATION,
-	InvalidUseCaseStep: `${DECLARATION} \`details.index\` is the step.`,
+	InvalidUseCaseStep: `${DECLARATION} \`details.index\` is the step. Raised while a call runs, an output answers a 500 whose detail is masked and that has no \`issues\`.`,
 	PasswordHasherRequired:
 		"Call `configure({ hasher })` at start on a runtime without argon2 (browsers, Workers, Node < 24.7). See [Runtime](../runtime.md).",
 	PropertyRequired:
@@ -182,7 +182,7 @@ const UNNAMED: {
 		layer: ExceptionLayers.UseCase,
 		when: "What a use case returns does not fit its response blueprint.",
 		handling:
-			"A mistake in the use case: fix what it returns. It carries `issues`, so `statusOf` gives 400; map it with `statuses` to answer 500.",
+			"A mistake in the use case: fix what it returns. An output answers a 500 whose detail is masked and that has no `issues`, even when `statuses` maps it, unless `debug` is set; in your own code, read `details.issues`.",
 		issues: true,
 	},
 	{
@@ -396,7 +396,7 @@ function render(): string {
 		"",
 		`Every exception afora exports (${rows.length}), by layer, and the names it raises without a class. Each one is an \`Exception\` with a \`layer\`, a \`name\`, a \`source\` and \`details\`; [Exceptions](../exceptions.md) explains the model, \`trace\` and \`guard\`.`,
 		"",
-		"**Status** is what `statusOf` gives, and so what the HTTP providers and the `websocket` sink answer, as problem+json ([Outputs](../outputs.md)): 400 for invalid input (and any exception whose `details.issues` is a list), 401, 403, 404 and 409 by name, and 500 for the rest. Two settings change it: an exception listed in the operation's `errors` (`useCaseOf({ errors })`, `throws` of a standard use case) answers 422 instead of 500, and the `statuses` option of an output maps any name to the status you choose.",
+		"**Status** is what `statusOf` gives, and so what the HTTP providers and the `websocket` sink answer, as problem+json ([Outputs](../outputs.md)): 400 for invalid input (and any exception whose `details.issues` is a list, except the internal ones such as `InvalidUseCaseResponse` and `InvalidUseCaseStep`, a masked 500), 401, 403, 404 and 409 by name, and 500 for the rest. Two settings change it: an exception listed in the operation's `errors` (`useCaseOf({ errors })`, `throws` of a standard use case) answers 422 instead of 500, and the `statuses` option of an output maps any name to the status you choose.",
 		"",
 		'**Catch** an exception with `error instanceof Class` when it is thrown as it is, or with `error.is(Class)` (also `is("Name")`) when it may come wrapped by an upper layer.',
 		"",

@@ -1,7 +1,7 @@
 import { Exception } from "../exception/exception";
 import type { Issue } from "../parse/types/parse.interface";
 import { takeStatus } from "../use-case/status";
-import { isDeclaredError, raisedOf } from "./status";
+import { isDeclaredError, isInternalError, raisedOf } from "./status";
 import type { Problem, ProblemOptions } from "./types/output.interface";
 
 /** The media type of a problem response. */
@@ -15,6 +15,9 @@ const INTERNAL = "Internal error.";
  * and the `detail` of a 5xx is `"Internal error."` unless `debug` is set or
  * the output declares the exception (its name in `statuses`, or a class of
  * `operation.errors`, except afora's internal ones), so internal messages do not leak.
+ * An internal exception (`InvalidUseCaseResponse`, `InvalidUseCaseStep`, ...)
+ * is masked and has no `issues` at any status, even one `statuses` chose,
+ * unless `debug` is set.
  */
 export function problemOf(error: unknown, options: ProblemOptions): Problem {
 	const { status, debug = false, statuses, operation } = options;
@@ -24,10 +27,11 @@ export function problemOf(error: unknown, options: ProblemOptions): Problem {
 		exception?.message ??
 		(error instanceof Error ? error.message : String(error));
 	const raised = exception && raisedOf(exception);
+	const masked = !debug && isInternalError(error);
 	const rawIssues = (raised?.details as { issues?: unknown } | undefined)
 		?.issues;
 	const issues =
-		status === 400 && Array.isArray(rawIssues)
+		status === 400 && !masked && Array.isArray(rawIssues)
 			? (rawIssues as readonly Issue[]).map((issue) => ({
 					path: [...issue.path],
 					code: issue.code as string,
@@ -39,7 +43,8 @@ export function problemOf(error: unknown, options: ProblemOptions): Problem {
 		title,
 		status,
 		detail:
-			status >= 500 && !debug && !isDeclaredError(error, operation, statuses)
+			masked ||
+			(status >= 500 && !debug && !isDeclaredError(error, operation, statuses))
 				? INTERNAL
 				: message,
 		...(raised ? { layer: raised.layer } : {}),

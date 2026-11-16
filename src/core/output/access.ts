@@ -1,4 +1,8 @@
-import type { AnyBlueprint } from "../blueprint/types/blueprint.interface";
+import type {
+	AnyBlueprint,
+	BlueprintField,
+} from "../blueprint/types/blueprint.interface";
+import { parseField } from "../parse/parse";
 import { isPublicAccess } from "../use-case/access";
 import type {
 	AccessDeclaration,
@@ -22,17 +26,71 @@ function readerOf(path: string): (principal: Principal) => unknown {
 			: undefined;
 }
 
+/** No value: an owner the input or the caller does not give, or one its property rejects. */
+const NO_OWNER = Symbol("no owner");
+
+/**
+ * The owner value a call names: `given` through the pipeline of its field
+ * (`preHandle`, validation, `afterHandle`), so what is compared is what the
+ * use case acts on (an email trimmed and lowercased, a slug slugified), or
+ * `NO_OWNER` when the field rejects it. The value is parsed as given, as
+ * the use case parses it: a sink coerces its text before the call.
+ */
+function canonicalOwnerOf(
+	field: BlueprintField | undefined,
+	given: unknown,
+	key: string,
+	source: string,
+): unknown {
+	if (given === undefined || given === null) return NO_OWNER;
+	const parsed = parseField(field, given, [key], source);
+	return parsed.issues === undefined &&
+		parsed.value !== undefined &&
+		parsed.value !== null
+		? parsed.value
+		: NO_OWNER;
+}
+
+/**
+ * Whether the caller's `expected` value is the owner `canonical` names. The
+ * claim (or subject) is compared as it was issued, not normalized: a token
+ * whose claim only becomes the owner's value once trimmed, lowercased or
+ * slugified names another identity, so the authenticator must issue the
+ * canonical value. A claim that is not a string, a number or a boolean
+ * never matches.
+ */
+function isOwner(canonical: unknown, expected: unknown): boolean {
+	if (canonical === NO_OWNER) return false;
+	if (
+		typeof expected !== "string" &&
+		typeof expected !== "number" &&
+		typeof expected !== "boolean"
+	) {
+		return false;
+	}
+	if (
+		typeof canonical !== "string" &&
+		typeof canonical !== "number" &&
+		typeof canonical !== "boolean"
+	) {
+		return false;
+	}
+	return String(canonical) === String(expected);
+}
+
 /**
  * The check of `access` for the operation `id`, made once: given the input
  * and the options of a call, it throws `Unauthenticated` or `Forbidden`, or
  * gives the options to run the command with (the context filled from the
- * caller). Throws `InvalidOutputStage` when `access.context` names a key the
+ * caller). `owner` compares the caller with the owner value of `input` after
+ * the pipeline of its field, the value the use case acts on (see `isOwner`). Throws `InvalidOutputStage` when `access.context` names a key the
  * `context` of the operation does not have.
  */
 export function accessGuardOf(
 	id: string,
 	access: AccessDeclaration,
 	context: AnyBlueprint | undefined,
+	input: AnyBlueprint,
 ): (input: unknown, options: OperationCallOptions | undefined) => RunOptions {
 	if (isPublicAccess(access)) {
 		return (_input, options) =>
@@ -42,6 +100,9 @@ export function accessGuardOf(
 	const owner = access.owner;
 	const ownerOf = owner
 		? readerOf(owner.claim === undefined ? "subject" : `claims.${owner.claim}`)
+		: undefined;
+	const ownerField = owner
+		? (input.properties[owner.input] as BlueprintField | undefined)
 		: undefined;
 	const fills = Object.entries(access.context ?? {}).map(
 		([key, path]) => [key, readerOf(path)] as const,
@@ -56,7 +117,7 @@ export function accessGuardOf(
 			});
 		}
 	}
-	return (input, options) => {
+	return (value, options) => {
 		const principal = options?.principal;
 		if (
 			principal === undefined ||
@@ -80,16 +141,11 @@ export function accessGuardOf(
 		if (owner && ownerOf) {
 			const expected = ownerOf(principal);
 			const given =
-				typeof input === "object" && input !== null
-					? (input as Record<string, unknown>)[owner.input]
+				typeof value === "object" && value !== null
+					? (value as Record<string, unknown>)[owner.input]
 					: undefined;
-			if (
-				given === undefined ||
-				given === null ||
-				expected === undefined ||
-				expected === null ||
-				String(given) !== String(expected)
-			) {
+			const canonical = canonicalOwnerOf(ownerField, given, owner.input, id);
+			if (!isOwner(canonical, expected)) {
 				throw new Forbidden({ source: id, details: { reason: "owner" } });
 			}
 		}

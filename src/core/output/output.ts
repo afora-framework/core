@@ -158,7 +158,7 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 		const guard =
 			UseCase.access === undefined
 				? undefined
-				: accessGuardOf(id, UseCase.access, context);
+				: accessGuardOf(id, UseCase.access, context, UseCase.blueprint);
 		return Object.freeze({
 			kind: "operation" as const,
 			version: 1 as const,
