@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 27.0.0-rc.4 — 2026-11-16
 
 ### Security
 
