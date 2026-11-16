@@ -1,6 +1,6 @@
 import { useCaseCatalogOf } from "../../core/use-case/plugin-catalog";
 import type { IUseCaseCatalog } from "../../core/use-case/types/plugin.interface";
-import { login, logout, refresh, register } from "./auth";
+import { changePassword, login, logout, refresh, register } from "./auth";
 import { create, delete_, get, list, restore, update } from "./crud";
 import {
 	archive,
@@ -17,10 +17,10 @@ import type { StdUseCasePlugins } from "./types";
  * pick from, as `(ctx) => ({ create: ctx.create(Posts) })`: `create`, `get`,
  * `list`, `update`, `delete` and `restore` for any entity; `publish`,
  * `unpublish`, `archive`, `unarchive`, `tag` and `untag` for the entities
- * with those record plugins; `register` and `login` for the
- * authenticatable ones, and `refresh` and `logout` for the tokens of `login`. `StdUseCases.context` is that `ctx`.
+ * with those record plugins; `register`, `login` and `changePassword`
+ * for the authenticatable ones, and `refresh` and `logout` for the tokens of `login`. `StdUseCases.context` is that `ctx`.
  */
-// Annotated: inferring the catalog from fourteen plugins is costly to check.
+// Annotated: inferring the catalog from seventeen plugins is costly to check.
 export const StdUseCases: IUseCaseCatalog<StdUseCasePlugins> = useCaseCatalogOf(
 	create,
 	get,
@@ -36,6 +36,7 @@ export const StdUseCases: IUseCaseCatalog<StdUseCasePlugins> = useCaseCatalogOf(
 	untag,
 	register,
 	login,
+	changePassword,
 	refresh,
 	logout,
 ) as unknown as IUseCaseCatalog<StdUseCasePlugins>;
