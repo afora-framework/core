@@ -1,3 +1,5 @@
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 
 export const DEFAULT_MODEL = "claude-opus-5-5";
@@ -55,8 +57,34 @@ export function baseParams(options: ModelOptions) {
 	};
 }
 
+/** The stamp of the runs of one invocation: `2026-11-10T21-04-05`. */
+export const stampOf = (now = new Date()): string =>
+	now.toISOString().slice(0, 19).replaceAll(":", "-");
+
 /** A directory name for the runs of one invocation: `2026-11-10T21-04-05-1`. */
 export function runNames(count: number, now = new Date()): string[] {
-	const stamp = now.toISOString().slice(0, 19).replaceAll(":", "-");
+	const stamp = stampOf(now);
 	return Array.from({ length: count }, (_, index) => `${stamp}-${index + 1}`);
+}
+
+/** What a scripted run records in its `run.json`. */
+export interface ScriptedRunJson {
+	readonly brief: number;
+	readonly db: string;
+	readonly model: string;
+	readonly effort: string;
+	/** Why the model stopped (afora runs), or why no app was written (baselines). */
+	readonly stop?: string;
+}
+
+/** Writes `run.json` of a scripted run: `"scripted": true` and how it was made. */
+export async function writeRunJson(
+	dir: string,
+	run: ScriptedRunJson,
+): Promise<void> {
+	const { brief, db, model, effort, stop } = run;
+	await writeFile(
+		join(dir, "run.json"),
+		`${JSON.stringify({ brief, db, model, effort, scripted: true, ...(stop ? { stop } : {}) })}\n`,
+	);
 }

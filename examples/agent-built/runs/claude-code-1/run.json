@@ -1,1 +1,1 @@
-{ "brief": 1 }
+{ "brief": 1, "db": "memory", "model": "claude-opus-5-5", "scripted": false }

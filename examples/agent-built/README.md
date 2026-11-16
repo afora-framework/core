@@ -11,13 +11,13 @@ So the example has three parts: a product brief, an app built from it through MC
 - the afora runs, [`runs/claude-code-1`](runs/claude-code-1/prompts.md) (brief 1) and [`runs/claude-code-2`](runs/claude-code-2/prompts.md) (brief 2), are Claude Code sessions (Claude Opus 5.5) calling the MCP server one tool at a time, recorded in their `tool-calls.json`;
 - the baselines, [`baseline/runs/claude-code-1`](baseline/runs/claude-code-1/prompts.md) and [`baseline/runs/claude-code-2`](baseline/runs/claude-code-2/prompts.md), were written by the same sessions.
 
-The scripts that make N runs of each with the Claude API ([`build-with-agent.ts`](scripts/build-with-agent.ts), [`build-baseline.ts`](scripts/build-baseline.ts)) are committed and tested to refuse to run without a key, but **have not been run: the scripted N-run results are pending until `bun run eval:agent-built` is run with a key.** Nothing below comes from them.
+The scripts that make N runs of each with the Claude API ([`eval.ts`](scripts/eval.ts), which drives [`build-with-agent.ts`](scripts/build-with-agent.ts) and [`build-baseline.ts`](scripts/build-baseline.ts)) are committed and tested to refuse to run without a key, but **have not been run: the scripted N-run results are pending until `bun run eval:agent-built` is run with a key** (see [Running the evaluation](#running-the-evaluation)). Nothing below comes from them. [eval/RESULTS.md](eval/RESULTS.md) labels the four runs above as not scripted.
 
 ## The brief
 
 [BRIEF.md](BRIEF.md): organizers sign up and log in for a token (unique email, a password that is never shown), create events (unique slug, a capacity) that only they can read or change, and sell tickets until the event is sold out. It fixes the HTTP contract, routes, bodies and statuses, so the same checks run against any implementation, and it states each guarantee as a product requirement, so the baseline is asked for them as plainly as afora gives them.
 
-That is version 2. [Version 1](BRIEF.v1.md) had no tokens and no owners: anyone could create an event for any organizer and read any event. Each run says in its `run.json` which version it was built from, and is evaluated against that version.
+That is version 2. [Version 1](BRIEF.v1.md) had no tokens and no owners: anyone could create an event for any organizer and read any event. [Version 3](BRIEF.v3.md) is the product and the contract of version 2 (routes, bodies, statuses, problem+json) described without listing the guarantees: it does not say that the password never appears in a response, that unknown fields are rejected, that emails and slugs are unique beyond the 409 of the table, that only its organizer sees an event, or that an error is never a 5xx. A baseline built from it has to think of them; it is evaluated with the same invariants as version 2. Each run says in its `run.json` which version it was built from (and its model and database), and is evaluated against that version.
 
 ## The app
 
@@ -34,28 +34,33 @@ bun test           # drift, round trip, replay, the API, the evaluation
 
 ## The evaluation
 
-[eval/invariants.ts](eval/invariants.ts) plays a scenario through the contract on a fetch handler (no port is opened) and checks five invariants; the fifth only for runs of brief 2, the first four with the routes and bodies of the run's brief:
+[eval/invariants.ts](eval/invariants.ts) plays a scenario through the contract on a fetch handler (no port is opened) and checks six invariants; ownership only for runs of briefs 2 and 3, the others with the routes and bodies of the run's brief:
 
-| Invariant                                                | What is checked                                                                                                                                                                                                                                                                                                                                   |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No sensitive value in any response                       | In every response of the scenario, errors included: no password that was sent, no password hash (argon2, bcrypt, scrypt, PBKDF2), and no key named like a secret (`password`, `hash`, `secret`, `salt`) holding anything but `"********"`.                                                                                                        |
-| Undeclared keys rejected (4xx)                           | Each of the four POST routes, sent a valid body plus one key the contract does not have, answers a 4xx.                                                                                                                                                                                                                                           |
-| Errors are problem+json with the right status, never 5xx | Taken email and slug (409), wrong password and unknown email (401), unknown organizer and event (404), sold out (422), weak password, capacity 0, a body that is not JSON and a missing field (400): each an `application/problem+json` whose body carries the status and a title. No response of the whole scenario is a 5xx.                    |
-| Unique keys enforced (409)                               | A second organizer with the same email and a second event with the same slug are refused with a 409 problem.                                                                                                                                                                                                                                      |
-| Only its organizer reads or changes an event (brief 2)   | Without a token, creating, reading or changing an event is a 401 problem, as is a malformed token or one signed with another secret. A second organizer reading or changing the first one's event gets a 404 or 403 problem, and the event is unchanged after; an event belongs to the organizer of the token, and cannot be created for another. |
+| Invariant                                                  | What is checked                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No sensitive value in any response                         | In every response of the scenario, errors included: no password that was sent, no password hash (argon2, bcrypt, scrypt, PBKDF2), and no key named like a secret (`password`, `hash`, `secret`, `salt`) holding anything but `"********"`.                                                                                                        |
+| Undeclared keys rejected (4xx)                             | Each of the four POST routes, sent a valid body plus one key the contract does not have, answers a 4xx.                                                                                                                                                                                                                                           |
+| Errors are problem+json with the right status, never 5xx   | Taken email and slug (409), wrong password and unknown email (401), unknown organizer and event (404), sold out (422), weak password, capacity 0, a body that is not JSON and a missing field (400): each an `application/problem+json` whose body carries the status and a title. No response of the whole scenario is a 5xx.                    |
+| Unique keys enforced (409)                                 | A second organizer with the same email and a second event with the same slug are refused with a 409 problem.                                                                                                                                                                                                                                      |
+| Only its organizer reads or changes an event (briefs 2, 3) | Without a token, creating, reading or changing an event is a 401 problem, as is a malformed token or one signed with another secret. A second organizer reading or changing the first one's event gets a 404 or 403 problem, and the event is unchanged after; an event belongs to the organizer of the token, and cannot be created for another. |
+| Capacity holds when the last seats are bought at once      | An event of 3 seats with one sold, then four purchases sent at the same time for the 2 seats left: no more than 2 succeed, exactly 2 do (no seat is lost to a rollback), each other one is a 422 problem, and a purchase after them is a 422.                                                                                                     |
 
-[eval/run.ts](eval/run.ts) evaluates every run: each afora run under `runs/` is first replayed from its `tool-calls.json` into a fresh directory (so what is evaluated is what the calls produce), and each baseline under `baseline/runs/` is imported as it is. Each run is checked in its own process, and the results go to [eval/RESULTS.md](eval/RESULTS.md). The test suite runs the evaluation, fails if any afora run fails an invariant, and checks that the committed RESULTS.md is what the runs give; a baseline that fails is a result, not a test failure. A test also runs the checks against a deliberately careless API (hash in the response, unknown keys kept, duplicates allowed, errors thrown) to show that each invariant can fail.
+[eval/run.ts](eval/run.ts) evaluates every run: each afora run under `runs/` is first replayed from its `tool-calls.json` into a fresh directory (so what is evaluated is what the calls produce), and each baseline under `baseline/runs/` is imported as it is. A run on SQLite gets a fresh database file (`DATABASE_PATH`). Each run is checked in its own process, and the results go to [eval/RESULTS.md](eval/RESULTS.md): the pass rate of each invariant per model, brief, database and side, with its 95% Wilson interval, the scripted runs apart from the others, then every run and every failed check. A run that could not be evaluated (a baseline whose answer had no code, a replay or a start that failed) fails every invariant of its brief. The test suite runs the evaluation, fails if an afora run that was not scripted fails an invariant, and checks that the committed RESULTS.md is what the runs give; a scripted run or a baseline that fails is a result, not a test failure. A test also runs the checks against a deliberately careless API (hash in the response, unknown keys kept, duplicates allowed, errors thrown, no capacity) to show that each invariant can fail, on every brief, and against one that checks the capacity and sells after an `await`, to show that the concurrency check catches a race.
+
+### On SQLite
+
+With `--db sqlite`, both sides keep their data in SQLite, and the brief says so (its storage sentence is replaced; [scripts/storage.ts](scripts/storage.ts)). The baseline is asked to use `bun:sqlite` (or Drizzle over it) in the file named by `DATABASE_PATH`. The afora run's MCP server gets the `drizzle` provider of [`@afora/drizzle`](../../packages/drizzle/README.md) in its providers catalog (as `afora-mcp --providers @afora/drizzle` does), and the agent is told to name it in the spec over `src/db.ts`, which the harness writes into the run: it re-exports [db/sqlite.ts](db/sqlite.ts), the Drizzle database on the same file and a table per entity of the application, with a unique index on each unique key, created before the app starts (what drizzle-kit would do from a schema). The agent cannot write files, so this is the one part it does not declare. A test replays the calls of `runs/claude-code-2` with the provider changed to `drizzle` and checks that the app holds every invariant on a SQLite file, with the tickets in it.
 
 ## Results
 
 From [eval/RESULTS.md](eval/RESULTS.md):
 
-| Implementation | Run           | Brief | No sensitive value | Undeclared keys | Errors as problem+json | Unique keys | Ownership    |
-| -------------- | ------------- | ----- | ------------------ | --------------- | ---------------------- | ----------- | ------------ |
-| afora          | claude-code-1 | 1     | pass (23/23)       | pass (4/4)      | pass (20/20)           | pass (2/2)  | not in brief |
-| afora          | claude-code-2 | 2     | pass (38/38)       | pass (5/5)      | pass (21/21)           | pass (2/2)  | pass (12/12) |
-| baseline       | claude-code-1 | 1     | pass (23/23)       | pass (4/4)      | pass (20/20)           | pass (2/2)  | not in brief |
-| baseline       | claude-code-2 | 2     | pass (38/38)       | pass (5/5)      | pass (21/21)           | pass (2/2)  | pass (12/12) |
+| Implementation | Run           | Brief | No sensitive value | Undeclared keys | Errors as problem+json | Unique keys | Ownership    | Concurrency |
+| -------------- | ------------- | ----- | ------------------ | --------------- | ---------------------- | ----------- | ------------ | ----------- |
+| afora          | claude-code-1 | 1     | pass (30/30)       | pass (4/4)      | pass (20/20)           | pass (2/2)  | not in brief | pass (5/5)  |
+| afora          | claude-code-2 | 2     | pass (45/45)       | pass (5/5)      | pass (21/21)           | pass (2/2)  | pass (12/12) | pass (5/5)  |
+| baseline       | claude-code-1 | 1     | pass (30/30)       | pass (4/4)      | pass (20/20)           | pass (2/2)  | not in brief | pass (5/5)  |
+| baseline       | claude-code-2 | 2     | pass (45/45)       | pass (5/5)      | pass (21/21)           | pass (2/2)  | pass (12/12) | pass (5/5)  |
 
 Both pass every check. What this shows, and what it does not:
 
@@ -65,23 +70,48 @@ Both pass every check. What this shows, and what it does not:
 ## Limitations
 
 - **One run each, by a Claude Code session.** Not N runs, and not the scripted loop: the session had the repository at hand (afora's docs and source) while it made the tool calls, which a scripted run does not, and it wrote the evaluation before the app and the baseline. The scripted runs remove both advantages.
-- **The checks are the invariants afora claims, on this contract.** They do not check the rest of the product, nor concurrency (two last tickets bought at once), nor anything the scenario does not exercise. Ownership is checked on the event routes of brief 2 only: the tokens it accepts are the ones `POST /api/sessions` gives, plus a malformed and a forged one; expiry is not exercised.
-- **A brief that states the guarantees favors the baseline**, which is deliberate: it makes the comparison about whether they hold, not about whether the agent guessed them.
-- **In memory only.** Both implementations keep their data in memory; a database changes how uniqueness and the sold-out rollback are enforced.
+- **The checks are the invariants afora claims, on this contract.** They do not check the rest of the product, nor anything the scenario does not exercise. Concurrency is one burst of four purchases on one event, sent together to the handler of one process: it catches a check and a write apart, not every race a server with several processes or connections can have. Ownership is checked on the event routes of briefs 2 and 3: the tokens it accepts are the ones `POST /api/sessions` gives, plus a malformed and a forged one; expiry is not exercised.
+- **A brief that states the guarantees favors the baseline**, which is deliberate: it makes the comparison about whether they hold, not about whether the agent guessed them. Brief 3 is the other case, where they are not stated.
+- **The committed runs are in memory.** `--db sqlite` runs both sides on SQLite; no such run has been made by an agent yet. On SQLite the afora side's tables come from the harness ([db/sqlite.ts](db/sqlite.ts)), not from the agent.
 
-## Reproduce with a key
+## Running the evaluation
+
+With a key, from the repository root, this makes 20 runs per side, per model and per brief, on SQLite and in memory, then evaluates every run into `eval/RESULTS.md`:
 
 ```bash
 export ANTHROPIC_API_KEY=...
-bun run eval:agent-built    # from the repository root: 5 afora runs, 5 baselines, then the evaluation
+bun run eval:agent-built -- --runs 20 --models claude-opus-5-5,claude-sonnet-5-5 --briefs 2,3 --db memory,sqlite
 ```
 
-or step by step, in this directory:
+Add `--dry-run` to print the plan first: the number of runs and API requests and a rough token estimate measured from the prompts on this checkout, with no key needed and nothing called or written. Without a key and without `--dry-run`, the script exits 1 before any run.
 
 ```bash
-bun run build:agent -- --runs 5      # runs/<timestamp>-<n>/: transcript.jsonl, tool-calls.json, prompts.md, afora.json, src/domain
-bun run build:baseline -- --runs 5   # baseline/runs/<timestamp>-<n>/: prompts.md, answer.md, app.ts
-bun run eval                         # writes eval/RESULTS.md
+bun run eval:agent-built -- --runs 20 --models claude-opus-5-5,claude-sonnet-5-5 --briefs 2,3 --dry-run
 ```
 
-The model is `claude-opus-5-5` with adaptive thinking at effort `high`; `--model` / `AFORA_EVAL_MODEL` and `--effort` / `AFORA_EVAL_EFFORT` change them. An afora run gets the instructions of [scripts/prompts.ts](scripts/prompts.ts), the guide and the catalog of the MCP server as its system prompt, the brief as its message, and the MCP tools; a baseline gets the brief and is asked for one Hono + Zod file, with no tools. Each run writes the exact prompts it sent. Commit the runs and the new RESULTS.md together; `bun test` then checks that every afora run holds every invariant.
+The flags of [scripts/eval.ts](scripts/eval.ts) (`bun run eval:all -- ...` in this directory):
+
+| Flag          | Default                                    | What it sets                                              |
+| ------------- | ------------------------------------------ | --------------------------------------------------------- |
+| `--runs`      | `20`                                       | runs per side, model, brief and database                  |
+| `--models`    | `AFORA_EVAL_MODEL`, else `claude-opus-5-5` | comma-separated model ids                                 |
+| `--briefs`    | `2`                                        | comma-separated versions of the brief: `1`, `2`, `3`      |
+| `--db`        | `memory`                                   | `memory`, `sqlite`, or both                               |
+| `--sides`     | `afora,baseline`                           | which sides to run                                        |
+| `--effort`    | `AFORA_EVAL_EFFORT`, else `high`           | the effort of adaptive thinking                           |
+| `--max-turns` | `60`                                       | the turns an afora run may take                           |
+| `--parallel`  | `4`                                        | runs made at the same time                                |
+| `--dry-run`   |                                            | print the plan and the estimate, call nothing             |
+| `--no-eval`   |                                            | make the runs, do not evaluate them (then `bun run eval`) |
+
+Each run gets its own directory, `runs/<stamp>-<model>-b<brief>-<db>-<n>` (afora) or `baseline/runs/...`, whose `run.json` records the brief, the database, the model, the effort, how the run stopped and `"scripted": true`. A run that hits an API error is started again from scratch, up to three times, then left out and listed at the end; a run that ends without a working app (cut off, no code, a spec that does not generate) stays and fails the evaluation.
+
+One run at a time, in this directory:
+
+```bash
+bun run build:agent -- --runs 5 --brief 3 --db sqlite      # runs/<timestamp>-<n>/: transcript.jsonl, tool-calls.json, prompts.md, run.json, afora.json, src/
+bun run build:baseline -- --runs 5 --brief 3 --db sqlite   # baseline/runs/<timestamp>-<n>/: prompts.md, answer.md, run.json, app.ts
+bun run eval                                               # writes eval/RESULTS.md
+```
+
+An afora run gets the instructions of [scripts/prompts.ts](scripts/prompts.ts), the guide and the catalog of the MCP server as its system prompt, the brief as its message, and the MCP tools; a baseline gets the brief and is asked for one Hono + Zod file, with no tools. Each run writes the exact prompts it sent. Commit the runs and the new RESULTS.md together; `bun test` then checks that RESULTS.md is what the runs give.

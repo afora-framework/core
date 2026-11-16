@@ -1,6 +1,8 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { extractSpec, generate, loadSpec, normalizeSpec } from "@afora/codegen";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -11,8 +13,29 @@ import {
 	type Handler,
 	invariantsOf,
 } from "./eval/invariants.ts";
-import { resultsMarkdown, runEval } from "./eval/run.ts";
+import {
+	groupsOf,
+	type RunResult,
+	rateOf,
+	resultsMarkdown,
+	runEval,
+} from "./eval/run.ts";
+import { formatRate, wilson } from "./eval/stats.ts";
+import { connectMcp, type RecordedCall } from "./scripts/mcp.ts";
+import {
+	estimateRun,
+	jobName,
+	jobsOf,
+	planOf,
+	THINKING_PER_BASELINE,
+} from "./scripts/plan.ts";
+import { agentInstructions, baselineInstructions } from "./scripts/prompts.ts";
 import { readCalls, replay } from "./scripts/replay.ts";
+import {
+	briefText,
+	MEMORY_SENTENCE,
+	SQLITE_SENTENCE,
+} from "./scripts/storage.ts";
 import { App } from "./src/domain";
 
 // biome-ignore lint/suspicious/noExplicitAny: test helper reading JSON bodies
@@ -289,13 +312,83 @@ describe("the evaluation", () => {
 			problems: false,
 			unique: false,
 			ownership: false,
+			concurrency: false,
 		});
 		expect(checks.filter((c) => !c.ok).length).toBeGreaterThan(10);
 	});
 
-	test("every afora run passes every invariant, and eval/RESULTS.md is what the runs give", async () => {
+	test("brief 3 is checked for every invariant, ownership and concurrency included, and both fail on the careless API", async () => {
+		expect(invariantsOf(3)).toEqual(invariantsOf(2));
+		expect(invariantsOf(3)).toContain("ownership");
+		expect(invariantsOf(1)).toContain("concurrency");
+		const v3 = await evaluate(careless(), 3);
+		expect(v3.passed.ownership).toBe(false);
+		expect(v3.passed.concurrency).toBe(false);
+		const v1 = await evaluate(careless(), 1);
+		expect(v1.passed.concurrency).toBe(false);
+		expect(v1.passed.ownership).toBeUndefined();
+		// the careless API sells every seat asked for
+		const oversold = v3.checks.find(
+			(c) =>
+				c.name === "four buyers at once never get more than the two seats left",
+		);
+		expect(oversold?.ok).toBe(false);
+		expect(oversold?.detail).toContain("4 tickets sold for 2 seats left");
+	});
+
+	test("concurrency fails on an API that checks the capacity, then awaits, then sells", async () => {
+		// the committed app, but its tickets route replaced by a racy one
+		const sold = new Map<string, number>();
+		const racy: Handler = async (request) => {
+			const match = /\/api\/events\/([^/]+)\/tickets$/.exec(
+				new URL(request.url).pathname,
+			);
+			if (!match || request.method !== "POST") return api.fetch(request);
+			const id = match[1] as string;
+			const event = await api.fetch(
+				new Request(`http://x/api/events/${id}`, {
+					headers: {
+						authorization: request.headers.get("authorization") ?? "",
+					},
+				}),
+			);
+			const capacity = event.ok ? (await body(event)).event.capacity : 3;
+			const taken = sold.get(id) ?? 0;
+			if (taken >= capacity) {
+				return Response.json(
+					{ type: "about:blank", title: "SoldOut", status: 422 },
+					{
+						status: 422,
+						headers: { "content-type": "application/problem+json" },
+					},
+				);
+			}
+			await Bun.sleep(5); // the read and the write are apart
+			sold.set(id, (sold.get(id) ?? 0) + 1);
+			return Response.json(
+				{ ticket: { id: crypto.randomUUID() } },
+				{ status: 201 },
+			);
+		};
+		const { passed } = await evaluate(racy, 1);
+		expect(passed.concurrency).toBe(false);
+	});
+
+	test("the non-scripted runs still evaluate: every afora run of them passes every invariant, and eval/RESULTS.md is what the runs give", async () => {
 		const results = await runEval();
-		const afora = results.filter((r) => r.implementation === "afora");
+		for (const name of ["claude-code-1", "claude-code-2"]) {
+			for (const side of ["afora", "baseline"] as const) {
+				const result = results.find(
+					(r) => r.run === name && r.implementation === side,
+				);
+				expect(result?.scripted).toBe(false);
+				expect(result?.error).toBeUndefined();
+			}
+		}
+		// scripted afora runs that fail are results, reported in RESULTS.md
+		const afora = results.filter(
+			(r) => r.implementation === "afora" && !r.scripted,
+		);
 		expect(afora.length).toBeGreaterThan(0);
 		for (const result of afora) {
 			expect({ run: result.run, error: result.error }).toEqual({
@@ -320,7 +413,8 @@ describe("the evaluation", () => {
 		const env = { ...process.env };
 		delete env.ANTHROPIC_API_KEY;
 		delete env.ANTHROPIC_AUTH_TOKEN;
-		for (const script of ["build-with-agent", "build-baseline"]) {
+		const before = await runCount();
+		for (const script of ["build-with-agent", "build-baseline", "eval"]) {
 			const child = Bun.spawn(["bun", `scripts/${script}.ts`, "--runs", "1"], {
 				env,
 				stderr: "pipe",
@@ -330,5 +424,324 @@ describe("the evaluation", () => {
 			expect(await child.exited).toBe(1);
 			expect(stderr).toContain("ANTHROPIC_API_KEY is not set");
 		}
+		const multi = Bun.spawn(
+			[
+				"bun",
+				"scripts/eval.ts",
+				"--runs",
+				"20",
+				"--models",
+				"claude-opus-5-5,claude-sonnet-5-5",
+				"--briefs",
+				"2,3",
+				"--db",
+				"sqlite",
+			],
+			{ env, stderr: "pipe", stdout: "pipe" },
+		);
+		const stderr = await new Response(multi.stderr).text();
+		expect(await multi.exited).toBe(1);
+		expect(stderr).toContain("ANTHROPIC_API_KEY is not set");
+		expect(await runCount()).toBe(before);
 	});
+
+	test("--dry-run prints the plan and a token estimate without a key, and writes no run", async () => {
+		const env = { ...process.env };
+		delete env.ANTHROPIC_API_KEY;
+		delete env.ANTHROPIC_AUTH_TOKEN;
+		const before = await runCount();
+		const child = Bun.spawn(
+			[
+				"bun",
+				"scripts/eval.ts",
+				"--runs",
+				"20",
+				"--models",
+				"claude-opus-5-5,claude-sonnet-5-5",
+				"--briefs",
+				"2,3",
+				"--dry-run",
+			],
+			{ env, stderr: "pipe", stdout: "pipe" },
+		);
+		const stdout = await new Response(child.stdout).text();
+		expect(await child.exited).toBe(0);
+		expect(stdout).toContain(
+			"Plan: 20 runs per side, model, brief and database: 160 runs.",
+		);
+		expect(stdout).toContain("claude-opus-5-5, claude-sonnet-5-5");
+		expect(stdout).toMatch(/total\s+160\s+~[\d,]+\s+~[\d,]+\s+~[\d,]+/);
+		expect(stdout).toContain("no model was called");
+		expect(await runCount()).toBe(before);
+	}, 60_000);
+});
+
+/** The run directories of both sides, to show a script made none. */
+async function runCount(): Promise<number> {
+	let count = 0;
+	for (const parent of ["runs", "baseline/runs"]) {
+		count += (await readdir(parent)).length;
+	}
+	return count;
+}
+
+describe("the plan of the scripted evaluation", () => {
+	test("N runs per side, model, brief and database", () => {
+		const plan = planOf(
+			[
+				"--runs",
+				"20",
+				"--models",
+				"claude-opus-5-5,claude-sonnet-5-5",
+				"--briefs",
+				"2,3",
+				"--db",
+				"memory,sqlite",
+			],
+			{},
+		);
+		expect(plan.models).toEqual(["claude-opus-5-5", "claude-sonnet-5-5"]);
+		expect(plan.briefs).toEqual([2, 3]);
+		expect(plan.dbs).toEqual(["memory", "sqlite"]);
+		const jobs = jobsOf(plan);
+		expect(jobs).toHaveLength(20 * 2 * 2 * 2 * 2);
+		const per = new Map<string, number>();
+		for (const job of jobs) {
+			const key = `${job.model}/${job.brief}/${job.db}/${job.side}`;
+			per.set(key, (per.get(key) ?? 0) + 1);
+		}
+		expect([...per.values()].every((count) => count === 20)).toBe(true);
+		expect(per.size).toBe(16);
+		// afora and baseline runs live in different directories
+		expect(
+			new Set(jobs.map((job) => `${job.side}/${jobName(job, "stamp")}`)).size,
+		).toBe(jobs.length);
+		expect(jobName(jobs[0] as (typeof jobs)[0], "2026-11-15T10-00-00")).toBe(
+			"2026-11-15T10-00-00-claude-opus-5-5-b2-memory-1",
+		);
+	});
+
+	test("defaults, and refusals of a bad flag", () => {
+		const plan = planOf([], {});
+		expect(plan).toMatchObject({
+			runs: 20,
+			models: ["claude-opus-5-5"],
+			briefs: [2],
+			dbs: ["memory"],
+			sides: ["afora", "baseline"],
+			effort: "high",
+			dryRun: false,
+			evaluate: true,
+		});
+		expect(planOf([], { AFORA_EVAL_MODEL: "claude-x" }).models).toEqual([
+			"claude-x",
+		]);
+		expect(() => planOf(["--briefs", "4"], {})).toThrow("--briefs");
+		expect(() => planOf(["--db", "postgres"], {})).toThrow("--db");
+		expect(() => planOf(["--runs", "0"], {})).toThrow("--runs");
+		expect(() => planOf(["--sides", "zod"], {})).toThrow("--sides");
+		expect(() => planOf(["--unknown"], {})).toThrow();
+	});
+
+	test("the estimate grows with the conversation of an afora run; a baseline is one request", () => {
+		const turns = [
+			{ call: 400, result: 4_000 },
+			{ call: 400, result: 4_000 },
+		];
+		const afora = estimateRun("afora", { fixed: 40_000, turns });
+		expect(afora.requests).toBe(3);
+		// 3 requests of the fixed part (10,000 tokens), then the history
+		expect(afora.input).toBeGreaterThan(30_000 + 2 * 1_000);
+		const baseline = estimateRun("baseline", {
+			fixed: 4_000,
+			turns: [],
+			answer: 40_000,
+		});
+		expect(baseline).toEqual({
+			requests: 1,
+			input: 1_000,
+			output: 10_000 + THINKING_PER_BASELINE,
+		});
+	});
+});
+
+describe("RESULTS.md", () => {
+	test("wilson gives the 95% interval of a pass rate", () => {
+		const all = wilson(20, 20);
+		expect(all.high).toBe(1);
+		expect(all.low).toBeCloseTo(0.8389, 3);
+		const none = wilson(0, 20);
+		expect(none.low).toBe(0);
+		expect(none.high).toBeCloseTo(0.1611, 3);
+		const half = wilson(10, 20);
+		expect(half.low).toBeCloseTo(0.2993, 3);
+		expect(half.high).toBeCloseTo(0.7007, 3);
+		expect(formatRate(wilson(18, 20))).toBe("18/20 (90%; 70%–97%)");
+		expect(formatRate(wilson(0, 0))).toBe("not in brief");
+		expect(() => wilson(3, 2)).toThrow();
+	});
+
+	test("pass rates per invariant, grouped by model, brief, database and side, scripted runs apart", () => {
+		const run = (
+			implementation: "afora" | "baseline",
+			index: number,
+			model: string,
+			passed: Partial<Record<string, boolean>>,
+		): RunResult => ({
+			implementation,
+			run: `s-${model}-${implementation}-${index}`,
+			brief: 3,
+			db: "sqlite",
+			model,
+			scripted: true,
+			checks: [],
+			passed: {
+				sensitive: true,
+				undeclared: true,
+				problems: true,
+				unique: true,
+				ownership: true,
+				concurrency: true,
+				...passed,
+			},
+		});
+		const results = [
+			run("afora", 1, "m-a", {}),
+			run("afora", 2, "m-a", {}),
+			run("baseline", 1, "m-a", { undeclared: false }),
+			run("baseline", 2, "m-a", {}),
+			run("baseline", 1, "m-b", { concurrency: false }),
+		];
+		const groups = groupsOf(results);
+		expect(
+			groups.map((g) => `${g.model}/${g.brief}/${g.db}/${g.implementation}`),
+		).toEqual([
+			"m-a/3/sqlite/afora",
+			"m-a/3/sqlite/baseline",
+			"m-b/3/sqlite/baseline",
+		]);
+		const baseline = groups[1]?.runs ?? [];
+		expect(rateOf(baseline, "undeclared")).toMatchObject({
+			passed: 1,
+			runs: 2,
+		});
+		expect(rateOf(baseline, "all")).toMatchObject({ passed: 1, runs: 2 });
+		const markdown = resultsMarkdown(results);
+		expect(markdown).toContain("## Scripted runs");
+		expect(markdown).toContain(
+			"| m-a | 3 | sqlite | baseline | 2 | 2/2 (100%; 34%–100%) | 1/2 (50%; 9%–91%) |",
+		);
+		expect(markdown).not.toContain("None yet");
+	});
+});
+
+describe("on SQLite", () => {
+	const drizzle = {
+		use: "drizzle",
+		options: {
+			db: { import: "../db.ts#db" },
+			tables: { import: "../db.ts#tables" },
+		},
+	};
+
+	test("the brief and the instructions say SQLite; brief 3 lists no guarantee", async () => {
+		for (const version of [1, 2, 3] as const) {
+			const memory = await briefText(version);
+			expect(memory).toContain(MEMORY_SENTENCE);
+			const sqlite = await briefText(version, "sqlite");
+			expect(sqlite).toContain(SQLITE_SENTENCE);
+			expect(sqlite).not.toContain(MEMORY_SENTENCE);
+		}
+		const v3 = await briefText(3);
+		for (const guarantee of [
+			"never",
+			"Unknown fields",
+			"cannot share",
+			"5xx",
+			"********",
+			"hash",
+		]) {
+			expect(v3).not.toContain(guarantee);
+		}
+		expect(agentInstructions("sqlite")).toContain('"use": "drizzle"');
+		expect(agentInstructions("sqlite")).not.toContain('"inMemory"');
+		expect(baselineInstructions("sqlite")).toContain("bun:sqlite");
+		expect(baselineInstructions("sqlite")).not.toContain("in memory");
+	});
+
+	test("the MCP server offers the drizzle provider to a run on SQLite, and only to it", async () => {
+		const dir = ".tmp/test-catalog";
+		await mkdir(dir, { recursive: true });
+		for (const db of ["memory", "sqlite"] as const) {
+			const mcp = await connectMcp(dir, db);
+			try {
+				const catalog = await mcp.callTool("afora_catalog", {});
+				expect(catalog.isError).toBe(false);
+				expect(catalog.text.includes("@afora/drizzle")).toBe(db === "sqlite");
+			} finally {
+				await mcp.close();
+			}
+		}
+	});
+
+	test("the calls of runs/claude-code-2 with the drizzle provider give an app on SQLite that holds every invariant", async () => {
+		const calls = (await readCalls("runs/claude-code-2/tool-calls.json")).map(
+			(call): RecordedCall =>
+				"tool" in call && call.tool === "afora_spec_write"
+					? {
+							...call,
+							arguments: {
+								spec: {
+									...(call.arguments.spec as object),
+									provider: drizzle,
+								},
+							},
+						}
+					: call,
+		);
+		const dir = ".tmp/test-sqlite";
+		await replay(calls, dir, { db: "sqlite" });
+		expect(existsSync(join(dir, "src/db.ts"))).toBe(true);
+		expect(
+			await readFile(join(dir, "src/domain/application.ts"), "utf8"),
+		).toContain("drizzleProvider({ db, tables })");
+
+		const file = resolve(".tmp/test-sqlite.sqlite");
+		await rm(file, { force: true });
+		const child = Bun.spawn(
+			["bun", "eval/check.ts", "afora", dir, "2", "sqlite"],
+			{
+				env: { ...process.env, DATABASE_PATH: file },
+				stdout: "pipe",
+				stderr: "pipe",
+			},
+		);
+		const [stdout, stderr] = await Promise.all([
+			new Response(child.stdout).text(),
+			new Response(child.stderr).text(),
+		]);
+		expect({ code: await child.exited, stderr }).toEqual({
+			code: 0,
+			stderr: "",
+		});
+		const evaluation = JSON.parse(stdout.trim().split("\n").at(-1) ?? "");
+		expect(evaluation.passed).toEqual({
+			sensitive: true,
+			undeclared: true,
+			problems: true,
+			unique: true,
+			ownership: true,
+			concurrency: true,
+		});
+		// the data is in the file: 2 tickets of the first event, 3 of the last seats
+		const sqlite = new Database(file, { readonly: true });
+		try {
+			const { count } = sqlite
+				.query("SELECT count(*) AS count FROM tickets")
+				.get() as { count: number };
+			expect(count).toBe(5);
+		} finally {
+			sqlite.close();
+		}
+	}, 120_000);
 });
