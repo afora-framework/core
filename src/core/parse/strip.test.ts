@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { blueprintOf } from "../../std/blueprint";
 import { entityOf } from "../../std/entity";
+import { ReservedBlueprintKey } from "../blueprint/exceptions";
 import { listOf } from "../blueprint/list";
 import { optionalOf } from "../blueprint/optional";
 import { recordOf } from "../record/record";
@@ -133,14 +134,10 @@ describe("stripUndeclared", () => {
 		expect(stripped.address).not.toBe(payload.address);
 	});
 
-	test("a declared __proto__ stays a key and an undeclared one is dropped", () => {
-		const Odd = blueprintOf((ctx) => ({ ["__proto__"]: ctx.string }));
-		const payload = JSON.parse('{"__proto__": "x", "polluted": true}');
-		const stripped = stripUndeclared(Odd, payload) as Record<string, unknown>;
-
-		expect(Object.getPrototypeOf(stripped)).toBe(Object.prototype);
-		expect(Object.hasOwn(stripped, "__proto__")).toBe(true);
-		expect(Object.hasOwn(stripped, "polluted")).toBe(false);
+	test("__proto__ cannot be declared, and an undeclared one is dropped", () => {
+		expect(() => blueprintOf((ctx) => ({ ["__proto__"]: ctx.string }))).toThrow(
+			ReservedBlueprintKey,
+		);
 
 		const plain = stripUndeclared(
 			Address,

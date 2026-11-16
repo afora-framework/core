@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import { blueprintOf } from "../../std/blueprint";
 import { Slug } from "../../std/properties/identity";
 import { Password } from "../../std/properties/password";
+import { ReservedBlueprintKey } from "../blueprint/exceptions";
 import { listOf } from "../blueprint/list";
 import { optionalOf } from "../blueprint/optional";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
@@ -97,6 +98,13 @@ test("a key cannot take the name of a member of the record", () => {
 test("a key cannot take the name of a member every object inherits", () => {
 	for (const key of Object.getOwnPropertyNames(Object.prototype)) {
 		expect(RESERVED_RECORD_KEYS).toContain(key);
+		// A blueprint itself cannot declare these (SEC-16).
+		if (key === "__proto__" || key === "constructor") {
+			expect(() => blueprintOf((ctx) => ({ [key]: ctx.string }))).toThrow(
+				ReservedBlueprintKey,
+			);
+			continue;
+		}
 		const Broken = blueprintOf((ctx) => ({ [key]: ctx.string }));
 		expect(() => recordOf(Broken)).toThrow(ReservedRecordKey);
 	}

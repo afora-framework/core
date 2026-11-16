@@ -1,12 +1,18 @@
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { exceptionOf } from "../exception/exception";
 
-/** A plugin declares a key the blueprint context reserves; `source` is the plugin name. */
+/**
+ * A plugin declares a key the blueprint context reserves (`source` is the
+ * plugin name), or a blueprint declares `__proto__`, `constructor` or
+ * `prototype` (`source` is `"blueprint"`).
+ */
 export const ReservedBlueprintKey = exceptionOf({
 	layer: ExceptionLayers.Blueprint,
 	name: "ReservedBlueprintKey",
-	message: ({ key }: { readonly key: string }) =>
-		`"${key}" is reserved and cannot be a plugin property.`,
+	message: ({ key }: { readonly key: string }, source) =>
+		source === "blueprint"
+			? `"${key}" is reserved and cannot be a key of a blueprint.`
+			: `"${key}" is reserved and cannot be a plugin property.`,
 });
 
 /** `variantOf` was given something it cannot make a field of; `reason` says what. */

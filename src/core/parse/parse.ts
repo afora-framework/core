@@ -63,6 +63,155 @@ export function isPlainObject(
 	return prototype === Object.prototype || prototype === null;
 }
 
+const OBJECT_PROTOTYPE = Object.prototype as unknown as Record<string, unknown>;
+/**
+ * An empty array, never written to: reading an index of it gives what a hole
+ * of a list would inherit, faster than reading `Array.prototype` itself.
+ */
+const NO_ITEMS: readonly unknown[] = [];
+
+/**
+ * Whether `item`, read from `source[name]`, is only inherited from
+ * `Object.prototype`: a key someone added to it (prototype pollution) is not
+ * a value of the input, and is treated as absent. A value from another
+ * prototype, such as the getter of a class, is the input's own.
+ */
+function inheritedFromObject(
+	source: object,
+	name: string,
+	item: unknown,
+): boolean {
+	return item === OBJECT_PROTOTYPE[name] && !Object.hasOwn(source, name);
+}
+
+/** An empty object, never written to: what it enumerates, `Object.prototype` has. */
+const NO_KEYS: object = {};
+
+/**
+ * Whether `Object.prototype` has no enumerable key: nothing was added to it
+ * by assignment, as prototype pollution adds keys, so a key an input lacks
+ * inherits nothing but its built-in members. Checked once for each object
+ * parsed (a `for...in` over an empty object takes about 2 ns), so that each
+ * value is only checked when it could be inherited.
+ */
+function objectPrototypeIsClean(): boolean {
+	for (const _key in NO_KEYS) return false;
+	return true;
+}
+
+/**
+ * `source[name]`, or `undefined` when it is only inherited from
+ * `Object.prototype`; with `inherits` false, `source[name]` as it is.
+ */
+function valueAt(
+	source: Record<string, unknown>,
+	name: string,
+	inherits: boolean,
+): unknown {
+	const item = source[name];
+	return inherits &&
+		item !== undefined &&
+		inheritedFromObject(source, name, item)
+		? undefined
+		: item;
+}
+
+/** `list[index]`, or `undefined` for a hole that `Array.prototype` would fill. */
+function itemAt(list: readonly unknown[], index: number): unknown {
+	const item = list[index];
+	return item !== undefined &&
+		item === NO_ITEMS[index] &&
+		!Object.hasOwn(list, index)
+		? undefined
+		: item;
+}
+
+/**
+ * Writes `item` as the key `name` of `handled`: a key, never the prototype,
+ * even for `__proto__` (which a blueprint cannot declare).
+ */
+function put(handled: Record<string, unknown>, name: string, item: unknown) {
+	if (name === "__proto__") {
+		Object.defineProperty(handled, name, {
+			value: item,
+			enumerable: true,
+			writable: true,
+			configurable: true,
+		});
+	} else {
+		handled[name] = item;
+	}
+}
+
+/** The values `frozenCopyOf` gave, frozen at every depth: kept as they are. */
+const frozenCopies = new WeakSet<object>();
+
+/**
+ * How deep a copy goes before it remembers what it copied: only a value with
+ * a cycle (which no JSON has) goes deeper, and each object is then copied
+ * once, so the copy ends.
+ */
+const TRACK_AFTER = 32;
+
+/**
+ * A copy of the value of a property, frozen at every depth, for a record to
+ * keep: the plain objects and arrays in it (as JSON has) are copied, so the
+ * caller's own cannot change the record. Other objects, such as a `File`, and
+ * primitives are kept as they are.
+ */
+function frozenCopyOf(value: unknown): unknown {
+	if (typeof value !== "object" || value === null) return value;
+	if (frozenCopies.has(value)) return value;
+	const copy = copyOf(value, 0, undefined);
+	if (copy !== value) frozenCopies.add(copy);
+	return copy;
+}
+
+function copyOf(
+	value: object,
+	depth: number,
+	seen: Map<object, object> | undefined,
+): object {
+	const isArray = Array.isArray(value);
+	if (!isArray && !isPlainObject(value)) return value;
+	let copied = seen;
+	if (copied === undefined && depth >= TRACK_AFTER) copied = new Map();
+	if (copied !== undefined) {
+		const done = copied.get(value);
+		if (done !== undefined) return done;
+	}
+	const next = depth + 1;
+	if (isArray) {
+		const list = value as readonly unknown[];
+		const items: unknown[] = [];
+		copied?.set(value, items);
+		for (let index = 0; index < list.length; index++) {
+			const item = list[index];
+			items.push(
+				typeof item === "object" && item !== null
+					? copyOf(item, next, copied)
+					: item,
+			);
+		}
+		return Object.freeze(items);
+	}
+	const source = value as Record<string, unknown>;
+	const copy: Record<string, unknown> =
+		Object.getPrototypeOf(value) === null ? Object.create(null) : {};
+	copied?.set(value, copy);
+	for (const name of Object.keys(source)) {
+		const item = source[name];
+		put(
+			copy,
+			name,
+			typeof item === "object" && item !== null
+				? copyOf(item, next, copied)
+				: item,
+		);
+	}
+	return Object.freeze(copy);
+}
+
 /** What a field is, told once from its brand. */
 const PROPERTY = 0;
 const LIST = 1;
@@ -131,6 +280,17 @@ interface Collection {
 	whole: { Check(value: unknown): boolean } | null | undefined;
 	/** How many values the collection parsed before `whole` was made. */
 	seen: number;
+	/**
+	 * Whether a field is named `__proto__`, which no blueprint declares: its
+	 * value is then written as a key, by the general path only.
+	 */
+	readonly guarded: boolean;
+	/**
+	 * Whether a field has the name of a member of `Object.prototype`, such as
+	 * `toString`: an input lacking it inherits that member, so its value is
+	 * always checked to be the input's own.
+	 */
+	readonly inheritable: boolean;
 }
 
 /** How many values a collection parses before its whole check is compiled. */
@@ -309,6 +469,8 @@ function collectionOf(properties: IBlueprintCollection): Collection {
 			parsers: undefined,
 			whole: undefined,
 			seen: 0,
+			guarded: fields.some(([name]) => name === "__proto__"),
+			inheritable: fields.some(([name]) => name in OBJECT_PROTOTYPE),
 		};
 		collections.set(properties, collection);
 	}
@@ -446,8 +608,10 @@ function collectionAt(
 		return reject(run, "invalid_type", "must be an object", pathOf(run, depth));
 	}
 
-	const { properties, names, steps } = collection;
+	const { properties, names, steps, guarded } = collection;
 	let rejected = false;
+	// Whether a value read from the input could be inherited, and is checked.
+	const inherits = collection.inheritable || !objectPrototypeIsClean();
 
 	// Every field a property that only checks its value, and nothing vouched,
 	// completed or tagged: one compiled check of the whole value, which keeps
@@ -455,6 +619,7 @@ function collectionAt(
 	// find its issues.
 	if (
 		specialized &&
+		!guarded &&
 		vouched === undefined &&
 		complete === undefined &&
 		tag === undefined
@@ -467,12 +632,23 @@ function collectionAt(
 		if (whole && isPlainObject(value) && whole.Check(value)) {
 			const source = value as Record<string, unknown>;
 			const handled: Record<string, unknown> = {};
+			let inherited = false;
 			for (let index = 0; index < names.length; index++) {
 				const name = names[index] as string;
 				const item = source[name];
-				if (item !== undefined) handled[name] = item;
+				if (item === undefined) continue;
+				// The check read a value `Object.prototype` gave: the paths below
+				// treat it as absent.
+				if (inherits && inheritedFromObject(source, name, item)) {
+					inherited = true;
+					break;
+				}
+				handled[name] =
+					run.freeze && typeof item === "object" && item !== null
+						? frozenCopyOf(item)
+						: item;
 			}
-			return run.freeze ? Object.freeze(handled) : handled;
+			if (!inherited) return run.freeze ? Object.freeze(handled) : handled;
 		}
 	}
 
@@ -482,6 +658,7 @@ function collectionAt(
 	// one loop over the parsers, with the path only made for an issue.
 	if (
 		specialized &&
+		!guarded &&
 		vouched === undefined &&
 		complete === undefined &&
 		tag === undefined
@@ -492,14 +669,25 @@ function collectionAt(
 			const handled: Record<string, unknown> = {};
 			for (let index = 0; index < names.length; index++) {
 				const name = names[index] as string;
-				const item = (parsers[index] as Parser)(source[name]);
+				let own = source[name];
+				if (
+					inherits &&
+					own !== undefined &&
+					inheritedFromObject(source, name, own)
+				) {
+					own = undefined;
+				}
+				const item = (parsers[index] as Parser)(own);
 				if (item === REJECTED) {
 					rejected = true;
 					run.keys[depth] = name;
 					run.issues ??= [];
 					takeRejectionIssues(pathOf(run, depth + 1), run.issues);
 				} else if (item !== undefined) {
-					handled[name] = item;
+					handled[name] =
+						run.freeze && typeof item === "object" && item !== null
+							? frozenCopyOf(item)
+							: item;
 				}
 			}
 			if (rejected) return REJECTED;
@@ -526,7 +714,9 @@ function collectionAt(
 
 	// The key of a variant goes first, with the name that chose this collection.
 	const handled: Record<string, unknown> =
-		tag === undefined ? {} : { [tag]: (value as Record<string, unknown>)[tag] };
+		tag === undefined
+			? {}
+			: { [tag]: valueAt(value as Record<string, unknown>, tag, true) };
 	// The few keys a caller vouches for (at most three: `id`, `createdAt` and
 	// `expiresAt`) are compared as locals, not searched for in each key.
 	const first = vouched?.[0];
@@ -541,18 +731,23 @@ function collectionAt(
 				name === third ||
 				(vouched.length > 3 && vouched.includes(name)))
 		) {
-			handled[name] = (value as Record<string, unknown>)[name];
+			const item = valueAt(value as Record<string, unknown>, name, inherits);
+			if (guarded) put(handled, name, item);
+			else handled[name] = item;
 			continue;
 		}
 		run.keys[depth] = name;
 		const item = fieldAt(
 			steps[index] as Step,
-			(value as Record<string, unknown>)[name],
+			valueAt(value as Record<string, unknown>, name, inherits),
 			run,
 			depth + 1,
 		);
 		if (item === REJECTED) rejected = true;
-		else if (item !== undefined) handled[name] = item;
+		else if (item !== undefined) {
+			if (guarded) put(handled, name, item);
+			else handled[name] = item;
+		}
 	}
 
 	if (!rejected && complete !== undefined) {
@@ -565,7 +760,10 @@ function collectionAt(
 				depth + 1,
 			);
 			if (item === REJECTED) rejected = true;
-			else if (item !== undefined) handled[name] = item;
+			else if (item !== undefined) {
+				if (guarded) put(handled, name, item);
+				else handled[name] = item;
+			}
 		}
 	}
 
@@ -662,7 +860,7 @@ function fieldAt(step: Step, value: unknown, run: Run, depth: number): unknown {
 			const items: unknown[] = [];
 			for (let index = 0; index < value.length; index++) {
 				run.keys[depth] = index;
-				const handled = fieldAt(item, value[index], run, depth + 1);
+				const handled = fieldAt(item, itemAt(value, index), run, depth + 1);
 				if (handled === REJECTED) rejected = true;
 				else items.push(handled);
 			}
@@ -713,7 +911,7 @@ function fieldAt(step: Step, value: unknown, run: Run, depth: number): unknown {
 				}
 			}
 			const { key } = variant;
-			const tag = (value as Record<string, unknown>)[key];
+			const tag = valueAt(value as Record<string, unknown>, key, true);
 			const named = typeof tag === "string" ? variants.get(tag) : undefined;
 			if (named === undefined) {
 				return reject(
@@ -798,7 +996,11 @@ function propertyAt(
 		}
 		if (parser !== null) {
 			const handled = parser(value);
-			if (handled !== REJECTED) return handled;
+			if (handled !== REJECTED) {
+				return run.freeze && typeof handled === "object" && handled !== null
+					? frozenCopyOf(handled)
+					: handled;
+			}
 			run.issues ??= [];
 			takeRejectionIssues(pathOf(run, depth), run.issues);
 			return REJECTED;
@@ -806,7 +1008,12 @@ function propertyAt(
 	}
 
 	const result = property.safeParse(value);
-	if (!result.issues) return result.value;
+	if (!result.issues) {
+		const handled: unknown = result.value;
+		return run.freeze && typeof handled === "object" && handled !== null
+			? frozenCopyOf(handled)
+			: handled;
+	}
 
 	const path = pathOf(run, depth);
 	run.issues ??= [];
