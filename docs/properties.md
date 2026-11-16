@@ -121,7 +121,7 @@ When every variant is an object that requires one same key with a literal, a dif
 
 ## JSON
 
-`ctx.json` (`JsonProperty`) holds any JSON value: `null`, a boolean, a finite number, a string, or a list or plain object of them, at any depth, typed `JsonValue`. It rejects what `JSON.stringify` would lose or change: `undefined` (in a list or an object too), functions, `NaN` and `Infinity`, class instances such as `Date`, and cycles, with `InvalidPropertyValue` and the path of the value (`/a/1: is not JSON (undefined)`).
+`ctx.json` (`JsonProperty`) holds any JSON value: `null`, a boolean, a finite number, a string, or a list or plain object of them, at any depth, typed `JsonValue`. It rejects what `JSON.stringify` would lose or change: `undefined` (in a list or an object too), functions, `NaN` and `Infinity`, class instances such as `Date`, and cycles, with `InvalidPropertyValue` and the path of the value (`/a/1: is not JSON (undefined)`). A value nested more than 1000 deep is rejected too (`is nested too deeply`), so that a small body such as `[[[[...]]]]` cannot keep the parse busy; `jsonOf` and `checkJsonSchema` apply the same limit before the schema walks the value.
 
 `jsonOf({ schema, name?, optional?, default? })` holds JSON that a JSON Schema (draft 2020-12) known at declaration accepts, written as JSON or with TypeBox; its value is typed by the schema, as TypeBox's `Static` reads it. Its issues are at the path of the data that breaks the schema, and the schema is described with the property (`describe()`, OpenAPI). A schema that is not a JSON Schema throws `InvalidJsonSchema`. In a blueprint it is `ctx.jsonOf`:
 
