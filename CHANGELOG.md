@@ -83,6 +83,7 @@ This release adds per-entity ids (integers and natural keys included), services 
 
 ### Documentation (#93, #67)
 
+- The [exceptions reference](docs/reference/exceptions.md) lists the problems the HTTP layer answers by itself (`InvalidRequestBody`, `UnsupportedMediaType`, `TooManyParts`, `InvalidFileContent`) and the exceptions a sink package throws (`MultipartBodyAlreadyRead` in `@afora/express`). The `@afora/mcp` README and the CLI page give the type check as `bunx --no-install tsc`, with `npx --no-install tsc` as the fallback.
 - New guides: [Building with an agent](docs/building-with-an-agent.md) (`@afora/mcp`, what to review, the CI checks), [Storing data](docs/storing-data.md) (from memory to Drizzle or DynamoDB, what each provider can do) and [Real time](docs/real-time.md) (`@afora/ws`, from the command to the socket). [Schema evolution](docs/schema-evolution.md#from-commit-to-production) gains the steps of a change from commit to production.
 - A tested recipe, [Uploading a file to a storage](docs/recipes/file-upload.md) (`fileOf` and a service), run by `bun run test:interop`.
 - The features of this release are in the tutorial, the Hono + Zod guide, the FAQ, the glossary and troubleshooting.
