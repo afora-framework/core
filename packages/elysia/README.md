@@ -109,7 +109,7 @@ The requests are handled by the route table of the core (`compileRoutes` of `@af
 - **Success.** The status of the route (`200` by default) with the response as JSON; records go through `toJSON`, so sensitive values are masked. A `204` has no body. The keys a route sends with `setCookie` leave the body and become `set-cookie` headers.
 - **Errors.** `application/problem+json`, with the status of `statusOf`: the `statuses` of the output first, then 400, 401, 403, 404, 409, 422 for a declared error, else 500. The detail of a 5xx is `"Internal error."` unless `debug` is on or the output declares the exception (its name in `statuses`, or one of the use case `errors`).
 - **Unknown routes** are a 404 problem and anything thrown outside an operation is a problem too, unless you gave the `app`.
-- **The body.** The routes carry no Elysia schema: the blueprint of each use case validates the input, once. The body reaches the route table as the text that was sent (`parse: "text"`). A `multipart/form-data` body is read as the `FormData` it is, for the routes whose input holds a file.
+- **The body.** The routes carry no Elysia schema: the blueprint of each use case validates the input, once. The body reaches the route table as the text that was sent (`parse: "text"`). A `multipart/form-data` body is left unread by the parser and read when the route asks: as `FormData` for the routes whose input holds a file (a malformed one is a 400 `InvalidRequestBody`), as text by the others (so it is the same 400 as any body that is not JSON).
 
 ## Middlewares and your own app
 

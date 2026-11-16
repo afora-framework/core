@@ -1049,6 +1049,9 @@ exports[`exports of the package and their declarations 1`] = `
   "EntityExpires": [
     "export type EntityExpires<Key extends string = string> = { readonly after: EntityDuration; } | { readonly at: Key; };",
   ],
+  "EntityHoldsFile": [
+    "EntityHoldsFile: import("../../index.js").DeclaredExceptionClass<{ readonly path: readonly string[]; }>",
+  ],
   "EntityIdOf": [
     "export type EntityIdOf<Entity> = EntityInstanceOf<Entity> extends { readonly id: infer Id; } ? Id : string;",
   ],
@@ -2958,13 +2961,13 @@ exports[`adapters entry (contract) 1`] = `
     "export type FieldsDescription = Readonly<Record<string, FieldDescription>>;",
   ],
   "FormParts": [
-    "export interface FormParts { keys(): Iterable<string>; getAll(name: string): readonly unknown[]; }",
+    "export interface FormParts { entries(): Iterable<readonly [ string, unknown ]>; }",
   ],
   "HTTP_OPTION_KEYS": [
-    "HTTP_OPTION_KEYS: readonly [ "basePath", "route", "responses", "requestId", "security", "docs", "debug", "context", "auth" ]",
+    "HTTP_OPTION_KEYS: readonly [ "basePath", "route", "responses", "requestId", "security", "docs", "debug", "maxParts", "context", "auth" ]",
   ],
   "HttpOptions": [
-    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; readonly auth?: { readonly jwt: DescribedJwtOptions & { readonly header?: string; readonly cookie?: string; }; }; }",
+    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly maxParts?: number; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; readonly auth?: { readonly jwt: DescribedJwtOptions & { readonly header?: string; readonly cookie?: string; }; }; }",
   ],
   "HttpRequest": [
     "export interface HttpRequest { param(name: string): string | undefined; query(): Readonly<Record<string, string | undefined>>; header(name: string): string | undefined; text(): string | Promise<string>; form?(): Promise<FormParts>; variable?(name: string): unknown; readonly native?: unknown; }",
@@ -4188,7 +4191,7 @@ exports[`testing entry (contract) 1`] = `
     "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? VariantValue<Key, Variants, Mode> : never;",
   ],
   "(internal) HttpOptions": [
-    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; readonly auth?: { readonly jwt: DescribedJwtOptions & { readonly header?: string; readonly cookie?: string; }; }; }",
+    "export interface HttpOptions extends RouteOptions { readonly docs?: { readonly path: string; readonly info: OpenAPISinkOptions["info"]; readonly servers?: OpenAPISinkOptions["servers"]; }; readonly debug?: boolean; readonly maxParts?: number; readonly context?: { readonly headers?: { readonly [contextKey: string]: string; }; readonly variables?: { readonly [contextKey: string]: string; }; }; readonly auth?: { readonly jwt: DescribedJwtOptions & { readonly header?: string; readonly cookie?: string; }; }; }",
   ],
   "(internal) IBlueprint": [
     "export interface IBlueprint<Properties extends IBlueprintCollection, Optional extends boolean = false> { readonly [Kind]: "blueprint"; readonly plugins: readonly IBlueprintPlugin[]; readonly properties: Properties; readonly schema: ISchema<BlueprintSchema<Properties>, BlueprintData<Properties>>; readonly optional: Optional; safeParse(value: unknown): ParseResult<Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; readonly "~standard": StandardSchemaV1.Props<Optional extends true ? BlueprintInput<Properties> | undefined : BlueprintInput<Properties>, Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; join<const Blueprints extends readonly AnyBlueprint[]>(...blueprints: Blueprints): IBlueprint<JoinedProperties<readonly [ { readonly properties: Properties; }, ...Blueprints ]>>; }",

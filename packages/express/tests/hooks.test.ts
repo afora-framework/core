@@ -45,6 +45,58 @@ async function call(
 	return fetch(`http://127.0.0.1:${port}${path}`, init);
 }
 
+class Upload extends useCaseOf({
+	name: "Upload",
+	blueprint: blueprintOf((ctx) => ({ file: ctx.file })),
+	response: blueprintOf((ctx) => ({ size: ctx.integer })),
+	route: { method: "post", path: "/upload" },
+}) {
+	override async execute() {
+		return { size: this.input.file.size };
+	}
+}
+
+describe("express sink: a multipart body", () => {
+	const app = (parser?: ReturnType<typeof createExpress.text>) => {
+		const mine = createExpress();
+		if (parser) mine.use(parser);
+		return outputOf({
+			name: "Media",
+			commands: [commandOf({ name: "Media", useCases: { upload: Upload } })],
+			pipe: [express({}, { app: mine })],
+		}).build();
+	};
+	const body = () => {
+		const form = new FormData();
+		form.append("file", new File(["abc"], "a.txt", { type: "text/plain" }));
+		return form;
+	};
+
+	test("is read from the stream, or from the bytes of express.raw()", async () => {
+		for (const parser of [undefined, createExpress.raw({ type: "*/*" })]) {
+			const served = await call(app(parser), "/upload", {
+				method: "POST",
+				body: body(),
+			});
+			expect(served.status).toBe(200);
+			expect(await served.json()).toEqual({ size: 3 });
+		}
+	});
+
+	test("already read by another parser is a 500 MultipartBodyAlreadyRead", async () => {
+		const served = await call(
+			app(createExpress.text({ type: "*/*" })),
+			"/upload",
+			{
+				method: "POST",
+				body: body(),
+			},
+		);
+		expect(served.status).toBe(500);
+		expect((await served.json()).title).toBe("MultipartBodyAlreadyRead");
+	});
+});
+
 describe("express sink: hooks", () => {
 	test("middlewares run before the routes, and may answer", async () => {
 		const order: string[] = [];

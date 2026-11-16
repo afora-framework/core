@@ -148,7 +148,7 @@ await assert.rejects(jwt.verify(`${signed}x`));
 class Upload extends useCaseOf({
 	name: "Upload",
 	blueprint: blueprintOf((ctx) => ({
-		file: ctx.fileOf({ types: ["image/*"], maxBytes: 8 }),
+		file: ctx.fileOf({ types: ["image/*"], maxBytes: 16 }),
 		count: ctx.integer,
 	})),
 	response: blueprintOf((ctx) => ({ name: ctx.string, count: ctx.integer })),
@@ -184,7 +184,13 @@ const multipart = (file) => {
 	};
 };
 const uploaded = await uploadRoute.handle(
-	multipart(new File(["png"], "a.png", { type: "image/png" })),
+	multipart(
+		new File(
+			[new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+			"a.png",
+			{ type: "image/png" },
+		),
+	),
 );
 assert.equal(uploaded.status, 200);
 assert.deepEqual(JSON.parse(uploaded.body), { name: "a.png", count: 2 });
@@ -193,5 +199,9 @@ const refused = await uploadRoute.handle(
 );
 assert.equal(refused.status, 400);
 assert.deepEqual(JSON.parse(refused.body).issues[0].path, ["file"]);
+const disguised = await uploadRoute.handle(
+	multipart(new File(["<svg/>"], "a.png", { type: "image/png" })),
+);
+assert.equal(JSON.parse(disguised.body).title, "InvalidFileContent");
 
 console.log(`smoke ok on node ${process.version}`);

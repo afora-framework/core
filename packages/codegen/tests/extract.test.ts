@@ -365,7 +365,35 @@ describe("hand-written application -> extractSpec -> generate", () => {
 		});
 		const dir = await generated({ ".": { spec } });
 		const domain = await import(join(dir, "src/domain/index.ts"));
-		expect(toOpenAPI(domain.Upload)).toEqual(toOpenAPI(Upload));
+		expect(toOpenAPI({ Upload: domain.Upload })).toEqual(toOpenAPI({ Upload }));
+	});
+
+	test("rejects an entity holding a file, and a sensitive or unique file", () => {
+		const issues = validateSpec({
+			version: 1,
+			properties: { Avatar: { file: { types: ["image/png"] } } },
+			records: {
+				Upload: {
+					fields: { file: "file", title: "string" },
+					sensitive: ["file"],
+					unique: ["title"],
+				},
+			},
+			entities: {
+				Profile: {
+					fields: {
+						avatar: "Avatar",
+						nested: { fields: { file: { file: {} } } },
+						name: "string",
+					},
+				},
+			},
+		} as unknown as Spec);
+		expect(issues.map((found) => [found.path.join("."), found.code])).toEqual([
+			["entities.Profile.fields.avatar", "entity_file"],
+			["entities.Profile.fields.nested", "entity_file"],
+			["records.Upload.sensitive.0", "invalid_file"],
+		]);
 	});
 
 	test("rejects file options that are not media types or a size", () => {

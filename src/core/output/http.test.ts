@@ -549,7 +549,7 @@ describe("an input with a file", () => {
 		name: "Upload",
 		blueprint: blueprintOf((ctx) => ({
 			folder: ctx.string,
-			file: ctx.fileOf({ types: ["image/*"], maxBytes: 8 }),
+			file: ctx.fileOf({ types: ["image/*"], maxBytes: 16 }),
 			count: ctx.optional.integer,
 			tags: ctx.list.optional.integer,
 			items: ctx.optionalOf(
@@ -604,14 +604,18 @@ describe("an input with a file", () => {
 			...(withForm ? { form: async () => form } : {}),
 		};
 	};
-	const png = (size: number) =>
-		new File([new Uint8Array(size)], "a.png", { type: "image/png" });
+	/** A PNG of `size` bytes: its signature, then zeros. */
+	const png = (size: number) => {
+		const bytes = new Uint8Array(size);
+		bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].slice(0, size));
+		return new File([bytes], "a.png", { type: "image/png" });
+	};
 
 	test("reads the parts: files as they are, text coerced, repeated keys as a list, JSON for objects", async () => {
 		const result = await upload.handle(
 			formRequest([
 				["folder", "from-body"],
-				["file", png(3)],
+				["file", png(10)],
 				["count", "2"],
 				["tags", "1"],
 				["tags", "2"],
@@ -622,7 +626,7 @@ describe("an input with a file", () => {
 		expect(JSON.parse(result.body as string)).toEqual({
 			folder: "docs",
 			name: "a.png",
-			size: 3,
+			size: 10,
 			count: 2,
 			tags: [1, 2],
 			items: ["x", "y"],
@@ -632,7 +636,7 @@ describe("an input with a file", () => {
 	test("rejects a file of another type, or too large, with an issue at its key", async () => {
 		for (const file of [
 			new File(["a"], "a.txt", { type: "text/plain" }),
-			png(9),
+			png(17),
 		]) {
 			const result = await upload.handle(formRequest([["file", file]]));
 			expect(result.status).toBe(400);
@@ -672,6 +676,65 @@ describe("an input with a file", () => {
 		});
 		expect(result.status).toBe(400);
 		expect(JSON.parse(result.body as string).title).toBe("InvalidRequestBody");
+	});
+
+	test("refuses an image whose first bytes are not of its declared type", async () => {
+		const fake = new File(["<svg onload=alert(1)>"], "a.png", {
+			type: "image/png",
+		});
+		const result = await upload.handle(formRequest([["file", fake]]));
+		expect(result.status).toBe(400);
+		const problem = JSON.parse(result.body as string);
+		expect(problem.title).toBe("InvalidFileContent");
+		expect(
+			problem.issues.map((issue: { path: unknown }) => issue.path),
+		).toEqual([["file"]]);
+	});
+
+	test("walks the parts once, and caps them with maxParts (413)", async () => {
+		const many: [string, string][] = Array.from({ length: 20_000 }, (_, i) => [
+			i % 2 === 0 ? "tags" : `x${i}`,
+			"1",
+		]);
+		const started = performance.now();
+		const capped = await upload.handle(formRequest(many));
+		expect(capped.status).toBe(413);
+		expect(JSON.parse(capped.body as string).title).toBe("TooManyParts");
+		const lifted = compileRoutes(
+			Media.operations,
+			{ maxParts: 30_000 },
+			{ output: { name: "Media", statuses: Media.statuses } },
+			{ source: "test" },
+		);
+		const read = await routeOf(lifted, "Media.upload").handle(
+			formRequest([["file", png(10)], ...many]),
+		);
+		// One undeclared key is kept, for the blueprint to reject.
+		expect(read.status).toBe(400);
+		const { issues } = JSON.parse(read.body as string);
+		expect(issues.map((issue: { path: unknown }) => issue.path)).toEqual([
+			["x1"],
+		]);
+		expect(performance.now() - started).toBeLessThan(1_000);
+		expect(httpOptionsIssue({ maxParts: 0 }, "test")).toBe(
+			"Expected test.maxParts to be a whole number, 1 or more.",
+		);
+	});
+
+	test("an exception of the server reading the body is a 500", async () => {
+		const Broken = exceptionOf({
+			layer: ExceptionLayers.Output,
+			name: "BodyGone",
+			message: "the body was read before",
+		});
+		const result = await upload.handle({
+			...formRequest([]),
+			form: async () => {
+				throw new Broken({ source: "test" });
+			},
+		});
+		expect(result.status).toBe(500);
+		expect(JSON.parse(result.body as string).title).toBe("BodyGone");
 	});
 
 	test("a get route, or a delete without a body, cannot take a file", () => {

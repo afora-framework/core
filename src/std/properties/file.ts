@@ -16,8 +16,11 @@ export type FileClass<Optional extends boolean = false> = PropertyClass<
 /** What `fileOf` takes. */
 export interface FileOptions<Optional extends boolean = false> {
 	/**
-	 * The media types accepted, as `"image/png"` or `"image/*"`; any type when
-	 * absent. Compared with the type of the file, without its parameters.
+	 * The media types accepted, as `"image/png"` or `"image/*"` (any image
+	 * but `image/svg+xml`, which only its own name takes); any type when
+	 * absent. Compared with the type the client declares for the file,
+	 * without its parameters: the HTTP sinks also check that a PNG, JPEG,
+	 * GIF, WebP or AVIF starts as one.
 	 */
 	readonly types?: readonly string[];
 	/** The largest size accepted, in bytes. */
@@ -31,13 +34,22 @@ function essenceOf(type: string): string {
 	return type.split(";", 1)[0]?.trim().toLowerCase() ?? "";
 }
 
-/** Whether the media type `type` is one of `accepted`, where `image/*` takes any image. */
+/**
+ * Types a wildcard does not take, only their own name: an SVG is a document
+ * that can carry scripts, not a picture to show as is.
+ */
+const NOT_BY_WILDCARD = new Set(["image/svg+xml"]);
+
+/**
+ * Whether the media type `type` is one of `accepted`, where `image/*` takes
+ * any image but SVG, which only `image/svg+xml` takes.
+ */
 function accepts(accepted: readonly string[], type: string): boolean {
 	const essence = essenceOf(type);
 	return accepted.some((pattern) => {
 		const wanted = essenceOf(pattern);
 		return wanted.endsWith("/*")
-			? essence.startsWith(wanted.slice(0, -1))
+			? essence.startsWith(wanted.slice(0, -1)) && !NOT_BY_WILDCARD.has(essence)
 			: essence === wanted;
 	});
 }
@@ -93,8 +105,10 @@ function invalidOptions(source: string, reason: string): never {
 
 /**
  * A file, as `multipart/form-data` gives it (a `File`, or any `Blob`):
- * checked to be one, of one of `types` (`image/*` takes any image) and of
- * at most `maxBytes`, and kept as it is, never copied or read. Its schema is
+ * checked to be one, of one of `types` (`image/*` takes any image but SVG)
+ * and of at most `maxBytes`, and kept as it is, never copied or read. The
+ * type is the one the client declares; the HTTP sinks check that the first
+ * bytes of a PNG, JPEG, GIF, WebP or AVIF match it. Its schema is
  * `format: "binary"`, so an HTTP sink reads `multipart/form-data` for an
  * input that holds one and OpenAPI documents it as a binary string. A file
  * cannot be `sensitive` or `unique`; a record's `toJSON` gives it as it is,

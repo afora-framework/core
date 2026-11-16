@@ -110,50 +110,148 @@ function read(entry: Entry, kind: FieldKind): unknown {
 	return kind.kind === "one" ? coerce(entry, kind.types) : entry;
 }
 
+/** The most parts a multipart body may have, unless `maxParts` says otherwise. */
+export const DEFAULT_MAX_PARTS = 1000;
+
+/** Thrown by `formInputOf` for a body with more parts than allowed. */
+export class TooManyParts extends Error {
+	constructor(readonly maxParts: number) {
+		super(`The body has more than ${maxParts} parts.`);
+	}
+}
+
 /**
  * The input a `multipart/form-data` body sends for `blueprint`: a file part
  * as the `File` it is; a text part coerced to the number or boolean the
  * field takes, or parsed as JSON for an object (an invalid one is kept as
  * text for the blueprint to reject); every part of a repeated key as the
  * items of a list field (one part is a list of one; a list of objects may
- * also be one JSON text). A key the blueprint
- * does not declare keeps its first part, for the blueprint to reject.
+ * also be one JSON text). The parts are walked once. Of the keys the
+ * blueprint does not declare, only the first is kept (its first part), for
+ * the blueprint to reject; the others are dropped unread. Throws
+ * `TooManyParts` past `maxParts` parts.
  * @internal
  */
 export function formInputOf(
 	blueprint: AnyBlueprint,
 	form: FormParts,
+	maxParts: number = DEFAULT_MAX_PARTS,
 ): Record<string, unknown> {
 	const { fields } = shapeOf(blueprint);
-	const input: Record<string, unknown> = {};
-	for (const key of new Set(form.keys())) {
-		const entries = form.getAll(key);
-		const kind = Object.hasOwn(fields, key) ? fields[key] : undefined;
-		let value: unknown;
-		if (kind === undefined) {
-			value = entries[0];
-		} else if (kind.kind === "list") {
-			const [only] = entries;
-			// A list of objects may come as one JSON text, the whole list.
-			const whole =
-				entries.length === 1 && kind.item.kind === "json"
-					? read(only, kind.item)
-					: undefined;
-			value = Array.isArray(whole)
-				? whole
-				: entries.map((entry) => read(entry, kind.item));
-		} else {
-			value = read(entries[0], kind);
+	const grouped = new Map<string, unknown[]>();
+	let undeclared: [string, unknown] | undefined;
+	let count = 0;
+	for (const [key, entry] of form.entries()) {
+		if (++count > maxParts) throw new TooManyParts(maxParts);
+		if (!Object.hasOwn(fields, key)) {
+			undeclared ??= [key, entry];
+			continue;
 		}
-		// As `JSON.parse` does: `__proto__` is a key like any other.
+		const entries = grouped.get(key);
+		if (entries) entries.push(entry);
+		else grouped.set(key, [entry]);
+	}
+	const input: Record<string, unknown> = {};
+	// As `JSON.parse` does: `__proto__` is a key like any other.
+	const put = (key: string, value: unknown) =>
 		Object.defineProperty(input, key, {
 			value,
 			enumerable: true,
 			writable: true,
 			configurable: true,
 		});
+	for (const [key, entries] of grouped) {
+		const kind = fields[key] as FieldKind;
+		if (kind.kind === "list") {
+			const [only] = entries;
+			// A list of objects may come as one JSON text, the whole list.
+			const whole =
+				entries.length === 1 && kind.item.kind === "json"
+					? read(only, kind.item)
+					: undefined;
+			put(
+				key,
+				Array.isArray(whole)
+					? whole
+					: entries.map((entry) => read(entry, kind.item)),
+			);
+		} else {
+			put(key, read(entries[0], kind));
+		}
 	}
+	if (undeclared) put(undeclared[0], undeclared[1]);
 	return input;
+}
+
+const ascii = (text: string) => Array.from(text, (char) => char.charCodeAt(0));
+const at = (bytes: Uint8Array, offset: number, expected: readonly number[]) =>
+	expected.every((byte, index) => bytes[offset + index] === byte);
+
+/**
+ * The image types whose first bytes are checked against the type a client
+ * declares: a file sent as one of them that does not start as one is
+ * refused, so a renamed script or SVG is not taken for a PNG.
+ */
+const SIGNATURES: Readonly<Record<string, (bytes: Uint8Array) => boolean>> = {
+	"image/png": (bytes) =>
+		at(bytes, 0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+	"image/jpeg": (bytes) => at(bytes, 0, [0xff, 0xd8, 0xff]),
+	"image/gif": (bytes) =>
+		at(bytes, 0, ascii("GIF87a")) || at(bytes, 0, ascii("GIF89a")),
+	"image/webp": (bytes) =>
+		at(bytes, 0, ascii("RIFF")) && at(bytes, 8, ascii("WEBP")),
+	"image/avif": (bytes) =>
+		at(bytes, 4, ascii("ftyp")) &&
+		["avif", "avis"].some((brand) => {
+			for (let offset = 8; offset + 4 <= bytes.length; offset += 4) {
+				if (at(bytes, offset, ascii(brand))) return true;
+			}
+			return false;
+		}),
+};
+
+/** The essence of a media type: without parameters, in lower case. */
+function essenceOf(type: string): string {
+	return type.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+}
+
+/**
+ * The 400 problem for the first file of `input` (a top-level key, or an item
+ * of one) whose declared type is a PNG, JPEG, GIF, WebP or AVIF image and
+ * whose first bytes are not; `undefined` when every such file is what it
+ * says. Reads at most 32 bytes of each.
+ * @internal
+ */
+export async function contentMismatchOf(
+	input: Readonly<Record<string, unknown>>,
+): Promise<object | undefined> {
+	for (const [key, value] of Object.entries(input)) {
+		const items = Array.isArray(value) ? value : [value];
+		for (let index = 0; index < items.length; index++) {
+			const item = items[index];
+			if (typeof Blob === "undefined" || !(item instanceof Blob)) continue;
+			const type = essenceOf(item.type);
+			const matches = SIGNATURES[type];
+			if (!matches) continue;
+			const bytes = new Uint8Array(await item.slice(0, 32).arrayBuffer());
+			if (matches(bytes)) continue;
+			const message = `Expected the content of a ${type} file, which this file does not start with`;
+			return {
+				type: "urn:afora:exception:InvalidFileContent",
+				title: "InvalidFileContent",
+				status: 400,
+				detail: message,
+				issues: [
+					{
+						path: Array.isArray(value) ? [key, index] : [key],
+						code: "invalid_value",
+						message,
+					},
+				],
+			};
+		}
+	}
+	return undefined;
 }
 
 /** Whether a `content-type` header names `multipart/form-data`. */

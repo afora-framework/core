@@ -27,6 +27,14 @@ export interface HttpOptions extends RouteOptions {
 	 */
 	readonly debug?: boolean;
 	/**
+	 * The most parts a `multipart/form-data` body may have (files and text
+	 * together); more is a 413 problem. Only routes whose input holds a file
+	 * read such a body.
+	 *
+	 * @default 1000
+	 */
+	readonly maxParts?: number;
+	/**
 	 * The context of an operation, by context key: from request headers
 	 * (`{ headers: { locale: "accept-language" } }`) and from values a
 	 * middleware of the server set for the request
@@ -53,12 +61,11 @@ export interface HttpOptions extends RouteOptions {
 }
 
 /**
- * What the route table reads of a `FormData`: the names of its parts and
- * the values of each, text or a `File`. A `FormData` of any runtime is one.
+ * What the route table reads of a `FormData`: its parts, in order, each a
+ * name and a value (text or a `File`). A `FormData` of any runtime is one.
  */
 export interface FormParts {
-	keys(): Iterable<string>;
-	getAll(name: string): readonly unknown[];
+	entries(): Iterable<readonly [string, unknown]>;
 }
 
 /** A request, as the server of a sink gives it to the route table. */

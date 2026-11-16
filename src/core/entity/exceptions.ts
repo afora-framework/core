@@ -68,3 +68,15 @@ export const InvalidIdStrategy = exceptionOf({
 	message: ({ reason }: { readonly reason: string }, source) =>
 		`Invalid id strategy of "${source}": ${reason}`,
 });
+
+/**
+ * The blueprint of an entity holds a file (`fileOf`), at `details.path`: an
+ * entity is stored, and a file is not. Store where the file went (a URL, a
+ * key of the storage) instead. `source` is the entity name.
+ */
+export const EntityHoldsFile = exceptionOf({
+	layer: ExceptionLayers.Entity,
+	name: "EntityHoldsFile",
+	message: ({ path }: { readonly path: readonly string[] }, source) =>
+		`"${path.join(".")}" of entity "${source}" holds a file, which an entity cannot store: store where the file went (a URL, a storage key) instead.`,
+});

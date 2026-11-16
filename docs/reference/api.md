@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 549 exports.
+Tier: stable. 550 exports.
 
 ### Access
 
@@ -638,6 +638,14 @@ change, and `onDelete` when it is destroyed.
 
 `after` a duration from `createdAt` (stored as `expiresAt`), or `at` the
 date held by a key of the blueprint, `Key`.
+
+### EntityHoldsFile
+
+*const* · tier: stable · `import { EntityHoldsFile } from "@afora/core"`
+
+The blueprint of an entity holds a file (`fileOf`), at `details.path`: an
+entity is stored, and a file is not. Store where the file went (a URL, a
+key of the storage) instead. `source` is the entity name.
 
 ### EntityIdOf
 
@@ -3508,8 +3516,10 @@ error.layer; // ExceptionLayers.UseCase
 *function* · tier: stable · `import { fileOf } from "@afora/core"`
 
 A file, as `multipart/form-data` gives it (a `File`, or any `Blob`):
-checked to be one, of one of `types` (`image/*` takes any image) and of
-at most `maxBytes`, and kept as it is, never copied or read. Its schema is
+checked to be one, of one of `types` (`image/*` takes any image but SVG)
+and of at most `maxBytes`, and kept as it is, never copied or read. The
+type is the one the client declares; the HTTP sinks check that the first
+bytes of a PNG, JPEG, GIF, WebP or AVIF match it. Its schema is
 `format: "binary"`, so an HTTP sink reads `multipart/form-data` for an
 input that holds one and OpenAPI documents it as a binary string. A file
 cannot be `sensitive` or `unique`; a record's `toJSON` gives it as it is,
@@ -4312,8 +4322,8 @@ The fields of a blueprint, record or entity in a description, by name.
 
 *interface* · tier: adapters · `import type { FormParts } from "@afora/core/adapters"`
 
-What the route table reads of a `FormData`: the names of its parts and
-the values of each, text or a `File`. A `FormData` of any runtime is one.
+What the route table reads of a `FormData`: its parts, in order, each a
+name and a value (text or a `File`). A `FormData` of any runtime is one.
 
 ### HTTP_OPTION_KEYS
 
@@ -4656,9 +4666,10 @@ only reads, coerces and runs:
   numbers and booleans the input takes; the operation validates it (a 400
   problem with `issues`).
 - An input that holds a file (`format: "binary"`, as `fileOf`) is read
-  from a `multipart/form-data` body when the request sends one (see
-  `formInputOf`); a server whose requests have no `form` answers it with
-  415. A JSON body still works for its other keys.
+  from a `multipart/form-data` body when the request sends one: files as
+  they are, text coerced, objects as JSON text, repeated keys as a list.
+  A server whose requests have no `form` answers it with 415. A JSON body
+  still works for its other keys.
 - The context comes from `context.headers` (coerced) and
   `context.variables` (as is); a missing one leaves the key out.
 - An operation with an `access` other than `public` asks

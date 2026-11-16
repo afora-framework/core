@@ -4,7 +4,7 @@
 
 ### File fields (#118)
 
-- A field or a property declaration `{ "file": { "types": ["image/png"], "maxBytes": 5000000 } }` (and the Std `"file"`), generated as `ctx.fileOf(...)` / `fileOf(...)`, extracted back and checked (`invalid_file`; not an environment variable); `afora.schema.json` has it. New types `FileField` and `FileOptionsSpec`.
+- A field or a property declaration `{ "file": { "types": ["image/png"], "maxBytes": 5000000 } }` (and the Std `"file"`), generated as `ctx.fileOf(...)` / `fileOf(...)`, extracted back and checked (`invalid_file`; not an environment variable); `afora.schema.json` has it. New types `FileField` and `FileOptionsSpec`. An entity holding a file is `entity_file`, a sensitive or unique file `invalid_file`.
 
 ### Serial ids (#122)
 

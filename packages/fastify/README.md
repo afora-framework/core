@@ -109,7 +109,7 @@ The requests are handled by the route table of the core (`compileRoutes` of `@af
 - **Success.** The status of the route (`200` by default) with the response as JSON; records go through `toJSON`, so sensitive values are masked. A `204` has no body. The keys a route sends with `setCookie` leave the body and become `set-cookie` headers.
 - **Errors.** `application/problem+json`, with the status of `statusOf`: the `statuses` of the output first, then 400, 401, 403, 404, 409, 422 for a declared error, else 500. The detail of a 5xx is `"Internal error."` unless `debug` is on or the output declares the exception (its name in `statuses`, or one of the use case `errors`).
 - **Unknown routes** are a 404 problem and anything thrown outside an operation is a problem too, unless you gave the `app`.
-- **The body.** The routes are registered in an encapsulated plugin whose content type parser keeps the body as text, so an invalid JSON body is a problem like the others, not Fastify's own error. A `multipart/form-data` body is kept as its bytes and read with the platform `Request.formData()` (no multipart dependency), only by routes whose input holds a file; Fastify's `bodyLimit` (1 MiB by default) bounds it.
+- **The body.** The routes are registered in an encapsulated plugin whose content type parser keeps the body as text, so an invalid JSON body is a problem like the others, not Fastify's own error. A `multipart/form-data` body is kept as its bytes and read with the platform `Request.formData()` (no multipart dependency), only by routes whose input holds a file (the others read it as text: the 400 of a body that is not JSON); Fastify's `bodyLimit` (1 MiB by default) bounds it.
 
 ## Middlewares and your own app
 

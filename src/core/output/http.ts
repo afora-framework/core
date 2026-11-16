@@ -5,7 +5,14 @@ import type { Principal } from "../use-case/types/access.interface";
 import type { RouteCookie } from "../use-case/types/route.interface";
 import { coerceTextValues } from "./coerce";
 import { InvalidOutputStage } from "./exceptions";
-import { fileKeysOf, formInputOf, isMultipart } from "./form";
+import {
+	contentMismatchOf,
+	DEFAULT_MAX_PARTS,
+	fileKeysOf,
+	formInputOf,
+	isMultipart,
+	TooManyParts,
+} from "./form";
 import {
 	type OpenAPISinkOptions,
 	type OperationRoute,
@@ -52,6 +59,7 @@ export const HTTP_OPTION_KEYS = [
 	...ROUTE_OPTION_KEYS,
 	"docs",
 	"debug",
+	"maxParts",
 	"context",
 	"auth",
 ] as const;
@@ -69,6 +77,14 @@ export function httpOptionsIssue(
 	if (routing) return routing;
 	if (given.debug !== undefined && typeof given.debug !== "boolean") {
 		return `Expected ${where}.debug to be a boolean.`;
+	}
+	if (
+		given.maxParts !== undefined &&
+		(typeof given.maxParts !== "number" ||
+			!Number.isInteger(given.maxParts) ||
+			given.maxParts < 1)
+	) {
+		return `Expected ${where}.maxParts to be a whole number, 1 or more.`;
 	}
 	const { docs, context, auth } = given;
 	if (auth !== undefined) {
@@ -261,6 +277,7 @@ export function compileRoutes(
 	}
 	const routes = operationRoutes(operations, options, source);
 	const debug = options.debug === true;
+	const maxParts = options.maxParts ?? DEFAULT_MAX_PARTS;
 	const contextHeaders = options.context?.headers ?? {};
 	const contextVariables = options.context?.variables ?? {};
 	const requestIdHeader = requestIdHeaderOf(options);
@@ -394,7 +411,13 @@ export function compileRoutes(
 					let form: FormParts;
 					try {
 						form = await request.form();
-					} catch {
+					} catch (error) {
+						// The server says why it could not read the body (it was
+						// already read, say): its own error, a 500 unless the
+						// output maps it.
+						if (error instanceof Exception) {
+							return fail(error, operation, request, 500);
+						}
 						return problem(
 							{
 								type: "urn:afora:exception:InvalidRequestBody",
@@ -406,7 +429,25 @@ export function compileRoutes(
 							request,
 						);
 					}
-					input = formInputOf(operation.input, form);
+					let parts: Record<string, unknown>;
+					try {
+						parts = formInputOf(operation.input, form, maxParts);
+					} catch (error) {
+						if (!(error instanceof TooManyParts)) throw error;
+						return problem(
+							{
+								type: "urn:afora:exception:TooManyParts",
+								title: "TooManyParts",
+								status: 413,
+								detail: error.message,
+							},
+							413,
+							request,
+						);
+					}
+					const mismatch = await contentMismatchOf(parts);
+					if (mismatch) return problem(mismatch, 400, request);
+					input = parts;
 				} else if (body) {
 					const text = await request.text();
 					try {

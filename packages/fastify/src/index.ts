@@ -79,7 +79,10 @@ class FastifyHttpRequest implements HttpRequest {
 		return first(this.native.headers[name]);
 	}
 	text() {
-		return typeof this.native.body === "string" ? this.native.body : "";
+		const { body } = this.native;
+		// A multipart body kept as bytes is read as the text it is: JSON it is not.
+		if (body instanceof Uint8Array) return new TextDecoder().decode(body);
+		return typeof body === "string" ? body : "";
 	}
 	form() {
 		const { body, headers } = this.native;

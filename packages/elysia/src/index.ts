@@ -62,16 +62,19 @@ interface Call {
 	readonly store?: Record<string, unknown>;
 }
 
+/** What the body of a `multipart/form-data` request is, left unread: `form` reads it. */
+const MULTIPART = Object.freeze({ multipart: true });
+
 /**
  * The body stays the text that was sent, for the table to parse; a
- * `multipart/form-data` one is read as the `FormData` it is, for the routes
- * whose input holds a file.
+ * `multipart/form-data` one is left unread, for `form` (or `text`) to read
+ * when the route asks, so a malformed one is the table's 400, not a 500.
  */
 const TEXT_BODY = {
 	parse: [
-		({ request, contentType }: { request: Request; contentType: string }) =>
+		({ contentType }: { contentType: string }) =>
 			/^\s*multipart\/form-data\s*(?:;|$)/i.test(contentType ?? "")
-				? request.formData()
+				? MULTIPART
 				: undefined,
 		"text",
 	],
@@ -114,12 +117,18 @@ class ElysiaHttpRequest implements HttpRequest {
 		return this.native.request.headers.get(name) ?? undefined;
 	}
 	text() {
-		return typeof this.native.body === "string" ? this.native.body : "";
+		const { body, request } = this.native;
+		if (body === MULTIPART) return request.text();
+		return typeof body === "string" ? body : "";
 	}
-	async form() {
-		const { body } = this.native;
-		if (body instanceof FormData) return body;
-		throw new TypeError("The body is not multipart/form-data.");
+	form() {
+		const { body, request } = this.native;
+		if (body !== MULTIPART) {
+			return Promise.reject(
+				new TypeError("The body is not multipart/form-data."),
+			);
+		}
+		return request.formData();
 	}
 	variable(name: string) {
 		return Object.hasOwn(this.native, name)

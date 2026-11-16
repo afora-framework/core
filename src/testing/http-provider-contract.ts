@@ -525,8 +525,19 @@ export function httpProviderContract<Server>(
 
 		it("reads a multipart body for an input with a file", async () => {
 			await withServer({}, async (send) => {
-				const image = (type: string, size: number, name = "a.png") =>
-					new File([new Uint8Array(size)], name, { type });
+				// An image of `size` bytes: the signature of its type, then zeros.
+				const signatures: Record<string, number[]> = {
+					"image/png": [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+					"image/gif": [0x47, 0x49, 0x46, 0x38, 0x39, 0x61],
+					"image/webp": [
+						0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+					],
+				};
+				const image = (type: string, size: number, name = "a.png") => {
+					const bytes = new Uint8Array(size);
+					bytes.set((signatures[type] ?? []).slice(0, size));
+					return new File([bytes], name, { type });
+				};
 				const form = (entries: [string, string | File][]) => {
 					const data = new FormData();
 					for (const [key, value] of entries) data.append(key, value);
@@ -540,8 +551,8 @@ export function httpProviderContract<Server>(
 						["flag", "true"],
 						["tags", "a"],
 						["tags", "b"],
-						["extras", image("image/gif", 1, "x.gif")],
-						["extras", image("image/gif", 1, "y.gif")],
+						["extras", image("image/gif", 8, "x.gif")],
+						["extras", image("image/gif", 8, "y.gif")],
 						["meta", '{"alt":"A"}'],
 					]),
 				});
@@ -599,6 +610,40 @@ export function httpProviderContract<Server>(
 						.map((issue) => issue.path)
 						.sort(),
 				).toEqual([["count"], ["file"]]);
+
+				const disguised = await send("POST", "/uploads/docs", {
+					body: form([
+						["file", new File(["<svg/>"], "a.png", { type: "image/png" })],
+					]),
+				});
+				expect(disguised.status).toBe(400);
+				expect((disguised.json as { title: string }).title).toBe(
+					"InvalidFileContent",
+				);
+
+				// A body that is not multipart after all, or has no boundary.
+				for (const type of [
+					"multipart/form-data; boundary=nope",
+					"multipart/form-data",
+				]) {
+					const malformed = await send("POST", "/uploads/docs", {
+						headers: { "content-type": type },
+						body: "not a multipart body",
+					});
+					expect(malformed.status).toBe(400);
+					expect((malformed.json as { title: string }).title).toBe(
+						"InvalidRequestBody",
+					);
+				}
+
+				// A route without a file reads JSON: a multipart body is invalid.
+				const notJson = await send("POST", "/enter", {
+					body: form([["title", "T"]]),
+				});
+				expect(notJson.status).toBe(400);
+				expect((notJson.json as { title: string }).title).toBe(
+					"InvalidRequestBody",
+				);
 
 				// JSON still works for the other keys; the file is then missing.
 				const json = await send("POST", "/uploads/docs", {

@@ -135,6 +135,7 @@ export type {
 export { eventOf } from "./core/entity/event";
 export {
 	DeletedEntity,
+	EntityHoldsFile,
 	ImmutableEntityKey,
 	InvalidEntityExpiry,
 	InvalidEntitySchemaVersion,
