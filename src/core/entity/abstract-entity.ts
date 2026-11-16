@@ -176,9 +176,17 @@ export function completeOf(
 	clock: EntityClockSettings,
 	lifetime: number | undefined,
 ): Complete {
+	const idNow = clock.makesValid?.idNow;
 	return (handled) => {
-		if (handled.createdAt === undefined) handled.createdAt = clock.now();
-		if (handled.id === undefined) handled.id = clock.generateId?.();
+		let stamped = false;
+		if (handled.createdAt === undefined) {
+			handled.createdAt = clock.now();
+			stamped = true;
+		}
+		if (handled.id === undefined) {
+			handled.id =
+				stamped && idNow !== undefined ? idNow() : clock.generateId?.();
+		}
 		if (lifetime !== undefined && handled[EXPIRES_AT] === undefined) {
 			const created = handled.createdAt;
 			const start = typeof created === "string" ? Date.parse(created) : NaN;
@@ -311,8 +319,8 @@ function withIdentity(
 		if (vouched !== undefined) vouchFor(vouched, complete);
 		return value;
 	}
-	const created =
-		createdAt === undefined && !createdAtLater ? clock.now() : createdAt;
+	const stamped = createdAt === undefined && !createdAtLater;
+	const created = stamped ? clock.now() : createdAt;
 	// `id` and `createdAt` come first, as in the blueprint of an entity, whose
 	// keys the record then finds in their places; the spread may bring either
 	// one as `undefined`, so both are set after it.
@@ -322,7 +330,14 @@ function withIdentity(
 		...value,
 	};
 	// Without a generator, a missing id stays missing, for the record to report.
-	identity.id = id === undefined && !idLater ? clock.generateId?.() : id;
+	// Right after `now`, an id for that same moment, without a second read of the clock.
+	const idNow = stamped ? clock.makesValid?.idNow : undefined;
+	identity.id =
+		id === undefined && !idLater
+			? idNow !== undefined
+				? idNow()
+				: clock.generateId?.()
+			: id;
 	identity.createdAt = created;
 	if (unversioned) identity[ENTITY_VERSION_KEY] = 1;
 	if (expiring && !expiresLater) {
