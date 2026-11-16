@@ -5,7 +5,7 @@ import {
 	recordPlugin,
 	stdProperty,
 } from "./catalog";
-import { fieldsOfDecl } from "./graph";
+import { fieldsOfDecl, flagOf } from "./graph";
 import type { Field } from "./model";
 import { checkImport, isImportObject } from "./provider";
 import { checkAccess, checkRoute } from "./route";
@@ -285,6 +285,75 @@ export function isGeneric(spec: Record<string, unknown>): boolean {
 
 const GENERIC_ERRORS = ["notFound", "conflict", "invalid", "owner"];
 
+/** The keys of an entity declaration that hold an entity (or a list of them). */
+function entityHoldingKeysOf(decl: Decl, scope: Scope): Set<string> {
+	const held = new Set<string>();
+	for (const [key, field] of Object.entries(fieldsOfDecl(decl) ?? {})) {
+		if (
+			field.kind === "type" &&
+			scope.decls.get(field.type)?.kind === "entity"
+		) {
+			held.add(key);
+		}
+	}
+	return held;
+}
+
+/** The sensitive keys of an entity declaration: its option, its properties and its plugins'. */
+function sensitiveKeysOf(decl: Decl, scope: Scope): Set<string> {
+	const sensitive = new Set<string>(
+		Array.isArray(decl.spec.sensitive)
+			? decl.spec.sensitive.filter(
+					(key): key is string => typeof key === "string",
+				)
+			: [],
+	);
+	for (const [key, field] of Object.entries(fieldsOfDecl(decl) ?? {})) {
+		if (flagOf(field, "sensitive", scope)) sensitive.add(key);
+	}
+	const plugins = Array.isArray(decl.spec.plugins) ? decl.spec.plugins : [];
+	for (const name of plugins) {
+		if (typeof name !== "string") continue;
+		for (const key of recordPlugin(name)?.sensitive ?? []) sensitive.add(key);
+	}
+	return sensitive;
+}
+
+/**
+ * What `update` refuses when it is declared, as the standard use case does:
+ * an entity with no change key an input can take (each one holds an entity,
+ * or is sensitive, like the password of `authenticatable`), and with
+ * `owner`, a change key that holds the owner.
+ */
+function checkUpdate(
+	entity: Decl,
+	ownerKey: string | undefined,
+	scope: Scope,
+	refuse: (key: string | undefined, message: string) => void,
+): void {
+	const held = entityHoldingKeysOf(entity, scope);
+	const sensitive = sensitiveKeysOf(entity, scope);
+	const changeable = [...new Set(changeKeysOf(entity))].filter(
+		(key) => !held.has(key),
+	);
+	const taken = changeable.filter((key) => !sensitive.has(key));
+	if (taken.length === 0) {
+		const listed = changeable.map((key) => `"${key}"`).join(", ");
+		refuse(
+			undefined,
+			changeable.length > 0
+				? `"update" has no change key of "${entity.name}" an input can take: ${listed} is sensitive, and the standard use cases never take a sensitive key as input. Change a password with "changePassword" (it asks for the current one), and leave "update" out.`
+				: `"update" has no change key of "${entity.name}" an input can take: add a key that holds no entity to its "change".`,
+		);
+	}
+	if (ownerKey !== undefined && taken.includes(ownerKey)) {
+		refuse(
+			"owner",
+			`"${ownerKey}" holds the owner, so with "owner" it cannot be a change key of "${entity.name}": the caller could give the entity away. Take it out of "change", or change it in a use case written by hand.`,
+		);
+	}
+}
+
 /** The keys of an entity declaration: identity, fields and the keys of its plugins. */
 function entityKeysOf(decl: Decl): string[] {
 	const plugins = Array.isArray(decl.spec.plugins) ? decl.spec.plugins : [];
@@ -405,7 +474,6 @@ function checkGenericUseCase(
 	}
 
 	const { options } = spec;
-	if (options === undefined) return;
 	const invalid = (key: string | undefined, message: string): void => {
 		issues.push(
 			issue(
@@ -415,10 +483,30 @@ function checkGenericUseCase(
 			),
 		);
 	};
-	if (!isObject(options)) {
+	if (options !== undefined && !isObject(options)) {
 		invalid(undefined, '"options" must be an object.');
 		return;
 	}
+	if (info?.name === "update" && entity?.kind === "entity") {
+		const owner = options?.owner;
+		const ownerKey = isObject(owner)
+			? typeof owner.key === "string"
+				? owner.key
+				: owner.key === undefined
+					? "ownerId"
+					: undefined
+			: undefined;
+		checkUpdate(entity, ownerKey, scope, (key, message) =>
+			issues.push(
+				issue(
+					key === undefined ? [...path, "generic"] : [...path, "options", key],
+					"generic_unavailable",
+					message,
+				),
+			),
+		);
+	}
+	if (options === undefined) return;
 	const known = ["errors", ...(info?.options ?? [])];
 	const keys = entity?.kind === "entity" ? entityKeysOf(entity) : undefined;
 	const isKey = (key: unknown): boolean =>
@@ -451,6 +539,63 @@ function checkGenericUseCase(
 				invalid(
 					key,
 					`"${String(value.key ?? "ownerId")}" is not a key of the entity${value.key === undefined ? ' (the default "key", of the ownable plugin)' : ""}.`,
+				);
+			} else if (
+				value.key === "id" &&
+				(info?.name === "create" || info?.name === "register")
+			) {
+				invalid(
+					key,
+					`owner.key "id" compares an entity with the caller, so "${info.name}", which makes the entity, cannot take it.`,
+				);
+			} else if (
+				info?.name === "restore" &&
+				value.key !== "id" &&
+				repository?.kind === "repository" &&
+				!(
+					Array.isArray(repository.spec.actions) &&
+					repository.spec.actions.includes("exists")
+				)
+			) {
+				invalid(
+					key,
+					`"restore" with "owner" needs the action "exists" in the actions of "${repository.name}", to read the deleted entity and its owner (or owner.key "id").`,
+				);
+			}
+		}
+		if (key === "relations") {
+			const held =
+				entity?.kind === "entity"
+					? entityHoldingKeysOf(entity, scope)
+					: undefined;
+			if (!isObject(value)) {
+				invalid(
+					key,
+					'"relations" must be an object of { "shared"?: boolean } by key that holds an entity.',
+				);
+			} else {
+				for (const [name, relation] of Object.entries(value)) {
+					if (held !== undefined && !held.has(name)) {
+						invalid(
+							key,
+							`relations.${name} must name a key of the entity that holds an entity.`,
+						);
+					} else if (
+						!isObject(relation) ||
+						Object.keys(relation).some((option) => option !== "shared") ||
+						(relation.shared !== undefined &&
+							typeof relation.shared !== "boolean")
+					) {
+						invalid(key, `relations.${name} must be { "shared"?: boolean }.`);
+					}
+				}
+			}
+		}
+		if (key === "maxLimit") {
+			if (!Number.isInteger(value) || (value as number) < 1) {
+				invalid(
+					key,
+					'"maxLimit" must be a whole number above 0: the largest "limit" the input takes (100 by default).',
 				);
 			}
 		}

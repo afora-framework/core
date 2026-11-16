@@ -318,20 +318,21 @@ const GENERIC_HOOKS = ["before", "after", "dependencies", "throws"];
  * checked against the plugins themselves by the tests of the catalog.
  */
 const GENERIC_OPTIONS: Readonly<Record<string, readonly string[]>> = {
-	create: ["as", "owner", "omit", "values", ...GENERIC_HOOKS],
+	create: ["as", "owner", "omit", "values", "relations", ...GENERIC_HOOKS],
 	get: ["as", "owner"],
-	list: ["owner", "orderBy"],
+	list: ["owner", "orderBy", "maxLimit"],
 	update: ["as", "owner", ...GENERIC_HOOKS],
 	delete: ["as", "owner", ...GENERIC_HOOKS],
-	restore: ["as", ...GENERIC_HOOKS],
+	restore: ["as", "owner", ...GENERIC_HOOKS],
 	publish: ["as", "owner", "set", ...GENERIC_HOOKS],
 	unpublish: ["as", "owner", "set", ...GENERIC_HOOKS],
 	archive: ["as", "owner", "set", ...GENERIC_HOOKS],
 	unarchive: ["as", "owner", "set", ...GENERIC_HOOKS],
 	tag: ["as", "owner", ...GENERIC_HOOKS],
 	untag: ["as", "owner", ...GENERIC_HOOKS],
-	register: ["as", "owner", "omit", "values", ...GENERIC_HOOKS],
+	register: ["as", "owner", "omit", "values", "relations", ...GENERIC_HOOKS],
 	login: ["as", "token"],
+	changePassword: ["as", "owner", ...GENERIC_HOOKS],
 	refresh: ["token"],
 	logout: [],
 };

@@ -2200,7 +2200,7 @@
 							"properties": {
 								"generic": {
 									"type": "string",
-									"description": "A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register, login, refresh or logout."
+									"description": "A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register, login, changePassword, refresh or logout."
 								},
 								"repository": {
 									"type": "string",
@@ -2212,7 +2212,7 @@
 									"patternProperties": {
 										"^[A-Za-z_$][A-Za-z0-9_$]*$": {}
 									},
-									"description": "Its options: \"as\" (the response key), \"owner\" ({ \"key\"?, \"context\" }), \"errors\" ({ \"notFound\" | \"conflict\" | \"invalid\" | \"owner\": an exception name }), and per use case \"omit\", \"values\", \"set\", \"orderBy\", and \"token\" for login and refresh ({ \"secret\": { \"env\": \"NAME\" }, \"issuer\"?, \"audience\"?, \"expiresIn\"?, \"algorithm\"?, \"refresh\"?: { \"expiresIn\" }, \"scopes\"?, \"scopesFrom\"?, \"claims\"? }: login then answers a token); those that write also take \"before\" and \"after\" ({ \"import\": \"./file.ts#function\" }, run before and after the write), \"dependencies\" (key -> name of a use case, repository or environment, for them) and \"throws\" (the exceptions they throw, as in \"errors\")."
+									"description": "Its options: \"as\" (the response key), \"owner\" ({ \"key\"?, \"context\" }; \"key\": \"id\" for an entity that is the caller, not for create and register), \"errors\" ({ \"notFound\" | \"conflict\" | \"invalid\" | \"owner\": an exception name }), and per use case \"omit\", \"values\", \"relations\" (create and register: { <key>: { \"shared\": true } } lets the input name an entity of another owner), \"set\", \"orderBy\", \"maxLimit\" (list: the largest limit, 100 by default), and \"token\" for login and refresh ({ \"secret\": { \"env\": \"NAME\" }, \"issuer\"?, \"audience\"?, \"expiresIn\"?, \"algorithm\"?, \"refresh\"?: { \"expiresIn\" }, \"scopes\"?, \"scopesFrom\"?, \"claims\"? }: login then answers a token); those that write also take \"before\" and \"after\" ({ \"import\": \"./file.ts#function\" }, run before and after the write), \"dependencies\" (key -> name of a use case, repository or environment, for them) and \"throws\" (the exceptions they throw, as in \"errors\")."
 								},
 								"description": {
 									"type": "string"
