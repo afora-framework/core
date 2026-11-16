@@ -142,6 +142,18 @@ report.entities.Entry;
 
 The `@afora/codegen` CLI writes and checks the lock: `afora-codegen schema lock` and `afora-codegen schema check`, for CI. See [its README](../packages/codegen/README.md).
 
+## From commit to production
+
+The pieces above, in the order a change goes through them. The example renames `fullName` to `name` and adds a required `locale`:
+
+1. **Change the code.** Edit the blueprint and declare what the change needs: `renamedFrom: "fullName"` on `name`, a `fill` on `locale` (or an `upgrade` step and a higher `schemaVersion` when the change is not a key-by-key one). From this commit on, every read brings an old row up in memory, so the new code works before any row is rewritten.
+2. **Check it before merging.** `afora-codegen schema check src/app.ts#App` (with `bunx`, or `npx` on Node) fails CI when a change declares nothing, and prints the stub to add. Once the code declares what it needs, `afora-codegen schema lock src/app.ts#App` writes the new `afora.lock.json`; commit it with the change.
+3. **Change the store's structure.** For SQL, the columns must exist before the new code writes: `drizzleProvider({ migrations: "apply" })` adds and renames them inside `app.migrate`, or `migrations: { file }` writes the SQL for drizzle-kit and your usual migration step ([`@afora/drizzle`](../packages/drizzle/README.md#schema-evolution)). A document store (in memory, DynamoDB) needs nothing here.
+4. **Deploy.** `await app.start({ lock })` refuses to start with `SchemaLockMismatch` when the code and the committed lock disagree on something a read cannot handle (an entity renamed without `previousNames`, a `schemaVersion` that went down).
+5. **Look first.** `app.migrate({ mode: "check", lock })` reads every row and reports how many would be upgraded, and in `invalid` the rows the new shape rejects (a tightened constraint, a duplicate under a new unique key), each with its issues. Fix those rows, or the declaration, before going on.
+6. **Rewrite the rows.** `app.migrate({ mode: "apply", lock })`, from a one-off job or a deploy hook. It is idempotent and resumable, so a run stopped halfway is run again. Until it runs, nothing breaks: reads keep bringing rows up.
+7. **Remove what is gone, later.** The old keys (`fullName`) stay in the rows until a run with `destructive: true`,, which you run once you no longer need the old values.
+
 ## Providers
 
 A provider needs nothing new to support schema evolution: the core brings rows up, and the backfill uses `findMany`, `update`, `insert` and `remove` (and `increment` of a renamed key, `findOne`). A provider that stores rows as documents keeps `$v` as any key; one with a fixed set of columns needs a column for it, or maps `context.schema.key` to one of its own.
