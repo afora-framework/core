@@ -67,10 +67,25 @@ if (import.meta.main) Bun.serve({ fetch: api.fetch });
 
 ```bash
 bun blog.ts
-# or, on Node:  npm install @hono/node-server tsx
-#               replace the last line with:  serve({ fetch: api.fetch, port: 3000 })   // from "@hono/node-server"
-#               npx tsx blog.ts
 ```
+
+The server starts on port 3000 and prints nothing; send it a request:
+
+```bash
+curl -X POST http://localhost:3000/posts \
+  -H "content-type: application/json" \
+  -d '{ "title": "Hello", "slug": "hello", "body": "First post." }'
+```
+
+On Node, install a server and a TypeScript runner, `npm install @hono/node-server tsx`, replace the last line of `blog.ts` with these two and run `npx tsx blog.ts`:
+
+<!-- docs:code skip: a fragment that replaces the last line of blog.ts on Node -->
+```ts
+import { serve } from "@hono/node-server"; // with the other imports, at the top
+serve({ fetch: api.fetch, port: 3000 });
+```
+
+These are the routes the file serves:
 
 ```text
 POST   /posts       { "title": "Hello", "slug": "hello", "body": "First post." }   -> 201 { "item": { "id": "...", ... } }
@@ -208,6 +223,7 @@ const Accounts = commandOf({
 	name: "Accounts",
 	useCases: (ctx) => ({
 		register: ctx.register(Users, {
+			values: { roles: ["posts:write"] }, // set here, never taken from the body
 			route: { method: "post", path: "/users", status: 201 },
 		}),
 		login: ctx.login(Users, {
@@ -221,11 +237,13 @@ const Accounts = commandOf({
 const Blog = commandOf({
 	name: "Blog",
 	useCases: (ctx) => ({
-		...resourceOf(Posts, {
-			path: "/posts",
-			actions: ["create", "get", "list"],
-			access: { create: { scopes: ["posts:write"] } },
-		})(ctx),
+		...resourceOf(Posts, { path: "/posts", actions: ["get", "list"] })(ctx),
+		create: ctx.create(Posts, {
+			owner: { key: "authorId", context: "userId" }, // the caller is the author
+			values: { published: false }, // a new post is a draft
+			access: { scopes: ["posts:write"], context: { userId: "subject" } },
+			route: { method: "post", path: "/posts", status: 201 },
+		}),
 		publish: PublishPost,
 	}),
 });
@@ -255,6 +273,8 @@ if (import.meta.main) Bun.serve({ fetch: api.fetch });
 ```bash
 JWT_SECRET="a-secret-of-at-least-thirty-two-characters" bun blog.ts
 ```
+
+On Node 22 to 24.6, `register` answers a 500 `PasswordHasherRequired`: those versions have no argon2 of their own, so call `configure({ hasher })` once before the server starts ([Runtime](runtime.md)). Bun and Node 24.7 or later need nothing.
 
 ## 4. A rule of your own
 
@@ -310,20 +330,33 @@ In the command, `publish: PublishPost` sits beside the standard operations: `res
 - the caller is authenticated and has the scope `posts:write`;
 - the context key `userId` is filled with **who was authenticated**, over anything the request sent. So `this.context.userId` in `execute` is never a value the client chose.
 
-The check runs before the use case, on every server and transport: a caller with no token gets a 401, one without the scope a 403, both as `application/problem+json`. `resourceOf` takes the same declaration per operation (`access: { create: { scopes: ["posts:write"] } }`); here reading stays open, because `get` and `list` declare none.
+The check runs before the use case, on every server and transport: a caller with no token gets a 401, one without the scope a 403, both as `application/problem+json`. The standard use cases take the same declaration (`access`); here reading stays open, because `get` and `list` declare none.
 
-**Who the caller is** comes from the sink. `auth: { jwt }` makes the `hono` sink read a bearer token, and the standard `login`, given `token`, issues one for the user that signed in, with the user's `roles` as its scopes:
+`create` is written out, beside the `get` and `list` of `resourceOf`, because it says more than a route:
+
+- `access` asks for `posts:write` and fills `userId` with who was authenticated, as on `PublishPost`;
+- `owner: { key: "authorId", context: "userId" }` stores that caller as the author, so `authorId` is not a key of the input: a body that sends one is a 400, and nobody writes a post in the name of someone else;
+- `values: { published: false }` builds every new post as a draft, so `published` is not a key of the input either.
+
+`register` has a `values` too: `roles: ["posts:write"]`. The roles of a user become the scopes of its token, so they are set by the application, never taken from the body; a body that sends `roles` is a 400. Here every account is an author; an application with other roles grants them in a use case of its own, behind an access of its own.
+
+**Who the caller is** comes from the sink. `auth: { jwt }` makes the `hono` sink read a bearer token, and the standard `login`, given `token`, issues one for the user that signed in, with the user's `roles` as its scopes. Register, sign in, create a post with the token and publish it:
 
 ```text
-POST /users  { "name": "Ana", "email": "ana@example.com", "password": "Str0ng!Pass", "roles": ["posts:write"] }
--> 201 { "item": { "email": "ana@example.com", "password": "********", ... } }
+POST /users  { "name": "Ana", "email": "ana@example.com", "password": "Str0ng!Pass" }
+-> 201 { "item": { "email": "ana@example.com", "password": "********", "roles": ["posts:write"], ... } }
 
 POST /login  { "email": "ana@example.com", "password": "Str0ng!Pass" }
--> 200 { "user": {...}, "token": "eyJ..." }
+-> 200 { "user": { "id": "...", ... }, "token": "eyJ..." }
+
+POST /posts  { "title": "Hello", "slug": "hello", "body": "First post." }   Authorization: Bearer eyJ...
+-> 201 { "item": { "authorId": "<the id of Ana>", "published": false, ... } }
 
 POST /posts/hello/publish                                   -> 401 { "title": "Unauthenticated", ... }
 POST /posts/hello/publish   Authorization: Bearer eyJ...    -> 200 { "post": { "published": true, ... } }
 ```
+
+Another user who signs in and publishes Ana's post gets a 403 `NotTheAuthor`, from the rule of `PublishPost` (see the next section).
 
 The password in a response is `"********"`: `Password` is a sensitive property, and `toJSON()` masks it. The plain password is hashed with argon2 before it is stored.
 
