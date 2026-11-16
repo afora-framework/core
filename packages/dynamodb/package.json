@@ -1,6 +1,6 @@
 {
 	"name": "@afora/dynamodb",
-	"version": "0.0.13",
+	"version": "27.0.0-rc.1",
 	"description": "A repository provider for @afora/core on one DynamoDB table.",
 	"keywords": [
 		"afora",
@@ -52,7 +52,7 @@
 		"@types/bun": "^1.4.4"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=0.0.9",
+		"@afora/core": ">=27.0.0-rc.1",
 		"@aws-sdk/client-dynamodb": "^3.1164.0",
 		"@aws-sdk/lib-dynamodb": "^3.1164.0"
 	}
