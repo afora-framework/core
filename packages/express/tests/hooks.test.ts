@@ -93,7 +93,9 @@ describe("express sink: a multipart body", () => {
 			},
 		);
 		expect(served.status).toBe(500);
-		expect((await served.json()).title).toBe("MultipartBodyAlreadyRead");
+		expect(((await served.json()) as { title: string }).title).toBe(
+			"MultipartBodyAlreadyRead",
+		);
 	});
 });
 
