@@ -48,4 +48,12 @@ export const InvalidFileOptions = exceptionOf({
 		`Invalid options for the file property "${source}": ${reason}`,
 });
 
-markExported(InvalidFile, InvalidFileOptions);
+/** `Url.with({ protocols })` got protocols that are not URL schemes, such as `"https"` without its colon. */
+export const InvalidUrlOptions = exceptionOf({
+	layer: ExceptionLayers.Schema,
+	name: "InvalidUrlOptions",
+	message: ({ reason }: { readonly reason: string }, source) =>
+		`Invalid options for the URL property "${source}": ${reason}`,
+});
+
+markExported(InvalidFile, InvalidFileOptions, InvalidUrlOptions);
