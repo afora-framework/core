@@ -1,5 +1,117 @@
 # Changelog
 
+## Unreleased
+
+Security fixes from an audit of 27.0.0-rc.2. Every finding has a regression test named `SEC-<n>`. The breaking ones change the standard use cases and `Url` before the contract freezes, as blocking issues of the 27.0 milestone (see [Release candidates](VERSIONING.md#release-candidates)).
+
+### Security
+
+- **Breaking.** `update` (and so the `update` of `resourceOf`) no longer takes sensitive keys as input, such as the `password` of `authenticatable`: any caller who could reach it could set another user's password. Use the new `changePassword`. An `update` whose change keys are all sensitive throws `UseCaseUnavailable`, so `resourceOf` on such an entity needs `update` left out of its `actions`. See Migration below. (SEC-01)
+- **Breaking.** With `owner`, `create` and `register` load an entity the input names (`<key>Id`) only if it is the caller's, when it has the same owner key; another owner's gives `notFound`. `relations: { <key>: { shared: true } }` opts a key out. See Migration below. (SEC-03)
+- **Breaking.** With `owner`, `update` throws `UseCaseUnavailable` when a change key it would take holds the owner (the caller could give the entity away). See Migration below. (SEC-09)
+- **Breaking.** `list` caps `limit` at `maxLimit`, 100 by default: a larger `limit` is `InvalidUseCaseInput` (400, issue `invalid_value`), and the input schema says `maximum`. See Migration below. (SEC-10)
+- The `owner` of an `access` is compared on the value the use case acts on: the input key goes through its property (`preHandle`, validation, `afterHandle`) first, so an `Email` is trimmed and lowercased and a `Slug` slugified. Before, the raw input was compared, so a token whose claim was ` Victim@Example.com` passed the check and the use case acted on `victim@example.com`. The subject or claim is compared as it was issued: it must already be canonical (an authenticator that gets `Ana@Example.com` from its identity provider issues `ana@example.com`). An owner value the property rejects, or a claim that is not a string, number or boolean, is a `Forbidden` (`details.reason: "owner"`). This is what [Access](docs/auth.md) already said. (SEC-02)
+- `InvalidUseCaseResponse` and `InvalidUseCaseStep` are answered as a 500 whose `detail` is `"Internal error."` with no `issues`, instead of a 400 that listed the paths of the server's own response. Every internal exception is a 500 from `statusOf`, and `problemOf` masks its `detail` and drops its `issues` at any status, even one chosen by `statuses`, unless `debug` is set. Client errors (`InvalidUseCaseInput`, `InvalidUseCaseContext`, `InvalidRecordValue`…) are still a 400 with their issues. (SEC-12)
+- `login` takes as long for an unknown email as for a known one: it verifies the password against a dummy hash, made once by the configured hasher on first use, so the time no longer tells which emails are registered. (SEC-11)
+- `restore` takes `owner`: a caller no longer brings back another owner's deleted entity. The docs said a deleted entity could not be read to check its owner; it can, with `withDeleted`. (SEC-08)
+<!-- SEC-PARSE -->
+- `@afora/codegen` / `@afora/mcp`: a relative module or `extends` is checked against every file a runtime may load for it (an added extension, the `.ts` of a `.js`, a directory's `index.*` or `package.json` entry, the `afora.json` of an extended directory), not only the path as written; any of them that is a symbolic link out of the project is `outside_project`. (SEC-05)
+- `@afora/codegen` / `@afora/mcp`: the `output.dir` of a spec extended by a path, at any depth, is held to the rules of `output.dir` from its own directory; the generated code imported the extended application from wherever it pointed. (SEC-06)
+- `@afora/codegen` / `@afora/mcp`: `output.dir` is refused in `node_modules` or `.git` however a file system may fold its name (`node_moduleſ`, fullwidth letters, combining marks), and `confinePath` / `writeGenerated` refuse to write there. (SEC-17)
+- `@afora/mcp`: the `app` of `afora_project` and `afora_extract` must be a `.ts`, `.tsx`, `.mts`, `.js` or `.mjs` module outside `node_modules` and `.git`, and only the `--app` module when the server was started with one. A failed import is reported by a code (`import_failed`, `not_an_application`, `extract_failed`), never with what the runtime printed. (SEC-18)
+- Release: the npm publish runs in a job that only holds the OIDC token, checks out nothing and runs `npm publish <tarball> --provenance --ignore-scripts`; install, build, checks and `npm pack` run in a job with a read-only token, and the tag and GitHub release in a job of their own. Every GitHub Action is pinned to a commit SHA, no checkout keeps git credentials, and benchmarks of pull requests run with a read-only token. CodeQL and zizmor run on `main`, `dev` and weekly, and `.github/CODEOWNERS` covers CI, releases and the code in the scope of `SECURITY.md`. (SEC-07, SEC-19)
+
+### Added
+
+- `ctx.changePassword(Users, options?)`: `{ id, currentPassword, password }`, for an `authenticatable` entity with `findById` and `update`; checks the current password with `verifyPassword` (`UseCaseInvalidCredentials`, as `login`) before storing the hash of the new one. Takes `as`, `owner`, `errors` and the hooks. See [Changing a password](docs/auth.md#changing-a-password).
+- `owner: { key: "id", context }` for an entity that is the caller (a user): its own id is compared with the context. Refused by `create` and `register`.
+- `restore` takes `owner` (the repository then needs the `exists` action, except for `key: "id"`), `list` takes `maxLimit`, and `create` takes `relations`.
+- `@afora/codegen` describes and generates these options.
+
+### Changed
+
+- Every `@afora/*` package ships its `LICENSE` file.
+- `SECURITY.md` lists the supported versions of the channels of `VERSIONING.md` instead of the `0.x` policy, and states the boundary rules of `@afora/mcp` and `@afora/codegen` in full.
+
+### Migration
+
+**`update` does not take the password.** Before:
+
+```ts
+useCases: (ctx) => ({ update: ctx.update(Users) }),
+	await Accounts.run("update", { id, password: "New@1234" });
+```
+
+After:
+
+```ts
+useCases: (ctx) => ({
+	update: ctx.update(Users, { owner: { key: "id", context: "userId" } }),
+	changePassword: ctx.changePassword(Users, {
+		owner: { key: "id", context: "userId" },
+	}),
+}),
+	await Accounts.run(
+		"changePassword",
+		{ id, currentPassword: "Old@1234", password: "New@1234" },
+		{ context: { userId: id } },
+	);
+```
+
+An entity whose only change key is the password drops `update`, or `resourceOf`'s `update` with `actions: ["create", "get", "list", "delete"]`.
+
+**`create` with `owner` checks the owner of what the input names.** Before:
+
+```ts
+create: ctx.create(Notes, { owner: { context: "userId" } }),
+// any folderId was accepted, whoever owned the folder
+```
+
+After:
+
+```ts
+create: ctx.create(Notes, {
+	owner: { context: "userId" },
+	relations: { folder: { shared: true } }, // only if folders are meant to be shared
+}),
+```
+
+**`update` with `owner` and the owner key in `change`.** Before:
+
+```ts
+class Note extends entityOf(
+	blueprintOf((ctx) => ({ text: ctx.text, ownerId: ctx.id })),
+	{
+		change: ["text", "ownerId"],
+	},
+) {}
+```
+
+After:
+
+```ts
+class Note extends entityOf(
+	blueprintOf((ctx) => ({ text: ctx.text, ownerId: ctx.id })),
+	{
+		change: ["text"], // a transfer is a use case written by hand
+	},
+) {}
+```
+
+**`list` caps `limit`.** Before:
+
+```ts
+list: ctx.list(Posts), await Blog.run("list", { limit: 500 });
+```
+
+After:
+
+```ts
+list: ctx.list(Posts, { maxLimit: 500 }),
+	await Blog.run("list", { limit: 500 });
+```
+<!-- SEC-PARSE-MIGRATION -->
+
 ## 27.0.0-rc.2 — 2026-11-16
 
 The second candidate of 27.0.0: faster parsing of entities and of blueprints without handlers, with no change to the API, the values or the issues (#161).

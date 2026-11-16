@@ -44,15 +44,15 @@ class PublishPostByDecorator extends useCaseOf({
 
 ## The declaration
 
-| `access`                      | Who may call                                                             |
-| ----------------------------- | ------------------------------------------------------------------------ |
-| not declared                  | Anyone: nothing is checked, as before.                                   |
-| `{ public: true }`            | Anyone, said on purpose: the document marks the operation as public.     |
-| `{}`                          | Any authenticated caller.                                                |
-| `{ scopes: [...] }`           | A caller that has **all** the scopes.                                    |
-| `{ owner: { input } }`        | A caller whose `subject` equals the input key `input` (a scalar key).    |
-| `{ owner: { input, claim } }` | A caller whose claim `claim` equals that input key (a tenant, say).      |
-| `{ context: { key: … } }`     | Any authenticated caller; the context key is filled from it (see below). |
+| `access`                      | Who may call                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------- |
+| not declared                  | Anyone: nothing is checked, as before.                                                            |
+| `{ public: true }`            | Anyone, said on purpose: the document marks the operation as public.                              |
+| `{}`                          | Any authenticated caller.                                                                         |
+| `{ scopes: [...] }`           | A caller that has **all** the scopes.                                                             |
+| `{ owner: { input } }`        | A caller whose `subject` equals the input key `input` (a scalar key), as its property handles it. |
+| `{ owner: { input, claim } }` | A caller whose claim `claim` equals that input key (a tenant, say).                               |
+| `{ context: { key: … } }`     | Any authenticated caller; the context key is filled from it (see below).                          |
 
 The options combine, and all of them must hold. `public: true` takes no other option. A declaration that does not fit the input throws `InvalidUseCaseDeclaration` when the use case is declared, as does a class whose `@Access` says something else than the access it already has. `PublishPost.access` is the frozen declaration, `app.describe().useCases.PublishPost.access` and `afora.json` carry it.
 
@@ -61,6 +61,8 @@ The options combine, and all of them must hold. `public: true` takes no other op
 **`context`** fills keys of the [context](use-cases.md#context-and-metadata) of the call from the caller: `"subject"`, `"scopes"` or `"claims.<name>"`. The value replaces whatever the request sent for that key, so a use case that reads `this.context.userId` reads who was authenticated, never a header a client chose. A key the context of the operation does not declare throws `InvalidOutputStage` when the output is declared. This is also how the ownership of the [standard use cases](std-use-cases.md) is tied to the caller: their `owner: { context: "userId" }` option compares a field of the stored entity with that context key, inside the use case, with the one read it already makes.
 
 **`owner`** compares a key of the input, before anything is read: it fits operations whose input names the owner (`/users/{id}/orders`). When the owner is a field of a stored entity, use the `owner` option of the standard use cases, or compare in the use case.
+
+The input key is compared after its property handles it, the value the use case acts on: an `Email` trimmed and lowercased, a `Slug` slugified. The subject or claim is compared as it was issued, so it must already be in that form: an authenticator that receives `Ana@Example.com` from its identity provider puts `ana@example.com` in the principal. A value the property rejects is a `Forbidden` with `details.reason: "owner"`, and so is a claim that is not a string, a number or a boolean; a number is compared as text (`42` and the subject `"42"`).
 
 ## Enforcement
 
@@ -72,7 +74,7 @@ The check is made once per operation, when the output is declared, and runs insi
 | A scope is missing (`details.scopes`)  | `Forbidden`       | 403    |
 | The caller is not the owner            | `Forbidden`       | 403    |
 
-Both are exceptions of the `Output` layer, served as `application/problem+json` like any other; `details.reason` of `Forbidden` is `"scope"` or `"owner"`. The check comes before the input is validated, so an anonymous caller learns nothing about the input of a protected operation.
+Both are exceptions of the `Output` layer, served as `application/problem+json` like any other; `details.reason` of `Forbidden` is `"scope"` or `"owner"`. The check comes before the input is validated, so an anonymous caller learns nothing about the input of a protected operation: only the owner key is parsed, by its own property, once the caller is authenticated and has the scopes.
 
 - **It fails closed.** A sink that passes no principal gets a 401 from every operation with an `access` other than `public`. Adding `access` to a use case served by a sink with no authentication configured closes that operation.
 - **A call in process is trusted.** `new UseCase(input).execute()`, `app.run(...)` and `command.run(...)` are your own code and are not checked: the boundary is the output.
