@@ -72,14 +72,27 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
-import { generate } from "../packages/codegen/src/index";
-import { stages as honoStages } from "../packages/hono/src/index";
 import {
 	checkVirtualModules,
 	entryPoints,
 	root,
 	type VirtualModule,
 } from "../tests/api-surface/program";
+
+// Imported by path, so the root type check (which runs without dist/) does not
+// follow the package sources, whose `@afora/core` resolves to dist/.
+const codegenModule = join(root, "packages/codegen/src/index.ts");
+const honoModule = join(root, "packages/hono/src/index.ts");
+const { generate } = (await import(codegenModule)) as {
+	generate: (
+		spec: unknown,
+		extended: object,
+		options: { stages: readonly unknown[] },
+	) => readonly { path: string; contents: string }[];
+};
+const { stages: honoStages } = (await import(honoModule)) as {
+	stages: readonly unknown[];
+};
 
 const argv = process.argv.slice(2);
 const reportOnly = argv.includes("--report");
@@ -774,11 +787,7 @@ function generateFrom(
 ) {
 	const dir = marker.arg ? `${slug}/${marker.arg}` : slug;
 	try {
-		const generated = generate(
-			spec as Parameters<typeof generate>[0],
-			{},
-			{ stages: honoStages },
-		);
+		const generated = generate(spec, {}, { stages: honoStages });
 		for (const output of generated) {
 			if (!output.path.endsWith(".ts")) continue;
 			count.generated++;
