@@ -117,7 +117,7 @@
 		"slugify": "^1.6.9"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.6.3",
+		"@biomejs/biome": "^2.6.8",
 		"@commitlint/cli": "^21.2.4",
 		"@commitlint/config-conventional": "^21.2.4",
 		"@seriousme/openapi-schema-validator": "2.11.0",
@@ -125,8 +125,8 @@
 		"ajv": "^8.20.0",
 		"ajv-formats": "^3.0.1",
 		"husky": "^9.1.7",
-		"knip": "^6.43.0",
-		"typebox": "^1.4.3",
+		"knip": "^6.45.1",
+		"typebox": "^1.4.7",
 		"typescript": "^7.0.2",
 		"typescript-language-service": "npm:typescript@5.9.3"
 	},
