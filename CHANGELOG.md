@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Repository
+
+- The Release workflow sets `coreVersion` in afora CMS's `site-values` entry after a release that npm serves as `latest` (once its tag and GitHub release exist), so getafora.com shows the new version without a hand edit. It uses the repository secret `CMS_TOKEN`, an afora CMS token limited to `site-values`, and the variable `CMS_API_URL`; without them it only warns. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## 27.0.0-rc.4 — 2026-11-16
 
 The fourth candidate of 27.0.0: the open code scanning alerts of the repository are closed (#170). Nothing in the public API changes.
