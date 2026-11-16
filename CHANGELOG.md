@@ -1,11 +1,13 @@
 # Changelog
 
-## Unreleased
+## 27.0.0-rc.4 — 2026-11-16
+
+The fourth candidate of 27.0.0: the open code scanning alerts of the repository are closed (#170). Nothing in the public API changes.
 
 ### Security
 
 - Every open code scanning alert is closed. Regular expressions that took quadratic time on crafted input now run in linear time: the route key of `openapi` on a path with many `{` (paths are validated before, so it was not reachable), the trailing `/` of `output.dir` in `@afora/codegen` (and of an import module, not reachable either), and the parser of `tsc` output in `@afora/mcp`, which took seconds on a long line repeating `(0,0): error TS0: `.
-- Repository: Dependabot proposes a new version only once it is 7 days old (security updates are not delayed), so a compromised release is usually pulled before it reaches a pull request. `release.yml` calls `ci.yml` and `bench.yml` with GitHub's self-repository syntax (`uses: $/...`). The docs scripts escape `\` in Markdown table cells and every regular expression character in export names.
+- Repository: Dependabot proposes a new version only once it is 7 days old (security updates are not delayed), so a compromised release is usually pulled before it reaches a pull request. `release.yml` calls `ci.yml` and `bench.yml` with GitHub's self-repository syntax (`uses: $/...`). The docs scripts escape `\` in Markdown table cells and every regular expression character in export names. The pull request of the benchmark results now carries `docs/performance.md`, which it left out (#171).
 
 ## 27.0.0-rc.3 — 2026-11-16
 
