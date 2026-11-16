@@ -6,8 +6,9 @@ name: Release
 # - main: the version of package.json, when it has no tag yet, to latest
 #   (stable), rc or beta. Bump it in a release pull request with
 #   `bun run release:version <v>`.
-# - release/<YY>.<minor>: the patches (stable or rc) of that line; to latest, or
-#   to the dist-tag v<YY>.<minor> when the version is behind latest.
+# - release/<YY>.<minor>: the patches (<YY>.<minor>.<p>, p >= 1, or their rc)
+#   of that line; to latest, or to the dist-tag release-<YY>.<minor> for an rc
+#   or a version behind latest.
 # - dev: the Next, <base>-alpha.<run number>, to the next dist-tag, on every push
 #   that changes src/, packages/*/src/ or package.json. The version is written
 #   before the build and never committed; no git tag and no GitHub release.
@@ -63,8 +64,8 @@ jobs:
         name: Compare package.json with the branch, the tags and npm
         # Fails when the version is outside the scheme or the line of the branch,
         # when a package is at another version or has a peer range on
-        # @afora/core that does not accept it, or when it would move latest
-        # backwards.
+        # @afora/core that does not accept it, when it would move its dist-tag
+        # backwards, or when npm cannot be read (only E404 means no tags).
         run: bun scripts/release-channel.ts detect
         env:
           BRANCH: ${{ github.ref_name }}

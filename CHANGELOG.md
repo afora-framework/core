@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Release channels.** Besides `latest` (stable), each version goes to the npm dist-tag of its channel: `-rc.<n>` to `rc`, `-beta.<n>` to `beta`, and the Next, `<base>-alpha.<n>`, to `next`, published on its own on every push to `dev` that changes the code (`npm install @afora/core@next`). Patches of an older line are published from `release/<YY>.<minor>` branches, to `latest` when they are the newest version and to the `v<YY>.<minor>` dist-tag otherwise. `bun run release:version <v>` sets the version of every package and, for a prerelease, the peer ranges on `@afora/core`. See [Channels](VERSIONING.md#channels).
+- **Release channels.** Besides `latest` (stable), each version goes to the npm dist-tag of its channel: `-rc.<n>` to `rc`, `-beta.<n>` to `beta`, and the Next, `<base>-alpha.<n>`, to `next`, published on its own on every push to `dev` that changes the code (`npm install @afora/core@next`). Patches of an older line are published from `release/<YY>.<minor>` branches, to `latest` when they are the newest version and to the `release-<YY>.<minor>` dist-tag otherwise. No dist-tag moves backwards. `bun run release:version <v>` sets the version of every package and the peer ranges on `@afora/core`: `>=<v>` for a prerelease, `^<v>` for a stable version. See [Channels](VERSIONING.md#channels).
 
 ## 27.0.0-rc.1 — 2026-11-16
 

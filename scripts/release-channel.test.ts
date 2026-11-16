@@ -4,9 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	channelOf,
+	distTagsOf,
+	isSemverRange,
 	nextVersion,
 	packageIssues,
 	parseVersion,
+	peerRangeOf,
 	setVersion,
 	touchesNext,
 } from "./release-channel.ts";
@@ -47,7 +50,7 @@ describe("parseVersion", () => {
 
 describe("channelOf on main", () => {
 	const main = (version: string, latest = "0.0.13", tagExists = false) =>
-		channelOf({ version, branch: "main", latest, tagExists });
+		channelOf({ version, branch: "main", distTags: { latest }, tagExists });
 
 	test("0.0.N and stable go to latest, marked latest, with the bench", () => {
 		for (const version of ["0.0.14", "27.0.0"]) {
@@ -100,9 +103,21 @@ describe("channelOf on main", () => {
 		expect(() => main("0.0.12")).toThrow("behind 0.0.13");
 	});
 
-	test("the guard applies only to latest", () => {
+	test("the latest guard applies only to latest", () => {
 		expect(main("27.0.0-rc.1", "27.1.0").distTag).toBe("rc");
 		expect(main("27.1.0-beta.1", "27.2.0").distTag).toBe("beta");
+	});
+
+	test("rc and beta never move backwards either", () => {
+		const at = (version: string, distTags: Record<string, string>) =>
+			channelOf({ version, branch: "main", distTags, tagExists: false });
+		expect(() => at("27.1.0-rc.1", { rc: "27.1.0-rc.2" })).toThrow(
+			"behind 27.1.0-rc.2, the rc on npm",
+		);
+		expect(() => at("27.1.0-beta.1", { beta: "27.2.0-beta.1" })).toThrow(
+			"the beta on npm",
+		);
+		expect(at("27.1.0-rc.3", { rc: "27.1.0-rc.2" }).distTag).toBe("rc");
 	});
 
 	test("the first publish has no latest to compare with", () => {
@@ -114,8 +129,18 @@ describe("channelOf on main", () => {
 });
 
 describe("channelOf on release/<YY>.<m>", () => {
-	const release = (version: string, latest: string, tagExists = false) =>
-		channelOf({ version, branch: "release/27.0", latest, tagExists });
+	const release = (
+		version: string,
+		latest: string,
+		tagExists = false,
+		distTags: Record<string, string> = {},
+	) =>
+		channelOf({
+			version,
+			branch: "release/27.0",
+			distTags: { latest, ...distTags },
+			tagExists,
+		});
 
 	test("a patch at or above latest goes to latest", () => {
 		expect(release("27.0.1", "27.0.0")).toMatchObject({
@@ -130,7 +155,7 @@ describe("channelOf on release/<YY>.<m>", () => {
 	test("a patch below latest goes to the tag of its line, not marked latest", () => {
 		expect(release("27.0.3", "27.1.0")).toMatchObject({
 			publish: true,
-			distTag: "v27.0",
+			distTag: "release-27.0",
 			prerelease: false,
 			makeLatest: false,
 			gitRelease: true,
@@ -138,17 +163,28 @@ describe("channelOf on release/<YY>.<m>", () => {
 		});
 	});
 
-	test("rc goes to rc, or to the tag of its line below latest", () => {
-		expect(release("27.0.1-rc.1", "27.0.0")).toMatchObject({
-			distTag: "rc",
-			prerelease: true,
-			makeLatest: false,
-		});
-		expect(release("27.0.4-rc.1", "27.1.0")).toMatchObject({
-			distTag: "v27.0",
-			prerelease: true,
-			makeLatest: false,
-		});
+	test("an rc of a patch goes to the tag of its line, without the bench", () => {
+		for (const latest of ["27.0.0", "27.1.0"]) {
+			expect(release("27.0.4-rc.1", latest)).toMatchObject({
+				distTag: "release-27.0",
+				prerelease: true,
+				makeLatest: false,
+				gitRelease: true,
+				bench: false,
+			});
+		}
+	});
+
+	test("the tag of the line never moves backwards", () => {
+		expect(() =>
+			release("27.0.2", "27.1.0", false, { "release-27.0": "27.0.3" }),
+		).toThrow("behind 27.0.3, the release-27.0 on npm");
+	});
+
+	test("x.y.0, its candidates and other majors are refused", () => {
+		expect(() => release("27.0.0", "0.0.13")).toThrow("only patches");
+		expect(() => release("27.0.0-rc.2", "0.0.13")).toThrow("only patches");
+		expect(() => release("28.0.1", "27.0.0")).toThrow("only patches");
 	});
 
 	test("alpha, beta and 0.0.N are refused", () => {
@@ -158,14 +194,13 @@ describe("channelOf on release/<YY>.<m>", () => {
 		expect(() => release("27.0.1-beta.1", "27.0.0")).toThrow(
 			"publishes stable and rc",
 		);
-		expect(() => release("0.0.14", "0.0.13")).toThrow("only 27.0.<patch>");
+		expect(() => release("0.0.14", "0.0.13")).toThrow("only patches");
 	});
 
 	test("a version of another line is refused", () => {
-		expect(() => release("27.1.0", "27.0.0")).toThrow(
-			"release/27.0 publishes only 27.0.<patch>, not 27.1.0",
+		expect(() => release("27.1.1", "27.0.0")).toThrow(
+			"release/27.0 publishes only patches of its line, 27.0.<patch> with a patch of 1 or more, not 27.1.1",
 		);
-		expect(() => release("28.0.1", "27.0.0")).toThrow("only 27.0.<patch>");
 	});
 
 	test("a released version publishes nothing", () => {
@@ -179,7 +214,7 @@ describe("channelOf on dev", () => {
 			channelOf({
 				version: "27.0.0-alpha.7",
 				branch: "dev",
-				latest: "0.0.13",
+				distTags: { latest: "0.0.13" },
 				tagExists: false,
 			}),
 		).toEqual({
@@ -351,14 +386,27 @@ describe("setVersion", () => {
 		);
 	});
 
-	test("a stable version keeps the declared ranges", () => {
+	test("rc to stable: the peers become ^<version>, within the major", () => {
 		const root = fixture();
 		setVersion("27.0.0", root);
 		expect(read(root).version).toBe("27.0.0");
-		expect(read(root, "packages/hono")).toMatchObject({
+		const hono = read(root, "packages/hono");
+		expect(hono).toMatchObject({
 			version: "27.0.0",
-			peerDependencies: { "@afora/core": ">=27.0.0-rc.1" },
+			peerDependencies: { "@afora/core": "^27.0.0" },
 		});
+		expect(packageIssues("27.0.0", [{ ...hono, corePeer: "^27.0.0" }])).toEqual(
+			[],
+		);
+		expect(Bun.semver.satisfies("28.0.0", "^27.0.0")).toBe(false);
+		expect(Bun.semver.satisfies("27.3.1", "^27.0.0")).toBe(true);
+	});
+
+	test("peerRangeOf", () => {
+		expect(peerRangeOf("27.1.2")).toBe("^27.1.2");
+		expect(peerRangeOf("27.1.0-rc.1")).toBe(">=27.1.0-rc.1");
+		expect(peerRangeOf("27.1.0-alpha.4")).toBe(">=27.1.0-alpha.4");
+		expect(peerRangeOf("0.0.14")).toBe(">=0.0.14");
 	});
 
 	test("the rest of each file is left as it is", () => {
@@ -381,5 +429,102 @@ describe("setVersion", () => {
 
 	test("a version outside the scheme is refused", () => {
 		expect(() => setVersion("1.2.3", fixture())).toThrow("not in the scheme");
+	});
+});
+
+describe("dist-tags", () => {
+	test("isSemverRange follows what npm refuses as a dist-tag", () => {
+		for (const range of [
+			"v27.0",
+			"27",
+			"27.0",
+			"x",
+			"*",
+			"^1",
+			">=2",
+			"~1.2",
+			"",
+		]) {
+			expect(isSemverRange(range)).toBe(true);
+		}
+		for (const tag of ["latest", "next", "beta", "rc", "release-27.0"]) {
+			expect(isSemverRange(tag)).toBe(false);
+		}
+	});
+
+	test("no dist-tag produced is a semver range", () => {
+		const cases: [string, string, Record<string, string>][] = [
+			["0.0.14", "main", { latest: "0.0.13" }],
+			["27.0.0", "main", { latest: "0.0.13" }],
+			["27.0.0-rc.1", "main", {}],
+			["27.1.0-beta.1", "main", {}],
+			["27.1.0-alpha.3", "dev", {}],
+			["27.0.1", "release/27.0", { latest: "27.0.0" }],
+			["27.0.2", "release/27.0", { latest: "27.1.0" }],
+			["27.0.2-rc.1", "release/27.0", { latest: "27.1.0" }],
+		];
+		for (const [version, branch, distTags] of cases) {
+			const { distTag } = channelOf({
+				version,
+				branch,
+				distTags,
+				tagExists: false,
+			});
+			expect(isSemverRange(distTag)).toBe(false);
+		}
+	});
+
+	test("next is taken over from a version of another channel", () => {
+		expect(
+			channelOf({
+				version: "27.0.0-alpha.3",
+				branch: "dev",
+				distTags: { next: "27.0.0-rc.1" },
+				tagExists: false,
+			}).distTag,
+		).toBe("next");
+		expect(() =>
+			channelOf({
+				version: "27.0.0-alpha.3",
+				branch: "dev",
+				distTags: { next: "27.0.0-alpha.9" },
+				tagExists: false,
+			}),
+		).toThrow("behind 27.0.0-alpha.9, the next on npm");
+	});
+
+	const result = (exitCode: number, stdout: string, stderr = "") => ({
+		exitCode,
+		stdout,
+		stderr,
+	});
+
+	test("distTagsOf reads the dist-tags", () => {
+		expect(
+			distTagsOf(result(0, '{"latest":"0.0.13","rc":"27.0.0-rc.1"}')),
+		).toEqual({ latest: "0.0.13", rc: "27.0.0-rc.1" });
+	});
+
+	test("distTagsOf: only E404 means no dist-tags", () => {
+		expect(
+			distTagsOf(
+				result(
+					1,
+					'{"error":{"code":"E404","summary":"Not Found"}}',
+					"npm error code E404",
+				),
+			),
+		).toEqual({});
+	});
+
+	test("distTagsOf: any other failure throws", () => {
+		expect(() => distTagsOf(result(1, "", "npm error code ETIMEDOUT"))).toThrow(
+			"npm view failed (exit 1): npm error code ETIMEDOUT",
+		);
+		expect(() => distTagsOf(result(1, "", "npm error code E500"))).toThrow(
+			"npm view failed",
+		);
+		expect(() => distTagsOf(result(0, "<html>"))).toThrow("no JSON");
+		expect(() => distTagsOf(result(0, '"0.0.13"'))).toThrow("no dist-tags");
 	});
 });

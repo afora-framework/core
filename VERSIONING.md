@@ -128,26 +128,27 @@ Every **Breaking.** entry, of values, types or behavior, has its block under Mig
 
 Each version is published under the npm dist-tag of its channel. Every channel installs by its tag:
 
-| Channel     | Version            | dist-tag | From                | What it promises                                                                                   |
-| ----------- | ------------------ | -------- | ------------------- | -------------------------------------------------------------------------------------------------- |
-| Stable      | `27.1.0`           | `latest` | `main`              | The contract of this file.                                                                         |
-| RC          | `27.1.0-rc.2`      | `rc`     | `main`              | The release as it will ship: only fixes land between two candidates.                               |
-| Beta        | `27.1.0-beta.1`    | `beta`   | `main`              | The features of the next minor or major, to try out. It may still break from one beta to the next. |
-| Next        | `27.1.0-alpha.<n>` | `next`   | every push to `dev` | What is on `dev` right now, published on its own. It may break at any time.                        |
-| Maintenance | `27.0.4`           | `v27.0`  | `release/27.0`      | Patches of an older line, published while `dev` moves on. Only fixes.                              |
+| Channel     | Version            | dist-tag       | From                | What it promises                                                                                   |
+| ----------- | ------------------ | -------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
+| Stable      | `27.1.0`           | `latest`       | `main`              | The contract of this file.                                                                         |
+| RC          | `27.1.0-rc.2`      | `rc`           | `main`              | The release as it will ship: only fixes land between two candidates.                               |
+| Beta        | `27.1.0-beta.1`    | `beta`         | `main`              | The features of the next minor or major, to try out. It may still break from one beta to the next. |
+| Next        | `27.1.0-alpha.<n>` | `next`         | every push to `dev` | What is on `dev` right now, published on its own. It may break at any time.                        |
+| Maintenance | `27.0.4`           | `release-27.0` | `release/27.0`      | Patches of an older line, published while `dev` moves on. Only fixes.                              |
 
 ```bash
 npm install @afora/core          # stable (latest)
 npm install @afora/core@rc       # the release candidate
 npm install @afora/core@beta     # the beta
 npm install @afora/core@next     # the Next, from dev
-npm install @afora/core@v27.0    # the newest patch of the 27.0 line
+npm install @afora/core@release-27.0   # the newest patch of the 27.0 line
 ```
 
 - **Order.** In semver, a prerelease comes before its release, and the channels are ordered by how stable they are: `27.1.0-alpha.9 < 27.1.0-beta.1 < 27.1.0-rc.1 < 27.1.0`. A range such as `^27.0.0` never picks a prerelease.
 - **The Next.** Its version is the one of `package.json` on `dev` without its prerelease, with the minor raised when that version is already released as stable (`27.0.0` released gives `27.1.0`), then `-alpha.<n>`, where `n` is the number of the run of the workflow. It has no git tag and no GitHub release. A push to `dev` that changes nothing under `src/`, `packages/*/src/` or `package.json` publishes none.
-- **Maintenance.** A patch published from `release/<YY>.<minor>` goes to `latest` when it is the newest version, and otherwise to the dist-tag of its line (`v27.0`), so `latest` never moves backwards. Its GitHub release is not marked as the latest.
-- **Peer ranges.** A prerelease satisfies only a range that names a prerelease of the same `YY.minor.patch`: `@afora/core@27.1.0-rc.1` does not satisfy `>=27.0.0`. So every package of a prerelease needs `@afora/core >=<that version>`; `bun run release:version` writes it, and a stable version keeps the ranges as they are declared. Install the packages of one channel together (`npm install @afora/core@rc @afora/hono@rc`).
+- **Maintenance.** A `release/<YY>.<minor>` branch publishes only patches of its line (`27.0.1` and up) and their candidates (`27.0.1-rc.1`); `27.0.0` and its candidates come from `main`. A patch goes to `latest` when it is the newest version, and otherwise to the dist-tag of its line (`release-27.0`; not `v27.0`, which npm reads as a version range and refuses as a tag), so `latest` never moves backwards; its GitHub release is then not marked as the latest. A candidate of a patch always goes to `release-27.0`, so `rc` stays on the next release.
+- **No tag moves backwards.** Before publishing, the release reads the dist-tags on npm and refuses a version behind the one its tag holds (`latest`, `rc`, `beta`, `next` or the tag of a line). A tag that holds a version of another channel, such as a `next` left on an rc, is taken over. When npm cannot be read, the release fails; only a package that is not on npm yet has no tags.
+- **Peer ranges.** A prerelease satisfies only a range that names a prerelease of the same `YY.minor.patch`: `@afora/core@27.1.0-rc.1` does not satisfy `>=27.0.0`. So every package of a prerelease needs `@afora/core >=<that version>`. A stable `YY.minor.patch` gets `^<that version>`, which stays within the major, so a package of 27 never accepts a core of 28; `0.0.<n>` gets `>=0.0.<n>`. `bun run release:version` writes the range. Install the packages of one channel together (`npm install @afora/core@rc @afora/hono@rc`).
 - **Moving a tag.** A tag that points to the wrong version is moved by hand, package by package: `npm dist-tag add @afora/core@27.1.0 latest`, or removed with `npm dist-tag rm @afora/core beta`.
 
 ## Release candidates

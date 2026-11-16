@@ -16,9 +16,9 @@
  *   bun scripts/release-channel.ts detect        # the job detect of release.yml
  *
  * `detect` reads BRANCH, RUN_NUMBER, EVENT and BEFORE from the environment, and
- * asks npm for the `latest` version and git for the tags; LATEST, TAGS (a comma
- * list) and CHANGED_FILES (a comma list) replace them for a dry run on a
- * machine. It writes its decision to $GITHUB_OUTPUT when that is set.
+ * asks npm for the dist-tags and git for the tags; DIST_TAGS (`latest=0.0.13,rc=...`),
+ * TAGS (a comma list) and CHANGED_FILES (a comma list) replace them for a dry
+ * run on a machine. It writes its decision to $GITHUB_OUTPUT when that is set.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -88,27 +88,83 @@ function parseOrThrow(version: string): ParsedVersion {
 	return parsed;
 }
 
-const behind = (version: string, latest: string | undefined) =>
-	latest !== undefined && Bun.semver.order(version, latest) === -1;
+const behind = (version: string, current: string | undefined) =>
+	current !== undefined && Bun.semver.order(version, current) === -1;
+
+/**
+ * Whether npm would read `tag` as a semver range, which it refuses as a
+ * dist-tag (`npm dist-tag add` and `npm publish --tag` check
+ * `semver.validRange`): anything that starts like a version or a comparator
+ * (`v27.0`, `27`, `x`, `^1`, `>=2`, `*`).
+ */
+export function isSemverRange(tag: string): boolean {
+	const trimmed = tag.trim();
+	return trimmed === "" || /^[<>=~^v\s]*[0-9xX*]/.test(trimmed);
+}
+
+/** The kinds of version each dist-tag holds, to tell its own from a leftover. */
+const KINDS_OF: Record<string, readonly VersionKind[]> = {
+	latest: ["zero", "stable"],
+	next: ["alpha"],
+	beta: ["beta"],
+	rc: ["rc"],
+};
+
+/**
+ * Throws when publishing `version` under `distTag` would move that tag
+ * backwards. A tag that holds a version of another channel (the `next` of the
+ * rc before the channels) is taken over.
+ */
+function guardTag(
+	version: string,
+	distTag: string,
+	distTags: Readonly<Record<string, string>>,
+) {
+	const current = distTags[distTag];
+	if (current === undefined || !behind(version, current)) return;
+	const kinds = KINDS_OF[distTag];
+	const kind = parseVersion(current)?.kind;
+	if (kinds && (kind === undefined || !kinds.includes(kind))) return;
+	throw new Error(
+		`${version} is behind ${current}, the ${distTag} on npm; a dist-tag never moves backwards`,
+	);
+}
+
+function checked(
+	channel: Channel,
+	distTags: Readonly<Record<string, string>>,
+	version: string,
+): Channel {
+	if (isSemverRange(channel.distTag)) {
+		throw new Error(
+			`${channel.distTag} is a semver range, which npm refuses as a dist-tag`,
+		);
+	}
+	if (channel.publish) guardTag(version, channel.distTag, distTags);
+	return channel;
+}
 
 const RELEASE_BRANCH = /^release\/([1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
 
 export interface ChannelInput {
 	readonly version: string;
 	readonly branch: string;
-	/** The `latest` version on npm, or undefined before the first publish. */
-	readonly latest?: string;
+	/** The dist-tags of `@afora/core` on npm (none before the first publish). */
+	readonly distTags?: Readonly<Record<string, string>>;
 	/** Whether the tag `v<version>` exists. */
 	readonly tagExists: boolean;
 }
 
 /** How `version` is released from `branch`. Throws when it may not be. */
-export function channelOf({
-	version,
-	branch,
-	latest,
-	tagExists,
-}: ChannelInput): Channel {
+export function channelOf(input: ChannelInput): Channel {
+	const distTags = input.distTags ?? {};
+	return checked(decide(input, distTags.latest), distTags, input.version);
+}
+
+function decide(
+	{ version, branch, tagExists }: ChannelInput,
+	latest: string | undefined,
+): Channel {
 	const parsed = parseOrThrow(version);
 	const prerelease = parsed.kind !== "stable" && parsed.kind !== "zero";
 	const mapped = TAG_OF[parsed.kind];
@@ -148,10 +204,7 @@ export function channelOf({
 		}
 		// The tag is created last, so a missing tag also means an unfinished release.
 		if (tagExists) return skip(`v${version} is already released`);
-		// Never move the latest dist-tag backwards; the other tags may.
-		if (mapped === "latest" && behind(version, latest)) {
-			throw new Error(`${version} is behind ${latest}, the latest on npm`);
-		}
+		// No dist-tag moves backwards: checked() refuses it.
 		return {
 			publish: true,
 			distTag: mapped,
@@ -169,10 +222,11 @@ export function channelOf({
 		if (
 			parsed.kind === "zero" ||
 			parsed.major !== Number(major) ||
-			parsed.minor !== Number(minor)
+			parsed.minor !== Number(minor) ||
+			parsed.patch === 0
 		) {
 			throw new Error(
-				`${branch} publishes only ${major}.${minor}.<patch>, not ${version}`,
+				`${branch} publishes only patches of its line, ${major}.${minor}.<patch> with a patch of 1 or more, not ${version}`,
 			);
 		}
 		if (parsed.kind !== "stable" && parsed.kind !== "rc") {
@@ -181,28 +235,31 @@ export function channelOf({
 			);
 		}
 		if (tagExists) return skip(`v${version} is already released`);
-		// A patch of an older line than the latest gets the tag of its line,
-		// so that latest does not move backwards.
-		if (behind(version, latest)) {
-			const distTag = `v${major}.${minor}`;
+		// The tag of the line: never a semver range such as v27.0, which npm refuses.
+		const lineTag = `release-${major}.${minor}`;
+		// A candidate of a patch, and a patch behind latest, get the tag of their
+		// line, so that neither rc nor latest move to an older line.
+		if (prerelease || behind(version, latest)) {
 			return {
 				publish: true,
-				distTag,
+				distTag: lineTag,
 				prerelease,
 				makeLatest: false,
 				gitRelease: true,
 				bench: false,
-				reason: `${version} is behind ${latest}, the latest on npm, so it goes to ${distTag}`,
+				reason: prerelease
+					? `${version} is a candidate of a patch, so it goes to ${lineTag}`
+					: `${version} is behind ${latest}, the latest on npm, so it goes to ${lineTag}`,
 			};
 		}
 		return {
 			publish: true,
-			distTag: mapped,
-			prerelease,
-			makeLatest: !prerelease,
+			distTag: "latest",
+			prerelease: false,
+			makeLatest: true,
 			gitRelease: true,
 			bench: true,
-			reason: `${version} goes to ${mapped}`,
+			reason: `${version} goes to latest`,
 		};
 	}
 
@@ -317,24 +374,33 @@ export function packageIssues(
 }
 
 /**
- * Writes `version` in package.json and in every packages/* /package.json. For
- * a prerelease, the peer ranges on `@afora/core` become `>=<version>`, since a
- * prerelease satisfies only a range that names one; a stable version keeps the
- * declared ranges. The rest of each file is left as it is.
+ * Writes `version` in package.json and in every packages/* /package.json, and
+ * the peer range on `@afora/core` that `peerRangeOf` gives. The rest of each
+ * file is left as it is.
  */
+/**
+ * The peer range on `@afora/core` of the packages of `version`: `^<version>`
+ * for a stable `YY.m.p` (the same major, which keeps the contract), and
+ * `>=<version>` for a prerelease (a prerelease satisfies only a range that
+ * names one of the same `YY.m.p`) and for `0.0.<n>`.
+ */
+export function peerRangeOf(version: string): string {
+	const { kind } = parseOrThrow(version);
+	return kind === "stable" ? `^${version}` : `>=${version}`;
+}
+
 export function setVersion(version: string, root = process.cwd()): string[] {
-	const parsed = parseOrThrow(version);
-	const prerelease = parsed.kind !== "stable" && parsed.kind !== "zero";
+	const peer = peerRangeOf(version);
 	const written: string[] = [];
 	for (const { path, corePeer } of manifestsOf(root)) {
 		let text = readFileSync(path, "utf8");
 		const top = /^(\t"version":\s*")[^"]*(")/m;
 		if (!top.test(text)) throw new Error(`${path} has no top-level version`);
 		text = text.replace(top, `$1${version}$2`);
-		if (prerelease && corePeer !== undefined) {
+		if (corePeer !== undefined) {
 			text = text.replace(
 				/("peerDependencies":\s*\{[^}]*?"@afora\/core":\s*")[^"]*(")/,
-				`$1>=${version}$2`,
+				`$1${peer}$2`,
 			);
 		}
 		writeFileSync(path, text);
@@ -349,12 +415,16 @@ async function detect(): Promise<Record<string, string>> {
 	const manifests = manifestsOf(process.cwd());
 	const pkgVersion = manifests[0]?.version as string;
 
-	const latest =
-		env.LATEST !== undefined
-			? env.LATEST || undefined
-			: (await Bun.$`npm view @afora/core version`.nothrow().quiet())
-					.text()
-					.trim() || undefined;
+	const distTags =
+		env.DIST_TAGS !== undefined
+			? Object.fromEntries(
+					env.DIST_TAGS.split(",")
+						.filter(Boolean)
+						.map((pair) => pair.split("=") as [string, string]),
+				)
+			: distTagsOf(
+					await Bun.$`npm view @afora/core dist-tags --json`.nothrow().quiet(),
+				);
 	const tags =
 		env.TAGS !== undefined
 			? env.TAGS.split(",").filter(Boolean)
@@ -386,19 +456,56 @@ async function detect(): Promise<Record<string, string>> {
 		});
 		return outputs(
 			version,
-			channelOf({ version, branch, latest, tagExists: false }),
+			channelOf({ version, branch, distTags, tagExists: false }),
 		);
 	}
 
 	const channel = channelOf({
 		version: pkgVersion,
 		branch,
-		latest,
+		distTags,
 		tagExists: tags.includes(`v${pkgVersion}`),
 	});
 	const issues = packageIssues(pkgVersion, manifests);
 	if (channel.publish && issues.length) throw new Error(issues.join("\n"));
 	return outputs(pkgVersion, channel);
+}
+
+interface CommandResult {
+	readonly exitCode: number;
+	readonly stdout: { toString(): string };
+	readonly stderr: { toString(): string };
+}
+
+/**
+ * The dist-tags from `npm view <package> dist-tags --json`. Only a package
+ * that is not on npm (E404) has none; any other failure throws, so that a
+ * registry outage is never read as "no latest" and lets a tag move backwards.
+ */
+export function distTagsOf(result: CommandResult): Record<string, string> {
+	const stdout = result.stdout.toString();
+	const stderr = result.stderr.toString();
+	if (result.exitCode !== 0) {
+		if (/\bE404\b/.test(`${stdout}\n${stderr}`)) return {};
+		throw new Error(
+			`npm view failed (exit ${result.exitCode}): ${stderr.trim() || stdout.trim()}`,
+		);
+	}
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(stdout);
+	} catch {
+		throw new Error(`npm view gave no JSON: ${stdout.trim()}`);
+	}
+	if (
+		parsed === null ||
+		typeof parsed !== "object" ||
+		Array.isArray(parsed) ||
+		!Object.values(parsed).every((value) => typeof value === "string")
+	) {
+		throw new Error(`npm view gave no dist-tags: ${stdout.trim()}`);
+	}
+	return parsed as Record<string, string>;
 }
 
 function outputs(version: string, channel: Channel): Record<string, string> {
