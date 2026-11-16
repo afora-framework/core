@@ -32,7 +32,8 @@
 		"./package.json": "./package.json"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"LICENSE"
 	],
 	"engines": {
 		"bun": ">=1.4.4",
