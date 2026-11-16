@@ -3,13 +3,16 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	changelogSection,
 	channelOf,
+	datedChangelog,
 	distTagsOf,
 	isSemverRange,
 	nextVersion,
 	packageIssues,
 	parseVersion,
 	peerRangeOf,
+	preparedVersion,
 	setVersion,
 	touchesNext,
 } from "./release-channel.ts";
@@ -526,5 +529,450 @@ describe("dist-tags", () => {
 		);
 		expect(() => distTagsOf(result(0, "<html>"))).toThrow("no JSON");
 		expect(() => distTagsOf(result(0, '"0.0.13"'))).toThrow("no dist-tags");
+	});
+});
+
+describe("preparedVersion", () => {
+	const DIST_TAGS = { latest: "0.0.13", rc: "27.0.0-rc.1" };
+	const TAGS = ["v0.0.12", "v0.0.13", "v27.0.0-rc.1"];
+	const prepare = (
+		channel: string,
+		pkgVersion: string,
+		{
+			tags = TAGS,
+			distTags = DIST_TAGS as Record<string, string>,
+			branch = "dev",
+			explicit,
+			unreleased = false,
+		}: {
+			tags?: string[];
+			distTags?: Record<string, string>;
+			branch?: string;
+			explicit?: string;
+			/** package.json holds a version never published (by default, it is tagged). */
+			unreleased?: boolean;
+		} = {},
+	) =>
+		preparedVersion({
+			channel,
+			pkgVersion,
+			tags: unreleased ? tags : [...tags, `v${pkgVersion}`],
+			distTags,
+			branch,
+			explicit,
+		});
+	const version = (...args: Parameters<typeof prepare>) =>
+		prepare(...args).version;
+
+	test("rc: the next candidate of the same target", () => {
+		const prepared = prepare("rc", "27.0.0-rc.1");
+		expect(prepared.version).toBe("27.0.0-rc.2");
+		expect(prepared.publishBranch).toBe("main");
+		expect(prepared.channel).toMatchObject({ publish: true, distTag: "rc" });
+		expect(
+			version("rc", "27.0.0-rc.9", {
+				tags: [...TAGS, "v27.0.0-rc.9"],
+				distTags: { latest: "0.0.13", rc: "27.0.0-rc.9" },
+			}),
+		).toBe("27.0.0-rc.10");
+	});
+
+	test("rc: the first candidate when the version is not an rc of the target", () => {
+		expect(version("rc", "27.1.0-beta.2")).toBe("27.1.0-rc.1");
+		// an unreleased stable in package.json: its rc would go backwards
+		expect(() =>
+			prepare("rc", "27.1.0", { unreleased: true, explicit: "27.1.0-rc.1" }),
+		).toThrow("is not after 27.1.0");
+	});
+
+	test("rc: a target released as stable moves to the next minor", () => {
+		const tags = [...TAGS, "v27.0.0", "v27.1.0"];
+		const distTags = { latest: "27.1.0", rc: "27.0.0-rc.3" };
+		expect(version("rc", "27.0.0", { tags, distTags })).toBe("27.2.0-rc.1");
+		expect(version("rc", "27.0.0-rc.3", { tags, distTags })).toBe(
+			"27.2.0-rc.1",
+		);
+	});
+
+	test("beta: the same scheme with -beta.<n>", () => {
+		expect(version("beta", "27.1.0-beta.1")).toBe("27.1.0-beta.2");
+		expect(version("beta", "27.1.0-alpha.3")).toBe("27.1.0-beta.1");
+		expect(
+			version("beta", "27.0.0", {
+				tags: [...TAGS, "v27.0.0"],
+				distTags: { latest: "27.0.0" },
+			}),
+		).toBe("27.1.0-beta.1");
+		expect(prepare("beta", "27.1.0-beta.1").channel.distTag).toBe("beta");
+	});
+
+	test("beta: refused after an rc of the same target", () => {
+		expect(() => prepare("beta", "27.0.0-rc.1")).toThrow(
+			"already an rc of 27.0.0",
+		);
+		expect(() =>
+			prepare("beta", "27.0.0-rc.1", { explicit: "27.0.0-beta.5" }),
+		).toThrow("already an rc of 27.0.0");
+	});
+
+	test("stable: the prerelease stripped", () => {
+		const prepared = prepare("stable", "27.0.0-rc.3", {
+			tags: [...TAGS, "v27.0.0-rc.3"],
+		});
+		expect(prepared.version).toBe("27.0.0");
+		expect(prepared.channel).toMatchObject({
+			distTag: "latest",
+			makeLatest: true,
+		});
+		expect(version("stable", "27.1.0-beta.2")).toBe("27.1.0");
+	});
+
+	test("stable: refused for a version that is not a prerelease", () => {
+		expect(() => prepare("stable", "27.0.0")).toThrow("is not a prerelease");
+		expect(() => prepare("stable", "0.0.13")).toThrow("is not a prerelease");
+	});
+
+	test("stable: refused when the stable already exists", () => {
+		expect(() =>
+			prepare("stable", "27.0.0-rc.3", { tags: [...TAGS, "v27.0.0"] }),
+		).toThrow("27.0.0 is already released as stable");
+	});
+
+	test("patch: the next patch of the line of the release branch", () => {
+		const tags = [...TAGS, "v27.0.0", "v27.0.1"];
+		const prepared = prepare("patch", "27.0.1", {
+			tags,
+			distTags: { latest: "27.0.1" },
+			branch: "release/27.0",
+		});
+		expect(prepared).toMatchObject({
+			version: "27.0.2",
+			publishBranch: "release/27.0",
+			channel: { distTag: "latest" },
+		});
+		expect(
+			version("patch", "27.0.0", {
+				tags: [...TAGS, "v27.0.0"],
+				distTags: { latest: "27.0.0" },
+				branch: "release/27.0",
+			}),
+		).toBe("27.0.1");
+		// behind latest: the tag of the line
+		expect(
+			prepare("patch", "27.0.1", {
+				tags,
+				distTags: { latest: "27.1.0" },
+				branch: "release/27.0",
+			}).channel.distTag,
+		).toBe("release-27.0");
+		// the rc of a patch becomes that patch
+		expect(
+			version("patch", "27.0.2-rc.1", {
+				tags,
+				distTags: { latest: "27.0.1" },
+				branch: "release/27.0",
+			}),
+		).toBe("27.0.2");
+	});
+
+	test("patch: only on release/<YY>.<minor>, of its line", () => {
+		expect(() => prepare("patch", "27.0.1")).toThrow(
+			"a patch is prepared on release/<YY>.<minor>, not on dev",
+		);
+		expect(() =>
+			prepare("patch", "27.1.0", { branch: "release/27.0" }),
+		).toThrow("not of the line 27.0");
+		expect(() =>
+			prepare("patch", "27.0.1-beta.1", { branch: "release/27.0" }),
+		).toThrow("holds stable and rc versions");
+	});
+
+	test("rc, beta and stable only on dev", () => {
+		for (const channel of ["rc", "beta", "stable"]) {
+			expect(() =>
+				prepare(channel, "27.0.0-rc.1", { branch: "release/27.0" }),
+			).toThrow("is prepared on dev");
+			expect(() => prepare(channel, "27.0.0-rc.1", { branch: "main" })).toThrow(
+				"is prepared on dev",
+			);
+		}
+	});
+
+	test("an unknown channel is refused", () => {
+		expect(() => prepare("next", "27.0.0-rc.1")).toThrow(
+			'the channel is one of rc, beta, stable, patch, not "next"',
+		);
+		expect(() => prepare("", "27.0.0-rc.1")).toThrow("the channel is one of");
+	});
+
+	test("rc and beta need a <YY> version to start from", () => {
+		expect(() => prepare("rc", "0.0.13")).toThrow("pass --version");
+		expect(version("rc", "0.0.13", { explicit: "27.0.0-rc.2" })).toBe(
+			"27.0.0-rc.2",
+		);
+	});
+
+	test("explicit: used as given when it passes the checks", () => {
+		expect(version("rc", "27.0.0-rc.1", { explicit: "27.0.0-rc.4" })).toBe(
+			"27.0.0-rc.4",
+		);
+		expect(version("rc", "27.0.0-rc.1", { explicit: " " })).toBe("27.0.0-rc.2");
+		expect(version("stable", "27.0.0-rc.1", { explicit: "27.0.0" })).toBe(
+			"27.0.0",
+		);
+		expect(
+			version("patch", "27.0.1", {
+				tags: [...TAGS, "v27.0.0", "v27.0.1"],
+				distTags: { latest: "27.0.1" },
+				branch: "release/27.0",
+				explicit: "27.0.2-rc.1",
+			}),
+		).toBe("27.0.2-rc.1");
+	});
+
+	test("explicit: outside the scheme or of another channel", () => {
+		expect(() => prepare("rc", "27.0.0-rc.1", { explicit: "1.2.3" })).toThrow(
+			"not in the scheme",
+		);
+		expect(() =>
+			prepare("rc", "27.0.0-rc.1", { explicit: "27.0.0-beta.2" }),
+		).toThrow("not a version of the channel rc");
+		expect(() =>
+			prepare("stable", "27.0.0-rc.1", { explicit: "27.1.0-rc.1" }),
+		).toThrow("not a version of the channel stable");
+		expect(() =>
+			prepare("beta", "27.0.0-rc.1", { explicit: "27.1.0-alpha.3" }),
+		).toThrow("not a version of the channel beta");
+	});
+
+	test("explicit: channelOf rules of the branch that publishes it", () => {
+		expect(() =>
+			prepare("patch", "27.0.1", {
+				tags: [...TAGS, "v27.0.0", "v27.0.1"],
+				branch: "release/27.0",
+				explicit: "27.1.0",
+			}),
+		).toThrow("publishes only patches of its line");
+	});
+
+	test("explicit: never backwards", () => {
+		expect(() =>
+			prepare("rc", "27.0.0-rc.3", { explicit: "27.0.0-rc.2" }),
+		).toThrow("is not after 27.0.0-rc.3");
+		expect(() =>
+			prepare("rc", "27.0.0-rc.3", { explicit: "27.0.0-rc.3" }),
+		).toThrow("is not after 27.0.0-rc.3");
+		// a dist-tag ahead of package.json
+		expect(() =>
+			prepare("rc", "27.0.0-rc.1", {
+				distTags: { latest: "0.0.13", rc: "27.0.0-rc.5" },
+				explicit: "27.0.0-rc.3",
+			}),
+		).toThrow("behind 27.0.0-rc.5, the rc on npm");
+		expect(() =>
+			prepare("stable", "27.0.0-rc.1", {
+				distTags: { latest: "27.1.0" },
+			}),
+		).toThrow("behind 27.1.0, the latest on npm");
+	});
+
+	test("a version bumped but not released is refused, unless given", () => {
+		// dev today: 27.0.0-rc.1 in package.json, no tag, not on npm
+		const today = { tags: ["v0.0.13"], distTags: { latest: "0.0.13" } };
+		for (const channel of ["rc", "beta", "stable"]) {
+			expect(() =>
+				prepare(channel, "27.0.0-rc.1", { ...today, unreleased: true }),
+			).toThrow(
+				"27.0.0-rc.1 is bumped but not released yet; merge the release pull request first, or pass --version",
+			);
+		}
+		expect(() =>
+			prepare("patch", "27.0.1", {
+				tags: ["v27.0.0"],
+				distTags: { latest: "27.0.0" },
+				branch: "release/27.0",
+				unreleased: true,
+			}),
+		).toThrow("27.0.1 is bumped but not released yet");
+		expect(
+			version("rc", "27.0.0-rc.1", {
+				...today,
+				unreleased: true,
+				explicit: "27.0.0-rc.2",
+			}),
+		).toBe("27.0.0-rc.2");
+		// on npm without its tag (a release that failed halfway): released
+		expect(
+			version("rc", "27.0.0-rc.1", {
+				tags: ["v0.0.13"],
+				distTags: { latest: "0.0.13", rc: "27.0.0-rc.1" },
+				unreleased: true,
+			}),
+		).toBe("27.0.0-rc.2");
+		// the Next (alpha) and 0.0.<n> are never bumped by hand
+		expect(version("beta", "27.1.0-alpha.3", { unreleased: true })).toBe(
+			"27.1.0-beta.1",
+		);
+	});
+
+	test("a version already tagged is refused", () => {
+		expect(() =>
+			prepare("rc", "27.0.0-rc.1", {
+				tags: [...TAGS, "v27.0.0-rc.2"],
+			}),
+		).toThrow("v27.0.0-rc.2 is already released");
+	});
+});
+
+describe("datedChangelog", () => {
+	const ROOT = `# Changelog
+
+## Unreleased
+
+### Fixed
+
+- A fix.
+
+## 27.0.0-rc.1 — 2026-11-16
+
+The first candidate.
+`;
+	const PACKAGE = `# Changelog
+
+## 27.0.0-rc.1 — 2026-11-16
+
+The first candidate.
+`;
+
+	test("dates the Unreleased section, entries kept", () => {
+		expect(datedChangelog(ROOT, "27.0.0-rc.2", "2026-11-20")).toBe(
+			ROOT.replace("## Unreleased", "## 27.0.0-rc.2 — 2026-11-20"),
+		);
+	});
+
+	test("an Unreleased heading with more text, at the end of the file", () => {
+		expect(
+			datedChangelog(
+				"# Changelog\n\n## unreleased (draft)\n\n- An entry.\n",
+				"27.1.0",
+				"2026-12-01",
+			),
+		).toBe("# Changelog\n\n## 27.1.0 — 2026-12-01\n\n- An entry.\n");
+	});
+
+	test("no Unreleased section: a prerelease is a candidate with no changes", () => {
+		expect(datedChangelog(PACKAGE, "27.0.0-rc.2", "2026-11-20")).toBe(
+			`# Changelog
+
+## 27.0.0-rc.2 — 2026-11-20
+
+A candidate of 27.0.0, with no changes since 27.0.0-rc.1.
+
+## 27.0.0-rc.1 — 2026-11-16
+
+The first candidate.
+`,
+		);
+	});
+
+	test("the note is added to the short section only", () => {
+		const note = "See the [root CHANGELOG](../../CHANGELOG.md).";
+		expect(datedChangelog(PACKAGE, "27.0.0", "2026-12-01", { note })).toContain(
+			"## 27.0.0 — 2026-12-01\n\nThe stable release of 27.0.0-rc.1, with no changes since. See the [root CHANGELOG](../../CHANGELOG.md).\n\nSince the first release, it went through [27.0.0-rc.1](#2700-rc1--2026-11-16); their sections below list the changes.\n\n## 27.0.0-rc.1",
+		);
+		expect(
+			datedChangelog(ROOT, "27.0.0", "2026-12-01", { note }),
+		).not.toContain(note);
+	});
+
+	test("an empty Unreleased section gets the short section", () => {
+		const text =
+			"# Changelog\n\n## Unreleased\n\n## 27.0.0 — 2026-12-01\n\nThe release.\n";
+		expect(datedChangelog(text, "27.0.1", "2026-12-05")).toBe(
+			"# Changelog\n\n## 27.0.1 — 2026-12-05\n\nNo changes since 27.0.0.\n\n## 27.0.0 — 2026-12-01\n\nThe release.\n",
+		);
+		expect(datedChangelog(text, "27.1.0-rc.1", "2026-12-05")).toContain(
+			"A candidate of 27.1.0, with no changes since 27.0.0.",
+		);
+	});
+
+	test("a changelog with no release yet", () => {
+		expect(datedChangelog("# Changelog\n", "27.0.0-rc.1", "2026-11-16")).toBe(
+			"# Changelog\n\n## 27.0.0-rc.1 — 2026-11-16\n\nA candidate of 27.0.0.\n",
+		);
+		expect(datedChangelog("# Changelog\n", "27.0.0", "2026-11-16")).toContain(
+			"No changes of its own.",
+		);
+	});
+
+	test("refuses a version that has a section, a bad date or version", () => {
+		expect(() => datedChangelog(PACKAGE, "27.0.0-rc.1", "2026-11-20")).toThrow(
+			"already has a section for 27.0.0-rc.1",
+		);
+		expect(() => datedChangelog(ROOT, "27.0.0-rc.2", "2026-13-01")).toThrow(
+			"is not a date",
+		);
+		expect(() => datedChangelog(ROOT, "27.0.0-rc.2", "20/11/2026")).toThrow(
+			"is not a date",
+		);
+		expect(() => datedChangelog(ROOT, "1.0.0", "2026-11-20")).toThrow(
+			"not in the scheme",
+		);
+	});
+
+	test("a stable after candidates links them since the previous stable", () => {
+		const text = `# Changelog
+
+## Unreleased
+
+- A last fix.
+
+## 27.0.0-rc.2 — 2026-11-20
+
+- A fix.
+
+## 27.0.0-rc.1 — 2026-11-16
+
+- The candidate.
+
+## 0.0.13 — 2026-11-16
+
+- Old.
+`;
+		const since =
+			"Since 0.0.13, it went through [27.0.0-rc.1](#2700-rc1--2026-11-16) and [27.0.0-rc.2](#2700-rc2--2026-11-20); their sections below list the changes.";
+		const dated = datedChangelog(text, "27.0.0", "2026-12-01");
+		expect(dated).toContain(
+			`## 27.0.0 — 2026-12-01\n\n${since}\n\n- A last fix.\n\n## 27.0.0-rc.2`,
+		);
+		expect(changelogSection(dated, "27.0.0")).toBe(`${since}\n\n- A last fix.`);
+		expect(
+			changelogSection(dated, "27.0.0", {
+				linkBase: "https://github.com/o/r/blob/b/CHANGELOG.md",
+			}),
+		).toContain(
+			"[27.0.0-rc.1](https://github.com/o/r/blob/b/CHANGELOG.md#2700-rc1--2026-11-16)",
+		);
+		// without entries: the short line, then the summary
+		const empty = text.replace("- A last fix.\n\n", "");
+		expect(datedChangelog(empty, "27.0.0", "2026-12-01")).toContain(
+			`## 27.0.0 — 2026-12-01\n\nThe stable release of 27.0.0-rc.2, with no changes since.\n\n${since}\n\n## 27.0.0-rc.2`,
+		);
+		// a stable with no candidates, and a prerelease, get no summary
+		expect(datedChangelog(text, "27.0.1", "2026-12-01")).not.toContain("Since");
+		expect(datedChangelog(text, "27.0.0-rc.3", "2026-12-01")).not.toContain(
+			"Since",
+		);
+	});
+
+	test("changelogSection gives the body of a section", () => {
+		const dated = datedChangelog(ROOT, "27.0.0-rc.2", "2026-11-20");
+		expect(changelogSection(dated, "27.0.0-rc.2")).toBe(
+			"### Fixed\n\n- A fix.",
+		);
+		expect(changelogSection(dated, "27.0.0-rc.1")).toBe("The first candidate.");
+		expect(() => changelogSection(dated, "27.0.0")).toThrow(
+			"no section for 27.0.0",
+		);
 	});
 });

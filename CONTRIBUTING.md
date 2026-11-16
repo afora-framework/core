@@ -87,7 +87,34 @@ On the pull request, choose "Review changes". Choose "Approve" when the checks a
 
 Versions follow [VERSIONING.md](VERSIONING.md). Any maintainer can make a release, not only the author of the changes. All the `@afora/*` packages share one version.
 
-1. From `dev`, open a release pull request against `main`. In it, run `bun run release:version <version>` (for instance `27.1.0`, `27.1.0-rc.1` or `27.1.0-beta.1`): it sets the version in `package.json` and in every `packages/*/package.json`, writes the peer ranges on `@afora/core` that a prerelease needs, and runs `bun install` to update `bun.lock`. Replace `unreleased (draft: ...)` with the date in the heading of the `CHANGELOG.md` section.
+### Prepare a release in one command
+
+```bash
+gh workflow run prepare-release.yml -f channel=rc        # or beta, stable
+gh workflow run prepare-release.yml -f channel=patch -f base=release/27.0
+```
+
+`.github/workflows/prepare-release.yml` runs `bun scripts/release-channel.ts prepare` on the base (`dev` by default), which computes the version of the channel and checks it: `rc` gives the next candidate (`27.0.0-rc.1` → `27.0.0-rc.2`, or `<target>-rc.1`, where the target is the version without its prerelease, or the next minor when that one is released), `beta` the same with `-beta.<n>` (refused after an rc of the same version), `stable` strips the prerelease (`27.0.0-rc.3` → `27.0.0`), and `patch`, on `release/<YY>.<minor>` only, raises the patch. `-f version=<v>` replaces the computed version, with the same checks: the scheme, the rules of the branch that publishes it, never behind `package.json`, a tag or a dist-tag. It then writes the version (as `bun run release:version` does) and turns `## Unreleased` into `## <version> — <date>` in `CHANGELOG.md` and in each `packages/*/CHANGELOG.md` (a changelog without one gets a short section). The workflow commits that as `chore: release <version>` on `chore/release-<version>` and opens the bump pull request against the base, with the CHANGELOG section as its body; it refuses when that branch or an open pull request for it already exists. If the run fails after pushing the branch and before the pull request is opened, it deletes the branch, so a new run can start over. The version of the base must be released already (tagged, or on npm): a version that was bumped but never published is refused, so that no version is skipped, unless `-f version=<v>` is given. A stable version after candidates opens its section with a line that links to the sections of those candidates since the previous stable.
+
+- The checkout keeps no credentials; the App token (or `RELEASE_TOKEN`) is used only to push and to call the API, and the actions are pinned to commit SHAs.
+- `auto_merge_bump` (on by default) enables auto-merge on the bump pull request, which merges once CI passes.
+- From `dev`, the workflow also opens (or updates) the pull request `dev` → `main`, titled `Release <version>`: merging it publishes to the dist-tag of the channel. That merge stays with a human, unless `auto_merge_release` is checked. Auto-merge on it is enabled only after the bump has landed in `dev`, so `main` is never merged without the version: the job waits for the bump pull request to merge (up to 45 minutes), and stops with an error, the link to it and the failed checks, as soon as a check fails. When it does not merge in time, or `auto_merge_bump` is off, the release pull request is still opened if `dev` is ahead of `main` (it follows `dev` as it moves), without auto-merge.
+- For a patch, the bump pull request targets `release/<YY>.<minor>`, and merging it publishes; there is no pull request to `main`.
+
+The same command works locally, on a clean checkout of the base: `bun scripts/release-channel.ts prepare --channel rc [--version <v>] [--date YYYY-MM-DD]` writes the files and prints `version=`, `dist-tag=` and `publish-branch=` (`TAGS` and `DIST_TAGS` replace git and npm for a dry run, as for `detect`).
+
+**One-time setup by the owner of the repository.** Pull requests opened with the default `GITHUB_TOKEN` do not run CI, so the workflow needs its own token:
+
+1. Create a GitHub App (Settings → Developer settings → GitHub Apps → New GitHub App), with no webhook and the repository permissions **Contents: Read and write**, **Pull requests: Read and write** and **Workflows: Read and write** (without it, a pull request `dev` → `main` that changes `.github/workflows` cannot be merged by the App). Install it on this repository only.
+2. Add two repository secrets (Settings → Secrets and variables → Actions): `RELEASE_APP_CLIENT_ID`, the Client ID shown on the page of the App (not the App ID), and `RELEASE_APP_PRIVATE_KEY`, a private key generated there (the whole `.pem`). Or, instead of an App, add `RELEASE_TOKEN`: a fine-grained personal access token on this repository with the same three permissions (Contents, Pull requests and Workflows: Read and write). The workflow fails with a clear message when neither is set.
+3. Turn on **Allow auto-merge** (Settings → General → Pull Requests).
+4. In the rulesets of `dev`, `main` and `release/*` (below), require the status checks of CI (`Lint, Knip and type check`, `Unit tests` and the others of `ci.yml`), so that auto-merge waits for them. Without required checks, auto-merge merges at once; with a required review, it waits for that review too.
+
+### By hand
+
+The manual way still works:
+
+1. From `dev`, open a release pull request against `main`. In it, run `bun run release:version <version>` (for instance `27.1.0`, `27.1.0-rc.1` or `27.1.0-beta.1`): it sets the version in `package.json` and in every `packages/*/package.json`, writes the peer ranges on `@afora/core` that a prerelease needs, and runs `bun install` to update `bun.lock`. Turn `## Unreleased` into `## <version> — <date>` in `CHANGELOG.md`.
 2. Have it reviewed as described above and merge `dev` into `main`.
 3. `.github/workflows/release.yml` runs on the push to `main`. It reads the version and fails when it is outside the scheme, when a package is at another version or has a peer range that does not accept it, or when a stable version is behind the `latest` on npm. If the version has no tag yet, it runs CI, publishes every package to npm under the dist-tag of its channel (`latest`, `rc` or `beta`, see [Channels](VERSIONING.md#channels)), then creates the `v<version>` tag and the GitHub release, marked as a prerelease for beta and rc. The benchmark job runs last, for stable and rc versions.
 4. If a release fails halfway, run the workflow again from the Actions tab (`workflow_dispatch`, on the branch of the release). What is already on npm is skipped. With `dry-run` checked, the run only prints what it would publish.

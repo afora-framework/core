@@ -7,18 +7,25 @@
  * - `nextVersion` gives the version of the Next channel (`-alpha.<run>`),
  *   published on every push to `dev`;
  * - `setVersion` writes one version in every package.json, and the peer ranges
- *   on `@afora/core` that a prerelease needs.
+ *   on `@afora/core` that a prerelease needs;
+ * - `preparedVersion` and `datedChangelog` give the version of the next rc,
+ *   beta, stable or patch, and date the changelogs for it
+ *   (.github/workflows/prepare-release.yml).
  *
  * The CLI:
  *
  *   bun scripts/release-channel.ts version <v>   # bun run release:version <v>: setVersion, then bun install
  *   bun scripts/release-channel.ts set-version <v>   # setVersion alone (the publish of the Next)
  *   bun scripts/release-channel.ts detect        # the job detect of release.yml
+ *   bun scripts/release-channel.ts prepare --channel rc [--version <v>] [--date YYYY-MM-DD]
+ *       # prepare-release.yml: preparedVersion, datedChangelog, setVersion, bun install
+ *   bun scripts/release-channel.ts section <v> [--link-base <url>]   # the section of <v> in CHANGELOG.md
  *
- * `detect` reads BRANCH, RUN_NUMBER, EVENT and BEFORE from the environment, and
- * asks npm for the dist-tags and git for the tags; DIST_TAGS (`latest=0.0.13,rc=...`),
+ * `detect` reads BRANCH, RUN_NUMBER, EVENT and BEFORE from the environment;
+ * `prepare` reads --branch, else BRANCH, else the current branch. Both ask
+ * npm for the dist-tags and git for the tags; DIST_TAGS (`latest=0.0.13,rc=...`),
  * TAGS (a comma list) and CHANGED_FILES (a comma list) replace them for a dry
- * run on a machine. It writes its decision to $GITHUB_OUTPUT when that is set.
+ * run on a machine. They write their outputs to $GITHUB_OUTPUT when it is set.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -409,30 +416,377 @@ export function setVersion(version: string, root = process.cwd()): string[] {
 	return written;
 }
 
+/** The channels a release can be prepared for (`prepare`, prepare-release.yml). */
+export const PREPARE_CHANNELS = ["rc", "beta", "stable", "patch"] as const;
+export type PrepareChannel = (typeof PREPARE_CHANNELS)[number];
+
+export interface PrepareInput {
+	/** rc, beta, stable or patch; anything else is refused. */
+	readonly channel: string;
+	/** The version of package.json on `branch`. */
+	readonly pkgVersion: string;
+	/** The git tags (with or without a leading `v`). */
+	readonly tags: readonly string[];
+	/** The dist-tags of `@afora/core` on npm. */
+	readonly distTags?: Readonly<Record<string, string>>;
+	/** The base of the bump: dev, or release/<YY>.<minor> for a patch. */
+	readonly branch: string;
+	/** A version to use instead of the computed one (empty means none). */
+	readonly explicit?: string;
+}
+
+export interface Prepared {
+	readonly version: string;
+	/** The branch whose push publishes it: main from dev, the release branch for a patch. */
+	readonly publishBranch: string;
+	/** How it is published from `publishBranch`. */
+	readonly channel: Channel;
+}
+
+const triple = ({ major, minor, patch }: ParsedVersion) =>
+	`${major}.${minor}.${patch}`;
+
+const prereleaseNumber = (version: string) =>
+	Number(/\.([0-9]+)$/.exec(version)?.[1] ?? 0);
+
+/** The kinds of version each channel may prepare. */
+const PREPARED_KINDS: Record<PrepareChannel, readonly VersionKind[]> = {
+	rc: ["rc"],
+	beta: ["beta"],
+	stable: ["stable", "zero"],
+	patch: ["stable", "rc"],
+};
+
+/**
+ * The version a release of `channel` gets, from the version of package.json
+ * on `branch`:
+ *
+ * - rc and beta: the next candidate of the target (`27.0.0-rc.1` →
+ *   `27.0.0-rc.2`), or its first (`<target>-rc.1`). The target is the version
+ *   without its prerelease, with the minor raised while it is released as
+ *   stable. A beta after an rc of the same target is refused.
+ * - stable: the prerelease stripped (`27.0.0-rc.3` → `27.0.0`).
+ * - patch, on release/<YY>.<minor> only: `YY.m.p` → `YY.m.(p+1)`, and the rc
+ *   of a patch → that patch.
+ *
+ * Every version, computed or `explicit`, is checked: in the scheme, of the
+ * kind of its channel, after the version of package.json, not released, and
+ * accepted by `channelOf` on the branch that publishes it (which refuses a
+ * dist-tag moving backwards). Throws otherwise.
+ */
+export function preparedVersion(input: PrepareInput): Prepared {
+	const { channel, pkgVersion, branch } = input;
+	if (!(PREPARE_CHANNELS as readonly string[]).includes(channel)) {
+		throw new Error(
+			`the channel is one of ${PREPARE_CHANNELS.join(", ")}, not "${channel}"`,
+		);
+	}
+	const kind = channel as PrepareChannel;
+	const line = RELEASE_BRANCH.exec(branch);
+	if (kind === "patch" && !line) {
+		throw new Error(
+			`a patch is prepared on release/<YY>.<minor>, not on ${branch}`,
+		);
+	}
+	if (kind !== "patch" && branch !== "dev") {
+		throw new Error(
+			`the channel ${kind} is prepared on dev (and published from main), not on ${branch}; release/<YY>.<minor> takes the channel patch`,
+		);
+	}
+	const current = parseOrThrow(pkgVersion);
+	const released = new Set(input.tags.map((tag) => tag.replace(/^v/, "")));
+	const explicit = input.explicit?.trim();
+	// A version bumped but never published would be skipped: its tag (or, for a
+	// release that failed halfway, the dist-tag that holds it) tells.
+	const published =
+		released.has(pkgVersion) ||
+		Object.values(input.distTags ?? {}).includes(pkgVersion);
+	if (
+		!explicit &&
+		!published &&
+		current.kind !== "alpha" &&
+		current.kind !== "zero"
+	) {
+		throw new Error(
+			`${pkgVersion} is bumped but not released yet; merge the release pull request first, or pass --version`,
+		);
+	}
+
+	const version = explicit
+		? explicit
+		: computedVersion(kind, pkgVersion, current, released, line);
+
+	const parsed = parseOrThrow(version);
+	if (!PREPARED_KINDS[kind].includes(parsed.kind)) {
+		throw new Error(
+			`${version} is not a version of the channel ${kind} (${PREPARED_KINDS[kind].join(" or ")})`,
+		);
+	}
+	if (
+		parsed.kind === "beta" &&
+		current.kind === "rc" &&
+		triple(parsed) === triple(current)
+	) {
+		throw new Error(
+			`${pkgVersion} is already an rc of ${triple(current)}; a beta of it would go back from rc to beta`,
+		);
+	}
+	if (Bun.semver.order(version, pkgVersion) !== 1) {
+		throw new Error(
+			`${version} is not after ${pkgVersion}, the version on ${branch}; a release never goes backwards`,
+		);
+	}
+	if (released.has(version)) {
+		throw new Error(`v${version} is already released`);
+	}
+	const publishBranch = kind === "patch" ? branch : "main";
+	return {
+		version,
+		publishBranch,
+		channel: channelOf({
+			version,
+			branch: publishBranch,
+			distTags: input.distTags,
+			tagExists: false,
+		}),
+	};
+}
+
+function computedVersion(
+	kind: PrepareChannel,
+	pkgVersion: string,
+	current: ParsedVersion,
+	released: ReadonlySet<string>,
+	line: RegExpExecArray | null,
+): string {
+	if (kind === "patch") {
+		const [, major, minor] = line as RegExpExecArray;
+		if (current.major !== Number(major) || current.minor !== Number(minor)) {
+			throw new Error(
+				`${pkgVersion} is not of the line ${major}.${minor} of release/${major}.${minor}`,
+			);
+		}
+		if (current.kind === "stable") {
+			return `${current.major}.${current.minor}.${current.patch + 1}`;
+		}
+		if (current.kind === "rc") return triple(current);
+		throw new Error(
+			`a release branch holds stable and rc versions, not ${pkgVersion}`,
+		);
+	}
+	if (kind === "stable") {
+		if (
+			current.kind !== "rc" &&
+			current.kind !== "beta" &&
+			current.kind !== "alpha"
+		) {
+			throw new Error(
+				`${pkgVersion} is not a prerelease; a stable release strips the prerelease of an rc or a beta (or pass --version)`,
+			);
+		}
+		const stable = triple(current);
+		if (released.has(stable)) {
+			throw new Error(`${stable} is already released as stable`);
+		}
+		return stable;
+	}
+	if (current.kind === "zero") {
+		throw new Error(
+			`the channel ${kind} needs a <YY>.<minor>.<patch> version to start from, not ${pkgVersion}; pass --version`,
+		);
+	}
+	let { minor, patch } = current;
+	while (released.has(`${current.major}.${minor}.${patch}`)) {
+		minor += 1;
+		patch = 0;
+	}
+	const target = `${current.major}.${minor}.${patch}`;
+	if (current.kind === kind && triple(current) === target) {
+		return `${target}-${kind}.${prereleaseNumber(pkgVersion) + 1}`;
+	}
+	return `${target}-${kind}.1`;
+}
+
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The first `## <version>` heading of `text` (a version of the scheme). */
+function firstVersionHeading(text: string): string | undefined {
+	for (const match of text.matchAll(/^## (\S+)/gm)) {
+		const version = match[1] as string;
+		if (parseVersion(version)) return version;
+	}
+	return undefined;
+}
+
+function emptySection(version: string, previous: string | undefined): string {
+	const parsed = parseOrThrow(version);
+	if (parsed.kind !== "stable" && parsed.kind !== "zero") {
+		return previous
+			? `A candidate of ${triple(parsed)}, with no changes since ${previous}.`
+			: `A candidate of ${triple(parsed)}.`;
+	}
+	if (
+		previous &&
+		parseVersion(previous) &&
+		previous.startsWith(`${version}-`)
+	) {
+		return `The stable release of ${previous}, with no changes since.`;
+	}
+	return previous ? `No changes since ${previous}.` : "No changes of its own.";
+}
+
+/** The anchor of a heading, as GitHub and scripts/check-doc-links.ts make it. */
+const slugOf = (heading: string) =>
+	heading
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}\s_-]/gu, "")
+		.trim()
+		.replace(/\s/g, "-");
+
+/**
+ * For a stable version, the candidates it went through since the previous
+ * stable: the prereleases of the same version among the headings of `tail`,
+ * up to the first stable one, linked to their sections.
+ */
+function sinceSummary(version: string, tail: string): string | undefined {
+	const parsed = parseOrThrow(version);
+	if (parsed.kind !== "stable") return undefined;
+	const candidates: string[] = [];
+	let previous: string | undefined;
+	for (const match of tail.matchAll(/^## (\S+)([^\n]*)$/gm)) {
+		const heading = `${match[1]}${match[2]}`.trim();
+		const other = parseVersion(match[1] as string);
+		if (!other) continue;
+		if (other.kind === "stable" || other.kind === "zero") {
+			previous = match[1];
+			break;
+		}
+		if (triple(other) === version) {
+			candidates.unshift(
+				`[${match[1]}](#${slugOf(heading.replace(/`/g, ""))})`,
+			);
+		}
+	}
+	if (candidates.length === 0) return undefined;
+	const list =
+		candidates.length === 1
+			? candidates[0]
+			: `${candidates.slice(0, -1).join(", ")} and ${candidates.at(-1)}`;
+	return `Since ${previous ?? "the first release"}, it went through ${list}; their sections below list the changes.`;
+}
+
+/**
+ * The changelog with its `## Unreleased` section dated as `## <version> —
+ * <date>`. Without one (or with an empty one), a short section is written
+ * instead, before the first `## ` heading, which says that a prerelease is a
+ * candidate with no changes since the previous version; `note` is added to
+ * it. A stable version after candidates opens with a "Since <previous stable>"
+ * line that links to their sections. Entries are never dropped. Throws when `version` already has a section.
+ */
+export function datedChangelog(
+	text: string,
+	version: string,
+	date: string,
+	{ note }: { readonly note?: string } = {},
+): string {
+	parseOrThrow(version);
+	if (!isDate(date)) throw new Error(`${date} is not a date (YYYY-MM-DD)`);
+	if (new RegExp(`^## v?${escaped(version)}(?:\\s|$)`, "m").test(text)) {
+		throw new Error(`the changelog already has a section for ${version}`);
+	}
+	const heading = `## ${version} — ${date}`;
+	const short = (previous: string | undefined) =>
+		[emptySection(version, previous), note].filter(Boolean).join(" ");
+
+	const unreleased = /^## Unreleased\b[^\n]*(?:\n|$)/im.exec(text);
+	if (unreleased) {
+		const start = unreleased.index;
+		const after = start + unreleased[0].length;
+		const rest = text.slice(after);
+		const next = rest.search(/^## /m);
+		const body = next === -1 ? rest : rest.slice(0, next);
+		const tail = rest.slice(body.length);
+		const since = sinceSummary(version, tail);
+		if (body.trim()) {
+			const summary = since ? `\n${since}\n` : "";
+			return `${text.slice(0, start)}${heading}\n${summary}${rest}`;
+		}
+		const section = `${heading}\n\n${short(firstVersionHeading(tail))}\n${since ? `\n${since}\n` : ""}`;
+		return `${text.slice(0, start)}${section}${tail ? `\n${tail}` : ""}`;
+	}
+	const since = sinceSummary(version, text);
+	const section = `${heading}\n\n${short(firstVersionHeading(text))}\n${since ? `\n${since}\n` : ""}`;
+	const first = text.search(/^## /m);
+	if (first === -1) return `${text.trimEnd()}\n\n${section}`;
+	return `${text.slice(0, first)}${section}\n${text.slice(first)}`;
+}
+
+/**
+ * The body of the `## <version>` section of a changelog, trimmed. With
+ * `linkBase` (the URL of the changelog), links to its headings become
+ * absolute, for a pull request body.
+ */
+export function changelogSection(
+	text: string,
+	version: string,
+	{ linkBase }: { readonly linkBase?: string } = {},
+): string {
+	const heading = new RegExp(
+		`^## v?${escaped(version)}(?:\\s[^\\n]*)?$`,
+		"m",
+	).exec(text);
+	if (!heading) {
+		throw new Error(`the changelog has no section for ${version}`);
+	}
+	const rest = text.slice(heading.index + heading[0].length);
+	const next = rest.search(/^## /m);
+	const body = (next === -1 ? rest : rest.slice(0, next)).trim();
+	return linkBase ? body.replaceAll("](#", `](${linkBase}#`) : body;
+}
+
+function isDate(date: string): boolean {
+	if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)) return false;
+	const parsed = new Date(`${date}T00:00:00Z`);
+	return (
+		!Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(date)
+	);
+}
+
+/** The dist-tags of `@afora/core` on npm, or those of DIST_TAGS (`latest=0.0.13,rc=...`). */
+async function readDistTags(): Promise<Record<string, string>> {
+	const list = process.env.DIST_TAGS;
+	if (list !== undefined) {
+		return Object.fromEntries(
+			list
+				.split(",")
+				.filter(Boolean)
+				.map((pair) => pair.split("=") as [string, string]),
+		);
+	}
+	return distTagsOf(
+		await Bun.$`npm view @afora/core dist-tags --json`.nothrow().quiet(),
+	);
+}
+
+/** The git tags of origin, or those of TAGS (a comma list). */
+async function readTags(): Promise<string[]> {
+	const list = process.env.TAGS;
+	if (list !== undefined) return list.split(",").filter(Boolean);
+	return (await Bun.$`git ls-remote --tags --refs origin`.quiet())
+		.text()
+		.split("\n")
+		.map((line) => line.split("refs/tags/")[1])
+		.filter((tag): tag is string => Boolean(tag));
+}
+
 async function detect(): Promise<Record<string, string>> {
 	const env = process.env;
 	const branch = env.BRANCH ?? env.GITHUB_REF_NAME ?? "";
 	const manifests = manifestsOf(process.cwd());
 	const pkgVersion = manifests[0]?.version as string;
 
-	const distTags =
-		env.DIST_TAGS !== undefined
-			? Object.fromEntries(
-					env.DIST_TAGS.split(",")
-						.filter(Boolean)
-						.map((pair) => pair.split("=") as [string, string]),
-				)
-			: distTagsOf(
-					await Bun.$`npm view @afora/core dist-tags --json`.nothrow().quiet(),
-				);
-	const tags =
-		env.TAGS !== undefined
-			? env.TAGS.split(",").filter(Boolean)
-			: (await Bun.$`git ls-remote --tags --refs origin`.quiet())
-					.text()
-					.split("\n")
-					.map((line) => line.split("refs/tags/")[1])
-					.filter((tag): tag is string => Boolean(tag));
+	const distTags = await readDistTags();
+	const tags = await readTags();
 
 	if (branch === "dev") {
 		// The Next is written by setVersion, peers included; package.json only
@@ -537,6 +891,112 @@ async function changedFiles(): Promise<string[] | undefined> {
 	return diff.text().split("\n").filter(Boolean);
 }
 
+/** Prints `key=value` lines, and appends them to $GITHUB_OUTPUT when it is set. */
+function emit(result: Record<string, string>) {
+	const lines = Object.entries(result).map(([key, value]) => `${key}=${value}`);
+	console.log(lines.join("\n"));
+	if (process.env.GITHUB_OUTPUT) {
+		writeFileSync(process.env.GITHUB_OUTPUT, `${lines.join("\n")}\n`, {
+			flag: "a",
+		});
+	}
+}
+
+const PREPARE_FLAGS = ["channel", "version", "date", "branch"] as const;
+
+function prepareFlags(args: readonly string[]) {
+	const values: Partial<Record<(typeof PREPARE_FLAGS)[number], string>> = {};
+	let install = true;
+	for (let i = 0; i < args.length; i++) {
+		const arg = args[i] as string;
+		if (arg === "--no-install") {
+			install = false;
+			continue;
+		}
+		const match = /^--([a-z-]+)(?:=(.*))?$/.exec(arg);
+		const name = match?.[1] as (typeof PREPARE_FLAGS)[number] | undefined;
+		if (!name || !PREPARE_FLAGS.includes(name)) {
+			throw new Error(`unknown argument ${arg}`);
+		}
+		const value = match?.[2] ?? args[++i];
+		if (value === undefined) throw new Error(`--${name} needs a value`);
+		values[name] = value;
+	}
+	return { ...values, install };
+}
+
+/** The changelogs `prepare` dates: CHANGELOG.md, then packages/* /CHANGELOG.md. */
+function changelogsOf(root: string): string[] {
+	return manifestsOf(root)
+		.map(({ path }) => join(path, "..", "CHANGELOG.md"))
+		.filter((path) => existsSync(path));
+}
+
+/**
+ * `prepare`: computes the version of the release (`preparedVersion`), dates
+ * the changelogs, writes the version (`setVersion`) and runs `bun install`.
+ * Nothing is written when a check fails.
+ */
+async function prepare(
+	args: readonly string[],
+): Promise<Record<string, string>> {
+	const flags = prepareFlags(args);
+	if (!flags.channel) {
+		throw new Error(`--channel is required: ${PREPARE_CHANNELS.join(", ")}`);
+	}
+	const date = flags.date ?? new Date().toISOString().slice(0, 10);
+	if (!isDate(date))
+		throw new Error(`--date ${date} is not a date (YYYY-MM-DD)`);
+	const root = process.cwd();
+	const branch =
+		flags.branch ||
+		process.env.BRANCH ||
+		(await Bun.$`git rev-parse --abbrev-ref HEAD`.quiet()).text().trim();
+	const pkgVersion = manifestsOf(root)[0]?.version as string;
+
+	const prepared = preparedVersion({
+		channel: flags.channel,
+		pkgVersion,
+		branch,
+		explicit: flags.version,
+		tags: await readTags(),
+		distTags: await readDistTags(),
+	});
+	const { version } = prepared;
+	const changelogs = changelogsOf(root).map((path) => ({
+		path,
+		text: datedChangelog(readFileSync(path, "utf8"), version, date, {
+			note:
+				path === join(root, "CHANGELOG.md")
+					? undefined
+					: "See the [root CHANGELOG](../../CHANGELOG.md).",
+		}),
+	}));
+
+	for (const path of setVersion(version, root)) {
+		console.error(`${path}: ${version}`);
+	}
+	for (const { path, text } of changelogs) {
+		writeFileSync(path, text);
+		console.error(`${path}: ## ${version} — ${date}`);
+	}
+	if (flags.install) await Bun.$`bun install`.quiet();
+	return {
+		version,
+		"dist-tag": prepared.channel.distTag,
+		"publish-branch": prepared.publishBranch,
+		prerelease: String(prepared.channel.prerelease),
+		date,
+	};
+}
+
+const USAGE = `usage: bun scripts/release-channel.ts
+  version <v> [--no-install]   setVersion, then bun install (bun run release:version)
+  set-version <v>              setVersion alone (the publish of the Next)
+  detect                       the job detect of release.yml
+  prepare --channel <rc|beta|stable|patch> [--version <v>] [--date YYYY-MM-DD] [--branch <b>] [--no-install]
+  section <v> [--link-base <url>]   the section of <v> in CHANGELOG.md`;
+
 async function main(args: string[]) {
 	const [command, version, ...flags] = args;
 	if ((command === "version" || command === "set-version") && version) {
@@ -546,22 +1006,21 @@ async function main(args: string[]) {
 		}
 		return;
 	}
-	if (command === "detect") {
-		const result = await detect();
-		const lines = Object.entries(result).map(
-			([key, value]) => `${key}=${value}`,
-		);
-		console.log(lines.join("\n"));
-		if (process.env.GITHUB_OUTPUT) {
-			writeFileSync(process.env.GITHUB_OUTPUT, `${lines.join("\n")}\n`, {
-				flag: "a",
-			});
+	if (command === "detect") return emit(await detect());
+	if (command === "prepare") return emit(await prepare(args.slice(1)));
+	if (command === "section" && version) {
+		const [flag, linkBase] = flags;
+		if (flag !== undefined && (flag !== "--link-base" || !linkBase)) {
+			throw new Error("usage: section <v> [--link-base <url>]");
 		}
+		console.log(
+			changelogSection(readFileSync("CHANGELOG.md", "utf8"), version, {
+				linkBase,
+			}),
+		);
 		return;
 	}
-	console.error(
-		"usage: bun scripts/release-channel.ts version <v> [--no-install] | set-version <v> | detect",
-	);
+	console.error(USAGE);
 	process.exit(2);
 }
 
