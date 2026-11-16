@@ -53,8 +53,12 @@ export function parametersOfPath(path: string): string[] {
 	return names;
 }
 
-/** Whether a JSON Schema describes a value that is neither an object nor a list. */
+/**
+ * Whether a JSON Schema describes a value that is neither an object nor a
+ * list, nor a file (`format: "binary"`), which only a multipart body sends.
+ */
 export function isScalarSchema(schema: OpenAPISchema): boolean {
+	if (schema.format === "binary") return false;
 	const types = [schema.type ?? []].flat();
 	return !types.some((type) => type === "object" || type === "array");
 }

@@ -62,8 +62,20 @@ interface Call {
 	readonly store?: Record<string, unknown>;
 }
 
-/** The body stays the text that was sent: the table parses it. */
-const TEXT_BODY = { parse: "text" } as const;
+/**
+ * The body stays the text that was sent, for the table to parse; a
+ * `multipart/form-data` one is read as the `FormData` it is, for the routes
+ * whose input holds a file.
+ */
+const TEXT_BODY = {
+	parse: [
+		({ request, contentType }: { request: Request; contentType: string }) =>
+			/^\s*multipart\/form-data\s*(?:;|$)/i.test(contentType ?? "")
+				? request.formData()
+				: undefined,
+		"text",
+	],
+} as const;
 
 /** The part of an Elysia app the sink uses, with routes that come from data. */
 interface Routable {
@@ -103,6 +115,11 @@ class ElysiaHttpRequest implements HttpRequest {
 	}
 	text() {
 		return typeof this.native.body === "string" ? this.native.body : "";
+	}
+	async form() {
+		const { body } = this.native;
+		if (body instanceof FormData) return body;
+		throw new TypeError("The body is not multipart/form-data.");
 	}
 	variable(name: string) {
 		return Object.hasOwn(this.native, name)

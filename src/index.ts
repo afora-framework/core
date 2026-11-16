@@ -558,9 +558,13 @@ export { Email, Ip, Phone, Url } from "./std/properties/contact";
 export type { EnumClass } from "./std/properties/enum";
 export { enumOf } from "./std/properties/enum";
 export {
+	InvalidFile,
+	InvalidFileOptions,
 	InvalidJsonData,
 	InvalidJsonSchema,
 } from "./std/properties/exceptions";
+export type { FileClass, FileOptions, TFile } from "./std/properties/file";
+export { FileProperty, fileOf } from "./std/properties/file";
 export { SchemaProperty } from "./std/properties/headless";
 export {
 	Id,

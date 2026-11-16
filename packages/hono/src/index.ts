@@ -269,6 +269,9 @@ class HonoRequest implements HttpRequest {
 	text() {
 		return this.body === undefined ? this.native.req.text() : this.body;
 	}
+	form() {
+		return this.native.req.formData();
+	}
 	variable(name: string) {
 		return (this.native.get as (name: string) => unknown)(name);
 	}

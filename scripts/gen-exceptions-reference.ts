@@ -76,6 +76,8 @@ const HANDLING: Record<string, string> = {
 	InvalidEnvironment:
 		"Set or fix the variable named in the message; validate environments at start (`app.start()`) so it fails before serving.",
 	InvalidEventPolicy: DECLARATION,
+	InvalidFile: INPUT,
+	InvalidFileOptions: DECLARATION,
 	InvalidJsonData: INPUT,
 	InvalidJsonSchema:
 		"Fix the schema; for a schema loaded at runtime, check it when it is saved, not when it is used.",

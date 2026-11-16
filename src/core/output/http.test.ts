@@ -543,3 +543,166 @@ describe("a list response", () => {
 		expect(body[0].secret).not.toBe("hunter22");
 	});
 });
+
+describe("an input with a file", () => {
+	class Upload extends useCaseOf({
+		name: "Upload",
+		blueprint: blueprintOf((ctx) => ({
+			folder: ctx.string,
+			file: ctx.fileOf({ types: ["image/*"], maxBytes: 8 }),
+			count: ctx.optional.integer,
+			tags: ctx.list.optional.integer,
+			items: ctx.optionalOf(
+				listOf(blueprintOf((ctx) => ({ name: ctx.string }))),
+			),
+		})),
+		response: blueprintOf((ctx) => ({
+			folder: ctx.string,
+			name: ctx.string,
+			size: ctx.integer,
+			count: ctx.optional.integer,
+			tags: ctx.list.optional.integer,
+			items: ctx.list.optional.string,
+		})),
+		route: { method: "post", path: "/media/{folder}" },
+	}) {
+		override async execute() {
+			const { file, items, ...rest } = this.input;
+			return {
+				...rest,
+				name: file.name,
+				size: file.size,
+				...(items ? { items: items.map((item) => item.name) } : {}),
+			};
+		}
+	}
+	const Media = outputOf({
+		name: "Media",
+		commands: [commandOf({ name: "Media", useCases: { upload: Upload } })],
+	});
+	const routes = compileRoutes(
+		Media.operations,
+		{},
+		{ output: { name: "Media", statuses: Media.statuses } },
+		{ source: "test" },
+	);
+	const upload = routeOf(routes, "Media.upload");
+	const formRequest = (
+		entries: [string, string | File][],
+		withForm = true,
+	): HttpRequest => {
+		const form = new FormData();
+		for (const [key, value] of entries) form.append(key, value);
+		return {
+			param: (name) => (name === "folder" ? "docs" : undefined),
+			query: () => ({}),
+			header: (name) =>
+				name === "content-type" ? "multipart/form-data; boundary=x" : undefined,
+			text: () => {
+				throw new Error("text is not read");
+			},
+			...(withForm ? { form: async () => form } : {}),
+		};
+	};
+	const png = (size: number) =>
+		new File([new Uint8Array(size)], "a.png", { type: "image/png" });
+
+	test("reads the parts: files as they are, text coerced, repeated keys as a list, JSON for objects", async () => {
+		const result = await upload.handle(
+			formRequest([
+				["folder", "from-body"],
+				["file", png(3)],
+				["count", "2"],
+				["tags", "1"],
+				["tags", "2"],
+				["items", '[{"name":"x"},{"name":"y"}]'],
+			]),
+		);
+		expect(result.status).toBe(200);
+		expect(JSON.parse(result.body as string)).toEqual({
+			folder: "docs",
+			name: "a.png",
+			size: 3,
+			count: 2,
+			tags: [1, 2],
+			items: ["x", "y"],
+		});
+	});
+
+	test("rejects a file of another type, or too large, with an issue at its key", async () => {
+		for (const file of [
+			new File(["a"], "a.txt", { type: "text/plain" }),
+			png(9),
+		]) {
+			const result = await upload.handle(formRequest([["file", file]]));
+			expect(result.status).toBe(400);
+			const { issues } = JSON.parse(result.body as string);
+			expect(issues.map((issue: { path: unknown }) => issue.path)).toEqual([
+				["file"],
+			]);
+		}
+	});
+
+	test("a multipart body on a server without form is a 415; JSON still reads the other keys", async () => {
+		const unsupported = await upload.handle(
+			formRequest([["file", png(1)]], false),
+		);
+		expect(unsupported.status).toBe(415);
+		expect(JSON.parse(unsupported.body as string).title).toBe(
+			"UnsupportedMediaType",
+		);
+		const json = await upload.handle({
+			...request({ body: { count: 1 } }),
+			param: () => "docs",
+		});
+		expect(json.status).toBe(400);
+		expect(
+			JSON.parse(json.body as string).issues.map(
+				(issue: { path: unknown }) => issue.path,
+			),
+		).toEqual([["file"]]);
+	});
+
+	test("a multipart body that cannot be read is a 400", async () => {
+		const result = await upload.handle({
+			...formRequest([]),
+			form: async () => {
+				throw new TypeError("bad");
+			},
+		});
+		expect(result.status).toBe(400);
+		expect(JSON.parse(result.body as string).title).toBe("InvalidRequestBody");
+	});
+
+	test("a get route, or a delete without a body, cannot take a file", () => {
+		for (const route of [
+			{ method: "get", path: "/media" },
+			{ method: "delete", path: "/media" },
+		] as const) {
+			class Bad extends useCaseOf({
+				name: "Bad",
+				blueprint: blueprintOf((ctx) => ({ file: ctx.file })),
+				response: blueprintOf(() => ({})),
+				route,
+			}) {
+				override async execute() {
+					return {};
+				}
+			}
+			const bad = outputOf({
+				name: "Bad",
+				commands: [commandOf({ name: "Bad", useCases: { bad: Bad } })],
+			});
+			expect(() =>
+				compileRoutes(
+					bad.operations,
+					{},
+					{ output: { name: "Bad", statuses: bad.statuses } },
+					{ source: "test" },
+				),
+			).toThrow(
+				/"file" is a file, which only a multipart\/form-data body sends/,
+			);
+		}
+	});
+});

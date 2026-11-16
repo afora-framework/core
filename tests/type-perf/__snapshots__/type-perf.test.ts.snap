@@ -191,6 +191,8 @@ exports[`source mode experience completions: blueprint context 1`] = `
   deletedAt (property)
   email (property)
   enumOf (property)
+  file (property)
+  fileOf (property)
   id (property)
   integer (property)
   ip (property)
@@ -218,6 +220,7 @@ complete L3:41 blueprintOf((ctx) => ({ a: ctx.optional.‸ }));
   dateTime (property)
   deletedAt (property)
   email (property)
+  file (property)
   id (property)
   integer (property)
   ip (property)
@@ -238,6 +241,7 @@ complete L4:37 blueprintOf((ctx) => ({ a: ctx.list.‸ }));
   dateTime (property)
   deletedAt (property)
   email (property)
+  file (property)
   id (property)
   integer (property)
   ip (property)
@@ -266,8 +270,8 @@ hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
       string: PropertyClass<TString, string>;
       text: PropertyClass<TString, string>;
       number: PropertyClass<TNumber, number>;
-      ... 8 more ...;
-      json: PropertyClass<...>;
+      ... 9 more ...;
+      file: PropertyClass<...>;
   }, {
       ...;
   }> & {
@@ -396,7 +400,7 @@ exports[`source mode experience errors 1`] = `
   TS2820 L13:40 repositoryOf({ entity: User, actions: [‸"findManyByEmail"] });
     Type '"findManyByEmail"' is not assignable to type 'RepositoryAction<typeof User>'. Did you mean '"findByEmail"'?
   TS2339 L14:32 blueprintOf((ctx) => ({ a: ctx.‸nope }));
-    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 13 more ...; json: PropertyClass<...>; }, { ...; }> & { ...; }]>'.
+    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 14 more ...; file: PropertyClass<...>; }, { ...; }> & { ...; }]>'.
   TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
     Type '"missing"' is not assignable to type '"n"'."
 `;
@@ -592,6 +596,8 @@ exports[`package mode experience completions: blueprint context 1`] = `
   deletedAt (property)
   email (property)
   enumOf (property)
+  file (property)
+  fileOf (property)
   id (property)
   integer (property)
   ip (property)
@@ -619,6 +625,7 @@ complete L3:41 blueprintOf((ctx) => ({ a: ctx.optional.‸ }));
   dateTime (property)
   deletedAt (property)
   email (property)
+  file (property)
   id (property)
   integer (property)
   ip (property)
@@ -639,6 +646,7 @@ complete L4:37 blueprintOf((ctx) => ({ a: ctx.list.‸ }));
   dateTime (property)
   deletedAt (property)
   email (property)
+  file (property)
   id (property)
   integer (property)
   ip (property)
@@ -663,8 +671,8 @@ hover L6:14 blueprintOf((‸ctx) => ({ a: ctx.email }));
       phone: import("<root>/dist/index").PropertyClass<TString, string>;
       url: import("<root>/dist/index").PropertyClass<TString, string>;
       ip: import("<root>/dist/index").PropertyClass<TUnion<[TString, TString]>, string>;
-      ... 12 more ...;
-      json: import("<root>/dist/index").PropertyClass<TUnsafe<...>, import("<root>/dist/index").JsonValue>;
+      ... 13 more ...;
+      file: import("<root>/dist/index").PropertyClass<TUnsafe<...>, File>;
   }, {
       ...;
   }> & {
@@ -793,7 +801,7 @@ exports[`package mode experience errors 1`] = `
   TS2820 L13:40 repositoryOf({ entity: User, actions: [‸"findManyByEmail"] });
     Type '"findManyByEmail"' is not assignable to type 'RepositoryAction<typeof User>'. Did you mean '"findByEmail"'?
   TS2339 L14:32 blueprintOf((ctx) => ({ a: ctx.‸nope }));
-    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 13 more ...; json: PropertyClass<...>; }, { ...; }> & { ...; }]>'.
+    Property 'nope' does not exist on type 'BlueprintContext<readonly [IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: PropertyClass<TString, string>; phone: PropertyClass<TString, string>; url: PropertyClass<TString, string>; ... 14 more ...; file: PropertyClass<...>; }, { ...; }> & { ...; }]>'.
   TS2322 L15:64 recordOf(blueprintOf((ctx) => ({ n: ctx.number })), { unique: [‸"missing"] });
     Type '"missing"' is not assignable to type '"n"'."
 `;

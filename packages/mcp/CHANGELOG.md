@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### File fields (#118)
+
+- The guide shows file fields, `"file"` and `{ "file": { "types", "maxBytes" } }`, read from a `multipart/form-data` body.
+
 ### Serial ids (#122)
 
 - The guide names `"id": "serial"`, an integer the database assigns on `create`, and the providers that assign ids.

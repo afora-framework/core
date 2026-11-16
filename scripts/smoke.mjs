@@ -2,14 +2,20 @@
 import assert from "node:assert/strict";
 // The application supplies the TypeBox peer used by these schemas and core.
 import { Type } from "typebox";
-import { outputValueOf, RESERVED_RECORD_KEYS } from "../dist/adapters.js";
+import {
+	compileRoutes,
+	outputValueOf,
+	RESERVED_RECORD_KEYS,
+} from "../dist/adapters.js";
 import { jwtOf, sliceOf, sliceValue } from "../dist/experimental.js";
 import {
 	blueprintOf,
+	commandOf,
 	DeletedEntity,
 	entityOf,
 	Id,
 	MASK,
+	outputOf,
 	Password,
 	PasswordHasherRequired,
 	propertyOf,
@@ -137,5 +143,55 @@ assert.deepEqual(await jwt.verify(signed), {
 	scopes: ["posts:write"],
 });
 await assert.rejects(jwt.verify(`${signed}x`));
+
+// Uploads: a file property and a multipart body, read with the FormData of Node
+class Upload extends useCaseOf({
+	name: "Upload",
+	blueprint: blueprintOf((ctx) => ({
+		file: ctx.fileOf({ types: ["image/*"], maxBytes: 8 }),
+		count: ctx.integer,
+	})),
+	response: blueprintOf((ctx) => ({ name: ctx.string, count: ctx.integer })),
+}) {
+	async execute() {
+		return { name: this.input.file.name, count: this.input.count };
+	}
+}
+const Media = outputOf({
+	name: "Media",
+	commands: [commandOf({ name: "Media", useCases: { upload: Upload } })],
+});
+const [uploadRoute] = compileRoutes(
+	Media.operations,
+	{},
+	{ output: { name: "Media", statuses: Media.statuses } },
+	{ source: "smoke" },
+).routes;
+const multipart = (file) => {
+	const form = new FormData();
+	form.append("file", file);
+	form.append("count", "2");
+	const request = new Request("http://smoke.test/", {
+		method: "POST",
+		body: form,
+	});
+	return {
+		param: () => undefined,
+		query: () => ({}),
+		header: (name) => request.headers.get(name) ?? undefined,
+		text: () => request.text(),
+		form: () => request.formData(),
+	};
+};
+const uploaded = await uploadRoute.handle(
+	multipart(new File(["png"], "a.png", { type: "image/png" })),
+);
+assert.equal(uploaded.status, 200);
+assert.deepEqual(JSON.parse(uploaded.body), { name: "a.png", count: 2 });
+const refused = await uploadRoute.handle(
+	multipart(new File(["text"], "a.txt", { type: "text/plain" })),
+);
+assert.equal(refused.status, 400);
+assert.deepEqual(JSON.parse(refused.body).issues[0].path, ["file"]);
 
 console.log(`smoke ok on node ${process.version}`);

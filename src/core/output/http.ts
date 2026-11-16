@@ -5,6 +5,7 @@ import type { Principal } from "../use-case/types/access.interface";
 import type { RouteCookie } from "../use-case/types/route.interface";
 import { coerceTextValues } from "./coerce";
 import { InvalidOutputStage } from "./exceptions";
+import { fileKeysOf, formInputOf, isMultipart } from "./form";
 import {
 	type OpenAPISinkOptions,
 	type OperationRoute,
@@ -21,6 +22,7 @@ import type {
 	Authenticator,
 	CompiledRoute,
 	CompileRoutesSettings,
+	FormParts,
 	HttpOptions,
 	HttpRequest,
 	HttpResult,
@@ -220,6 +222,11 @@ function cookieWriterOf(cookie: RouteCookie): (value: string) => string {
  *   body or the query sends for them is dropped). Text is coerced to the
  *   numbers and booleans the input takes; the operation validates it (a 400
  *   problem with `issues`).
+ * - An input that holds a file (`format: "binary"`, as `fileOf`) is read
+ *   from a `multipart/form-data` body when the request sends one: files as
+ *   they are, text coerced, objects as JSON text, repeated keys as a list.
+ *   A server whose requests have no `form` answers it with 415. A JSON body
+ *   still works for its other keys.
  * - The context comes from `context.headers` (coerced) and
  *   `context.variables` (as is); a missing one leaves the key out.
  * - An operation with an `access` other than `public` asks
@@ -350,6 +357,8 @@ export function compileRoutes(
 		const readsCookies = cookieKeys.length > 0;
 		const authenticates = guarded && authenticator !== undefined;
 		const hasContext = operation.context !== undefined;
+		// An input with a file is read from a multipart body when one is sent.
+		const takesFiles = body && fileKeysOf(operation.input).length > 0;
 
 		const handle = async (request: HttpRequest): Promise<HttpResult> => {
 			try {
@@ -369,7 +378,36 @@ export function compileRoutes(
 				}
 
 				let input: unknown;
-				if (body) {
+				if (takesFiles && isMultipart(request.header("content-type"))) {
+					if (request.form === undefined) {
+						return problem(
+							{
+								type: "urn:afora:exception:UnsupportedMediaType",
+								title: "UnsupportedMediaType",
+								status: 415,
+								detail: "This server does not read multipart/form-data bodies.",
+							},
+							415,
+							request,
+						);
+					}
+					let form: FormParts;
+					try {
+						form = await request.form();
+					} catch {
+						return problem(
+							{
+								type: "urn:afora:exception:InvalidRequestBody",
+								title: "InvalidRequestBody",
+								status: 400,
+								detail: "The request body is not valid multipart/form-data.",
+							},
+							400,
+							request,
+						);
+					}
+					input = formInputOf(operation.input, form);
+				} else if (body) {
 					const text = await request.text();
 					try {
 						input = text.trim() === "" ? {} : JSON.parse(text);

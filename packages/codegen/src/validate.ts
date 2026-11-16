@@ -4,7 +4,13 @@ import { checkEntityEvents } from "./entity-events";
 import { checkEntityExpires } from "./entity-expires";
 import { checkEntitySchema } from "./entity-schema";
 import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
-import { checkEnum, type Field, parseFields, targetOf } from "./model";
+import {
+	checkEnum,
+	checkFile,
+	type Field,
+	parseFields,
+	targetOf,
+} from "./model";
 import { checkOutput, checkStageCatalog, stageEntries } from "./output";
 import {
 	checkPolicyCatalog,
@@ -209,6 +215,18 @@ function checkField(
 		);
 	}
 	if (field.kind === "enum") return;
+	if (field.kind === "file") {
+		if (owner === "environment") {
+			issues.push(
+				issue(
+					path,
+					"invalid_environment_field",
+					"An environment variable cannot be a file.",
+				),
+			);
+		}
+		return;
+	}
 	if (field.kind === "inline") {
 		if (owner === "environment") {
 			issues.push(
@@ -550,13 +568,13 @@ function checkStringList(
 function checkProperty(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 	const path = ["properties", decl.name];
 	const { spec } = decl;
-	const forms = ["base", "enum", "opaque"].filter((key) => key in spec);
+	const forms = ["base", "enum", "file", "opaque"].filter((key) => key in spec);
 	if (forms.length !== 1) {
 		issues.push(
 			issue(
 				path,
 				"invalid_property",
-				'A property declares exactly one of "base" (a Std or declared property), "enum" or "opaque".',
+				'A property declares exactly one of "base" (a Std or declared property), "enum", "file" or "opaque".',
 			),
 		);
 		return;
@@ -620,6 +638,11 @@ function checkProperty(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 	if (forms[0] === "enum") {
 		allowKeys(["enum", "name", "default", "optional"]);
 		checkEnum(spec, path, issues);
+		return;
+	}
+	if (forms[0] === "file") {
+		allowKeys(["file", "optional"]);
+		checkFile(spec.file, [...path, "file"], issues);
 		return;
 	}
 	allowKeys(["base", "with", "optional"]);

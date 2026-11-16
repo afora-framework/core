@@ -7,6 +7,7 @@ import {
 } from "./spec/field";
 import type {
 	EnumValue,
+	FileOptionsSpec,
 	ListBounds,
 	SpecIssue,
 	WithOptions,
@@ -29,6 +30,12 @@ export type Field = {
 			readonly name?: string;
 			readonly default?: EnumValue;
 	  } & FieldEvolution)
+	| {
+			readonly kind: "file";
+			readonly types?: readonly string[];
+			readonly maxBytes?: number;
+			readonly name?: string;
+	  }
 	| {
 			readonly kind: "inline";
 			readonly fields: Readonly<Record<string, Field>>;
@@ -243,6 +250,72 @@ export function checkEnum(
 	return ok;
 }
 
+/** The options of a file (`{ "types": [...], "maxBytes": n }`), checked; `undefined` when invalid. */
+export function checkFile(
+	value: unknown,
+	path: readonly (string | number)[],
+	issues: SpecIssue[],
+): FileOptionsSpec | undefined {
+	if (!isObject(value)) {
+		issues.push(
+			issue(
+				path,
+				"invalid_file",
+				'"file" is an object: { "types": ["image/png"], "maxBytes": 5000000 }, or {} for any file.',
+			),
+		);
+		return undefined;
+	}
+	const before = issues.length;
+	checkKeys(value, ["types", "maxBytes", "name"], path, issues);
+	const { types, maxBytes, name } = value;
+	if (
+		types !== undefined &&
+		(!Array.isArray(types) ||
+			types.length === 0 ||
+			!types.every(
+				(type) => typeof type === "string" && /^[^\s/]+\/[^\s/]+$/.test(type),
+			))
+	) {
+		issues.push(
+			issue(
+				[...path, "types"],
+				"invalid_file",
+				'"types" must be a non-empty list of media types, as "image/png" or "image/*".',
+			),
+		);
+	}
+	if (
+		maxBytes !== undefined &&
+		(typeof maxBytes !== "number" ||
+			!Number.isInteger(maxBytes) ||
+			maxBytes < 0)
+	) {
+		issues.push(
+			issue(
+				[...path, "maxBytes"],
+				"invalid_file",
+				'"maxBytes" must be a whole number of bytes, 0 or more.',
+			),
+		);
+	}
+	if (name !== undefined && (typeof name !== "string" || name === "")) {
+		issues.push(
+			issue(
+				[...path, "name"],
+				"invalid_file",
+				'"name" must be a non-empty string.',
+			),
+		);
+	}
+	if (issues.length > before) return undefined;
+	return {
+		...(types === undefined ? {} : { types: [...(types as string[])] }),
+		...(maxBytes === undefined ? {} : { maxBytes: maxBytes as number }),
+		...(name === undefined ? {} : { name: name as string }),
+	};
+}
+
 /**
  * A field of a spec, parsed. Reports to `issues` what is malformed and gives
  * `undefined` when it cannot be used.
@@ -276,7 +349,7 @@ export function parseField(
 			issue(
 				path,
 				"invalid_field",
-				'A field is a string ("email", "Age?", "User[]") or an object ({ "type": ... }, { "enum": [...] }, { "fields": {...} } or { "variant": {...} }).',
+				'A field is a string ("email", "Age?", "User[]") or an object ({ "type": ... }, { "enum": [...] }, { "file": {...} }, { "fields": {...} } or { "variant": {...} }).',
 			),
 		);
 		return undefined;
@@ -291,7 +364,7 @@ export function parseField(
 		);
 		return undefined;
 	}
-	const forms = ["type", "enum", "fields", "variant"].filter(
+	const forms = ["type", "enum", "file", "fields", "variant"].filter(
 		(key) => key in value,
 	);
 	if (forms.length !== 1) {
@@ -299,7 +372,7 @@ export function parseField(
 			issue(
 				path,
 				"invalid_field",
-				'A field object has exactly one of "type", "enum", "fields" or "variant".',
+				'A field object has exactly one of "type", "enum", "file", "fields" or "variant".',
 			),
 		);
 		return undefined;
@@ -399,6 +472,13 @@ export function parseField(
 			...evolution,
 			...mods,
 		};
+	}
+	if (forms[0] === "file") {
+		checkKeys(value, ["file", ...MODIFIERS], path, issues);
+		const file = checkFile(value.file, [...path, "file"], issues);
+		const mods = modifiers();
+		if (!file || !mods) return undefined;
+		return { kind: "file", ...file, ...mods };
 	}
 	if (forms[0] === "variant") {
 		checkKeys(value, ["variant", ...MODIFIERS], path, issues);

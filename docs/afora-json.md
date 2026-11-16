@@ -116,6 +116,30 @@ A field that holds one of several objects, told apart by the value of one key ([
 
 It is generated as `ctx.variantOf("method", { card: Card, pix: Pix })`, wrapped in `listOf` and `optionalOf`, and extracted back from `describe()`. The validator checks that `key` is a string that is not empty and that `of` has at least one variant (`invalid_variant`), that each name is declared (`unknown_type`) and is a blueprint, a record or an entity (`wrong_kind`), that no variant declares the key, which the field adds (`invalid_variant`, an entity's identity keys and a plugin's keys included), and that a record or an entity is not two variants (`invalid_variant`: an instance is told apart by its class). An entity among the variants needs its repository in the `relations` of the holder's repository, as for any entity field (`missing_relation`). A variant field cannot be an environment variable (`invalid_environment_field`) nor the `orderBy` of an index (`invalid_index`), and `$input.<field>.<key>` in a step is checked against the key and the keys of every variant.
 
+## Files
+
+A field that holds a file ([`fileOf`](std-properties.md#files)) is `"file"` for any file, or `{ "file": { "types": ["image/png", "image/*"], "maxBytes": 5000000 } }`, next to the `type`, `enum`, `fields` and `variant` forms; `{ "file": {} }` is any file too, and `name` names the property. `optional` and `list` apply; `with`, `fill` and `renamedFrom` do not. A property declaration takes the same form, `{ "file": {...}, "optional"?: true }`. It is generated as `ctx.fileOf({ types, maxBytes })` (`fileOf` for a declaration) and extracted back from `describe()`. The validator checks that `types` is a non-empty list of media types, that `maxBytes` is a whole number, 0 or more, and that nothing else is given (`invalid_file`, `unknown_key`); a file cannot be an environment variable (`invalid_environment_field`). An HTTP output reads the input of a use case that holds one from a `multipart/form-data` body: see [Outputs](outputs.md).
+
+```json
+{
+	"useCases": {
+		"UploadMedia": {
+			"input": {
+				"fields": {
+					"file": {
+						"file": {
+							"types": ["image/png", "image/jpeg"],
+							"maxBytes": 5000000
+						}
+					},
+					"folder": "string?"
+				}
+			}
+		}
+	}
+}
+```
+
 ## A list as the response
 
 The `response` of a use case written in the spec is a blueprint (its name, or `{ "fields": {...} }`), or a list written as a list field, for a use case that [answers an array](use-cases.md#a-list-as-the-response):

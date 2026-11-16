@@ -6,6 +6,7 @@ import {
 	entityOf,
 	enumOf,
 	environmentOf,
+	fileOf,
 	Integer,
 	idOf,
 	inMemoryProvider,
@@ -337,6 +338,56 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 });
 
 describe("hand-written application -> extractSpec -> generate", () => {
+	test("keeps file fields and file properties (fileOf)", async () => {
+		const Avatar = fileOf({ types: ["image/png", "image/*"], maxBytes: 1000 });
+		const Upload = blueprintOf((ctx) => ({
+			avatar: Avatar,
+			any: ctx.file,
+			cover: ctx.fileOf({ maxBytes: 10 }),
+			extras: ctx.optionalOf(ctx.listOf(ctx.fileOf({ types: ["text/plain"] }))),
+		}));
+		const App = applicationOf({
+			name: "files",
+			properties: { Avatar },
+			blueprints: { Upload },
+			provider: inMemoryProvider(),
+		});
+		const spec = extractSpec(App);
+		expect(validateSpec(spec)).toEqual([]);
+		expect(spec.properties?.Avatar).toEqual({
+			file: { types: ["image/png", "image/*"], maxBytes: 1000 },
+		});
+		expect(spec.blueprints?.Upload?.fields).toEqual({
+			avatar: "Avatar",
+			any: "file",
+			cover: { file: { maxBytes: 10 } },
+			extras: { file: { types: ["text/plain"] }, optional: true, list: true },
+		});
+		const dir = await generated({ ".": { spec } });
+		const domain = await import(join(dir, "src/domain/index.ts"));
+		expect(toOpenAPI(domain.Upload)).toEqual(toOpenAPI(Upload));
+	});
+
+	test("rejects file options that are not media types or a size", () => {
+		const issues = validateSpec({
+			version: 1,
+			blueprints: {
+				Upload: {
+					fields: {
+						a: { file: { types: ["png"] } },
+						b: { file: { maxBytes: -1 } },
+						c: { file: { other: 1 } },
+					},
+				},
+			},
+		} as unknown as Spec);
+		expect(issues.map((found) => [found.path.join("."), found.code])).toEqual([
+			["blueprints.Upload.fields.a.file.types", "invalid_file"],
+			["blueprints.Upload.fields.b.file.maxBytes", "invalid_file"],
+			["blueprints.Upload.fields.c.file.other", "unknown_key"],
+		]);
+	});
+
 	test("gives the same OpenAPI schemas", async () => {
 		const Age = Integer.with({ min: 0, max: 150 });
 		const Status = enumOf(["draft", "published"]);

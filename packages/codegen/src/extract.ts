@@ -230,6 +230,21 @@ class Extraction {
 			case "optional":
 				return { ...this.property(lineage.base), optional: true };
 			case "factory": {
+				if (lineage.factory === "fileOf") {
+					const { types, maxBytes, name, optional } = lineage.args as {
+						types?: readonly string[];
+						maxBytes?: number;
+						name?: string;
+						optional?: boolean;
+					};
+					return {
+						kind: "file",
+						optional: optional === true,
+						...(types === undefined ? {} : { types: [...types] }),
+						...(maxBytes === undefined ? {} : { maxBytes }),
+						...(name === undefined ? {} : { name }),
+					};
+				}
 				if (lineage.factory !== "enumOf") return this.opaqueFor(property);
 				const {
 					values,
@@ -361,6 +376,16 @@ class Extraction {
 				enum: [...field.values],
 				...(field.name === undefined ? {} : { name: field.name }),
 				...(field.default === undefined ? {} : { default: field.default }),
+				...(field.optional ? { optional: true } : {}),
+			};
+		}
+		if (field.kind === "file") {
+			return {
+				file: {
+					...(field.types === undefined ? {} : { types: [...field.types] }),
+					...(field.maxBytes === undefined ? {} : { maxBytes: field.maxBytes }),
+					...(field.name === undefined ? {} : { name: field.name }),
+				},
 				...(field.optional ? { optional: true } : {}),
 			};
 		}

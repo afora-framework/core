@@ -52,6 +52,15 @@ export interface HttpOptions extends RouteOptions {
 	};
 }
 
+/**
+ * What the route table reads of a `FormData`: the names of its parts and
+ * the values of each, text or a `File`. A `FormData` of any runtime is one.
+ */
+export interface FormParts {
+	keys(): Iterable<string>;
+	getAll(name: string): readonly unknown[];
+}
+
 /** A request, as the server of a sink gives it to the route table. */
 export interface HttpRequest {
 	/** The value of the `{name}` segment of the path, decoded. */
@@ -62,6 +71,12 @@ export interface HttpRequest {
 	header(name: string): string | undefined;
 	/** The body, as text. Called at most once, and only by routes with a body. */
 	text(): string | Promise<string>;
+	/**
+	 * The `multipart/form-data` body, as `FormData`. Called at most once, in
+	 * place of `text`, by a route whose input holds a file when the request
+	 * says it sends one; a server without it answers such a request with 415.
+	 */
+	form?(): Promise<FormParts>;
 	/** A value a middleware of the server set for this request, by name. */
 	variable?(name: string): unknown;
 	/** The request of the server itself, for an authenticator that needs it. */

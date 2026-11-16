@@ -38,6 +38,30 @@ const WithOptions = Type.Record(Type.String(), Type.Unknown(), {
 
 const FieldRef = Type.Ref("#/$defs/Field");
 
+/** What a file accepts, as `fileOf` takes it. */
+const FileOptions = Type.Object(
+	{
+		types: Type.Optional(
+			Type.Array(
+				Type.String({
+					pattern: "^[^\\s/]+/[^\\s/]+$",
+					description: 'A media type, "image/png", or "image/*" for any image.',
+				}),
+				{ minItems: 1 },
+			),
+		),
+		maxBytes: Type.Optional(
+			Type.Integer({ minimum: 0, description: "The largest size, in bytes." }),
+		),
+		name: Type.Optional(Type.String({ minLength: 1 })),
+	},
+	{
+		additionalProperties: false,
+		description:
+			"A file (fileOf), sent in a multipart/form-data body: the media types it accepts and its largest size. {} takes any file.",
+	},
+);
+
 /** `fill` and `renamedFrom` of a type or enum field (not a list). */
 const Evolution = {
 	fill: Type.Optional(
@@ -89,6 +113,10 @@ export const fieldDefinition = Type.Union(
 				...Evolution,
 				...Modifiers,
 			},
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{ file: FileOptions, ...Modifiers },
 			{ additionalProperties: false },
 		),
 		Type.Object(
@@ -175,6 +203,10 @@ const Property = Type.Union(
 			{ additionalProperties: false },
 		),
 		Type.Object(
+			{ file: FileOptions, optional: Type.Optional(Type.Boolean()) },
+			{ additionalProperties: false },
+		),
+		Type.Object(
 			{
 				opaque: Type.Literal(true),
 				ref: Type.Optional(
@@ -192,7 +224,7 @@ const Property = Type.Union(
 	],
 	{
 		description:
-			"A custom property: `base` + `with` (a refined Std property), an `enum`, or an `opaque` import of a hand-written property.",
+			"A custom property: `base` + `with` (a refined Std property), an `enum`, a `file`, or an `opaque` import of a hand-written property.",
 	},
 );
 

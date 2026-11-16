@@ -38,9 +38,11 @@ export function canonicalField(field: Field): Json {
 					}
 				: field.kind === "variant"
 					? { variant: canonicalVariant(field) }
-					: { fields: canonicalFields(field.fields) };
+					: field.kind === "file"
+						? { file: canonicalFile(field) }
+						: { fields: canonicalFields(field.fields) };
 	const evolution =
-		field.kind === "inline" || field.kind === "variant"
+		field.kind === "inline" || field.kind === "variant" || field.kind === "file"
 			? {}
 			: {
 					...(field.fill === undefined ? {} : { fill: field.fill }),
@@ -53,6 +55,19 @@ export function canonicalField(field: Field): Json {
 		...evolution,
 		...(field.optional ? { optional: true } : {}),
 		...(field.list ? { list: { ...field.list } } : {}),
+	};
+}
+
+/** The options of a file, in their order: only those given. */
+function canonicalFile(file: {
+	readonly types?: readonly string[];
+	readonly maxBytes?: number;
+	readonly name?: string;
+}): Json {
+	return {
+		...(file.types === undefined ? {} : { types: [...file.types] }),
+		...(file.maxBytes === undefined ? {} : { maxBytes: file.maxBytes }),
+		...(file.name === undefined ? {} : { name: file.name }),
 	};
 }
 
@@ -187,6 +202,9 @@ function canonicalProperty(name: string, value: Json): Json {
 			ref: typeof value.ref === "string" ? value.ref : name,
 			import: value.import,
 		};
+	}
+	if (isObject(value.file)) {
+		return { file: canonicalFile(value.file), ...optional };
 	}
 	if (Array.isArray(value.enum)) {
 		return {

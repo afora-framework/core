@@ -917,7 +917,7 @@ function missingInField(
 		}
 		return segment;
 	}
-	if (field.kind === "enum") return segment;
+	if (field.kind === "enum" || field.kind === "file") return segment;
 	const decl = scope.decls.get(field.type);
 	if (decl) {
 		const fields = fieldsOfDecl(decl);

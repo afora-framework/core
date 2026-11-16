@@ -630,3 +630,56 @@ describe("a list response", () => {
 		expect(document).toMatchSnapshot();
 	});
 });
+
+describe("an input with a file", () => {
+	class Upload extends useCaseOf({
+		name: "Upload",
+		blueprint: blueprintOf((ctx) => ({
+			folder: ctx.string,
+			file: ctx.fileOf({ types: ["image/png"], maxBytes: 1000 }),
+			extras: ctx.optionalOf(ctx.listOf(ctx.file)),
+			caption: ctx.optional.string,
+		})),
+		response: blueprintOf((ctx) => ({ size: ctx.integer })),
+		route: { method: "post", path: "/media/{folder}" },
+	}) {
+		override async execute() {
+			return { size: this.input.file.size };
+		}
+	}
+	const document = outputOf({
+		name: "Media",
+		commands: [commandOf({ name: "Media", useCases: { upload: Upload } })],
+		pipe: [openapi({ info })],
+	}).build();
+
+	test("is sent as multipart/form-data, each file a binary string", async () => {
+		await validated(document);
+		const operation = document.paths["/media/{folder}"]?.post as {
+			requestBody: { required: boolean; content: Record<string, unknown> };
+		};
+		const body = operation.requestBody;
+		expect(body.required).toBe(true);
+		expect(body.content).toEqual({
+			"multipart/form-data": {
+				schema: {
+					type: "object",
+					properties: {
+						file: {
+							type: "string",
+							format: "binary",
+							contentMediaType: "image/png",
+						},
+						extras: {
+							type: "array",
+							items: { type: "string", format: "binary" },
+						},
+						caption: { type: "string" },
+					},
+					required: ["file"],
+					additionalProperties: false,
+				},
+			},
+		});
+	});
+});

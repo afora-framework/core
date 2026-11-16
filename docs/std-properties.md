@@ -121,6 +121,27 @@ shape.match(""); // false
 shape.serialize(); // '{"type":"string","minLength":1}'
 ```
 
+### Files
+
+| Context      | Class / factory | Holds                                                                               |
+| ------------ | --------------- | ----------------------------------------------------------------------------------- |
+| `ctx.file`   | `FileProperty`  | any file (a `File`, or any `Blob`), of any type and size                            |
+| `ctx.fileOf` | `fileOf`        | a file of the media `types` given (`"image/*"` takes any image), at most `maxBytes` |
+
+A file is what a `multipart/form-data` body sends: an [HTTP sink](outputs.md) reads one for an input that holds a file, and the OpenAPI document describes it as `type: "string", format: "binary"` (with `contentMediaType` when one exact type is accepted). The value is checked to be a `Blob`, its type (without parameters, case aside) to be one of `types`, and its size to be at most `maxBytes`; anything else throws `InvalidFile`, whose message is the issue's (`Expected a file`, `Expected a file of type image/png, not "text/plain"`, `Expected a file of at most 5000000 bytes, not 6000000 bytes`), at the key of the file. Options that are not media types or a size throw `InvalidFileOptions` when the property is declared. The file is kept as it is: never read, copied or frozen, so a use case streams it to storage (`file.stream()`, `await file.arrayBuffer()`). A file cannot be `sensitive` or `unique`. A record's `toJSON` gives the file as it is, and `JSON.stringify` writes a `Blob` as `{}`: respond with what you made of it (a URL, `{ name, type, size }`), not the file. The demo value is an empty file of the first type, made when it is asked for (no `File` is made when a module loads).
+
+```ts
+import { blueprintOf } from "@afora/core";
+
+const UploadMedia = blueprintOf((ctx) => ({
+	file: ctx.fileOf({
+		types: ["image/png", "image/jpeg", "image/webp"],
+		maxBytes: 5_000_000,
+	}),
+	folder: ctx.optional.string,
+}));
+```
+
 ### Enumerations
 
 `ctx.enumOf(values, options?)` (`enumOf`) holds one of a list of strings or numbers, typed as their union; its demo is the first value unless `default` names another, and `{ optional: true }` accepts `undefined`. [Properties](properties.md) has the details.
