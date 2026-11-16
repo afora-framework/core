@@ -67,7 +67,6 @@ The second line fails when someone edited a generated file or the spec without g
 
 A spec names its provider and its stages by name: `inMemory`, `select` and `openapi` are built in. Others come from catalogs, which the companion packages export. Give the server a module of the project that gathers them:
 
-<!-- docs:code skip: a file of the project, read by afora-mcp through --providers and --stages -->
 ```ts
 // afora.catalog.ts
 export { providers } from "@afora/drizzle";

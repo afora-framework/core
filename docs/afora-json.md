@@ -233,7 +233,7 @@ A use case that needs what is not a repository (a cache, a storage, a client of 
 
 The events come from the lifecycle of the entities. An entity (not a record) declares them by cycle, each one event or a list:
 
-```json
+```json afora:entities
 "Post": {
 	"fields": { "title": "text" },
 	"events": {
@@ -249,7 +249,7 @@ A name alone is an event without a handler, raised to be published; `{ name, han
 
 `"trace"` is the tracer of the application (see [Tracing](tracing.md)), an import of one written by hand, such as `otelTracer()` of [`@afora/otel`](../packages/otel/README.md):
 
-```json
+```json afora
 {
 	"version": 1,
 	"name": "blog",
@@ -263,7 +263,7 @@ A name alone is an event without a handler, raised to be published; `{ name, han
 
 A repository declares its [indexes](repositories.md#indexes) and what it does with a [scan](repositories.md#query-cost) as in TypeScript:
 
-```json
+```json afora:partial
 "repositories": {
 	"Entries": {
 		"entity": "Entry",
@@ -283,7 +283,7 @@ They are generated as `indexes` and `scans` of `repositoryOf`, given by `describ
 
 An entity (not a record) declares when its records expire with `expires`, generated as the [option of `entityOf`](entities.md#records-that-expire) and extracted back from `describe()`:
 
-```json
+```json afora:entities
 "AuditEvent": { "fields": { "action": "text" }, "expires": { "after": { "days": 400 } } },
 "Window": { "fields": { "hits": "integer", "until": "dateTime?" }, "expires": { "at": "until" } }
 ```
@@ -296,7 +296,7 @@ Steps are a sequence with no branching, no loops and no expressions (see [what s
 
 `Reserve` takes stock away from an item, and fits in steps:
 
-```json
+```json afora:useCases
 "Reserve": {
 	"input": { "fields": { "itemId": "id", "quantity": "integer" } },
 	"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] }, "item": "Item" } },
@@ -317,7 +317,7 @@ Steps are a sequence with no branching, no loops and no expressions (see [what s
 
 Then the rule changes: when the stock is short, leave it as it is and answer `back-ordered`. That is a branch, so `Reserve` moves to code. Only `implementation` changes:
 
-```json
+```json afora:useCases
 "Reserve": {
 	"input": { "fields": { "itemId": "id", "quantity": "integer" } },
 	"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] }, "item": "Item" } },
@@ -329,7 +329,27 @@ Then the rule changes: when the stock is short, leave it as it is and answer `ba
 
 `generate` now writes `export abstract class ReserveBase extends useCaseOf({...}) {}` in `src/domain/reserve.use-case.ts` (the file is named after the use case in kebab case), with the declaration above. The class is written once, at the path the spec names (relative to the output directory), and `application.ts` registers it:
 
-<!-- docs:code skip: src/handlers/reserve.ts imports the files afora-codegen generates from the spec above -->
+<!-- docs:code generate
+{
+	"version": 1,
+	"name": "shop",
+	"output": { "dir": "src/domain" },
+	"entities": { "Item": { "fields": { "name": "text", "stock": "integer" }, "change": ["stock"] } },
+	"repositories": { "Items": { "entity": "Item", "actions": ["findById", "update"] } },
+	"exceptions": { "ItemNotFound": { "layer": "use-case" } },
+	"useCases": {
+		"Reserve": {
+			"input": { "fields": { "itemId": "id", "quantity": "integer" } },
+			"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] }, "item": "Item" } },
+			"dependencies": { "items": "Items" },
+			"errors": ["ItemNotFound"],
+			"implementation": { "import": "../handlers/reserve#Reserve" }
+		}
+	}
+}
+-->
+
+<!-- docs:code file: src/handlers/reserve.ts -->
 ```ts
 // src/handlers/reserve.ts
 import { ItemNotFound } from "../domain/exceptions";
@@ -351,7 +371,7 @@ export class Reserve extends ReserveBase {
 
 `this.input`, `this.context` and `this.dependencies` are typed from the declaration, and the response is validated by its blueprint as for steps; throw only the exceptions `errors` lists. A use case in steps that depends on `Reserve` keeps it as it is, `call` included:
 
-```json
+```json afora:useCases
 "PlaceOrder": {
 	"input": { "fields": { "itemId": "id", "quantity": "integer" } },
 	"response": { "fields": { "status": { "enum": ["reserved", "back-ordered"] } } },
@@ -371,7 +391,7 @@ The generated `use-cases.ts` imports `Reserve` from `../handlers/reserve` for it
 
 A use case that a [standard use case](std-use-cases.md) covers is declared by naming it and the repository it is for, in place of its input, response and steps:
 
-```json
+```json afora:partial
 "useCases": {
 	"CreatePost": {
 		"generic": "create",
@@ -393,7 +413,7 @@ It generates `export const CreatePost = StdUseCases.context.create(Posts, { name
 
 The use cases that write (all but `get`, `list` and `login`) take the [hooks](std-use-cases.md#before-and-after) too: `before` and `after` are imports, as the `fn` of a `run` step, `dependencies` name declared use cases, repositories, environments or `"Logger"`, as those of a use case written in the spec, and `throws` lists exceptions as `errors` does (a name, or `{ "core": "Name" }`):
 
-```json
+```json afora:useCases
 "CreateEntry": {
 	"generic": "create",
 	"repository": "Entries",
@@ -414,7 +434,7 @@ The validator checks that the use case exists (`unknown_generic`), that the repo
 
 A use case in `afora.json` takes the same `route` and `access` as in TypeScript (see [Routes](use-cases.md#routes) and [Access](auth.md)), beside its description:
 
-```json
+```json afora:partial
 "useCases": {
 	"ListPosts": {
 		"route": {

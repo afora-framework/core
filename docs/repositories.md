@@ -209,37 +209,67 @@ Without `create`, an id that holds no entity (or a soft-deleted one) throws `Rep
 
 **Providers.** A repository reads and writes through an `IRepositoryProvider` (v2), on plain unmasked values, each call getting a `context` with the `entity`, the repository `name`, its `unique` keys, `env` and, for an entity that expires, `expiry` (`{ key }`). Writing a provider is adapter work: `IRepositoryProvider`, `RepositoryContext`, `RepositoryData`, `ProviderQuery` and `ProviderCapabilities` are imported from `@afora/core/adapters` (see [API tiers](api-tiers.md)).
 
-<!-- docs:code skip: the shape of the interface, its parameters left untyped to read; import the real one from @afora/core/adapters -->
+<!-- docs:code context
+/* block */
+
+// the shape above is the interface, both ways
+const shape = (provider: IRepositoryProvider): Provider => provider;
+const real = (provider: Provider): IRepositoryProvider => provider;
+-->
 ```ts
 import type {
 	IRepositoryProvider,
+	ProviderCapabilities,
+	ProviderIncrementOptions,
+	ProviderMigrationResult,
 	ProviderQuery,
+	ProviderUpdateOptions,
+	RepositoryContext,
 	RepositoryData,
+	SchemaPlan,
 } from "@afora/core/adapters";
+import type { IdValue } from "@afora/core";
 
-interface IRepositoryProvider<Environment = unknown> {
-	findOne(context, query?: ProviderQuery): Promise<RepositoryData | undefined>; // first row after offset
-	findMany(context, query?: ProviderQuery): Promise<readonly RepositoryData[]>;
-	insert(context, data): Promise<void | { readonly id: IdValue }>; // { id } when it assigned one (capabilities.generatedIds)
+// the shape of IRepositoryProvider (import the real one)
+interface Provider<Environment = unknown> {
+	findOne(
+		context: RepositoryContext<Environment>,
+		query?: ProviderQuery,
+	): Promise<RepositoryData | undefined>; // first row after offset
+	findMany(
+		context: RepositoryContext<Environment>,
+		query?: ProviderQuery,
+	): Promise<readonly RepositoryData[]>;
+	insert(
+		context: RepositoryContext<Environment>,
+		data: RepositoryData,
+	): Promise<void | { readonly id: IdValue }>; // { id } when it assigned one (capabilities.generatedIds)
 	update(
-		context,
-		data,
-		options?: { expectedVersion?: number }, // capabilities.versioning
+		context: RepositoryContext<Environment>,
+		data: RepositoryData,
+		options?: ProviderUpdateOptions, // { expectedVersion?: number }, capabilities.versioning
 	): Promise<void>;
-	remove(context, id: string): Promise<void>;
-	count(context, query?: ProviderQuery): Promise<number>; // ignores orderBy, limit and offset
+	remove(context: RepositoryContext<Environment>, id: IdValue): Promise<void>;
+	count(
+		context: RepositoryContext<Environment>,
+		query?: ProviderQuery,
+	): Promise<number>; // ignores orderBy, limit and offset
 	increment?(
 		// capabilities.atomic
-		context,
-		id: string,
+		context: RepositoryContext<Environment>,
+		id: IdValue,
 		deltas: Readonly<Record<string, number>>,
-		options?: { set?: RepositoryData; create?: RepositoryData; now?: string },
+		options?: ProviderIncrementOptions, // { set?, create?, now? }
 	): Promise<RepositoryData>; // the row as stored
-	capabilities?: ProviderCapabilities; // e.g. { transactions: true, keyset: true, indexes: true, versioning: true, atomic: true, generatedIds: true }
+	readonly capabilities?: ProviderCapabilities; // e.g. { transactions: true, keyset: true, indexes: true, versioning: true, atomic: true, generatedIds: true }
 	transaction?<Result>(
 		run: (provider: IRepositoryProvider<Environment>) => Promise<Result>,
 	): Promise<Result>;
 	close?(): void | Promise<void>; // called by app.stop()
+	migrate?(
+		context: RepositoryContext<Environment>,
+		plan: SchemaPlan,
+	): Promise<void | ProviderMigrationResult>; // see Schema evolution
 }
 ```
 

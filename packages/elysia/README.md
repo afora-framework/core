@@ -68,7 +68,7 @@ const app = Api.build(); // an Elysia app
 app.listen(3000);
 ```
 
-```
+```text
 GET /api/posts/hello          -> 200 { "post": { "slug": "hello", ... } }
 GET /api/posts/Not%20A%20Slug -> 400 application/problem+json, with "issues"
 GET /openapi.json             -> the OpenAPI 3.1 document of the same routes
@@ -113,7 +113,11 @@ The requests are handled by the route table of the core (`compileRoutes` of `@af
 
 ## Middlewares and your own app
 
-<!-- docs:code skip: fragment: the second argument of the stage; @elysiajs/cors is not a dependency of this repo and tenantOf stands for your code -->
+<!-- docs:code context
+import { elysia } from "@afora/elysia";
+
+declare function tenantOf(host: string | undefined): string; // your code
+-->
 ```ts
 import { cors } from "@elysiajs/cors";
 

@@ -79,11 +79,23 @@ resetRuntime(); // the default hasher and generator again, and the id clock rest
 
 ## Deploying
 
+<!-- docs:code file: api.ts
+import { commandOf, outputOf } from "@afora/core";
+import { hono } from "@afora/hono";
+
+const Health = commandOf({ name: "Health", useCases: {} });
+export const api = outputOf({ name: "Api", commands: [Health], pipe: [hono()] }).build();
+-->
+<!-- docs:code file: hasher.ts
+import type { PasswordHasher } from "@afora/core";
+
+export declare const hasher: PasswordHasher;
+-->
+
 An output built with an HTTP provider is a server object of that framework: a Hono app, a Fastify instance, an Express app or an Elysia app. Deploying it is deploying that framework's app. With [`@afora/hono`](../packages/hono/README.md), the one that runs everywhere, and `api` the built output of `./api.ts` (as in the [docs index](README.md)):
 
 **Bun.**
 
-<!-- docs:code skip: imports the application of the page, `./api`, which is not a file here -->
 ```ts
 import { api } from "./api";
 
@@ -92,7 +104,6 @@ Bun.serve({ fetch: api.fetch, port: 3000 });
 
 **Node.** With `@hono/node-server`, and `tsx` (or a build step) to run TypeScript:
 
-<!-- docs:code skip: @hono/node-server is not installed in this repository -->
 ```ts
 import { serve } from "@hono/node-server";
 import { api } from "./api";
@@ -102,7 +113,6 @@ serve({ fetch: api.fetch, port: 3000 });
 
 **Workers.** The app is the default export; configure a hasher if the API hashes passwords, and read variables from the bindings:
 
-<!-- docs:code skip: imports the application of the page, `./api`, which is not a file here -->
 ```ts
 import { configure } from "@afora/core";
 import { api } from "./api";

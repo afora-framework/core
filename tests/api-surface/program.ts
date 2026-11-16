@@ -5,7 +5,7 @@
  * code blocks of the docs). Uses `typescript-language-service` (TS 5.9): the
  * `typescript` devDependency is the native 7.x without a JS API.
  */
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import ts from "typescript-language-service";
 
 export const root = join(import.meta.dir, "../..");
@@ -179,6 +179,11 @@ export interface VirtualModule {
 	/** Label for reports. */
 	id: string;
 	code: string;
+	/**
+	 * Its file under `__virtual__/` (e.g. `docs__tutorial/src/db.ts`), so modules
+	 * can import each other by relative path; `m<index>.ts` when absent.
+	 */
+	path?: string;
 }
 
 export interface ModuleDiagnostics {
@@ -205,7 +210,7 @@ export function checkVirtualModules(
 	const files = new Map<string, string>();
 	const ids = new Map<string, string>();
 	modules.forEach((module, index) => {
-		const name = join(dir, `m${index}.ts`);
+		const name = join(dir, module.path ?? `m${index}.ts`);
 		files.set(name, `${module.code}\nexport {};\n`);
 		ids.set(name, module.id);
 	});
@@ -225,6 +230,13 @@ export function checkVirtualModules(
 		readFile: host.readFile.bind(host),
 	};
 	host.fileExists = (file) => files.has(file) || real.fileExists(file);
+	const directories = new Set<string>();
+	for (const file of files.keys())
+		for (let d = dirname(file); d.startsWith(dir); d = dirname(d))
+			directories.add(d);
+	const realDirectoryExists = host.directoryExists?.bind(host);
+	host.directoryExists = (path) =>
+		directories.has(path) || (realDirectoryExists?.(path) ?? true);
 	host.readFile = (file) => files.get(file) ?? real.readFile(file);
 	host.getSourceFile = (file, languageVersion, ...rest) => {
 		const text = files.get(file);
@@ -252,8 +264,23 @@ export function checkVirtualModules(
 			literals.map((literal) => {
 				const name = literal.text;
 				const mode = ts.getModeForUsageLocation(file, literal, compilerOptions);
-				let resolved = resolve(name, containingFile, mode);
-				if (!resolved && !name.startsWith(".") && !name.startsWith("/"))
+				const bare = !name.startsWith(".") && !name.startsWith("/");
+				// A package found in a fallback root takes the copy of what it imports
+				// (a peer such as hono or elysia) that the root or the packages have,
+				// so a type has one identity.
+				let resolved: ts.ResolvedModuleFull | undefined;
+				if (
+					bare &&
+					fallbackRoots.some((dir) =>
+						containingFile.startsWith(join(dir, "node_modules")),
+					)
+				)
+					for (const dir of [root, ...fallbackRoots]) {
+						resolved = resolve(name, join(dir, "__resolve__.ts"), mode);
+						if (resolved) break;
+					}
+				resolved ??= resolve(name, containingFile, mode);
+				if (!resolved && bare)
 					for (const dir of fallbackRoots) {
 						resolved = resolve(name, join(dir, "__resolve__.ts"), mode);
 						if (resolved) break;
