@@ -6,7 +6,9 @@
  *
  * A run is checked against the version of the brief it was built from:
  * version 1 (BRIEF.v1.md) has no sessions nor owners, version 2 (BRIEF.md)
- * adds a token and events only their organizer reads or changes.
+ * adds a token and events only their organizer reads or changes, and
+ * version 3 (BRIEF.v3.md) is the product of version 2 with the same contract,
+ * described without listing the guarantees: the same checks apply.
  */
 
 /** A fetch-like handler: `app.fetch` of a Hono app, or anything with that shape. */
@@ -18,13 +20,19 @@ export const INVARIANTS = {
 	problems: "Errors are problem+json with the right status, never 5xx",
 	unique: "Unique keys enforced (409)",
 	ownership: "Only its organizer reads or changes an event (401, 403/404)",
+	concurrency: "Capacity holds when the last seats are bought at once",
 } as const;
 export type Invariant = keyof typeof INVARIANTS;
 export const INVARIANT_IDS = Object.keys(INVARIANTS) as Invariant[];
 
-/** The versions of the brief: BRIEF.v1.md and BRIEF.md. */
-export type BriefVersion = 1 | 2;
+/** The versions of the brief: BRIEF.v1.md, BRIEF.md and BRIEF.v3.md. */
+export type BriefVersion = 1 | 2 | 3;
+export const BRIEF_VERSIONS: readonly BriefVersion[] = [1, 2, 3];
 export const CURRENT_BRIEF: BriefVersion = 2;
+
+/** Whether `value` names a version of the brief. */
+export const isBriefVersion = (value: unknown): value is BriefVersion =>
+	BRIEF_VERSIONS.includes(value as BriefVersion);
 
 /** The invariants a run of this version of the brief is checked for. */
 export function invariantsOf(brief: BriefVersion): Invariant[] {
@@ -120,7 +128,8 @@ export async function evaluate(
 	handler: Handler,
 	brief: BriefVersion = CURRENT_BRIEF,
 ): Promise<Evaluation> {
-	const v2 = brief === 2;
+	// briefs 2 and 3 share the contract: tokens and owners
+	const v2 = brief >= 2;
 	const exchanges: Exchange[] = [];
 	const checks: Check[] = [];
 	const check = (
@@ -670,6 +679,76 @@ export async function evaluate(
 			`expected a 4xx, or an event of ${organizerId}, got ${describe(spoofed)}`,
 		);
 	}
+
+	// --- concurrency: the last seats bought at once ---
+	// An event of 3 seats, one sold, then four buyers at the same time for
+	// the two seats left: two get a ticket, the other two a 422 sold out.
+	const lastSeats = await send("create a small event", "POST", "/api/events", {
+		...party,
+		title: "Last seats",
+		slug: "last-seats",
+		capacity: 3,
+	});
+	const lastSeatsId: string | undefined = lastSeats.json?.event?.id;
+	const firstSeat = await send(
+		"buy the first seat",
+		"POST",
+		`/api/events/${lastSeatsId}/tickets`,
+		{ buyerEmail: "gil@example.com" },
+	);
+	check(
+		"concurrency",
+		"setup: create an event of 3 seats and sell one",
+		success(lastSeats) && typeof lastSeatsId === "string" && success(firstSeat),
+		`expected 2xx { event: { id } } and a 2xx ticket, got ${describe(lastSeats)} and ${describe(firstSeat)}`,
+	);
+	const SEATS_LEFT = 2;
+	const rush = await Promise.all(
+		["hal", "ivy", "joe", "kim"].map((buyer) =>
+			send(
+				"buy one of the last seats at once",
+				"POST",
+				`/api/events/${lastSeatsId}/tickets`,
+				{ buyerEmail: `${buyer}@example.com` },
+			),
+		),
+	);
+	const sold = rush.filter(success).length;
+	const statuses = rush.map((exchange) => exchange.status).join(", ");
+	check(
+		"concurrency",
+		"four buyers at once never get more than the two seats left",
+		sold <= SEATS_LEFT,
+		`${sold} tickets sold for ${SEATS_LEFT} seats left (statuses ${statuses})`,
+	);
+	check(
+		"concurrency",
+		"the two seats left are sold",
+		sold === SEATS_LEFT,
+		`${sold} tickets sold for ${SEATS_LEFT} seats left (statuses ${statuses})`,
+	);
+	const refused = rush.filter((exchange) => !success(exchange));
+	check(
+		"concurrency",
+		"every buyer who gets no seat gets a 422 problem",
+		refused.every((exchange) => isProblem(exchange, 422)),
+		refused
+			.filter((exchange) => !isProblem(exchange, 422))
+			.map(describe)
+			.join("; "),
+	);
+	const later = await send(
+		"buy after the rush",
+		"POST",
+		`/api/events/${lastSeatsId}/tickets`,
+		{ buyerEmail: "lea@example.com" },
+	);
+	check(
+		"concurrency",
+		"after the rush, the event is sold out (422)",
+		isProblem(later, 422),
+		`expected a 422 problem+json, got ${describe(later)}`,
+	);
 
 	// --- never a 5xx, on any request of the scenario ---
 	const failures = exchanges.filter((exchange) => exchange.status >= 500);

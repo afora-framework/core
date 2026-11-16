@@ -7,9 +7,12 @@
 			"@afora/core/experimental": ["../../src/experimental.ts"],
 			"@afora/codegen": ["../../packages/codegen/src/index.ts"],
 			"@afora/hono": ["../../packages/hono/src/index.ts"],
-			"@afora/mcp": ["../../packages/mcp/src/index.ts"]
+			"@afora/mcp": ["../../packages/mcp/src/index.ts"],
+			"@afora/drizzle": ["../../packages/drizzle/src/index.ts"],
+			"drizzle-orm": ["./node_modules/drizzle-orm"],
+			"drizzle-orm/*": ["./node_modules/drizzle-orm/*"]
 		}
 	},
 	"include": ["**/*.ts"],
-	"exclude": ["node_modules", ".tmp"]
+	"exclude": ["node_modules", ".tmp", "baseline/runs"]
 }
