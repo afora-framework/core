@@ -70,6 +70,8 @@ export const RESERVED_RECORD_KEYS: readonly string[] = Object.freeze([
 	"constructor",
 ]);
 
+const OBJECT_PROTOTYPE = Object.prototype as unknown as Record<string, unknown>;
+
 /** Makes each of `keys` a member of the records of `prototype`, e.g. `user.name`. */
 export function exposeRecordKeys(
 	prototype: object,
@@ -78,7 +80,16 @@ export function exposeRecordKeys(
 	for (const key of keys) {
 		Object.defineProperty(prototype, key, {
 			get(this: object) {
-				return values.get(this)?.[key];
+				const state = values.get(this);
+				if (state === undefined) return undefined;
+				const item = state[key];
+				// The state is a plain object: a value only `Object.prototype` has
+				// (one someone added to it) is not the record's.
+				return item !== undefined &&
+					item === OBJECT_PROTOTYPE[key] &&
+					!Object.hasOwn(state, key)
+					? undefined
+					: item;
 			},
 			enumerable: true,
 			configurable: true,

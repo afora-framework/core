@@ -17,47 +17,71 @@ export type JsonValue =
 
 type Path = readonly (string | number)[];
 
+/**
+ * How deep JSON is read: a value nested deeper is rejected, so that a small
+ * body (`[[[[...]]]]`) cannot make the walks over it (this one, the check of
+ * a schema, the copy a record keeps) run long or overflow the stack.
+ */
+const MAX_JSON_DEPTH = 1000;
+
 /** Why `value` is not JSON, and where; `undefined` when it is. */
 function notJson(
 	value: unknown,
-	path: Path = [],
-	ancestors: readonly object[] = [],
 ): { readonly path: Path; readonly message: string } | undefined {
-	if (value === null) return undefined;
-	switch (typeof value) {
-		case "string":
-		case "boolean":
+	// The objects from the root to the one being read: each is in it once, so
+	// finding a cycle is one lookup, whatever the depth.
+	const ancestors = new Set<object>();
+	const path: (string | number)[] = [];
+	const at = (message: string) => ({ path: [...path], message });
+
+	function walk(
+		item: unknown,
+		depth: number,
+	): { readonly path: Path; readonly message: string } | undefined {
+		if (item === null) return undefined;
+		switch (typeof item) {
+			case "string":
+			case "boolean":
+				return undefined;
+			case "number":
+				return Number.isFinite(item) ? undefined : at(`is not JSON (${item})`);
+			case "object":
+				break;
+			default:
+				return at(`is not JSON (${typeof item})`);
+		}
+		if (ancestors.has(item)) return at("is circular");
+		if (depth >= MAX_JSON_DEPTH) return at("is nested too deeply");
+		if (Array.isArray(item)) {
+			ancestors.add(item);
+			for (let index = 0; index < item.length; index++) {
+				path.push(index);
+				const found = walk(item[index], depth + 1);
+				path.pop();
+				if (found) return found;
+			}
+			ancestors.delete(item);
 			return undefined;
-		case "number":
-			return Number.isFinite(value)
-				? undefined
-				: { path, message: `is not JSON (${value})` };
-		case "object":
-			break;
-		default:
-			return { path, message: `is not JSON (${typeof value})` };
-	}
-	if (ancestors.includes(value)) return { path, message: "is circular" };
-	const inner = [...ancestors, value];
-	if (Array.isArray(value)) {
-		for (let index = 0; index < value.length; index++) {
-			const found = notJson(value[index], [...path, index], inner);
+		}
+		const prototype = Object.getPrototypeOf(item);
+		if (prototype !== Object.prototype && prototype !== null) {
+			return at(
+				`is not JSON (an instance of ${prototype?.constructor?.name ?? "a class"})`,
+			);
+		}
+		ancestors.add(item);
+		for (const key in item) {
+			if (!Object.hasOwn(item, key)) continue;
+			path.push(key);
+			const found = walk((item as Record<string, unknown>)[key], depth + 1);
+			path.pop();
 			if (found) return found;
 		}
+		ancestors.delete(item);
 		return undefined;
 	}
-	const prototype = Object.getPrototypeOf(value);
-	if (prototype !== Object.prototype && prototype !== null) {
-		return {
-			path,
-			message: `is not JSON (an instance of ${prototype?.constructor?.name ?? "a class"})`,
-		};
-	}
-	for (const [key, item] of Object.entries(value)) {
-		const found = notJson(item, [...path, key], inner);
-		if (found) return found;
-	}
-	return undefined;
+
+	return walk(value, 0);
 }
 
 const JSON_SCHEMA = Type.Unsafe({

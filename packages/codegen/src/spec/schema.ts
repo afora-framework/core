@@ -902,7 +902,7 @@ const GenericUseCaseDeclaration = Type.Object(
 	{
 		generic: Type.String({
 			description:
-				"A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register, login, refresh or logout.",
+				"A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register, login, changePassword, refresh or logout.",
 		}),
 		repository: Type.String({
 			pattern: NAME,
@@ -912,7 +912,7 @@ const GenericUseCaseDeclaration = Type.Object(
 		options: Type.Optional(
 			Type.Record(Type.String({ pattern: KEY }), Type.Unknown(), {
 				description:
-					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy", and "token" for login and refresh ({ "secret": { "env": "NAME" }, "issuer"?, "audience"?, "expiresIn"?, "algorithm"?, "refresh"?: { "expiresIn" }, "scopes"?, "scopesFrom"?, "claims"? }: login then answers a token); those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").',
+					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }; "key": "id" for an entity that is the caller, not for create and register), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "relations" (create and register: { <key>: { "shared": true } } lets the input name an entity of another owner), "set", "orderBy", "maxLimit" (list: the largest limit, 100 by default), and "token" for login and refresh ({ "secret": { "env": "NAME" }, "issuer"?, "audience"?, "expiresIn"?, "algorithm"?, "refresh"?: { "expiresIn" }, "scopes"?, "scopesFrom"?, "claims"? }: login then answers a token); those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").',
 			}),
 		),
 		description: Type.Optional(Type.String()),

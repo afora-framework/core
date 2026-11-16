@@ -162,9 +162,15 @@ export async function validateInProject(
 			: { extended: {}, issues: [] };
 	// The spec comes from an agent: nothing it names may leave the project.
 	const boundary = projectBoundaryIssues(spec, project.root);
+	// When loading what it extends failed, the loader says why (a spec that
+	// leaves the project, a cycle, a missing file): its message replaces the
+	// "not loaded" of validateSpec.
+	const failed = loaded.issues.length > 0;
 	const issues = [
 		...boundary,
-		...validateSpec(spec, loaded.extended, codegenOptionsOf(project)),
+		...validateSpec(spec, loaded.extended, codegenOptionsOf(project)).filter(
+			(issue) => !failed || issue.code !== "unresolved_extends",
+		),
 	];
 	const known = new Set(
 		issues.map((issue) => `${issue.code}@${issue.path.join(".")}`),
@@ -174,9 +180,7 @@ export async function validateInProject(
 		issues: [
 			...issues,
 			...loaded.issues.filter(
-				(issue) =>
-					!known.has(`${issue.code}@${issue.path.join(".")}`) &&
-					!issues.some((other) => other.code === "unresolved_extends"),
+				(issue) => !known.has(`${issue.code}@${issue.path.join(".")}`),
 			),
 		],
 	};

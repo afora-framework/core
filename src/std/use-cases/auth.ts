@@ -4,21 +4,32 @@ import { coerceTextValues } from "../../core/output/coerce";
 import { outputValueOf } from "../../core/output/problem";
 import {
 	UseCaseEntityConflict,
+	UseCaseEntityNotFound,
 	UseCaseInvalidCredentials,
 } from "../../core/use-case/exceptions";
 import { useCasePluginOf } from "../../core/use-case/plugin";
 import type { UseCaseTargetInfo } from "../../core/use-case/types/plugin.interface";
 import { StringProperty } from "../properties/primitives";
+import { currentHasher, type PasswordHasher } from "../runtime";
 import { createCompilation } from "./crud";
 import {
 	asOf,
 	checkOptions,
+	contextOf,
+	distinct,
 	errorOf,
 	fields,
+	HOOKS,
+	hooksOf,
+	idOf,
+	joinDependencies,
+	loadSteps,
 	metaOf,
 	type Options,
+	ownerOf,
 } from "./shared";
 import type {
+	ChangePasswordMaker,
 	LoginMaker,
 	LogoutMaker,
 	RefreshMaker,
@@ -111,6 +122,28 @@ function tokensOf(target: UseCaseTargetInfo, options: Options) {
 	return { issue, verifyRefresh, refresh: refresh !== undefined };
 }
 
+/** The hash a login of an unknown email is checked against, by hasher: made once each, on first use. */
+const dummyHashes = new WeakMap<PasswordHasher, Promise<string>>();
+
+/**
+ * Verifies `plain` against a hash of a password nobody has, made by the
+ * hasher in use, so that a login of an unknown email costs what one of a
+ * known email costs and its time does not tell them apart. Gives nothing;
+ * a hasher that fails still fails, as it would for a known email.
+ */
+async function verifyNobody(found: unknown, plain: unknown): Promise<void> {
+	if (found !== undefined && found !== null) return;
+	const hasher = currentHasher();
+	let hash = dummyHashes.get(hasher);
+	if (!hash) {
+		hash = hasher.hash("afora: the password of nobody");
+		dummyHashes.set(hasher, hash);
+		// A hash that failed is made again by the next call.
+		hash.catch(() => dummyHashes.delete(hasher));
+	}
+	await hasher.verify(String(plain), await hash);
+}
+
 const authenticatable = (actions: readonly string[]) => ({
 	requires: { actions, plugins: ["authenticatable"] },
 });
@@ -173,6 +206,11 @@ export const login = useCasePluginOf<"login", LoginMaker>("login", {
 			errors: [invalid],
 			steps: [
 				{ find: "repository.findByEmail", args: ["$input.email"], as: "item" },
+				{
+					run: "verifyNobody",
+					fn: verifyNobody,
+					args: ["$item", "$input.password"],
+				},
 				{ ensure: "exists", value: "$item", error: invalid },
 				{
 					invoke: "$item",
@@ -200,6 +238,81 @@ export const login = useCasePluginOf<"login", LoginMaker>("login", {
 							: {}),
 					},
 				},
+			],
+		};
+	},
+});
+
+/** Changes the password of an authenticatable entity, given its current one. */
+export const changePassword = useCasePluginOf<
+	"changePassword",
+	ChangePasswordMaker
+>("changePassword", {
+	description:
+		"Changes the password of the authenticatable entity of an id, when the current password given matches, and stores it.",
+	...authenticatable(["findById", "update"]),
+	compile: (target, options) => {
+		checkOptions(target, options, ["as", "owner", ...HOOKS]);
+		const owner = ownerOf(target, options);
+		const hooks = hooksOf(target, options);
+		const notFound = errorOf(
+			target,
+			options,
+			"notFound",
+			UseCaseEntityNotFound,
+		);
+		const invalid = errorOf(
+			target,
+			options,
+			"invalid",
+			UseCaseInvalidCredentials,
+		);
+		const password = target.field("password");
+		return {
+			...metaOf(target, options, "ChangePassword"),
+			blueprint: fields(() => ({
+				id: idOf(target),
+				currentPassword: StringProperty,
+				password: password.input.field,
+			})),
+			response: fields(() => ({ [asOf(target, options)]: target.entity })),
+			...contextOf(owner),
+			dependencies: joinDependencies(
+				target,
+				{ repository: target.repository },
+				hooks,
+			),
+			errors: distinct(notFound, invalid, ...hooks.throws),
+			steps: [
+				...loadSteps(owner, notFound),
+				{
+					invoke: "$item",
+					method: "verifyPassword",
+					args: ["$input.currentPassword"],
+					as: "matches",
+				},
+				{ ensure: "true", value: "$matches", error: invalid },
+				...hooks.before("$item"),
+				...(password.convert
+					? [
+							{
+								run: "convertPassword",
+								fn: password.convert,
+								args: [`${hooks.input}.password`],
+								as: "passwordConverted",
+							},
+						]
+					: []),
+				{
+					change: "$item",
+					key: "password",
+					value: password.convert
+						? "$passwordConverted"
+						: `${hooks.input}.password`,
+				},
+				{ update: "repository", value: "$item", as: "saved" },
+				...hooks.after("$saved"),
+				{ return: { [asOf(target, options)]: "$saved" } },
 			],
 		};
 	},

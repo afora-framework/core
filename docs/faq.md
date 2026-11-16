@@ -69,7 +69,7 @@ Once an application binds it to its provider, the module-level repository throws
 
 **Why does a 500 say only `"Internal error."`, and how do I show a message?**
 
-An error nobody declared may carry anything (a SQL fragment, a path), so a 5xx hides its detail unless the sink has `debug: true`. An exception the output lists in `statuses` (`{ PaymentFailed: 502 }`), or one the operation declares in its `errors`, keeps its message at any status: listing it is the decision to show it. A few are never shown, even when listed, such as `InvalidEnvironment` and `InvalidUseCaseResponse`. See [Outputs](outputs.md).
+An error nobody declared may carry anything (a SQL fragment, a path), so a 5xx hides its detail unless the sink has `debug: true`. An exception the output lists in `statuses` (`{ PaymentFailed: 502 }`), or one the operation declares in its `errors`, keeps its message at any status: listing it is the decision to show it. A few are never shown, even when listed, such as `InvalidEnvironment`, `InvalidUseCaseResponse` and `InvalidUseCaseStep`: they are a 500 without `issues`, since they describe the server, not the request. See [Outputs](outputs.md).
 
 **Can an id be an integer, or a key of my own?**
 

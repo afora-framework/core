@@ -1,6 +1,6 @@
 {
 	"name": "@afora/ws",
-	"version": "27.0.0-rc.2",
+	"version": "27.0.0-rc.3",
 	"description": "A WebSocket sink for afora outputs: operations over a JSON protocol, problem+json errors, masked values and topic subscriptions fed by domain events.",
 	"keywords": [
 		"afora",
@@ -30,7 +30,8 @@
 		"./package.json": "./package.json"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"LICENSE"
 	],
 	"engines": {
 		"bun": ">=1.4.4",
@@ -50,7 +51,7 @@
 		"typebox": "^1.4.3"
 	},
 	"peerDependencies": {
-		"@afora/core": ">=27.0.0-rc.2",
+		"@afora/core": ">=27.0.0-rc.3",
 		"typebox": "^1"
 	}
 }

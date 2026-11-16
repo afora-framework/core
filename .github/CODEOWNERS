@@ -1,0 +1,17 @@
+# Changes to these paths need a review of their owner (with "Require review from
+# Code Owners" on in the branch rulesets of main and dev).
+
+# CI, releases and what decides what is published
+/.github/workflows/ @Hoyasumii
+/.github/CODEOWNERS @Hoyasumii
+/scripts/release-* @Hoyasumii
+/package.json @Hoyasumii
+/packages/*/package.json @Hoyasumii
+/SECURITY.md @Hoyasumii
+
+# code where a bug is a security issue (SECURITY.md, Scope)
+/src/std/use-cases/ @Hoyasumii
+/src/core/output/ @Hoyasumii
+/src/core/parse/ @Hoyasumii
+/packages/codegen/src/ @Hoyasumii
+/packages/mcp/src/ @Hoyasumii

@@ -2,8 +2,11 @@ import { listOf } from "../../core/blueprint/list";
 import { optionalOf } from "../../core/blueprint/optional";
 import type { BlueprintField } from "../../core/blueprint/types/blueprint.interface";
 import { generatesIds } from "../../core/entity/abstract-entity";
+import type { AnyRepository } from "../../core/repository/types/repository.interface";
 import { UseCaseEntityNotFound } from "../../core/use-case/exceptions";
 import { useCasePluginOf } from "../../core/use-case/plugin";
+import { isPlain } from "../../core/use-case/steps/references";
+import { useCaseTargetOf } from "../../core/use-case/target";
 import type {
 	UseCaseCompilation,
 	UseCaseTargetInfo,
@@ -31,6 +34,7 @@ import {
 	loadSteps,
 	metaOf,
 	type Options,
+	type Owner,
 	ownerOf,
 	type Step,
 	valuesOf,
@@ -58,8 +62,16 @@ export function createCompilation(
 	checks: (input: string) => readonly Step[] = () => [],
 	errors: readonly AnyExceptionClass[] = [],
 ): UseCaseCompilation {
-	checkOptions(target, options, ["as", "owner", "omit", "values", ...HOOKS]);
-	const owner = ownerOf(target, options);
+	checkOptions(target, options, [
+		"as",
+		"owner",
+		"omit",
+		"values",
+		"relations",
+		...HOOKS,
+	]);
+	const owner = ownerOf(target, options, { self: false });
+	const shared = sharedOf(target, options);
 	const hooks = hooksOf(target, options);
 	const omitted = keysOf(target, options, "omit");
 	const constants = valuesOf(target, options, "values");
@@ -79,14 +91,19 @@ export function createCompilation(
 		}
 		input[key] = field;
 	};
-	/** Loads the entity a key holds, by the id of `reference`, and gives its name. */
+	/**
+	 * Loads the entity a key holds, by the id of `reference`, and gives its
+	 * name; with `checked`, one that has the owner key must be the caller's.
+	 */
 	const load = (
 		key: string,
 		reference: string,
 		error: AnyExceptionClass,
+		checked = false,
 	): string => {
 		const dependency = `${key}Repository`;
-		dependencies[dependency] = target.relation(key, ["findById"]);
+		const repository = target.relation(key, ["findById"]);
+		dependencies[dependency] = repository;
 		used.add(error);
 		steps.push(
 			{
@@ -96,6 +113,18 @@ export function createCompilation(
 			},
 			{ ensure: "exists", value: `$${key}Found`, error },
 		);
+		const held =
+			checked && owner && !shared.has(key)
+				? ownerReferenceOf(repository, owner)
+				: "";
+		if (held && owner) {
+			steps.push({
+				ensure: "equals",
+				value: `$${key}Found.${held}`,
+				other: `$context.${owner.context}`,
+				error,
+			});
+		}
 		return `$${key}Found`;
 	};
 
@@ -133,7 +162,7 @@ export function createCompilation(
 		take(plan.input.key, plan.input.field);
 		const given = `${hooks.input}.${plan.input.key}`;
 		if (plan.kind === "entity") {
-			values[key] = load(key, given, notFound);
+			values[key] = load(key, given, notFound, true);
 		} else if (plan.convert) {
 			steps.push({
 				run: `convert${capitalize(key)}`,
@@ -166,6 +195,54 @@ export function createCompilation(
 	};
 }
 
+/**
+ * Where an entity of `repository` holds its owner, by the owner key of the
+ * use case: the key, or the id of the entity it holds; `""` when it has no
+ * such key.
+ */
+function ownerReferenceOf(repository: AnyRepository, owner: Owner): string {
+	const plan = useCaseTargetOf(repository).fields.find(
+		(field) => field.key === owner.plan.key,
+	);
+	if (!plan) return "";
+	if (plan.kind === "entity") return `${plan.key}.id`;
+	return plan.kind === "property" ? plan.key : "";
+}
+
+/**
+ * The keys of the option `relations: { <key>: { shared: true } }`: the
+ * entities the input loads that need not be the caller's.
+ */
+function sharedOf(
+	target: UseCaseTargetInfo,
+	options: Options,
+): ReadonlySet<string> {
+	const { relations } = options;
+	if (relations === undefined) return new Set();
+	if (!isPlain(relations)) {
+		return target.unavailable(
+			"the option relations must be an object of { shared } by key",
+		);
+	}
+	const shared = new Set<string>();
+	for (const [key, relation] of Object.entries(relations)) {
+		if (target.field(key).kind !== "entity") {
+			target.unavailable(
+				`relations.${key} must name a key that holds an entity`,
+			);
+		}
+		if (
+			!isPlain(relation) ||
+			Object.keys(relation).some((option) => option !== "shared") ||
+			(relation.shared !== undefined && typeof relation.shared !== "boolean")
+		) {
+			target.unavailable(`relations.${key} must be { shared?: boolean }`);
+		}
+		if ((relation as { readonly shared?: boolean }).shared) shared.add(key);
+	}
+	return shared;
+}
+
 /** Builds an entity from the input and stores it. */
 export const create = useCasePluginOf<"create", CreateMaker>("create", {
 	description:
@@ -185,14 +262,24 @@ export const get = useCasePluginOf<"get", GetMaker>("get", {
 		})),
 });
 
+/** The largest `limit` of `list`, unless its option `maxLimit` says otherwise. */
+const MAX_LIMIT = 100;
+
 /** Gives a page of entities. */
 export const list = useCasePluginOf<"list", ListMaker>("list", {
 	description: "Gives a page of entities: { items, total, limit, offset }.",
 	requires: { actions: ["findPage"] },
 	compile: (target, options) => {
-		checkOptions(target, options, ["owner", "orderBy"]);
+		checkOptions(target, options, ["owner", "orderBy", "maxLimit"]);
 		const owner = ownerOf(target, options);
-		const { orderBy = [{ key: "createdAt", direction: "desc" }] } = options;
+		const {
+			orderBy = [{ key: "createdAt", direction: "desc" }],
+			maxLimit = MAX_LIMIT,
+		} = options;
+		if (!Number.isInteger(maxLimit) || (maxLimit as number) < 1) {
+			target.unavailable("the option maxLimit must be a whole number above 0");
+		}
+		const Limit = Integer.with({ max: maxLimit as number });
 		if (!Array.isArray(orderBy)) {
 			target.unavailable("the option orderBy must be a list of orders");
 		}
@@ -202,7 +289,7 @@ export const list = useCasePluginOf<"list", ListMaker>("list", {
 		return {
 			...metaOf(target, options, "List"),
 			blueprint: fields(() => ({
-				limit: optionalOf(Integer),
+				limit: optionalOf(Limit),
 				offset: optionalOf(Integer),
 			})),
 			response: fields(() => ({
@@ -260,15 +347,28 @@ export const update = useCasePluginOf<"update", UpdateMaker>("update", {
 			"notFound",
 			UseCaseEntityNotFound,
 		);
-		const plans = target.changeKeys
+		const changeable = target.changeKeys
 			.map((key) => target.field(key))
 			// An entity is changed by a use case that loads it, written by hand.
 			.filter((plan) => plan.kind !== "entity" && plan.kind !== "entity-list");
+		// A sensitive key (a password) is changed only with a proof, such as
+		// the current password of `changePassword`, never from a plain input.
+		const plans = changeable.filter((plan) => !plan.sensitive);
 		if (plans.length === 0) {
-			target.unavailable("the entity has no change key an input can take");
+			const sensitive = changeable.map((plan) => `"${plan.key}"`).join(", ");
+			target.unavailable(
+				changeable.length > 0
+					? `the entity has no change key an input can take: ${sensitive} is sensitive, and the standard use cases never take a sensitive key as input (a password is changed by changePassword)`
+					: "the entity has no change key an input can take",
+			);
 		}
 		if (plans.some((plan) => plan.key === "id")) {
 			target.unavailable('"id" cannot be a change key');
+		}
+		if (owner && plans.some((plan) => plan.key === owner.plan.key)) {
+			target.unavailable(
+				`"${owner.plan.key}" holds the owner, so with owner it cannot be a change key: the caller could give the entity away`,
+			);
 		}
 		const steps: Step[] = [];
 		for (const plan of plans) {
@@ -340,22 +440,64 @@ export const restore = useCasePluginOf<"restore", RestoreMaker>("restore", {
 		"Brings back the soft-deleted entity of an id; for a repository with soft deletion and the restore action.",
 	requires: { actions: ["restore"] },
 	compile: (target, options) => {
-		// A deleted entity cannot be read to check who owns it before it is back.
-		checkOptions(target, options, ["as", ...HOOKS]);
+		checkOptions(target, options, ["as", "owner", ...HOOKS]);
+		const owner = ownerOf(target, options);
 		const hooks = hooksOf(target, options);
+		const notFound = errorOf(
+			target,
+			options,
+			"notFound",
+			UseCaseEntityNotFound,
+		);
+		const id = `${hooks.input}.id`;
+		const checks: Step[] = [];
+		if (owner?.plan.key === "id") {
+			checks.push({
+				ensure: "equals",
+				value: id,
+				other: `$context.${owner.context}`,
+				error: notFound,
+			});
+		} else if (owner) {
+			// findById does not see a deleted entity: `exists` reads it with the
+			// deleted ones, by its id and its owner.
+			if (!target.actions.includes("exists")) {
+				target.unavailable(
+					'with owner, it needs the action "exists", to read the deleted entity and its owner',
+				);
+			}
+			checks.push(
+				{
+					find: "repository.exists",
+					args: [
+						{
+							where: {
+								id,
+								[owner.plan.key]: `$context.${owner.context}`,
+							},
+							withDeleted: true,
+						},
+					],
+					as: "owned",
+				},
+				{ ensure: "true", value: "$owned", error: notFound },
+			);
+		}
 		return {
 			...metaOf(target, options, "Restore"),
 			blueprint: fields(() => ({ id: idOf(target) })),
 			response: fields(() => ({ [asOf(target, options)]: target.entity })),
+			...contextOf(owner),
 			dependencies: joinDependencies(
 				target,
 				{ repository: target.repository },
 				hooks,
 			),
-			errors: distinct(...hooks.throws),
+			errors: distinct(...(owner ? [notFound] : []), ...hooks.throws),
 			steps: [
 				...hooks.before(),
-				{ restore: "repository", value: `${hooks.input}.id`, as: "item" },
+				...checks,
+				{ restore: "repository", value: id, as: "item" },
 				...hooks.after("$item"),
 				{ return: { [asOf(target, options)]: "$item" } },
 			],

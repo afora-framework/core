@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 552 exports.
+Tier: stable. 554 exports.
 
 ### Access
 
@@ -1445,6 +1445,12 @@ was written by newer code), or an `upgrade` step did not give an object.
 
 The `trace` of an application is not a tracer (`ITracer`).
 
+### InvalidUrlOptions
+
+*const* · tier: stable · `import { InvalidUrlOptions } from "@afora/core"`
+
+`Url.with({ protocols })` got protocols that are not URL schemes, such as `"https"` without its colon.
+
 ### InvalidUseCaseDeclaration
 
 *const* · tier: stable · `import { InvalidUseCaseDeclaration } from "@afora/core"`
@@ -2338,7 +2344,9 @@ Equality, or membership in a list. Conditions on different keys are ANDed.
 
 *const* · tier: stable · `import { ReservedBlueprintKey } from "@afora/core"`
 
-A plugin declares a key the blueprint context reserves; `source` is the plugin name.
+A plugin declares a key the blueprint context reserves (`source` is the
+plugin name), or a blueprint declares `__proto__`, `constructor` or
+`prototype` (`source` is `"blueprint"`).
 
 ### ReservedEntityKey
 
@@ -2403,7 +2411,8 @@ The value a use case whose response gives `Output` resolves with.
 
 *type* · tier: stable · `import type { RestoreMaker } from "@afora/core"`
 
-`restore`: for a repository with soft deletion and the `restore` action.
+`restore`: for a repository with soft deletion and the `restore` action;
+with `owner`, also `exists` (but for `owner.key: "id"`).
 
 ### Route
 
@@ -2743,8 +2752,8 @@ The standard use cases, by name, for the `useCases` of `commandOf` to
 pick from, as `(ctx) => ({ create: ctx.create(Posts) })`: `create`, `get`,
 `list`, `update`, `delete` and `restore` for any entity; `publish`,
 `unpublish`, `archive`, `unarchive`, `tag` and `untag` for the entities
-with those record plugins; `register` and `login` for the
-authenticatable ones, and `refresh` and `logout` for the tokens of `login`. `StdUseCases.context` is that `ctx`.
+with those record plugins; `register`, `login` and `changePassword`
+for the authenticatable ones, and `refresh` and `logout` for the tokens of `login`. `StdUseCases.context` is that `ctx`.
 
 ### StepArgs
 
@@ -3016,9 +3025,18 @@ When a record was last updated; absent until it is.
 
 ### Url
 
-*const* · tier: stable · `import { Url } from "@afora/core"`
+*class* · tier: stable · `import { Url } from "@afora/core"`
 
-A URL of up to 2048 characters, trimmed.
+A URL of up to 2048 characters, trimmed, of any protocol but `javascript:`,
+`data:`, `vbscript:` and `file:` (in any case, however written).
+`Url.with({ protocols: ["https:", "mailto:"] })` accepts only the
+protocols it lists, instead.
+
+### UrlOptions
+
+*type* · tier: stable · `import type { UrlOptions } from "@afora/core"`
+
+What `Url.with` takes: the options of any string property, and `protocols`.
 
 ### UseCaseAlreadyExecuted
 
@@ -4795,6 +4813,9 @@ values or causes) is present only for a 400, `trace` only with `debug`,
 and the `detail` of a 5xx is `"Internal error."` unless `debug` is set or
 the output declares the exception (its name in `statuses`, or a class of
 `operation.errors`, except afora's internal ones), so internal messages do not leak.
+An internal exception (`InvalidUseCaseResponse`, `InvalidUseCaseStep`, ...)
+is masked and has no `issues` at any status, even one `statuses` chose,
+unless `debug` is set.
 
 ### requestIdHeaderOf
 
@@ -4861,7 +4882,9 @@ sinks, without calling it; `undefined` for any other function.
 
 The HTTP-style status of an error, in this order: `statuses` by exception
 name; 400 for invalid input or context (and any exception whose
-`details.issues` is a list, except `InvalidCommandEnvironment`, a 500); 404 for a missing entity or operation; 409 for
+`details.issues` is a list, except the internal ones, such as
+`InvalidUseCaseResponse`, `InvalidUseCaseStep` and
+`InvalidCommandEnvironment`, a 500); 404 for a missing entity or operation; 409 for
 a unique violation, a concurrency conflict or an entity that already exists; 401 for
 `UseCaseInvalidCredentials` and `Unauthenticated`; 403 for `Forbidden`; 422 for a class in `operation.errors`; 500 for the
 rest, errors that are not exceptions included. Exceptions match by name,

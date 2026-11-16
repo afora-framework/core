@@ -56,10 +56,15 @@ jobs:
       git-release: ${{ steps.channel.outputs.git-release }}
       bench: ${{ steps.channel.outputs.bench }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # the repository is public: git ls-remote and git fetch of the detect need no credentials
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
+          # no cache in a release: a cache written by another workflow must not reach what is published
+          no-cache: true
       - id: channel
         name: Compare package.json with the branch, the tags and npm
         # Fails when the version is outside the scheme or the line of the branch,
@@ -81,53 +86,46 @@ jobs:
     if: needs.detect.outputs.publish == 'true' && !inputs.dry-run
     uses: ./.github/workflows/ci.yml
 
-  publish:
-    name: Publish to npm
+  build:
+    name: Build and pack the packages
+    # Builds and packs every package without any write scope and without the OIDC
+    # token: the dependencies, the build and the checks of prepublishOnly run here,
+    # and only the tarballs go on to the job that publishes.
     needs: [detect, ci]
     if: needs.detect.outputs.publish == 'true' && !inputs.dry-run
     runs-on: ubuntu-latest
-    environment: npm
     permissions:
-      contents: write
-      id-token: write
+      contents: read
     env:
       VERSION: ${{ needs.detect.outputs.version }}
-      DIST_TAG: ${{ needs.detect.outputs.dist-tag }}
       PRERELEASE: ${{ needs.detect.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
-      - uses: actions/setup-node@v7
+          # no cache in a release: a cache written by another workflow must not reach what is published
+          no-cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
       - run: bun install --frozen-lockfile
       - name: Write the version of the Next
         # in every package.json, peers included, for this run only: never committed
         if: github.ref == 'refs/heads/dev'
         run: bun scripts/release-channel.ts set-version "$VERSION"
+      - name: Checks of prepublishOnly
+        # npm publish ran the prepublishOnly of the core (typecheck, tests, smoke);
+        # the publish job runs no script (--ignore-scripts), so they run here
+        run: bun run typecheck && bun test && bun run smoke
       - run: bun run build:packages
-      - name: Publish
-        # core first, then the packages that depend on it. A version that is
-        # already on npm is skipped, so a run can be repeated after a partial failure.
-        # Publishing uses trusted publishing (OIDC) only. No token is passed on
-        # purpose: with one, npm falls back to it without a word when OIDC fails,
-        # the package goes out without provenance and its trusted publisher is
-        # never validated. A package that is not on npm yet is published once by
-        # hand with scripts/release-setup.sh, since npm cannot create one through OIDC.
+      - name: Pack
+        # core first, then the packages that depend on it: publish reads the
+        # order from packages.txt (one "<name> <tarball>" per line).
         run: |
-          publish() {
-            dir="$1"
-            name="$(node -p "require('./$dir/package.json').name")"
-            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
-              echo "$name@$VERSION is already on npm, skipping"
-              return
-            fi
-            (cd "$dir" && npm publish --tag "$DIST_TAG")
-          }
-
           # npm does not rewrite the workspace: protocol, so pin the real version:
           # a range for a stable version, the exact one for a prerelease, which
           # may break from one to the next.
@@ -138,30 +136,90 @@ jobs:
           fi
           (cd packages/mcp && npm pkg set "dependencies.@afora/codegen=$pin")
 
-          publish .
-          publish packages/codegen
-          publish packages/mcp
-          publish packages/hono
-          publish packages/fastify
-          publish packages/express
-          publish packages/elysia
-          publish packages/ws
-          publish packages/drizzle
-          publish packages/dynamodb
-          publish packages/otel
+          out="$RUNNER_TEMP/packages"
+          mkdir -p "$out"
+          : > "$out/packages.txt"
+          for dir in . packages/codegen packages/mcp packages/hono packages/fastify packages/express packages/elysia packages/ws packages/drizzle packages/dynamodb packages/otel; do
+            name="$(node -p "require('./$dir/package.json').name")"
+            file="$(cd "$dir" && npm pack --ignore-scripts --pack-destination "$out" | tail -n 1)"
+            echo "$name $file" >> "$out/packages.txt"
+          done
+          cat "$out/packages.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          path: ${{ runner.temp }}/packages
+          if-no-files-found: error
+          retention-days: 7
+          # a re-run of this job replaces the tarballs of the previous attempt
+          overwrite: true
+
+  publish:
+    name: Publish to npm
+    # The only job with the OIDC token. It checks out nothing, installs nothing and
+    # runs no script of the packages: it publishes the tarballs of build.
+    needs: [detect, build]
+    if: needs.detect.outputs.publish == 'true' && !inputs.dry-run
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.detect.outputs.version }}
+      DIST_TAG: ${{ needs.detect.outputs.dist-tag }}
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: ${{ runner.temp }}/packages
+      - name: Publish
+        # In the order of packages.txt: core first, then the packages that depend
+        # on it. A version that is already on npm is skipped, so a run can be
+        # repeated after a partial failure.
+        # Publishing uses trusted publishing (OIDC) only. No token is passed on
+        # purpose: with one, npm falls back to it without a word when OIDC fails,
+        # the package goes out without provenance and its trusted publisher is
+        # never validated. A package that is not on npm yet is published once by
+        # hand with scripts/release-setup.sh, since npm cannot create one through OIDC.
+        working-directory: ${{ runner.temp }}/packages
+        run: |
+          while read -r name file; do
+            [ -n "$name" ] || continue
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION is already on npm, skipping"
+              continue
+            fi
+            npm publish "./$file" --tag "$DIST_TAG" --provenance --ignore-scripts
+          done < packages.txt
+
+  release:
+    name: Tag and GitHub release
+    # not for the Next (alpha); beta and rc are prereleases, and a patch of
+    # an older line than latest is not marked as the latest release
+    needs: [detect, publish]
+    if: needs.detect.outputs.git-release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
       - name: Create the tag and the GitHub release
-        # not for the Next (alpha); beta and rc are prereleases, and a patch of
-        # an older line than latest is not marked as the latest release
-        if: needs.detect.outputs.git-release == 'true'
         run: |
           if [ "$PRERELEASE" = "true" ]; then
             mark="--prerelease"
           else
             mark="--latest=$MAKE_LATEST"
           fi
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --generate-notes "$mark"
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --generate-notes "$mark"
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.detect.outputs.version }}
+          PRERELEASE: ${{ needs.detect.outputs.prerelease }}
           MAKE_LATEST: ${{ needs.detect.outputs.make-latest }}
 
   bench:

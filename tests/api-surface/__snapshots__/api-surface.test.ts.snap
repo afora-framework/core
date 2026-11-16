@@ -89,6 +89,12 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) ChangeOf": [
     "type ChangeOf<Record> = Record extends { readonly change: infer Change; } ? Change : never;",
   ],
+  "(internal) ChangePasswordInput": [
+    "type ChangePasswordInput<Repository> = ById<Repository> & { readonly currentPassword: typeof StringProperty; readonly password: typeof PlainPassword; };",
+  ],
+  "(internal) ChangePasswordMaker": [
+    "export type ChangePasswordMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", Authenticatable, "authenticatable">, options?: Options & Hookable<Repository, ChangePasswordInput<Repository>, never, None, Owner, Dependencies, true>) => EntityUseCase<Repository, Options, ChangePasswordInput<Repository>, Dependencies>;",
+  ],
   "(internal) ChangeStep": [
     "type ChangeStep<Step, Record, Scope> = [ Record ] extends [ never ] ? ValueStep<Step, "change", object, unknown, Scope> : [ Step ] extends [ { readonly key: infer Name; } ] ? Name extends keyof ChangeOf<Record> ? ValueStep<Step, "value", FirstParameter<ChangeOf<Record>[Name]>, Record, Scope> : [ { readonly [Key in keyof Step]: Key extends "key" ? keyof ChangeOf<Record> & string : Step[Key]; }, Record ] : [ Step, Record ];",
   ],
@@ -629,6 +635,9 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) ScopeAfter": [
     "type ScopeAfter<Step, Result, Scope> = [ Step ] extends [ { readonly as: infer Name extends string; } ] ? Scope & { readonly [Key in Name]: Result; } : [ Step ] extends [ { readonly ensure: "exists"; readonly value: \`$\${infer Name}\`; } ] ? Name extends keyof Scope ? Scope & { readonly [Key in Name]: NonNullable<Scope[Name]>; } : Scope : Scope;",
   ],
+  "(internal) SensitiveKey": [
+    "type SensitiveKey<Repository> = (EntityOf<Repository> extends { readonly [RecordSensitiveKeys]?: infer Key; } ? Extract<Key, string> : never) | { [Key in KeyOf<Repository>]: Props<Repository>[Key] extends { readonly type: { readonly sensitive: true; }; } ? Key : never; }[KeyOf<Repository>];",
+  ],
   "(internal) SensitiveTypeOf": [
     "export type SensitiveTypeOf<Property> = Property extends { readonly type: { readonly sensitive: true; }; } ? { readonly sensitive: true; } : unknown;",
   ],
@@ -699,10 +708,13 @@ exports[`exports of the package and their declarations 1`] = `
     "export type UniqueTypeOf<Property> = Property extends { readonly type: { readonly unique: true; }; } ? { readonly unique: true; } : unknown;",
   ],
   "(internal) UpdateInput": [
-    "type UpdateInput<Repository> = { readonly [Key in "id" | ChangeKey<Repository> as Key extends "id" ? Key : HoldsEntity<Props<Repository>[Key]> extends true ? never : Key]: Key extends "id" ? IdField<Repository> : Optional<Props<Repository>[Key]>; };",
+    "type UpdateInput<Repository> = { readonly [Key in "id" | Exclude<ChangeKey<Repository>, SensitiveKey<Repository>> as Key extends "id" ? Key : HoldsEntity<Props<Repository>[Key]> extends true ? never : Key]: Key extends "id" ? IdField<Repository> : Optional<Props<Repository>[Key]>; };",
   ],
   "(internal) UpdatedAt_base": [
     "UpdatedAt_base: DateTimeClass<true>",
+  ],
+  "(internal) Url_base": [
+    "Url_base: import("../../index.js").PropertyClass<Type.TString, string>",
   ],
   "(internal) UseCaseContextOf": [
     "export type UseCaseContextOf<Plugins> = { readonly [Name in keyof Plugins]: Plugins[Name] extends { readonly make: infer Make; } ? Make : never; };",
@@ -1412,6 +1424,9 @@ exports[`exports of the package and their declarations 1`] = `
   "InvalidTraceDeclaration": [
     "InvalidTraceDeclaration: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
   ],
+  "InvalidUrlOptions": [
+    "InvalidUrlOptions: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
   "InvalidUseCaseDeclaration": [
     "InvalidUseCaseDeclaration: DeclaredExceptionClass<{ reason: string; }>",
   ],
@@ -1840,7 +1855,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type ResponseValue<Output extends UseCaseOutput> = Output extends AnyBlueprintList ? Readonly<BlueprintListValue<Output>> : BlueprintValue<Extract<Output, IBlueprintCollection>>;",
   ],
   "RestoreMaker": [
-    "export type RestoreMaker = <Repository extends AnyRepository, const Options extends StdUseCaseOptions & { readonly as?: string; } = None, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "restore">, options?: Options & Hookable<Repository, ById<Repository>, never, None, undefined, Dependencies, false>) => StepsUseCaseConstructor<ById<Repository>, EntityResponse<Repository, Options>, { readonly repository: Repository; } & Dependencies>;",
+    "export type RestoreMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "restore">, options?: Options & Hookable<Repository, ById<Repository>, never, None, Owner, Dependencies, false>) => EntityUseCase<Repository, Options, ById<Repository>, Dependencies>;",
   ],
   "Route": [
     "export declare function Route<Method extends RouteSettings["method"]>(method: Method, options?: Omit<RouteFields, "path"> & RouteBody<Method>): UseCaseDecorator;",
@@ -1938,10 +1953,10 @@ exports[`exports of the package and their declarations 1`] = `
     "State: unique symbol",
   ],
   "Std": [
-    "Std: import("../index.js").IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: import("../index.js").PropertyClass<import("typebox").TString, string>; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof DateTime; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; schema: typeof SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof enumOf; jsonOf: typeof jsonOf; fileOf: typeof fileOf; }> & { readonly factories: { enumOf: typeof enumOf; jsonOf: typeof jsonOf; fileOf: typeof fileOf; }; }",
+    "Std: import("../index.js").IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: typeof Url; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof DateTime; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; schema: typeof SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof enumOf; jsonOf: typeof jsonOf; fileOf: typeof fileOf; }> & { readonly factories: { enumOf: typeof enumOf; jsonOf: typeof jsonOf; fileOf: typeof fileOf; }; }",
   ],
   "StdCreateOptions": [
-    "export interface StdCreateOptions<Repository> extends StdEntityOptions<Repository> { readonly omit?: readonly KeyOf<Repository>[]; readonly values?: { readonly [Key in KeyOf<Repository>]?: unknown; }; }",
+    "export interface StdCreateOptions<Repository> extends StdEntityOptions<Repository> { readonly omit?: readonly KeyOf<Repository>[]; readonly values?: { readonly [Key in KeyOf<Repository>]?: unknown; }; readonly relations?: { readonly [Key in KeyOf<Repository>]?: { readonly shared?: boolean; }; }; }",
   ],
   "StdEntityOptions": [
     "export interface StdEntityOptions<Repository> extends StdUseCaseOptions, StdOwnerOption<Repository> { readonly as?: string; }",
@@ -1959,7 +1974,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface StdLifecycleOptions<Repository> extends StdEntityOptions<Repository> { readonly set?: { readonly [Key in KeyOf<Repository>]?: unknown; }; }",
   ],
   "StdListOptions": [
-    "export interface StdListOptions<Repository> extends StdUseCaseOptions, StdOwnerOption<Repository> { readonly orderBy?: readonly { readonly key: KeyOf<Repository>; readonly direction?: "asc" | "desc"; }[]; }",
+    "export interface StdListOptions<Repository> extends StdUseCaseOptions, StdOwnerOption<Repository> { readonly orderBy?: readonly { readonly key: KeyOf<Repository>; readonly direction?: "asc" | "desc"; }[]; readonly maxLimit?: number; }",
   ],
   "StdNoHookOptions": [
     "export interface StdNoHookOptions { readonly before?: never; readonly after?: never; readonly dependencies?: never; readonly throws?: never; }",
@@ -1974,7 +1989,7 @@ exports[`exports of the package and their declarations 1`] = `
     "StdStages: import("../index.js").IStageCatalog<Readonly<Record<string, import("../index.js").StageFactory>>>",
   ],
   "StdUseCaseContext": [
-    "export interface StdUseCaseContext { readonly create: CreateMaker; readonly get: GetMaker; readonly list: ListMaker; readonly update: UpdateMaker; readonly delete: DeleteMaker; readonly restore: RestoreMaker; readonly publish: PublishMaker; readonly unpublish: PublishMaker; readonly archive: ArchiveMaker; readonly unarchive: ArchiveMaker; readonly tag: TagMaker; readonly untag: TagMaker; readonly register: RegisterMaker; readonly login: LoginMaker; readonly refresh: RefreshMaker; readonly logout: LogoutMaker; }",
+    "export interface StdUseCaseContext { readonly create: CreateMaker; readonly get: GetMaker; readonly list: ListMaker; readonly update: UpdateMaker; readonly delete: DeleteMaker; readonly restore: RestoreMaker; readonly publish: PublishMaker; readonly unpublish: PublishMaker; readonly archive: ArchiveMaker; readonly unarchive: ArchiveMaker; readonly tag: TagMaker; readonly untag: TagMaker; readonly register: RegisterMaker; readonly login: LoginMaker; readonly changePassword: ChangePasswordMaker; readonly refresh: RefreshMaker; readonly logout: LogoutMaker; }",
   ],
   "StdUseCaseErrors": [
     "export interface StdUseCaseErrors { readonly notFound?: AnyExceptionClass; readonly conflict?: AnyExceptionClass; readonly invalid?: AnyExceptionClass; readonly owner?: AnyExceptionClass; }",
@@ -2112,7 +2127,10 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare class UpdatedAt extends UpdatedAt_base { }",
   ],
   "Url": [
-    "Url: import("../../index.js").PropertyClass<Type.TString, string>",
+    "export declare class Url extends Url_base { static with<Self extends AnyPropertyConstructor>(this: Self, options: UrlOptions): Self; }",
+  ],
+  "UrlOptions": [
+    "export type UrlOptions = PropertyOptions<Type.TString, string> & { readonly protocols?: readonly string[]; };",
   ],
   "UseCaseAlreadyExecuted": [
     "UseCaseAlreadyExecuted: DeclaredExceptionClass<undefined>",
@@ -2211,7 +2229,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function blueprintBuilderOf<const Base extends readonly BlueprintSource[]>(...base: Base): BlueprintBuilder<Base>;",
   ],
   "blueprintOf": [
-    "blueprintOf: import("../index.js").BlueprintBuilder<readonly [ import("../index.js").IBlueprintPlugin<{ id: typeof import("../index.js").Id; slug: typeof import("../index.js").Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: import("../index.js").PropertyClass<import("typebox").TString, string>; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof import("../index.js").Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof import("../index.js").DateTime; createdAt: typeof import("../index.js").CreatedAt; updatedAt: typeof import("../index.js").UpdatedAt; deletedAt: typeof import("../index.js").DeletedAt; schema: typeof import("../index.js").SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; }> & { readonly factories: { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; }; } ]>",
+    "blueprintOf: import("../index.js").BlueprintBuilder<readonly [ import("../index.js").IBlueprintPlugin<{ id: typeof import("../index.js").Id; slug: typeof import("../index.js").Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: typeof import("../index.js").Url; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof import("../index.js").Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof import("../index.js").DateTime; createdAt: typeof import("../index.js").CreatedAt; updatedAt: typeof import("../index.js").UpdatedAt; deletedAt: typeof import("../index.js").DeletedAt; schema: typeof import("../index.js").SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; }> & { readonly factories: { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; }; } ]>",
   ],
   "blueprintPluginOf": [
     "export declare function blueprintPluginOf<Properties extends IBlueprintCollection, Factories extends Record<keyof Factories, BlueprintFactory>>(name: string, properties: Properties, factories: Factories): IBlueprintPlugin<Properties, Factories> & { readonly factories: Factories; };",
@@ -7596,11 +7614,11 @@ exports[`afora.json schema 1`] = `
                   "type": "string",
                 },
                 "generic": {
-                  "description": "A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register, login, refresh or logout.",
+                  "description": "A standard use case (afora_catalog useCases): create, get, list, update, delete, restore, publish, unpublish, archive, unarchive, tag, untag, register, login, changePassword, refresh or logout.",
                   "type": "string",
                 },
                 "options": {
-                  "description": "Its options: "as" (the response key), "owner" ({ "key"?, "context" }), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "set", "orderBy", and "token" for login and refresh ({ "secret": { "env": "NAME" }, "issuer"?, "audience"?, "expiresIn"?, "algorithm"?, "refresh"?: { "expiresIn" }, "scopes"?, "scopesFrom"?, "claims"? }: login then answers a token); those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").",
+                  "description": "Its options: "as" (the response key), "owner" ({ "key"?, "context" }; "key": "id" for an entity that is the caller, not for create and register), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "relations" (create and register: { <key>: { "shared": true } } lets the input name an entity of another owner), "set", "orderBy", "maxLimit" (list: the largest limit, 100 by default), and "token" for login and refresh ({ "secret": { "env": "NAME" }, "issuer"?, "audience"?, "expiresIn"?, "algorithm"?, "refresh"?: { "expiresIn" }, "scopes"?, "scopesFrom"?, "claims"? }: login then answers a token); those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").",
                   "patternProperties": {
                     "^[A-Za-z_$][A-Za-z0-9_$]*$": {},
                   },

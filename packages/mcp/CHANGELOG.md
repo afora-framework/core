@@ -1,5 +1,16 @@
 # Changelog
 
+## 27.0.0-rc.3 — 2026-11-16
+
+### Security
+
+- `afora_spec_validate`, `afora_spec_write` and `afora_generate` get the boundary fixes of `@afora/codegen` (SEC-05, SEC-06, SEC-17). When loading what a spec extends fails, `unresolved_extends` carries the loader's reason instead of a generic "was not loaded".
+- The `app` of `afora_project` and `afora_extract` must be a `.ts`, `.tsx`, `.mts`, `.js` or `.mjs` module outside `node_modules` and `.git`, and only the `--app` module when the server was started with one. A failed import is reported by a code (`import_failed`, `not_an_application`, `extract_failed`), never with what the runtime printed. (SEC-18)
+
+### Changed
+
+- The guide describes `changePassword`, that `update` never takes a sensitive key, `owner.key: "id"`, `restore` with `owner`, `relations` and `maxLimit`.
+
 ## 27.0.0-rc.2 — 2026-11-16
 
 A candidate of 27.0.0, with no changes since 27.0.0-rc.1. See the [root CHANGELOG](../../CHANGELOG.md).

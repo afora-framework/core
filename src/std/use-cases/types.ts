@@ -18,6 +18,7 @@ import type { IdStrategy } from "../../core/entity/types/id.interface";
 import type { EntityVersion } from "../../core/entity/version";
 import type { OptionalProperty } from "../../core/property/types/optional-property.type";
 import type { AnyPropertyConstructor } from "../../core/property/types/property-collection.type";
+import type { RecordSensitiveKeys } from "../../core/record/types/plugin.interface";
 import type {
 	AnyRepository,
 	AnyRepositoryEntity,
@@ -35,6 +36,7 @@ import type {
 	StepsUseCaseConstructor,
 	UseCaseCollection,
 } from "../../core/use-case/use-case";
+import type { PlainPassword } from "../properties/password";
 import type { Integer, StringProperty } from "../properties/primitives";
 
 type EntityOf<Repository> = Repository extends {
@@ -89,7 +91,7 @@ export interface StdUseCaseErrors {
 	readonly notFound?: AnyExceptionClass;
 	/** For an entity that already exists (`register`). `UseCaseEntityConflict` by default. */
 	readonly conflict?: AnyExceptionClass;
-	/** For credentials that do not match (`login`). `UseCaseInvalidCredentials` by default. */
+	/** For credentials that do not match (`login`, `changePassword`). `UseCaseInvalidCredentials` by default. */
 	readonly invalid?: AnyExceptionClass;
 	/** For a caller that is not found, when it owns what `create` makes. `notFound` by default. */
 	readonly owner?: AnyExceptionClass;
@@ -144,7 +146,8 @@ export interface StdOwnerOption<Repository> {
 	 * the key of the `ownable` plugin), and `context` names the context key
 	 * with the id of the caller: `create` fills the key from it, a use case
 	 * over one entity throws `notFound` for another owner's, and `list` gives
-	 * only the caller's.
+	 * only the caller's. `key: "id"` makes the entity its own owner (a user
+	 * changing itself); `create` and `register` refuse it.
 	 */
 	readonly owner?: {
 		readonly key?: KeyOf<Repository>;
@@ -171,6 +174,14 @@ export interface StdCreateOptions<Repository>
 	readonly omit?: readonly KeyOf<Repository>[];
 	/** Values the entity is built with, in place of taking them from the input. */
 	readonly values?: { readonly [Key in KeyOf<Repository>]?: unknown };
+	/**
+	 * Per key that holds an entity: with `owner`, an entity the input names
+	 * must be the caller's when it has the same owner key (else `notFound`);
+	 * `shared: true` lets any owner's in.
+	 */
+	readonly relations?: {
+		readonly [Key in KeyOf<Repository>]?: { readonly shared?: boolean };
+	};
 }
 
 /** The options of `publish`, `unpublish`, `archive` and `unarchive`. */
@@ -189,6 +200,12 @@ export interface StdListOptions<Repository>
 		readonly key: KeyOf<Repository>;
 		readonly direction?: "asc" | "desc";
 	}[];
+	/**
+	 * The largest `limit` the input takes; a larger one is invalid input.
+	 *
+	 * @default 100
+	 */
+	readonly maxLimit?: number;
 }
 
 type None = Record<never, never>;
@@ -389,9 +406,29 @@ type ChangeKey<Repository> =
 		? keyof Changes & KeyOf<Repository>
 		: never;
 
-/** The input of `update`: the id, and each change key, optional. */
+/** The keys the entity declares `sensitive`, as its record options or properties do. */
+type SensitiveKey<Repository> =
+	| (EntityOf<Repository> extends {
+			readonly [RecordSensitiveKeys]?: infer Key;
+	  }
+			? Extract<Key, string>
+			: never)
+	| {
+			[Key in KeyOf<Repository>]: Props<Repository>[Key] extends {
+				readonly type: { readonly sensitive: true };
+			}
+				? Key
+				: never;
+	  }[KeyOf<Repository>];
+
+/** The input of `update`: the id, and each change key that is not sensitive, optional. */
 type UpdateInput<Repository> = {
-	readonly [Key in "id" | ChangeKey<Repository> as Key extends "id"
+	readonly [Key in
+		| "id"
+		| Exclude<
+				ChangeKey<Repository>,
+				SensitiveKey<Repository>
+		  > as Key extends "id"
 		? Key
 		: HoldsEntity<Props<Repository>[Key]> extends true
 			? never
@@ -512,12 +549,14 @@ export type DeleteMaker = <
 		>,
 ) => EntityUseCase<Repository, Options, ById<Repository>, Dependencies>;
 
-/** `restore`: for a repository with soft deletion and the `restore` action. */
+/**
+ * `restore`: for a repository with soft deletion and the `restore` action;
+ * with `owner`, also `exists` (but for `owner.key: "id"`).
+ */
 export type RestoreMaker = <
 	Repository extends AnyRepository,
-	const Options extends StdUseCaseOptions & {
-		readonly as?: string;
-	} = None,
+	const Options extends StdEntityOptions<Repository> = None,
+	const Owner = undefined,
 	const Dependencies extends UseCaseCollection = None,
 >(
 	repository: Repository & UseCaseTarget<Repository, "restore">,
@@ -527,15 +566,11 @@ export type RestoreMaker = <
 			ById<Repository>,
 			never,
 			None,
-			undefined,
+			Owner,
 			Dependencies,
 			false
 		>,
-) => StepsUseCaseConstructor<
-	ById<Repository>,
-	EntityResponse<Repository, Options>,
-	{ readonly repository: Repository } & Dependencies
->;
+) => EntityUseCase<Repository, Options, ById<Repository>, Dependencies>;
 
 /** `publish` and `unpublish`: for a publishable entity. */
 export type PublishMaker = <
@@ -620,6 +655,43 @@ type TagInput<Repository> = ById<Repository> & {
 };
 
 type Authenticatable = { verifyPassword(plain: string): Promise<boolean> };
+
+/** The input of `changePassword`: the id, the current password and the new one. */
+type ChangePasswordInput<Repository> = ById<Repository> & {
+	readonly currentPassword: typeof StringProperty;
+	readonly password: typeof PlainPassword;
+};
+
+/** `changePassword`: for an authenticatable entity, with `findById` and `update`. */
+export type ChangePasswordMaker = <
+	Repository extends AnyRepository,
+	const Options extends StdEntityOptions<Repository> = None,
+	const Owner = undefined,
+	const Dependencies extends UseCaseCollection = None,
+>(
+	repository: Repository &
+		UseCaseTarget<
+			Repository,
+			"findById" | "update",
+			Authenticatable,
+			"authenticatable"
+		>,
+	options?: Options &
+		Hookable<
+			Repository,
+			ChangePasswordInput<Repository>,
+			never,
+			None,
+			Owner,
+			Dependencies,
+			true
+		>,
+) => EntityUseCase<
+	Repository,
+	Options,
+	ChangePasswordInput<Repository>,
+	Dependencies
+>;
 
 /** `register`: for an authenticatable entity, with `findByEmail` and `create`. */
 export type RegisterMaker = <
@@ -729,6 +801,7 @@ export interface StdUseCaseContext {
 	readonly untag: TagMaker;
 	readonly register: RegisterMaker;
 	readonly login: LoginMaker;
+	readonly changePassword: ChangePasswordMaker;
 	readonly refresh: RefreshMaker;
 	readonly logout: LogoutMaker;
 }
