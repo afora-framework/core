@@ -4,7 +4,7 @@ import { vouching } from "../core/entity/trust";
 import { Id } from "./properties/identity";
 import { CreatedAt, DeletedAt, ExpiresAt, UpdatedAt } from "./properties/time";
 import { StdRecordPlugins } from "./record-plugins";
-import { generateId, makesDefaultIds } from "./runtime";
+import { generateId, makesDefaultIds, uuidv7 } from "./runtime";
 
 /** The identity of every `std` entity. */
 const Identity = blueprintBuilderOf()(() => ({
@@ -63,6 +63,15 @@ function now(): string {
  * user.destroy().isDeleted; // true
  * ```
  */
+/**
+ * An id for the millisecond `now` has just read: a UUID v7 of that moment
+ * with the default generator, which saves a second read of the clock and
+ * gives the id the time of `createdAt`; the configured generator otherwise.
+ */
+function idNow(): string {
+	return makesDefaultIds() ? uuidv7(lastMillisecond) : generateId();
+}
+
 export const entityOf = entityBuilderOf(
 	vouching(
 		{
@@ -74,6 +83,6 @@ export const entityOf = entityBuilderOf(
 		},
 		// The default id is a UUID v7 in lower case and `toISOString` a date and
 		// time, which `Id` and `CreatedAt` keep as they are.
-		{ id: makesDefaultIds, createdAt: () => true },
+		{ id: makesDefaultIds, createdAt: () => true, idNow },
 	),
 );
