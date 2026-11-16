@@ -15,8 +15,10 @@ A key of the blueprint has the name of a member of the record (`set`, `toJSON`, 
 ### ReservedBlueprintKey
 
 > `"optional" is reserved and cannot be a plugin property.`
+>
+> `"__proto__" is reserved and cannot be a key of a blueprint.`
 
-A blueprint plugin declared a key that `ctx` reserves (`optional`, `list`, `listOf`, `optionalOf`, `propertyOf`, `variantOf`). Rename it. See [Blueprints](blueprints.md).
+A blueprint plugin declared a key that `ctx` reserves (`optional`, `list`, `listOf`, `optionalOf`, `propertyOf`, `variantOf`), or a blueprint declared `__proto__`, `constructor` or `prototype`, which would reach the prototype of a parsed value. Rename it. See [Blueprints](blueprints.md).
 
 ### InvalidRepositoryDeclaration
 
