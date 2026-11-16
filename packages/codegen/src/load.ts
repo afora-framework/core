@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { boundaryIssues } from "./boundary";
+import { boundaryIssues, isInside, specFileOf } from "./boundary";
 import type { ResolvedSpec, Spec } from "./spec/types";
 
 /** Thrown when a spec file cannot be read, parsed, or one it extends cannot be found. */
@@ -37,8 +37,7 @@ async function read(path: string): Promise<unknown> {
 /** The file a reference points to: a relative path (a directory means its afora.json) or a package. */
 export function referenceToPath(ref: string, from: string): string {
 	if (ref.startsWith(".") || isAbsolute(ref)) {
-		const path = resolve(dirname(from), ref);
-		return path.endsWith(".json") ? path : resolve(path, "afora.json");
+		return specFileOf(resolve(dirname(from), ref));
 	}
 	try {
 		return createRequire(from).resolve(`${ref}/afora.json`);
@@ -84,6 +83,19 @@ class Loader {
 		return extended;
 	}
 
+	/** A file reached by a path is read only where it really is inside the root. */
+	private async confine(file: string): Promise<void> {
+		const root = await realpath(this.root as string).catch(() => undefined);
+		const real = await realpath(file).catch(() => undefined);
+		// A file that does not exist fails as one when it is read.
+		if (root === undefined || real === undefined) return;
+		if (!isInside(root, real)) {
+			throw new SpecLoadError(
+				`${file} reaches outside the project: it is a symbolic link, or under one, that leaves the project directory.`,
+			);
+		}
+	}
+
 	async load(file: string, confined = false): Promise<ResolvedSpec> {
 		const cached = this.cache.get(file);
 		if (cached) return cached;
@@ -91,6 +103,7 @@ class Loader {
 			throw new SpecLoadError(`${file} extends itself (a cycle of "extends").`);
 		}
 		this.loading.add(file);
+		if (confined && this.root !== undefined) await this.confine(file);
 		const spec = (await read(file)) as Spec;
 		if (confined && this.root !== undefined) {
 			const issues = boundaryIssues(spec, this.root, dirname(file));
