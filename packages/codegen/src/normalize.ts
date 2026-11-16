@@ -328,6 +328,7 @@ function canonicalRouting(value: Json): Json {
 					: route.method,
 			...(route.path === undefined ? {} : { path: route.path }),
 			...(route.status === undefined ? {} : { status: route.status }),
+			...(route.statuses === undefined ? {} : { statuses: route.statuses }),
 			...(route.query === undefined ? {} : { query: route.query }),
 			...(headers === undefined ? {} : { headers }),
 			...(route.cookie === undefined ? {} : { cookie: route.cookie }),

@@ -23,6 +23,7 @@ const INTERNAL = new Set([
 	"InvalidEnvironment",
 	"InvalidApplicationEnvironment",
 	"InvalidUseCaseResponse",
+	"UndeclaredStatus",
 ]);
 const NOT_FOUND = new Set([
 	"RepositoryEntityNotFound",
@@ -59,7 +60,8 @@ export function raisedOf(error: Exception): Exception {
  * included when the output lists them, except the internal ones
  * (`UnexpectedError`, or any exception that carries its message,
  * `InvalidCommandEnvironment`, `InvalidEnvironment`,
- * `InvalidApplicationEnvironment`, `InvalidUseCaseResponse`). Being made by
+ * `InvalidApplicationEnvironment`, `InvalidUseCaseResponse`,
+ * `UndeclaredStatus`). Being made by
  * `exceptionOf` is not enough: afora's own exceptions are made by it too.
  */
 export function isDeclaredError(

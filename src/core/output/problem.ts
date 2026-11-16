@@ -1,5 +1,6 @@
 import { Exception } from "../exception/exception";
 import type { Issue } from "../parse/types/parse.interface";
+import { takeStatus } from "../use-case/status";
 import { isDeclaredError, raisedOf } from "./status";
 import type { Problem, ProblemOptions } from "./types/output.interface";
 
@@ -51,9 +52,11 @@ export function problemOf(error: unknown, options: ProblemOptions): Problem {
 
 /**
  * The JSON a sink sends: `JSON.parse(JSON.stringify(value))`. Every record
- * goes through its `toJSON`, so sensitive values are always masked.
+ * goes through its `toJSON`, so sensitive values are always masked. A
+ * status chosen with `withStatus` is not part of the value: a sink that does
+ * not speak HTTP ignores it.
  */
 export function outputValueOf(value: unknown): unknown {
-	const text = JSON.stringify(value);
+	const text = JSON.stringify(takeStatus(value).body);
 	return text === undefined ? undefined : JSON.parse(text);
 }

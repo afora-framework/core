@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### A status chosen at run time (#116)
+
+- A call of a use case that returns `withStatus(status, body)` replies with the body as its `value`: the status is HTTP only.
+
 ### Added
 
 - The sink enforces the `access` of use cases (#60): the caller is the `principal` a session was opened with (`endpoint.session(socket, { principal })`, also in the `extra` of `handle`), else what the `authenticator` hook gives (`websocket(options, { authenticator })`, type `WebSocketHooks`, whose `request.header(name)` reads the values of the session). Without one, an operation with an access answers a 401 problem.

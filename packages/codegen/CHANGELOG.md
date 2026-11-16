@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### A status chosen at run time (#116)
+
+- A use case route takes `"statuses": [503]`, the other statuses its `execute` may choose with `withStatus` (in hand-written code, or in the function of a `run` step): checked as `useCaseOf` checks it (`invalid_route` for a status that is not a 2xx with a body, a 4xx or a 5xx, for 204, 205, 400, 500, a duplicate or the route `status`), generated and extracted back. `afora.schema.json` has it.
+
 ### File fields (#118)
 
 - A field or a property declaration `{ "file": { "types": ["image/png"], "maxBytes": 5000000 } }` (and the Std `"file"`), generated as `ctx.fileOf(...)` / `fileOf(...)`, extracted back and checked (`invalid_file`; not an environment variable); `afora.schema.json` has it. New types `FileField` and `FileOptionsSpec`. An entity holding a file is `entity_file`, a sensitive or unique file `invalid_file`.

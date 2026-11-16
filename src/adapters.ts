@@ -99,3 +99,4 @@ export type {
 } from "./core/repository/types/schema.interface";
 export { Demo } from "./core/symbols/demo";
 export { Kind } from "./core/symbols/kind";
+export { chosenStatusOf } from "./core/use-case/status";

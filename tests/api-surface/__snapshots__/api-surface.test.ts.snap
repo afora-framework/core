@@ -1853,10 +1853,10 @@ exports[`exports of the package and their declarations 1`] = `
     "export type RouteDeclaration = RouteFields & (({ readonly method: Exclude<RouteMethod, "delete">; } & RouteBody<"get">) | ({ readonly method: "delete"; } & RouteBody<"delete">));",
   ],
   "RouteFields": [
-    "export interface RouteFields { readonly path?: string; readonly status?: RouteSuccessStatus; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
+    "export interface RouteFields { readonly path?: string; readonly status?: RouteSuccessStatus; readonly statuses?: readonly number[]; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
   ],
   "RouteOptions": [
-    "export interface RouteOptions { readonly basePath?: string; readonly route?: { readonly [operationId: string]: { readonly path?: string; readonly status?: RouteStatus; } & ({ readonly method?: Exclude<OpenAPIMethod, "delete">; readonly body?: never; } | { readonly method?: "delete"; readonly body?: boolean; }); }; readonly responses?: { readonly [operationId: string]: { readonly headers?: { readonly [name: string]: string; }; }; }; readonly requestId?: true | string; readonly security?: { readonly schemes: { readonly [name: string]: OpenAPISecurityScheme; }; readonly operations?: { readonly [operationId: string]: SecurityRequirement | false; }; readonly default?: SecurityRequirement; }; }",
+    "export interface RouteOptions { readonly basePath?: string; readonly route?: { readonly [operationId: string]: { readonly path?: string; readonly status?: RouteStatus; readonly statuses?: readonly number[]; } & ({ readonly method?: Exclude<OpenAPIMethod, "delete">; readonly body?: never; } | { readonly method?: "delete"; readonly body?: boolean; }); }; readonly responses?: { readonly [operationId: string]: { readonly headers?: { readonly [name: string]: string; }; }; }; readonly requestId?: true | string; readonly security?: { readonly schemes: { readonly [name: string]: OpenAPISecurityScheme; }; readonly operations?: { readonly [operationId: string]: SecurityRequirement | false; }; readonly default?: SecurityRequirement; }; }",
   ],
   "RouteSettings": [
     "export type RouteSettings = RouteFields & (({ readonly method: Exclude<RouteMethod, "delete"> | Uppercase<Exclude<RouteMethod, "delete">>; } & RouteBody<"get">) | ({ readonly method: "delete" | "DELETE"; } & RouteBody<"delete">));",
@@ -2074,6 +2074,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "UndeclaredRecordProperty": [
     "UndeclaredRecordProperty: import("../../index.js").DeclaredExceptionClass<{ readonly key: string; readonly issues?: readonly Issue[]; }>",
+  ],
+  "UndeclaredStatus": [
+    "UndeclaredStatus: import("../../index.js").DeclaredExceptionClass<{ readonly status: number; readonly statuses: readonly number[]; }>",
   ],
   "UniqueMark": [
     "export type UniqueMark<Unique extends boolean> = Unique extends true ? { readonly type: { readonly unique: true; }; } : unknown;",
@@ -2427,6 +2430,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "variantOf": [
     "export declare function variantOf<const Key extends string, const Variants extends BlueprintVariants>(key: Key, variants: Variants): IBlueprintVariant<Key, Variants>;",
+  ],
+  "withStatus": [
+    "export declare function withStatus<Body extends object>(status: number, body: Body): Body;",
   ],
   "wrapProvider": [
     "export declare function wrapProvider<Provider extends IRepositoryProvider>(provider: Provider, interceptor: ProviderInterceptor<ProviderEnvironmentOf<Provider>>): Provider;",
@@ -2847,13 +2853,13 @@ exports[`adapters entry (contract) 1`] = `
     "export type RouteDeclaration = RouteFields & (({ readonly method: Exclude<RouteMethod, "delete">; } & RouteBody<"get">) | ({ readonly method: "delete"; } & RouteBody<"delete">));",
   ],
   "(internal) RouteFields": [
-    "export interface RouteFields { readonly path?: string; readonly status?: RouteSuccessStatus; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
+    "export interface RouteFields { readonly path?: string; readonly status?: RouteSuccessStatus; readonly statuses?: readonly number[]; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
   ],
   "(internal) RouteMethod": [
     "export type RouteMethod = "get" | "post" | "put" | "patch" | "delete";",
   ],
   "(internal) RouteOptions": [
-    "export interface RouteOptions { readonly basePath?: string; readonly route?: { readonly [operationId: string]: { readonly path?: string; readonly status?: RouteStatus; } & ({ readonly method?: Exclude<OpenAPIMethod, "delete">; readonly body?: never; } | { readonly method?: "delete"; readonly body?: boolean; }); }; readonly responses?: { readonly [operationId: string]: { readonly headers?: { readonly [name: string]: string; }; }; }; readonly requestId?: true | string; readonly security?: { readonly schemes: { readonly [name: string]: OpenAPISecurityScheme; }; readonly operations?: { readonly [operationId: string]: SecurityRequirement | false; }; readonly default?: SecurityRequirement; }; }",
+    "export interface RouteOptions { readonly basePath?: string; readonly route?: { readonly [operationId: string]: { readonly path?: string; readonly status?: RouteStatus; readonly statuses?: readonly number[]; } & ({ readonly method?: Exclude<OpenAPIMethod, "delete">; readonly body?: never; } | { readonly method?: "delete"; readonly body?: boolean; }); }; readonly responses?: { readonly [operationId: string]: { readonly headers?: { readonly [name: string]: string; }; }; }; readonly requestId?: true | string; readonly security?: { readonly schemes: { readonly [name: string]: OpenAPISecurityScheme; }; readonly operations?: { readonly [operationId: string]: SecurityRequirement | false; }; readonly default?: SecurityRequirement; }; }",
   ],
   "(internal) RouteStatus": [
     "export type RouteStatus = 200 | 201 | 202 | 204;",
@@ -2988,7 +2994,7 @@ exports[`adapters entry (contract) 1`] = `
     "export interface OperationDescriptor { readonly kind: "operation"; readonly version: 1; readonly id: string; readonly command: string; readonly name: string; readonly useCase: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly input: AnyBlueprint; readonly response: AnyUseCaseResponse; readonly context?: AnyBlueprint; readonly errors: readonly AnyExceptionClass[]; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly meta: Readonly<Record<string, unknown>>; invoke(input: unknown, options?: OperationCallOptions): Promise<unknown>; }",
   ],
   "OperationRoute": [
-    "export interface OperationRoute { readonly method: OpenAPIMethod; readonly path: string; readonly parameters: readonly string[]; readonly status: RouteStatus; readonly headers: { readonly [name: string]: string; }; readonly body: boolean; readonly query: readonly string[]; readonly requestHeaders: { readonly [inputKey: string]: string; }; readonly cookies: { readonly [inputKey: string]: string; }; readonly setCookies: { readonly [responseKey: string]: RouteCookie; }; }",
+    "export interface OperationRoute { readonly method: OpenAPIMethod; readonly path: string; readonly parameters: readonly string[]; readonly status: RouteStatus; readonly statuses: readonly number[]; readonly headers: { readonly [name: string]: string; }; readonly body: boolean; readonly query: readonly string[]; readonly requestHeaders: { readonly [inputKey: string]: string; }; readonly cookies: { readonly [inputKey: string]: string; }; readonly setCookies: { readonly [responseKey: string]: RouteCookie; }; }",
   ],
   "OutputDescription": [
     "export interface OutputDescription { readonly from: string; readonly name: string; readonly commands: readonly string[]; readonly statuses: Readonly<Record<string, number>>; readonly pipe: readonly StageDescription[]; }",
@@ -3100,6 +3106,9 @@ exports[`adapters entry (contract) 1`] = `
   ],
   "UseCaseDescription": [
     "export interface UseCaseDescription { readonly from: string; readonly name: string; readonly description?: string; readonly tags: readonly string[]; readonly deprecated: boolean; readonly route?: RouteDeclaration; readonly access?: AccessDeclaration; readonly input: FieldsDescription; readonly response: FieldsDescription; readonly responseList?: Extract<FieldDescription, { readonly kind: "list"; }>; readonly context?: FieldsDescription; readonly refs?: { readonly input?: string; readonly response?: string; readonly context?: string; }; readonly errors: readonly ({ readonly kind: "exception"; readonly ref: string; } | { readonly kind: "core"; readonly name: string; })[]; readonly dependencies: Readonly<Record<string, UseCaseDependencyDescription>>; readonly implementation: { readonly kind: "steps"; readonly steps: readonly UseCaseStepDescription[]; } | { readonly kind: "opaque"; }; readonly generic?: { readonly name: string; readonly version: string; readonly repository: string; readonly options: Readonly<Record<string, unknown>>; }; }",
+  ],
+  "chosenStatusOf": [
+    "export declare function chosenStatusOf(value: unknown): number | undefined;",
   ],
   "coerceTextValues": [
     "export declare function coerceTextValues(blueprint: AnyBlueprint, texts: Readonly<Record<string, string | undefined>>): Record<string, unknown>;",
@@ -3781,7 +3790,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type RouteDeclaration = RouteFields & (({ readonly method: Exclude<RouteMethod, "delete">; } & RouteBody<"get">) | ({ readonly method: "delete"; } & RouteBody<"delete">));",
   ],
   "(internal) RouteFields": [
-    "export interface RouteFields { readonly path?: string; readonly status?: RouteSuccessStatus; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
+    "export interface RouteFields { readonly path?: string; readonly status?: RouteSuccessStatus; readonly statuses?: readonly number[]; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
   ],
   "(internal) RouteMethod": [
     "export type RouteMethod = "get" | "post" | "put" | "patch" | "delete";",
@@ -4460,13 +4469,13 @@ exports[`testing entry (contract) 1`] = `
     "export type RouteDeclaration = RouteFields & (({ readonly method: Exclude<RouteMethod, "delete">; } & RouteBody<"get">) | ({ readonly method: "delete"; } & RouteBody<"delete">));",
   ],
   "(internal) RouteFields": [
-    "export interface RouteFields { readonly path?: string; readonly status?: RouteSuccessStatus; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
+    "export interface RouteFields { readonly path?: string; readonly status?: RouteSuccessStatus; readonly statuses?: readonly number[]; readonly query?: readonly string[]; readonly headers?: { readonly [inputKey: string]: string; }; readonly cookie?: { readonly [inputKey: string]: string; }; readonly setCookie?: { readonly [responseKey: string]: RouteCookie; }; }",
   ],
   "(internal) RouteMethod": [
     "export type RouteMethod = "get" | "post" | "put" | "patch" | "delete";",
   ],
   "(internal) RouteOptions": [
-    "export interface RouteOptions { readonly basePath?: string; readonly route?: { readonly [operationId: string]: { readonly path?: string; readonly status?: RouteStatus; } & ({ readonly method?: Exclude<OpenAPIMethod, "delete">; readonly body?: never; } | { readonly method?: "delete"; readonly body?: boolean; }); }; readonly responses?: { readonly [operationId: string]: { readonly headers?: { readonly [name: string]: string; }; }; }; readonly requestId?: true | string; readonly security?: { readonly schemes: { readonly [name: string]: OpenAPISecurityScheme; }; readonly operations?: { readonly [operationId: string]: SecurityRequirement | false; }; readonly default?: SecurityRequirement; }; }",
+    "export interface RouteOptions { readonly basePath?: string; readonly route?: { readonly [operationId: string]: { readonly path?: string; readonly status?: RouteStatus; readonly statuses?: readonly number[]; } & ({ readonly method?: Exclude<OpenAPIMethod, "delete">; readonly body?: never; } | { readonly method?: "delete"; readonly body?: boolean; }); }; readonly responses?: { readonly [operationId: string]: { readonly headers?: { readonly [name: string]: string; }; }; }; readonly requestId?: true | string; readonly security?: { readonly schemes: { readonly [name: string]: OpenAPISecurityScheme; }; readonly operations?: { readonly [operationId: string]: SecurityRequirement | false; }; readonly default?: SecurityRequirement; }; }",
   ],
   "(internal) RouteStatus": [
     "export type RouteStatus = 200 | 201 | 202 | 204;",
@@ -7303,7 +7312,7 @@ exports[`afora.json schema 1`] = `
                 },
                 "route": {
                   "additionalProperties": false,
-                  "description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status and body.",
+                  "description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status, statuses and body.",
                   "properties": {
                     "body": {
                       "default": false,
@@ -7462,6 +7471,32 @@ exports[`afora.json schema 1`] = `
                       ],
                       "default": 200,
                       "description": "The status of a success.",
+                    },
+                    "statuses": {
+                      "description": "The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. A 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not 400 or 500 (kept for problems), nor the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500.",
+                      "items": {
+                        "maximum": 599,
+                        "minimum": 200,
+                        "not": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                204,
+                                205,
+                                400,
+                                500,
+                              ],
+                            },
+                            {
+                              "maximum": 399,
+                              "minimum": 300,
+                            },
+                          ],
+                        },
+                        "type": "integer",
+                      },
+                      "type": "array",
+                      "uniqueItems": true,
                     },
                   },
                   "required": [
@@ -7578,7 +7613,7 @@ exports[`afora.json schema 1`] = `
                 },
                 "route": {
                   "additionalProperties": false,
-                  "description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status and body.",
+                  "description": "Where the use case is served over HTTP. The input stays the only description of what it takes: the route says where each key is read from. What is left is the JSON body of a post, put or patch (or of a delete with body: true), and the query of a get or delete. The route option of a sink overrides method, path, status, statuses and body.",
                   "properties": {
                     "body": {
                       "default": false,
@@ -7737,6 +7772,32 @@ exports[`afora.json schema 1`] = `
                       ],
                       "default": 200,
                       "description": "The status of a success.",
+                    },
+                    "statuses": {
+                      "description": "The other statuses execute may choose with withStatus(status, body) (hand-written code, or a run step whose result the return gives), each with the same response, e.g. [503] for a health check. A 2xx with a body (not 204 or 205), a 4xx or a 5xx, but not 400 or 500 (kept for problems), nor the status itself. An HTTP sink answers an undeclared one with UndeclaredStatus, a masked 500.",
+                      "items": {
+                        "maximum": 599,
+                        "minimum": 200,
+                        "not": {
+                          "anyOf": [
+                            {
+                              "enum": [
+                                204,
+                                205,
+                                400,
+                                500,
+                              ],
+                            },
+                            {
+                              "maximum": 399,
+                              "minimum": 300,
+                            },
+                          ],
+                        },
+                        "type": "integer",
+                      },
+                      "type": "array",
+                      "uniqueItems": true,
                     },
                   },
                   "required": [

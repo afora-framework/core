@@ -249,6 +249,7 @@ export {
 	Forbidden,
 	InvalidOutputStage,
 	Unauthenticated,
+	UndeclaredStatus,
 } from "./core/output/exceptions";
 export type {
 	OpenAPIDocument,
@@ -478,6 +479,7 @@ export type {
 	ServiceValueOf,
 } from "./core/use-case/service";
 export { isService, serviceOf } from "./core/use-case/service";
+export { withStatus } from "./core/use-case/status";
 export type {
 	CheckedSteps,
 	StepReferencesOf,

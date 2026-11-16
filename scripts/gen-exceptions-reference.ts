@@ -134,6 +134,7 @@ const HANDLING: Record<string, string> = {
 		"Use `await password.verify(input)`, or configure a hasher with `verifySync`.",
 	Unauthenticated: "An output answers 401.",
 	UndeclaredBlueprintProperty: DECLARATION,
+	UndeclaredStatus: `${BUG} An HTTP sink answers a masked 500: add the status to \`route.statuses\`, or return another one.`,
 	UndeclaredRecordProperty: `${INPUT} The value is rejected, never trimmed: drop the key before building the record.`,
 	UnstoredEntity: `${BUG} Create the entity first: \`create\` gives it the id the database assigns.`,
 	UnsupportedIdentity: `${DECLARATION} Give the repository a provider with \`capabilities.generatedIds\` (in memory, Drizzle), or another id strategy than \`Serial\`.`,

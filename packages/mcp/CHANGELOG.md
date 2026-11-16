@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### A status chosen at run time (#116)
+
+- A tool call of a use case that returns `withStatus(status, body)` gives the body: the status is HTTP only. The guide names `route.statuses`.
+
 ### File fields (#118)
 
 - The guide shows file fields, `"file"` and `{ "file": { "types", "maxBytes" } }`, read from a `multipart/form-data` body.

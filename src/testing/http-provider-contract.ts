@@ -7,6 +7,7 @@ import {
 	outputOf,
 	recordOf,
 	useCaseOf,
+	withStatus,
 } from "../index";
 import type { ContractRunner } from "./provider-contract";
 
@@ -200,9 +201,23 @@ function operations() {
 			};
 		}
 	}
+	class Health extends useCaseOf({
+		name: "ContractHealth",
+		blueprint: blueprintOf((ctx) => ({ page: ctx.optional.integer })),
+		response: Echo,
+		route: { method: "get", path: "/health", statuses: [503] },
+	}) {
+		override async execute() {
+			const { page } = this.input;
+			return page === undefined
+				? { title: "up" }
+				: withStatus(page, { title: "down" });
+		}
+	}
 	return commandOf({
 		name: "Contract",
 		useCases: {
+			health: Health,
 			get: Get,
 			change: Change,
 			remove: Remove,
@@ -462,6 +477,29 @@ export function httpProviderContract<Server>(
 			});
 		});
 
+		it("sends the status a use case chose, if its route declares it", async () => {
+			await withServer({}, async (send) => {
+				const up = await send("GET", "/health");
+				expect(up.status).toBe(200);
+				expect(up.json).toEqual({ title: "up" });
+				const down = await send("GET", "/health?page=503");
+				expect(down.status).toBe(503);
+				expect(down.type).toBe("application/json");
+				expect(down.json).toEqual({ title: "down" });
+				const undeclared = await send("GET", "/health?page=418");
+				expect(undeclared.status).toBe(500);
+				expect(undeclared.type).toBe("application/problem+json");
+				const { title, detail } = undeclared.json as {
+					title: string;
+					detail: string;
+				};
+				expect([title, detail]).toEqual([
+					"UndeclaredStatus",
+					"Internal error.",
+				]);
+			});
+		});
+
 		it("masks sensitive values", async () => {
 			await withServer({}, async (send) => {
 				const revealed = await send("GET", "/note");
@@ -672,6 +710,7 @@ export function httpProviderContract<Server>(
 						Object.keys((docs.json as { paths: object }).paths).sort(),
 					).toEqual([
 						"/api/enter",
+						"/api/health",
 						"/api/items/{id}",
 						"/api/mine",
 						"/api/note",
@@ -688,6 +727,17 @@ export function httpProviderContract<Server>(
 					).paths["/api/uploads/{folder}"];
 					expect(Object.keys(upload?.post.requestBody.content ?? {})).toEqual([
 						"multipart/form-data",
+					]);
+					const health = (
+						docs.json as {
+							paths: Record<string, { get: { responses: object } }>;
+						}
+					).paths["/api/health"];
+					expect(Object.keys(health?.get.responses ?? {})).toEqual([
+						"200",
+						"400",
+						"500",
+						"503",
 					]);
 				},
 			);
