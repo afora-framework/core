@@ -149,6 +149,25 @@ export const joi = (schema: JoiSchema): Contender => ({
 	ok: (result) => !(result as { error?: unknown }).error,
 });
 
+/**
+ * Each input with the `id` and `createdAt` a stored row has, made once per
+ * input (a lookup per call, not a copy), so the row measures the check alone.
+ */
+const storedRows = new WeakMap<object, unknown>();
+function storedRowOf(input: unknown): unknown {
+	if (typeof input !== "object" || input === null) return input;
+	let row = storedRows.get(input);
+	if (row === undefined) {
+		row = {
+			id: "0190a6d6-7c4e-7b2a-9f3e-1c2d3e4f5a6b",
+			createdAt: "2026-11-16T12:00:00.000Z",
+			...input,
+		};
+		storedRows.set(input, row);
+	}
+	return row;
+}
+
 const noIssues = (result: unknown) =>
 	(result as { issues?: unknown }).issues === undefined;
 
@@ -200,6 +219,13 @@ export function afora(
 			library: "afora",
 			note: "class extends entityOf(...) {}, makes its id and createdAt",
 			make: (input) => Entity.safeParse(input),
+			ok: noIssues,
+		},
+		{
+			name: "afora Entity.safeParse (a stored row)",
+			library: "afora",
+			note: "the value as a repository reads it back: id and createdAt given, and checked",
+			make: (input) => Entity.safeParse(storedRowOf(input)),
 			ok: noIssues,
 		},
 		{
