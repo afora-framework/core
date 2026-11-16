@@ -101,11 +101,65 @@ interface Step {
 	variants: Map<string, Collection | AnyRecordClass> | undefined;
 }
 
+/** What a property's definition does to a value: the handled value, or `REJECTED`. */
+type Parser = (value: unknown) => unknown;
+
 /** The fields of a collection of properties, in order: the name and the step of each. */
 interface Collection {
 	readonly properties: IBlueprintCollection;
 	readonly names: readonly string[];
 	readonly steps: readonly Step[];
+	/**
+	 * The parser of each field, in order, when every field is a property that
+	 * parses through its definition; `null` when one is not. Made on the first
+	 * value.
+	 */
+	parsers: readonly Parser[] | null | undefined;
+}
+
+/**
+ * Whether a collection whose fields are all plain properties is parsed by
+ * one loop over their parsers. Turned off only by tests, which compare it
+ * with the general path.
+ */
+let specialized = true;
+
+/**
+ * Turns the specialized paths of the parse on or off, and gives what it was.
+ * For tests only.
+ * @internal
+ */
+export function setSpecializedParse(on: boolean): boolean {
+	const was = specialized;
+	specialized = on;
+	return was;
+}
+
+/** The parser of a step that is a property parsing through its definition, or `null`. */
+function plainParserOf(step: Step): Parser | null {
+	if (step.kind !== PROPERTY) return null;
+	const property = step.property as AnyPropertyConstructor;
+	if ((property.safeParse as unknown) !== DECLARED_SAFE_PARSE) return null;
+	if (step.parser === undefined) {
+		step.parser = parserOf(parsingDefinitionOf(property)) ?? null;
+	}
+	return step.parser;
+}
+
+/** The parsers of `collection`, worked out on its first value. */
+function parsersOf(collection: Collection): readonly Parser[] | null {
+	let { parsers } = collection;
+	if (parsers === undefined) {
+		const found: Parser[] = [];
+		for (const step of collection.steps) {
+			const parser = plainParserOf(step);
+			if (parser === null) break;
+			found.push(parser);
+		}
+		parsers = found.length === collection.steps.length ? found : null;
+		collection.parsers = parsers;
+	}
+	return parsers;
 }
 
 function stepOf(field: BlueprintField | undefined): Step {
@@ -182,6 +236,7 @@ function collectionOf(properties: IBlueprintCollection): Collection {
 			properties,
 			names: fields.map(([name]) => name),
 			steps: fields.map(([, field]) => keptStepOf(field)),
+			parsers: undefined,
 		};
 		collections.set(properties, collection);
 	}
@@ -323,6 +378,36 @@ function collectionAt(
 	let rejected = false;
 
 	const keys = Object.keys(value);
+
+	// Every field a plain property, and nothing vouched, completed or tagged:
+	// one loop over the parsers, with the path only made for an issue.
+	if (
+		specialized &&
+		vouched === undefined &&
+		complete === undefined &&
+		tag === undefined
+	) {
+		const parsers = parsersOf(collection);
+		if (parsers !== null && declaresEvery(properties, names, keys)) {
+			const source = value as Record<string, unknown>;
+			const handled: Record<string, unknown> = {};
+			for (let index = 0; index < names.length; index++) {
+				const name = names[index] as string;
+				const item = (parsers[index] as Parser)(source[name]);
+				if (item === REJECTED) {
+					rejected = true;
+					run.keys[depth] = name;
+					run.issues ??= [];
+					takeRejectionIssues(pathOf(run, depth + 1), run.issues);
+				} else if (item !== undefined) {
+					handled[name] = item;
+				}
+			}
+			if (rejected) return REJECTED;
+			return run.freeze ? Object.freeze(handled) : handled;
+		}
+	}
+
 	for (let index = 0; index < keys.length; index++) {
 		const name = keys[index] as string;
 		// A value written in the order of the blueprint has each key in its place.
@@ -409,6 +494,20 @@ export function parseField(
 
 /** The `safeParse` of a property that does not declare one. */
 const DECLARED_SAFE_PARSE: unknown = AbstractProperty.safeParse;
+
+/** Whether every key of `keys` is declared by `properties`, whose fields are `names`. */
+function declaresEvery(
+	properties: IBlueprintCollection,
+	names: readonly string[],
+	keys: readonly string[],
+): boolean {
+	for (let index = 0; index < keys.length; index++) {
+		const name = keys[index] as string;
+		// A value written in the order of the blueprint has each key in its place.
+		if (name !== names[index] && !Object.hasOwn(properties, name)) return false;
+	}
+	return true;
+}
 
 /**
  * `parseField` for the value `run` is handling at `depth`: the handled value,
