@@ -1,82 +1,89 @@
 name: Release
 
-# Publishes when the version in package.json has no tag yet. Bump the version in
-# a pull request; merging it to main runs CI, publishes and creates the tag.
+# Publishes the channels of VERSIONING.md. scripts/release-channel.ts decides
+# what a run does, and scripts/release-channel.test.ts covers it:
+#
+# - main: the version of package.json, when it has no tag yet, to latest
+#   (stable), rc or beta. Bump it in a release pull request with
+#   `bun run release:version <v>`.
+# - release/<YY>.<minor>: the patches (stable or rc) of that line; to latest, or
+#   to the dist-tag v<YY>.<minor> when the version is behind latest.
+# - dev: the Next, <base>-alpha.<run number>, to the next dist-tag, on every push
+#   that changes src/, packages/*/src/ or package.json. The version is written
+#   before the build and never committed; no git tag and no GitHub release.
+#
+# Every publish runs from this file and the environment npm: they are what npm
+# trusts (trusted publishing, OIDC).
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**", dev]
+    # One list for every branch: on dev, the detect job also checks that the push
+    # changed src/, packages/*/src/ or package.json, so a dependency bump of a
+    # package alone publishes no Next.
     paths:
       - package.json
       - packages/*/package.json
-  # re-runs a release that failed halfway
+      - src/**
+      - packages/*/src/**
+  # re-runs a release that failed halfway, or shows the decision with dry-run
   workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Only print what would be published
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: release
+  # one release at a time per branch: the Next of dev never waits for a release of main
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   detect:
-    name: Detect a new version
-    if: github.ref == 'refs/heads/main'
+    name: Detect the version and the channel
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-latest
     outputs:
-      release: ${{ steps.version.outputs.release }}
-      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.channel.outputs.publish }}
+      version: ${{ steps.channel.outputs.version }}
+      dist-tag: ${{ steps.channel.outputs.dist-tag }}
+      prerelease: ${{ steps.channel.outputs.prerelease }}
+      make-latest: ${{ steps.channel.outputs.make-latest }}
+      git-release: ${{ steps.channel.outputs.git-release }}
+      bench: ${{ steps.channel.outputs.bench }}
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
-      - id: version
-        name: Compare package.json with the tags and npm
-        run: |
-          version="$(node -p 'require("./package.json").version')"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-          # The scheme of VERSIONING.md: 0.0.<n> before 27.0, then <YY>.<minor>.<patch>
-          # with an optional -rc.<n>, where YY (the year of the cycle) is 27 or more.
-          if ! printf '%s' "$version" | grep -Eq '^(0\.0\.(0|[1-9][0-9]*)|(2[7-9]|[3-9][0-9]|[1-9][0-9]{2,})\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?)$'; then
-            echo "::error::$version is not in the scheme of VERSIONING.md: 0.0.<n>, or <YY>.<minor>.<patch>[-rc.<n>] with YY >= 27"
-            exit 1
-          fi
-
-          # The tag is created last, so a missing tag also means an unfinished release.
-          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
-            echo "v$version is already released, nothing to do"
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # All the packages are released together, under one version and one tag.
-          for dir in packages/*/; do
-            other="$(node -p "require('./${dir}package.json').version")"
-            if [ "$other" != "$version" ]; then
-              echo "::error::$dir is at $other, but package.json is at $version"
-              exit 1
-            fi
-          done
-
-          # Never move the latest dist-tag backwards.
-          latest="$(npm view @afora/core version)"
-          if [ "$(bun -e "console.log(Bun.semver.order('$version', '$latest'))")" = "-1" ]; then
-            echo "::error::package.json is at $version, behind $latest on npm"
-            exit 1
-          fi
-
-          echo "release=true" >> "$GITHUB_OUTPUT"
+      - id: channel
+        name: Compare package.json with the branch, the tags and npm
+        # Fails when the version is outside the scheme or the line of the branch,
+        # when a package is at another version or has a peer range on
+        # @afora/core that does not accept it, or when it would move latest
+        # backwards.
+        run: bun scripts/release-channel.ts detect
+        env:
+          BRANCH: ${{ github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+      - name: Dry run
+        if: inputs.dry-run
+        run: echo "::notice::dry run, nothing is published"
 
   ci:
     needs: detect
-    if: needs.detect.outputs.release == 'true'
+    if: needs.detect.outputs.publish == 'true' && !inputs.dry-run
     uses: ./.github/workflows/ci.yml
 
   publish:
     name: Publish to npm
     needs: [detect, ci]
+    if: needs.detect.outputs.publish == 'true' && !inputs.dry-run
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -84,6 +91,8 @@ jobs:
       id-token: write
     env:
       VERSION: ${{ needs.detect.outputs.version }}
+      DIST_TAG: ${{ needs.detect.outputs.dist-tag }}
+      PRERELEASE: ${{ needs.detect.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -94,6 +103,10 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
+      - name: Write the version of the Next
+        # in every package.json, peers included, for this run only: never committed
+        if: github.ref == 'refs/heads/dev'
+        run: bun scripts/release-channel.ts set-version "$VERSION"
       - run: bun run build:packages
       - name: Publish
         # core first, then the packages that depend on it. A version that is
@@ -111,15 +124,18 @@ jobs:
               echo "$name@$VERSION is already on npm, skipping"
               return
             fi
-            case "$VERSION" in
-              *-*) tag=next ;;
-              *) tag=latest ;;
-            esac
-            (cd "$dir" && npm publish --tag "$tag")
+            (cd "$dir" && npm publish --tag "$DIST_TAG")
           }
 
-          # npm does not rewrite the workspace: protocol, so pin the real version.
-          (cd packages/mcp && npm pkg set "dependencies.@afora/codegen=^$VERSION")
+          # npm does not rewrite the workspace: protocol, so pin the real version:
+          # a range for a stable version, the exact one for a prerelease, which
+          # may break from one to the next.
+          if [ "$PRERELEASE" = "true" ]; then
+            pin="$VERSION"
+          else
+            pin="^$VERSION"
+          fi
+          (cd packages/mcp && npm pkg set "dependencies.@afora/codegen=$pin")
 
           publish .
           publish packages/codegen
@@ -133,18 +149,25 @@ jobs:
           publish packages/dynamodb
           publish packages/otel
       - name: Create the tag and the GitHub release
+        # not for the Next (alpha); beta and rc are prereleases, and a patch of
+        # an older line than latest is not marked as the latest release
+        if: needs.detect.outputs.git-release == 'true'
         run: |
-          prerelease=""
-          case "$VERSION" in
-            *-*) prerelease="--prerelease" ;;
-          esac
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --generate-notes $prerelease
+          if [ "$PRERELEASE" = "true" ]; then
+            mark="--prerelease"
+          else
+            mark="--latest=$MAKE_LATEST"
+          fi
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --generate-notes "$mark"
         env:
           GH_TOKEN: ${{ github.token }}
+          MAKE_LATEST: ${{ needs.detect.outputs.make-latest }}
 
   bench:
     name: Benchmark results of the release
-    needs: publish
+    # stable and rc only
+    needs: [detect, publish]
+    if: needs.detect.outputs.bench == 'true'
     permissions:
       contents: write
       pull-requests: write

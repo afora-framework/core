@@ -62,6 +62,8 @@ jobs:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bun test
+      # the channels of release.yml (scripts/release-channel.ts)
+      - run: bun run test:release
       - run: bun run test:interop
       - run: bun run test:blog
       - run: bun run test:agent-built
