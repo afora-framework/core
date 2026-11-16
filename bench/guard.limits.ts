@@ -26,8 +26,8 @@ export const ENTITY_LIMITS: Record<string, { limit: number; why: string }> = {
 		why: "A valid entity makes a UUID v7 and a time stamp and keeps four more keys than the record (about 1.5x to 1.9x here); the limit is that plus noise.",
 	},
 	"no-transform valid": {
-		limit: 3.2,
-		why: "Zod 4 is at its fastest here (250 to 400 ns) while the entity pays a fixed cost for its identity (two reads of the clock, a UUID v7) and its four keys. That cost does not follow the speed of the CPU: on GitHub runners it is about 720-790 ns whether Zod 4 takes 255 ns or 330 ns, and about 1,000 ns where Zod 4 takes 400 ns, so the ratio depends on the runner, not on the change: 2.1x to 2.3x, 2.4x to 2.65x and 2.75x to 3.0x on three kinds of runner (nine jobs, November 2026), steady within a job; 2.1x on an Apple M2. The limit is the highest of these plus noise. A slower entity still shows as a step on every kind of runner; `bun run bench -- --compare` times it against the base on one runner.",
+		limit: 3.5,
+		why: "Zod 4 is at its fastest here (250 to 400 ns) while the entity pays a fixed cost for its identity (two reads of the clock, a UUID v7) and its four keys, and that cost does not follow the speed of the CPU: on GitHub runners it is about 720-790 ns whether Zod 4 takes 255 ns or 330 ns, and about 1,000 ns where Zod 4 takes 400 ns. So the ratio depends on the kind of runner, each steady within a job: 2.1x-2.3x, 2.4x-2.65x and 2.75x-3.0x (nine jobs, November 2026; 2.1x-2.3x on an Apple M2). The limit is the highest, 3.0x, plus 15% for noise. What it lets through: a slowdown of up to 1.5x-1.6x on the runners at 2.1x-2.3x, 1.3x-1.45x at 2.4x-2.65x, 1.15x-1.25x at 2.75x-3.0x. Its ratio to `blueprint.safeParse` would not hold it closer, since the blueprint follows the CPU and the entity's identity does not (4.2x to 5.6x across the same runners), and nor would its ratio to `Record.safeParse` (2.5x to 2.8x).",
 	},
 	"no-transform invalid": {
 		limit: 2.3,

@@ -48,10 +48,12 @@ export type Timed = { name: string; best: number; rounds: number[] };
 export type TimedCase = { scenario: string; kind: Kind; runs: Timed[] };
 
 /**
- * The best time of each named contender on each case. Each contender is
- * warmed up before its first round. The contenders of a case take turns in
- * every round, so that whatever slows the machine down for a moment slows
- * them all, and the best round of each is the one with the least of it.
+ * The time of each round of each named contender on each case, and its best
+ * round. Each contender is warmed up before its first round. The contenders
+ * of a case take turns in every round, in the order given, so that whatever
+ * slows the machine down for a moment slows them all; the guard divides the
+ * times of a round by that of its reference, timed next to them, and takes
+ * the median of these ratios (`pairedRatio`).
  */
 export function timeCases(
 	cases: Array<{
@@ -181,7 +183,7 @@ function check(
 		})),
 	);
 	return timed.map(({ scenario, kind, runs }) => {
-		const [reference, guarded, watched, entity] = runs as [
+		const [guarded, reference, entity, watched] = runs as [
 			Timed,
 			Timed,
 			Timed,
@@ -212,7 +214,9 @@ function check(
 const RETRIES = 2;
 
 export function guard(scenarios: Scenario[]): boolean {
-	const names = [REFERENCE, GUARDED, WATCHED, ENTITY];
+	// Each guarded call is timed right next to the reference, in every round:
+	// `blueprint.safeParse` just before Zod 4, `Entity.safeParse` just after.
+	const names = [GUARDED, REFERENCE, ENTITY, WATCHED];
 	const cases = scenarios.flatMap((scenario) =>
 		KINDS.map((kind) => ({ scenario, kind })),
 	);
