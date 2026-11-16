@@ -48,7 +48,7 @@ function paths(result: ParseResult<unknown>): (string | number)[][] {
 	return issuesOf(result).map((issue) => [...issue.path]);
 }
 
-test("a valid value is handled, frozen and stripped of undefined keys", () => {
+test("a valid value is handled into a copy of its own, stripped of undefined keys", () => {
 	const result = parseCollection(
 		Profile.properties,
 		{ ...profile, billing: undefined },
@@ -60,9 +60,35 @@ test("a valid value is handled, frozen and stripped of undefined keys", () => {
 	expect(result.issues ?? result).toEqual({ value: profile });
 	const value = (result as { value: Record<string, unknown> }).value;
 	expect(Object.keys(value)).not.toContain("billing");
+	expect(Object.isFrozen(value)).toBe(false);
+	expect(Object.isFrozen(value.addresses)).toBe(false);
+	expect(Object.isFrozen(value.address)).toBe(false);
+	// A copy: changing it changes neither the input nor the next parse.
+	(value.address as { street: string }).street = "Changed";
+	expect(profile.address.street).toBe("Main St");
+	const again = parseCollection(Profile.properties, profile, [], "test");
+	expect((again as { value: typeof profile }).value.address.street).toBe(
+		"Main St",
+	);
+});
+
+test("with freeze, every object and array made is frozen, at every depth", () => {
+	const result = parseCollection(Profile.properties, profile, [], "test", true);
+	const value = (result as { value: typeof profile }).value;
 	expect(Object.isFrozen(value)).toBe(true);
-	expect(Object.isFrozen(value.addresses)).toBe(true);
 	expect(Object.isFrozen(value.address)).toBe(true);
+	expect(Object.isFrozen(value.addresses)).toBe(true);
+	expect(Object.isFrozen(value.addresses[0])).toBe(true);
+	expect(Object.isFrozen(value.tags)).toBe(true);
+	expect(Object.isFrozen(value.tags[0])).toBe(true);
+	const field = parseField(
+		listOf(Address),
+		[profile.address],
+		[],
+		"test",
+		true,
+	);
+	expect(Object.isFrozen((field as { value: unknown[] }).value[0])).toBe(true);
 });
 
 test("every issue is collected, in the order of the blueprint", () => {

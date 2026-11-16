@@ -904,6 +904,4 @@ afora is a framework with one entry point: its bundle carries TypeBox and the co
 
 ## What CI holds
 
-`bun run bench:guard` times `blueprint.safeParse` and Zod 4 safeParse on every case above, several times each in one process, and fails when the best time of afora is over the limit of the case, as a multiple of the best time of Zod 4. The limit is 1.15x, except:
-
-- `large-list valid`: 1.25x. afora is level with Zod 4 here (about 1.0x): freezing 1,000 objects and their array is most of the time. The limit is that plus noise.
+`bun run bench:guard` times `blueprint.safeParse` and Zod 4 safeParse on every case above, several times each in one process, and fails when the best time of afora is over the limit of the case, as a multiple of the best time of Zod 4. The limit is 1.15x.

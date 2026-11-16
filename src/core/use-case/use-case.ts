@@ -37,6 +37,7 @@ import {
 	silentLogger,
 	writeLog,
 } from "../logger/logger";
+import { parseField } from "../parse/parse";
 import type { Issue } from "../parse/types/parse.interface";
 import { recordNameOf } from "../record/name";
 import { AbstractRepository, isRepository } from "../repository/repository";
@@ -737,9 +738,16 @@ export abstract class AbstractUseCase<
 		const scope = options?.[ScopeKey];
 		let context: object | undefined;
 		if (declaration.context) {
-			const checked = declaration.context.safeParse(options?.context);
+			// The context is shared by the use case and those it runs: frozen at every depth.
+			const checked = parseField(
+				declaration.context,
+				options?.context,
+				[],
+				"blueprint",
+				true,
+			);
 			if (checked.issues) invalidValue(checked.issues, source, "context");
-			context = Object.freeze(checked.value as object);
+			context = checked.value as object;
 		}
 		// `context` is typed by `UseCaseConstructor`, which knows the declaration.
 		Object.defineProperty(this, "context", {
