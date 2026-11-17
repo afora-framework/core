@@ -29,7 +29,7 @@ jobs:
       matrix:
         include:
           - { os: ubuntu-latest, key: linux, label: Linux x64 }
-          - { os: macos-14, key: macos, label: macOS ARM64 }
+          - { os: macos-latest, key: macos, label: macOS ARM64 }
     permissions:
       contents: read
     outputs:
