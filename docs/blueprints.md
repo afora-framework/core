@@ -28,6 +28,28 @@ const Customer = User.join(Timestamps); // every field of both
 
 `join` takes any number of blueprints (`A.join(B, C)` is `A.join(B).join(C)`); a later one replaces a key of an earlier one, like plugins do. `listOf` takes a property, a blueprint or another list, and `optionalOf` makes it an optional key.
 
+## The type of a value
+
+Every blueprint is a [Standard Schema](standard-schema.md), so `StandardSchemaV1.InferOutput` gives the type of the value it parses, and `StandardSchemaV1.InferInput` the type of what it accepts:
+
+```ts
+import { blueprintOf, type StandardSchemaV1 } from "@afora/core";
+
+const Task = blueprintOf((ctx) => ({
+	title: ctx.string,
+	done: ctx.boolean,
+	notes: ctx.optional.string,
+}));
+
+type Task = StandardSchemaV1.InferOutput<typeof Task>;
+// { title: string; done: boolean; notes?: string | undefined }
+type TaskInput = StandardSchemaV1.InferInput<typeof Task>;
+
+const task: Task = { title: "Write the docs", done: false };
+```
+
+The two differ when a field is a record: the input also takes the plain object of its blueprint, the value holds an instance of the record. `BlueprintValue` and `BlueprintInput` take a collection of properties (what the function given to `blueprintOf` returns), not a blueprint, so `BlueprintValue<typeof Task>` is not the type of a task.
+
 ## One of several blueprints
 
 `variantOf(key, variants)` is a field that holds one of several objects, told apart by the value of one key:
