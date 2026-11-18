@@ -17,11 +17,19 @@ concurrency:
 
 jobs:
   bench-compare:
-    name: Validation speed against the base
+    name: Validation speed against the base (${{ matrix.label }})
     # Runs the code of the pull request, so its token only reads; the comment is
-    # written by the job below, from the uploaded compare.md.
+    # written by the job below, from the uploaded reports. Linux x64 and macOS
+    # ARM64 are timed apart: the cost of an engine on one is not that on the
+    # other (what #158 gained on an M2 it did not gain on Linux).
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, key: linux, label: Linux x64 }
+          - { os: macos-latest, key: macos, label: macOS ARM64 }
     permissions:
       contents: read
     outputs:
@@ -51,21 +59,22 @@ jobs:
         if: always()
         run: |
           if [ -f "$RUNNER_TEMP/compare.md" ]; then
-            cat "$RUNNER_TEMP/compare.md" >> "$GITHUB_STEP_SUMMARY"
+            { echo "#### ${{ matrix.label }}"; echo; cat "$RUNNER_TEMP/compare.md"; echo; } > "$RUNNER_TEMP/report-${{ matrix.key }}.md"
+            cat "$RUNNER_TEMP/report-${{ matrix.key }}.md" >> "$GITHUB_STEP_SUMMARY"
             echo "report=true" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always() && steps.report.outputs.report == 'true'
         with:
-          name: compare
-          path: ${{ runner.temp }}/compare.md
+          name: report-${{ matrix.key }}
+          path: ${{ runner.temp }}/report-${{ matrix.key }}.md
           retention-days: 7
           overwrite: true
 
   comment:
     name: Comment the comparison
-    # Runs no code of the pull request: it only posts the compare.md of the job
-    # above, also when the comparison failed. A pull request from a fork has a
+    # Runs no code of the pull request: it only posts the reports of the jobs
+    # above, also when a comparison failed. A pull request from a fork has a
     # read-only token: it gets the summary alone.
     needs: bench-compare
     if: always() && needs.bench-compare.outputs.report == 'true' && github.event.pull_request.head.repo.full_name == github.repository
@@ -75,10 +84,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: compare
+          pattern: report-*
+          merge-multiple: true
           path: ${{ runner.temp }}/compare
       - name: Comment on the pull request
-        run: gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none --body-file "$RUNNER_TEMP/compare/compare.md" || echo "::warning::could not comment on the pull request"
+        run: |
+          cat "$RUNNER_TEMP"/compare/report-*.md > "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none --body-file "$RUNNER_TEMP/comment.md" || echo "::warning::could not comment on the pull request"
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
