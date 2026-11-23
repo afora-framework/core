@@ -53,7 +53,7 @@ import {
 } from "./exceptions";
 import { inMemoryProvider } from "./in-memory";
 import { planQuery } from "./plan";
-import { prepareQuery } from "./query";
+import { isMembership, prepareQuery } from "./query";
 import { parseEntity, relationsOf, resolveReferences } from "./references";
 import {
 	assertUnbound,
@@ -354,6 +354,31 @@ const equals = (self: Internal, key: string, value: unknown) =>
 	queryOf(self, { where: { [key]: value } });
 
 /**
+ * The query of `findBy<Key>` and `findManyBy<Key>`: equality on `key` with
+ * one value. `undefined` when the value is missing (`undefined` or `null`),
+ * which matches no entity; throws `InvalidRepositoryQuery` for `{ in }`, which
+ * only the queries take.
+ */
+function oneValue(
+	self: Internal,
+	key: string,
+	value: unknown,
+): ProviderQuery | undefined {
+	const query = equals(self, key, value);
+	const one = query.where?.[key];
+	if (one === undefined || one === null) return undefined;
+	if (isMembership(one)) {
+		throw new InvalidRepositoryQuery({
+			source: self.context.name,
+			details: {
+				reason: `"${key}" takes one value, not { in }: use findMany for a membership.`,
+			},
+		});
+	}
+	return query;
+}
+
+/**
  * `query` with the index that serves it, after the scan policy: a scan logs
  * `repository-scan` with `scans: "warn"`, and throws `InvalidRepositoryQuery`
  * (reason `scan`) with `"reject"`, before the provider is called.
@@ -396,22 +421,23 @@ function planned<Query extends RepositoryQuery>(
 
 const findBy = (key: string): Method =>
 	action(async (self, value: unknown) => {
-		const data = await self.provider.findOne(
-			self.context,
-			equals(self, key, value),
-		);
+		const query = oneValue(self, key, value);
+		if (query === undefined) return undefined;
+		const data = await self.provider.findOne(self.context, query);
 		return data === undefined ? undefined : await self.hydrate(data);
 	});
 
 const findManyBy = (key: string): Method =>
-	action(async (self, value: unknown) =>
-		self.hydrateMany(
+	action(async (self, value: unknown) => {
+		const query = oneValue(self, key, value);
+		if (query === undefined) return [];
+		return self.hydrateMany(
 			await self.provider.findMany(
 				self.context,
-				planned(self, `findManyBy${capitalize(key)}`, equals(self, key, value)),
+				planned(self, `findManyBy${capitalize(key)}`, query),
 			),
-		),
-	);
+		);
+	});
 
 const findMany = action(async (self, query: unknown) =>
 	self.hydrateMany(
