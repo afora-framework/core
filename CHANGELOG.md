@@ -10,6 +10,7 @@
 - `@afora/codegen` prints a spec string holding a long run of spaces in linear time. (SEC-31)
 - `@afora/mcp`: the diagnostics `afora_generate` returns carry the file, line, column, TS code and a message whose literal values and quoted types are redacted (`"…"`, `'…'`; a plain name such as `'ServiceFactory'` is kept), so a type of a project module never brings its values into the answer. (SEC-32)
 - A spec file that is not valid JSON is reported by its path (and, where the runtime gives it, a line and column), never with the parser's message, which could quote the file; `@afora/mcp` gives the paths of what a spec extends from the project root. (SEC-33)
+- The response of a use case declared by a blueprint or a list (`response: Account.blueprint`, `listOf(...)`, a blueprint holding a `Password`) is sent masked as a record's `toJSON` masks it: every property declared `sensitive` (a `Password` always) at any depth, through nested blueprints, lists and variants, and the keys a record or entity declares `sensitive` where the blueprint is the record's (its `.blueprint` or the blueprint it was declared from). This holds in `outputValueOf` and so in every sink of afora (`http`, `hono`, `express`, `fastify`, `elysia`, `websocket`, `mcpTools`), as [Outputs](docs/outputs.md) promised. A direct call (`execute()`, a dependency) still reads the real values, and a key a route sends with `setCookie` keeps its value. (SEC-19)
 
 ### Fixed
 

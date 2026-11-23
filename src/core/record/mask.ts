@@ -15,6 +15,23 @@ import { isMarked } from "./marks";
 /** What a masked value becomes, whatever its length, so none is told apart. */
 export const MASK = "********";
 
+/** The keys each record declares `sensitive`, by the blueprint of the record. */
+const sensitiveByBlueprint = new WeakMap<object, readonly string[]>();
+
+/**
+ * Notes that a record of `blueprint` declares the `sensitive` keys, so that
+ * a value of that blueprint outside the record (a use case response) is
+ * masked the same way. A blueprint shared by records gets the keys of each.
+ */
+export function markSensitiveKeys(
+	blueprint: object,
+	sensitive: readonly string[],
+): void {
+	if (sensitive.length === 0) return;
+	const known = sensitiveByBlueprint.get(blueprint) ?? [];
+	sensitiveByBlueprint.set(blueprint, [...new Set([...known, ...sensitive])]);
+}
+
 /**
  * `value` with every leaf, at any depth, replaced by `MASK`: strings, numbers,
  * booleans and bigints; `null` and `undefined` as is. A record is masked by
@@ -46,6 +63,7 @@ function maskField(
 	field: BlueprintField | undefined,
 	value: unknown,
 	sensitive: boolean,
+	byBlueprint = false,
 ): unknown {
 	if (value === undefined) return value;
 	if (isBlueprintVariant(field)) {
@@ -66,13 +84,15 @@ function maskField(
 	if (sensitive || isMarked(field, "sensitive")) return maskAll(value);
 	if (isBlueprintList(field) && Array.isArray(value)) {
 		return Object.freeze(
-			value.map((item) => maskField(field.item, item, false)),
+			value.map((item) => maskField(field.item, item, false, byBlueprint)),
 		);
 	}
 	if (isBlueprint(field) && typeof value === "object" && value !== null) {
 		return maskCollection(
 			field.properties,
 			value as Readonly<Record<string, unknown>>,
+			byBlueprint ? sensitiveByBlueprint.get(field) : undefined,
+			byBlueprint,
 		);
 	}
 	if (isBlueprintVariant(field)) {
@@ -82,6 +102,8 @@ function maskField(
 			? maskCollection(
 					variant.properties,
 					value as Readonly<Record<string, unknown>>,
+					byBlueprint ? sensitiveByBlueprint.get(variant) : undefined,
+					byBlueprint,
 				)
 			: value;
 	}
@@ -90,19 +112,32 @@ function maskField(
 
 /**
  * `value` of `properties` with the values of the `sensitive` keys and of
- * every property declared `sensitive`, at any depth, masked.
+ * every property declared `sensitive`, at any depth, masked. With
+ * `byBlueprint`, a nested blueprint of a record also masks the keys that
+ * record declares `sensitive`.
  */
 export function maskCollection(
 	properties: IBlueprintCollection,
 	value: Readonly<Record<string, unknown>>,
 	sensitive: readonly string[] = [],
+	byBlueprint = false,
 ): Readonly<Record<string, unknown>> {
 	return Object.freeze(
 		Object.fromEntries(
 			Object.entries(value).map(([key, item]) => [
 				key,
-				maskField(properties[key], item, sensitive.includes(key)),
+				maskField(properties[key], item, sensitive.includes(key), byBlueprint),
 			]),
 		),
 	);
+}
+
+/**
+ * `value` of `field` (a blueprint or a list) as it may leave the process:
+ * every property declared `sensitive` (a `Password`) masked at any depth of
+ * blueprints, lists and variants, records by their `toJSON`, and the keys a
+ * record declares `sensitive` where the blueprint is the one of that record.
+ */
+export function maskValueOf(field: BlueprintField, value: unknown): unknown {
+	return maskField(field, value, false, true);
 }

@@ -18,6 +18,7 @@ import {
 	UndeclaredRecordProperty,
 } from "./exceptions";
 import { isMarked } from "./marks";
+import { markSensitiveKeys } from "./mask";
 import { declareRecordName, isRecordName } from "./name";
 import { applyPlugins, RecordPlugins } from "./plugin";
 import type {
@@ -178,6 +179,10 @@ export function declareRecord(
 			}
 		}
 	}
+
+	// A value of the blueprint outside the record is masked the same way.
+	markSensitiveKeys(blueprint, sensitive);
+	markSensitiveKeys(declared, declaredOptions.sensitive ?? []);
 
 	const methods = change.length > 0 ? [CHANGE_MEMBER] : [];
 	for (const member of Object.keys(applied.descriptors)) {

@@ -8,6 +8,7 @@ import type {
 	IBlueprintCollection,
 } from "../blueprint/types/blueprint.interface";
 import { isProperty } from "../property/is-property";
+import { markSensitiveKeys } from "../record/mask";
 import { isRecordName } from "../record/name";
 import { IdentifiedRecord } from "../record/plugin";
 import { declareRecord, pluginContextOf } from "../record/record";
@@ -152,6 +153,9 @@ export function entityBuilderOf<
 			ENTITY_MEMBERS,
 			context,
 		);
+		// A value of the blueprint the entity is declared from, outside the
+		// entity, is masked the same way.
+		markSensitiveKeys(blueprint, options.sensitive ?? []);
 		Object.defineProperty(DeclaredEntity, IdentifiedRecord, { value: true });
 		Object.defineProperty(DeclaredEntity, EntityClock, { value: ownClock });
 		Object.defineProperty(DeclaredEntity, EntityClassBrand, { value: true });

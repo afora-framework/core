@@ -10,6 +10,7 @@ import type {
 } from "../blueprint/types/blueprint.interface";
 import { parseField } from "../parse/parse";
 import type { ParseResult } from "../parse/types/parse.interface";
+import { maskValueOf } from "../record/mask";
 
 /**
  * What the `response` of a use case says it gives: the fields of an object
@@ -68,13 +69,34 @@ export function parseResponse(
 	response: AnyUseCaseResponse,
 	value: unknown,
 ): ParseResult<unknown> {
-	return parseField(
+	const parsed = parseField(
 		response,
 		value,
 		[],
 		isBlueprintList(response) ? "list" : "blueprint",
 		true,
 	);
+	if (!parsed.issues && typeof parsed.value === "object" && parsed.value) {
+		responses.set(parsed.value, response);
+	}
+	return parsed;
+}
+
+/** The `response` each value `parseResponse` gave was handled by. */
+const responses = new WeakMap<object, AnyUseCaseResponse>();
+
+/**
+ * What `value` sends out of the process: a value `parseResponse` gave, with
+ * what is sensitive masked by its response (a `Password` always, the
+ * `sensitive` keys of a record's blueprint, at any depth); anything else as
+ * it is (a record masks itself through its `toJSON`).
+ */
+export function responseJsonOf(value: unknown): unknown {
+	const response =
+		typeof value === "object" && value !== null
+			? responses.get(value)
+			: undefined;
+	return response === undefined ? value : maskValueOf(response, value);
 }
 
 /**
