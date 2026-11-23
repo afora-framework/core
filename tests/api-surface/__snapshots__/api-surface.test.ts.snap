@@ -663,7 +663,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type Split<Path extends string> = Path extends \`\${infer Head}.\${infer Tail}\` ? [ Head, ...Split<Tail> ] : [ Path ];",
   ],
   "(internal) StageDescription": [
-    "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; } | { readonly kind: "opaque"; };",
+    "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; readonly hooks?: true; } | { readonly kind: "opaque"; };",
   ],
   "(internal) StdTokenOptions": [
     "export interface StdTokenOptions extends DescribedJwtOptions { readonly refresh?: { readonly expiresIn: number; }; readonly scopes?: readonly string[]; readonly scopesFrom?: string; readonly claims?: { readonly [claim: string]: string; }; }",
@@ -3117,7 +3117,7 @@ exports[`adapters entry (contract) 1`] = `
     "export interface SinkStage<Result = unknown, Options extends object = StageOptions> { readonly kind: "sink"; readonly name?: string; readonly options?: Options; build(operations: readonly OperationDescriptor[], context: StageContext): Result; }",
   ],
   "StageDescription": [
-    "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; } | { readonly kind: "opaque"; };",
+    "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; readonly hooks?: true; } | { readonly kind: "opaque"; };",
   ],
   "UseCaseDependencyDescription": [
     "export interface UseCaseDependencyDescription { readonly kind: "use-case" | "repository" | "environment" | "logger" | "service"; readonly ref: string; }",
@@ -3853,7 +3853,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export interface StageContext { readonly output: { readonly name: string; readonly statuses: OutputStatuses; }; }",
   ],
   "(internal) StageDescription": [
-    "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; } | { readonly kind: "opaque"; };",
+    "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; readonly hooks?: true; } | { readonly kind: "opaque"; };",
   ],
   "(internal) StageOptions": [
     "export type StageOptions = { readonly [key: string]: JsonValue; };",

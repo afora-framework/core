@@ -90,8 +90,9 @@ export function transformOf<Options extends object = StageOptions>(
 /**
  * A factory of sink stages: `openapi({ info })`. A sink that needs what JSON
  * cannot hold (middlewares, an authenticator) takes it as a second argument,
- * its `hooks`, which `build` receives and the description of the stage
- * leaves out.
+ * its `hooks`, which `build` receives. The description of the stage says
+ * that it was given hooks (`hooks: true`, when one of them is defined), not
+ * what they are: a stage with hooks is code, which extraction imports.
  */
 export function sinkOf<
 	Result,
@@ -125,12 +126,16 @@ export function sinkOf<
 				context: StageContext,
 			) => build(operations, options, context, hooks),
 		});
+		const hooked =
+			hooks !== undefined &&
+			Object.values(hooks as object).some((hook) => hook !== undefined);
 		descriptions.set(
 			stage,
 			Object.freeze({
 				kind: "sink" as const,
 				name,
 				options: options as StageOptions,
+				...(hooked ? { hooks: true as const } : {}),
 			}),
 		);
 		return stage;

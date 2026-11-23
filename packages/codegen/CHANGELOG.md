@@ -7,6 +7,10 @@
 - `generate` trims the end of each printed line in linear time. (SEC-31)
 - `loadSpec` and `resolveExtended` report a spec file that is not valid JSON by its path (with a line and column when the runtime gives the offset), never with the parser's message, which could quote the file. (SEC-33)
 
+### Fixed
+
+- `extractSpec` no longer drops the hooks of a sink (#199): a stage whose description has `hooks: true` (as `hono(options, { authenticator })`) throws an `ExtractionError` naming `outputs.<Name>.pipe.<index>` until it is mapped in `imports` (`--import` in the CLI), and is then written as `{ "import": "..." }`. It was written as `{ "sink", "options" }` before, so the generated code had no authenticator and no middlewares, and the mapping was ignored.
+
 ## 27.0.0-rc.4 — 2026-11-16
 
 ### Security
