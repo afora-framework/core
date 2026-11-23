@@ -28,10 +28,27 @@ async function read(path: string): Promise<unknown> {
 	try {
 		return JSON.parse(text);
 	} catch (error) {
+		// Never the engine's message: it can quote the text of the file.
 		throw new SpecLoadError(
-			`${path} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+			`${path} is not valid JSON${positionOf(text, error)}.`,
 		);
 	}
+}
+
+/**
+ * ` (line L, column C)` of a JSON.parse error, when the engine gives the
+ * offset (Node does, as `position N`); only that number is read from its message.
+ */
+function positionOf(text: string, error: unknown): string {
+	const match = /\bposition (\d+)\b/.exec(
+		error instanceof Error ? error.message : "",
+	);
+	if (!match) return "";
+	const offset = Math.min(Number(match[1]), text.length);
+	const before = text.slice(0, offset);
+	const line = before.split("\n").length;
+	const column = offset - before.lastIndexOf("\n");
+	return ` (line ${line}, column ${column})`;
 }
 
 /** The file a reference points to: a relative path (a directory means its afora.json) or a package. */

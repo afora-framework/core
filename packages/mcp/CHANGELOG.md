@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- The diagnostics of `afora_generate` carry the file, line, column, TS code and a message whose string and template literals and quoted types are redacted (`"…"`, `'…'`); a quoted plain name such as `'ServiceFactory'` is kept. A type of a project module written `as const` no longer brings its values into the answer. (SEC-32)
+- An `afora.json`, or a spec it extends, that is not valid JSON is reported without the parser's message, which could quote the file; `unresolved_extends` gives the paths inside the project from its root. (SEC-33)
+- Gets the fix of `@afora/codegen` for a spec string with a long run of spaces (SEC-31).
+
 ## 27.0.0-rc.4 — 2026-11-16
 
 ### Security

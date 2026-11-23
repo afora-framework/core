@@ -12,6 +12,7 @@ import { join } from "node:path";
 import {
 	confinePath,
 	generate,
+	loadSpec,
 	projectBoundaryIssues,
 	resolveExtended,
 	SpecLoadError,
@@ -203,3 +204,52 @@ describe("SEC-17: tooling directories spelled with characters a file system fold
 		expect(result.refused.length).toBeGreaterThan(0);
 	});
 });
+
+describe("SEC-31: printing a spec string with a long run of blanks", () => {
+	test("SEC-31: a message with 20000 spaces is generated in linear time", () => {
+		const spec = {
+			version: 1,
+			exceptions: Object.fromEntries([
+				["Aaa", { layer: "entity", message: `a${" ".repeat(20_000)}b` }],
+				...Array.from({ length: 20 }, (_, i) => [
+					`E${i}`,
+					{ layer: "entity", message: "m" },
+				]),
+			]),
+		};
+		const start = performance.now();
+		const files = generate(spec as never);
+		expect(performance.now() - start).toBeLessThan(1000);
+		expect(
+			files.some((file) => file.contents.includes(" ".repeat(20_000))),
+		).toBe(true);
+	});
+});
+
+describe("SEC-33: a spec file that is not valid JSON", () => {
+	test("SEC-33: the error names the file, never its text", async () => {
+		const { project } = await scratch();
+		const file = join(project, "settings.json");
+		for (const text of [
+			'{\n  "Stripe": sk_live_ABCDEFGHIJ0123\n}\n',
+			"{\n  \"Stripe\": 'sk_live_ABCDEFGHIJ0123'\n}\n",
+		]) {
+			await writeFile(file, text);
+			await expectNoText(file);
+		}
+	});
+});
+
+async function expectNoText(file: string): Promise<void> {
+	const error = await loadSpec(file).then(
+		() => undefined,
+		(caught: unknown) => caught,
+	);
+	expect(error).toBeInstanceOf(SpecLoadError);
+	const message = (error as Error).message;
+	expect(message).toContain("not valid JSON");
+	expect(message).toContain(file);
+	for (const text of ["sk_live", "Stripe", "ABCDEFGHIJ"]) {
+		expect(message).not.toContain(text);
+	}
+}

@@ -7,6 +7,9 @@
 
 - `findBy<Key>` and `findManyBy<Key>` give no entity for a missing value: `undefined` or `null` gives `undefined` and `[]` without calling the provider, on every provider, including a declarative use case step given an optional input that is absent. See [Repositories](docs/repositories.md). (SEC-20)
 - **Breaking.** A standard `register` whose input takes a key that a `login` or `refresh` of the same entity makes its tokens from (`token.scopesFrom`, the keys of `token.claims`) now throws `UseCaseUnavailable` at declaration, whichever is declared first and in whatever command; the key is given by `values` or left out with `omit`. The example of [Tokens and sessions](docs/auth.md#tokens-and-sessions) sets `roles` with `values`. (SEC-22)
+- `@afora/codegen` prints a spec string holding a long run of spaces in linear time. (SEC-31)
+- `@afora/mcp`: the diagnostics `afora_generate` returns carry the file, line, column, TS code and a message whose literal values and quoted types are redacted (`"…"`, `'…'`; a plain name such as `'ServiceFactory'` is kept), so a type of a project module never brings its values into the answer. (SEC-32)
+- A spec file that is not valid JSON is reported by its path (and, where the runtime gives it, a line and column), never with the parser's message, which could quote the file; `@afora/mcp` gives the paths of what a spec extends from the project root. (SEC-33)
 
 ### Fixed
 

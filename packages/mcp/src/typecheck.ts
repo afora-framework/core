@@ -29,6 +29,48 @@ export type TypecheckResult =
  */
 const DIAGNOSTIC = /\((\d+),(\d+)\): error (TS\d+): /;
 
+/** A quoted name tsc prints that is only a name: `'ServiceFactory'`, `'Kind'`. */
+const NAME = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
+
+/**
+ * `text` with each string and template literal as `"…"` (`\`…\``), one
+ * that does not close redacted to the end. A single walk: a regular
+ * expression with escapes retries from every quote, quadratic on `"\"\"\"…`.
+ */
+function redactLiterals(text: string): string {
+	let out = "";
+	let index = 0;
+	while (index < text.length) {
+		const char = text[index] as string;
+		if (char !== '"' && char !== "`") {
+			out += char;
+			index++;
+			continue;
+		}
+		let end = index + 1;
+		while (end < text.length && text[end] !== char) {
+			end += text[end] === "\\" ? 2 : 1;
+		}
+		out += `${char}…${end < text.length ? char : ""}`;
+		index = end + 1;
+	}
+	return out;
+}
+
+/**
+ * A tsc message without the values it may print: a type of a project module
+ * written `as const` holds its literal values, and tsc quotes it whole. Every
+ * literal becomes `"…"`, and every quoted type that is not a plain name
+ * becomes `'…'`, so a diagnostic says where and what kind of error, never
+ * what a module holds.
+ */
+export function redactMessage(message: string): string {
+	return redactLiterals(message).replace(
+		/'([^'\n]*)'/g,
+		(quoted, inner: string) => (NAME.test(inner) ? quoted : "'…'"),
+	);
+}
+
 /** Parses the output of `tsc --noEmit` (default, non-pretty format). */
 export function parseDiagnostics(
 	output: string,
@@ -44,11 +86,11 @@ export function parseDiagnostics(
 				line: Number(match[1]),
 				column: Number(match[2]),
 				code: match[3] as string,
-				message: text.slice(match.index + match[0].length),
+				message: redactMessage(text.slice(match.index + match[0].length)),
 			});
 		} else if (/^\s+\S/.test(text) && found.length > 0) {
 			const last = found[found.length - 1] as { message: string };
-			last.message += `\n${text.trim()}`;
+			last.message += `\n${redactMessage(text.trim())}`;
 		}
 	}
 	return found;
@@ -82,7 +124,7 @@ export async function typecheck(
 		if (all.length === 0 && result.code !== 0) {
 			return {
 				ran: false,
-				reason: `tsc failed without diagnostics: ${result.output.trim().slice(0, 500)}`,
+				reason: `tsc failed without diagnostics: ${redactMessage(result.output.trim().slice(0, 500))}`,
 			};
 		}
 		const diagnostics = all
