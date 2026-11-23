@@ -4924,7 +4924,7 @@ Property declarations by key, e.g. `{ name: Name, email: Email }`.
 
 *const* · tier: experimental · `import { InvalidJwtOptions } from "@afora/core/experimental"`
 
-`jwtOf` got options it cannot use, or its secret is missing; `details.reason` says what.
+`jwtOf` got options it cannot use, its secret is missing, or `sign` got a scope that is not a scope token; `details.reason` says what.
 
 ### Jwt
 
@@ -5117,7 +5117,9 @@ hono(options, { authenticator: jwt.authenticator() });
 
 A token is refused (`Unauthenticated`) when it is malformed, signed with
 another algorithm or secret, expired, not yet valid, of another issuer,
-audience or use, or has no subject. Throws `InvalidJwtOptions` for options
+audience or use, or has no subject. `sign` leaves out a claim with a
+registered name and rejects a scope that is not a scope token (not empty,
+no space or control character). Throws `InvalidJwtOptions` for options
 it cannot use, and when the secret of `{ env }` is missing or shorter than
 32 characters, on the first token.
 
