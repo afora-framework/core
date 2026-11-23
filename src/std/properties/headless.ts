@@ -4,12 +4,20 @@ import { InvalidPropertyValue } from "../../core/property/exceptions";
 import { propertyOf } from "../../core/property/property";
 import { schemaOf } from "../../core/schema/schema";
 import type { ISchema } from "../../core/schema/types/schema.interface";
+import { assertDepth } from "./json";
 
 /** A JSON Schema (draft 2020-12) object; boolean schemas are not accepted. */
 const JSON_SCHEMA = Type.Unsafe<TSchema>({
 	type: "object",
 	allOf: [Meta["https://json-schema.org/draft/2020-12/schema"]],
 });
+
+/**
+ * How deep a held schema is read, in JSON levels: a schema nested deeper is
+ * rejected, so that checking data against it stays quick and within the
+ * stack, on every runtime.
+ */
+const MAX_SCHEMA_DEPTH = 128;
 
 /**
  * A TypeBox schema held as a value, e.g. the shape of a content type defined
@@ -20,6 +28,7 @@ export class SchemaProperty extends propertyOf({
 	name: "schema",
 	schema: JSON_SCHEMA,
 	default: Type.String(),
+	preHandle: (value) => assertDepth(value, MAX_SCHEMA_DEPTH),
 }) {
 	private compiled?: ISchema<TSchema>;
 
@@ -27,7 +36,8 @@ export class SchemaProperty extends propertyOf({
 	static deserialize(json: string): SchemaProperty {
 		let value: unknown;
 		try {
-			value = JSON.parse(json);
+			// The depth first: the check of the schema walks it all.
+			value = assertDepth(JSON.parse(json), MAX_SCHEMA_DEPTH);
 		} catch (error) {
 			throw new InvalidPropertyValue({
 				source: "schema",

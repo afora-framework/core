@@ -25,6 +25,32 @@ type Path = readonly (string | number)[];
  */
 const MAX_JSON_DEPTH = 1000;
 
+/**
+ * Throws, for the property to reject it, when `value` has an object or a list
+ * nested `maxDepth` levels or more below it (the root is at level 0). The
+ * walk stops at `maxDepth`, so it is short and a cycle ends it too.
+ */
+export function assertDepth<Value>(value: Value, maxDepth: number): Value {
+	const path: (string | number)[] = [];
+	function walk(item: unknown, depth: number): boolean {
+		if (typeof item !== "object" || item === null) return false;
+		if (depth >= maxDepth) return true;
+		for (const key in item) {
+			if (!Object.hasOwn(item, key)) continue;
+			path.push(Array.isArray(item) ? Number(key) : key);
+			if (walk((item as Record<string, unknown>)[key], depth + 1)) return true;
+			path.pop();
+		}
+		return false;
+	}
+	if (walk(value, 0)) {
+		throw new Error(
+			`${path.length === 0 ? "" : `/${path.join("/")}: `}is nested too deeply`,
+		);
+	}
+	return value;
+}
+
 /** Why `value` is not JSON, and where; `undefined` when it is. */
 function notJson(
 	value: unknown,
