@@ -219,7 +219,10 @@ export abstract class AbstractDefineProperty<
 
 		// preHandle expects the schema's types, so a value of another type is
 		// rejected before it reaches it.
-		if ((preHandles || handles) && !schema.matchShape(value)) {
+		if (
+			((preHandles && !takesAnyValueOf(this.preHandle)) || handles) &&
+			!schema.matchShape(value)
+		) {
 			return this.mismatch(value);
 		}
 
@@ -300,6 +303,28 @@ export abstract class AbstractDefineProperty<
 		const { name, schema } = this.type;
 		return reject(new Failure(name, undefined, errorsOfSchema(schema, value)));
 	}
+}
+
+/** The `preHandle` steps that take a value of any type. */
+const anyValueSteps = new WeakSet<object>();
+
+/**
+ * Tells that `step`, a `preHandle`, takes a value of any type: the shape of
+ * a value is not checked before it, only the schema after it. For a step
+ * that bounds what the schema then walks, such as a cap on depth.
+ * @internal
+ */
+export function takesAnyValue<Step extends object>(step: Step): Step {
+	anyValueSteps.add(step);
+	return step;
+}
+
+/**
+ * Whether `step` was told to take a value of any type.
+ * @internal
+ */
+export function takesAnyValueOf(step: unknown): boolean {
+	return typeof step === "function" && anyValueSteps.has(step);
 }
 
 /** The steps as they are when a property does not declare them. */
@@ -398,6 +423,7 @@ export function parserOf(
 	const { match, matchShape } = checksOfSchema(schema);
 	const preHandle =
 		pipeline.preHandle === PASS.preHandle ? undefined : pipeline.preHandle;
+	const shapeFirst = !takesAnyValueOf(preHandle);
 	const afterHandle =
 		pipeline.afterHandle === PASS.afterHandle
 			? undefined
@@ -409,7 +435,7 @@ export function parserOf(
 		}
 		try {
 			if (preHandle !== undefined) {
-				if (!matchShape(value)) return pipeline.mismatch(value);
+				if (shapeFirst && !matchShape(value)) return pipeline.mismatch(value);
 				value = preHandle.call(pipeline, value);
 			}
 			if (!match(value)) return pipeline.mismatch(value);

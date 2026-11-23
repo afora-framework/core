@@ -8,7 +8,8 @@
 
 ### Fixed
 
-- `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: once a blueprint had parsed a few values, such a value made them throw a `RangeError` instead of giving an issue at the property's path, as they did before. (SEC-27)
+- `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: they give an issue at the property's path. (SEC-27)
+- `jsonOf` checks the depth of a value (1000 at most, `is nested too deeply`) before its schema walks it, for a recursive schema too, as [Properties](docs/properties.md#json) says. (SEC-28)
 
 ### Documentation
 
