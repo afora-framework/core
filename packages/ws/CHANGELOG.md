@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A session holds at most 1000 topics: past that, a new subscription is a 403 `WsTopicForbidden`, the answer to a topic that is not allowed. A topic the session already holds does not count twice, and unsubscribing frees a place. (SEC-30)
+
 ## 27.0.0-rc.4 — 2026-11-16
 
 A candidate of 27.0.0, with no changes since 27.0.0-rc.3. See the [root CHANGELOG](../../CHANGELOG.md).
