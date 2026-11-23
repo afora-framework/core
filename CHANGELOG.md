@@ -6,6 +6,7 @@
 ### Security
 
 - `findBy<Key>` and `findManyBy<Key>` give no entity for a missing value: `undefined` or `null` gives `undefined` and `[]` without calling the provider, on every provider, including a declarative use case step given an optional input that is absent. See [Repositories](docs/repositories.md). (SEC-20)
+- **Breaking.** A standard `register` whose input takes a key that a `login` or `refresh` of the same entity makes its tokens from (`token.scopesFrom`, the keys of `token.claims`) now throws `UseCaseUnavailable` at declaration, whichever is declared first and in whatever command; the key is given by `values` or left out with `omit`. The example of [Tokens and sessions](docs/auth.md#tokens-and-sessions) sets `roles` with `values`. (SEC-22)
 
 ### Fixed
 
