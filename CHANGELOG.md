@@ -6,6 +6,10 @@
 
 - The Release workflow sets `coreVersion` in afora CMS's `site-values` entry after a release that npm serves as `latest` (once its tag and GitHub release exist), so getafora.com shows the new version without a hand edit. It uses the repository secret `CMS_TOKEN`, an afora CMS token limited to `site-values`, and the variable `CMS_API_URL`; without them it only warns. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+### Fixed
+
+- `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: once a blueprint had parsed a few values, such a value made them throw a `RangeError` instead of giving an issue at the property's path, as they did before. (SEC-27)
+
 ### Documentation
 
 - [Blueprints](docs/blueprints.md#the-type-of-a-value) shows how to get the type of a blueprint's value: `StandardSchemaV1.InferOutput<typeof Task>`, and `InferInput` for what it accepts. `BlueprintValue` takes a collection of properties, not a blueprint.
