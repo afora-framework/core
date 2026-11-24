@@ -11,6 +11,8 @@
 - A spec file that is not valid JSON is reported by its path (and, where the runtime gives it, a line and column), never with the parser's message, which could quote the file; `@afora/mcp` gives the paths of what a spec extends from the project root. (SEC-33)
 - The response of a use case declared by a blueprint or a list (`response: Account.blueprint`, `listOf(...)`, a blueprint holding a `Password`) is sent masked as a record's `toJSON` masks it: every property declared `sensitive` (a `Password` always) at any depth, through nested blueprints, lists and variants, and the keys a record or entity declares `sensitive` where the blueprint is the record's (its `.blueprint` or the blueprint it was declared from). This holds in `outputValueOf` and so in every sink of afora (`http`, `hono`, `express`, `fastify`, `elysia`, `websocket`, `mcpTools`), as [Outputs](docs/outputs.md) promised. A direct call (`execute()`, a dependency) still reads the real values, and a key a route sends with `setCookie` keeps its value. (SEC-19)
 
+- **Breaking.** `@afora/hono`: every input key of a webhook operation comes from the signed body. A webhook whose route reads an input key from the path (`{name}`), the query, a header or a cookie now throws `InvalidOutputStage` when the app is built, since the signature covers only the body. The README says which values a webhook can be deduplicated on: one in the body, or `webhook-id` with `"standard-webhooks"`. See [Webhooks](packages/hono/README.md#webhooks) and Migration below. (SEC-37)
+
 ### Fixed
 
 - The OpenAPI document of an output marks `writeOnly` every key a use case response is sent masked by: where the response is a record's blueprint (`response: Account.blueprint`), the keys the record declares `sensitive`, at any depth of blueprints, lists and variants, as well as every `sensitive` property. See [Outputs](docs/outputs.md). (SEC-34)
@@ -36,6 +38,37 @@
 
 - [Outputs](docs/outputs.md) says that a key a route sends with `setCookie` keeps its real value in the cookie (masking applies to the body), and that a blueprint shared by several records masks the `sensitive` keys of all of them in a response; [Standard use cases](docs/std-use-cases.md) describes at `register` the declaration check on the keys a token is made from.
 - [Blueprints](docs/blueprints.md#the-type-of-a-value) shows how to get the type of a blueprint's value: `StandardSchemaV1.InferOutput<typeof Task>`, and `InferInput` for what it accepts. `BlueprintValue` takes a collection of properties, not a blueprint.
+
+### Migration
+
+**A webhook reads its input from the body only.** Before:
+
+```ts
+class PaymentReceived extends useCaseOf({
+	name: "PaymentReceived",
+	blueprint: blueprintOf((ctx) => ({
+		tenant: ctx.string,
+		amount: ctx.integer,
+	})),
+	route: { method: "post", path: "/tenants/{tenant}/stripe" },
+}) {}
+```
+
+After:
+
+```ts
+class PaymentReceived extends useCaseOf({
+	name: "PaymentReceived",
+	// `tenant` is read from the signed body (for Stripe, the metadata you set on the object).
+	blueprint: blueprintOf((ctx) => ({
+		tenant: ctx.string,
+		amount: ctx.integer,
+	})),
+	route: { method: "post", path: "/stripe" },
+}) {}
+```
+
+A value that only the URL or a header carries is not signed: send it in the body, or check it against the body in `execute`.
 
 ## 27.0.0-rc.4 — 2026-11-16
 
