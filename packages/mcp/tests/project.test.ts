@@ -1,6 +1,6 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { type Connected, connect, makeProject, removeProject } from "./project";
 
 const projects: string[] = [];
@@ -186,6 +186,74 @@ describe("afora_project", () => {
 		expect(data.notes).toEqual([
 			'Output "Docs": Blog.getPost declare no access beside operations that do; say { "public": true } where anyone may call.',
 			"No output serves the command(s) Health: their operations run only in process.",
+		]);
+	});
+
+	test("shows that a sink was given hooks in code", async () => {
+		const hono = JSON.stringify(
+			resolve(import.meta.dir, "../../hono/src/index.ts"),
+		);
+		const app = APP_TS.replace(
+			"export const App",
+			`import { hono } from ${hono};
+export const Api = outputOf({
+	name: "Api",
+	commands: [Blog],
+	pipe: [hono({ basePath: "/v1" }, { authenticator: () => null })],
+});
+export const Open = outputOf({
+	name: "Open",
+	commands: [Blog],
+	pipe: [hono({ basePath: "/open" })],
+});
+
+export const App`,
+		).replace("outputs: { Docs }", "outputs: { Docs, Api, Open }");
+		const { client } = await setup(
+			{ "src/app.ts": app },
+			{ app: "src/app.ts#App" },
+		);
+		const { isError, data } = await client.call("afora_project");
+		expect(isError, JSON.stringify(data)).toBe(false);
+		const outputs = Object.fromEntries(
+			data.outputs.map((output: Record<string, unknown>) => [
+				output.name,
+				output,
+			]),
+		);
+		expect(outputs.Api.hooks).toBe(true);
+		expect(outputs.Api.authentication).toBe(
+			"not in the sink options; the sink is given hooks in code, which may hold an authenticator",
+		);
+		expect(outputs.Open.hooks).toBeUndefined();
+		expect(data.notes).toContain(
+			'Output "Api": 1 operation(s) declare an access and its sink options have no "auth"; the stage is given hooks in code, which must hold an authenticator, or they answer 401.',
+		);
+		expect(data.notes).toContain(
+			'Output "Open": 1 operation(s) declare an access and its sink options have no "auth". Unless the stage is given an authenticator in code (its hooks), they answer 401.',
+		);
+		// Extraction does not drop the hooks: it asks where the stage is exported from.
+		const code = {
+			"useCases.GetPost": "../app#GetPost",
+			"useCases.WritePost": "../app#WritePost",
+			"useCases.Ping": "../app#Ping",
+		};
+		const unmapped = await client.call("afora_extract", {
+			app: "src/app.ts#App",
+			imports: code,
+		});
+		expect(unmapped.isError).toBe(true);
+		expect(JSON.stringify(unmapped.data)).toContain("outputs.Api.pipe.0");
+		const mapped = await client.call("afora_extract", {
+			app: "src/app.ts#App",
+			imports: { ...code, "outputs.Api.pipe.0": "../api#apiSink" },
+		});
+		expect(mapped.isError, JSON.stringify(mapped.data)).toBe(false);
+		expect(mapped.data.spec.outputs.Api.pipe).toEqual([
+			{ import: "../api#apiSink" },
+		]);
+		expect(mapped.data.spec.outputs.Open.pipe).toEqual([
+			{ sink: "hono", options: { basePath: "/open" } },
 		]);
 	});
 

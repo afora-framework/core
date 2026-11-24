@@ -23,7 +23,7 @@ function plain(value: unknown): value is Record<string, unknown> {
 	);
 }
 
-function isMembership(
+export function isMembership(
 	value: unknown,
 ): value is { readonly in: readonly unknown[] } {
 	return (

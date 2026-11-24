@@ -1,6 +1,41 @@
 # Changelog
 
-## Unreleased
+## 27.0.0-rc.5 — 2026-11-24
+
+The fifth candidate of 27.0.0: security fixes from a hunt of 27.0.0-rc.4, and the fix of #199, a blocking issue of the 27.0 milestone. Every finding has a regression test named `SEC-<n>`. Two are breaking, before the contract freezes: a standard `register` no longer takes the keys a token is made from, and a webhook of `@afora/hono` reads its input from the signed body only (see Migration below). The public API gains one optional field, `hooks` on `StageDescription` (#199); nothing else in it changes (see [Release candidates](VERSIONING.md#release-candidates)).
+
+### Security
+
+- `findBy<Key>` and `findManyBy<Key>` give no entity for a missing value: `undefined` or `null` gives `undefined` and `[]` without calling the provider, on every provider, including a declarative use case step given an optional input that is absent. See [Repositories](docs/repositories.md). (SEC-20)
+- **Breaking.** A standard `register` whose input takes a key that a `login` or `refresh` of the same entity makes its tokens from (`token.scopesFrom`, the keys of `token.claims`) now throws `UseCaseUnavailable` at declaration, whichever is declared first and in whatever command; the key is given by `values` or left out with `omit`. The example of [Tokens and sessions](docs/auth.md#tokens-and-sessions) sets `roles` with `values`. (SEC-22)
+- `@afora/codegen` prints a spec string holding a long run of spaces in linear time. (SEC-31)
+- `@afora/codegen` and `@afora/mcp`: `output.dir` is relative on every platform. `validateSpec` gives `invalid_output` for one that starts with `/` or `\` (a root or UNC path) or with a drive (`D:`), a spec it extends is refused for the same, and `confinePath` (so `writeGenerated`) holds a path on another Windows drive outside the project. See [the codegen README](packages/codegen/README.md). (SEC-39)
+- `@afora/mcp`: the diagnostics `afora_generate` returns carry the file, line, column, TS code and a message whose literal values and quoted types are redacted (`"…"`, `'…'`; a plain name such as `'ServiceFactory'` is kept), so a type of a project module never brings its values into the answer. (SEC-32)
+- A spec file that is not valid JSON is reported by its path (and, where the runtime gives it, a line and column), never with the parser's message, which could quote the file; `@afora/mcp` gives the paths of what a spec extends from the project root. (SEC-33)
+- The response of a use case declared by a blueprint or a list (`response: Account.blueprint`, `listOf(...)`, a blueprint holding a `Password`) is sent masked as a record's `toJSON` masks it: every property declared `sensitive` (a `Password` always) at any depth, through nested blueprints, lists and variants, and the keys a record or entity declares `sensitive` where the blueprint is the record's (its `.blueprint` or the blueprint it was declared from). This holds in `outputValueOf` and so in every sink of afora (`http`, `hono`, `express`, `fastify`, `elysia`, `websocket`, `mcpTools`), as [Outputs](docs/outputs.md) promised. A direct call (`execute()`, a dependency) still reads the real values, and a key a route sends with `setCookie` keeps its value. (SEC-19)
+- **Breaking.** `@afora/hono`: every input key of a webhook operation comes from the signed body. A webhook whose route reads an input key from the path (`{name}`), the query, a header or a cookie now throws `InvalidOutputStage` when the app is built, since the signature covers only the body. The README says which values a webhook can be deduplicated on: one in the body, or `webhook-id` with `"standard-webhooks"`. See [Webhooks](packages/hono/README.md#webhooks) and Migration below. (SEC-37)
+
+### Fixed
+
+- The OpenAPI document of an output marks `writeOnly` every key a use case response is sent masked by: where the response is a record's blueprint (`response: Account.blueprint`), the keys the record declares `sensitive`, at any depth of blueprints, lists and variants, as well as every `sensitive` property. See [Outputs](docs/outputs.md). (SEC-34)
+- `@afora/codegen` and `@afora/mcp`: `output.dir` and `confinePath` refuse `node_modules` and `.git` in the spellings Windows reads as them too: with trailing dots or spaces, with a stream suffix (`:...`) and as a short name (`NODE_M~1`, `GIT~1`), on every platform. (SEC-40)
+- `@afora/mcp`: `afora_generate` type-checks with the TypeScript installed in the project (`node_modules/typescript` of the project directory), run by the server's own runtime, and only with it: a `tsc` of a parent directory, the `PATH` or a package cache is never run. A project without TypeScript gets `typecheck: { ran: false }` with the reason. See [Building with an agent](docs/building-with-an-agent.md). (SEC-41)
+- The default route of an operation (`/{command}/{operation}` in kebab case, in `openapi` and the sinks that serve HTTP) is computed in linear time. Routes are unchanged.
+- `findBy<Key>` and `findManyBy<Key>` take one value: `{ in: [...] }` throws `InvalidRepositoryQuery` instead of being read as a membership, which only the queries (`findMany`, `exists`, `findPage`, `count`) take. (SEC-21)
+- `PlainPassword` and `Password.hash` apply the same password rules to a value with line breaks: the schema pattern of `PlainPassword` looks for each required character across the whole value, as `Password.hash` does.
+- `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: they give an issue at the property's path. (SEC-27)
+- `jsonOf` checks the depth of a value (1000 at most, `is nested too deeply`) before its schema walks it, for a recursive schema too, as [Properties](docs/properties.md#json) says. (SEC-28)
+- `SchemaProperty` (`ctx.schema`) rejects a schema nested more than 128 JSON levels deep, with an `is nested too deeply` issue at its path, in `safeParse`, the constructor and `deserialize`, so a schema it holds can always be checked against quickly, on Bun, Node and browsers. See [Standard properties](docs/std-properties.md#json-and-schemas). (SEC-29)
+- `new SchemaProperty(value)` checks the depth of `value` before its shape, so a schema nested far deeper than the limit throws `InvalidPropertyValue` (`is nested too deeply`), as `safeParse` and `deserialize` give. (SEC-35)
+- `@afora/ws`: a session holds at most 1000 topics. Past the limit a new subscription is a 403 `WsTopicForbidden`, the answer to a topic that is not allowed; a topic the session already holds does not count twice, and unsubscribing frees a place. See [the ws README](packages/ws/README.md#protocol). (SEC-30)
+- `@afora/ws`: a topic is at most 512 bytes (UTF-8). A longer `subscribe` or `unsubscribe` is a 400 `InvalidWsMessage`, before the topics of the options and `authorize` are asked, so the topics a session holds stay bounded in size as in number. See [the ws README](packages/ws/README.md#protocol). (SEC-36)
+- `jwtOf`: a scope is a scope token (RFC 6749): `sign` rejects with `InvalidJwtOptions` a scope that is empty or holds a space or a control character, so the scopes a token is verified with are the ones it was signed with. The option `token` of `login` and `refresh` throws `UseCaseUnavailable` for such a fixed scope, and `login` gives no token to an entity that holds one. See [Access](docs/auth.md#tokens-and-sessions). (SEC-23)
+- `jwtOf`: `sign` leaves out of the token a claim named like a registered one (`sub`, `scope`, `iat`, `exp`, `nbf`, `iss`, `aud`, `use`), so `issuer`, `audience` and `use` come only from the options; the option `token.claims` of `login` and `refresh` throws `UseCaseUnavailable` for such a name. (SEC-24)
+- `jwtOf`: `verify` accepts a signature only in the base64url encoding `sign` gives (no padding, no other unused bits), so a token has one valid form. (SEC-25)
+- The default password hashers (`Bun.password`, native `node:crypto`) verify a stored hash they cannot read (argon2i or argon2d on Node, another argon2 version, settings out of range, a salt or tag too short) as `false`, after the same work as a wrong password, so `login` answers it with `UseCaseInvalidCredentials` (401) in the same time instead of a 500. See [Runtime](docs/runtime.md#password-hashing). (SEC-38)
+- `jwtOf`: a top-level `__proto__` key is not a claim: `sign` leaves it out and `verify` does not copy it into `principal.claims`, which stays a plain object.
+- Extracting an application no longer drops the hooks of a sink (#199). `hono(options, { authenticator, middlewares })` was extracted as `{ "sink": "hono", "options": {...} }`, so the code generated from the spec served the API with no authenticator and no middlewares, and an `--import outputs.<Name>.pipe.<index>` mapping was ignored. The description of a sink given hooks (`stageDescriptionOf`, `app.describe().outputs.<Name>.pipe`) now carries `hooks: true`, an optional field added to `StageDescription` (`@afora/core/adapters`); `extractSpec` of `@afora/codegen` throws an `ExtractionError` naming `outputs.<Name>.pipe.<index>` for such a stage until it is mapped, and then writes `{ "import": "..." }`. A sink without hooks is extracted as before. `afora_project` of `@afora/mcp` shows `hooks: true` on such an output. See [Routes and access](docs/afora-json.md#routes-and-access).
+- `@afora/codegen` names the file of a use case, and `afora_project` of `@afora/mcp` gives the default route of an operation, in linear time for a name with a long run of capitals; the names are the same as before.
 
 ### Repository
 
@@ -8,7 +43,59 @@
 
 ### Documentation
 
+- [Outputs](docs/outputs.md) says that a key a route sends with `setCookie` keeps its real value in the cookie (masking applies to the body), and that a blueprint shared by several records masks the `sensitive` keys of all of them in a response; [Standard use cases](docs/std-use-cases.md) describes at `register` the declaration check on the keys a token is made from.
 - [Blueprints](docs/blueprints.md#the-type-of-a-value) shows how to get the type of a blueprint's value: `StandardSchemaV1.InferOutput<typeof Task>`, and `InferInput` for what it accepts. `BlueprintValue` takes a collection of properties, not a blueprint.
+
+### Migration
+
+**`register` does not take the keys a token is made from.** Before:
+
+```ts
+useCases: (ctx) => ({
+	register: ctx.register(Users), // the input took `roles`
+	login: ctx.login(Users, { token: { secret: { env: "JWT_SECRET" }, scopesFrom: "roles" } }),
+}),
+```
+
+After:
+
+```ts
+useCases: (ctx) => ({
+	register: ctx.register(Users, { values: { roles: [] } }),
+	login: ctx.login(Users, { token: { secret: { env: "JWT_SECRET" }, scopesFrom: "roles" } }),
+}),
+```
+
+Roles are then given by a use case only an administrator can call (`ctx.create` or `ctx.update` with `access`). An optional key can be left out with `omit` instead.
+
+**A webhook reads its input from the body only.** Before:
+
+```ts
+class PaymentReceived extends useCaseOf({
+	name: "PaymentReceived",
+	blueprint: blueprintOf((ctx) => ({
+		tenant: ctx.string,
+		amount: ctx.integer,
+	})),
+	route: { method: "post", path: "/tenants/{tenant}/stripe" },
+}) {}
+```
+
+After:
+
+```ts
+class PaymentReceived extends useCaseOf({
+	name: "PaymentReceived",
+	// `tenant` is read from the signed body (for Stripe, the metadata you set on the object).
+	blueprint: blueprintOf((ctx) => ({
+		tenant: ctx.string,
+		amount: ctx.integer,
+	})),
+	route: { method: "post", path: "/stripe" },
+}) {}
+```
+
+A value that only the URL or a header carries is not signed: send it in the body, or check it against the body in `execute`.
 
 ## 27.0.0-rc.4 — 2026-11-16
 

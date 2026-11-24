@@ -53,7 +53,7 @@ export class PlainPassword extends propertyOf({
 	schema: Type.String({
 		minLength: PASSWORD_MIN_LENGTH,
 		maxLength: PASSWORD_MAX_LENGTH,
-		pattern: `^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[${escaped}])`,
+		pattern: `^(?=[\\s\\S]*[a-z])(?=[\\s\\S]*[A-Z])(?=[\\s\\S]*\\d)(?=[\\s\\S]*[${escaped}])`,
 	}),
 	default: "Demo@123",
 	sensitive: true,

@@ -8,15 +8,18 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 import {
 	confinePath,
 	generate,
+	loadSpec,
 	projectBoundaryIssues,
 	resolveExtended,
 	SpecLoadError,
+	validateSpec,
 	writeGenerated,
 } from "../src";
+import { inTooling, isInsideWith } from "../src/boundary";
 
 const dirs: string[] = [];
 afterAll(() =>
@@ -201,5 +204,147 @@ describe("SEC-17: tooling directories spelled with characters a file system fold
 		const result = await writeGenerated(project, generate(spec, {}));
 		expect(result.written).toEqual([]);
 		expect(result.refused.length).toBeGreaterThan(0);
+	});
+});
+
+describe("SEC-31: printing a spec string with a long run of blanks", () => {
+	test("SEC-31: a message with 20000 spaces is generated in linear time", () => {
+		const spec = {
+			version: 1,
+			exceptions: Object.fromEntries([
+				["Aaa", { layer: "entity", message: `a${" ".repeat(20_000)}b` }],
+				...Array.from({ length: 20 }, (_, i) => [
+					`E${i}`,
+					{ layer: "entity", message: "m" },
+				]),
+			]),
+		};
+		const start = performance.now();
+		const files = generate(spec as never);
+		expect(performance.now() - start).toBeLessThan(1000);
+		expect(
+			files.some((file) => file.contents.includes(" ".repeat(20_000))),
+		).toBe(true);
+	});
+});
+
+describe("SEC-33: a spec file that is not valid JSON", () => {
+	test("SEC-33: the error names the file, never its text", async () => {
+		const { project } = await scratch();
+		const file = join(project, "settings.json");
+		for (const text of [
+			'{\n  "Stripe": sk_live_ABCDEFGHIJ0123\n}\n',
+			"{\n  \"Stripe\": 'sk_live_ABCDEFGHIJ0123'\n}\n",
+		]) {
+			await writeFile(file, text);
+			await expectNoText(file);
+		}
+	});
+});
+
+async function expectNoText(file: string): Promise<void> {
+	const error = await loadSpec(file).then(
+		() => undefined,
+		(caught: unknown) => caught,
+	);
+	expect(error).toBeInstanceOf(SpecLoadError);
+	const message = (error as Error).message;
+	expect(message).toContain("not valid JSON");
+	expect(message).toContain(file);
+	for (const text of ["sk_live", "Stripe", "ABCDEFGHIJ"]) {
+		expect(message).not.toContain(text);
+	}
+}
+
+describe("SEC-39: an output.dir on another drive or root", () => {
+	const ROOTED = [
+		"D:\\evil",
+		"D:/evil",
+		"D:evil",
+		"C:\\outside",
+		"\\outside",
+		"\\\\server\\share\\x",
+		"//server/share/x",
+		"/abs",
+	];
+
+	test("SEC-39: validateSpec refuses an output.dir absolute on any platform or with a drive", () => {
+		for (const dir of ROOTED) {
+			expect(
+				validateSpec({ version: 1, output: { dir } }, {}).map(
+					({ code, path }) => `${code}@${path.join(".")}`,
+				),
+				dir,
+			).toEqual(["invalid_output@output.dir"]);
+		}
+		expect(
+			validateSpec({ version: 1, output: { dir: "src/domain" } }, {}),
+		).toEqual([]);
+	});
+
+	test("SEC-39: such an output.dir in an extended spec is refused", async () => {
+		const { project } = await scratch();
+		await mkdir(join(project, "shared"));
+		const file = join(project, "afora.json");
+		for (const dir of ROOTED) {
+			await writeFile(
+				join(project, "shared/afora.json"),
+				JSON.stringify({ version: 1, output: { dir } }),
+			);
+			const refused = resolveExtended(
+				{ version: 1, extends: ["./shared"] },
+				file,
+				{ root: project },
+			);
+			await expect(refused, dir).rejects.toThrow("output.dir");
+		}
+	});
+
+	test("SEC-39: a path on another Windows drive is not inside the project", () => {
+		expect(isInsideWith(win32, "C:\\proj", "D:\\evil\\x.ts")).toBe(false);
+		expect(isInsideWith(win32, "C:\\proj", "C:\\outside\\x.ts")).toBe(false);
+		expect(isInsideWith(win32, "C:\\proj", "C:\\proj\\src\\x.ts")).toBe(true);
+		expect(isInsideWith(win32, "C:\\proj", "C:\\proj")).toBe(true);
+	});
+});
+
+describe("SEC-40: tooling directories spelled as Windows also reads them", () => {
+	const TOOLING = [
+		"node_modules.",
+		"node_modules ",
+		"node_modules. .",
+		"node_modules::$INDEX_ALLOCATION",
+		"node_modules:x",
+		".git.",
+		".git ::$INDEX_ALLOCATION",
+		"NODE_M~1",
+		"node_m~2",
+		"GIT~1",
+		"src/GIT~1/hooks",
+	];
+
+	test("SEC-40: inTooling and output.dir refuse them", async () => {
+		const { project } = await scratch();
+		for (const dir of TOOLING) {
+			expect(inTooling(dir), dir).toBe(true);
+			expect(paths({ version: 1, output: { dir } }, project), dir).toEqual([
+				"outside_project@output.dir",
+			]);
+		}
+		for (const dir of [
+			"src/domain",
+			"node_modules_old",
+			"my~1",
+			"src/git-hooks",
+		]) {
+			expect(inTooling(dir), dir).toBe(false);
+		}
+	});
+
+	test("SEC-40: confinePath refuses them", async () => {
+		const { project } = await scratch();
+		for (const dir of TOOLING) {
+			expect((await confinePath(project, `${dir}/x.ts`)).ok, dir).toBe(false);
+		}
 	});
 });

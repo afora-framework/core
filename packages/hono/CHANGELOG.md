@@ -1,5 +1,11 @@
 # Changelog
 
+## 27.0.0-rc.5 — 2026-11-24
+
+### Security
+
+- **Breaking.** Every input key of a webhook operation comes from the signed body: a webhook whose route reads an input key from the path, the query, a header or a cookie throws `InvalidOutputStage` when the app is built. The README says which values a webhook can be deduplicated on. See [Webhooks](README.md#webhooks). (SEC-37)
+
 ## 27.0.0-rc.4 — 2026-11-16
 
 A candidate of 27.0.0, with no changes since 27.0.0-rc.3. See the [root CHANGELOG](../../CHANGELOG.md).

@@ -119,7 +119,7 @@ const Account = commandOf({
 
 `owner: { key: "id", context }` compares the id of the entity with the caller, so a user changes only their own password; the access `context: { userId: "subject" }` fills that context from the token. `change.password` stays on the entity, for a reset flow written by hand (a token sent by email, say).
 
-**Login does not tell which emails exist.** When the email is unknown, `login` still verifies the password given against a hash of a password nobody has, made once by the configured hasher on the first such login (not at import), and answers the same `UseCaseInvalidCredentials`, so the time of the answer is the same for a known and an unknown email.
+**Login does not tell which emails exist.** When the email is unknown, `login` still verifies the password given against a hash of a password nobody has, made once by the configured hasher on the first such login (not at import), and answers the same `UseCaseInvalidCredentials`, so the time of the answer is the same for a known and an unknown email. A stored hash the default hasher cannot read gets that answer too, in the same time (see [Runtime](runtime.md#password-hashing)).
 
 ## Tokens and sessions
 
@@ -169,6 +169,7 @@ const Auth = commandOf({
 	name: "Auth",
 	useCases: (ctx) => ({
 		register: ctx.register(Users, {
+			values: { roles: [] }, // the token is made from roles: never from the input
 			route: { method: "post", path: "/users", status: 201 },
 		}),
 		login: ctx.login(Users, {
@@ -191,12 +192,13 @@ const Api = outputOf({
 });
 ```
 
-- **`login` with `token`** answers `{ item, token }`, and `refreshToken` too with `refresh`. The token is signed for the entity: its `id` is the subject, its scopes are `scopes` (a fixed list) plus the list held by the key `scopesFrom`, and `claims: { tenant: "tenantId" }` copies keys of the entity into claims.
+- **`login` with `token`** answers `{ item, token }`, and `refreshToken` too with `refresh`. The token is signed for the entity: its `id` is the subject, its scopes are `scopes` (a fixed list) plus the list held by the key `scopesFrom`, and `claims: { tenant: "tenantId" }` copies keys of the entity into claims. Each scope is a scope token: not empty, without spaces or control characters, since a token keeps its scopes space separated. A fixed scope that is not one throws `UseCaseUnavailable` when the use case is declared, and `login` gives no token to an entity that holds one (a 500). `claims` cannot name a registered claim (`sub`, `scope`, `iat`, `exp`, `nbf`, `iss`, `aud`, `use`): `UseCaseUnavailable` too.
+- **`register` does not take the keys a token is made from.** Whoever calls `register` would otherwise choose their own scopes and claims. So a `register` whose input takes a key that the `token.scopesFrom` or `token.claims` of a `login` or `refresh` of the same entity reads throws `UseCaseUnavailable` at declaration, whichever of them is declared first and in whatever command: set the key with `values` (or leave an optional one out with `omit`), and change it with a use case that only an administrator can call.
 - **`refresh`** takes `{ refreshToken }` and answers a new `{ token, refreshToken }`, if the entity still exists. A refresh token is signed for that use only: it is not accepted as an access token, nor the other way round.
 - **`auth.jwt`** in the options of a sink that serves HTTP is the authenticator: it reads `Authorization: Bearer <token>` (another header with `header`), verifies it and gives the `Principal` that the [access](#the-declaration) of each use case is checked against. The OpenAPI document gets the matching security scheme. An `authenticator` given in the hooks of the sink replaces it.
 - **The secret is named, never written.** These options are described by `describe()` and stored in `afora.json`, so `secret` is `{ env: "NAME" }` there; the variable is read when the first token is signed or verified, and a missing or short one throws `InvalidJwtOptions`.
 
-A token is refused, with a 401, when it is malformed, signed with another secret or algorithm (the algorithm is the one of the options, never the one the token names), expired, or of another issuer, audience or use.
+A token is refused, with a 401, when it is malformed (a signature not in the one encoding `sign` gives included), signed with another secret or algorithm (the algorithm is the one of the options, never the one the token names), expired, or of another issuer, audience or use.
 
 **Sessions in cookies.** The route of a use case can send keys of its response as cookies, with [`setCookie`](use-cases.md#routes), and read input keys from cookies, with `cookie`. So a browser session is the same three use cases with other routes:
 
@@ -247,7 +249,7 @@ The tokens then never reach the body, and `logout`, which answers empty tokens, 
 
 **What it does not do.** Tokens are not stored, so there is no revocation: a token already issued is valid until it expires, and `logout` only removes cookies. Keep `expiresIn` short and let `refresh` renew it; a deleted entity cannot refresh. For revocation, rotation with reuse detection, asymmetric keys or an identity provider, write the `authenticator` hook and your own use cases; the declaration of access does not change.
 
-**By hand.** `jwtOf(options)` is the same signer on its own: `sign({ subject, scopes?, claims? }, { expiresIn?, use? })`, `verify(token, { use? })` and `authenticator({ header?, cookie? })`. Here the secret may be the text itself.
+**By hand.** `jwtOf(options)` is the same signer on its own: `sign({ subject, scopes?, claims? }, { expiresIn?, use? })`, `verify(token, { use? })` and `authenticator({ header?, cookie? })`. Here the secret may be the text itself. `sign` rejects with `InvalidJwtOptions` a scope that is not a scope token, and leaves out of the token a claim with a registered name: those are the token's own.
 
 ```ts
 import { jwtOf } from "@afora/core/experimental";

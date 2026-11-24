@@ -2,6 +2,7 @@ import { type Static, type TOptional, type TSchema, Type } from "typebox";
 import { Meta } from "typebox/schema";
 import Value from "typebox/value";
 import type { Issue, IssueCode } from "../../core/parse/types/parse.interface";
+import { takesAnyValue } from "../../core/property/define-property";
 import { recordPropertyLineage } from "../../core/property/lineage";
 import { type PropertyClass, propertyOf } from "../../core/property/property";
 import { InvalidJsonData, InvalidJsonSchema } from "./exceptions";
@@ -23,6 +24,32 @@ type Path = readonly (string | number)[];
  * a schema, the copy a record keeps) run long or overflow the stack.
  */
 const MAX_JSON_DEPTH = 1000;
+
+/**
+ * Throws, for the property to reject it, when `value` has an object or a list
+ * nested `maxDepth` levels or more below it (the root is at level 0). The
+ * walk stops at `maxDepth`, so it is short and a cycle ends it too.
+ */
+export function assertDepth<Value>(value: Value, maxDepth: number): Value {
+	const path: (string | number)[] = [];
+	function walk(item: unknown, depth: number): boolean {
+		if (typeof item !== "object" || item === null) return false;
+		if (depth >= maxDepth) return true;
+		for (const key in item) {
+			if (!Object.hasOwn(item, key)) continue;
+			path.push(Array.isArray(item) ? Number(key) : key);
+			if (walk((item as Record<string, unknown>)[key], depth + 1)) return true;
+			path.pop();
+		}
+		return false;
+	}
+	if (walk(value, 0)) {
+		throw new Error(
+			`${path.length === 0 ? "" : `/${path.join("/")}: `}is nested too deeply`,
+		);
+	}
+	return value;
+}
 
 /** Why `value` is not JSON, and where; `undefined` when it is. */
 function notJson(
@@ -233,8 +260,14 @@ function demoOf(schema: TSchema): unknown {
 	}
 }
 
-/** Throws, for the property to reject it, when `value` is not JSON. */
-function assertJson<Value>(value: Value): Value {
+/**
+ * Throws, for the property to reject it, when `value` is not JSON. It takes a
+ * value of any type, so it runs before the schema walks the value, deep as it
+ * may be.
+ */
+const assertJson = takesAnyValue(function assertJson<Value>(
+	value: Value,
+): Value {
 	const found = notJson(value);
 	if (found) {
 		throw new Error(
@@ -242,7 +275,7 @@ function assertJson<Value>(value: Value): Value {
 		);
 	}
 	return value;
-}
+});
 
 /**
  * Any JSON value: `null`, a boolean, a finite number, a string, or a list or

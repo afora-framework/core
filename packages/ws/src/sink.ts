@@ -187,6 +187,14 @@ function validate(options: WebSocketOptions): string | undefined {
 	return undefined;
 }
 
+/**
+ * The most topics one session holds. A pattern such as `posts/*` matches
+ * endless topics, and each held topic costs memory in the session and the
+ * hub; a client follows tens of topics, so 1000 leaves room for a dashboard
+ * while keeping a socket's share of the hub bounded.
+ */
+const MAX_SESSION_TOPICS = 1000;
+
 /** Whether `topic` matches `pattern`, where `*` is one segment. */
 function matches(pattern: string, topic: string): boolean {
 	const wanted = pattern.split("/");
@@ -218,8 +226,10 @@ function matches(pattern: string, topic: string): boolean {
  *   option; richer rules, such as authentication, are a `transform` stage.
  * - In a session with a hub, `{ id?, subscribe: topic }` subscribes the
  *   socket (`{ id, subscribed }`) when `subscriptions.topics` and
- *   `authorize` allow it (a 403 `WsTopicForbidden` otherwise), and
- *   `{ id?, unsubscribe }` leaves the topic. The hub then sends
+ *   `authorize` allow it and the session holds fewer than 1000 topics
+ *   (a 403 `WsTopicForbidden` otherwise), and
+ *   `{ id?, unsubscribe }` leaves the topic. A topic over 512 bytes (UTF-8)
+ *   is a 400 `InvalidWsMessage`, before the topics and `authorize`. The hub then sends
  *   `{ topic, event }` for each event published to the topic.
  */
 export const websocket = sinkOf<
@@ -389,7 +399,10 @@ export const websocket = sinkOf<
 				const allowed =
 					patterns.some((pattern) => matches(pattern, topic)) &&
 					(authorize ? await authorize(topic, values) : true);
-				if (!allowed) {
+				// Checked after `authorize`, so subscriptions awaiting it at once
+				// cannot pass the limit together; a held topic does not count twice.
+				const full = !topics.has(topic) && topics.size >= MAX_SESSION_TOPICS;
+				if (!allowed || full) {
 					return {
 						id,
 						problem: problem(

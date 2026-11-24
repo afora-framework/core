@@ -92,6 +92,21 @@ function fits(rest: Command[], width: number): boolean {
 	return false;
 }
 
+/**
+ * `text` without its trailing spaces and tabs. A walk back from the end, in
+ * time linear in what it removes: `/[ \t]+$/` retries from every blank of a
+ * run, quadratic in a long run of blanks inside a string.
+ */
+function trimBlanksEnd(text: string): string {
+	let end = text.length;
+	while (end > 0) {
+		const char = text.charCodeAt(end - 1);
+		if (char !== 32 && char !== 9) break;
+		end--;
+	}
+	return end === text.length ? text : text.slice(0, end);
+}
+
 /** Prints `doc` with tabs for indentation and a final newline. */
 export function print(doc: Doc): string {
 	let out = "";
@@ -150,7 +165,7 @@ export function print(doc: Doc): string {
 							column += 1;
 						}
 					} else {
-						out = `${out.replace(/[ \t]+$/, "")}\n${"\t".repeat(level)}`;
+						out = `${trimBlanksEnd(out)}\n${"\t".repeat(level)}`;
 						column = level * TAB;
 					}
 					break;

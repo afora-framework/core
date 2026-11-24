@@ -1,5 +1,6 @@
 import { jwtOf, jwtOptionsIssue } from "../auth/jwt";
 import { Exception } from "../exception/exception";
+import { responseJsonOf } from "../use-case/response";
 import { HEADER_NAME } from "../use-case/route";
 import { takeStatus } from "../use-case/status";
 import type { Principal } from "../use-case/types/access.interface";
@@ -538,15 +539,20 @@ export function compileRoutes(
 						status: sent,
 						headers: headersOf(headers, request),
 						cookies: NO_COOKIES,
-						body: sent === 204 ? null : (JSON.stringify(response) ?? "null"),
+						body:
+							sent === 204
+								? null
+								: (JSON.stringify(responseJsonOf(response)) ?? "null"),
 					};
 				}
-				// The keys sent as cookies leave the body.
+				// The keys sent as cookies leave the body. A cookie is sent as
+				// the route declares it, a key masked in the body included.
 				const value = outputValueOf(response);
+				const unmasked = JSON.parse(JSON.stringify(response) ?? "null");
 				const written: string[] = [];
-				if (isObject(value)) {
+				if (isObject(value) && isObject(unmasked)) {
 					for (const [key, write] of setCookies) {
-						const cookie = value[key];
+						const cookie = unmasked[key];
 						delete value[key];
 						if (cookie !== undefined && cookie !== null) {
 							written.push(write(String(cookie)));

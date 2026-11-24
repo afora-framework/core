@@ -1,4 +1,9 @@
-import { jwtOf, jwtOptionsIssue } from "../../core/auth/jwt";
+import {
+	isScopeToken,
+	jwtOf,
+	jwtOptionsIssue,
+	REGISTERED,
+} from "../../core/auth/jwt";
 import type { JsonValue } from "../../core/json";
 import { coerceTextValues } from "../../core/output/coerce";
 import { outputValueOf } from "../../core/output/problem";
@@ -42,10 +47,49 @@ const isTexts = (value: unknown): value is string[] =>
 	Array.isArray(value) && value.every((item) => typeof item === "string");
 
 /**
+ * By entity, the keys its tokens are made from (`token.scopesFrom` and the
+ * keys of `token.claims`, by login and refresh) and the keys register takes
+ * from its input, each with the use case that declared it first.
+ */
+const tokenKeys = new WeakMap<object, Map<string, string>>();
+const inputKeys = new WeakMap<object, Map<string, string>>();
+
+/**
+ * Records `keys` of the entity of `target` as made into tokens by `by`, or
+ * taken from the input of register `by`; throws `UseCaseUnavailable` when
+ * one of them is already the other, whichever was declared first: a caller
+ * of register would choose what the tokens say.
+ */
+function noTokenKeyInInput(
+	target: UseCaseTargetInfo,
+	side: "token" | "input",
+	keys: readonly string[],
+	by: string,
+): void {
+	const [own, other] =
+		side === "token" ? [tokenKeys, inputKeys] : [inputKeys, tokenKeys];
+	const known = other.get(target.entity);
+	const clash = keys.find((key) => known?.has(key));
+	if (clash !== undefined) {
+		const [register, token] =
+			side === "token" ? [known?.get(clash), by] : [by, known?.get(clash)];
+		target.unavailable(
+			`the token of ${token} is made from "${clash}" (token.scopesFrom or token.claims), so ${register} cannot take it from its input: omit it or set it in values`,
+		);
+	}
+	let recorded = own.get(target.entity);
+	if (!recorded) {
+		recorded = new Map();
+		own.set(target.entity, recorded);
+	}
+	for (const key of keys) if (!recorded.has(key)) recorded.set(key, by);
+}
+
+/**
  * What issues and verifies the tokens of the `token` option, checked;
  * `undefined` without the option.
  */
-function tokensOf(target: UseCaseTargetInfo, options: Options) {
+function tokensOf(target: UseCaseTargetInfo, options: Options, verb: string) {
 	const given = options.token;
 	if (given === undefined) return undefined;
 	const bad = jwtOptionsIssue(given, "the option token", TOKEN_KEYS, true);
@@ -69,6 +113,12 @@ function tokensOf(target: UseCaseTargetInfo, options: Options) {
 			"the option token.scopes must be a list of scopes",
 		);
 	}
+	const badScope = scopes?.find((scope) => !isScopeToken(scope));
+	if (badScope !== undefined) {
+		return target.unavailable(
+			`the scope ${JSON.stringify(badScope)} of the option token.scopes must be a scope token: not empty, without spaces or control characters`,
+		);
+	}
 	if (scopesFrom !== undefined) target.field(scopesFrom);
 	if (
 		claims !== undefined &&
@@ -79,8 +129,23 @@ function tokensOf(target: UseCaseTargetInfo, options: Options) {
 		);
 	}
 	const claimKeys = Object.entries(claims ?? {});
+	const registered = claimKeys.find(([claim]) => REGISTERED.has(claim));
+	if (registered) {
+		return target.unavailable(
+			`the option token.claims cannot name the claim "${registered[0]}": it is registered (${[...REGISTERED].join(", ")})`,
+		);
+	}
 	for (const [, key] of claimKeys) target.field(key);
 	const jwt = jwtOf(jwtOptions);
+	noTokenKeyInInput(
+		target,
+		"token",
+		[
+			...(scopesFrom === undefined ? [] : [scopesFrom]),
+			...claimKeys.map(([, key]) => key),
+		],
+		metaOf(target, options, verb).name,
+	);
 	const issue = async (entity: Record<string, unknown>) => {
 		const held = scopesFrom === undefined ? [] : entity[scopesFrom];
 		const subject = {
@@ -173,6 +238,13 @@ export const register = useCasePluginOf<"register", RegisterMaker>("register", {
 				{ ensure: "absent", value: "$existing", error: conflict },
 			],
 			[conflict],
+			(keys) =>
+				noTokenKeyInInput(
+					target,
+					"input",
+					keys,
+					metaOf(target, options, "Register").name,
+				),
 		);
 	},
 });
@@ -184,7 +256,7 @@ export const login = useCasePluginOf<"login", LoginMaker>("login", {
 	...authenticatable(["findByEmail"]),
 	compile: (target, options) => {
 		checkOptions(target, options, ["as", "token"]);
-		const tokens = tokensOf(target, options);
+		const tokens = tokensOf(target, options, "Login");
 		const invalid = errorOf(
 			target,
 			options,
@@ -325,7 +397,7 @@ export const refresh = useCasePluginOf<"refresh", RefreshMaker>("refresh", {
 	requires: { actions: ["findById"] },
 	compile: (target, options) => {
 		checkOptions(target, options, ["token"]);
-		const tokens = tokensOf(target, options);
+		const tokens = tokensOf(target, options, "Refresh");
 		if (!tokens?.refresh) {
 			return target.unavailable(
 				"it needs the option token with refresh, the same login was given",

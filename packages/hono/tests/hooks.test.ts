@@ -153,9 +153,15 @@ describe("hono sink: hooks", () => {
 		expect((await app.request("/api/posts/a")).status).toBe(200);
 	});
 
-	test("hooks are not part of the description of the stage", () => {
+	test("the description of the stage says it has hooks, not what they are", () => {
 		const stage = hono({ basePath: "/api" }, { authenticator: bearer });
 		expect(stageDescriptionOf(stage)).toEqual({
+			kind: "sink",
+			name: "hono",
+			options: { basePath: "/api" },
+			hooks: true,
+		});
+		expect(stageDescriptionOf(hono({ basePath: "/api" }))).toEqual({
 			kind: "sink",
 			name: "hono",
 			options: { basePath: "/api" },

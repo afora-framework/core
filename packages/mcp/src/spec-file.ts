@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 import {
 	COLLECTION_KEYS,
 	type CodegenOptions,
@@ -73,12 +73,17 @@ export async function readSpec(project: Project): Promise<Spec | undefined> {
 	if (!confined.ok) {
 		throw new ToolError(`${SPEC_FILE} is ${confined.reason}.`);
 	}
+	let text: string;
 	try {
-		return JSON.parse(await readFile(confined.absolute, "utf8")) as Spec;
-	} catch (error) {
-		throw new ToolError(
-			`${SPEC_FILE} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		text = await readFile(confined.absolute, "utf8");
+	} catch {
+		throw new ToolError(`${SPEC_FILE} cannot be read.`);
+	}
+	try {
+		return JSON.parse(text) as Spec;
+	} catch {
+		// Never the engine's message: it can quote the text of the file.
+		throw new ToolError(`${SPEC_FILE} is not valid JSON.`);
 	}
 }
 
@@ -140,7 +145,8 @@ async function extendedOf(
 				{
 					path: ["extends"],
 					code: "unresolved_extends",
-					message: error.message,
+					// Paths in the project are given from its root.
+					message: error.message.split(`${project.root}${sep}`).join(""),
 				},
 			],
 		};

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, expectTypeOf, test } from "bun:test";
+import nodeCrypto from "node:crypto";
 import { statusOf } from "../../adapters";
 import {
 	blueprintOf,
@@ -10,7 +11,13 @@ import {
 	resourceOf,
 	StdUseCases,
 } from "../../index";
-import { configure, currentHasher, resetRuntime } from "../runtime";
+import {
+	configure,
+	currentHasher,
+	nodeHasherOf,
+	type PasswordHasher,
+	resetRuntime,
+} from "../runtime";
 
 const ana = "0190a6a0-0000-7000-8000-00000000000a";
 const bob = "0190a6a0-0000-7000-8000-00000000000b";
@@ -554,5 +561,170 @@ describe("SEC-11: login takes as long for an unknown email", () => {
 			// the dummy hash is made on the first unknown email only
 			expect(calls).toEqual({ hash: 1, verify: 1 + round });
 		}
+	});
+});
+
+describe("SEC-38: login answers a stored hash the hasher cannot read as wrong credentials", () => {
+	afterEach(() => resetRuntime());
+
+	const salt = "YO5NNmxyK9+adO95GxWsAaUX4TULmT3IGhTYfpshXl0";
+	const tag = "/C89OCh7bhDY2cR2UkgvOV3dPlkghNLhv/DJsdopwMo";
+	const unreadable = {
+		outOfRange: `$argon2id$v=19$m=99999999999,t=0,p=0$${salt}$${tag}`,
+		shortSalt: `$argon2id$v=19$m=65536,t=2,p=1$AAAA$${tag}`,
+		shortTag: `$argon2id$v=19$m=65536,t=2,p=1$${salt}$AA`,
+		otherVersion: `$argon2id$v=16$m=65536,t=2,p=1$${salt}$${tag}`,
+	};
+
+	const hashers: [string, PasswordHasher | undefined][] = [
+		["the default hasher", undefined],
+		["the node:crypto hasher", nodeHasherOf(nodeCrypto as never)],
+	];
+
+	for (const [label, hasher] of hashers) {
+		test(`SEC-38: ${label} answers 401, not 500`, async () => {
+			if (hasher) configure({ hasher });
+			const Users = repositoryOf({
+				entity: Account,
+				provider: inMemoryProvider(),
+				actions: ["findByEmail", "create"],
+			});
+			const A = commandOf({
+				name: "A",
+				useCases: (ctx) => ({ login: ctx.login(Users) }),
+			});
+			for (const [name, password] of Object.entries(unreadable)) {
+				const email = `${name.toLowerCase()}@x.io`;
+				await Users.create(new Account({ name, email, password } as never));
+				const thrown = await failure(
+					A.run("login", { email, password: "Wrong@123" }),
+				);
+				expect(thrown.name).toBe("UseCaseInvalidCredentials");
+				expect(statusOf(thrown as Error)).toBe(401);
+			}
+		});
+	}
+});
+
+describe("SEC-22: register does not take the keys login makes tokens from", () => {
+	const token = {
+		secret: { env: "AFORA_SEC22_TEST_SECRET" },
+		scopesFrom: "roles",
+		claims: { tenant: "tenant" },
+	} as const;
+	const member = () => {
+		class Member extends entityOf(
+			blueprintOf((ctx) => ({
+				name: ctx.string,
+				roles: ctx.list.string,
+				tenant: ctx.string,
+			})),
+			{ plugins: (ctx) => [ctx.authenticatable] },
+		) {}
+		return repositoryOf({
+			entity: Member,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findByEmail", "create"],
+		});
+	};
+
+	test("SEC-22: a register that takes a key of token.scopesFrom or token.claims is refused", () => {
+		const Members = member();
+		const message = unavailable(() =>
+			commandOf({
+				name: "Auth",
+				useCases: (ctx) => ({
+					register: ctx.register(Members),
+					login: ctx.login(Members, { token }),
+				}),
+			}),
+		);
+		expect(message).toContain('"roles"');
+		const Others = member();
+		expect(
+			unavailable(() =>
+				commandOf({
+					name: "Auth",
+					useCases: (ctx) => ({
+						register: ctx.register(Others, { omit: [], values: { roles: [] } }),
+						login: ctx.login(Others, { token }),
+					}),
+				}),
+			),
+		).toContain('"tenant"');
+	});
+
+	test("SEC-22: refused whatever is declared first, and across commands", () => {
+		const Members = member();
+		commandOf({
+			name: "Sessions",
+			useCases: (ctx) => ({
+				refresh: ctx.refresh(Members, {
+					token: { ...token, refresh: { expiresIn: 60 } },
+				}),
+			}),
+		});
+		expect(
+			unavailable(() =>
+				commandOf({
+					name: "Accounts",
+					useCases: (ctx) => ({ register: ctx.register(Members) }),
+				}),
+			),
+		).toContain('"roles"');
+		const Others = member();
+		commandOf({
+			name: "Accounts",
+			useCases: (ctx) => ({ register: ctx.register(Others) }),
+		});
+		expect(
+			unavailable(() =>
+				commandOf({
+					name: "Sessions",
+					useCases: (ctx) => ({ login: ctx.login(Others, { token }) }),
+				}),
+			),
+		).toContain('"roles"');
+	});
+
+	test("SEC-22: keys given by values are not taken from the input", async () => {
+		process.env.AFORA_SEC22_TEST_SECRET =
+			"a-secret-of-at-least-thirty-two-characters";
+		const Members = member();
+		const Auth = commandOf({
+			name: "Auth",
+			useCases: (ctx) => ({
+				register: ctx.register(Members, {
+					values: { roles: ["member"], tenant: "default" },
+				}),
+				login: ctx.login(Members, { token }),
+			}),
+		});
+		const given = { name: "Eve", email: "eve@x.dev", password: strong };
+		const refused = await failure(
+			Auth.run("register", {
+				...given,
+				roles: ["admin"],
+				tenant: "acme",
+			} as unknown as typeof given),
+		);
+		expect(refused.name).toBe("InvalidUseCaseInput");
+		const { item } = await Auth.run("register", given);
+		expect(item.roles).toEqual(["member"]);
+		expect(item.tenant).toBe("default");
+		const { token: issued } = await Auth.run("login", {
+			email: given.email,
+			password: strong,
+		});
+		expect(typeof issued).toBe("string");
+		// Without a token option, login reads no key: register may take them.
+		const Plain = member();
+		commandOf({
+			name: "Plain",
+			useCases: (ctx) => ({
+				register: ctx.register(Plain),
+				login: ctx.login(Plain),
+			}),
+		});
 	});
 });

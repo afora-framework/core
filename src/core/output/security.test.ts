@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	compileRoutes,
 	type HttpRequest,
+	outputValueOf,
 	problemOf,
 	statusOf,
 } from "../../adapters";
@@ -9,12 +10,19 @@ import {
 	blueprintOf,
 	commandOf,
 	Exception,
+	entityOf,
 	Forbidden,
 	InvalidUseCaseStep,
+	listOf,
+	MASK,
+	openapi,
 	outputOf,
+	Password,
 	type Principal,
 	Route,
 	useCaseOf,
+	variantOf,
+	withStatus,
 } from "../../index";
 
 /** What the use case acted on: the value after the pipeline of its property. */
@@ -382,5 +390,315 @@ describe("SEC-12: internal exceptions are not answered as the caller's input", (
 		const input = await route("Stats.echo").handle(request({ email: "x" }));
 		expect(input.status).toBe(400);
 		expect(JSON.parse(input.body as string).issues).toHaveLength(1);
+	});
+});
+
+describe("SEC-19: a response declared by a blueprint is masked in every output", () => {
+	const HASH = Password.demo().value;
+	const Empty = blueprintOf(() => ({}));
+	const HolderFields = blueprintOf((ctx) => ({
+		email: ctx.email,
+		password: ctx.password,
+		token: ctx.string,
+	}));
+	class Holder extends entityOf(HolderFields, { sensitive: ["token"] }) {}
+	const holder = new Holder({
+		email: "a@b.co",
+		password: HASH,
+		token: "t0k3n",
+	});
+	const Credential = blueprintOf((ctx) => ({
+		email: ctx.email,
+		password: ctx.password,
+	}));
+	const credential = { email: "a@b.co", password: HASH };
+	const masked = { email: "a@b.co", password: MASK };
+
+	class Own extends useCaseOf({
+		name: "Own",
+		blueprint: Empty,
+		response: Holder.blueprint,
+	}) {
+		override async execute() {
+			return holder as never;
+		}
+	}
+	class Many extends useCaseOf({
+		name: "Many",
+		blueprint: Empty,
+		response: listOf(Holder.blueprint),
+	}) {
+		override async execute() {
+			return [holder] as never;
+		}
+	}
+	class Fields extends useCaseOf({
+		name: "Fields",
+		blueprint: Empty,
+		response: HolderFields,
+	}) {
+		override async execute() {
+			return holder;
+		}
+	}
+	class Plain extends useCaseOf({
+		name: "Plain",
+		blueprint: Empty,
+		response: Credential,
+	}) {
+		override async execute() {
+			return credential;
+		}
+	}
+	class Nested extends useCaseOf({
+		name: "Nested",
+		blueprint: Empty,
+		response: blueprintOf(() => ({
+			inner: Credential,
+			items: listOf(Credential),
+			kind: variantOf("kind", {
+				credential: Credential,
+				other: blueprintOf((ctx) => ({ name: ctx.string })),
+			}),
+		})),
+	}) {
+		override async execute() {
+			return {
+				inner: credential,
+				items: [credential, credential],
+				kind: { kind: "credential" as const, ...credential },
+			};
+		}
+	}
+	class Chosen extends useCaseOf({
+		name: "Chosen",
+		blueprint: Empty,
+		response: Credential,
+		route: { method: "post", path: "/chosen", statuses: [503] },
+	}) {
+		override async execute() {
+			return withStatus(503, credential);
+		}
+	}
+	class AsRecord extends useCaseOf({
+		name: "AsRecord",
+		blueprint: Empty,
+		response: blueprintOf(() => ({ holder: Holder })),
+	}) {
+		override async execute() {
+			return { holder };
+		}
+	}
+	const Leaks = commandOf({
+		name: "Leaks",
+		useCases: {
+			own: Own,
+			many: Many,
+			fields: Fields,
+			plain: Plain,
+			nested: Nested,
+			chosen: Chosen,
+			record: AsRecord,
+		},
+	});
+	const operations = outputOf({ name: "L", commands: [Leaks] }).operations;
+	const operation = (name: string) => {
+		const found = operations.find(({ id }) => id === `Leaks.${name}`);
+		if (!found) throw new Error(name);
+		return found;
+	};
+	const holderJson = JSON.parse(JSON.stringify(holder));
+	const expected: Record<string, unknown> = {
+		own: holderJson,
+		many: [holderJson],
+		fields: { ...masked, token: MASK },
+		plain: masked,
+		nested: {
+			inner: masked,
+			items: [masked, masked],
+			kind: { kind: "credential", ...masked },
+		},
+		chosen: masked,
+		record: { holder: holderJson },
+	};
+
+	test("SEC-19: outputValueOf masks sensitive values of a blueprint response", async () => {
+		for (const [name, value] of Object.entries(expected)) {
+			const sent = outputValueOf(await operation(name).invoke({}));
+			expect(JSON.stringify(sent)).not.toContain(HASH);
+			expect(JSON.stringify(sent)).not.toContain("t0k3n");
+			expect(sent).toEqual(value);
+		}
+	});
+
+	test("SEC-19: over HTTP, a blueprint response is sent masked", async () => {
+		const table = compileRoutes(
+			operations,
+			{},
+			{ output: { name: "L", statuses: {} } },
+			{ source: "test" },
+		);
+		const request: HttpRequest = {
+			param: () => undefined,
+			query: () => ({}),
+			header: (name) =>
+				name.toLowerCase() === "content-type" ? "application/json" : undefined,
+			text: () => "{}",
+			variable: () => undefined,
+		};
+		for (const [name, value] of Object.entries(expected)) {
+			const route = table.routes.find(
+				(found) => found.operation.id === `Leaks.${name}`,
+			);
+			if (!route) throw new Error(name);
+			const sent = await route.handle(request);
+			expect(sent.status).toBe(name === "chosen" ? 503 : 200);
+			expect(sent.body as string).not.toContain(HASH);
+			expect(sent.body as string).not.toContain("t0k3n");
+			expect(JSON.parse(sent.body as string)).toEqual(value);
+		}
+	});
+
+	test("SEC-19: a key a route sends as a cookie keeps its value", async () => {
+		class Session extends entityOf(
+			blueprintOf((ctx) => ({ token: ctx.string, name: ctx.string })),
+			{ sensitive: ["token"] },
+		) {}
+		class Open extends useCaseOf({
+			name: "Open",
+			blueprint: Empty,
+			response: Session.blueprint,
+			route: {
+				method: "post",
+				path: "/open",
+				setCookie: { token: { name: "sid" } },
+			},
+		}) {
+			override async execute() {
+				return new Session({ token: "s1d", name: "n" }) as never;
+			}
+		}
+		class Peek extends useCaseOf({
+			name: "Peek",
+			blueprint: Empty,
+			response: Session.blueprint,
+		}) {
+			override async execute() {
+				return new Session({ token: "s1d", name: "n" }) as never;
+			}
+		}
+		const table = compileRoutes(
+			outputOf({
+				name: "C",
+				commands: [
+					commandOf({ name: "C", useCases: { open: Open, peek: Peek } }),
+				],
+			}).operations,
+			{},
+			{ output: { name: "C", statuses: {} } },
+			{ source: "test" },
+		);
+		const request: HttpRequest = {
+			param: () => undefined,
+			query: () => ({}),
+			header: (name) =>
+				name.toLowerCase() === "content-type" ? "application/json" : undefined,
+			text: () => "{}",
+			variable: () => undefined,
+		};
+		const route = (id: string) => {
+			const found = table.routes.find(({ operation }) => operation.id === id);
+			if (!found) throw new Error(id);
+			return found;
+		};
+		const open = await route("C.open").handle(request);
+		expect(open.cookies.some((cookie) => cookie.startsWith("sid=s1d"))).toBe(
+			true,
+		);
+		expect(JSON.parse(open.body as string)).not.toHaveProperty("token");
+		const peek = await route("C.peek").handle(request);
+		expect(JSON.parse(peek.body as string).token).toBe(MASK);
+	});
+
+	test("SEC-19: a direct call still reads the real values", async () => {
+		const plain = await new Plain({}).execute();
+		expect(plain.password).toBe(HASH);
+		const own = await new Own({}).execute();
+		expect(own).toMatchObject({ token: "t0k3n" });
+		const nested = await new Nested({}).execute();
+		expect(nested.items[1]?.password).toBe(HASH);
+	});
+});
+
+describe("SEC-34: the OpenAPI document marks write-only every key a response masks", () => {
+	const Empty = blueprintOf(() => ({}));
+	const AccountFields = blueprintOf((ctx) => ({
+		name: ctx.string,
+		token: ctx.string,
+	}));
+	class Account extends entityOf(AccountFields, { sensitive: ["token"] }) {}
+	const Other = blueprintOf((ctx) => ({ label: ctx.string }));
+	const Nested = blueprintOf(() => ({
+		inner: AccountFields,
+		items: listOf(AccountFields),
+		kind: variantOf("kind", { account: AccountFields, other: Other }),
+	}));
+	const declare = <
+		Response extends Parameters<typeof useCaseOf>[0]["response"],
+	>(
+		name: string,
+		response: Response,
+	) =>
+		class extends useCaseOf({ name, blueprint: Empty, response } as never) {
+			override async execute() {
+				return undefined as never;
+			}
+		};
+	const document = outputOf({
+		name: "D",
+		commands: [
+			commandOf({
+				name: "D",
+				useCases: {
+					own: declare("own", Account.blueprint),
+					fields: declare("fields", AccountFields),
+					many: declare("many", listOf(Account.blueprint)),
+					nested: declare("nested", Nested),
+				},
+			}),
+		],
+		pipe: [openapi({ info: { title: "D", version: "1" } })],
+	}).build();
+	// biome-ignore lint/suspicious/noExplicitAny: the document is read as JSON.
+	const responseOf = (name: string): any => {
+		const operations = Object.values(
+			document.paths as Record<string, Record<string, unknown>>,
+		).flatMap((slot) => Object.values(slot));
+		const operation = operations.find(
+			(found) =>
+				(found as { operationId?: string }).operationId === `D_${name}`,
+		) as {
+			responses: Record<
+				string,
+				{ content: Record<string, { schema: unknown }> }
+			>;
+		};
+		return operation.responses["200"]?.content["application/json"]?.schema;
+	};
+
+	test("SEC-34: a record's sensitive keys are write-only in a blueprint response", () => {
+		expect(responseOf("own").properties.token.writeOnly).toBe(true);
+		expect(responseOf("fields").properties.token.writeOnly).toBe(true);
+		expect(responseOf("own").properties.name.writeOnly).toBeUndefined();
+		expect(responseOf("many").items.properties.token.writeOnly).toBe(true);
+	});
+
+	test("SEC-34: at any depth of blueprints, lists and variants", () => {
+		const nested = responseOf("nested").properties;
+		expect(nested.inner.properties.token.writeOnly).toBe(true);
+		expect(nested.items.items.properties.token.writeOnly).toBe(true);
+		const [account, other] = nested.kind.oneOf;
+		expect(account.properties.token.writeOnly).toBe(true);
+		expect(other.properties.label.writeOnly).toBeUndefined();
 	});
 });

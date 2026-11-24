@@ -161,6 +161,8 @@ endpoint.session(ws, {
 });
 ```
 
+A session holds at most 1000 topics: past that, a new subscription is a 403 `WsTopicForbidden` until the client unsubscribes from one. Subscribing again to a topic it holds does not count twice. A topic is at most 512 bytes (UTF-8): a longer `subscribe` or `unsubscribe` is a 400 `InvalidWsMessage`, before `authorize` is asked, so keep the topics `publishEvents` fills (`tasks/{id}`) under that length.
+
 ## 6. More than one process
 
 `wsHub()` keeps its subscribers in memory, so it reaches the sockets of one process or isolate. To reach every instance behind a load balancer, implement `WsHub` (`subscribe`, `unsubscribe`, `size`, `publish`) over a broker: Bun's `server.publish`, Redis, or a Durable Object that holds the sockets. The command and the sink do not change.

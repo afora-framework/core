@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type SpecData, Validator } from "@seriousme/openapi-schema-validator";
-import { PROBLEM_MEDIA_TYPE } from "../../adapters";
+import { operationRoutes, PROBLEM_MEDIA_TYPE } from "../../adapters";
 import {
 	blueprintOf,
 	commandOf,
@@ -681,5 +681,66 @@ describe("an input with a file", () => {
 				},
 			},
 		});
+	});
+});
+
+describe("the default route of an operation", () => {
+	/** The rule the route had, with regular expressions. */
+	const reference = (text: string) =>
+		text
+			.replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+			.replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "");
+	const input = blueprintOf(() => ({}));
+	const pathOf = (command: string, name: string) =>
+		operationRoutes(
+			[{ id: `${command}.${name}`, command, name, input } as never],
+			{},
+		).get(`${command}.${name}`)?.path;
+
+	test("names are put in kebab case as before", () => {
+		const names = [
+			"changePassword",
+			"HTMLParser",
+			"getHTTPResponseCode",
+			"ABCd",
+			"ABcDEf",
+			"AAbBc",
+			"user2FA",
+			"v2Api",
+			"IOStream",
+			"already-kebab",
+			"snake_case_Name",
+			"Ünicode Name",
+			"__x__",
+			"A",
+			"a",
+			"ABC",
+		];
+		const chars = "aZbY0_- .AzB9";
+		let seed = 7;
+		for (let i = 0; i < 500; i++) {
+			let name = "";
+			const length = 1 + (i % 12);
+			for (let j = 0; j < length; j++) {
+				seed = (seed * 1103515245 + 12345) % 2 ** 31;
+				name += chars[seed % chars.length];
+			}
+			names.push(name);
+		}
+		for (const name of names) {
+			expect(pathOf("Cmd", name), name).toBe(
+				`/${reference("Cmd")}/${reference(name)}`,
+			);
+		}
+	});
+
+	test("a long run of capitals is put in kebab case in linear time", () => {
+		const name = `${"A".repeat(50_000)}!`;
+		const start = performance.now();
+		expect(pathOf("Cmd", name)).toBe(`/cmd/${"a".repeat(50_000)}`);
+		expect(performance.now() - start).toBeLessThan(500);
 	});
 });

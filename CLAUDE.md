@@ -60,6 +60,10 @@ The library ships to Bun **and** Node >= 22 (and must load in browsers/Workers).
 - File layout per module: implementation, `exceptions.ts`, `types/*.interface.ts`, colocated `*.test.ts`, and optional `*.sandbox.ts` scratch scripts (run with `bun <file>`; excluded from the build and the layering test).
 - Conventional commits with optional scope: `feat(repository): …`, `fix(use-case): …`, `chore: …`.
 
+## Security hunts
+
+`/rc-hunt` (`.claude/skills/rc-hunt/SKILL.md`) runs a vulnerability and bug hunt on the latest release candidate: it fans out `afora-hunter` agents per attack surface, verifies each finding with `afora-verifier`, fixes the confirmed ones with `SEC-NN` tests, files private draft advisories and prepares the next rc with a `dev` → `main` release PR. The repository is public: findings stay in `docs/plans/security/` (ignored) and in draft advisories, and commits, PRs and the CHANGELOG describe fixes without a reproduction.
+
 ## Brand
 
 The line is **Simple to write. Built to hold.**; `docs/brand.md` holds it with the descriptions, the voice (calm, precise, honest, no hype) and the palette. For any public-facing text or visual (README, docs intros, release notes, posts, banners, charts), use the `afora-brand` subagent (`.claude/agents/afora-brand.md`): give it the subject as the prompt and it answers with afora's position, the piece and the files that back each claim.

@@ -4691,7 +4691,8 @@ The last stage: builds something concrete out of the operations.
 
 *type* · tier: adapters · `import type { StageDescription } from "@afora/core/adapters"`
 
-What a stage is, out of band: a name and JSON options, or opaque.
+What a stage is, out of band: a name and JSON options, or opaque. `hooks`
+is `true` on a sink given hooks (code, which the description leaves out).
 
 ### UseCaseDependencyDescription
 
@@ -4800,7 +4801,8 @@ routing of the `openapi` sink and of the sinks that serve HTTP.
 *function* · tier: adapters · `import { outputValueOf } from "@afora/core/adapters"`
 
 The JSON a sink sends: `JSON.parse(JSON.stringify(value))`. Every record
-goes through its `toJSON`, so sensitive values are always masked. A
+goes through its `toJSON`, and a response declared by a blueprint is
+masked by it, so sensitive values are always masked. A
 status chosen with `withStatus` is not part of the value: a sink that does
 not speak HTTP ignores it.
 
@@ -4858,8 +4860,9 @@ entity whose `schemaVersion` is lower than the lock's. Empty when it can.
 
 A factory of sink stages: `openapi({ info })`. A sink that needs what JSON
 cannot hold (middlewares, an authenticator) takes it as a second argument,
-its `hooks`, which `build` receives and the description of the stage
-leaves out.
+its `hooks`, which `build` receives. The description of the stage says
+that it was given hooks (`hooks: true`, when one of them is defined), not
+what they are: a stage with hooks is code, which extraction imports.
 
 ### stageCatalogOf
 
@@ -4923,7 +4926,7 @@ Property declarations by key, e.g. `{ name: Name, email: Email }`.
 
 *const* · tier: experimental · `import { InvalidJwtOptions } from "@afora/core/experimental"`
 
-`jwtOf` got options it cannot use, or its secret is missing; `details.reason` says what.
+`jwtOf` got options it cannot use, its secret is missing, or `sign` got a scope that is not a scope token; `details.reason` says what.
 
 ### Jwt
 
@@ -5116,7 +5119,9 @@ hono(options, { authenticator: jwt.authenticator() });
 
 A token is refused (`Unauthenticated`) when it is malformed, signed with
 another algorithm or secret, expired, not yet valid, of another issuer,
-audience or use, or has no subject. Throws `InvalidJwtOptions` for options
+audience or use, or has no subject. `sign` leaves out a claim with a
+registered name and rejects a scope that is not a scope token (not empty,
+no space or control character). Throws `InvalidJwtOptions` for options
 it cannot use, and when the secret of `{ env }` is missing or shorter than
 32 characters, on the first token.
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 27.0.0-rc.5 — 2026-11-24
+
+### Security
+
+- `generate` trims the end of each printed line in linear time. (SEC-31)
+- `output.dir` is relative on every platform: `validateSpec` gives `invalid_output` for one that starts with `/` or `\` (a root or UNC path) or with a drive (`D:`), `resolveExtended` refuses an extended spec with such an `output.dir`, and `confinePath` (so `writeGenerated`) holds a path on another Windows drive outside the project. (SEC-39)
+- `loadSpec` and `resolveExtended` report a spec file that is not valid JSON by its path (with a line and column when the runtime gives the offset), never with the parser's message, which could quote the file. (SEC-33)
+
+### Fixed
+
+- The file name of a use case kept in its own file (`register-user.use-case.ts`) is made in linear time for a name with a long run of capitals; the names are the same as before.
+- `projectBoundaryIssues`, `resolveExtended` and `confinePath` refuse `node_modules` and `.git` in the spellings Windows reads as them too: with trailing dots or spaces, with a stream suffix (`:...`) and as a short name (`NODE_M~1`, `GIT~1`), on every platform. (SEC-40)
+- `extractSpec` no longer drops the hooks of a sink (#199): a stage whose description has `hooks: true` (as `hono(options, { authenticator })`) throws an `ExtractionError` naming `outputs.<Name>.pipe.<index>` until it is mapped in `imports` (`--import` in the CLI), and is then written as `{ "import": "..." }`. It was written as `{ "sink", "options" }` before, so the generated code had no authenticator and no middlewares, and the mapping was ignored.
+
 ## 27.0.0-rc.4 — 2026-11-16
 
 ### Security

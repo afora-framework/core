@@ -34,14 +34,6 @@ export const SyncVerifyUnsupported = exceptionOf({
 		"The configured password hasher has no verifySync. Use verify, or configure a hasher that provides verifySync.",
 });
 
-/** The hash is argon2id of a version that `node:crypto` cannot derive. */
-export const UnsupportedPasswordHash = exceptionOf({
-	layer: ExceptionLayers.Property,
-	name: "UnsupportedPasswordHash",
-	message: ({ version }: { readonly version: number }) =>
-		`The password hash uses argon2 version ${version}, but native argon2 (node:crypto) only derives version ${ARGON2_VERSION}. Verify it with Bun.password or configure({ hasher }).`,
-});
-
 // The two the package exports count as core exceptions for `useCaseOf({ errors })`.
 markExported(PasswordHasherRequired, SyncVerifyUnsupported);
 
@@ -129,6 +121,12 @@ export function decodePhc(phc: string): DecodedPhc | undefined {
 	};
 }
 
+/**
+ * A hash with the default settings, verified in place of a hash the hasher
+ * cannot read, so that such a hash takes as long as a wrong password.
+ */
+const UNREADABLE_STAND_IN = encodePhc(new Uint8Array(32), new Uint8Array(32));
+
 /** An argon2id hasher on top of native `node:crypto`, or `undefined` if it lacks argon2. */
 export function nodeHasherOf(
 	crypto: Partial<Argon2Crypto>,
@@ -155,15 +153,11 @@ export function nodeHasherOf(
 		memory: parsed.memory,
 		passes: parsed.passes,
 	});
+	const standIn = decodePhc(UNREADABLE_STAND_IN) as DecodedPhc;
+	// A hash node:crypto cannot derive (not argon2id, another version) is read as the stand-in.
 	const decode = (hash: string) => {
 		const parsed = decodePhc(hash);
-		if (parsed && parsed.version !== ARGON2_VERSION) {
-			throw new UnsupportedPasswordHash({
-				source: "password",
-				details: { version: parsed.version },
-			});
-		}
-		return parsed;
+		return parsed && parsed.version === ARGON2_VERSION ? parsed : undefined;
 	};
 	const matches = (tag: Uint8Array, expected: Uint8Array) =>
 		tag.length === expected.length && timingSafeEqual(tag, expected);
@@ -181,16 +175,27 @@ export function nodeHasherOf(
 			});
 			return encodePhc(salt, tag);
 		},
+		// A hash it cannot read verifies as false, after the work of a wrong password.
 		async verify(plain, hash) {
 			const parsed = decode(hash);
-			if (!parsed) return false;
-			return matches(await derive(parametersOf(plain, parsed)), parsed.tag);
+			if (parsed) {
+				try {
+					return matches(await derive(parametersOf(plain, parsed)), parsed.tag);
+				} catch {}
+			}
+			await derive(parametersOf(plain, standIn));
+			return false;
 		},
 		verifySync(plain, hash) {
 			const parsed = decode(hash);
-			if (!parsed) return false;
-			const tag = argon2Sync("argon2id", parametersOf(plain, parsed));
-			return matches(tag, parsed.tag);
+			if (parsed) {
+				try {
+					const tag = argon2Sync("argon2id", parametersOf(plain, parsed));
+					return matches(tag, parsed.tag);
+				} catch {}
+			}
+			argon2Sync("argon2id", parametersOf(plain, standIn));
+			return false;
 		},
 	};
 }
@@ -202,12 +207,29 @@ interface BunPassword {
 	verifySync(plain: string, hash: string): boolean;
 }
 
-/** Wraps `Bun.password` as an argon2id hasher. */
+/**
+ * Wraps `Bun.password` as an argon2id hasher. A hash it cannot read verifies
+ * as false, after the work of a wrong password.
+ */
 function bunHasherOf(password: BunPassword): PasswordHasher {
 	return {
 		hash: (plain) => password.hash(plain, { algorithm: "argon2id" }),
-		verify: (plain, hash) => password.verify(plain, hash),
-		verifySync: (plain, hash) => password.verifySync(plain, hash),
+		async verify(plain, hash) {
+			try {
+				return await password.verify(plain, hash);
+			} catch {
+				await password.verify(plain, UNREADABLE_STAND_IN);
+				return false;
+			}
+		},
+		verifySync(plain, hash) {
+			try {
+				return password.verifySync(plain, hash);
+			} catch {
+				password.verifySync(plain, UNREADABLE_STAND_IN);
+				return false;
+			}
+		},
 	};
 }
 

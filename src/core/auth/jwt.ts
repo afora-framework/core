@@ -5,7 +5,7 @@ import { Unauthenticated } from "../output/exceptions";
 import type { Principal } from "../use-case/types/access.interface";
 import type { Jwt, JwtAlgorithm, JwtOptions } from "./types/jwt.interface";
 
-/** `jwtOf` got options it cannot use, or its secret is missing; `details.reason` says what. */
+/** `jwtOf` got options it cannot use, its secret is missing, or `sign` got a scope that is not a scope token; `details.reason` says what. */
 export const InvalidJwtOptions = exceptionOf({
 	layer: ExceptionLayers.Output,
 	name: "InvalidJwtOptions",
@@ -20,7 +20,7 @@ const HASHES: Readonly<Record<JwtAlgorithm, string>> = {
 const MIN_SECRET = 32;
 const DEFAULT_EXPIRES_IN = 900;
 /** The claims of a token that are not claims of the caller. */
-const REGISTERED = new Set([
+export const REGISTERED: ReadonlySet<string> = new Set([
 	"sub",
 	"scope",
 	"iat",
@@ -30,6 +30,23 @@ const REGISTERED = new Set([
 	"aud",
 	"use",
 ]);
+
+/** Whether `key` is a claim of the caller: not registered, and not `__proto__`, which would set the prototype of the claims. */
+const isClaimName = (key: string): boolean =>
+	key !== "__proto__" && !REGISTERED.has(key);
+
+/**
+ * A scope is a scope token (RFC 6749, 3.3): not empty, without a space or a
+ * control character, since the scopes of a token are kept space separated.
+ */
+export function isScopeToken(scope: unknown): scope is string {
+	if (typeof scope !== "string" || scope === "") return false;
+	for (let i = 0; i < scope.length; i++) {
+		const code = scope.charCodeAt(i);
+		if (code <= 0x20 || code === 0x7f) return false;
+	}
+	return true;
+}
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -152,7 +169,9 @@ export function jwtOptionsIssue(
  *
  * A token is refused (`Unauthenticated`) when it is malformed, signed with
  * another algorithm or secret, expired, not yet valid, of another issuer,
- * audience or use, or has no subject. Throws `InvalidJwtOptions` for options
+ * audience or use, or has no subject. `sign` leaves out a claim with a
+ * registered name and rejects a scope that is not a scope token (not empty,
+ * no space or control character). Throws `InvalidJwtOptions` for options
  * it cannot use, and when the secret of `{ env }` is missing or shorter than
  * 32 characters, on the first token.
  */
@@ -205,11 +224,26 @@ export function jwtOf(options: JwtOptions): Jwt {
 
 	const jwt: Jwt = {
 		async sign(subject, token = {}) {
+			const scopes = subject.scopes ?? [];
+			const bad = scopes.find((scope) => !isScopeToken(scope));
+			if (bad !== undefined) {
+				throw new InvalidJwtOptions({
+					source: "jwt.sign",
+					details: {
+						reason: `Expected the scope ${JSON.stringify(bad)} to be a scope token: not empty, without spaces or control characters.`,
+					},
+				});
+			}
+			// A registered name among the claims is the token's own, never the caller's.
+			const claims: Record<string, JsonValue> = {};
+			for (const [key, value] of Object.entries(subject.claims ?? {})) {
+				if (isClaimName(key)) claims[key] = value;
+			}
 			const now = Math.floor(Date.now() / 1000);
 			const payload = {
-				...(subject.claims ?? {}),
+				...claims,
 				sub: subject.subject,
-				scope: (subject.scopes ?? []).join(" "),
+				scope: scopes.join(" "),
 				iat: now,
 				exp: now + (token.expiresIn ?? lifetime),
 				...(options.issuer === undefined ? {} : { iss: options.issuer }),
@@ -232,7 +266,8 @@ export function jwtOf(options: JwtOptions): Jwt {
 			// The algorithm is the one of the options, never the one the token names.
 			if (jsonOf(head)?.alg !== algorithm) return refused();
 			const signature = bytesOf(sign);
-			if (!signature) return refused();
+			// Only the encoding sign gives: no other unused bits, no padding.
+			if (!signature || base64url(signature) !== sign) return refused();
 			const valid = await crypto.subtle.verify(
 				"HMAC",
 				await keyOf(),
@@ -259,7 +294,7 @@ export function jwtOf(options: JwtOptions): Jwt {
 			}
 			const claims: Record<string, JsonValue> = {};
 			for (const [key, value] of Object.entries(payload)) {
-				if (!REGISTERED.has(key)) claims[key] = value as JsonValue;
+				if (isClaimName(key)) claims[key] = value as JsonValue;
 			}
 			return {
 				subject: sub,

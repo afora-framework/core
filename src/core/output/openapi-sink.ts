@@ -10,7 +10,7 @@ import type {
 import { isBlueprintVariant } from "../blueprint/variant";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { Exception } from "../exception/exception";
-import { toOpenAPI } from "../openapi/openapi";
+import { componentsOf } from "../openapi/openapi";
 import type { OpenAPISchema } from "../openapi/types/openapi.interface";
 import { isProperty } from "../property/is-property";
 import { recordNameOf } from "../record/name";
@@ -505,14 +505,51 @@ function invalid(reason: string, source = "openapi"): never {
 	throw new InvalidOutputStage({ source, details: { reason } });
 }
 
+const isCapital = (char: number) => char >= 65 && char <= 90;
+const isSmall = (char: number) => char >= 97 && char <= 122;
+const isDigit = (char: number) => char >= 48 && char <= 57;
+
+/**
+ * `text` with a `-` before each capital that starts a word: after a small
+ * letter or a digit (`changePassword`), or after a capital when a small
+ * letter follows (`HTMLParser`). One pass: a regular expression over a run
+ * of capitals backtracks in quadratic time.
+ */
+function wordsOf(text: string): string {
+	let words = "";
+	for (let index = 0; index < text.length; index++) {
+		const char = text.charCodeAt(index);
+		if (index > 0 && isCapital(char)) {
+			const before = text.charCodeAt(index - 1);
+			if (
+				isSmall(before) ||
+				isDigit(before) ||
+				(isCapital(before) && isSmall(text.charCodeAt(index + 1)))
+			) {
+				words += "-";
+			}
+		}
+		words += text[index];
+	}
+	return words;
+}
+
+/** `text` without the `-` at its start and end, in one pass. */
+function trimDashes(text: string): string {
+	let start = 0;
+	let end = text.length;
+	while (start < end && text.charCodeAt(start) === 45) start++;
+	while (end > start && text.charCodeAt(end - 1) === 45) end--;
+	return text.slice(start, end);
+}
+
 /** `changePassword` -> `change-password`. */
 function kebab(text: string): string {
-	return text
-		.replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
+	return trimDashes(
+		wordsOf(text)
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-"),
+	);
 }
 
 /** Where an operation is served, and how it answers. */
@@ -997,7 +1034,10 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 			models[`${operation.id}#input`] = operation.input;
 			models[`${operation.id}#response`] = operation.response;
 		}
-		const { schemas } = toOpenAPI(models) as {
+		// A response is sent masked (`maskValueOf`), and described so.
+		const { schemas } = componentsOf(models, "#/components/schemas/", (name) =>
+			name.endsWith("#response"),
+		) as {
 			schemas: Record<string, OpenAPISchema>;
 		};
 

@@ -1,5 +1,7 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import {
+	chmod,
 	mkdir,
 	mkdtemp,
 	realpath,
@@ -8,8 +10,9 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { validateInProject } from "../src/spec-file";
+import { redactMessage, typecheck } from "../src/typecheck";
 import { type Connected, connect, makeProject, removeProject } from "./project";
 
 const dirs: string[] = [];
@@ -173,4 +176,196 @@ describe("SEC-18: the application an agent may import", () => {
 			expect(String(result.data)).toContain("import_failed");
 		}
 	}, 60_000);
+});
+
+describe("SEC-32: the diagnostics afora_generate returns", () => {
+	const projects: string[] = [];
+	afterAll(() => Promise.all(projects.map(removeProject)));
+
+	test("SEC-32: the literal values of a project module are not echoed back", async () => {
+		const dir = await makeProject({
+			"src/secrets.ts":
+				// biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal of the module
+				'export const config = { db: { url: "postgres://admin:hunter2@db/prod" }, key: "sk_live_LEAKME", pin: 98765, tag: `t_${"x"}` } as const;\n',
+		});
+		projects.push(dir);
+		const client = await connect({ project: dir });
+		clients.push(client);
+		const spec = {
+			version: 1,
+			services: { leak: { import: "../secrets#config" } },
+			useCases: {
+				Peek: {
+					input: { fields: { key: "string" } },
+					response: { fields: { value: "string" } },
+					dependencies: { leak: "leak" },
+					implementation: { import: "../secrets#config" },
+				},
+			},
+		};
+		expect((await client.call("afora_spec_write", { spec })).data.written).toBe(
+			true,
+		);
+		const result = await client.call("afora_generate", {});
+		const { typecheck } = result.data;
+		expect(typecheck.ran).toBe(true);
+		expect(typecheck.ok).toBe(false);
+		expect(typecheck.diagnostics.length).toBeGreaterThan(0);
+		for (const diagnostic of typecheck.diagnostics) {
+			expect(diagnostic.file).toMatch(/^src\/domain\//);
+			expect(diagnostic.line).toBeGreaterThan(0);
+			expect(diagnostic.code).toMatch(/^TS\d+$/);
+		}
+		// What the agent can act on stays: the type that was expected.
+		expect(JSON.stringify(typecheck)).toContain("'ServiceFactory'");
+		const text = JSON.stringify(result.data);
+		for (const secret of ["hunter2", "sk_live", "98765", "t_x", "postgres"]) {
+			expect(text).not.toContain(secret);
+		}
+	}, 120_000);
+});
+
+describe("SEC-32: redacting a tsc message", () => {
+	test("SEC-32: literals and quoted types are redacted, plain names kept", () => {
+		expect(
+			redactMessage(
+				// biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal type as tsc prints it
+				"Type '{ readonly a: \"it's \\\" x\"; b: 5; c: `x${string}` }' is not assignable to type 'ServiceFactory'. Property 'x.y' is missing; '123'",
+			),
+		).toBe(
+			"Type '…' is not assignable to type 'ServiceFactory'. Property 'x.y' is missing; '…'",
+		);
+	});
+
+	test("SEC-32: a message full of escaped quotes is redacted in linear time", () => {
+		const start = performance.now();
+		for (const message of [
+			`"${'\\"'.repeat(100_000)}`,
+			`\`${"\\`".repeat(100_000)}`,
+			"'a".repeat(100_000),
+		]) {
+			redactMessage(message);
+		}
+		expect(performance.now() - start).toBeLessThan(200);
+	});
+});
+
+describe("SEC-33: a spec file that is not valid JSON", () => {
+	test("SEC-33: an extended file that is not JSON is reported without its text or the project path", async () => {
+		const { root } = await scratch();
+		await mkdir(join(root, "config"));
+		for (const text of [
+			'{"Stripe": sk_live_ABCDEFGHIJ0123}\n',
+			"{\"Stripe\": 'sk_live_ABCDEFGHIJ0123'}\n",
+		]) {
+			await writeFile(join(root, "config/appsettings.json"), text);
+			await expectNoText(root);
+		}
+	});
+
+	const expectNoText = async (root: string) => {
+		const { issues } = await validateInProject(
+			{ root },
+			{ version: 1, extends: ["./config/appsettings.json"] },
+		);
+		const unresolved = issues.find((i) => i.code === "unresolved_extends");
+		expect(unresolved?.message).toContain("config/appsettings.json");
+		expect(unresolved?.message).toContain("not valid JSON");
+		for (const text of ["sk_live", "Stripe", root]) {
+			expect(JSON.stringify(issues)).not.toContain(text);
+		}
+	};
+
+	test("SEC-33: an afora.json that is not JSON is reported without its text", async () => {
+		const dir = await makeProject({
+			"afora.json": '{"version": 1, "name": sk_live_ABCDEFGHIJ0123}\n',
+		});
+		const client = await connect({ project: dir });
+		clients.push(client);
+		try {
+			const result = await client.call("afora_spec_read", {});
+			expect(result.isError).toBe(true);
+			expect(String(result.data)).toContain("not valid JSON");
+			expect(String(result.data)).not.toContain("sk_live");
+			expect(String(result.data)).not.toContain("name");
+		} finally {
+			await removeProject(dir);
+		}
+	});
+});
+
+describe("SEC-39: an output.dir on another drive", () => {
+	test("SEC-39: validateInProject refuses an output.dir with a drive or a root", async () => {
+		const { root } = await scratch();
+		for (const dir of ["D:\\evil", "D:/evil", "D:evil", "\\outside"]) {
+			const { issues } = await validateInProject({ root } as never, {
+				version: 1,
+				output: { dir },
+			});
+			expect(codes(issues), dir).toContain("invalid_output@output.dir");
+		}
+	});
+});
+
+describe("SEC-41: the tsc afora_generate runs", () => {
+	/** A project without TypeScript, a tsc in a parent's node_modules/.bin and one on the PATH. */
+	async function decoys(): Promise<{ root: string; ran: string[] }> {
+		const base = await realpath(
+			await mkdtemp(join(tmpdir(), "afora-mcp-tsc-")),
+		);
+		dirs.push(base);
+		const root = join(base, "project");
+		await mkdir(root);
+		await writeFile(join(root, "tsconfig.json"), "{}");
+		const ran: string[] = [];
+		for (const dir of [join(base, "node_modules/.bin"), join(base, "bin")]) {
+			await mkdir(dir, { recursive: true });
+			const marker = join(dir, "ran");
+			ran.push(marker);
+			const tsc = join(dir, "tsc");
+			await writeFile(tsc, `#!/bin/sh\ntouch "${marker}"\n`);
+			await chmod(tsc, 0o755);
+		}
+		return { root, ran };
+	}
+
+	test("SEC-41: without TypeScript in the project, no other tsc runs", async () => {
+		const { root, ran } = await decoys();
+		const path = process.env.PATH;
+		process.env.PATH = `${dirname(ran[1] as string)}:${path}`;
+		try {
+			const result = await typecheck(root, []);
+			expect(result.ran).toBe(false);
+			expect(result.ran === false && result.reason).toContain(
+				"TypeScript is not installed",
+			);
+		} finally {
+			process.env.PATH = path;
+		}
+		for (const marker of ran) expect(existsSync(marker), marker).toBe(false);
+	}, 60_000);
+
+	test("SEC-41: the TypeScript of the project runs", async () => {
+		const { root, ran } = await decoys();
+		await mkdir(join(root, "node_modules"));
+		await symlink(
+			join(import.meta.dir, "../../../node_modules/typescript"),
+			join(root, "node_modules/typescript"),
+		);
+		await mkdir(join(root, "src"));
+		await writeFile(join(root, "src/a.ts"), "export const a: number = 'x';\n");
+		await writeFile(
+			join(root, "tsconfig.json"),
+			JSON.stringify({
+				compilerOptions: { strict: true, types: [] },
+				include: ["src"],
+			}),
+		);
+		const result = await typecheck(root, ["src/a.ts"]);
+		expect(result.ran).toBe(true);
+		expect(result.ran && result.diagnostics.map((d) => d.code)).toEqual([
+			"TS2322",
+		]);
+		for (const marker of ran) expect(existsSync(marker), marker).toBe(false);
+	}, 120_000);
 });

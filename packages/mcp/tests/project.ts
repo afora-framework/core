@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -7,7 +7,10 @@ import { createServer, type ServerOptions } from "../src";
 const ROOT = resolve(import.meta.dir, "../../..");
 const SCRATCH = resolve(import.meta.dir, ".tmp");
 
-/** A fresh project with a tsconfig that resolves `@afora/core` to its source. */
+/**
+ * A fresh project with a tsconfig that resolves `@afora/core` to its source,
+ * and TypeScript installed (a link to the repository's).
+ */
 export async function makeProject(
 	files: Readonly<Record<string, string>> = {},
 ): Promise<string> {
@@ -30,6 +33,11 @@ export async function makeProject(
 	await writeFile(
 		join(dir, "tsconfig.json"),
 		JSON.stringify(tsconfig, null, 2),
+	);
+	await mkdir(join(dir, "node_modules"));
+	await symlink(
+		join(ROOT, "node_modules/typescript"),
+		join(dir, "node_modules/typescript"),
 	);
 	for (const [path, contents] of Object.entries(files)) {
 		await mkdir(dirname(join(dir, path)), { recursive: true });
