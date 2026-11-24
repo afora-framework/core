@@ -228,7 +228,8 @@ function matches(pattern: string, topic: string): boolean {
  *   socket (`{ id, subscribed }`) when `subscriptions.topics` and
  *   `authorize` allow it and the session holds fewer than 1000 topics
  *   (a 403 `WsTopicForbidden` otherwise), and
- *   `{ id?, unsubscribe }` leaves the topic. The hub then sends
+ *   `{ id?, unsubscribe }` leaves the topic. A topic over 512 bytes (UTF-8)
+ *   is a 400 `InvalidWsMessage`, before the topics and `authorize`. The hub then sends
  *   `{ topic, event }` for each event published to the topic.
  */
 export const websocket = sinkOf<

@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- `afora_project` gives the default route of an operation in linear time for a name with a long run of capitals; the routes are the same as before.
 - `afora_project` shows `hooks: true` on an output whose sink was given hooks in code (an authenticator, middlewares), and its `authentication` and notes say so. `afora_extract` asks for `outputs.<Name>.pipe.<index>` in `imports` for such a stage instead of dropping its hooks (#199).
 
 ## 27.0.0-rc.4 — 2026-11-16

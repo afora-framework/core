@@ -33,6 +33,13 @@ const VERBS = ["op", "subscribe", "unsubscribe"] as const;
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const encoder = new TextEncoder();
 
+/**
+ * The longest topic, in UTF-8 bytes as the size of a message. A topic names
+ * a resource (`users/<uuid>/posts/<uuid>` is under 100 bytes), so 512 leaves
+ * room for deep names while a session's 1000 topics stay under 512 KiB.
+ */
+const MAX_TOPIC_BYTES = 512;
+
 /** A frame that cannot be read: why, and the id when the frame had a readable one. */
 export interface WsMessageFailure {
 	readonly reason: string;
@@ -48,8 +55,8 @@ function isId(value: unknown): value is WsRequestId {
 
 /**
  * `data` read as a request: text (or UTF-8 bytes) of a JSON object with an
- * optional `id` and exactly one of `op`, `subscribe` and `unsubscribe`, or
- * already such an object. Never throws.
+ * optional `id` and exactly one of `op`, `subscribe` and `unsubscribe` (a
+ * topic of at most 512 UTF-8 bytes), or already such an object. Never throws.
  */
 export function parseWsMessage(
 	data: string | ArrayBuffer | Uint8Array | object,
@@ -105,6 +112,15 @@ export function parseWsMessage(
 	const [verb] = verbs as [(typeof VERBS)[number]];
 	if (typeof given[verb] !== "string" || given[verb] === "") {
 		return fail(`"${verb}" must be a non-empty string.`, id);
+	}
+	if (
+		verb !== "op" &&
+		encoder.encode(given[verb] as string).byteLength > MAX_TOPIC_BYTES
+	) {
+		return fail(
+			`"${verb}" must be a topic of at most ${MAX_TOPIC_BYTES} bytes.`,
+			id,
+		);
 	}
 	if (verb !== "op" && given.input !== undefined) {
 		return fail(`"input" only goes with "op".`, id);

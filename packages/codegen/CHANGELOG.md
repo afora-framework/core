@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- The file name of a use case kept in its own file (`register-user.use-case.ts`) is made in linear time for a name with a long run of capitals; the names are the same as before.
 - `extractSpec` no longer drops the hooks of a sink (#199): a stage whose description has `hooks: true` (as `hono(options, { authenticator })`) throws an `ExtractionError` naming `outputs.<Name>.pipe.<index>` until it is mapped in `imports` (`--import` in the CLI), and is then written as `{ "import": "..." }`. It was written as `{ "sink", "options" }` before, so the generated code had no authenticator and no middlewares, and the mapping was ignored.
 
 ## 27.0.0-rc.4 — 2026-11-16
