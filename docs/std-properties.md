@@ -110,7 +110,7 @@ await password.verify("secret"); // false
 | `ctx.jsonOf` | `jsonOf`         | JSON that a JSON Schema known at declaration accepts, typed by it  |
 | `ctx.schema` | `SchemaProperty` | a JSON Schema (draft 2020-12) as a value, such as a content type's |
 
-[Properties](properties.md#json) covers `JsonProperty`, `jsonOf` and `checkJsonSchema`. `SchemaProperty` holds a schema itself, defined at runtime: `serialize()` and `SchemaProperty.deserialize(json)` move it to and from JSON, and `match(data)` and `errors(data)` validate data against it.
+[Properties](properties.md#json) covers `JsonProperty`, `jsonOf` and `checkJsonSchema`. `SchemaProperty` holds a schema itself, defined at runtime: `serialize()` and `SchemaProperty.deserialize(json)` move it to and from JSON, and `match(data)` and `errors(data)` validate data against it. A schema nested more than 128 JSON levels deep (the root is the first; `{ "type": "object", "properties": { "a": {...} } }` takes two per object) is rejected (`is nested too deeply`, with the path), by `safeParse`, the constructor and `deserialize`, so that checking data against a stored schema stays quick and within the stack on every runtime.
 
 ```ts
 import { SchemaProperty } from "@afora/core";

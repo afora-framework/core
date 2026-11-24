@@ -11,15 +11,13 @@
 
 - `findBy<Key>` and `findManyBy<Key>` take one value: `{ in: [...] }` throws `InvalidRepositoryQuery` instead of being read as a membership, which only the queries (`findMany`, `exists`, `findPage`, `count`) take. (SEC-21)
 - `PlainPassword` and `Password.hash` apply the same password rules to a value with line breaks: the schema pattern of `PlainPassword` looks for each required character across the whole value, as `Password.hash` does.
+- `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: they give an issue at the property's path. (SEC-27)
+- `jsonOf` checks the depth of a value (1000 at most, `is nested too deeply`) before its schema walks it, for a recursive schema too, as [Properties](docs/properties.md#json) says. (SEC-28)
+- `SchemaProperty` (`ctx.schema`) rejects a schema nested more than 128 JSON levels deep, with an `is nested too deeply` issue at its path, in `safeParse`, the constructor and `deserialize`, so a schema it holds can always be checked against quickly, on Bun, Node and browsers. See [Standard properties](docs/std-properties.md#json-and-schemas). (SEC-29)
 
 ### Repository
 
 - The Release workflow sets `coreVersion` in afora CMS's `site-values` entry after a release that npm serves as `latest` (once its tag and GitHub release exist), so getafora.com shows the new version without a hand edit. It uses the repository secret `CMS_TOKEN`, an afora CMS token limited to `site-values`, and the variable `CMS_API_URL`; without them it only warns. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-### Fixed
-
-- `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: they give an issue at the property's path. (SEC-27)
-- `jsonOf` checks the depth of a value (1000 at most, `is nested too deeply`) before its schema walks it, for a recursive schema too, as [Properties](docs/properties.md#json) says. (SEC-28)
 
 ### Documentation
 
