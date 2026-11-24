@@ -285,3 +285,149 @@ describe("SEC-47: a write checks that the entities it references exist", () => {
 		expect(await Tasks.findMany({})).toEqual([]);
 	});
 });
+
+describe("SEC-46: a query with a missing value in where", () => {
+	async function invites() {
+		const Members = repositoryOf({
+			entity: Member,
+			actions: [
+				"create",
+				"findMany",
+				"exists",
+				"count",
+				"findPage",
+				"findCursor",
+			],
+		});
+		await Members.create({ name: "Ana", email: "ana@example.com" });
+		await Members.create({
+			name: "Bia",
+			email: "bia@example.com",
+			code: "code-bia",
+			team: "core",
+		});
+		return Members;
+	}
+
+	test("SEC-46: findMany, exists, count, findPage and findCursor match no entity for undefined or null", async () => {
+		const Members = await invites();
+		for (const missing of [undefined, null]) {
+			const where = { code: missing as never };
+			expect(await Members.findMany({ where })).toEqual([]);
+			expect(await Members.exists({ where })).toBe(false);
+			expect(await Members.count({ where })).toBe(0);
+			const page = await Members.findPage({ where });
+			expect(page.items).toEqual([]);
+			expect(page.total).toBe(0);
+			const cursor = await Members.findCursor({ where });
+			expect(cursor.items).toEqual([]);
+			expect(cursor.next).toBeUndefined();
+			expect(
+				await Members.findMany({
+					where: { name: "Ana", team: missing as never },
+				}),
+			).toEqual([]);
+		}
+		expect(
+			(await Members.findMany({ where: { code: "code-bia" } })).map(
+				(m) => m.name,
+			),
+		).toEqual(["Bia"]);
+	});
+
+	test("SEC-46: a missing value inside in matches no entity", async () => {
+		const Members = await invites();
+		expect(
+			await Members.findMany({
+				where: { code: { in: [undefined, null] as never } },
+			}),
+		).toEqual([]);
+		expect(
+			(
+				await Members.findMany({
+					where: { code: { in: [null, "code-bia"] as never } },
+				})
+			).map((m) => m.name),
+		).toEqual(["Bia"]);
+	});
+
+	test("SEC-46: the provider is not asked for a missing value", async () => {
+		const Members = await invites();
+		const provider = (Members as unknown as { provider: IRepositoryProvider })
+			.provider;
+		const reads: string[] = [];
+		for (const method of ["findOne", "findMany", "count"] as const) {
+			const original = provider[method] as (...args: unknown[]) => unknown;
+			(provider as unknown as Record<string, unknown>)[method] = (
+				...args: unknown[]
+			) => {
+				reads.push(method);
+				return original.apply(provider, args);
+			};
+		}
+		const where = { code: undefined };
+		await Members.findMany({ where });
+		await Members.exists({ where });
+		await Members.count({ where });
+		await Members.findPage({ where });
+		await Members.findCursor({ where });
+		expect(reads).toEqual([]);
+	});
+
+	test("SEC-46: a declarative use case given no value finds nothing", async () => {
+		const Members = await invites();
+		const NotFound = exceptionOf({
+			layer: ExceptionLayers.UseCase,
+			name: "NotFound",
+			message: "No member has this code.",
+		});
+		class WhoseCode extends useCaseOf({
+			name: "WhoseCode",
+			blueprint: blueprintOf((ctx) => ({ code: ctx.optional.string })),
+			response: blueprintOf((ctx) => ({ email: ctx.string })),
+			dependencies: { members: Members },
+			errors: [NotFound],
+			steps: [
+				{
+					find: "members.findMany",
+					args: [{ where: { code: "$input.code" }, limit: 1 }],
+					as: "found",
+				},
+				{ ensure: "exists", value: "$found.0", error: NotFound },
+				{ return: { email: "$found.0.email" } },
+			],
+		}) {}
+		class Known extends useCaseOf({
+			name: "Known",
+			blueprint: blueprintOf((ctx) => ({ code: ctx.optional.string })),
+			response: blueprintOf((ctx) => ({ known: ctx.boolean })),
+			dependencies: { members: Members },
+			steps: [
+				{
+					find: "members.exists",
+					args: [{ where: { code: "$input.code" } }],
+					as: "known",
+				},
+				{ return: { known: "$known" } },
+			],
+		}) {}
+		const run = async (UseCase: unknown, input: object) => {
+			try {
+				return await new (
+					UseCase as new (
+						input: object,
+					) => {
+						execute(): Promise<unknown>;
+					}
+				)(input).execute();
+			} catch (error) {
+				return (error as Error).name;
+			}
+		};
+		expect(await run(WhoseCode, { code: "code-bia" })).toEqual({
+			email: "bia@example.com",
+		});
+		expect(await run(WhoseCode, {})).toBe("NotFound");
+		expect(await run(Known, {})).toEqual({ known: false });
+	});
+});

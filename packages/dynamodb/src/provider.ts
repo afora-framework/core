@@ -123,6 +123,23 @@ function isMembership(
 	);
 }
 
+/**
+ * `query` without the missing values (`undefined` or `null`) of its `in`
+ * lists, or `undefined` when a key of `where` is given one: a missing value
+ * matches no row.
+ */
+function presentQuery(query: ProviderQuery): ProviderQuery | undefined {
+	if (query.where === undefined) return query;
+	const where: Record<string, unknown> = {};
+	for (const [key, condition] of Object.entries(query.where)) {
+		if (!isPresent(condition)) return undefined;
+		where[key] = isMembership(condition)
+			? { in: condition.in.filter(isPresent) }
+			: condition;
+	}
+	return { ...query, where };
+}
+
 /** The key holding the expiry of the entities of `context`, on any version of `@afora/core`. */
 const expiryKeyOf = (context: RepositoryContext): string | undefined =>
 	(context as { readonly expiry?: { readonly key: string } }).expiry?.key;
@@ -619,7 +636,9 @@ export function dynamoDbProvider(
 			expiry: true,
 		}),
 
-		findOne: logged("findOne", async (context, query: ProviderQuery = {}) => {
+		findOne: logged("findOne", async (context, given: ProviderQuery = {}) => {
+			const query = presentQuery(given);
+			if (query === undefined) return undefined;
 			const [first] = selectRows(
 				await candidates(context, query),
 				{ ...query, limit: Math.min(query.limit ?? 1, 1) },
@@ -628,18 +647,22 @@ export function dynamoDbProvider(
 			return first;
 		}),
 
-		findMany: logged(
-			"findMany",
-			async (context, query: ProviderQuery = {}) =>
+		findMany: logged("findMany", async (context, given: ProviderQuery = {}) => {
+			const query = presentQuery(given);
+			if (query === undefined) return [];
+			return (
 				(await pageInIdOrder(context, query)) ??
 				selectRows(
 					await candidates(context, query),
 					query,
 					expiryKeyOf(context),
-				),
-		),
+				)
+			);
+		}),
 
-		count: logged("count", async (context, query: ProviderQuery = {}) => {
+		count: logged("count", async (context, given: ProviderQuery = {}) => {
+			const query = presentQuery(given);
+			if (query === undefined) return 0;
 			const expiry = expiryKeyOf(context);
 			return (await candidates(context, query)).filter((data) =>
 				matchesQuery(data, query, expiry),
