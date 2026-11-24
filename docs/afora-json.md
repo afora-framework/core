@@ -169,24 +169,24 @@ The `response` of a use case written in the spec is a blueprint (its name, or `{
 
 Some things are code, not data: a provider made by hand, a `run` function, the `before` and `after` of a standard use case, an `execute`, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
 
-| Key                                | Maps                                                                       |
-| ---------------------------------- | -------------------------------------------------------------------------- |
-| `provider`                         | the provider of the application, when created without `providerOf`         |
-| `log`                              | the `log` of the application, when made by `logFrom`                       |
-| `log.providers.<index>`            | a log provider other than `"console"` or `"json"`, by its position         |
-| `trace`                            | the tracer of the application (`trace`), always written by hand            |
-| `repositories.<Name>.provider`     | the own provider of a repository, when created without `providerOf`        |
-| `providers.<key>`                  | a provider of the top-level `providers`, when created without `providerOf` |
-| `useCases.<Name>`                  | a use case with a hand-written `execute`                                   |
-| `useCases.<Name>.run.<name>`       | the `fn` of a `run` step of a steps use case                               |
-| `useCases.<Name>.before`, `.after` | the `before` and `after` of a standard use case                            |
-| `commands.<Name>.events`           | the event handler of a command, when it is not a policy                    |
-| `commands.<Name>.onEventError`     | the `onEventError` handler of a command                                    |
-| `publishers.<key>`                 | a publisher of the top-level `publishers`                                  |
-| `services.<name>`                  | the factory of a service of the top-level `services`                       |
-| `entities.<Name>.events.<event>`   | the handler of a lifecycle event of an entity                              |
-| `outputs.<Name>.pipe.<index>`      | a stage written by hand, by its position in the `pipe`                     |
-| `<property name>`                  | the module of a property that cannot be recreated (see the limitations)    |
+| Key                                | Maps                                                                          |
+| ---------------------------------- | ----------------------------------------------------------------------------- |
+| `provider`                         | the provider of the application, when created without `providerOf`            |
+| `log`                              | the `log` of the application, when made by `logFrom`                          |
+| `log.providers.<index>`            | a log provider other than `"console"` or `"json"`, by its position            |
+| `trace`                            | the tracer of the application (`trace`), always written by hand               |
+| `repositories.<Name>.provider`     | the own provider of a repository, when created without `providerOf`           |
+| `providers.<key>`                  | a provider of the top-level `providers`, when created without `providerOf`    |
+| `useCases.<Name>`                  | a use case with a hand-written `execute`                                      |
+| `useCases.<Name>.run.<name>`       | the `fn` of a `run` step of a steps use case                                  |
+| `useCases.<Name>.before`, `.after` | the `before` and `after` of a standard use case                               |
+| `commands.<Name>.events`           | the event handler of a command, when it is not a policy                       |
+| `commands.<Name>.onEventError`     | the `onEventError` handler of a command                                       |
+| `publishers.<key>`                 | a publisher of the top-level `publishers`                                     |
+| `services.<name>`                  | the factory of a service of the top-level `services`                          |
+| `entities.<Name>.events.<event>`   | the handler of a lifecycle event of an entity                                 |
+| `outputs.<Name>.pipe.<index>`      | a stage written by hand, or a sink given hooks, by its position in the `pipe` |
+| `<property name>`                  | the module of a property that cannot be recreated (see the limitations)       |
 
 The value is always `"./file.ts#export"`.
 
@@ -465,7 +465,7 @@ A use case in `afora.json` takes the same `route` and `access` as in TypeScript 
 - **Checked against the spec.** For a use case written in the spec, each key a route places must be a key of the input (`setCookie`, of the response), no key may have two places, the `owner` of an access must name an input key and its `context` keys must be in the context: `invalid_route` and `invalid_access`. For a standard use case only the shape is checked, since its input follows the repository; the generated code checks the rest when it loads.
 - **The route of a sink still wins.** The `route` option of a `hono` (or `fastify`, `express`, `elysia`, `openapi`) stage, by operation id, overrides the method, path, status, `statuses` and `body` (a `delete` that reads a JSON body), as in TypeScript.
 - **Tokens.** `login` and `refresh` take `"token": { "secret": { "env": "JWT_SECRET" }, ... }` in `options`, and a sink `"auth": { "jwt": { "secret": { "env": "JWT_SECRET" } } }`; the secret is always the name of an environment variable (see [Tokens and sessions](auth.md#tokens-and-sessions)).
-- **Hooks are code.** The middlewares and the authenticator of a sink are its second argument, which JSON cannot hold. A stage that needs them is written in a file and named with `{ "import": "./stages.ts#api" }`.
+- **Hooks are code.** The middlewares and the authenticator of a sink are its second argument, which JSON cannot hold. A stage that needs them is written in a file and named with `{ "import": "./stages.ts#api" }`. `describe()` marks such a stage with `hooks: true`, so extraction throws an `ExtractionError` naming `outputs.<Name>.pipe.<index>` until it is mapped (`--import outputs.Api.pipe.0=./stages.ts#api`), and then writes `{ "import": "./stages.ts#api" }`: the generated code keeps the hooks instead of serving the output without them.
 
 ## Catalogs: providers, stages and event policies
 

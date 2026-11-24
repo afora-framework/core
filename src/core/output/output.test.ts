@@ -525,6 +525,31 @@ describe("stage descriptions and catalogs", () => {
 		});
 	});
 
+	test("the description of a sink given hooks says so, not what they are", () => {
+		const make = sinkOf<
+			number,
+			Record<string, unknown>,
+			{ auth?: () => boolean }
+		>({
+			name: "x",
+			build: () => 1,
+		});
+		expect(stageDescriptionOf(make({}, { auth: () => true }))).toEqual({
+			kind: "sink",
+			name: "x",
+			options: {},
+			hooks: true,
+		});
+		// No hook defined: nothing a spec would lose.
+		for (const hooks of [undefined, {}, { auth: undefined }]) {
+			expect(stageDescriptionOf(make({}, hooks))).toEqual({
+				kind: "sink",
+				name: "x",
+				options: {},
+			});
+		}
+	});
+
 	test("options are copied", () => {
 		const tags = ["a"];
 		const stage = select({ tags });

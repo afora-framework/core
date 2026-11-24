@@ -123,12 +123,16 @@ type AnyTransform = TransformStage<any>;
 // biome-ignore lint/suspicious/noExplicitAny: sinks of any options
 type AnySink<Result> = SinkStage<Result, any>;
 
-/** What a stage is, out of band: a name and JSON options, or opaque. */
+/**
+ * What a stage is, out of band: a name and JSON options, or opaque. `hooks`
+ * is `true` on a sink given hooks (code, which the description leaves out).
+ */
 export type StageDescription =
 	| {
 			readonly kind: "transform" | "sink";
 			readonly name: string;
 			readonly options: StageOptions;
+			readonly hooks?: true;
 	  }
 	| { readonly kind: "opaque" };
 

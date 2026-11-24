@@ -778,12 +778,24 @@ export function extractSpec(
 			? { statuses: { ...value.statuses } }
 			: {}),
 		pipe: value.pipe.map((stage, index) => {
+			const key = `outputs.${name}.pipe.${index}`;
 			if (stage.kind === "opaque") {
 				return {
 					import: importFor(
 						options.imports,
-						`outputs.${name}.pipe.${index}`,
+						key,
 						`The stage ${index} of the output "${name}" was written by hand, so it`,
+					),
+				};
+			}
+			// Hooks (an authenticator, middlewares) are code: the stage is
+			// imported as it is, never written as JSON without them.
+			if (stage.hooks === true) {
+				return {
+					import: importFor(
+						options.imports,
+						key,
+						`The sink "${stage.name}" (stage ${index} of the output "${name}") was given hooks (an authenticator, middlewares), which are code, so it`,
 					),
 				};
 			}

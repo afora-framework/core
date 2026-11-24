@@ -8,6 +8,10 @@
 - An `afora.json`, or a spec it extends, that is not valid JSON is reported without the parser's message, which could quote the file; `unresolved_extends` gives the paths inside the project from its root. (SEC-33)
 - Gets the fix of `@afora/codegen` for a spec string with a long run of spaces (SEC-31).
 
+### Fixed
+
+- `afora_project` shows `hooks: true` on an output whose sink was given hooks in code (an authenticator, middlewares), and its `authentication` and notes say so. `afora_extract` asks for `outputs.<Name>.pipe.<index>` in `imports` for such a stage instead of dropping its hooks (#199).
+
 ## 27.0.0-rc.4 — 2026-11-16
 
 ### Security

@@ -31,6 +31,8 @@ interface ProjectFacts {
 					readonly kind: string;
 					readonly name?: string;
 					readonly options?: Json;
+					/** The stage was given hooks in code (an authenticator, middlewares). */
+					readonly hooks?: true;
 				}[];
 			}
 		>
@@ -78,8 +80,10 @@ export interface ProjectView {
 		readonly sink?: string;
 		readonly basePath?: string;
 		readonly docs?: string;
-		/** `auth.jwt` when the sink options hold it; hooks are code, which this view cannot see. */
+		/** `auth.jwt` when the sink options hold it; hooks are code, which this view cannot see into. */
 		readonly authentication: string;
+		/** The sink was given hooks in code (an authenticator, middlewares): read from an application only. */
+		readonly hooks?: true;
 		readonly routes: readonly RouteView[];
 	}[];
 	/** What deserves a look: operations that are open, or closed for lack of an authenticator. */
@@ -171,7 +175,9 @@ function viewOf(facts: ProjectFacts): ProjectView {
 			);
 			if (guarded.length > 0 && !hasAuth && sink?.name !== "openapi") {
 				notes.push(
-					`Output "${name}": ${guarded.length} operation(s) declare an access and its sink options have no "auth". Unless the stage is given an authenticator in code (its hooks), they answer 401.`,
+					sink?.hooks
+						? `Output "${name}": ${guarded.length} operation(s) declare an access and its sink options have no "auth"; the stage is given hooks in code, which must hold an authenticator, or they answer 401.`
+						: `Output "${name}": ${guarded.length} operation(s) declare an access and its sink options have no "auth". Unless the stage is given an authenticator in code (its hooks), they answer 401.`,
 				);
 			}
 			const open = routes.filter((route) => route.access === "open");
@@ -190,7 +196,10 @@ function viewOf(facts: ProjectFacts): ProjectView {
 				: {}),
 			authentication: hasAuth
 				? "auth.jwt"
-				: "not in the sink options (an authenticator hook is code)",
+				: sink?.hooks
+					? "not in the sink options; the sink is given hooks in code, which may hold an authenticator"
+					: "not in the sink options (an authenticator hook is code)",
+			...(sink?.hooks ? { hooks: true as const } : {}),
 			routes: http ? routes : routes.map((route) => ({ ...route })),
 		};
 	});
@@ -367,6 +376,7 @@ export function projectViewOfDescription(description: unknown): ProjectView {
 					kind: String(entry.kind ?? "opaque"),
 					...(typeof entry.name === "string" ? { name: entry.name } : {}),
 					...(isObject(entry.options) ? { options: entry.options } : {}),
+					...(entry.hooks === true ? { hooks: true as const } : {}),
 				};
 			}),
 		};

@@ -165,7 +165,8 @@ a file of your own.
   after the write; \`before\` may give back the input to write), \`dependencies\` (key -> declared name, for them) and \`throws\`
   (the exceptions they throw). Write steps only for what no standard use case does, nor its \`before\`/\`after\`.
 - \`afora_extract\` needs \`imports\` for \`useCases.<Name>\` (hand-written execute) and \`useCases.<Name>.run.<name>\` (run functions);
-  a standard use case needs none, but \`useCases.<Name>.before\` and \`.after\` for its hooks.
+  a standard use case needs none, but \`useCases.<Name>.before\` and \`.after\` for its hooks; a stage written by hand, or a sink given
+  hooks in code (an authenticator, middlewares), needs \`outputs.<Name>.pipe.<index>\`.
 
 ## Commands and outputs
 

@@ -4691,7 +4691,8 @@ The last stage: builds something concrete out of the operations.
 
 *type* · tier: adapters · `import type { StageDescription } from "@afora/core/adapters"`
 
-What a stage is, out of band: a name and JSON options, or opaque.
+What a stage is, out of band: a name and JSON options, or opaque. `hooks`
+is `true` on a sink given hooks (code, which the description leaves out).
 
 ### UseCaseDependencyDescription
 
@@ -4859,8 +4860,9 @@ entity whose `schemaVersion` is lower than the lock's. Empty when it can.
 
 A factory of sink stages: `openapi({ info })`. A sink that needs what JSON
 cannot hold (middlewares, an authenticator) takes it as a second argument,
-its `hooks`, which `build` receives and the description of the stage
-leaves out.
+its `hooks`, which `build` receives. The description of the stage says
+that it was given hooks (`hooks: true`, when one of them is defined), not
+what they are: a stage with hooks is code, which extraction imports.
 
 ### stageCatalogOf
 
