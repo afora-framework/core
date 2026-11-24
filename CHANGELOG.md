@@ -5,6 +5,7 @@
 ### Security
 
 - **Breaking.** A refresh token issued by the standard `login` or `refresh` of an entity is accepted only by the `refresh` of that entity: its `use` names the entity (`refresh:<Entity>`), and the `refresh` of another entity sharing the secret answers it as any invalid token, whatever the ids. A refresh token issued before this change is no longer accepted; signing in again gives a new one. [Tokens and sessions](docs/auth.md#tokens-and-sessions) says what an access token names. (SEC-42)
+- **Breaking.** A write checks that the entities a record references exist before it stores their ids: `create`, `update`, a soft `delete` given the entity and the entity `increment` creates throw `RepositoryEntityNotFound` (404), and store nothing, for an id the repository of its relation does not hold (a soft-deleted or expired entity counts as held, as when it is read). The ids are read in one `findMany` with `in` for each relation, through the providers of the use case that runs the write. An entity held by a record is now stored through its own repository before the record. See [Repositories](docs/repositories.md). (SEC-47)
 
 ## 27.0.0-rc.5 — 2026-11-24
 

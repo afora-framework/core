@@ -137,3 +137,151 @@ describe("SEC-21: findBy<Key> and findManyBy<Key> take one value", () => {
 		).rejects.toBeInstanceOf(InvalidRepositoryQuery);
 	});
 });
+
+describe("SEC-47: a write checks that the entities it references exist", () => {
+	class Review extends entityOf(
+		blueprintOf((ctx) => ({
+			title: ctx.string,
+			owner: Member,
+			reviewers: ctx.listOf(Member),
+			score: ctx.number,
+		})),
+		{ name: "Review", change: ["score", "owner"] },
+	) {}
+
+	async function setup() {
+		const reads: string[] = [];
+		const Members = repositoryOf({
+			entity: Member,
+			actions: ["create", "delete"],
+		});
+		const ana = await Members.create({ name: "Ana", email: "ana@example.com" });
+		const bia = await Members.create({ name: "Bia", email: "bia@example.com" });
+		const provider = (Members as unknown as { provider: IRepositoryProvider })
+			.provider;
+		const findMany = provider.findMany;
+		provider.findMany = (...args) => {
+			reads.push("findMany");
+			return findMany.apply(provider, args);
+		};
+		const Tasks = repositoryOf({
+			entity: Task,
+			actions: ["create", "update", "findMany"],
+			relations: [Members],
+		});
+		const Reviews = repositoryOf({
+			entity: Review,
+			actions: ["create", "update", "findMany", "increment"],
+			relations: [Members],
+		});
+		return { Members, Tasks, Reviews, ana, bia, reads };
+	}
+
+	const unsaved = () => new Member({ name: "Caio", email: "caio@example.com" });
+
+	test("SEC-47: create rejects a reference to an id that was never stored", async () => {
+		const { Tasks, ana } = await setup();
+		await Tasks.create({ title: "Ship", owner: ana });
+		const error = await Tasks.create({ title: "Ghost", owner: unsaved() }).then(
+			() => undefined,
+			(caught: unknown) => caught,
+		);
+		expect((error as Error).name).toBe("RepositoryEntityNotFound");
+		const titles = (await Tasks.findMany({})).map((task) => task.title);
+		expect(titles).toEqual(["Ship"]);
+	});
+
+	test("SEC-47: update rejects a reference to an id that was never stored", async () => {
+		const { Reviews, ana, bia } = await setup();
+		const review = await Reviews.create({
+			title: "Draft",
+			owner: ana,
+			reviewers: [bia],
+			score: 1,
+		});
+		review.change.owner(unsaved());
+		await expect(Reviews.update(review)).rejects.toMatchObject({
+			name: "RepositoryEntityNotFound",
+		});
+		const [stored] = await Reviews.findMany({});
+		expect(stored?.owner.name).toBe("Ana");
+	});
+
+	test("SEC-47: a reference in a list is checked too", async () => {
+		const { Reviews, ana, bia } = await setup();
+		await expect(
+			Reviews.create({
+				title: "Draft",
+				owner: ana,
+				reviewers: [bia, unsaved()],
+				score: 1,
+			}),
+		).rejects.toMatchObject({ name: "RepositoryEntityNotFound" });
+		expect(await Reviews.findMany({})).toEqual([]);
+	});
+
+	test("SEC-47: the entity increment creates is checked", async () => {
+		const { Reviews, ana } = await setup();
+		const id = new Review({
+			title: "x",
+			owner: ana,
+			reviewers: [],
+			score: 0,
+		}).id;
+		await expect(
+			Reviews.increment(
+				id,
+				{ score: 1 },
+				{ create: { title: "New", owner: unsaved(), reviewers: [] } },
+			),
+		).rejects.toMatchObject({ name: "RepositoryEntityNotFound" });
+		expect(await Reviews.findMany({})).toEqual([]);
+	});
+
+	test("SEC-47: the references of a write are read in one batch per relation", async () => {
+		const { Reviews, ana, bia, reads } = await setup();
+		await Reviews.create({
+			title: "Draft",
+			owner: ana,
+			reviewers: [ana, bia],
+			score: 1,
+		});
+		expect(reads).toEqual(["findMany"]);
+	});
+
+	test("SEC-47: a soft-deleted entity can still be referenced", async () => {
+		const Members = repositoryOf({
+			entity: Member,
+			actions: ["create", "delete"],
+			deletion: "soft",
+		});
+		const Tasks = repositoryOf({
+			entity: Task,
+			actions: ["create", "findMany"],
+			relations: [Members],
+		});
+		const ana = await Members.create({ name: "Ana", email: "ana@example.com" });
+		await Members.delete(ana);
+		await Tasks.create({ title: "Ship", owner: ana });
+		expect((await Tasks.findMany({}))[0]?.owner.name).toBe("Ana");
+	});
+
+	test("SEC-47: a use case given a plain entity value of an unknown id stores nothing", async () => {
+		const { Tasks } = await setup();
+		class AddTask extends useCaseOf({
+			name: "AddTask",
+			blueprint: blueprintOf((ctx) => ({ title: ctx.string, owner: Member })),
+			response: blueprintOf((ctx) => ({ title: ctx.string })),
+			dependencies: { tasks: Tasks },
+			steps: [
+				{ create: "tasks", value: "$input", as: "task" },
+				{ return: { title: "$task.title" } },
+			],
+		}) {}
+		const owner = unsaved().toJSON();
+		await expect(
+			new AddTask({ title: "Ghost", owner } as never).execute(),
+		).rejects.toMatchObject({ name: "RepositoryEntityNotFound" });
+		expect(await Tasks.findMany({})).toEqual([]);
+	});
+});

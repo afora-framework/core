@@ -232,6 +232,42 @@ function loadByIds(
 }
 
 /**
+ * Throws `RepositoryEntityNotFound` when `data`, the value of an entity of
+ * `state` about to be stored, holds the id of an entity its relation does
+ * not hold, read in one batch for each relation, as reads load them (a
+ * soft-deleted or expired entity counts as held). The providers of the
+ * `scope` of the call, if any, replace those of the relations.
+ */
+export async function assertReferences(
+	state: RepositoryState,
+	data: RepositoryData,
+	scope?: ExecutionScope,
+): Promise<void> {
+	if (state.relations.size === 0) return;
+	const wanted = new Map<RepositoryState, Set<IdValue>>();
+	mapReferences(state.entity.blueprint.properties, data, (target, value) => {
+		const relation = state.relations.get(target);
+		if (relation && isIdValue(value)) {
+			const ids = wanted.get(relation) ?? new Set<IdValue>();
+			wanted.set(relation, ids.add(value));
+		}
+		return value;
+	});
+	for (const [relation, ids] of wanted) {
+		const found = new Set(
+			(await loadByIds(relation, [...ids], scope)).map((row) => row.id),
+		);
+		for (const id of ids) {
+			if (found.has(id)) continue;
+			throw new RepositoryEntityNotFound({
+				source: relation.name,
+				details: { id },
+			});
+		}
+	}
+}
+
+/**
  * `datas`, the stored values of the entities of `state`, with the id of each
  * entity they hold replaced by the entity, loaded in one batch for each
  * relation. An entity loaded twice in `session` is the same instance. Throws

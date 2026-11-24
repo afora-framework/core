@@ -54,7 +54,12 @@ import {
 import { inMemoryProvider } from "./in-memory";
 import { planQuery } from "./plan";
 import { isMembership, prepareQuery } from "./query";
-import { parseEntity, relationsOf, resolveReferences } from "./references";
+import {
+	assertReferences,
+	parseEntity,
+	relationsOf,
+	resolveReferences,
+} from "./references";
 import {
 	assertUnbound,
 	contextOf,
@@ -676,6 +681,7 @@ const create = action(async (self, input: unknown) => {
 			? input
 			: new (Entity as unknown as new (value: unknown) => object)(input);
 	const data = self.dataOf(entity);
+	await referencesExist(self, data);
 	if (!assignsIdsOnInsert(Entity)) {
 		await self.provider.insert(self.context, data);
 		return entity;
@@ -753,6 +759,19 @@ export function assertGeneratedIds(
 	});
 }
 
+/**
+ * Throws `RepositoryEntityNotFound` when `data`, about to be stored, holds
+ * the id of an entity its relation does not hold: a reference is stored as
+ * an id, which every read of the record would then fail to load.
+ */
+function referencesExist(self: Internal, data: RepositoryData): Promise<void> {
+	return assertReferences(
+		stateOf(self),
+		data,
+		(self as { [ScopeKey]?: ExecutionScope })[ScopeKey],
+	);
+}
+
 /** The current date and time, by the clock of the entity class of `context`. */
 function nowOf(context: RepositoryContext): string {
 	return (
@@ -805,6 +824,7 @@ async function writeEntity(
 ): Promise<void> {
 	const data = self.dataOf(entity);
 	storedIdOf(self, data, action);
+	await referencesExist(self, data);
 	const written = await write(self, data);
 	if (written.version !== undefined && isEntity(entity)) {
 		storeEntityVersion(entity, written.version as number);
@@ -1000,6 +1020,8 @@ const increment = action(
 			create === undefined
 				? undefined
 				: createdOf(context, id, create, checked);
+		if (created !== undefined)
+			await referencesExist(self, self.dataOf(created));
 		await bringUpRenamed(self, id, checked);
 		const stored = await (
 			self.provider.increment as NonNullable<IRepositoryProvider["increment"]>
