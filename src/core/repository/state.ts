@@ -159,6 +159,18 @@ function declarationOf(state: RepositoryState): RepositoryState {
 	return origins.get(state) ?? state;
 }
 
+/**
+ * What identifies the declaration of `repository`, shared by every
+ * repository that extends or is bound from it (as `inspectRepository(...).state`),
+ * without the rest of the inspection; `undefined` when it is not one.
+ */
+export function repositoryDeclarationOf(
+	repository: unknown,
+): object | undefined {
+	const state = findState(repository);
+	return state === undefined ? undefined : declarationOf(state);
+}
+
 /** The repository `repositoryOf` made for each declaration. */
 const declared = new WeakMap<RepositoryState, object>();
 

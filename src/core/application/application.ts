@@ -101,7 +101,11 @@ import {
 } from "../use-case/service";
 import { describeSteps } from "../use-case/steps/describe";
 import { interpretedStepsOf } from "../use-case/steps/run";
-import { type AnyUseCaseClass, isUseCaseClass } from "../use-case/use-case";
+import {
+	type AnyUseCaseClass,
+	isUseCaseClass,
+	markBoundUseCase,
+} from "../use-case/use-case";
 import {
 	ApplicationAlreadyStarted,
 	ApplicationConflict,
@@ -1771,6 +1775,8 @@ export function applicationOf<
 		class Bound extends Declared {}
 		Object.defineProperty(Bound, "name", { value: Declared.name });
 		boundUseCases.set(UseCase, Bound as unknown as AnyUseCaseClass);
+		// A `replace` names the declared use case: it replaces the bound one too.
+		markBoundUseCase(Bound as unknown as AnyUseCaseClass, UseCase);
 		const dependencies = Object.fromEntries(
 			Object.entries(UseCase.dependencies).map(([key, dependency]) => [
 				key,
@@ -1993,18 +1999,24 @@ export function applicationOf<
 		async run(
 			useCase: unknown,
 			input: unknown = {},
-			options?: { readonly context?: unknown; readonly dependencies?: unknown },
+			options?: {
+				readonly context?: unknown;
+				readonly dependencies?: unknown;
+				readonly replace?: unknown;
+			},
 		) {
 			if (!boundUseCaseOf.has(useCase)) {
 				invalid(name, "Expected a use case registered in the application.");
 			}
-			const Bound = boundUseCaseOf.get(useCase) as AnyUseCaseClass;
-			const instance = (
-				options?.context === undefined
-					? new Bound(input)
-					: new Bound(input, { context: options.context })
-			) as { execute(dependencies?: unknown): Promise<unknown> };
-			return instance.execute(options?.dependencies);
+			const Bound = boundUseCaseOf.get(useCase) as AnyUseCaseClass & {
+				run(input: unknown, options: object): Promise<unknown>;
+			};
+			// The response only: the events are left to a command.
+			return Bound.run(input, {
+				context: options?.context,
+				dependencies: options?.dependencies,
+				replace: options?.replace,
+			});
 		},
 		command(command: unknown) {
 			if (!boundCommandOf.has(command)) {

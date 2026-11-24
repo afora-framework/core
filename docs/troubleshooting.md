@@ -70,11 +70,17 @@ You called `set`, `change.<key>` or `destroy()` on an entity that is deleted. Af
 
 > `A UseCase instance can execute only once.`
 
-An instance runs once, including when it failed, and a second or concurrent `execute` rejects. Build a new instance for each call (`new Register(input).execute()`), or use `app.run(Register, input)`. See [Use cases](use-cases.md).
+An instance runs once, including when it failed, and a second or concurrent `execute` rejects. Build a new instance for each call (`new Register(input).execute()`), or use `Register.run(input)` or `app.run(Register, input)`, which build one. See [Use cases](use-cases.md).
 
 ### InvalidUseCaseDependencies
 
-The overrides given to `execute` name a dependency the use case does not declare, give the wrong kind of value for one (a function for a use case, an object of methods for a repository), or a dependency was called after `execute` ended (do not keep a dependency function in a variable that outlives the call). See [Use cases](use-cases.md) and the [recipe](recipes/override-repository-method.md).
+The overrides given to `execute` name a dependency the use case does not declare, give the wrong kind of value for one (a function for a use case, an object of methods for a repository), or a dependency was called after `execute` ended (do not keep a dependency function in a variable that outlives the call). The `replace` of a call rejects with it too, before anything runs, when it is not a list of `[declaration, replacement]` pairs, names one declaration twice or gives the wrong kind of value. See [Use cases](use-cases.md) and the [recipe](recipes/override-repository-method.md).
+
+### UnusedUseCaseReplacement
+
+> `No use case of the call declares the repository of "Member": replace only what one of them declares.`
+
+The `replace` of `UseCase.run`, `app.run`, `command.run` or `command.execute` names a declaration that no use case of the call declares: the use case called, the use cases it declares at any depth, minus those replaced (by `replace` or by a direct override), which run nothing of theirs. The dependency may have been renamed, removed or replaced higher up. `details.replacements` names each one. Replace what the graph declares, or drop the entry. See [Use cases](use-cases.md#run-and-replace).
 
 ### ServiceNotBound, ServiceOutsideExecution
 

@@ -42,6 +42,12 @@ export interface ExecutionScope {
 	readonly context?: unknown;
 	/** Who calls and the native request, for the factories of services. */
 	readonly origin?: CallOrigin;
+	/**
+	 * What the `replace` of the call gives in place of each declaration, by
+	 * the declaration it replaces (see `replacementKeyOf`): every use case
+	 * of the call that declares it gets the replacement. Validated already.
+	 */
+	readonly replacements?: ReadonlyMap<object, unknown>;
 }
 
 /**

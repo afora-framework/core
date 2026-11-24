@@ -45,6 +45,7 @@ import type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
 	UseCaseInput,
+	UseCaseReplacements,
 	UseCaseResponse,
 } from "../../use-case/use-case";
 import type { ProviderSlot, ProviderStorage } from "../providers";
@@ -54,32 +55,42 @@ type Named<Value> = Readonly<Record<string, Value>>;
 
 /**
  * The options of `app.run`: the `context` of the use case, required when it
- * declares one, and `dependencies`, what its `execute` takes to replace them.
+ * declares one, `dependencies`, what its `execute` takes to replace them,
+ * and `replace`, declarations replaced in every use case of the call that
+ * declares them (see `UseCaseReplacements`).
  */
-export type ApplicationRunOptions<UseCase extends AnyUseCaseClass> =
-	(UseCase["context"] extends IBlueprint<infer Properties>
-		? { readonly context: BlueprintInput<Properties> }
-		: { readonly context?: undefined }) & {
-		readonly dependencies?: Parameters<InstanceType<UseCase>["execute"]>[0];
-	};
+export type ApplicationRunOptions<
+	UseCase extends AnyUseCaseClass,
+	Declarations extends readonly unknown[] = [],
+> = (UseCase["context"] extends IBlueprint<infer Properties>
+	? { readonly context: BlueprintInput<Properties> }
+	: { readonly context?: undefined }) & {
+	readonly dependencies?: Parameters<InstanceType<UseCase>["execute"]>[0];
+	readonly replace?: UseCaseReplacements<Declarations>;
+};
 
 /**
  * What `app.run` takes after the use case: its input, optional when no key
  * of it is required, and the options, required when it declares a context.
  */
-export type ApplicationRunArgs<UseCase extends AnyUseCaseClass> =
-	UseCase["context"] extends AnyBlueprint
-		? [input: UseCaseInput<UseCase>, options: ApplicationRunOptions<UseCase>]
-		: // biome-ignore lint/complexity/noBannedTypes: whether every key is optional
-			{} extends UseCaseInput<UseCase>
-			? [
-					input?: UseCaseInput<UseCase>,
-					options?: ApplicationRunOptions<UseCase>,
-				]
-			: [
-					input: UseCaseInput<UseCase>,
-					options?: ApplicationRunOptions<UseCase>,
-				];
+export type ApplicationRunArgs<
+	UseCase extends AnyUseCaseClass,
+	Declarations extends readonly unknown[] = [],
+> = UseCase["context"] extends AnyBlueprint
+	? [
+			input: UseCaseInput<UseCase>,
+			options: ApplicationRunOptions<UseCase, Declarations>,
+		]
+	: // biome-ignore lint/complexity/noBannedTypes: whether every key is optional
+		{} extends UseCaseInput<UseCase>
+		? [
+				input?: UseCaseInput<UseCase>,
+				options?: ApplicationRunOptions<UseCase, Declarations>,
+			]
+		: [
+				input: UseCaseInput<UseCase>,
+				options?: ApplicationRunOptions<UseCase, Declarations>,
+			];
 
 /** The declarations of an application, by name, one collection for each kind. */
 export interface ApplicationCollections {
@@ -279,13 +290,18 @@ export interface IApplication<
 	useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase;
 	/**
 	 * Runs a use case registered in the application over its bound
-	 * repositories: `new (app.useCase(UseCase))(input, { context }).execute(dependencies)`.
-	 * It rejects with what the constructor or `execute` throw. The events the
-	 * use case collected are not handled; a command is what dispatches them.
+	 * repositories: `new (app.useCase(UseCase))(input, { context }).execute(dependencies)`,
+	 * with the declarations of `replace` replaced at any depth (see
+	 * `UseCase.run`). It rejects with what the constructor or `execute`
+	 * throw. The events the use case collected are not handled; a command is
+	 * what dispatches them.
 	 */
-	run<UseCase extends AnyUseCaseClass>(
+	run<
+		UseCase extends AnyUseCaseClass,
+		const Declarations extends readonly unknown[] = [],
+	>(
 		useCase: UseCase,
-		...args: ApplicationRunArgs<UseCase>
+		...args: ApplicationRunArgs<UseCase, Declarations>
 	): Promise<UseCaseResponse<UseCase>>;
 	/** The bound version of a command registered in the application. */
 	command<Command extends AnyCommand>(command: Command): Command;

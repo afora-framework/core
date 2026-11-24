@@ -97,7 +97,7 @@ test("a title is unique", async () => {
 
 ## Use cases
 
-A use case is a class, and `execute` takes its dependencies as parameters with defaults, so a test replaces what it needs and leaves the rest. Build a new instance for each call: an instance runs once (`UseCaseAlreadyExecuted`).
+A use case is a class, and `execute` takes its dependencies as parameters with defaults, so a test replaces what it needs and leaves the rest. An instance runs once (`UseCaseAlreadyExecuted`): build a new one for each call, or call the static `run`, which does it for you (`Greet.run(input, { dependencies })`).
 
 **Replace a use case dependency** with a function that returns the declared response. **Replace an environment** with an object of valid variables, which skips reading the real ones. **Replace a repository** with an object holding the methods the rule calls; the class types it as the whole repository, so write `satisfies Partial<typeof Repo> as typeof Repo`. The [recipe](recipes/override-repository-method.md) shows a repository, with the code run by the test suite of the docs.
 
@@ -128,12 +128,45 @@ test("uses the environment, or the one the test gives", async () => {
 		settings: { GREETING: "Oi" },
 	});
 	expect(replaced.text).toBe("Oi, Ana");
+
+	// The same, without keeping an instance.
+	const again = await Greet.run(
+		{ name: "Bia" },
+		{ dependencies: { settings: { GREETING: "Olá" } } },
+	);
+	expect(again.text).toBe("Olá, Bia");
 });
 ```
 
 An override is checked like the real thing: a name the use case does not declare, or the wrong kind of value, rejects with `InvalidUseCaseDependencies`, and a response that does not fit the blueprint is rejected too. Overrides apply to direct dependencies only.
 
-Events collected by a use case are not run. Read them with `pullEvents()` on the instance, as for an entity.
+**Replace a dependency further down** with `replace`, keyed by the declaration rather than by name: the real graph runs, and every use case of the call that declares it gets the replacement. A use case that calls another, which reads the environment, gets the replacement at the second level:
+
+<!-- docs:code continue -->
+```ts
+class Welcome extends useCaseOf({
+	name: "Welcome",
+	blueprint: blueprintOf((ctx) => ({ name: ctx.text })),
+	response: blueprintOf((ctx) => ({ text: ctx.string })),
+	dependencies: { greet: Greet },
+}) {
+	override async execute({ greet = this.dependencies.greet } = {}) {
+		return { text: `${(await greet(this.input)).text}!` };
+	}
+}
+
+test("replaces the environment of a nested use case", async () => {
+	const { text } = await Welcome.run(
+		{ name: "Ana" },
+		{ replace: [[Settings, { GREETING: "Oi" }]] },
+	);
+	expect(text).toBe("Oi, Ana!");
+});
+```
+
+A replacement is checked like an override, and one that no use case of the call declares rejects with `UnusedUseCaseReplacement`, so a test does not keep passing after a dependency was renamed. `app.run`, `command.run` and `command.execute` take the same `replace`. See [Use cases](use-cases.md#run-and-replace).
+
+Events collected by a use case are not run. Read them with `pullEvents()` on the instance, as for an entity, or get them with the response from `run(input, { events: true })`, which gives `{ value, events }`.
 
 For a command, `run(operation, input, { env })` replaces environment variables for that call only, and `execute` gives `{ value, events }` without running an event policy. See [Commands](commands.md#environments).
 

@@ -16,6 +16,7 @@ import type {
 	AnyUseCaseClass,
 	UseCaseInput,
 	UseCaseOptions,
+	UseCaseReplacements,
 	UseCaseResponse,
 } from "../../use-case/use-case";
 
@@ -148,23 +149,41 @@ export type CommandResponse<
 
 /**
  * The options of a call: `{ context }` of the command when it declares one,
- * otherwise those of the use case.
+ * otherwise those of the use case; the `env` of the call, and `replace`
+ * (see `UseCaseReplacements`).
  */
 export type CommandOptions<
 	Class extends AnyUseCaseClass,
 	Context extends IBlueprintCollection | undefined,
 	Environment extends EnvironmentDependencies | undefined = undefined,
+	Declarations extends readonly unknown[] = [],
 > = Context extends IBlueprintCollection
 	? [
 			options: {
 				readonly context: BlueprintInput<Context>;
-			} & CommandEnvOption<Environment>,
+			} & CommandEnvOption<Environment> &
+				CommandReplaceOption<Declarations>,
 		]
 	: Class["context"] extends IBlueprint<infer Properties>
-		? [options: UseCaseOptions<Properties> & CommandEnvOption<Environment>]
+		? [
+				options: UseCaseOptions<Properties> &
+					CommandEnvOption<Environment> &
+					CommandReplaceOption<Declarations>,
+			]
 		: Environment extends undefined
-			? []
-			: [options?: CommandEnvOption<Environment>];
+			? [options?: CommandReplaceOption<Declarations>]
+			: [
+					options?: CommandEnvOption<Environment> &
+						CommandReplaceOption<Declarations>,
+				];
+
+/**
+ * The `replace` a call can give: declarations replaced in every use case of
+ * the call that declares them, at any depth (see `UseCaseReplacements`).
+ */
+export interface CommandReplaceOption<Declarations extends readonly unknown[]> {
+	readonly replace?: UseCaseReplacements<Declarations>;
+}
 
 /**
  * The `env` a call can give, when the command declares environments: some of
@@ -206,16 +225,22 @@ export interface CommandOf<
 	readonly onEventError: CommandEventErrorHandler | undefined;
 	readonly operations: readonly (keyof UseCases & string)[];
 	/** Runs `op` and applies the event policy; gives its response. */
-	run<Op extends keyof UseCases & string>(
+	run<
+		Op extends keyof UseCases & string,
+		const Declarations extends readonly unknown[] = [],
+	>(
 		op: Op,
 		input: UseCaseInput<UseCases[Op]>,
-		...options: CommandOptions<UseCases[Op], Context, Environment>
+		...options: CommandOptions<UseCases[Op], Context, Environment, Declarations>
 	): Promise<UseCaseResponse<UseCases[Op]>>;
 	/** Runs `op` and gives the response and the events, without applying the policy. */
-	execute<Op extends keyof UseCases & string>(
+	execute<
+		Op extends keyof UseCases & string,
+		const Declarations extends readonly unknown[] = [],
+	>(
 		op: Op,
 		input: UseCaseInput<UseCases[Op]>,
-		...options: CommandOptions<UseCases[Op], Context, Environment>
+		...options: CommandOptions<UseCases[Op], Context, Environment, Declarations>
 	): Promise<CommandExecution<UseCaseResponse<UseCases[Op]>>>;
 }
 

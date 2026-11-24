@@ -57,6 +57,41 @@ export { Member };
 
 `execute` takes the dependencies as parameters with defaults, so a test passes a replacement for the ones it cares about; the rest resolve as usual. For a repository, give an object with the methods the rule calls. The class types `members` as the whole repository, hence `satisfies Partial<typeof Members> as typeof Members`: `satisfies` checks your fake against the real signatures, and the cast only widens it.
 
-Overrides apply to direct dependencies, and the use case still validates the response. An instance executes once (`UseCaseAlreadyExecuted`), so build a new one for each case. A repository declared at module level is no longer usable once an application binds it (`RepositoryUsedOutsideApplication`); in a test of an application, call `app.run(Join, input)` with the in-memory provider instead.
+Overrides apply to direct dependencies, and the use case still validates the response. An instance executes once (`UseCaseAlreadyExecuted`), so build a new one for each case, or call `Join.run(input, { dependencies: { members: fakeMembers() } })`, which does. A repository declared at module level is no longer usable once an application binds it (`RepositoryUsedOutsideApplication`); in a test of an application, call `app.run(Join, input)` with the in-memory provider instead.
+
+## Deeper in the graph
+
+When the rule under test is one level up, a use case that runs `Join`, replace the repository by its declaration with `replace`. The real `Join` runs, with `Members` replaced, and so does any other use case of the call that declares it. A replacement is typed as some of the methods of the repository, so it needs no cast:
+
+<!-- docs:code continue -->
+```ts
+import { listOf } from "@afora/core";
+
+class JoinMany extends useCaseOf({
+	name: "JoinMany",
+	blueprint: blueprintOf((ctx) => ({
+		people: listOf(
+			blueprintOf((ctx) => ({ name: ctx.text, email: ctx.email })),
+		),
+	})),
+	response: blueprintOf((ctx) => ({ joined: ctx.integer })),
+	dependencies: { join: Join },
+}) {
+	override async execute({ join = this.dependencies.join } = {}) {
+		for (const person of this.input.people) await join(person);
+		return { joined: this.input.people.length };
+	}
+}
+
+const taken = new Member({ name: "Ana", email: "ana@example.com" });
+// Join is real; only findByEmail is replaced, so the email is taken.
+const rejected = await JoinMany.run(
+	{ people: [{ name: "Ana", email: "ana@example.com" }] },
+	{ replace: [[Members, { findByEmail: async () => taken }]] },
+).catch((error: unknown) => error);
+console.log(rejected instanceof EmailTaken); // true
+```
+
+A replacement that no use case of the call declares rejects with `UnusedUseCaseReplacement`, and one of the wrong kind with `InvalidUseCaseDependencies`, as an override does.
 
 More: [Use cases](../use-cases.md), [Testing](../testing.md), [Repositories](../repositories.md).

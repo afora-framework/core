@@ -51,6 +51,7 @@ import {
 	type AnyUseCaseClass,
 	executionStatusOf,
 	isUseCaseClass,
+	replacementsOf,
 } from "../use-case/use-case";
 import {
 	CommandEventFailed,
@@ -403,7 +404,12 @@ function declareCommand<
 		op: string,
 		input: unknown,
 		options:
-			| { context?: unknown; env?: unknown; [OriginKey]?: CallOrigin }
+			| {
+					context?: unknown;
+					env?: unknown;
+					replace?: unknown;
+					[OriginKey]?: CallOrigin;
+			  }
 			| undefined,
 		keepSpan: boolean,
 	): Promise<{
@@ -440,6 +446,7 @@ function declareCommand<
 		let callContext: unknown = options?.context;
 		let given: unknown = callContext;
 		let overrides: ReturnType<typeof callEnvironment> | undefined;
+		let replacements: ReadonlyMap<object, unknown> | undefined;
 		try {
 			if (context) {
 				const checked = context.safeParse(callContext);
@@ -457,6 +464,7 @@ function declareCommand<
 				options?.env === undefined
 					? undefined
 					: callEnvironment(where, environments, options.env);
+			replacements = replacementsOf(UseCase, options?.replace);
 		} catch (error) {
 			failSpan(span, error, ExceptionLayers.Command);
 			throw error;
@@ -473,10 +481,19 @@ function declareCommand<
 					: overrides.byEnvironment;
 			// The services of the call, made once for every use case it runs.
 			const services = serviceFactoriesOf(UseCase) !== undefined;
-			if (!environmentsOfCall && !logger && !tracer && !services) return scope;
+			if (
+				!environmentsOfCall &&
+				!logger &&
+				!tracer &&
+				!services &&
+				!replacements
+			) {
+				return scope;
+			}
 			return {
 				...scope,
 				providers: scope?.providers ?? new Map(),
+				...(replacements ? { replacements } : {}),
 				...(environmentsOfCall ? { environments: environmentsOfCall } : {}),
 				...(logger ? { logger } : {}),
 				...(tracer ? { tracer, ...(span ? { span } : {}) } : {}),
@@ -564,7 +581,7 @@ function declareCommand<
 		async execute(
 			op: string,
 			input: unknown,
-			options?: { context?: unknown; env?: unknown },
+			options?: { context?: unknown; env?: unknown; replace?: unknown },
 		) {
 			const { value, events } = await perform(op, input, options, false);
 			return { value, events } satisfies CommandExecution<unknown>;
@@ -572,7 +589,7 @@ function declareCommand<
 		async run(
 			op: string,
 			input: unknown,
-			options?: { context?: unknown; env?: unknown },
+			options?: { context?: unknown; env?: unknown; replace?: unknown },
 		) {
 			const {
 				value,

@@ -182,13 +182,15 @@ function operationsOfCommand(command: AnyCommand): OperationDescriptor[] {
 			invoke: guard
 				? async (input: unknown, options?: OperationCallOptions) =>
 						run(name, input, withOrigin(guard(input, options), options))
-				: (input: unknown, options?: OperationCallOptions) =>
+				: // Only what an operation call carries reaches the command: never
+					// what a caller could add to it, such as a `replace`.
+					(input: unknown, options?: OperationCallOptions) =>
 						run(
 							name,
 							input,
-							options && ("principal" in options || "native" in options)
-								? withOrigin({ context: options.context }, options)
-								: options,
+							options === undefined
+								? undefined
+								: withOrigin({ context: options.context }, options),
 						),
 		});
 	});
