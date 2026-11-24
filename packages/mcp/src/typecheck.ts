@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { run } from "./process";
 
 export interface Diagnostic {
@@ -97,8 +97,37 @@ export function parseDiagnostics(
 }
 
 /**
- * Runs `tsc --noEmit -p <root>` when the project has a tsconfig.json, and
- * keeps only the diagnostics of `files` (paths relative to `root`).
+ * The tsc of the TypeScript installed in the project, `<root>/node_modules/typescript`
+ * (its `bin.tsc`), if there is one. Nothing else is looked up: not a parent
+ * directory, the PATH or a package cache.
+ */
+function projectTsc(root: string): string | undefined {
+	const dir = join(root, "node_modules", "typescript");
+	let manifest: unknown;
+	try {
+		manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+	} catch {
+		return undefined;
+	}
+	if (typeof manifest !== "object" || manifest === null) return undefined;
+	const { name, bin } = manifest as { name?: unknown; bin?: unknown };
+	const entry =
+		typeof bin === "object" && bin !== null
+			? (bin as { tsc?: unknown }).tsc
+			: undefined;
+	if (name !== "typescript" || typeof entry !== "string") return undefined;
+	const file = resolve(dir, entry);
+	const rel = relative(dir, file);
+	if (rel.startsWith("..") || isAbsolute(rel) || !existsSync(file)) {
+		return undefined;
+	}
+	return file;
+}
+
+/**
+ * Runs the project's `tsc --noEmit -p <root>` when the project has a
+ * tsconfig.json, and keeps only the diagnostics of `files` (paths relative
+ * to `root`).
  */
 export async function typecheck(
 	root: string,
@@ -107,41 +136,44 @@ export async function typecheck(
 	if (!existsSync(join(root, "tsconfig.json"))) {
 		return { ran: false, reason: "The project has no tsconfig.json." };
 	}
-	const mine = new Set(files.map((file) => resolve(root, file)));
-	const commands: [string, string[]][] = [
-		// Never install: `bunx tsc` without TypeScript in the project would
-		// download and run the unrelated `tsc` package of the registry.
-		["bunx", ["--no-install", "tsc", "--noEmit", "-p", root]],
-		["npx", ["--no-install", "tsc", "--noEmit", "-p", root]],
-	];
-	for (const [command, args] of commands) {
-		const result = await run(command, args, { cwd: root, timeoutMs: 180_000 });
-		if (result.missing) continue;
-		if (result.timedOut) {
-			return { ran: false, reason: "tsc timed out after 180 seconds." };
-		}
-		const all = parseDiagnostics(result.output);
-		if (all.length === 0 && result.code !== 0) {
-			return {
-				ran: false,
-				reason: `tsc failed without diagnostics: ${redactMessage(result.output.trim().slice(0, 500))}`,
-			};
-		}
-		const diagnostics = all
-			.filter((item) => mine.has(resolve(root, item.path)))
-			.map(({ path, ...item }) => ({
-				...item,
-				file: relative(root, resolve(root, path)),
-			}));
+	// Only the TypeScript of the project, run by this runtime: `bunx` and
+	// `npx` would also find a tsc in a parent directory, the PATH or their cache.
+	const tsc = projectTsc(root);
+	if (!tsc) {
 		return {
-			ran: true,
-			ok: diagnostics.length === 0,
-			diagnostics,
-			otherErrors: all.length - diagnostics.length,
+			ran: false,
+			reason:
+				"TypeScript is not installed in the project (node_modules/typescript).",
 		};
 	}
+	const mine = new Set(files.map((file) => resolve(root, file)));
+	const result = await run(process.execPath, [tsc, "--noEmit", "-p", root], {
+		cwd: root,
+		timeoutMs: 180_000,
+	});
+	if (result.missing) {
+		return { ran: false, reason: "tsc could not be started." };
+	}
+	if (result.timedOut) {
+		return { ran: false, reason: "tsc timed out after 180 seconds." };
+	}
+	const all = parseDiagnostics(result.output);
+	if (all.length === 0 && result.code !== 0) {
+		return {
+			ran: false,
+			reason: `tsc failed without diagnostics: ${redactMessage(result.output.trim().slice(0, 500))}`,
+		};
+	}
+	const diagnostics = all
+		.filter((item) => mine.has(resolve(root, item.path)))
+		.map(({ path, ...item }) => ({
+			...item,
+			file: relative(root, resolve(root, path)),
+		}));
 	return {
-		ran: false,
-		reason: "Neither bunx nor npx is available to run tsc.",
+		ran: true,
+		ok: diagnostics.length === 0,
+		diagnostics,
+		otherErrors: all.length - diagnostics.length,
 	};
 }

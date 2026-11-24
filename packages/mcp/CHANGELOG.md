@@ -7,10 +7,13 @@
 - The diagnostics of `afora_generate` carry the file, line, column, TS code and a message whose string and template literals and quoted types are redacted (`"…"`, `'…'`); a quoted plain name such as `'ServiceFactory'` is kept. A type of a project module written `as const` no longer brings its values into the answer. (SEC-32)
 - An `afora.json`, or a spec it extends, that is not valid JSON is reported without the parser's message, which could quote the file; `unresolved_extends` gives the paths inside the project from its root. (SEC-33)
 - Gets the fix of `@afora/codegen` for a spec string with a long run of spaces (SEC-31).
+- Gets the fix of `@afora/codegen` for an `output.dir` with a root or a drive (SEC-39): `afora_spec_validate`, `afora_spec_write`, `afora_generate` and `afora_extract` (its `outputDir`) report it as `invalid_output`.
 
 ### Fixed
 
 - `afora_project` gives the default route of an operation in linear time for a name with a long run of capitals; the routes are the same as before.
+- `afora_generate` type-checks with the TypeScript installed in the project (`node_modules/typescript` of the project directory), run by the server's own runtime, and only with it: a `tsc` of a parent directory, the `PATH` or a package cache is never run (`bunx --no-install` and `npx --no-install` looked there). A project without TypeScript gets `typecheck: { ran: false }` with the reason. (SEC-41)
+- Gets the fix of `@afora/codegen` for `node_modules` and `.git` in the spellings Windows reads as them (SEC-40).
 - `afora_project` shows `hooks: true` on an output whose sink was given hooks in code (an authenticator, middlewares), and its `authentication` and notes say so. `afora_extract` asks for `outputs.<Name>.pipe.<index>` in `imports` for such a stage instead of dropping its hooks (#199).
 
 ## 27.0.0-rc.4 — 2026-11-16

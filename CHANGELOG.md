@@ -7,15 +7,18 @@
 - `findBy<Key>` and `findManyBy<Key>` give no entity for a missing value: `undefined` or `null` gives `undefined` and `[]` without calling the provider, on every provider, including a declarative use case step given an optional input that is absent. See [Repositories](docs/repositories.md). (SEC-20)
 - **Breaking.** A standard `register` whose input takes a key that a `login` or `refresh` of the same entity makes its tokens from (`token.scopesFrom`, the keys of `token.claims`) now throws `UseCaseUnavailable` at declaration, whichever is declared first and in whatever command; the key is given by `values` or left out with `omit`. The example of [Tokens and sessions](docs/auth.md#tokens-and-sessions) sets `roles` with `values`. (SEC-22)
 - `@afora/codegen` prints a spec string holding a long run of spaces in linear time. (SEC-31)
+- `@afora/codegen` and `@afora/mcp`: `output.dir` is relative on every platform. `validateSpec` gives `invalid_output` for one that starts with `/` or `\` (a root or UNC path) or with a drive (`D:`), a spec it extends is refused for the same, and `confinePath` (so `writeGenerated`) holds a path on another Windows drive outside the project. See [the codegen README](packages/codegen/README.md). (SEC-39)
 - `@afora/mcp`: the diagnostics `afora_generate` returns carry the file, line, column, TS code and a message whose literal values and quoted types are redacted (`"…"`, `'…'`; a plain name such as `'ServiceFactory'` is kept), so a type of a project module never brings its values into the answer. (SEC-32)
 - A spec file that is not valid JSON is reported by its path (and, where the runtime gives it, a line and column), never with the parser's message, which could quote the file; `@afora/mcp` gives the paths of what a spec extends from the project root. (SEC-33)
 - The response of a use case declared by a blueprint or a list (`response: Account.blueprint`, `listOf(...)`, a blueprint holding a `Password`) is sent masked as a record's `toJSON` masks it: every property declared `sensitive` (a `Password` always) at any depth, through nested blueprints, lists and variants, and the keys a record or entity declares `sensitive` where the blueprint is the record's (its `.blueprint` or the blueprint it was declared from). This holds in `outputValueOf` and so in every sink of afora (`http`, `hono`, `express`, `fastify`, `elysia`, `websocket`, `mcpTools`), as [Outputs](docs/outputs.md) promised. A direct call (`execute()`, a dependency) still reads the real values, and a key a route sends with `setCookie` keeps its value. (SEC-19)
-
 - **Breaking.** `@afora/hono`: every input key of a webhook operation comes from the signed body. A webhook whose route reads an input key from the path (`{name}`), the query, a header or a cookie now throws `InvalidOutputStage` when the app is built, since the signature covers only the body. The README says which values a webhook can be deduplicated on: one in the body, or `webhook-id` with `"standard-webhooks"`. See [Webhooks](packages/hono/README.md#webhooks) and Migration below. (SEC-37)
 
 ### Fixed
 
 - The OpenAPI document of an output marks `writeOnly` every key a use case response is sent masked by: where the response is a record's blueprint (`response: Account.blueprint`), the keys the record declares `sensitive`, at any depth of blueprints, lists and variants, as well as every `sensitive` property. See [Outputs](docs/outputs.md). (SEC-34)
+- `@afora/codegen` and `@afora/mcp`: `output.dir` and `confinePath` refuse `node_modules` and `.git` in the spellings Windows reads as them too: with trailing dots or spaces, with a stream suffix (`:...`) and as a short name (`NODE_M~1`, `GIT~1`), on every platform. (SEC-40)
+- `@afora/mcp`: `afora_generate` type-checks with the TypeScript installed in the project (`node_modules/typescript` of the project directory), run by the server's own runtime, and only with it: a `tsc` of a parent directory, the `PATH` or a package cache is never run. A project without TypeScript gets `typecheck: { ran: false }` with the reason. See [Building with an agent](docs/building-with-an-agent.md). (SEC-41)
+- The default route of an operation (`/{command}/{operation}` in kebab case, in `openapi` and the sinks that serve HTTP) is computed in linear time; a name with a long run of capitals took seconds. Routes are unchanged.
 - `findBy<Key>` and `findManyBy<Key>` take one value: `{ in: [...] }` throws `InvalidRepositoryQuery` instead of being read as a membership, which only the queries (`findMany`, `exists`, `findPage`, `count`) take. (SEC-21)
 - `PlainPassword` and `Password.hash` apply the same password rules to a value with line breaks: the schema pattern of `PlainPassword` looks for each required character across the whole value, as `Password.hash` does.
 - `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: they give an issue at the property's path. (SEC-27)
@@ -44,7 +47,6 @@
 ### Migration
 
 **A webhook reads its input from the body only.** Before:
-
 ```ts
 class PaymentReceived extends useCaseOf({
 	name: "PaymentReceived",
@@ -55,9 +57,7 @@ class PaymentReceived extends useCaseOf({
 	route: { method: "post", path: "/tenants/{tenant}/stripe" },
 }) {}
 ```
-
 After:
-
 ```ts
 class PaymentReceived extends useCaseOf({
 	name: "PaymentReceived",
@@ -69,7 +69,6 @@ class PaymentReceived extends useCaseOf({
 	route: { method: "post", path: "/stripe" },
 }) {}
 ```
-
 A value that only the URL or a header carries is not signed: send it in the body, or check it against the body in `execute`.
 
 ## 27.0.0-rc.4 — 2026-11-16

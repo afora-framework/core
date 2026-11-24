@@ -25,6 +25,7 @@ import {
 	checkProviders,
 	checkTrace,
 } from "./provider";
+import { isRooted } from "./rooted";
 import {
 	checkEnvironmentNames,
 	type Decl,
@@ -1442,7 +1443,7 @@ function check(
 		if (
 			typeof dir !== "string" ||
 			dir === "" ||
-			dir.startsWith("/") ||
+			isRooted(dir) ||
 			/(^|[\\/])\.\.([\\/]|$)/.test(dir)
 		) {
 			issues.push(
