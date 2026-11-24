@@ -53,7 +53,8 @@ import type {
  * their errors: an input of the keys of the entity, the entity built from
  * it and stored. The option `before` runs first, and the steps after it read
  * the input it gives; `checks` read it under `$input` all the same, rooted
- * by the function given.
+ * by the function given. `taken` gets the keys of the entity the input
+ * gives, before the compilation is made.
  */
 export function createCompilation(
 	target: UseCaseTargetInfo,
@@ -61,6 +62,7 @@ export function createCompilation(
 	verb: string,
 	checks: (input: string) => readonly Step[] = () => [],
 	errors: readonly AnyExceptionClass[] = [],
+	taken?: (keys: readonly string[]) => void,
 ): UseCaseCompilation {
 	checkOptions(target, options, [
 		"as",
@@ -84,6 +86,7 @@ export function createCompilation(
 		repository: target.repository,
 	};
 	const steps: Step[] = [];
+	const inputKeys: string[] = [];
 	const used = new Set<AnyExceptionClass>([...errors, ...hooks.throws]);
 	const take = (key: string, field: BlueprintField): void => {
 		if (Object.hasOwn(input, key)) {
@@ -160,6 +163,7 @@ export function createCompilation(
 			continue;
 		}
 		take(plan.input.key, plan.input.field);
+		inputKeys.push(key);
 		const given = `${hooks.input}.${plan.input.key}`;
 		if (plan.kind === "entity") {
 			values[key] = load(key, given, notFound, true);
@@ -175,6 +179,7 @@ export function createCompilation(
 			values[key] = given;
 		}
 	}
+	taken?.(inputKeys);
 
 	return {
 		...metaOf(target, options, verb),

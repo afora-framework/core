@@ -169,6 +169,7 @@ const Auth = commandOf({
 	name: "Auth",
 	useCases: (ctx) => ({
 		register: ctx.register(Users, {
+			values: { roles: [] }, // the token is made from roles: never from the input
 			route: { method: "post", path: "/users", status: 201 },
 		}),
 		login: ctx.login(Users, {
@@ -192,6 +193,7 @@ const Api = outputOf({
 ```
 
 - **`login` with `token`** answers `{ item, token }`, and `refreshToken` too with `refresh`. The token is signed for the entity: its `id` is the subject, its scopes are `scopes` (a fixed list) plus the list held by the key `scopesFrom`, and `claims: { tenant: "tenantId" }` copies keys of the entity into claims.
+- **`register` does not take the keys a token is made from.** Whoever calls `register` would otherwise choose their own scopes and claims. So a `register` whose input takes a key that the `token.scopesFrom` or `token.claims` of a `login` or `refresh` of the same entity reads throws `UseCaseUnavailable` at declaration, whichever of them is declared first and in whatever command: set the key with `values` (or leave an optional one out with `omit`), and change it with a use case that only an administrator can call.
 - **`refresh`** takes `{ refreshToken }` and answers a new `{ token, refreshToken }`, if the entity still exists. A refresh token is signed for that use only: it is not accepted as an access token, nor the other way round.
 - **`auth.jwt`** in the options of a sink that serves HTTP is the authenticator: it reads `Authorization: Bearer <token>` (another header with `header`), verifies it and gives the `Principal` that the [access](#the-declaration) of each use case is checked against. The OpenAPI document gets the matching security scheme. An `authenticator` given in the hooks of the sink replaces it.
 - **The secret is named, never written.** These options are described by `describe()` and stored in `afora.json`, so `secret` is `{ env: "NAME" }` there; the variable is read when the first token is signed or verified, and a missing or short one throws `InvalidJwtOptions`.

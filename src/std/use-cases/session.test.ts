@@ -66,7 +66,9 @@ function build(cookies = false) {
 	const Auth = commandOf({
 		name: "Auth",
 		useCases: (ctx) => ({
+			// The keys the tokens are made from are set, never taken from the input.
 			register: ctx.register(Users, {
+				values: { roles: ["admin"], tenant: "acme" },
 				route: { method: "post", path: "/users", status: 201 },
 			}),
 			login: ctx.login(Users, {
@@ -173,8 +175,6 @@ const ana = {
 	name: "Ana",
 	email: "ana@x.dev",
 	password: "S3nha!forte",
-	roles: ["admin"],
-	tenant: "acme",
 };
 
 describe("session: tokens of login", () => {
@@ -210,7 +210,6 @@ describe("session: tokens of login", () => {
 	test("the token of the options authenticates the caller, and fills the context", async () => {
 		const { call } = build();
 		await call("/users", { body: ana });
-		await call("/users", { body: { ...ana, email: "bob@x.dev", roles: [] } });
 		const { json } = await call("/login", {
 			body: { email: ana.email, password: ana.password },
 		});
@@ -230,11 +229,13 @@ describe("session: tokens of login", () => {
 				})
 			).status,
 		).toBe(401);
-		const bob = await call("/login", {
-			body: { email: "bob@x.dev", password: ana.password },
+		const bob = await jwtOf({ secret, issuer: "blog" }).sign({
+			subject: "bob",
+			scopes: ["self"],
+			claims: { tenant: "acme" },
 		});
 		const denied = await call("/me", {
-			headers: { authorization: `Bearer ${bob.json.token}` },
+			headers: { authorization: `Bearer ${bob}` },
 		});
 		expect(denied.status).toBe(403);
 	});
