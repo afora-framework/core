@@ -119,7 +119,7 @@ const Account = commandOf({
 
 `owner: { key: "id", context }` compares the id of the entity with the caller, so a user changes only their own password; the access `context: { userId: "subject" }` fills that context from the token. `change.password` stays on the entity, for a reset flow written by hand (a token sent by email, say).
 
-**Login does not tell which emails exist.** When the email is unknown, `login` still verifies the password given against a hash of a password nobody has, made once by the configured hasher on the first such login (not at import), and answers the same `UseCaseInvalidCredentials`, so the time of the answer is the same for a known and an unknown email.
+**Login does not tell which emails exist.** When the email is unknown, `login` still verifies the password given against a hash of a password nobody has, made once by the configured hasher on the first such login (not at import), and answers the same `UseCaseInvalidCredentials`, so the time of the answer is the same for a known and an unknown email. A stored hash the default hasher cannot read gets that answer too, in the same time (see [Runtime](runtime.md#password-hashing)).
 
 ## Tokens and sessions
 

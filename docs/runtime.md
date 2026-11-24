@@ -26,7 +26,7 @@ The companion packages say where they run in their READMEs: [`@afora/hono`](../p
 2. On a Node that has native argon2 (24.7 and later), `node:crypto`, with the same settings as Bun's default (64 MiB of memory, 2 passes, parallelism 1), so a hash made on one verifies on the other.
 3. Anywhere else, a hasher that throws `PasswordHasherRequired` on use, until you configure one.
 
-The native Node hasher derives argon2 version 19 only (the version Bun and most libraries write). A hash of another version throws `UnsupportedPasswordHash`: verify it with `Bun.password`, or configure a hasher that reads it.
+The native Node hasher derives argon2id of version 19 only (the version Bun and most libraries write). A stored hash a default hasher cannot read (argon2i or argon2d on Node, another version, settings out of range, a salt or tag too short) verifies as `false`, after the same work as a wrong password, so `login` answers it as wrong credentials and in the same time. To accept such hashes, verify them with `Bun.password` or configure a hasher that reads them.
 
 A hasher is an object with `hash(plain)` and `verify(plain, hash)`, both asynchronous, and optionally `verifySync(plain, hash)`. Without `verifySync`, `password.verifySync` throws `SyncVerifyUnsupported`; `password.verify` always works. On a browser, a Worker or an older Node, give afora any argon2 library that runs there, once, before the first password is hashed:
 

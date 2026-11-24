@@ -16,7 +16,6 @@ import {
 	resetRuntime,
 	SyncVerifyUnsupported,
 	toBase64,
-	UnsupportedPasswordHash,
 	uuidv7,
 } from "./runtime";
 
@@ -170,26 +169,104 @@ test("base64 helpers round trip random bytes, unpadded", () => {
 	}
 });
 
-test("the node argon2 hasher refuses a hash of another argon2 version", async () => {
-	const argon2 = () => {
-		throw new Error("must not derive");
+const SALT = "YO5NNmxyK9+adO95GxWsAaUX4TULmT3IGhTYfpshXl0";
+const TAG = "/C89OCh7bhDY2cR2UkgvOV3dPlkghNLhv/DJsdopwMo";
+/** Hashes `Password` accepts that the hashers cannot read. */
+const UNREADABLE = [
+	`$argon2id$v=19$m=99999999999,t=0,p=0$${SALT}$${TAG}`,
+	`$argon2id$v=19$m=65536,t=2,p=1$AAAA$${TAG}`,
+	`$argon2id$v=19$m=65536,t=2,p=1$${SALT}$AA`,
+	`$argon2id$v=16$m=65536,t=2,p=1$${SALT}$${TAG}`,
+	`$argon2i$v=19$m=65536,t=2,p=1$${SALT}$${TAG}`,
+];
+const DEFAULTS = { memory: 65536, passes: 2, parallelism: 1, tagLength: 32 };
+
+test("the node argon2 hasher verifies a hash it cannot read as false, after deriving with the default settings", async () => {
+	const derived: Record<string, unknown>[] = [];
+	const argon2Sync = (_: string, parameters: Record<string, unknown>) => {
+		const { memory, passes, parallelism, tagLength, nonce } = parameters as {
+			memory: number;
+			passes: number;
+			parallelism: number;
+			tagLength: number;
+			nonce: Uint8Array;
+		};
+		if (memory > 2 ** 32 - 1 || passes < 1 || parallelism < 1) {
+			throw new RangeError("out of range");
+		}
+		if (nonce.length < 8 || tagLength < 4) throw new RangeError("too short");
+		derived.push({ memory, passes, parallelism, tagLength });
+		return new Uint8Array(tagLength);
 	};
 	const hasher = nodeHasherOf({
-		argon2: argon2 as never,
-		argon2Sync: argon2,
+		argon2: ((
+			algorithm: string,
+			parameters: Record<string, unknown>,
+			callback: (error: Error | null, key: Uint8Array) => void,
+		) => callback(null, argon2Sync(algorithm, parameters))) as never,
+		argon2Sync: argon2Sync as never,
 		randomBytes: () => new Uint8Array(32),
 		timingSafeEqual: () => true,
 	}) as PasswordHasher;
-	const old = encodePhc(new Uint8Array(32), new Uint8Array(32)).replace(
-		"v=19",
-		"v=16",
-	);
 
-	expect(decodePhc(old)?.version).toBe(16);
-	expect(() => hasher.verifySync?.("x", old)).toThrow(UnsupportedPasswordHash);
-	await expect(hasher.verify("x", old)).rejects.toBeInstanceOf(
-		UnsupportedPasswordHash,
-	);
+	for (const hash of UNREADABLE) {
+		expect(isPasswordHash(hash)).toBe(true);
+		derived.length = 0;
+		expect(await hasher.verify("x", hash)).toBe(false);
+		expect(derived).toEqual([DEFAULTS]);
+		derived.length = 0;
+		expect(hasher.verifySync?.("x", hash)).toBe(false);
+		expect(derived).toEqual([DEFAULTS]);
+	}
+});
+
+test.skipIf(native === undefined)(
+	"the native node argon2 hasher verifies a hash it cannot read as false",
+	async () => {
+		for (const hash of UNREADABLE) {
+			expect(await native?.verify("x", hash)).toBe(false);
+			expect(native?.verifySync?.("x", hash)).toBe(false);
+		}
+	},
+);
+
+test("the Bun hasher verifies a hash it cannot read as false, after verifying one with the default settings", async () => {
+	const verified: string[] = [];
+	const check = (hash: string) => {
+		verified.push(hash);
+		if (UNREADABLE.includes(hash)) throw new Error("InvalidEncoding");
+		return false;
+	};
+	const hasher = defaultHasherOf({
+		bun: {
+			password: {
+				hash: async () => "hashed",
+				verify: async (_: string, hash: string) => check(hash),
+				verifySync: (_: string, hash: string) => check(hash),
+			},
+		},
+	});
+	const unreadable = UNREADABLE.slice(0, 3);
+	for (const hash of unreadable) {
+		verified.length = 0;
+		expect(await hasher.verify("x", hash)).toBe(false);
+		expect(verified).toHaveLength(2);
+		expect(decodePhc(verified[1] as string)).toMatchObject({
+			version: 19,
+			memory: 65536,
+			passes: 2,
+			parallelism: 1,
+		});
+		verified.length = 0;
+		expect(hasher.verifySync?.("x", hash)).toBe(false);
+		expect(verified).toHaveLength(2);
+	}
+	for (const hash of UNREADABLE) {
+		expect(await Bun.password.verify("x", hash).catch(() => "throws")).not.toBe(
+			true,
+		);
+		expect(await defaultHasherOf({ bun: Bun }).verify("x", hash)).toBe(false);
+	}
 });
 
 test("importing the package does not import node:crypto", async () => {

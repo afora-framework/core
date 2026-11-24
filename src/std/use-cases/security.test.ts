@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, expectTypeOf, test } from "bun:test";
+import nodeCrypto from "node:crypto";
 import { statusOf } from "../../adapters";
 import {
 	blueprintOf,
@@ -10,7 +11,13 @@ import {
 	resourceOf,
 	StdUseCases,
 } from "../../index";
-import { configure, currentHasher, resetRuntime } from "../runtime";
+import {
+	configure,
+	currentHasher,
+	nodeHasherOf,
+	type PasswordHasher,
+	resetRuntime,
+} from "../runtime";
 
 const ana = "0190a6a0-0000-7000-8000-00000000000a";
 const bob = "0190a6a0-0000-7000-8000-00000000000b";
@@ -555,6 +562,48 @@ describe("SEC-11: login takes as long for an unknown email", () => {
 			expect(calls).toEqual({ hash: 1, verify: 1 + round });
 		}
 	});
+});
+
+describe("SEC-38: login answers a stored hash the hasher cannot read as wrong credentials", () => {
+	afterEach(() => resetRuntime());
+
+	const salt = "YO5NNmxyK9+adO95GxWsAaUX4TULmT3IGhTYfpshXl0";
+	const tag = "/C89OCh7bhDY2cR2UkgvOV3dPlkghNLhv/DJsdopwMo";
+	const unreadable = {
+		outOfRange: `$argon2id$v=19$m=99999999999,t=0,p=0$${salt}$${tag}`,
+		shortSalt: `$argon2id$v=19$m=65536,t=2,p=1$AAAA$${tag}`,
+		shortTag: `$argon2id$v=19$m=65536,t=2,p=1$${salt}$AA`,
+		otherVersion: `$argon2id$v=16$m=65536,t=2,p=1$${salt}$${tag}`,
+	};
+
+	const hashers: [string, PasswordHasher | undefined][] = [
+		["the default hasher", undefined],
+		["the node:crypto hasher", nodeHasherOf(nodeCrypto as never)],
+	];
+
+	for (const [label, hasher] of hashers) {
+		test(`SEC-38: ${label} answers 401, not 500`, async () => {
+			if (hasher) configure({ hasher });
+			const Users = repositoryOf({
+				entity: Account,
+				provider: inMemoryProvider(),
+				actions: ["findByEmail", "create"],
+			});
+			const A = commandOf({
+				name: "A",
+				useCases: (ctx) => ({ login: ctx.login(Users) }),
+			});
+			for (const [name, password] of Object.entries(unreadable)) {
+				const email = `${name.toLowerCase()}@x.io`;
+				await Users.create(new Account({ name, email, password } as never));
+				const thrown = await failure(
+					A.run("login", { email, password: "Wrong@123" }),
+				);
+				expect(thrown.name).toBe("UseCaseInvalidCredentials");
+				expect(statusOf(thrown as Error)).toBe(401);
+			}
+		});
+	}
 });
 
 describe("SEC-22: register does not take the keys login makes tokens from", () => {
