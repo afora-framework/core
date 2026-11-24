@@ -36,6 +36,19 @@ export function toOpenAPI(
 	if (isField(modelOrModels)) {
 		return schemaOf(modelOrModels, openAPIScope(new Map(), refPrefix));
 	}
+	return componentsOf(modelOrModels, refPrefix);
+}
+
+/**
+ * `toOpenAPI(models)`, the models `masked` tells described as sent masked,
+ * as a use case response is (see `Scope.masked`).
+ * @internal
+ */
+export function componentsOf(
+	modelOrModels: Record<string, BlueprintField>,
+	refPrefix: string,
+	masked: (name: string) => boolean = () => false,
+): OpenAPIComponents {
 	if (typeof modelOrModels !== "object" || modelOrModels === null) {
 		throw new InvalidOpenAPIModel({
 			source: "openapi",
@@ -53,6 +66,7 @@ export function toOpenAPI(
 	}
 
 	const scope = openAPIScope(names, refPrefix);
+	const maskedScope: Scope = { ...scope, masked: true };
 	const schemas: Record<string, OpenAPISchema> = {};
 	for (const [name, model] of Object.entries(modelOrModels)) {
 		const record = recordFieldOf(model);
@@ -60,7 +74,7 @@ export function toOpenAPI(
 		schemas[name] =
 			record && names.get(record.record) === name
 				? recordSchemaOf(record.record, scope)
-				: schemaOf(model, scope);
+				: schemaOf(model, masked(name) ? maskedScope : scope);
 	}
 	return { schemas };
 }

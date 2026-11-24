@@ -10,7 +10,7 @@ import type {
 import { isBlueprintVariant } from "../blueprint/variant";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { Exception } from "../exception/exception";
-import { toOpenAPI } from "../openapi/openapi";
+import { componentsOf } from "../openapi/openapi";
 import type { OpenAPISchema } from "../openapi/types/openapi.interface";
 import { isProperty } from "../property/is-property";
 import { recordNameOf } from "../record/name";
@@ -997,7 +997,10 @@ export const openapi = sinkOf<OpenAPIDocument, OpenAPISinkOptions>({
 			models[`${operation.id}#input`] = operation.input;
 			models[`${operation.id}#response`] = operation.response;
 		}
-		const { schemas } = toOpenAPI(models) as {
+		// A response is sent masked (`maskValueOf`), and described so.
+		const { schemas } = componentsOf(models, "#/components/schemas/", (name) =>
+			name.endsWith("#response"),
+		) as {
 			schemas: Record<string, OpenAPISchema>;
 		};
 

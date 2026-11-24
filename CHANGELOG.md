@@ -13,6 +13,7 @@
 
 ### Fixed
 
+- The OpenAPI document of an output marks `writeOnly` every key a use case response is sent masked by: where the response is a record's blueprint (`response: Account.blueprint`), the keys the record declares `sensitive`, at any depth of blueprints, lists and variants, as well as every `sensitive` property. See [Outputs](docs/outputs.md). (SEC-34)
 - `findBy<Key>` and `findManyBy<Key>` take one value: `{ in: [...] }` throws `InvalidRepositoryQuery` instead of being read as a membership, which only the queries (`findMany`, `exists`, `findPage`, `count`) take. (SEC-21)
 - `PlainPassword` and `Password.hash` apply the same password rules to a value with line breaks: the schema pattern of `PlainPassword` looks for each required character across the whole value, as `Password.hash` does.
 - `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: they give an issue at the property's path. (SEC-27)
