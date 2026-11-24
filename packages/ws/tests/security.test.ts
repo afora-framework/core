@@ -203,7 +203,7 @@ describe("SEC-50: a problem lists a bounded number of issues", () => {
 			id: 1,
 			op: "Tags.tag",
 			input: { tags: Array.from({ length: 20_000 }, () => 0) },
-		})) as { problem: Problem & { issues: unknown[] } };
+		})) as unknown as { problem: Problem & { issues: unknown[] } };
 		expect(reply.problem.status).toBe(400);
 		expect(reply.problem.issues).toHaveLength(100);
 	});
