@@ -159,7 +159,9 @@ function build(cookies = false) {
 		const request: HttpRequest = {
 			param: () => undefined,
 			query: () => ({}),
-			header: (name) => given.headers?.[name],
+			header: (name) =>
+				given.headers?.[name] ??
+				(name === "content-type" ? "application/json" : undefined),
 			text: () => JSON.stringify(given.body ?? {}),
 		};
 		const result = await route.handle(request);
@@ -469,7 +471,9 @@ describe("session: entities with integer ids", () => {
 			const result = await route.handle({
 				param: () => undefined,
 				query: () => ({}),
-				header: (name) => given.headers?.[name],
+				header: (name) =>
+					given.headers?.[name] ??
+					(name === "content-type" ? "application/json" : undefined),
 				text: () => JSON.stringify(given.body ?? {}),
 			});
 			return {

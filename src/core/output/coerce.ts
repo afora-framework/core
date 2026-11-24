@@ -56,7 +56,12 @@ export function coerceTextValues(
 	const types = scalarTypesOf(blueprint);
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(texts)) {
-		if (value !== undefined) out[key] = coerce(value, types[key]);
+		if (value !== undefined) {
+			out[key] = coerce(
+				value,
+				Object.hasOwn(types, key) ? types[key] : undefined,
+			);
+		}
 	}
 	return out;
 }

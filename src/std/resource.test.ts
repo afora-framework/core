@@ -94,7 +94,8 @@ describe("resourceOf", () => {
 			const request: HttpRequest = {
 				param: () => given.id,
 				query: () => given.query ?? {},
-				header: () => undefined,
+				header: (name) =>
+					name === "content-type" ? "application/json" : undefined,
 				text: () => JSON.stringify(given.body ?? {}),
 			};
 			const result = await table.routes[index]?.handle(request);
@@ -200,7 +201,8 @@ describe("resourceOf, with other ids", () => {
 			const request: HttpRequest = {
 				param: () => given.id,
 				query: () => ({}),
-				header: () => undefined,
+				header: (name) =>
+					name === "content-type" ? "application/json" : undefined,
 				text: () => JSON.stringify(given.body ?? {}),
 			};
 			const result = await table.routes[index]?.handle(request);

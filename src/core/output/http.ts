@@ -12,6 +12,7 @@ import {
 	DEFAULT_MAX_PARTS,
 	fileKeysOf,
 	formInputOf,
+	isJson,
 	isMultipart,
 	TooManyParts,
 } from "./form";
@@ -183,6 +184,13 @@ export function httpOptionsIssue(
 const REQUEST_ID = /^[\x21-\x7e]{1,200}$/;
 const JSON_TYPE = "application/json";
 const NO_COOKIES: readonly string[] = Object.freeze([]);
+/** The 415 of a body that is not JSON. */
+const unsupportedBody = Object.freeze({
+	type: "urn:afora:exception:UnsupportedMediaType",
+	title: "UnsupportedMediaType",
+	status: 415,
+	detail: "The request body is read as application/json only.",
+});
 
 /** The cookies of a `cookie` header, by name; the first of each name wins. */
 function cookiesOf(header: string | undefined): Map<string, string> {
@@ -455,7 +463,17 @@ export function compileRoutes(
 					if (mismatch) return problem(mismatch, 400, request);
 					input = parts;
 				} else if (body) {
+					// A body is read only as JSON: a type a form can send without a
+					// preflight (text/plain, urlencoded, multipart) never reaches
+					// the operation. No content-type is no body: an empty one is {}.
+					const type = request.header("content-type");
+					if (type !== undefined && !isJson(type)) {
+						return problem(unsupportedBody, 415, request);
+					}
 					const text = await request.text();
+					if (text.trim() !== "" && type === undefined) {
+						return problem(unsupportedBody, 415, request);
+					}
 					try {
 						input = text.trim() === "" ? {} : JSON.parse(text);
 					} catch {

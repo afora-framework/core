@@ -248,6 +248,8 @@ hono({
 
 The tokens then never reach the body, and `logout`, which answers empty tokens, removes both cookies.
 
+A browser sends the cookie with every request to the API, a form posted from another page included (with `SameSite=Lax`, the default, only from a page of the same site). The routes read a body only as JSON (see [Serving HTTP](outputs.md)): a form's `text/plain`, `application/x-www-form-urlencoded` or `multipart/form-data` body is a 415, and a page of another origin can send `application/json` only after a CORS preflight that the server allows. A request with no body and no `content-type` is still read as `{}`, so an operation whose input is all optional (`logout`, `refresh`) can be called that way: keep `SameSite` at `Lax` or `Strict`, and check the `Origin` of such requests in a middleware where the cookie is `SameSite=None` or other sites share the domain.
+
 **What it does not do.** Tokens are not stored, so there is no revocation: a token already issued is valid until it expires, and `logout` only removes cookies. Keep `expiresIn` short and let `refresh` renew it; a deleted entity cannot refresh. For revocation, rotation with reuse detection, asymmetric keys or an identity provider, write the `authenticator` hook and your own use cases; the declaration of access does not change.
 
 **By hand.** `jwtOf(options)` is the same signer on its own: `sign({ subject, scopes?, claims? }, { expiresIn?, use? })`, `verify(token, { use? })` and `authenticator({ header?, cookie? })`. Here the secret may be the text itself. `sign` rejects with `InvalidJwtOptions` a scope that is not a scope token, and leaves out of the token a claim with a registered name: those are the token's own.

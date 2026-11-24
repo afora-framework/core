@@ -231,7 +231,9 @@ export async function contentMismatchOf(
 			const item = items[index];
 			if (typeof Blob === "undefined" || !(item instanceof Blob)) continue;
 			const type = essenceOf(item.type);
-			const matches = SIGNATURES[type];
+			const matches = Object.hasOwn(SIGNATURES, type)
+				? SIGNATURES[type]
+				: undefined;
 			if (!matches) continue;
 			const bytes = new Uint8Array(await item.slice(0, 32).arrayBuffer());
 			if (matches(bytes)) continue;
@@ -252,6 +254,19 @@ export async function contentMismatchOf(
 		}
 	}
 	return undefined;
+}
+
+/**
+ * Whether a `content-type` header names JSON: `application/json` or an
+ * `application/*+json` type, with any parameters.
+ * @internal
+ */
+export function isJson(contentType: string): boolean {
+	const type = essenceOf(contentType);
+	if (type === "application/json") return true;
+	if (!type.startsWith("application/") || !type.endsWith("+json")) return false;
+	const subtype = type.slice("application/".length, -"+json".length);
+	return subtype !== "" && !subtype.includes("/");
 }
 
 /** Whether a `content-type` header names `multipart/form-data`. */

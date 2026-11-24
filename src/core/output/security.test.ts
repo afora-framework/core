@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	coerceTextValues,
 	compileRoutes,
 	type HttpRequest,
 	outputValueOf,
@@ -977,4 +978,196 @@ describe("SEC-45: a transform that copies the response leaves it masked", () => 
 			}
 		});
 	}
+});
+
+describe("SEC-48: a route reads a body only as JSON", () => {
+	let ran = 0;
+	class Send extends useCaseOf({
+		name: "Send",
+		blueprint: blueprintOf((ctx) => ({
+			to: ctx.string,
+			note: ctx.optional.string,
+		})),
+		response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+		route: { method: "post", path: "/send" },
+	}) {
+		override async execute() {
+			ran++;
+			return { ok: true };
+		}
+	}
+	class Ping extends useCaseOf({
+		name: "Ping",
+		blueprint: blueprintOf((ctx) => ({ note: ctx.optional.string })),
+		response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+		route: { method: "post", path: "/ping" },
+	}) {
+		override async execute() {
+			ran++;
+			return { ok: true };
+		}
+	}
+	const Mailing = commandOf({
+		name: "Mailing",
+		useCases: { send: Send, ping: Ping },
+	});
+	const table = compileRoutes(
+		outputOf({ name: "M", commands: [Mailing] }).operations,
+		{},
+		{ output: { name: "M", statuses: {} } },
+		{ source: "test" },
+	);
+	const route = (id: string) => {
+		const found = table.routes.find(({ operation }) => operation.id === id);
+		if (!found) throw new Error(id);
+		return found;
+	};
+	const request = (type: string | undefined, body: string): HttpRequest => ({
+		param: () => undefined,
+		query: () => ({}),
+		header: (name) =>
+			name.toLowerCase() === "content-type" ? type : undefined,
+		text: () => body,
+		variable: () => undefined,
+	});
+	const JSON_BODY = JSON.stringify({ to: "a", note: "b" });
+
+	test("SEC-48: a body of another media type, or of none, is a 415", async () => {
+		ran = 0;
+		for (const type of [
+			"text/plain",
+			"text/plain;charset=UTF-8",
+			"application/x-www-form-urlencoded",
+			"multipart/form-data; boundary=x",
+			"application/jsonx",
+			"text/json",
+			undefined,
+		]) {
+			const sent = await route("Mailing.send").handle(request(type, JSON_BODY));
+			expect(sent.status).toBe(415);
+			expect(JSON.parse(sent.body as string).title).toBe(
+				"UnsupportedMediaType",
+			);
+		}
+		expect(ran).toBe(0);
+	});
+
+	test("SEC-48: an empty body is a 415 under another media type", async () => {
+		ran = 0;
+		for (const type of ["text/plain", "application/x-www-form-urlencoded"]) {
+			const sent = await route("Mailing.ping").handle(request(type, ""));
+			expect(sent.status).toBe(415);
+		}
+		expect(ran).toBe(0);
+	});
+
+	test("SEC-48: JSON and +json bodies are read, and no body at all is {}", async () => {
+		ran = 0;
+		for (const type of [
+			"application/json",
+			"application/json; charset=utf-8",
+			"Application/JSON",
+			"application/merge-patch+json",
+			"application/vnd.api+json; charset=utf-8",
+		]) {
+			const sent = await route("Mailing.send").handle(request(type, JSON_BODY));
+			expect(sent.status).toBe(200);
+		}
+		expect(
+			(await route("Mailing.ping").handle(request(undefined, ""))).status,
+		).toBe(200);
+		expect(ran).toBe(6);
+	});
+});
+
+describe("SEC-49: a key named like an Object.prototype member is read as any other", () => {
+	class Find extends useCaseOf({
+		name: "Find",
+		blueprint: blueprintOf((ctx) => ({
+			q: ctx.string,
+			page: ctx.optional.integer,
+		})),
+		response: blueprintOf((ctx) => ({ q: ctx.string })),
+		route: { method: "get", path: "/find" },
+	}) {
+		override async execute() {
+			return { q: this.input.q };
+		}
+	}
+	class Attach extends useCaseOf({
+		name: "Attach",
+		blueprint: blueprintOf((ctx) => ({ file: ctx.file })),
+		response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+		route: { method: "post", path: "/attach" },
+	}) {
+		override async execute() {
+			return { ok: true };
+		}
+	}
+	const Search = commandOf({
+		name: "Search",
+		useCases: { find: Find, attach: Attach },
+	});
+	const operations = outputOf({ name: "Q", commands: [Search] }).operations;
+	const table = compileRoutes(
+		operations,
+		{},
+		{ output: { name: "Q", statuses: {} } },
+		{ source: "test" },
+	);
+	const route = (id: string) => {
+		const found = table.routes.find(({ operation }) => operation.id === id);
+		if (!found) throw new Error(id);
+		return found;
+	};
+	const NAMES = [
+		"constructor",
+		"toString",
+		"hasOwnProperty",
+		"valueOf",
+		"__proto__",
+	];
+
+	test("SEC-49: coerceTextValues reads such a key as text", () => {
+		const input = operations.find(({ id }) => id === "Search.find")?.input;
+		if (!input) throw new Error("Search.find");
+		for (const name of NAMES) {
+			const out = coerceTextValues(input, { q: "a", page: "2", [name]: "1" });
+			expect(out.q).toBe("a");
+			expect(out.page).toBe(2);
+			if (name !== "__proto__") expect(out[name]).toBe("1");
+		}
+	});
+
+	test("SEC-49: over HTTP, such a query key is a 400, not a 500", async () => {
+		for (const name of NAMES) {
+			const sent = await route("Search.find").handle({
+				param: () => undefined,
+				query: () => ({ q: "a", [name]: "1" }),
+				header: () => undefined,
+				text: () => "",
+				variable: () => undefined,
+			});
+			expect(sent.status).toBeLessThan(500);
+		}
+	});
+
+	test("SEC-49: a file part of such a type is read as a file", async () => {
+		for (const name of NAMES) {
+			const form = new FormData();
+			form.append("file", new File(["abc"], "a.bin", { type: name }));
+			const sent = await route("Search.attach").handle({
+				param: () => undefined,
+				query: () => ({}),
+				header: (header) =>
+					header.toLowerCase() === "content-type"
+						? "multipart/form-data; boundary=x"
+						: undefined,
+				text: () => "",
+				form: async () => form,
+				variable: () => undefined,
+			});
+			expect(sent.status).toBe(200);
+		}
+	});
 });
