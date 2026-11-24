@@ -31,6 +31,10 @@ export const REGISTERED: ReadonlySet<string> = new Set([
 	"use",
 ]);
 
+/** Whether `key` is a claim of the caller: not registered, and not `__proto__`, which would set the prototype of the claims. */
+const isClaimName = (key: string): boolean =>
+	key !== "__proto__" && !REGISTERED.has(key);
+
 /**
  * A scope is a scope token (RFC 6749, 3.3): not empty, without a space or a
  * control character, since the scopes of a token are kept space separated.
@@ -233,7 +237,7 @@ export function jwtOf(options: JwtOptions): Jwt {
 			// A registered name among the claims is the token's own, never the caller's.
 			const claims: Record<string, JsonValue> = {};
 			for (const [key, value] of Object.entries(subject.claims ?? {})) {
-				if (!REGISTERED.has(key)) claims[key] = value;
+				if (isClaimName(key)) claims[key] = value;
 			}
 			const now = Math.floor(Date.now() / 1000);
 			const payload = {
@@ -290,7 +294,7 @@ export function jwtOf(options: JwtOptions): Jwt {
 			}
 			const claims: Record<string, JsonValue> = {};
 			for (const [key, value] of Object.entries(payload)) {
-				if (!REGISTERED.has(key)) claims[key] = value as JsonValue;
+				if (isClaimName(key)) claims[key] = value as JsonValue;
 			}
 			return {
 				subject: sub,

@@ -184,6 +184,54 @@ describe("SEC-24: registered claim names stay the token's own", () => {
 	});
 });
 
+describe("claims keep the prototype of a plain object", () => {
+	test("a top-level __proto__ key is not a claim, in verify and in sign", async () => {
+		const jwt = jwtOf({ secret });
+		const encoder = new TextEncoder();
+		const base64url = (bytes: Uint8Array) =>
+			btoa(String.fromCharCode(...bytes))
+				.replaceAll("+", "-")
+				.replaceAll("/", "_")
+				.replaceAll("=", "");
+		const head = base64url(
+			encoder.encode(JSON.stringify({ alg: "HS256", typ: "JWT" })),
+		);
+		const now = Math.floor(Date.now() / 1000);
+		const body = base64url(
+			encoder.encode(
+				`{"sub":"u2","scope":"","iat":${now},"exp":${now + 60},"tenant":"acme","__proto__":{"role":"admin"}}`,
+			),
+		);
+		const key = await crypto.subtle.importKey(
+			"raw",
+			encoder.encode(secret),
+			{ name: "HMAC", hash: "SHA-256" },
+			false,
+			["sign"],
+		);
+		const signature = new Uint8Array(
+			await crypto.subtle.sign("HMAC", key, encoder.encode(`${head}.${body}`)),
+		);
+		const principal = await jwt.verify(
+			`${head}.${body}.${base64url(signature)}`,
+		);
+		const claims = principal.claims as Record<string, unknown>;
+		expect(Object.getPrototypeOf(claims)).toBe(Object.prototype);
+		expect(claims.role).toBeUndefined();
+		expect(claims).toEqual({ tenant: "acme" });
+		expect(JSON.stringify(claims)).toBe('{"tenant":"acme"}');
+
+		const token = await jwt.sign({
+			subject: "u1",
+			claims: JSON.parse('{"__proto__":{"role":"admin"},"tenant":"acme"}'),
+		});
+		expect(Object.hasOwn(payloadOf(token), "__proto__")).toBe(false);
+		const signed = (await jwt.verify(token)).claims as Record<string, unknown>;
+		expect(Object.getPrototypeOf(signed)).toBe(Object.prototype);
+		expect(signed).toEqual({ tenant: "acme" });
+	});
+});
+
 describe("SEC-25: a signature verifies in its canonical encoding only", () => {
 	test("SEC-25: a signature with other unused trailing bits is refused", async () => {
 		const alphabet =
