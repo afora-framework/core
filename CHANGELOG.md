@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 27.0.0-rc.6 — 2026-11-24
+
+The sixth candidate of 27.0.0: security fixes from a hunt of 27.0.0-rc.5. Every finding has a regression test named `SEC-<n>`. Seven are breaking, before the contract freezes, and each of those entries says what to change: a missing value in `where` matches no entity, a refresh token is accepted only by the `refresh` of its entity, a write checks that the entities it references exist, the HTTP sinks read a body only as JSON, a parse collects at most 100 issues, a held JSON Schema must be cheap to check, and `@afora/codegen` reads an `extends` package from the project only. No export is added or removed (see [Release candidates](VERSIONING.md#release-candidates)).
 
 ### Security
 
