@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Security
+
+- `findBy<Key>` and `findManyBy<Key>` give no entity for a missing value: `undefined` or `null` gives `undefined` and `[]` without calling the provider, on every provider, including a declarative use case step given an optional input that is absent. See [Repositories](docs/repositories.md). (SEC-20)
+
+### Fixed
+
+- `findBy<Key>` and `findManyBy<Key>` take one value: `{ in: [...] }` throws `InvalidRepositoryQuery` instead of being read as a membership, which only the queries (`findMany`, `exists`, `findPage`, `count`) take. (SEC-21)
+
 ### Repository
 
 - The Release workflow sets `coreVersion` in afora CMS's `site-values` entry after a release that npm serves as `latest` (once its tag and GitHub release exist), so getafora.com shows the new version without a hand edit. It uses the repository secret `CMS_TOKEN`, an afora CMS token limited to `site-values`, and the variable `CMS_API_URL`; without them it only warns. See [CONTRIBUTING.md](CONTRIBUTING.md).

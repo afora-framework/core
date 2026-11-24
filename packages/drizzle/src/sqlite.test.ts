@@ -411,6 +411,62 @@ describe("repositoryOf", () => {
 	});
 });
 
+describe("SEC-20: findBy<Key> and findManyBy<Key> with a missing value", () => {
+	function members() {
+		const sqlite = new Database(":memory:");
+		sqlite.run(
+			"CREATE TABLE members (id TEXT PRIMARY KEY, createdAt TEXT, updatedAt TEXT, deletedAt TEXT, name TEXT, code TEXT UNIQUE, team TEXT)",
+		);
+		const table = sqliteTable("members", {
+			id: text("id").primaryKey(),
+			createdAt: text("createdAt"),
+			updatedAt: text("updatedAt"),
+			deletedAt: text("deletedAt"),
+			name: text("name"),
+			code: text("code"),
+			team: text("team"),
+		});
+		class Member extends entityOf(
+			blueprintOf((ctx) => ({
+				name: ctx.string,
+				code: ctx.optional.string,
+				team: ctx.optional.string,
+			})),
+			{ name: "Member", unique: ["code"] },
+		) {}
+		return repositoryOf({
+			entity: Member,
+			provider: drizzleProvider({
+				db: drizzle(sqlite),
+				tables: { Member: table },
+			}),
+			actions: ["create", "findByCode", "findManyByTeam"],
+		});
+	}
+
+	it("SEC-20: a missing value matches no row, a stored null included", async () => {
+		const Members = members();
+		await Members.create({ name: "Ana" });
+		await Members.create({ name: "Bia", code: "code-bia", team: "core" });
+		expect(await Members.findByCode(undefined as never)).toBeUndefined();
+		expect(await Members.findByCode(null as never)).toBeUndefined();
+		expect(await Members.findManyByTeam(undefined as never)).toEqual([]);
+		expect(await Members.findManyByTeam(null as never)).toEqual([]);
+		expect((await Members.findByCode("code-bia"))?.name).toBe("Bia");
+	});
+
+	it("SEC-21: an { in } object is not read as a membership", async () => {
+		const Members = members();
+		await Members.create({ name: "Bia", code: "code-bia", team: "core" });
+		await expect(
+			Members.findByCode({ in: ["code-bia"] } as never),
+		).rejects.toMatchObject({ name: "InvalidRepositoryQuery" });
+		await expect(
+			Members.findManyByTeam({ in: ["core"] } as never),
+		).rejects.toMatchObject({ name: "InvalidRepositoryQuery" });
+	});
+});
+
 describe("migrate", () => {
 	const change = (
 		fields: Pick<SchemaChange, "change"> & Partial<SchemaChange>,
