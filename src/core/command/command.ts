@@ -36,6 +36,7 @@ import {
 } from "../tracing/tracing";
 import { isUseCaseCatalog } from "../use-case/plugin-catalog";
 import {
+	applicationReplacementsOf,
 	type CallOrigin,
 	type ExecutionScope,
 	OriginKey,
@@ -202,12 +203,14 @@ interface CallEnvironment {
 
 /**
  * The variables of each of `environments` with `given` over them, validated
- * by its blueprint. An environment whose every key is given is not loaded.
+ * by its blueprint. An environment whose every key is given is not loaded;
+ * one `replaced` holds gives those variables instead.
  */
 function callEnvironment(
 	source: string,
 	environments: readonly AnyEnvironment[],
 	given: unknown,
+	replaced: ReadonlyMap<object, Readonly<Record<string, unknown>>> | undefined,
 ): CallEnvironment {
 	if (typeof given !== "object" || given === null || Array.isArray(given)) {
 		throw new InvalidCommandEnvironment({
@@ -238,7 +241,9 @@ function callEnvironment(
 		}
 		const complete = keys.every((key) => Object.hasOwn(picked, key));
 		const base =
-			Object.keys(picked).length === 0 || !complete ? environment.load() : {};
+			Object.keys(picked).length === 0 || !complete
+				? (replaced?.get(environment) ?? environment.load())
+				: {};
 		if (Object.keys(picked).length === 0) {
 			Object.assign(merged, base);
 			continue;
@@ -463,7 +468,12 @@ function declareCommand<
 			overrides =
 				options?.env === undefined
 					? undefined
-					: callEnvironment(where, environments, options.env);
+					: callEnvironment(
+							where,
+							environments,
+							options.env,
+							applicationReplacementsOf(UseCase)?.environments,
+						);
 			replacements = replacementsOf(UseCase, options?.replace);
 		} catch (error) {
 			failSpan(span, error, ExceptionLayers.Command);
@@ -556,7 +566,12 @@ function declareCommand<
 		return {
 			...outcome,
 			context: callContext,
-			env: () => overrides?.merged ?? loadEnvironments(environments),
+			env: () =>
+				overrides?.merged ??
+				loadEnvironments(
+					environments,
+					applicationReplacementsOf(UseCase)?.environments,
+				),
 			logger: logger ?? silentLogger,
 			tracer,
 			span,
@@ -573,7 +588,12 @@ function declareCommand<
 		transaction,
 		environments,
 		get env() {
-			return loadEnvironments(environments);
+			// The use cases of a command an application rebuilt share its replacements.
+			return loadEnvironments(
+				environments,
+				applicationReplacementsOf(Object.values(frozenUseCases)[0])
+					?.environments,
+			);
 		},
 		events,
 		onEventError,

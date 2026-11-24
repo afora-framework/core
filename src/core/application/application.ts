@@ -94,6 +94,10 @@ import {
 import { useCaseOriginOf } from "../use-case/plugin";
 import { responsePropertiesOf } from "../use-case/response";
 import {
+	type ApplicationReplacements,
+	ApplicationReplacementsKey,
+} from "../use-case/scope";
+import {
 	ApplicationServicesKey,
 	isService,
 	type ServiceFactories,
@@ -192,6 +196,94 @@ const logSettings = new WeakMap<object, LogSettings | LogFactory>();
 const traceSettings = new WeakMap<object, ITracer>();
 /** The `runtime` services each application has (its own over inherited ones), for `extends`. */
 const runtimeSettings = new WeakMap<object, RuntimeServices>();
+
+/** One registration an application made by `app.with` replaces: its key and what replaces it. */
+interface Replacement<Value> {
+	readonly name: string;
+	readonly value: Value;
+}
+
+/**
+ * What an application made by `app.with` replaces, checked already: the
+ * repositories by declaration (their `Entry.key`), the use cases by their
+ * declared class, the environments by environment, and the keys of the
+ * services and publishers (given as its own `services` and `publishers`).
+ */
+interface Replaced {
+	readonly repositories: ReadonlyMap<object, Replacement<object>>;
+	readonly useCases: ReadonlyMap<
+		object,
+		Replacement<(input: unknown) => unknown>
+	>;
+	readonly environments: ReadonlyMap<
+		object,
+		Replacement<Readonly<Record<string, unknown>>>
+	>;
+	readonly services: ReadonlySet<string>;
+	readonly publishers: ReadonlySet<string>;
+}
+
+/** The setting by which `app.with` gives `applicationOf` what it replaces. Internal. */
+const ReplacedKey: unique symbol = Symbol("afora.application.replaced");
+
+/** What each application replaces (inherited replacements included), for `extends`. */
+const replacedSettings = new WeakMap<object, Replaced>();
+
+/** The replacements of the applications `extended`, in order, then `own`; `undefined` without any. */
+function replacedOf(
+	extended: readonly object[],
+	own: Replaced | undefined,
+): Replaced | undefined {
+	const all = [
+		...extended.map((application) => replacedSettings.get(application)),
+		own,
+	].filter((replaced): replaced is Replaced => replaced !== undefined);
+	if (all.length === 0) return undefined;
+	if (all.length === 1) return all[0];
+	const maps = <Value>(
+		pick: (replaced: Replaced) => ReadonlyMap<object, Value>,
+	) => new Map(all.flatMap((replaced) => [...pick(replaced)]));
+	const sets = (pick: (replaced: Replaced) => ReadonlySet<string>) =>
+		new Set(all.flatMap((replaced) => [...pick(replaced)]));
+	return {
+		repositories: maps((replaced) => replaced.repositories),
+		useCases: maps((replaced) => replaced.useCases),
+		environments: maps((replaced) => replaced.environments),
+		services: sets((replaced) => replaced.services),
+		publishers: sets((replaced) => replaced.publishers),
+	};
+}
+
+/**
+ * `repository` with the methods of `fake` in their place, each called with
+ * `fake` as `this`; the others are those of `repository`, which stays
+ * what the application inspects, migrates and checks.
+ */
+function replacedRepositoryOf(repository: object, fake: object): object {
+	const view = Object.create(repository) as object;
+	for (const [method, implementation] of Object.entries(fake)) {
+		Object.defineProperty(view, method, {
+			value: (...args: unknown[]) =>
+				(implementation as (...args: unknown[]) => unknown).apply(fake, args),
+			enumerable: true,
+		});
+	}
+	return Object.freeze(view);
+}
+
+/** Whether `method` names a method of `repository` (an action or one it declares). */
+function isRepositoryMethod(repository: object, method: string): boolean {
+	return (
+		method !== "constructor" &&
+		!(method in Object.prototype) &&
+		typeof Reflect.get(repository, method) === "function"
+	);
+}
+
+/** Whether `value` is a plain object (not `null`, not a list). */
+function isObjectOf(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /** What `settings` holds for the last of `extended` that has something there. */
 function inherited<Value>(
@@ -1028,6 +1120,32 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 	};
 }
 
+/** What `describe` gives of what an application replaces: each key, opaque. */
+function replacementsDescriptionOf(
+	replaced: Replaced,
+): NonNullable<ApplicationDescription["replacements"]> {
+	const opaque = (names: Iterable<string>) => {
+		const list = [...names];
+		return list.length === 0
+			? undefined
+			: Object.fromEntries(
+					list.map((key) => [key, { kind: "opaque" as const }]),
+				);
+	};
+	const named = (map: ReadonlyMap<object, { readonly name: string }>) =>
+		opaque([...map.values()].map((replacement) => replacement.name));
+	const sections = {
+		repositories: named(replaced.repositories),
+		useCases: named(replaced.useCases),
+		environments: named(replaced.environments),
+		services: opaque(replaced.services),
+		publishers: opaque(replaced.publishers),
+	};
+	return Object.fromEntries(
+		Object.entries(sections).filter(([, section]) => section !== undefined),
+	);
+}
+
 function describeRegistry(
 	name: string,
 	extended: readonly AnyApplication[],
@@ -1039,6 +1157,7 @@ function describeRegistry(
 	services: Readonly<Record<string, string>>,
 	traced: boolean,
 	runtime: RuntimeServices | undefined,
+	replaced: Replaced | undefined,
 ): ApplicationDescription {
 	const scope: Scope = {
 		properties: referencesOf(registry, "properties"),
@@ -1215,6 +1334,9 @@ function describeRegistry(
 						Object.entries(services).map(([key, from]) => [key, { from }]),
 					),
 				}),
+		...(replaced === undefined
+			? {}
+			: { replacements: replacementsDescriptionOf(replaced) }),
 		properties: each("properties", (entry) => ({
 			from: entry.from,
 			...propertyDescriptionOf(entry.value as BlueprintField, scope),
@@ -1704,8 +1826,35 @@ export function applicationOf<
 			}
 		}
 	}
-	// Use cases, commands and outputs are rebound for a provider, a logger or
-	// publishers. Repositories are bound for a provider, its own or one of `providersOf`.
+	// What it replaces, made by `app.with`: its own and inherited.
+	const replaced = replacedOf(
+		extended,
+		(settings as { readonly [ReplacedKey]?: Replaced })[ReplacedKey],
+	);
+	const replacedEnvironments = new Map<
+		object,
+		Readonly<Record<string, unknown>>
+	>(
+		[...(replaced?.environments ?? [])].map(([environment, { value }]) => [
+			environment,
+			value,
+		]),
+	);
+	// What every use case it binds carries to its calls: the repositories
+	// and environments replaced, under those a call replaces itself.
+	const useCaseReplacements: ApplicationReplacements | undefined =
+		replaced === undefined ||
+		(replaced.repositories.size === 0 && replacedEnvironments.size === 0)
+			? undefined
+			: {
+					replacements: new Map(
+						[...replaced.repositories].map(([key, { value }]) => [key, value]),
+					),
+					environments: replacedEnvironments,
+				};
+	// Use cases, commands and outputs are rebound for a provider, a logger,
+	// publishers or replacements. Repositories are bound for a provider, its
+	// own or one of `providersOf`.
 	const bindsProviders = provider !== undefined || instances.size > 0;
 	const rebinds =
 		bindsProviders ||
@@ -1713,7 +1862,8 @@ export function applicationOf<
 		tracer !== undefined ||
 		runtime !== undefined ||
 		hasPublishers ||
-		hasServices;
+		hasServices ||
+		replaced !== undefined;
 
 	const collection = (key: ApplicationCollectionKey) =>
 		Object.freeze(
@@ -1725,8 +1875,13 @@ export function applicationOf<
 	const bound = new Map<unknown, unknown>();
 	const boundByState = new Map<object, unknown>();
 	const repositories: Record<string, unknown> = {};
+	// What `app.repositories` shows: a replaced one with its fake methods.
+	const shownRepositories: Record<string, unknown> = {};
+	const environmentsOfProviders =
+		replacedEnvironments.size === 0 ? undefined : replacedEnvironments;
 	for (const entry of registry.repositories.values()) {
-		// With only a `runtime`, the declaration stays usable: it reads the same store.
+		// With only a `runtime` (or replaced environments), the declaration
+		// stays usable: it reads the same store.
 		const repository = bindsProviders
 			? bindRepository(
 					entry.value as object,
@@ -1734,19 +1889,27 @@ export function applicationOf<
 					instances,
 					{ application: name, key: entry.name, logger },
 					runtime,
+					environmentsOfProviders,
 				)
-			: runtime !== undefined
+			: runtime !== undefined || environmentsOfProviders !== undefined
 				? bindRepository(
 						entry.value as object,
 						undefined,
 						undefined,
 						undefined,
 						runtime,
+						environmentsOfProviders,
 					)
 				: entry.value;
-		bound.set(entry.value, repository);
+		const fake = replaced?.repositories.get(entry.key)?.value;
+		const shown =
+			fake === undefined
+				? repository
+				: replacedRepositoryOf(repository as object, fake);
+		bound.set(entry.value, shown);
 		boundByState.set(entry.key, repository);
 		repositories[entry.name] = repository;
+		shownRepositories[entry.name] = shown;
 		// A provider made on start is checked once it exists.
 		const through = providerOfRepository(repository);
 		if (
@@ -1774,6 +1937,18 @@ export function applicationOf<
 		const Declared = UseCase as unknown as new (...args: never[]) => object;
 		class Bound extends Declared {}
 		Object.defineProperty(Bound, "name", { value: Declared.name });
+		// Replaced by `app.with`: the function runs in place of `execute`,
+		// its response checked as that of `execute` is.
+		const fake = replaced?.useCases.get(UseCase)?.value;
+		if (fake !== undefined) {
+			Object.defineProperty(Bound.prototype, "execute", {
+				value(this: { readonly input: unknown }) {
+					return fake(this.input);
+				},
+				writable: true,
+				configurable: true,
+			});
+		}
 		boundUseCases.set(UseCase, Bound as unknown as AnyUseCaseClass);
 		// A `replace` names the declared use case: it replaces the bound one too.
 		markBoundUseCase(Bound as unknown as AnyUseCaseClass, UseCase);
@@ -1802,6 +1977,10 @@ export function applicationOf<
 			Object.defineProperty(Bound, ApplicationRuntimeKey, { value: runtime });
 		if (hasServices)
 			Object.defineProperty(Bound, ApplicationServicesKey, { value: services });
+		if (useCaseReplacements)
+			Object.defineProperty(Bound, ApplicationReplacementsKey, {
+				value: useCaseReplacements,
+			});
 		return Bound as unknown as AnyUseCaseClass;
 	};
 	const useCases: Record<string, unknown> = {};
@@ -1875,7 +2054,7 @@ export function applicationOf<
 					details: { holder: "the context", reference: "an environment" },
 				});
 			}
-			return environment.load();
+			return replacedEnvironments.get(environment) ?? environment.load();
 		},
 		logger: logger ?? silentLogger,
 	}) as ApplicationContext;
@@ -1902,6 +2081,8 @@ export function applicationOf<
 		const failures: Record<string, string[]> = {};
 		let cause: unknown;
 		for (const entry of environmentEntries) {
+			// Replaced by `app.with`: checked by its blueprint already.
+			if (replacedEnvironments.has(entry.value as object)) continue;
 			try {
 				(entry.value as AnyEnvironment).load();
 			} catch (error) {
@@ -1985,7 +2166,7 @@ export function applicationOf<
 		records: collection("records"),
 		entities: collection("entities"),
 		environments: collection("environments"),
-		repositories: Object.freeze(repositories),
+		repositories: Object.freeze(shownRepositories),
 		useCases: Object.freeze(useCases),
 		commands: Object.freeze(commands),
 		outputs: Object.freeze(outputs),
@@ -2048,6 +2229,165 @@ export function applicationOf<
 				...(runtime === undefined ? {} : { runtime }),
 			} as never);
 		},
+		with(given: unknown) {
+			if (!isObjectOf(given)) {
+				invalid(
+					name,
+					"Expected app.with to take the replacements by collection: { repositories, useCases, environments, services, publishers }.",
+				);
+			}
+			const collections = [
+				"repositories",
+				"useCases",
+				"environments",
+				"services",
+				"publishers",
+			];
+			for (const key of Object.keys(given)) {
+				if (!collections.includes(key)) {
+					invalid(
+						name,
+						`app.with replaces repositories, useCases, environments, services and publishers, not ${key}.`,
+					);
+				}
+			}
+			const entriesOf = (collection: string): [string, unknown][] => {
+				const value = given[collection];
+				if (value === undefined) return [];
+				if (!isObjectOf(value)) {
+					invalid(
+						name,
+						`Expected ${collection} of app.with to be an object of replacements by key.`,
+					);
+				}
+				return Object.entries(value);
+			};
+			const unregistered = (reference: string): never => {
+				throw new UnregisteredApplicationReference({
+					source: name,
+					details: { holder: "app.with", reference },
+				});
+			};
+			const replacedRepositories = new Map<object, Replacement<object>>();
+			for (const [key, fake] of entriesOf("repositories")) {
+				const entry =
+					registry.repositories.get(key) ?? unregistered(`repository "${key}"`);
+				const repository = repositories[key] as object;
+				if (!isObjectOf(fake)) {
+					invalid(
+						name,
+						`repositories.${key} of app.with must be an object of some methods of the repository.`,
+					);
+				}
+				for (const [method, implementation] of Object.entries(fake)) {
+					if (
+						typeof implementation !== "function" ||
+						!isRepositoryMethod(repository, method)
+					) {
+						invalid(
+							name,
+							`repositories.${key}.${method} of app.with is not a method of the repository: a replacement gives some of its methods.`,
+						);
+					}
+				}
+				replacedRepositories.set(entry.key, { name: key, value: fake });
+			}
+			const replacedUseCases = new Map<
+				object,
+				Replacement<(input: unknown) => unknown>
+			>();
+			for (const [key, fake] of entriesOf("useCases")) {
+				const entry =
+					registry.useCases.get(key) ?? unregistered(`use case "${key}"`);
+				if (typeof fake !== "function") {
+					invalid(
+						name,
+						`useCases.${key} of app.with must be a function of the input that gives the response.`,
+					);
+				}
+				replacedUseCases.set(entry.value as object, {
+					name: key,
+					value: fake as (input: unknown) => unknown,
+				});
+			}
+			const replacedVariables = new Map<
+				object,
+				Replacement<Readonly<Record<string, unknown>>>
+			>();
+			for (const [key, variables] of entriesOf("environments")) {
+				const entry =
+					registry.environments.get(key) ??
+					unregistered(`environment "${key}"`);
+				if (!isObjectOf(variables)) {
+					invalid(
+						name,
+						`environments.${key} of app.with must be an object of the variables of the environment.`,
+					);
+				}
+				const parsed = (entry.value as AnyEnvironment).blueprint.safeParse(
+					variables,
+				);
+				if (parsed.issues) {
+					throw new InvalidApplicationEnvironment({
+						source: name,
+						details: {
+							environments: {
+								[key]: [
+									...new Set(
+										parsed.issues.map((issue) => String(issue.path[0] ?? "")),
+									),
+								],
+							},
+						},
+						cause: parsed.issues.find((issue) => issue.cause)?.cause,
+					});
+				}
+				replacedVariables.set(entry.value as object, {
+					name: key,
+					value: Object.freeze(parsed.value) as Readonly<
+						Record<string, unknown>
+					>,
+				});
+			}
+			const ownServices: Record<string, unknown> = {};
+			for (const [key, factory] of entriesOf("services")) {
+				if (!Object.hasOwn(services, key)) unregistered(`service "${key}"`);
+				ownServices[key] = factory;
+			}
+			const ownPublishers: Record<string, unknown> = {};
+			for (const [key, publisher] of entriesOf("publishers")) {
+				if (!Object.hasOwn(publishers, key)) {
+					unregistered(`publisher "${key}"`);
+				}
+				ownPublishers[key] = publisher;
+			}
+			const own: Replaced = {
+				repositories: replacedRepositories,
+				useCases: replacedUseCases,
+				environments: replacedVariables,
+				services: new Set(Object.keys(ownServices)),
+				publishers: new Set(Object.keys(ownPublishers)),
+			};
+			// An application that extends this one, as `extend` makes it; its
+			// services and publishers checked as those of `applicationOf` are.
+			return applicationOf({
+				name,
+				extends: [application],
+				...(provider === undefined
+					? {}
+					: { provider: defaultSlot ?? provider }),
+				...(declaredLog === undefined ? {} : { log: declaredLog }),
+				...(tracer === undefined ? {} : { trace: tracer }),
+				...(runtime === undefined ? {} : { runtime }),
+				...(Object.keys(ownServices).length === 0
+					? {}
+					: { services: ownServices }),
+				...(Object.keys(ownPublishers).length === 0
+					? {}
+					: { publishers: ownPublishers }),
+				[ReplacedKey]: own,
+			} as never);
+		},
 		describe: () =>
 			describeRegistry(
 				name,
@@ -2064,6 +2404,7 @@ export function applicationOf<
 				serviceFrom,
 				tracer !== undefined,
 				runtime,
+				replaced,
 			),
 		get started() {
 			return started;
@@ -2135,7 +2476,7 @@ export function applicationOf<
 						"Expected an environment registered in the application.",
 					);
 				}
-				return declaration.load();
+				return replacedEnvironments.get(declaration) ?? declaration.load();
 			}
 			if (isCommand(declaration)) return application.command(declaration);
 			if (isOutput(declaration)) return application.output(declaration);
@@ -2165,6 +2506,7 @@ export function applicationOf<
 	if (declaredLog !== undefined) logSettings.set(application, declaredLog);
 	if (tracer !== undefined) traceSettings.set(application, tracer);
 	if (runtime !== undefined) runtimeSettings.set(application, runtime);
+	if (replaced !== undefined) replacedSettings.set(application, replaced);
 	publisherOrigins.set(application, Object.freeze(origins));
 	serviceSettings.set(application, services);
 	serviceOrigins.set(application, Object.freeze(serviceFrom));

@@ -39,6 +39,11 @@ export interface RepositoryState {
 	readonly logger?: ILogger;
 	/** The runtime services of the application that bound it, in force for its calls. */
 	readonly runtime?: RuntimeServices;
+	/** The variables an application made by `app.with` gives in place of its environments. */
+	readonly environments?: ReadonlyMap<
+		object,
+		Readonly<Record<string, unknown>>
+	>;
 	context?: RepositoryContext;
 }
 
@@ -104,7 +109,7 @@ export function contextOf(state: RepositoryState): RepositoryContext {
 		indexes: state.indexes,
 		...(key === undefined ? {} : { expiry: Object.freeze({ key }) }),
 		...(schema === undefined ? {} : { schema }),
-		env: loadEnvironments(state.environment),
+		env: loadEnvironments(state.environment, state.environments),
 	});
 	return state.context;
 }
@@ -208,6 +213,9 @@ function bindState(
 	instances: ReadonlyMap<object, IRepositoryProvider> | undefined,
 	logger: ILogger | undefined,
 	runtime: RuntimeServices | undefined,
+	environments:
+		| ReadonlyMap<object, Readonly<Record<string, unknown>>>
+		| undefined,
 	bound = new Map<RepositoryState, RepositoryState>(),
 ): RepositoryState {
 	const done = bound.get(state);
@@ -216,6 +224,7 @@ function bindState(
 		...state,
 		logger,
 		runtime,
+		environments,
 		provider: state.explicitProvider
 			? (instances?.get(state.provider) ?? state.provider)
 			: (provider ?? state.provider),
@@ -223,7 +232,15 @@ function bindState(
 		relations: new Map(
 			[...state.relations].map(([target, related]) => [
 				target,
-				bindState(related, provider, instances, logger, runtime, bound),
+				bindState(
+					related,
+					provider,
+					instances,
+					logger,
+					runtime,
+					environments,
+					bound,
+				),
 			]),
 		),
 	};
@@ -268,7 +285,8 @@ export interface RepositoryBinding {
  * provider found in `instances` is replaced by its value. With `binding`,
  * the declaration (made by `repositoryOf`) throws
  * `RepositoryUsedOutsideApplication` from then on. With `runtime`, its calls
- * run with those services.
+ * run with those services. With `environments`, its provider reads those
+ * variables in place of the environments they replace.
  */
 export function bindRepository<Repository extends object>(
 	repository: Repository,
@@ -276,6 +294,7 @@ export function bindRepository<Repository extends object>(
 	instances?: ReadonlyMap<object, IRepositoryProvider>,
 	binding?: RepositoryBinding,
 	runtime?: RuntimeServices,
+	environments?: ReadonlyMap<object, Readonly<Record<string, unknown>>>,
 ): Repository {
 	const state = stateOf(repository);
 	const Declared = repository.constructor as new () => object;
@@ -283,7 +302,14 @@ export function bindRepository<Repository extends object>(
 	Object.defineProperty(Bound, "name", { value: Declared.name });
 	states.set(
 		Bound,
-		bindState(state, provider, instances, binding?.logger, runtime),
+		bindState(
+			state,
+			provider,
+			instances,
+			binding?.logger,
+			runtime,
+			environments,
+		),
 	);
 	if (binding) {
 		owners.set(declarationOf(state), {

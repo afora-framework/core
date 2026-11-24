@@ -178,14 +178,24 @@ function convert(field: unknown, variable: string): unknown {
 	return variable;
 }
 
-/** The variables of every environment of `dependencies`, merged in order. */
+/**
+ * The variables of every environment of `dependencies`, merged in order;
+ * those of an environment `replaced` holds (an application made by
+ * `app.with`) in place of what it loads.
+ */
 export function loadEnvironments(
 	dependencies: EnvironmentDependencies | undefined,
+	replaced?: ReadonlyMap<object, Readonly<Record<string, unknown>>>,
 ): Readonly<Record<string, unknown>> {
 	if (dependencies === undefined) return Object.freeze({});
 	const list = isEnvironment(dependencies) ? [dependencies] : dependencies;
 	return Object.freeze(
-		Object.assign({}, ...list.map((environment) => environment.load())),
+		Object.assign(
+			{},
+			...list.map(
+				(environment) => replaced?.get(environment) ?? environment.load(),
+			),
+		),
 	);
 }
 

@@ -41,6 +41,7 @@ export type {
 	AnyApplication,
 	ApplicationCollections,
 	ApplicationContext,
+	ApplicationReplacementSettings,
 	ApplicationRunArgs,
 	ApplicationRunOptions,
 	ApplicationSettings,

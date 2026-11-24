@@ -240,6 +240,41 @@ test("creates a note, then refuses a duplicate with 409", async () => {
 
 To test as a signed-in caller, send the credentials the sink is configured for (a bearer token for `jwt`); to test a use case's rule without HTTP, call `app.run(UseCase, input, { context })`. See [Access](auth.md).
 
+### Replacing registrations
+
+An integration test often needs the application as it is, with a few things swapped: a mailer that sends nothing, an environment with fixed variables, a repository that fails. `app.with` gives that application without declaring a second one: the registrations it names are replaced by key, in every use case at any depth and in the commands and outputs, so the real sink, statuses, auth and event policies run (see [Applications](applications.md#replacing-registrations)).
+
+```ts
+test("publishes and mails the editors", async () => {
+	const sent: string[] = [];
+	const app = Blog.with({
+		services: {
+			mailer: () => ({
+				send: (to: string, text: string) => {
+					sent.push(`${to}: ${text}`);
+					return `sent to ${to}`;
+				},
+			}),
+		},
+		environments: { Mail: { MAIL_TO: "editors@example.com" } },
+		repositories: { Posts: { findMany: async () => [] } },
+	});
+	await app.start({ register: false });
+
+	const response = await app.outputs.Api.build().request("/posts/publish", {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ title: "Hello" }),
+	});
+	expect(response.status).toBe(200);
+	expect(sent).toEqual(["editors@example.com: Hello"]);
+
+	await app.stop();
+});
+```
+
+A repository replacement gives only the methods the test changes; the others still read and write through the provider. A use case is replaced by a function of its input, whose response is checked as that of `execute` is. An environment replacement is checked by its blueprint when `with` is called, and `start()` does not ask the process for those variables. A key the application does not register throws `UnregisteredApplicationReference`, and a value of the wrong kind `InvalidApplicationDeclaration`, so a renamed registration does not leave a test passing against the real one. `Blog` itself is not changed.
+
 ## Spying on the database
 
 A repository is frozen: patching one of its methods fails, because the object cannot be changed. That is on purpose. Assigning a method (`Projects.findMany = ...`, which is what a spy that assigns does) throws `RepositoryIsFrozen`, whose message names `spyProvider`, `execute` and this section. A spy that redefines the property (`vi.spyOn`, `jest.spyOn`) is stopped by the engine before afora is asked, with `TypeError: Cannot redefine property: findMany`, or `Cannot define property findMany, object is not extensible`; `spyOn` of `bun:test` reports `spyOn(target, prop) does not support accessor properties yet`. Whichever message you got, the answer is the same. One repository is shared by every use case, command and application that names it, so a patched method would leak into every other test of the process; and an application with a `provider` does not even call it, since `app.repositories.Projects` is a copy bound to that provider. Spy on what lies under every repository instead: the provider.

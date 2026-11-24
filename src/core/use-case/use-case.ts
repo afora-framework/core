@@ -75,7 +75,12 @@ import {
 	type UseCaseOutput,
 } from "./response";
 import { routeDeclarationOf } from "./route";
-import { type ExecutionScope, ScopeKey } from "./scope";
+import {
+	applicationReplacementsOf,
+	type ExecutionScope,
+	ScopeKey,
+	withApplicationReplacements,
+} from "./scope";
 import {
 	type AnyService,
 	isService,
@@ -996,7 +1001,13 @@ export abstract class AbstractUseCase<
 		const options = args[0] as
 			| { context?: unknown; [ScopeKey]?: ExecutionScope }
 			| undefined;
-		const scope = options?.[ScopeKey];
+		// Bound by an application made by `app.with`: its replacements reach
+		// every use case of the call, under those of the call itself.
+		const ofApplication = applicationReplacementsOf(this.constructor);
+		const scope =
+			ofApplication === undefined
+				? options?.[ScopeKey]
+				: withApplicationReplacements(options?.[ScopeKey], ofApplication);
 		let context: object | undefined;
 		if (declaration.context) {
 			// The context is shared by the use case and those it runs: frozen at every depth.

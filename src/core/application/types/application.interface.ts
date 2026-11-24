@@ -44,6 +44,7 @@ import type { RouteDeclaration } from "../../use-case/types/route.interface";
 import type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
+	ReplacementOf,
 	UseCaseInput,
 	UseCaseReplacements,
 	UseCaseResponse,
@@ -234,6 +235,35 @@ export type MergedCollections<
 		UnionToIntersection<Extended[number][Key]>;
 };
 
+/**
+ * What `app.with` takes: the registrations it replaces, by collection and by
+ * the key they are registered under. A repository gets some of its methods
+ * (the others stay its own), a use case a function of its input that gives
+ * its response, an environment its variables, a service a factory and a
+ * publisher an `IEventPublisher`, as `applicationOf` takes them.
+ */
+export interface ApplicationReplacementSettings<
+	Collections extends ApplicationCollections,
+> {
+	readonly repositories?: {
+		readonly [Key in keyof Collections["repositories"]]?: ReplacementOf<
+			Collections["repositories"][Key]
+		>;
+	};
+	readonly useCases?: {
+		readonly [Key in keyof Collections["useCases"]]?: ReplacementOf<
+			Collections["useCases"][Key]
+		>;
+	};
+	readonly environments?: {
+		readonly [Key in keyof Collections["environments"]]?: ReplacementOf<
+			Collections["environments"][Key]
+		>;
+	};
+	readonly services?: Readonly<Record<string, ServiceFactory>>;
+	readonly publishers?: Readonly<Record<string, IEventPublisher>>;
+}
+
 /** A named, immutable manifest of what an application declares. */
 export interface IApplication<
 	Name extends string,
@@ -311,6 +341,19 @@ export interface IApplication<
 	extend<const Others extends readonly AnyApplication[]>(
 		...others: Others
 	): IApplication<Name, MergedCollections<Collections, Others>>;
+	/**
+	 * A new application that extends this one with the registrations of
+	 * `replacements` replaced, by key, everywhere: in its use cases at any
+	 * depth, its commands and outputs, `repositories`, `context.env` and
+	 * `get`. This one is left as it is; `extend` keeps the replacements.
+	 *
+	 * @throws {@link UnregisteredApplicationReference} when a key is not registered.
+	 * @throws {@link InvalidApplicationDeclaration} when a replacement is of the wrong kind.
+	 * @throws {@link InvalidApplicationEnvironment} when the variables of an environment do not satisfy its blueprint.
+	 */
+	with(
+		replacements: ApplicationReplacementSettings<Collections>,
+	): IApplication<Name, Collections>;
 	/** A format-neutral, JSON-serializable graph of its declarations. */
 	describe(): ApplicationDescription;
 	/**
@@ -658,6 +701,18 @@ export interface ApplicationDescription {
 	readonly publishers?: Readonly<Record<string, { readonly from: string }>>;
 	/** Its services (inherited ones included), by name, with the application that declared each; present only when it has some. */
 	readonly services?: Readonly<Record<string, { readonly from: string }>>;
+	/** Present only on an application made by `app.with` (or extending one): what it replaces, by collection and key, each opaque. */
+	readonly replacements?: {
+		readonly repositories?: Readonly<
+			Record<string, { readonly kind: "opaque" }>
+		>;
+		readonly useCases?: Readonly<Record<string, { readonly kind: "opaque" }>>;
+		readonly environments?: Readonly<
+			Record<string, { readonly kind: "opaque" }>
+		>;
+		readonly services?: Readonly<Record<string, { readonly kind: "opaque" }>>;
+		readonly publishers?: Readonly<Record<string, { readonly kind: "opaque" }>>;
+	};
 	readonly properties: Readonly<
 		Record<string, PropertyDescription & { readonly from: string }>
 	>;
