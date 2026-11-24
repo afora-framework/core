@@ -41,6 +41,7 @@ import { parseField } from "../parse/parse";
 import type { Issue } from "../parse/types/parse.interface";
 import { recordNameOf } from "../record/name";
 import { AbstractRepository, isRepository } from "../repository/repository";
+import { actionGetters } from "../repository/state";
 import type { AnyRepository } from "../repository/types/repository.interface";
 import { Kind } from "../symbols/kind";
 import {
@@ -462,7 +463,11 @@ function methodNamesOf(repository: object): string[] {
 	) {
 		for (const name of Object.getOwnPropertyNames(current)) {
 			const descriptor = Object.getOwnPropertyDescriptor(current, name);
-			if (name !== "constructor" && typeof descriptor?.value === "function") {
+			if (
+				name !== "constructor" &&
+				(typeof descriptor?.value === "function" ||
+					(descriptor?.get !== undefined && actionGetters.has(descriptor.get)))
+			) {
 				names.add(name);
 			}
 		}

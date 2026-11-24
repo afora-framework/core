@@ -39,6 +39,9 @@ export interface RepositoryState {
 	context?: RepositoryContext;
 }
 
+/** The getters that give the actions of a repository, which are not members of it a caller defines. */
+export const actionGetters = new WeakSet<object>();
+
 export const states = new WeakMap<object, RepositoryState>();
 
 /** The state of the repository class of `repository`, or of a class it extends; `undefined` for anything else. */

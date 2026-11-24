@@ -33,6 +33,20 @@ export const InvalidRepositoryDeclaration = exceptionOf({
 	message: ({ reason }: { readonly reason: string }) => reason,
 });
 
+/** A method of a repository was assigned or redefined, as `spyOn` does. */
+export const RepositoryIsFrozen = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "RepositoryIsFrozen",
+	message: ({
+		repository,
+		member,
+	}: {
+		readonly repository: string;
+		readonly member: string;
+	}) =>
+		`The repository ${repository} is frozen: "${member}" cannot be replaced. It is shared by every use case and application that names it. To observe it, wrap the provider with spyProvider from @afora/core/testing; to replace it for one call, override it in execute (execute({ ${repository}: { ${member}: ... } })). See docs/testing.md#spying-on-the-database.`,
+});
+
 /** A method of a repository got a value that is not an entity of it. */
 export const InvalidRepositoryEntity = exceptionOf({
 	layer: ExceptionLayers.Repository,

@@ -48,6 +48,7 @@ import {
 	InvalidRepositoryQuery,
 	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
+	RepositoryIsFrozen,
 	UnstoredEntity,
 	UnsupportedIdentity,
 } from "./exceptions";
@@ -61,6 +62,7 @@ import {
 	resolveReferences,
 } from "./references";
 import {
+	actionGetters,
 	assertUnbound,
 	contextOf,
 	declareRepository,
@@ -1443,10 +1445,18 @@ export function repositoryOf<
 				invalid(name, `The provider has no "${need}" for "${name_}".`);
 			}
 		}
+		// An accessor, so that assigning the method says why it cannot be done.
+		const getter = () => implementation;
+		actionGetters.add(getter);
 		Object.defineProperty(DeclaredRepository.prototype, name_ as string, {
-			value: implementation,
-			writable: true,
-			configurable: true,
+			get: getter,
+			set() {
+				throw new RepositoryIsFrozen({
+					source: name,
+					details: { repository: name, member: String(name_) },
+				});
+			},
+			configurable: false,
 		});
 	}
 	Object.defineProperty(DeclaredRepository, "name", { value: name });

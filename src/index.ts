@@ -368,6 +368,7 @@ export {
 	InvalidStoredSchemaVersion,
 	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
+	RepositoryIsFrozen,
 	RepositoryUniqueViolation,
 	RepositoryUsedOutsideApplication,
 	UnstoredEntity,
