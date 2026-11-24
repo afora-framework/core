@@ -1,5 +1,7 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import {
+	chmod,
 	mkdir,
 	mkdtemp,
 	realpath,
@@ -8,9 +10,9 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { validateInProject } from "../src/spec-file";
-import { redactMessage } from "../src/typecheck";
+import { redactMessage, typecheck } from "../src/typecheck";
 import { type Connected, connect, makeProject, removeProject } from "./project";
 
 const dirs: string[] = [];
@@ -290,4 +292,80 @@ describe("SEC-33: a spec file that is not valid JSON", () => {
 			await removeProject(dir);
 		}
 	});
+});
+
+describe("SEC-39: an output.dir on another drive", () => {
+	test("SEC-39: validateInProject refuses an output.dir with a drive or a root", async () => {
+		const { root } = await scratch();
+		for (const dir of ["D:\\evil", "D:/evil", "D:evil", "\\outside"]) {
+			const { issues } = await validateInProject({ root } as never, {
+				version: 1,
+				output: { dir },
+			});
+			expect(codes(issues), dir).toContain("invalid_output@output.dir");
+		}
+	});
+});
+
+describe("SEC-41: the tsc afora_generate runs", () => {
+	/** A project without TypeScript, a tsc in a parent's node_modules/.bin and one on the PATH. */
+	async function decoys(): Promise<{ root: string; ran: string[] }> {
+		const base = await realpath(
+			await mkdtemp(join(tmpdir(), "afora-mcp-tsc-")),
+		);
+		dirs.push(base);
+		const root = join(base, "project");
+		await mkdir(root);
+		await writeFile(join(root, "tsconfig.json"), "{}");
+		const ran: string[] = [];
+		for (const dir of [join(base, "node_modules/.bin"), join(base, "bin")]) {
+			await mkdir(dir, { recursive: true });
+			const marker = join(dir, "ran");
+			ran.push(marker);
+			const tsc = join(dir, "tsc");
+			await writeFile(tsc, `#!/bin/sh\ntouch "${marker}"\n`);
+			await chmod(tsc, 0o755);
+		}
+		return { root, ran };
+	}
+
+	test("SEC-41: without TypeScript in the project, no other tsc runs", async () => {
+		const { root, ran } = await decoys();
+		const path = process.env.PATH;
+		process.env.PATH = `${dirname(ran[1] as string)}:${path}`;
+		try {
+			const result = await typecheck(root, []);
+			expect(result.ran).toBe(false);
+			expect(result.ran === false && result.reason).toContain(
+				"TypeScript is not installed",
+			);
+		} finally {
+			process.env.PATH = path;
+		}
+		for (const marker of ran) expect(existsSync(marker), marker).toBe(false);
+	}, 60_000);
+
+	test("SEC-41: the TypeScript of the project runs", async () => {
+		const { root, ran } = await decoys();
+		await mkdir(join(root, "node_modules"));
+		await symlink(
+			join(import.meta.dir, "../../../node_modules/typescript"),
+			join(root, "node_modules/typescript"),
+		);
+		await mkdir(join(root, "src"));
+		await writeFile(join(root, "src/a.ts"), "export const a: number = 'x';\n");
+		await writeFile(
+			join(root, "tsconfig.json"),
+			JSON.stringify({
+				compilerOptions: { strict: true, types: [] },
+				include: ["src"],
+			}),
+		);
+		const result = await typecheck(root, ["src/a.ts"]);
+		expect(result.ran).toBe(true);
+		expect(result.ran && result.diagnostics.map((d) => d.code)).toEqual([
+			"TS2322",
+		]);
+		for (const marker of ran) expect(existsSync(marker), marker).toBe(false);
+	}, 120_000);
 });

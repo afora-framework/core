@@ -26,7 +26,7 @@ Any MCP client that starts a stdio server takes the same command:
 }
 ```
 
-The server runs on Node (`npx @afora/mcp`) as well. Importing your TypeScript needs Bun on the `PATH`: `afora_extract` does it, and `afora_project` when it is given an application (`--app` or `app`). `afora_generate` type-checks with `bunx --no-install tsc`, or `npx --no-install tsc` when there is no Bun. The flags are in the [command line reference](cli.md#afora-mcp).
+The server runs on Node (`npx @afora/mcp`) as well. Importing your TypeScript needs Bun on the `PATH`: `afora_extract` does it, and `afora_project` when it is given an application (`--app` or `app`). `afora_generate` type-checks with the TypeScript installed in the project (`node_modules/typescript`), run by the server's runtime; without it the result says so and nothing is type-checked. The flags are in the [command line reference](cli.md#afora-mcp).
 
 ## 2. Ask for a change
 
