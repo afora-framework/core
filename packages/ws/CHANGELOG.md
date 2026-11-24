@@ -1,5 +1,9 @@
 # Changelog
 
+## 27.0.0-rc.6 — 2026-11-24
+
+A candidate of 27.0.0, with no changes since 27.0.0-rc.5. See the [root CHANGELOG](../../CHANGELOG.md).
+
 ## 27.0.0-rc.5 — 2026-11-24
 
 ### Fixed
