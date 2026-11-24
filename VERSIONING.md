@@ -156,9 +156,20 @@ npm install @afora/core@release-27.0   # the newest patch of the 27.0 line
 A stable major or minor can go through release candidates, and the first stable release, 27.0.0, does. A version such as `27.0.0-rc.1` is published to the `rc` dist-tag and marked as a prerelease on GitHub; `latest` does not move.
 
 1. `27.0.0-rc.1` is published once the blocking issues of the 27.0 milestone are closed.
-2. During the rc, only fixes land. No new exports, and no change to the contract, except to fix a blocking issue. Each fix that needs a new build ships as the next candidate (`27.0.0-rc.2`, and so on).
-3. The rc stays open for at least two weeks after the last candidate.
-4. It ends when no blocking issue is open. Then `27.0.0` is published to `latest`.
+2. During the rc, only fixes land. No new exports, and no change to the contract, except to fix a blocking issue.
+3. Only a [blocking](#what-blocks-a-release) fix makes a new candidate (`27.0.0-rc.2`, and so on). Any other fix is merged into `dev` as usual and ships in the first patch (`27.0.1`), or rides along with the next candidate if a blocking fix makes one.
+4. The rc stays open for at least two weeks after the last candidate. A fix that does not block does not restart that time.
+5. It ends when no blocking issue is open. Then `27.0.0` is published to `latest`, with the code of the last candidate: it is prepared from `main` (the version and the dated changelog only), not from `dev`.
+
+### What blocks a release
+
+Finding more issues does not, by itself, keep the rc open. An issue or a finding blocks the stable release only when one of these holds:
+
+- Its fix is a change listed under [Breaking changes](#breaking-changes). After the stable release it would have to wait for the next year's major, so it lands before.
+- It is a vulnerability of high or critical severity with no documented mitigation.
+- It loses or corrupts data stored through afora.
+
+Anything else does not block: a vulnerability of medium or low severity, a bug with a workaround, a fix of performance or of the docs. It goes to the milestone of the first patch (`27.0.1`) and ships after the stable release. A security fix there follows the same steps as one in a candidate: a `SEC-<n>` test, a draft advisory, published with the patch.
 
 Later majors can use the same flow (`28.0.0-rc.1`).
 

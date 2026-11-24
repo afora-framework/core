@@ -71,7 +71,7 @@ export function redactMessage(message: string): string {
 	);
 }
 
-/** Parses the output of `tsc --noEmit` (default, non-pretty format). */
+/** Parses the output of `tsc --noEmit --pretty false`. */
 export function parseDiagnostics(
 	output: string,
 ): (Diagnostic & { readonly path: string })[] {
@@ -147,10 +147,16 @@ export async function typecheck(
 		};
 	}
 	const mine = new Set(files.map((file) => resolve(root, file)));
-	const result = await run(process.execPath, [tsc, "--noEmit", "-p", root], {
-		cwd: root,
-		timeoutMs: 180_000,
-	});
+	// `--pretty false` whatever the tsconfig says: pretty output (code frames
+	// of any file of the project) is not what parseDiagnostics reads.
+	const result = await run(
+		process.execPath,
+		[tsc, "--noEmit", "--pretty", "false", "-p", root],
+		{
+			cwd: root,
+			timeoutMs: 180_000,
+		},
+	);
 	if (result.missing) {
 		return { ran: false, reason: "tsc could not be started." };
 	}
@@ -161,7 +167,8 @@ export async function typecheck(
 	if (all.length === 0 && result.code !== 0) {
 		return {
 			ran: false,
-			reason: `tsc failed without diagnostics: ${redactMessage(result.output.trim().slice(0, 500))}`,
+			// Never what tsc printed: it can quote any file of the project.
+			reason: `tsc exited with code ${result.code} without a diagnostic; run tsc in the project to see why.`,
 		};
 	}
 	const diagnostics = all

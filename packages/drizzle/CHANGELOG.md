@@ -1,5 +1,11 @@
 # Changelog
 
+## 27.0.0-rc.6 — 2026-11-24
+
+### Security
+
+- **Breaking.** A missing value (`undefined` or `null`) in `where` matches no row, also inside `in`, instead of being read as `IS NULL`. See the [root CHANGELOG](../../CHANGELOG.md). (SEC-46)
+
 ## 27.0.0-rc.5 — 2026-11-24
 
 A candidate of 27.0.0, with no changes since 27.0.0-rc.4. See the [root CHANGELOG](../../CHANGELOG.md).

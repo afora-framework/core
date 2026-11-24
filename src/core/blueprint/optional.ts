@@ -11,6 +11,7 @@ import { fieldOf } from "./callable";
 import { isBlueprint } from "./is-blueprint";
 import { isBlueprintList, standardListOf } from "./list";
 import { isOptionalRecord, isRecordClass } from "./record-field";
+import { deriveBlueprint } from "./sources";
 import type {
 	AnyBlueprint,
 	AnyBlueprintList,
@@ -88,6 +89,8 @@ export function optionalOf(given: BlueprintField): unknown {
 				value === undefined ? { value } : field.safeParse(value),
 		};
 		Object.freeze(withStandard(optional, (value) => optional.safeParse(value)));
+		// What the records of `field` declare follows the copy.
+		deriveBlueprint(optional, [field]);
 		cache.set(field, optional);
 		return optional;
 	}

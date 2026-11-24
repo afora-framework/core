@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+	coerceTextValues,
 	compileRoutes,
 	type HttpRequest,
 	outputValueOf,
 	problemOf,
 	statusOf,
 } from "../../adapters";
+import { sliceOf } from "../../experimental";
 import {
 	blueprintOf,
 	commandOf,
@@ -16,10 +18,13 @@ import {
 	listOf,
 	MASK,
 	openapi,
+	operationOf,
+	optionalOf,
 	outputOf,
 	Password,
 	type Principal,
 	Route,
+	transformOf,
 	useCaseOf,
 	variantOf,
 	withStatus,
@@ -700,5 +705,540 @@ describe("SEC-34: the OpenAPI document marks write-only every key a response mas
 		const [account, other] = nested.kind.oneOf;
 		expect(account.properties.token.writeOnly).toBe(true);
 		expect(other.properties.label.writeOnly).toBeUndefined();
+	});
+});
+
+/** What every output sends of `operations`: by `outputValueOf` and over HTTP. */
+async function sentOf(
+	operations: readonly import("./types/output.interface").OperationDescriptor[],
+): Promise<Record<string, { readonly value: unknown; readonly body: string }>> {
+	const table = compileRoutes(
+		operations,
+		{},
+		{ output: { name: "S", statuses: {} } },
+		{ source: "test" },
+	);
+	const request: HttpRequest = {
+		param: () => undefined,
+		query: () => ({}),
+		header: (name) =>
+			name.toLowerCase() === "content-type" ? "application/json" : undefined,
+		text: () => "{}",
+		variable: () => undefined,
+	};
+	const sent: Record<string, { value: unknown; body: string }> = {};
+	for (const route of table.routes) {
+		const { operation } = route;
+		const response = await route.handle(request);
+		expect(response.status).toBe(200);
+		sent[operation.name] = {
+			value: outputValueOf(await operation.invoke({})),
+			body: response.body as string,
+		};
+	}
+	return sent;
+}
+
+/** The response schemas of the OpenAPI document of `useCases`, by operation name. */
+function responseSchemasOf(
+	useCases: Record<string, ReturnType<typeof useCaseOf>>,
+): Record<string, unknown> {
+	const document = outputOf({
+		name: "D",
+		commands: [commandOf({ name: "D", useCases } as never)],
+		pipe: [openapi({ info: { title: "D", version: "1" } })],
+	}).build() as {
+		paths: Record<string, Record<string, unknown>>;
+		components?: { schemas?: Record<string, unknown> };
+	};
+	const schemas: Record<string, unknown> = {};
+	for (const slot of Object.values(document.paths)) {
+		for (const operation of Object.values(slot) as {
+			operationId: string;
+			responses: Record<
+				string,
+				{ content: Record<string, { schema: unknown }> }
+			>;
+		}[]) {
+			schemas[operation.operationId.replace(/^D_/, "")] =
+				operation.responses["200"]?.content["application/json"]?.schema;
+		}
+	}
+	return schemas;
+}
+
+/** Every schema under `schema` that describes `key`, at any depth. */
+// biome-ignore lint/suspicious/noExplicitAny: the document is read as JSON.
+function schemasOfKey(schema: any, key: string): any[] {
+	if (typeof schema !== "object" || schema === null) return [];
+	return Object.entries(schema).flatMap(([name, item]) => [
+		...(name === "properties" && (item as Record<string, unknown>)[key]
+			? [(item as Record<string, unknown>)[key]]
+			: []),
+		...schemasOfKey(item, key),
+	]);
+}
+
+describe("SEC-43: a record's sensitive keys stay masked through optionalOf", () => {
+	const Empty = blueprintOf(() => ({}));
+	const Fields = blueprintOf((ctx) => ({
+		email: ctx.email,
+		token: ctx.string,
+	}));
+	class Account extends entityOf(Fields, { sensitive: ["token"] }) {}
+	const account = new Account({ email: "a@b.co", token: "t0k3n" });
+	const raw = { email: "a@b.co", token: "t0k3n" };
+	const Other = blueprintOf((ctx) => ({ label: ctx.string }));
+	const declare = (name: string, response: unknown, value: () => unknown) =>
+		class extends useCaseOf({ name, blueprint: Empty, response } as never) {
+			override async execute() {
+				return value() as never;
+			}
+		};
+	const useCases = {
+		entity: declare(
+			"entity",
+			blueprintOf(() => ({ me: optionalOf(Account.blueprint) })),
+			() => ({ me: account }),
+		),
+		fields: declare(
+			"fields",
+			blueprintOf(() => ({ me: optionalOf(Fields) })),
+			() => ({ me: raw }),
+		),
+		many: declare(
+			"many",
+			listOf(blueprintOf(() => ({ me: optionalOf(Account.blueprint) }))),
+			() => [{ me: account }],
+		),
+		variant: declare(
+			"variant",
+			blueprintOf(() => ({
+				kind: variantOf("kind", { account: optionalOf(Fields), other: Other }),
+			})),
+			() => ({ kind: { kind: "account", ...raw } }),
+		),
+	};
+	const operations = outputOf({
+		name: "S",
+		commands: [commandOf({ name: "S", useCases })],
+	}).operations;
+
+	test("SEC-43: outputValueOf and HTTP mask them", async () => {
+		const sent = await sentOf(operations);
+		expect(Object.keys(sent).sort()).toEqual(Object.keys(useCases).sort());
+		for (const [name, { value, body }] of Object.entries(sent)) {
+			expect(JSON.stringify(value), name).not.toContain("t0k3n");
+			expect(body, name).not.toContain("t0k3n");
+			expect(body, name).toContain(MASK);
+		}
+	});
+
+	test("SEC-43: the OpenAPI document marks them write-only", () => {
+		const schemas = responseSchemasOf(useCases);
+		for (const name of Object.keys(useCases)) {
+			const tokens = schemasOfKey(schemas[name], "token");
+			expect(tokens.length, name).toBeGreaterThan(0);
+			for (const token of tokens) expect(token.writeOnly, name).toBe(true);
+		}
+	});
+});
+
+describe("SEC-44: a record's sensitive keys stay masked in a joined or sliced blueprint", () => {
+	const Empty = blueprintOf(() => ({}));
+	const Fields = blueprintOf((ctx) => ({
+		email: ctx.email,
+		token: ctx.string,
+	}));
+	class Account extends entityOf(Fields, { sensitive: ["token"] }) {}
+	const raw = { email: "a@b.co", token: "t0k3n" };
+	const Extra = blueprintOf((ctx) => ({ extra: ctx.string }));
+	const declare = (name: string, response: unknown, value: () => unknown) =>
+		class extends useCaseOf({ name, blueprint: Empty, response } as never) {
+			override async execute() {
+				return value() as never;
+			}
+		};
+	const useCases = {
+		joined: declare("joined", Fields.join(Extra), () => ({
+			...raw,
+			extra: "x",
+		})),
+		joinedAfter: declare("joinedAfter", Extra.join(Fields), () => ({
+			...raw,
+			extra: "x",
+		})),
+		sliced: declare(
+			"sliced",
+			sliceOf(Account.blueprint, { email: true, token: true }),
+			() => raw,
+		),
+		nested: declare(
+			"nested",
+			sliceOf(
+				blueprintOf(() => ({ me: Fields, other: Extra })),
+				{ me: { token: true } },
+			),
+			() => ({ me: { token: "t0k3n" } }),
+		),
+	};
+	const operations = outputOf({
+		name: "S",
+		commands: [commandOf({ name: "S", useCases })],
+	}).operations;
+
+	test("SEC-44: outputValueOf and HTTP mask them", async () => {
+		const sent = await sentOf(operations);
+		expect(Object.keys(sent).sort()).toEqual(Object.keys(useCases).sort());
+		for (const [name, { value, body }] of Object.entries(sent)) {
+			expect(JSON.stringify(value), name).not.toContain("t0k3n");
+			expect(body, name).not.toContain("t0k3n");
+			expect(body, name).toContain(MASK);
+		}
+	});
+
+	test("SEC-44: the OpenAPI document marks them write-only", () => {
+		const schemas = responseSchemasOf(useCases);
+		for (const name of Object.keys(useCases)) {
+			const tokens = schemasOfKey(schemas[name], "token");
+			expect(tokens.length, name).toBeGreaterThan(0);
+			for (const token of tokens) expect(token.writeOnly, name).toBe(true);
+		}
+	});
+
+	test("SEC-44: only the keys kept are marked, and the source keeps its own", () => {
+		const Sliced = sliceOf(Account.blueprint, { email: true });
+		const schemas = responseSchemasOf({
+			sliced: declare("sliced", Sliced, () => ({ email: "a@b.co" })),
+			fields: declare("fields", Fields, () => raw),
+		});
+		expect(schemasOfKey(schemas.sliced, "token")).toEqual([]);
+		expect(schemasOfKey(schemas.sliced, "email")[0].writeOnly).toBeUndefined();
+		expect(schemasOfKey(schemas.fields, "token")[0].writeOnly).toBe(true);
+	});
+});
+
+describe("SEC-45: a transform that copies the response leaves it masked", () => {
+	const HASH = Password.demo().value;
+	const Empty = blueprintOf(() => ({}));
+	const Credential = blueprintOf((ctx) => ({
+		email: ctx.email,
+		password: ctx.password,
+	}));
+	class Me extends useCaseOf({
+		name: "Me",
+		blueprint: Empty,
+		response: Credential,
+	}) {
+		override async execute() {
+			return { email: "a@b.co", password: HASH };
+		}
+	}
+	class All extends useCaseOf({
+		name: "All",
+		blueprint: Empty,
+		response: listOf(Credential),
+	}) {
+		override async execute() {
+			return [{ email: "a@b.co", password: HASH }];
+		}
+	}
+	const copying = (copy: (value: unknown) => unknown) =>
+		transformOf({
+			name: "copying",
+			apply: (operation) =>
+				operationOf(operation, {
+					invoke: async (input, call) =>
+						copy(await operation.invoke(input, call)),
+				}),
+		})();
+
+	for (const [name, copy] of [
+		["structuredClone", (value: unknown) => structuredClone(value)],
+		[
+			"spread",
+			(value: unknown) =>
+				Array.isArray(value)
+					? value.map((item) => ({ ...item }))
+					: { ...(value as object) },
+		],
+	] as const) {
+		test(`SEC-45: a copy by ${name} is masked by the declared response`, async () => {
+			const output = outputOf({
+				name: "S",
+				commands: [commandOf({ name: "S", useCases: { me: Me, all: All } })],
+				pipe: [copying(copy)],
+			});
+			const sent = await sentOf(output.operations);
+			expect(Object.keys(sent).sort()).toEqual(["all", "me"]);
+			for (const { value, body } of Object.values(sent)) {
+				expect(JSON.stringify(value)).not.toContain(HASH);
+				expect(body).not.toContain(HASH);
+				expect(body).toContain(MASK);
+			}
+		});
+	}
+});
+
+describe("SEC-48: a route reads a body only as JSON", () => {
+	let ran = 0;
+	class Send extends useCaseOf({
+		name: "Send",
+		blueprint: blueprintOf((ctx) => ({
+			to: ctx.string,
+			note: ctx.optional.string,
+		})),
+		response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+		route: { method: "post", path: "/send" },
+	}) {
+		override async execute() {
+			ran++;
+			return { ok: true };
+		}
+	}
+	class Ping extends useCaseOf({
+		name: "Ping",
+		blueprint: blueprintOf((ctx) => ({ note: ctx.optional.string })),
+		response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+		route: { method: "post", path: "/ping" },
+	}) {
+		override async execute() {
+			ran++;
+			return { ok: true };
+		}
+	}
+	const Mailing = commandOf({
+		name: "Mailing",
+		useCases: { send: Send, ping: Ping },
+	});
+	const table = compileRoutes(
+		outputOf({ name: "M", commands: [Mailing] }).operations,
+		{},
+		{ output: { name: "M", statuses: {} } },
+		{ source: "test" },
+	);
+	const route = (id: string) => {
+		const found = table.routes.find(({ operation }) => operation.id === id);
+		if (!found) throw new Error(id);
+		return found;
+	};
+	const request = (type: string | undefined, body: string): HttpRequest => ({
+		param: () => undefined,
+		query: () => ({}),
+		header: (name) =>
+			name.toLowerCase() === "content-type" ? type : undefined,
+		text: () => body,
+		variable: () => undefined,
+	});
+	const JSON_BODY = JSON.stringify({ to: "a", note: "b" });
+
+	test("SEC-48: a body of another media type, or of none, is a 415", async () => {
+		ran = 0;
+		for (const type of [
+			"text/plain",
+			"text/plain;charset=UTF-8",
+			"application/x-www-form-urlencoded",
+			"multipart/form-data; boundary=x",
+			"application/jsonx",
+			"text/json",
+			undefined,
+		]) {
+			const sent = await route("Mailing.send").handle(request(type, JSON_BODY));
+			expect(sent.status).toBe(415);
+			expect(JSON.parse(sent.body as string).title).toBe(
+				"UnsupportedMediaType",
+			);
+		}
+		expect(ran).toBe(0);
+	});
+
+	test("SEC-48: an empty body is a 415 under another media type", async () => {
+		ran = 0;
+		for (const type of ["text/plain", "application/x-www-form-urlencoded"]) {
+			const sent = await route("Mailing.ping").handle(request(type, ""));
+			expect(sent.status).toBe(415);
+		}
+		expect(ran).toBe(0);
+	});
+
+	test("SEC-48: JSON and +json bodies are read, and no body at all is {}", async () => {
+		ran = 0;
+		for (const type of [
+			"application/json",
+			"application/json; charset=utf-8",
+			"Application/JSON",
+			"application/merge-patch+json",
+			"application/vnd.api+json; charset=utf-8",
+		]) {
+			const sent = await route("Mailing.send").handle(request(type, JSON_BODY));
+			expect(sent.status).toBe(200);
+		}
+		expect(
+			(await route("Mailing.ping").handle(request(undefined, ""))).status,
+		).toBe(200);
+		expect(ran).toBe(6);
+	});
+});
+
+describe("SEC-49: a key named like an Object.prototype member is read as any other", () => {
+	class Find extends useCaseOf({
+		name: "Find",
+		blueprint: blueprintOf((ctx) => ({
+			q: ctx.string,
+			page: ctx.optional.integer,
+		})),
+		response: blueprintOf((ctx) => ({ q: ctx.string })),
+		route: { method: "get", path: "/find" },
+	}) {
+		override async execute() {
+			return { q: this.input.q };
+		}
+	}
+	class Attach extends useCaseOf({
+		name: "Attach",
+		blueprint: blueprintOf((ctx) => ({ file: ctx.file })),
+		response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+		route: { method: "post", path: "/attach" },
+	}) {
+		override async execute() {
+			return { ok: true };
+		}
+	}
+	const Search = commandOf({
+		name: "Search",
+		useCases: { find: Find, attach: Attach },
+	});
+	const operations = outputOf({ name: "Q", commands: [Search] }).operations;
+	const table = compileRoutes(
+		operations,
+		{},
+		{ output: { name: "Q", statuses: {} } },
+		{ source: "test" },
+	);
+	const route = (id: string) => {
+		const found = table.routes.find(({ operation }) => operation.id === id);
+		if (!found) throw new Error(id);
+		return found;
+	};
+	const NAMES = [
+		"constructor",
+		"toString",
+		"hasOwnProperty",
+		"valueOf",
+		"__proto__",
+	];
+
+	test("SEC-49: coerceTextValues reads such a key as text", () => {
+		const input = operations.find(({ id }) => id === "Search.find")?.input;
+		if (!input) throw new Error("Search.find");
+		for (const name of NAMES) {
+			const out = coerceTextValues(input, { q: "a", page: "2", [name]: "1" });
+			expect(out.q).toBe("a");
+			expect(out.page).toBe(2);
+			if (name !== "__proto__") expect(out[name]).toBe("1");
+		}
+	});
+
+	test("SEC-49: over HTTP, such a query key is a 400, not a 500", async () => {
+		for (const name of NAMES) {
+			const sent = await route("Search.find").handle({
+				param: () => undefined,
+				query: () => ({ q: "a", [name]: "1" }),
+				header: () => undefined,
+				text: () => "",
+				variable: () => undefined,
+			});
+			expect(sent.status).toBeLessThan(500);
+		}
+	});
+
+	test("SEC-49: a file part of such a type is read as a file", async () => {
+		for (const name of NAMES) {
+			const form = new FormData();
+			form.append("file", new File(["abc"], "a.bin", { type: name }));
+			const sent = await route("Search.attach").handle({
+				param: () => undefined,
+				query: () => ({}),
+				header: (header) =>
+					header.toLowerCase() === "content-type"
+						? "multipart/form-data; boundary=x"
+						: undefined,
+				text: () => "",
+				form: async () => form,
+				variable: () => undefined,
+			});
+			expect(sent.status).toBe(200);
+		}
+	});
+});
+
+describe("SEC-50: a problem lists a bounded number of issues", () => {
+	const MAX = 100;
+	class Tag extends useCaseOf({
+		name: "Tag",
+		blueprint: blueprintOf((ctx) => ({ tags: listOf(ctx.string) })),
+		response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+		route: { method: "post", path: "/tags" },
+	}) {
+		override async execute() {
+			return { ok: true };
+		}
+	}
+	const Tags = commandOf({ name: "Tags", useCases: { tag: Tag } });
+	const invalidInput = (count: number) =>
+		new Exception({
+			layer: "use-case" as never,
+			name: "InvalidUseCaseInput",
+			source: "Tag",
+			message: "Invalid UseCase input.",
+			details: {
+				issues: Array.from({ length: count }, (_, index) => ({
+					path: ["tags", index],
+					code: "invalid_type",
+					message: "must be string",
+					source: "string",
+				})),
+			},
+		});
+
+	test("SEC-50: problemOf keeps the first issues, up to the limit", () => {
+		const problem = problemOf(invalidInput(MAX * 10), { status: 400 });
+		expect(problem.issues).toHaveLength(MAX);
+		expect(problem.issues?.[0]?.path).toEqual(["tags", 0]);
+		expect(problem.issues?.at(-1)?.path).toEqual(["tags", MAX - 1]);
+	});
+
+	test("SEC-50: a problem under the limit keeps every issue", () => {
+		const problem = problemOf(invalidInput(MAX - 1), { status: 400 });
+		expect(problem.issues).toHaveLength(MAX - 1);
+	});
+
+	test("SEC-50: over HTTP, a list of invalid items answers a bounded problem", async () => {
+		const table = compileRoutes(
+			outputOf({ name: "T", commands: [Tags] }).operations,
+			{},
+			{ output: { name: "T", statuses: {} } },
+			{ source: "test" },
+		);
+		const route = table.routes.find(
+			({ operation }) => operation.id === "Tags.tag",
+		);
+		if (!route) throw new Error("route");
+		const items = 20_000;
+		const body = JSON.stringify({
+			tags: Array.from({ length: items }, () => 0),
+		});
+		const result = await route.handle({
+			param: () => undefined,
+			query: () => ({}),
+			header: (name) =>
+				name.toLowerCase() === "content-type" ? "application/json" : undefined,
+			text: () => body,
+			variable: () => undefined,
+		});
+		expect(result.status).toBe(400);
+		const problem = JSON.parse(result.body as string);
+		expect(problem.issues).toHaveLength(MAX);
+		expect((result.body as string).length).toBeLessThan(body.length);
 	});
 });

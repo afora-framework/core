@@ -1,4 +1,5 @@
 import { Exception } from "../exception/exception";
+import { MAX_ISSUES } from "../parse/parse";
 import type { Issue } from "../parse/types/parse.interface";
 import { responseJsonOf } from "../use-case/response";
 import { takeStatus } from "../use-case/status";
@@ -12,8 +13,9 @@ const INTERNAL = "Internal error.";
 
 /**
  * An RFC 9457 problem for `error`. `issues` (`path`, `code`, `message`; no
- * values or causes) is present only for a 400, `trace` only with `debug`,
- * and the `detail` of a 5xx is `"Internal error."` unless `debug` is set or
+ * values or causes; the first `MAX_ISSUES` at most) is present only for a
+ * 400, `trace` only with `debug`, and the `detail` of a 5xx is
+ * `"Internal error."` unless `debug` is set or
  * the output declares the exception (its name in `statuses`, or a class of
  * `operation.errors`, except afora's internal ones), so internal messages do not leak.
  * An internal exception (`InvalidUseCaseResponse`, `InvalidUseCaseStep`, ...)
@@ -33,7 +35,7 @@ export function problemOf(error: unknown, options: ProblemOptions): Problem {
 		?.issues;
 	const issues =
 		status === 400 && !masked && Array.isArray(rawIssues)
-			? (rawIssues as readonly Issue[]).map((issue) => ({
+			? (rawIssues as readonly Issue[]).slice(0, MAX_ISSUES).map((issue) => ({
 					path: [...issue.path],
 					code: issue.code as string,
 					message: issue.message,

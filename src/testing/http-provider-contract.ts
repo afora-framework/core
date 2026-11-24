@@ -432,6 +432,31 @@ export function httpProviderContract<Server>(
 			});
 		});
 
+		it("SEC-48: reads a body only as JSON, a +json type included", async () => {
+			await withServer({}, async (send) => {
+				const body = JSON.stringify({ title: "T" });
+				for (const type of [
+					"text/plain",
+					"text/plain;charset=UTF-8",
+					"application/x-www-form-urlencoded",
+				]) {
+					const refused = await send("PUT", "/items/p?page=1", {
+						headers: { "content-type": type },
+						body,
+					});
+					expect(refused.status).toBe(415);
+					expect((refused.json as { title: string }).title).toBe(
+						"UnsupportedMediaType",
+					);
+				}
+				const read = await send("PUT", "/items/p?page=1", {
+					headers: { "content-type": "application/merge-patch+json" },
+					body,
+				});
+				expect(read.status).toBe(201);
+			});
+		});
+
 		it("gives errors the status of the output, and hides internal ones", async () => {
 			await withServer({}, async (send) => {
 				const rejected = await send("PUT", "/items/p?page=1", {
@@ -674,13 +699,13 @@ export function httpProviderContract<Server>(
 					);
 				}
 
-				// A route without a file reads JSON: a multipart body is invalid.
+				// A route without a file reads JSON only: a multipart body is a 415.
 				const notJson = await send("POST", "/enter", {
 					body: form([["title", "T"]]),
 				});
-				expect(notJson.status).toBe(400);
+				expect(notJson.status).toBe(415);
 				expect((notJson.json as { title: string }).title).toBe(
-					"InvalidRequestBody",
+					"UnsupportedMediaType",
 				);
 
 				// JSON still works for the other keys; the file is then missing.

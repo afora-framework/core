@@ -1,6 +1,7 @@
 import { isCommand } from "../command/command";
 import type { AnyCommand } from "../command/types/command.interface";
 import { Kind } from "../symbols/kind";
+import { respondedWith } from "../use-case/response";
 import { type CallOrigin, OriginKey, StatusKey } from "../use-case/scope";
 import { withStatus } from "../use-case/status";
 import type { AnyUseCaseClass } from "../use-case/use-case";
@@ -261,7 +262,26 @@ function transformed(
 					`A transform must return the operation "${operation.id}" or null.`,
 				);
 			}
-			next.push(result);
+			// What a new `invoke` resolves with is masked by the declared
+			// response, even when it is a copy of what the use case gave.
+			const invoke = result.invoke;
+			next.push(
+				invoke === operation.invoke
+					? result
+					: Object.freeze({
+							...result,
+							async invoke(
+								this: unknown,
+								input: unknown,
+								options?: OperationCallOptions,
+							) {
+								return respondedWith(
+									operation.response,
+									await invoke.call(this, input, options),
+								);
+							},
+						}),
+			);
 		}
 		current = next;
 	}

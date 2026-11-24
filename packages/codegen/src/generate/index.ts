@@ -109,6 +109,15 @@ function keyDoc(key: string): string {
 	return isIdentifier(key) ? key : JSON.stringify(key);
 }
 
+/**
+ * Whether `{ key }` is a property `key: key`: only for an identifier (the
+ * local of an import), never for a key that prints as the same token as its
+ * value (`"200": 200`, `true: true`, `null: null`, `'"a"': "a"`).
+ */
+function isShorthand(key: string): boolean {
+	return isIdentifier(key) && !["true", "false", "null"].includes(key);
+}
+
 /** A JSON value as a TypeScript literal: flat when it fits, broken when it does not. */
 function literal(value: Json, onImport?: (reference: string) => string): Doc {
 	if (onImport && isImportObject(value))
@@ -155,7 +164,9 @@ function objectDoc(
 				join(
 					[",", line],
 					props.map(([key, value]) =>
-						shorthand && value === key ? key : [keyDoc(key), ": ", value],
+						shorthand && value === key && isShorthand(key)
+							? key
+							: [keyDoc(key), ": ", value],
 					),
 				),
 			]),

@@ -375,6 +375,32 @@ export function providerContract(
 				).toBe(undefined);
 			});
 
+			it("SEC-46: a missing value (undefined or null) matches no row, also inside in", async () => {
+				const { provider, context, seed } = await fixture();
+				const [a, b] = [row({ age: 20 }), row({ name: "Bia" })];
+				await seed(a, b);
+				for (const missing of [undefined, null]) {
+					const where = { age: missing };
+					expect(ids(await provider.findMany(context, { where }))).toEqual([]);
+					expect(await provider.findOne(context, { where })).toBe(undefined);
+					expect(await provider.count(context, { where })).toBe(0);
+					expect(
+						ids(
+							await provider.findMany(context, {
+								where: { age: { in: [missing] } },
+							}),
+						),
+					).toEqual([]);
+					expect(
+						ids(
+							await provider.findMany(context, {
+								where: { age: { in: [missing, 20] } },
+							}),
+						),
+					).toEqual([a.id]);
+				}
+			});
+
 			it("ANDs conditions on several keys", async () => {
 				const { provider, context, seed } = await fixture();
 				const [a, b, c] = [

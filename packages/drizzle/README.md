@@ -113,7 +113,7 @@ await users.findPage({
 
 ## Queries
 
-- `where`: equality (`eq`; `undefined`/`null` is `IS NULL`) and `{ in: [...] }`, ANDed across keys. An empty `in` matches nothing.
+- `where`: equality (`eq`) and `{ in: [...] }`, ANDed across keys. An empty `in` matches nothing, and so does a missing value (`undefined` or `null`, never read as `IS NULL`); one inside `in` is left out of the list.
 - `orderBy`: ascending puts missing values first and descending last (`NULLS FIRST` / `NULLS LAST`). Strings compare by code point: SQLite's default `BINARY` collation does, and on Postgres the provider adds `COLLATE "C"` to `text`, `varchar` and `char` columns. Ties keep insertion order: by `rowid` on SQLite (the table must not be `WITHOUT ROWID`) and, on Postgres, which has no stable physical order, by `id`, which is creation order for UUID v7 ids (the default `Id`).
 - `limit` / `offset`, `withDeleted` (rows with `deletedAt IS NULL` unless true) and `count` (ignores order and pagination) as in the contract.
 - Records that expire (`capabilities.expiry`): for an entity declared with `expires` (`@afora/core` with records that expire), reads add `"<key>" IS NULL OR "<key>" > now`, on `expiresAt` (`expires: { after }`) or the key of `expires: { at }`, unless `withExpired` is true. The table needs that column: a `text` column compares ISO 8601 text, which orders as time when every value is UTC (`toISOString()`, as the entity writes them); a timestamp column compares as a date. Expired rows stay in the table and keep their unique values: purge them with a scheduled `DELETE ... WHERE "expiresAt" <= now()` of your own, and index the column if tables grow.

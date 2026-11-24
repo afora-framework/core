@@ -109,7 +109,7 @@ For a library that validates, normalizes and builds an object, yes. In the commi
 
 **Does an invalid value cost more?**
 
-Validation of invalid input collects every issue, and that path is held to the same budget as the valid one: `bun run bench:guard` fails a change that makes it slower. `safeParse` never throws for invalid input.
+Validation of invalid input collects every issue (up to 100, so a large invalid value costs no more than its first hundred issues), and that path is held to the same budget as the valid one: `bun run bench:guard` fails a change that makes it slower. `safeParse` never throws for invalid input.
 
 ## Stability and versioning
 
