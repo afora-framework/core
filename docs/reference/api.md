@@ -4800,8 +4800,7 @@ routing of the `openapi` sink and of the sinks that serve HTTP.
 *function* · tier: adapters · `import { outputValueOf } from "@afora/core/adapters"`
 
 The JSON a sink sends: `JSON.parse(JSON.stringify(value))`. Every record
-goes through its `toJSON`, and a response declared by a blueprint is
-masked by it, so sensitive values are always masked. A
+goes through its `toJSON`, so sensitive values are always masked. A
 status chosen with `withStatus` is not part of the value: a sink that does
 not speak HTTP ignores it.
 
