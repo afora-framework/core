@@ -369,3 +369,108 @@ describe("SEC-41: the tsc afora_generate runs", () => {
 		for (const marker of ran) expect(existsSync(marker), marker).toBe(false);
 	}, 120_000);
 });
+
+describe("SEC-53: the reason afora_generate gives when tsc fails", () => {
+	/** A project whose TypeScript (5.x) prints pretty output, with an error in a module it did not generate. */
+	async function prettyProject(): Promise<string> {
+		const { root } = await scratch();
+		await mkdir(join(root, "node_modules"));
+		await symlink(
+			join(
+				import.meta.dir,
+				"../../../node_modules/typescript-language-service",
+			),
+			join(root, "node_modules/typescript"),
+		);
+		await writeFile(
+			join(root, "tsconfig.json"),
+			JSON.stringify({
+				compilerOptions: { pretty: true, strict: true, types: [] },
+				include: ["src"],
+			}),
+		);
+		await writeFile(
+			join(root, "src/config.ts"),
+			"export const port: string = 5432; // pass=hunter2\n",
+		);
+		await writeFile(join(root, "src/domain/a.ts"), "export const a = 1;\n");
+		return root;
+	}
+
+	test("SEC-53: a tsconfig with pretty output still gives parsed diagnostics", async () => {
+		const root = await prettyProject();
+		const result = await typecheck(root, ["src/domain/a.ts"]);
+		expect(JSON.stringify(result)).not.toContain("hunter2");
+		expect(result.ran).toBe(true);
+		expect(result.ran && result.ok).toBe(true);
+		expect(result.ran && result.otherErrors).toBe(1);
+	}, 120_000);
+
+	test("SEC-53: a tsc that fails without a diagnostic is not echoed back", async () => {
+		const { root } = await scratch();
+		const ts = join(root, "node_modules/typescript");
+		await mkdir(join(ts, "bin"), { recursive: true });
+		await writeFile(
+			join(ts, "package.json"),
+			JSON.stringify({ name: "typescript", bin: { tsc: "./bin/tsc" } }),
+		);
+		await writeFile(
+			join(ts, "bin/tsc"),
+			"console.log('src/config.ts:1:1 - export const key = sk_live_LEAKME');\nprocess.exit(2);\n",
+		);
+		await writeFile(join(root, "tsconfig.json"), "{}");
+		const result = await typecheck(root, []);
+		expect(result.ran).toBe(false);
+		const reason = result.ran === false ? result.reason : "";
+		expect(reason).toContain("2");
+		for (const text of ["sk_live", "LEAKME", "config.ts", "export"]) {
+			expect(reason).not.toContain(text);
+		}
+	}, 60_000);
+});
+
+describe("SEC-54: a package named by extends", () => {
+	test("SEC-54: a package outside the project's node_modules is not read", async () => {
+		const { root } = await scratch();
+		const parent = join(dirname(root), "node_modules/parentpkg");
+		await mkdir(parent, { recursive: true });
+		await writeFile(join(parent, "package.json"), '{"name":"parentpkg"}');
+		await writeFile(
+			join(parent, "afora.json"),
+			JSON.stringify({
+				version: 1,
+				name: "OUTSIDE-PACKAGE",
+				blueprints: { Outside: { fields: { a: "string" } } },
+			}),
+		);
+		const { issues, extended } = await validateInProject(
+			{ root },
+			{ version: 1, extends: ["parentpkg"] },
+		);
+		expect(codes(issues)).toContain("unresolved_extends@extends");
+		expect(JSON.stringify({ issues, extended })).not.toContain(
+			"OUTSIDE-PACKAGE",
+		);
+	});
+});
+
+describe("SEC-55: the messages of unresolved_extends", () => {
+	test("SEC-55: no message carries the project path or a path outside it", async () => {
+		const { root } = await scratch();
+		const base = dirname(root);
+		const broken = join(base, "node_modules/brokenpkg");
+		await mkdir(broken, { recursive: true });
+		await writeFile(join(broken, "package.json"), '{"name":"brokenpkg"}');
+		await writeFile(join(broken, "afora.json"), "{ not json");
+		for (const ref of ["no-such-package-xyz", "brokenpkg", "./missing.json"]) {
+			const { issues } = await validateInProject(
+				{ root },
+				{ version: 1, extends: [ref] },
+			);
+			const unresolved = issues.find((i) => i.code === "unresolved_extends");
+			expect(unresolved, ref).toBeDefined();
+			expect(JSON.stringify(issues), ref).not.toContain(base);
+			expect(JSON.stringify(issues), ref).not.toContain(tmpdir());
+		}
+	});
+});

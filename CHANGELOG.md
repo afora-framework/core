@@ -20,6 +20,13 @@
 ### Fixed
 
 - A record keeps no object or array nested more than 1000 levels below a key, whatever the schema of the property (`Type.Unknown()` included): `safeParse` gives an `invalid_value` issue at the key (`is nested too deeply`, the limit of `ctx.json`), and the constructor, `set` and `change` throw it, so `toJSON` and `JSON.stringify` output every record on Bun, Node and browsers. Masking a `sensitive` key stays within the stack whatever the key holds. See [Records](docs/records.md). (SEC-52)
+- `@afora/mcp`: `afora_generate` runs `tsc` with `--pretty false`, so a project whose tsconfig sets `pretty` gets its diagnostics parsed and redacted like any other, and a `tsc` that fails without a diagnostic is reported by its exit code, never with what it printed. (SEC-53)
+- **Breaking.** `@afora/codegen` and `@afora/mcp`: with a project root (`resolveExtended(..., { root })`, so every `extends` `@afora/mcp` reads), a package named by `extends` is looked up in the `node_modules` of the project only, never in a parent directory, a package cache or the registry, and its spec, with what that spec extends, must really be inside `<root>/node_modules`; otherwise the issue is `unresolved_extends`. `loadSpec` (the CLI) resolves a package as before. See [the mcp README](packages/mcp/README.md#safety). (SEC-54)
+- `@afora/codegen` and `@afora/mcp`: with a project root, the messages of `resolveExtended`, so `unresolved_extends`, name a file from the root and never by an absolute path. (SEC-55)
+
+### Fixed
+
+- `@afora/codegen`: `generate` writes a key of a free-form JSON value (the options of a stage) as a shorthand property only when it is an identifier, so `{ "200": 200, "true": true }` prints as `{ "200": 200, true: true }` and the generated module parses. (SEC-56)
 
 ## 27.0.0-rc.5 — 2026-11-24
 
