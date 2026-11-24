@@ -15,6 +15,7 @@ import {
 	InvalidUseCaseStep,
 	listOf,
 	MASK,
+	openapi,
 	outputOf,
 	Password,
 	type Principal,
@@ -626,5 +627,78 @@ describe("SEC-19: a response declared by a blueprint is masked in every output",
 		expect(own).toMatchObject({ token: "t0k3n" });
 		const nested = await new Nested({}).execute();
 		expect(nested.items[1]?.password).toBe(HASH);
+	});
+});
+
+describe("SEC-34: the OpenAPI document marks write-only every key a response masks", () => {
+	const Empty = blueprintOf(() => ({}));
+	const AccountFields = blueprintOf((ctx) => ({
+		name: ctx.string,
+		token: ctx.string,
+	}));
+	class Account extends entityOf(AccountFields, { sensitive: ["token"] }) {}
+	const Other = blueprintOf((ctx) => ({ label: ctx.string }));
+	const Nested = blueprintOf(() => ({
+		inner: AccountFields,
+		items: listOf(AccountFields),
+		kind: variantOf("kind", { account: AccountFields, other: Other }),
+	}));
+	const declare = <
+		Response extends Parameters<typeof useCaseOf>[0]["response"],
+	>(
+		name: string,
+		response: Response,
+	) =>
+		class extends useCaseOf({ name, blueprint: Empty, response } as never) {
+			override async execute() {
+				return undefined as never;
+			}
+		};
+	const document = outputOf({
+		name: "D",
+		commands: [
+			commandOf({
+				name: "D",
+				useCases: {
+					own: declare("own", Account.blueprint),
+					fields: declare("fields", AccountFields),
+					many: declare("many", listOf(Account.blueprint)),
+					nested: declare("nested", Nested),
+				},
+			}),
+		],
+		pipe: [openapi({ info: { title: "D", version: "1" } })],
+	}).build();
+	// biome-ignore lint/suspicious/noExplicitAny: the document is read as JSON.
+	const responseOf = (name: string): any => {
+		const operations = Object.values(
+			document.paths as Record<string, Record<string, unknown>>,
+		).flatMap((slot) => Object.values(slot));
+		const operation = operations.find(
+			(found) =>
+				(found as { operationId?: string }).operationId === `D_${name}`,
+		) as {
+			responses: Record<
+				string,
+				{ content: Record<string, { schema: unknown }> }
+			>;
+		};
+		return operation.responses["200"]?.content["application/json"]?.schema;
+	};
+
+	test("SEC-34: a record's sensitive keys are write-only in a blueprint response", () => {
+		expect(responseOf("own").properties.token.writeOnly).toBe(true);
+		expect(responseOf("fields").properties.token.writeOnly).toBe(true);
+		expect(responseOf("own").properties.name.writeOnly).toBeUndefined();
+		expect(responseOf("many").items.properties.token.writeOnly).toBe(true);
+	});
+
+	test("SEC-34: at any depth of blueprints, lists and variants", () => {
+		const nested = responseOf("nested").properties;
+		expect(nested.inner.properties.token.writeOnly).toBe(true);
+		expect(nested.items.items.properties.token.writeOnly).toBe(true);
+		const [account, other] = nested.kind.oneOf;
+		expect(account.properties.token.writeOnly).toBe(true);
+		expect(other.properties.label.writeOnly).toBeUndefined();
 	});
 });

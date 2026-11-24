@@ -11,6 +11,7 @@ import { isBlueprintVariant } from "../blueprint/variant";
 import { identityKeysOf } from "../entity/abstract-entity";
 import { isEntityClass } from "../entity/entity";
 import { isProperty } from "../property/is-property";
+import { sensitiveKeysOf } from "../record/mask";
 import { recordNameOf } from "../record/name";
 import { rawTypeOf } from "../schema/schema";
 import { InvalidOpenAPIModel } from "./exceptions";
@@ -43,6 +44,12 @@ export interface Scope {
 	 * the walk is done, by `refsToDefs`).
 	 */
 	readonly defs?: Map<AnyRecordClass | string, Definition>;
+	/**
+	 * Whether the value is sent masked as a use case response is: a blueprint
+	 * of a record, outside it, has the keys the record declares `sensitive`
+	 * write-only, at any depth of blueprints, lists and variants.
+	 */
+	readonly masked?: boolean;
 }
 
 /** Keys a record marks on its own: sensitive ones, and the identity of an entity. */
@@ -58,6 +65,16 @@ export interface Definition {
 }
 
 const NO_MARKS: Marks = { writeOnly: [], readOnly: [] };
+
+/**
+ * The marks of a blueprint outside its records: the keys they declare
+ * `sensitive` are write-only, as a value of it is sent with them masked.
+ */
+function blueprintMarksOf(blueprint: object, scope: Scope): Marks {
+	if (!scope.masked) return NO_MARKS;
+	const writeOnly = sensitiveKeysOf(blueprint);
+	return writeOnly.length === 0 ? NO_MARKS : { writeOnly, readOnly: [] };
+}
 
 /** Whether `value` is any blueprint field. */
 export function isField(value: unknown): value is BlueprintField {
@@ -136,7 +153,9 @@ export function recordSchemaOf(record: AnyRecordClass, scope: Scope): Schema {
 				readonly options?: { readonly sensitive?: readonly string[] };
 			}
 		).options ?? {};
-	return objectOf(record.blueprint.properties, scope, {
+	// A record is sent by its `toJSON`, masked by its own options only.
+	const own = scope.masked ? { ...scope, masked: false } : scope;
+	return objectOf(record.blueprint.properties, own, {
 		writeOnly: sensitive,
 		readOnly: isEntityClass(record) ? identityKeysOf(record) : [],
 	});
@@ -253,7 +272,9 @@ export function schemaOf(field: BlueprintField, scope: Scope): Schema {
 			...(maxItems === undefined ? {} : { maxItems }),
 		};
 	}
-	if (isBlueprint(field)) return objectOf(field.properties, scope, NO_MARKS);
+	if (isBlueprint(field)) {
+		return objectOf(field.properties, scope, blueprintMarksOf(field, scope));
+	}
 	if (isBlueprintVariant(field)) {
 		// One object per variant, with the key first as its name, and the key
 		// declared as what tells them apart.
@@ -264,7 +285,11 @@ export function schemaOf(field: BlueprintField, scope: Scope): Schema {
 				const object = (
 					isRecordClass(variant)
 						? recordSchemaOf(variant, scope)
-						: objectOf(variant.properties, scope, NO_MARKS)
+						: objectOf(
+								variant.properties,
+								scope,
+								blueprintMarksOf(variant, scope),
+							)
 				) as {
 					readonly properties: Record<string, Schema>;
 					readonly required?: readonly string[];

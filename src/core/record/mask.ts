@@ -33,6 +33,15 @@ export function markSensitiveKeys(
 }
 
 /**
+ * The keys the records of `blueprint` declare `sensitive`, which a value of
+ * it is masked by outside them (none when no record is of it).
+ * @internal
+ */
+export function sensitiveKeysOf(blueprint: object): readonly string[] {
+	return sensitiveByBlueprint.get(blueprint) ?? [];
+}
+
+/**
  * `value` with every leaf, at any depth, replaced by `MASK`: strings, numbers,
  * booleans and bigints; `null` and `undefined` as is. A record is masked by
  * its `toJSON`.

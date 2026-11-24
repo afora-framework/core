@@ -13,11 +13,13 @@
 
 ### Fixed
 
+- The OpenAPI document of an output marks `writeOnly` every key a use case response is sent masked by: where the response is a record's blueprint (`response: Account.blueprint`), the keys the record declares `sensitive`, at any depth of blueprints, lists and variants, as well as every `sensitive` property. See [Outputs](docs/outputs.md). (SEC-34)
 - `findBy<Key>` and `findManyBy<Key>` take one value: `{ in: [...] }` throws `InvalidRepositoryQuery` instead of being read as a membership, which only the queries (`findMany`, `exists`, `findPage`, `count`) take. (SEC-21)
 - `PlainPassword` and `Password.hash` apply the same password rules to a value with line breaks: the schema pattern of `PlainPassword` looks for each required character across the whole value, as `Password.hash` does.
 - `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: they give an issue at the property's path. (SEC-27)
 - `jsonOf` checks the depth of a value (1000 at most, `is nested too deeply`) before its schema walks it, for a recursive schema too, as [Properties](docs/properties.md#json) says. (SEC-28)
 - `SchemaProperty` (`ctx.schema`) rejects a schema nested more than 128 JSON levels deep, with an `is nested too deeply` issue at its path, in `safeParse`, the constructor and `deserialize`, so a schema it holds can always be checked against quickly, on Bun, Node and browsers. See [Standard properties](docs/std-properties.md#json-and-schemas). (SEC-29)
+- `new SchemaProperty(value)` checks the depth of `value` before its shape, so a schema nested far deeper than the limit throws `InvalidPropertyValue` (`is nested too deeply`), as `safeParse` and `deserialize` give. (SEC-35)
 - `@afora/ws`: a session holds at most 1000 topics. Past the limit a new subscription is a 403 `WsTopicForbidden`, the answer to a topic that is not allowed; a topic the session already holds does not count twice, and unsubscribing frees a place. See [the ws README](packages/ws/README.md#protocol). (SEC-30)
 - `jwtOf`: a scope is a scope token (RFC 6749): `sign` rejects with `InvalidJwtOptions` a scope that is empty or holds a space or a control character, so the scopes a token is verified with are the ones it was signed with. The option `token` of `login` and `refresh` throws `UseCaseUnavailable` for such a fixed scope, and `login` gives no token to an entity that holds one. See [Access](docs/auth.md#tokens-and-sessions). (SEC-23)
 - `jwtOf`: `sign` leaves out of the token a claim named like a registered one (`sub`, `scope`, `iat`, `exp`, `nbf`, `iss`, `aud`, `use`), so `issuer`, `audience` and `use` come only from the options; the option `token.claims` of `login` and `refresh` throws `UseCaseUnavailable` for such a name. (SEC-24)
@@ -30,6 +32,7 @@
 
 ### Documentation
 
+- [Outputs](docs/outputs.md) says that a key a route sends with `setCookie` keeps its real value in the cookie (masking applies to the body), and that a blueprint shared by several records masks the `sensitive` keys of all of them in a response; [Standard use cases](docs/std-use-cases.md) describes at `register` the declaration check on the keys a token is made from.
 - [Blueprints](docs/blueprints.md#the-type-of-a-value) shows how to get the type of a blueprint's value: `StandardSchemaV1.InferOutput<typeof Task>`, and `InferInput` for what it accepts. `BlueprintValue` takes a collection of properties, not a blueprint.
 
 ## 27.0.0-rc.4 — 2026-11-16

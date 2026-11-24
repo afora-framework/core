@@ -61,3 +61,30 @@ describe("SEC-29: depth of a schema held as a value", () => {
 		}
 	});
 });
+
+describe("SEC-35: the constructor of SchemaProperty checks the depth first", () => {
+	test("SEC-35: a schema nested far deeper than the limit throws InvalidPropertyValue", () => {
+		for (const shape of [
+			nestedItems(20000),
+			JSON.parse(`${'{"items":'.repeat(20000)}{}${"}".repeat(20000)}`),
+		]) {
+			expect(() => new SchemaProperty(shape as never)).toThrow(
+				InvalidPropertyValue,
+			);
+			expect(() => new SchemaProperty(shape as never)).toThrow(
+				"is nested too deeply",
+			);
+		}
+	});
+
+	test("SEC-35: a value that is not a schema is still rejected", () => {
+		for (const value of ["text", 1, null, [], true]) {
+			expect(() => new SchemaProperty(value as never)).toThrow(
+				InvalidPropertyValue,
+			);
+		}
+		expect(new SchemaProperty({ type: "string" } as never).match("a")).toBe(
+			true,
+		);
+	});
+});
