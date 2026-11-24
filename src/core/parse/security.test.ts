@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import {
 	blueprintOf,
 	jsonOf,
+	propertyOf,
 	ReservedBlueprintKey,
 	recordOf,
 } from "../../index";
@@ -269,5 +270,38 @@ describe("SEC-16: prototype keys of a blueprint", () => {
 			JSON.parse('{"__proto__":{"isAdmin":true},"name":"x"}'),
 		);
 		expect(result.issues?.[0]?.code).toBe("undeclared_key");
+	});
+});
+
+describe("SEC-27: values too deep for a recursive schema", () => {
+	const Node = Type.Cyclic(
+		{ Node: Type.Object({ children: Type.Array(Type.Ref("Node")) }) },
+		"Node",
+	);
+	const Tree = propertyOf({ name: "tree", schema: Node });
+	const Menu = blueprintOf((ctx) => ({ title: ctx.string, tree: Tree }));
+	const deep = (depth: number): unknown =>
+		JSON.parse(
+			`${'{"children":['.repeat(depth)}{"children":[]}${"]}".repeat(depth)}`,
+		);
+
+	test("SEC-27: safeParse and ~standard.validate give issues, after many parses too", async () => {
+		const body = { title: "m", tree: deep(50000) };
+		const first = Menu.safeParse(body);
+		expect(first.issues?.[0]?.path).toEqual(["tree"]);
+		for (let index = 0; index < 20; index++) {
+			expect(
+				Menu.safeParse({ title: "m", tree: { children: [] } }).issues,
+			).toBeUndefined();
+		}
+		const later = Menu.safeParse(body);
+		expect(later.issues?.[0]?.path).toEqual(["tree"]);
+		const validated = await Menu["~standard"].validate(body);
+		expect(
+			(validated as { readonly issues?: readonly unknown[] }).issues?.length,
+		).toBeGreaterThan(0);
+		expect(
+			Menu.safeParse({ title: "m", tree: deep(10) }).issues,
+		).toBeUndefined();
 	});
 });

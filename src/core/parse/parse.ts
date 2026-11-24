@@ -591,6 +591,22 @@ export function collectionParserOf(
 }
 
 /**
+ * Whether `whole` accepts `value`; `false` when the check throws, as it does
+ * for a value too deep for the stack: the paths that take a value it rejects
+ * find its issues, and an error is one of them.
+ */
+function passesWhole(
+	whole: { Check(value: unknown): boolean },
+	value: unknown,
+): boolean {
+	try {
+		return whole.Check(value);
+	} catch {
+		return false;
+	}
+}
+
+/**
  * `parseCollection` for the value `run` is handling at `depth`: the handled
  * value, or `REJECTED` with its issues in `run`. With `tag`, the value is a
  * variant: it also has the key `tag`, which is kept, first, as it is.
@@ -629,7 +645,7 @@ function collectionAt(
 			whole = wholeOf(collection);
 			collection.whole = whole;
 		}
-		if (whole && isPlainObject(value) && whole.Check(value)) {
+		if (whole && isPlainObject(value) && passesWhole(whole, value)) {
 			const source = value as Record<string, unknown>;
 			const handled: Record<string, unknown> = {};
 			let inherited = false;

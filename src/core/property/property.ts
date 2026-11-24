@@ -4,7 +4,12 @@ import { schemaOf } from "../schema/schema";
 import type { StandardSchemaV1 } from "../standard/standard-schema";
 import { Demo } from "../symbols/demo";
 import { AbstractProperty } from "./abstract-property";
-import { AbstractDefineProperty, declarePipeline } from "./define-property";
+import {
+	AbstractDefineProperty,
+	declarePipeline,
+	takesAnyValue,
+	takesAnyValueOf,
+} from "./define-property";
 import type { AbstractPropertyConstructor } from "./types/abstract-property-constructor.type";
 import type { AnyPropertyConstructor } from "./types/property-collection.type";
 import type { PropertyValue } from "./types/property-constructor.type";
@@ -171,7 +176,10 @@ export function propertyOf<
 		preHandle(value: Static<ValueSchema>): Static<ValueSchema>;
 		afterHandle(value: Static<ValueSchema>): Static<ValueSchema>;
 	};
-	if (onPreHandle) steps.preHandle = (value) => onPreHandle(value);
+	if (onPreHandle) {
+		steps.preHandle = (value) => onPreHandle(value);
+		if (takesAnyValueOf(onPreHandle)) takesAnyValue(steps.preHandle);
+	}
 	if (onAfterHandle) steps.afterHandle = (value) => onAfterHandle(value);
 	declarePipeline(DefineProperty.prototype);
 

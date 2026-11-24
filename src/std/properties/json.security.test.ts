@@ -81,3 +81,29 @@ describe("SEC-04: deeply nested JSON", () => {
 		);
 	});
 });
+
+describe("SEC-28: deep values of a recursive JSON schema", () => {
+	const Node = Type.Cyclic(
+		{ Node: Type.Object({ children: Type.Array(Type.Ref("Node")) }) },
+		"Node",
+	);
+	const Tree = jsonOf({ schema: Node, name: "tree" });
+	const Doc = recordOf(blueprintOf((ctx) => ({ title: ctx.text, tree: Tree })));
+	const deep = (depth: number): unknown =>
+		JSON.parse(
+			`${'{"children":['.repeat(depth)}{"children":[]}${"]}".repeat(depth)}`,
+		);
+
+	test("SEC-28: the depth is capped before the schema is checked", () => {
+		for (const depth of [5000, 20000, 100000]) {
+			const value = deep(depth);
+			expect(Tree.safeParse(value).issues?.[0]?.message).toContain(
+				"is nested too deeply",
+			);
+			const issue = Doc.safeParse({ title: "t", tree: value }).issues?.[0];
+			expect(issue?.message).toContain("is nested too deeply");
+			expect(issue?.path).toEqual(["tree"]);
+		}
+		expect(Tree.safeParse(deep(10)).issues).toBeUndefined();
+	});
+});
