@@ -59,11 +59,13 @@ Keep the scope narrow; six hunters is the default.
 
 For each finding, start one `Agent` with `subagent_type: "afora-verifier"`. Give it the code locations, the PoC and the command to run it, and the tag worktree path, **not** the hunter's reasoning or severity. Independent findings are verified in parallel. Keep CONFIRMED and PLAUSIBLE; list REFUTED with its reason. Merge duplicates across surfaces.
 
+Then classify each CONFIRMED finding as **blocking** or **not blocking** by [What blocks a release](../../../VERSIONING.md#what-blocks-a-release): blocking only when its fix is a breaking change of the contract, it is a vulnerability of high or critical severity with no documented mitigation, or it loses or corrupts stored data. Everything else is not blocking, however many there are.
+
 For a PLAUSIBLE finding, try once yourself to turn it into a running PoC; if you cannot, it stays PLAUSIBLE in the report and is not fixed.
 
 ## Phase 5: fix (skipped with `--no-fix`)
 
-For each CONFIRMED finding, most severe first:
+For each CONFIRMED finding, blocking ones first, then most severe first:
 
 1. Check that it still reproduces on `origin/dev` (run the PoC there). If `dev` already fixed it, note the commit and skip to the next.
 2. `git worktree add ../afora-sec-<slug> -b sec/<slug> origin/dev` (`fix/<slug>` for a plain bug), then `bun install`.
@@ -75,7 +77,7 @@ For each CONFIRMED finding, most severe first:
 
 ## Phase 6: record
 
-1. Write `docs/plans/security/<YYYY-MM-DD>-<tag>.md`: target and previous tag, baseline results, a table of findings (id, surface, kind, severity, verdict, `file:line`, fix branch, advisory), each finding with conditions, impact and PoC, the REFUTED ones with their reason, and the surfaces hunted with no finding. Check it is ignored: `git check-ignore -q docs/plans/security/<file>`.
+1. Write `docs/plans/security/<YYYY-MM-DD>-<tag>.md`: target and previous tag, baseline results, a table of findings (id, surface, kind, severity, verdict, blocking or not, `file:line`, fix branch, advisory), each finding with conditions, impact and PoC, the REFUTED ones with their reason, and the surfaces hunted with no finding. Check it is ignored: `git check-ignore -q docs/plans/security/<file>`.
 2. For each CONFIRMED vulnerability of severity medium or higher, ask the user, then create a draft advisory (drafts are private):
 
    ```bash
@@ -88,7 +90,9 @@ For each CONFIRMED finding, most severe first:
 
 Show the user the list of branches to push and the neutral PR titles, and wait for the go-ahead (or the choice of the private fork for a given advisory). Then, for each branch: `git push -u origin <branch>`, `gh pr create --base dev` with a neutral body ending with the PR attribution line, and `gh pr checks <n> --watch`. Merging is the user's call: offer `! gh pr merge <n> --merge`, or merge only on their explicit approval.
 
-## Phase 8: prepare the rc patch and open `dev` → `main` (skipped with `--no-release` or when no fix was merged)
+## Phase 8: prepare the rc patch and open `dev` → `main` (skipped with `--no-release` or when no blocking fix was merged)
+
+Only a blocking fix makes a new candidate. When every fix merged is not blocking, skip this phase: the fixes stay in `dev` for the first patch (put their issues in the `27.0.1` milestone), the rc is not extended, and the summary says so.
 
 The `prepare-release.yml` workflow has no secrets; prepare locally:
 

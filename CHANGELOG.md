@@ -22,6 +22,10 @@
 - A record keeps no object or array nested more than 1000 levels below a key, whatever the schema of the property (`Type.Unknown()` included): `safeParse` gives an `invalid_value` issue at the key (`is nested too deeply`, the limit of `ctx.json`), and the constructor, `set` and `change` throw it, so `toJSON` and `JSON.stringify` output every record on Bun, Node and browsers. Masking a `sensitive` key stays within the stack whatever the key holds. See [Records](docs/records.md). (SEC-52)
 - `@afora/codegen`: `generate` writes a key of a free-form JSON value (the options of a stage) as a shorthand property only when it is an identifier, so `{ "200": 200, "true": true }` prints as `{ "200": 200, true: true }` and the generated module parses. (SEC-56)
 
+### Documentation
+
+- [VERSIONING.md](VERSIONING.md#what-blocks-a-release) says what blocks a stable release: a fix that is a breaking change of the contract, a vulnerability of high or critical severity with no documented mitigation, or a loss or corruption of stored data. Only such a fix makes a new release candidate and restarts the two weeks; any other fix ships in the first patch (`27.0.1`), and the stable release has the code of the last candidate.
+
 ## 27.0.0-rc.5 — 2026-11-24
 
 The fifth candidate of 27.0.0: security fixes from a hunt of 27.0.0-rc.4, and the fix of #199, a blocking issue of the 27.0 milestone. Every finding has a regression test named `SEC-<n>`. Two are breaking, before the contract freezes: a standard `register` no longer takes the keys a token is made from, and a webhook of `@afora/hono` reads its input from the signed body only (see Migration below). The public API gains one optional field, `hooks` on `StageDescription` (#199); nothing else in it changes (see [Release candidates](VERSIONING.md#release-candidates)).
