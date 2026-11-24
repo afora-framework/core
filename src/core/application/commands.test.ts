@@ -13,6 +13,7 @@ import {
 	inMemoryProvider,
 	repositoryOf,
 	UnregisteredApplicationReference,
+	UnregisteredUseCaseDependency,
 	useCaseOf,
 } from "../../index";
 
@@ -117,22 +118,47 @@ describe("registration", () => {
 		).toThrow(InvalidApplicationDeclaration);
 	});
 
-	test("every use case must be registered", () => {
-		try {
+	test("a command registers the use cases it holds", () => {
+		const { useCases: _listed, ...without } = base;
+		const listed = applicationOf({ name: "a", ...base, commands: { Users } });
+		const app = applicationOf({ name: "a", ...without, commands: { Users } });
+		expect(app.commands.Users.useCases.register).toBe(Register);
+		expect(app.describe()).toEqual(listed.describe());
+	});
+
+	test("listing a use case in both places is the same class", () => {
+		expect(() =>
 			applicationOf({
 				name: "a",
 				...base,
-				useCases: { Register, Count },
+				useCases: { Register },
 				commands: { Users },
-			});
-			throw new Error("did not throw");
-		} catch (error) {
-			expect(error).toBeInstanceOf(UnregisteredApplicationReference);
-			expect((error as { details: unknown }).details).toMatchObject({
-				command: "Users",
-				useCase: "RegisterAndFail",
-			});
-		}
+			}),
+		).not.toThrow();
+	});
+
+	test("two different use cases with one name conflict", () => {
+		class Other extends Register {}
+		const Dup = commandOf({ name: "Dup", useCases: { register: Other } });
+		const { useCases: _listed, ...without } = base;
+		expect(() =>
+			applicationOf({ name: "a", ...without, commands: { Users, Dup } }),
+		).toThrow(ApplicationConflict);
+		expect(() =>
+			applicationOf({
+				name: "a",
+				...base,
+				useCases: { Register },
+				commands: { Dup },
+			}),
+		).toThrow(ApplicationConflict);
+	});
+
+	test("the dependencies of a use case a command holds must be registered", () => {
+		const { useCases: _listed, repositories: _repos, ...without } = base;
+		expect(() =>
+			applicationOf({ name: "a", ...without, commands: { Users } }),
+		).toThrow(UnregisteredUseCaseDependency);
 	});
 
 	test("app.command rejects an unregistered command", () => {

@@ -513,11 +513,12 @@ function resolve(
 			});
 		}
 	}
-	// The use cases a plugin made (`ctx.create(Posts)`) need no listing: the
-	// commands that hold them register them, by name.
+	// The use cases a command holds, written by hand or made by a plugin
+	// (`ctx.create(Posts)`), need no listing: the command registers them, by
+	// name, with the checks of any other use case.
 	for (const entry of [...registry.commands.values()]) {
 		for (const UseCase of Object.values((entry.value as AnyCommand).useCases)) {
-			if (useCaseOriginOf(UseCase) === undefined || byKey.has(UseCase)) {
+			if (byKey.has(UseCase)) {
 				continue;
 			}
 			add({
@@ -619,11 +620,8 @@ function validate(source: string, registry: Registry): void {
 	}
 }
 
-/** Checks that every use case of every command is registered. */
+/** Checks that every environment of every command is registered (its use cases are registered with it). */
 function validateCommands(source: string, registry: Registry): void {
-	const useCases = new Set(
-		[...registry.useCases.values()].map((entry) => entry.key),
-	);
 	const environments = new Set(
 		[...registry.environments.values()].map((entry) => entry.key),
 	);
@@ -637,18 +635,6 @@ function validateCommands(source: string, registry: Registry): void {
 					holder: `command "${entry.name}"`,
 					reference: "an environment",
 					command: entry.name,
-				} as { holder: string; reference: string },
-			});
-		}
-		for (const UseCase of Object.values(command.useCases)) {
-			if (useCases.has(UseCase)) continue;
-			throw new UnregisteredApplicationReference({
-				source,
-				details: {
-					holder: `command "${entry.name}"`,
-					reference: `use case "${UseCase.useCaseName}"`,
-					command: entry.name,
-					useCase: UseCase.useCaseName,
 				} as { holder: string; reference: string },
 			});
 		}

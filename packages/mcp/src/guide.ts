@@ -306,6 +306,6 @@ export class PublishPost extends useCaseOf({
 
   The same without decorators is \`route: { method: "post", path: "..." }\` and \`access: { ... }\` in the settings of \`useCaseOf\`; use the form
   the project already uses. Then add the class to a command (\`commandOf({ name, useCases: { publish: PublishPost } })\`) and register the
-  use case and the command in the application. Call \`afora_project\` again: the operation must be listed, with its route and access.
+  command in the application (it registers the use cases it holds). Call \`afora_project\` again: the operation must be listed, with its route and access.
 - \`afora_extract\` turns such an application into a spec, when the project wants to move to afora.json; it needs \`imports\` for what is hand-written.
 `;

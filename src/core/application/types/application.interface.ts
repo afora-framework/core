@@ -118,7 +118,7 @@ export interface ApplicationSettings<
 	readonly repositories?: Collections["repositories"];
 	/** Use cases, keyed by their `useCaseName`. */
 	readonly useCases?: Collections["useCases"];
-	/** Commands, keyed by their `commandName`; every use case of each must be in `useCases`. */
+	/** Commands, keyed by their `commandName`; the use cases of each are registered with it. */
 	readonly commands?: Collections["commands"];
 	/** Outputs, keyed by their `outputName`; every command of each must be in `commands`. */
 	readonly outputs?: Collections["outputs"];
