@@ -87,7 +87,7 @@ describe("inMemoryProvider", () => {
 		expect((await read.findMany()).map((item) => item.title)).toEqual(["a"]);
 	});
 
-	test("where supports equality and in, ANDed, and an empty in matches nothing", async () => {
+	test("where supports equality and in, ANDed, and an empty in or a missing value matches nothing", async () => {
 		const provider = inMemoryProvider();
 		await seed(provider, [
 			row("a", { n: 1, group: { x: 1, y: 2 } }),
@@ -102,7 +102,8 @@ describe("inMemoryProvider", () => {
 		).toEqual(["a", "c"]);
 		expect(await ofWhere({ n: { in: [] } })).toEqual([]);
 		expect(await ofWhere({ group: { x: 1, y: 2 } })).toEqual(["a", "b"]);
-		expect(await ofWhere({ group: undefined })).toEqual(["c"]);
+		expect(await ofWhere({ group: undefined })).toEqual([]);
+		expect(await ofWhere({ group: null })).toEqual([]);
 		expect(
 			await provider.findOne(context, { where: { n: 9 } }),
 		).toBeUndefined();

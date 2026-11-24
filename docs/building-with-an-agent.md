@@ -87,7 +87,7 @@ Without an `afora.json`, start the server with `--app src/app.ts#App`. `afora_pr
 
 ## 7. What the server will not do
 
-The input of the server comes from an agent and is treated as untrusted. Every write stays inside `--project`; an `import` or `extends` that leaves the project, or names a module built into the runtime, is refused with `outside_project`; nothing an agent sends is executed, it can only name files of the project to import. The full trust model is in the [package README](../packages/mcp/README.md#safety).
+The input of the server comes from an agent and is treated as untrusted. Every write stays inside `--project`; an `import` or `extends` that leaves the project, or names a module built into the runtime, is refused with `outside_project`, and a package named by `extends` is read only from the project's own `node_modules`; nothing an agent sends is executed, it can only name files of the project to import. The full trust model is in the [package README](../packages/mcp/README.md#safety).
 
 ## The other direction
 

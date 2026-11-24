@@ -40,7 +40,7 @@ The terms afora uses, in alphabetical order. Each entry is short and points to t
 
 **identity keys.** The keys an entity adds to its blueprint: `id`, `createdAt`, `updatedAt`, `deletedAt` (and `expiresAt` or `version` when declared). They are read-only, and a blueprint cannot declare them. See [Entities](entities.md).
 
-**issue.** One problem found by `safeParse` or `~standard.validate`: a `code`, a `path`, a `message` and a `source`. They are collected, never thrown. See [Standard Schema](standard-schema.md).
+**issue.** One problem found by `safeParse` or `~standard.validate`: a `code`, a `path`, a `message` and a `source`. They are collected, never thrown, up to 100 per parse. See [Standard Schema](standard-schema.md).
 
 **lock (schema lock).** `afora.lock.json`, a committed snapshot of the shapes of your entities. `afora-codegen schema check` compares it with the code in CI, and `app.start({ lock })` refuses a mismatch. See [Schema evolution](schema-evolution.md).
 

@@ -395,7 +395,10 @@ describe("hono webhooks", () => {
 			{
 				method: "POST",
 				body,
-				headers: await githubHeaders(body, "from-binding"),
+				headers: {
+					"content-type": "application/json",
+					...(await githubHeaders(body, "from-binding")),
+				},
 			},
 			{ BOUND_SECRET: "from-binding" },
 		);
@@ -481,6 +484,7 @@ describe("hono webhooks", () => {
 		const response = await app.request("/payments/lookup", {
 			method: "POST",
 			body: "{}",
+			headers: { "content-type": "application/json" },
 		});
 		expect(response.status).toBe(200);
 	});

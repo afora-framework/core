@@ -4,6 +4,7 @@ import {
 	blueprintOf,
 	checkJsonSchema,
 	InvalidJsonData,
+	InvalidJsonSchema,
 	JsonProperty,
 	jsonOf,
 	jsonSchemaIssues,
@@ -105,5 +106,52 @@ describe("SEC-28: deep values of a recursive JSON schema", () => {
 			expect(issue?.path).toEqual(["tree"]);
 		}
 		expect(Tree.safeParse(deep(10)).issues).toBeUndefined();
+	});
+});
+
+describe("SEC-51: cost of checking against a schema known at runtime", () => {
+	function fanOut(count: number, keyword: "allOf" | "anyOf"): unknown {
+		const defs: Record<string, unknown> = { d0: { type: "number" } };
+		for (let index = 1; index <= count; index++) {
+			const ref = { $ref: `#/$defs/d${index - 1}` };
+			defs[`d${index}`] = { [keyword]: [ref, { ...ref }] };
+		}
+		return { $defs: defs, $ref: `#/$defs/d${count}` };
+	}
+	const refused: readonly unknown[] = [
+		fanOut(24, "allOf"),
+		fanOut(24, "anyOf"),
+		{ $defs: { a: { $ref: "#/$defs/a" } }, $ref: "#/$defs/a" },
+		{ type: "string", pattern: "^(a+)+$" },
+		{ type: "string", pattern: "^(.*a){12}$" },
+		JSON.parse(`${'{"items":'.repeat(20000)}{}${"}".repeat(20000)}`),
+	];
+
+	test("SEC-51: jsonSchemaIssues and checkJsonSchema throw InvalidJsonSchema, quickly", () => {
+		for (const schema of refused) {
+			const started = performance.now();
+			expect(() => jsonSchemaIssues(schema, `${"a".repeat(30)}!`)).toThrow(
+				InvalidJsonSchema,
+			);
+			expect(() => checkJsonSchema(schema, 1)).toThrow(InvalidJsonSchema);
+			expect(performance.now() - started).toBeLessThan(100);
+		}
+	});
+
+	test("SEC-51: a schema with references of ordinary cost is still checked", () => {
+		const schema = {
+			$defs: { name: { type: "string", minLength: 1 } },
+			type: "object",
+			properties: {
+				title: { $ref: "#/$defs/name" },
+				authors: { type: "array", items: { $ref: "#/$defs/name" } },
+			},
+			required: ["title"],
+		};
+		expect(jsonSchemaIssues(schema, { title: "t", authors: ["a"] })).toEqual(
+			[],
+		);
+		expect(jsonSchemaIssues(schema, { title: "" })[0]?.path).toEqual(["title"]);
+		expect(checkJsonSchema(schema, { title: "t" })).toEqual({ title: "t" });
 	});
 });

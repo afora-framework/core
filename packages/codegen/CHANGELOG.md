@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- **Breaking.** `resolveExtended(..., { root })` looks up a package named by `extends` in the `node_modules` of `root` only (and of its directories, as Node would, but never above `root`, in a package cache or the registry), and its spec, with what that spec extends, must really be inside `<root>/node_modules`, or `SpecLoadError` is thrown. `loadSpec` resolves a package as before. (SEC-54)
+- With a root, the messages of `resolveExtended` name a file from the root, never by an absolute path. (SEC-55)
+
+### Fixed
+
+- `generate` writes a key of a free-form JSON value (the options of a stage) as a shorthand property only when it is an identifier, so `{ "200": 200, "true": true }` prints as `{ "200": 200, true: true }` and the generated module parses. (SEC-56)
+
 ## 27.0.0-rc.5 — 2026-11-24
 
 ### Security

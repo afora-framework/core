@@ -10,6 +10,7 @@ import { isBlueprint } from "./is-blueprint";
 import { isBlueprintList, listOf } from "./list";
 import { optionalOf } from "./optional";
 import { isRecordClass, recordFieldOf } from "./record-field";
+import { deriveBlueprint } from "./sources";
 import type {
 	AnyBlueprint,
 	AnyRecordClass,
@@ -166,6 +167,7 @@ function sliceField(
 			field.plugins,
 			sliceCollection(field.properties, selected, `${path}.`),
 		);
+		deriveBlueprint(sliced, [field]);
 		return field.optional ? optionalOf(sliced) : sliced;
 	}
 	if (isBlueprintVariant(field)) {
@@ -206,15 +208,19 @@ export const sliceOf: {
 			? Selector
 			: never,
 	): NoInfer<SlicedBlueprint<PropertiesOf<Blueprint>, MaskOf<Selector>>>;
-} = ((blueprint: AnyBlueprint, selector: unknown): unknown =>
-	blueprintFromProperties(
+} = ((blueprint: AnyBlueprint, selector: unknown): unknown => {
+	const sliced = blueprintFromProperties(
 		blueprint.plugins,
 		sliceCollection(
 			blueprint.properties,
 			maskOf(selector, blueprint.properties),
 			"",
 		),
-	)) as never;
+	);
+	// The keys kept keep what the records of `blueprint` declare about them.
+	deriveBlueprint(sliced, [blueprint]);
+	return sliced;
+}) as never;
 
 /**
  * `value` with only the keys `selector` names, recursively through objects and

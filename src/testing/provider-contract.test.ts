@@ -43,6 +43,8 @@ function select(
 				Object.keys(condition).length === 1 &&
 				Array.isArray((condition as { in?: unknown }).in);
 			const matches = (value: unknown) =>
+				value !== undefined &&
+				value !== null &&
 				JSON.stringify(data[key]) === JSON.stringify(value);
 			return isIn
 				? (condition as unknown as { in: unknown[] }).in.some(matches)

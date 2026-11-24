@@ -1,3 +1,4 @@
+import { joinOf } from "../blueprint/blueprint";
 import { isRecordClass } from "../blueprint/record-field";
 import type {
 	AnyBlueprint,
@@ -362,13 +363,14 @@ export function applyPlugins(
 		blueprint:
 			flat.length === 0
 				? blueprint
-				: blueprint.join(
+				: joinOf([
+						blueprint,
 						...flat.map(
 							(plugin) =>
 								(plugin.record as unknown as { blueprint: AnyBlueprint })
 									.blueprint,
 						),
-					),
+					]),
 		plugins: Object.freeze(flat),
 		sensitive: flat.flatMap((plugin) => plugin.options.sensitive),
 		unique: flat.flatMap((plugin) => plugin.options.unique),

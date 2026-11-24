@@ -1,6 +1,6 @@
 # Standard Schema
 
-Every field implements Standard Schema V1 (`vendor: "afora"`), so any library that takes one (Hono, tRPC, TanStack Form...) takes it as is. `validate` is synchronous, never throws for an invalid value, and reports every issue with its `path` (e.g. `["addresses", 0, "zip"]`).
+Every field implements Standard Schema V1 (`vendor: "afora"`), so any library that takes one (Hono, tRPC, TanStack Form...) takes it as is. `validate` is synchronous, never throws for an invalid value, and reports every issue with its `path` (e.g. `["addresses", 0, "zip"]`), up to 100: past the hundredth issue a parse stops and gives the first 100 found, in order, so the issues of a value stay bounded whatever its size. This holds for `safeParse` and the records that parse through them too.
 
 | Field                                                              | `~standard.validate` gives                                                         |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |

@@ -9,6 +9,7 @@ import {
 	inMemoryProvider,
 	repositoryOf,
 	resourceOf,
+	Serial,
 	StdUseCases,
 } from "../../index";
 import {
@@ -726,5 +727,113 @@ describe("SEC-22: register does not take the keys login makes tokens from", () =
 				login: ctx.login(Plain),
 			}),
 		});
+	});
+});
+
+describe("SEC-42: a refresh token is accepted only by the refresh of its entity", () => {
+	const token = {
+		secret: { env: "AFORA_SEC42_TEST_SECRET" },
+		issuer: "shop",
+		refresh: { expiresIn: 60 },
+	} as const;
+	const setup = () => {
+		process.env.AFORA_SEC42_TEST_SECRET =
+			"a-secret-of-at-least-thirty-two-characters";
+		class Customer extends entityOf(
+			blueprintOf((ctx) => ({ name: ctx.string })),
+			{ id: Serial, plugins: (ctx) => [ctx.authenticatable] },
+		) {}
+		class Staff extends entityOf(
+			blueprintOf((ctx) => ({ name: ctx.string, roles: ctx.list.string })),
+			{ id: Serial, plugins: (ctx) => [ctx.authenticatable] },
+		) {}
+		const actions = ["findById", "findByEmail", "create"] as const;
+		const Customers = repositoryOf({
+			entity: Customer,
+			provider: inMemoryProvider(),
+			actions,
+		});
+		const Staffs = repositoryOf({
+			entity: Staff,
+			provider: inMemoryProvider(),
+			actions,
+		});
+		const staffToken = { ...token, scopesFrom: "roles" } as const;
+		const Shop = commandOf({
+			name: "Shop",
+			useCases: (ctx) => ({
+				register: ctx.register(Customers),
+				login: ctx.login(Customers, { token }),
+				refresh: ctx.refresh(Customers, { token }),
+			}),
+		});
+		const Backoffice = commandOf({
+			name: "Backoffice",
+			useCases: (ctx) => ({
+				register: ctx.register(Staffs, { values: { roles: ["admin"] } }),
+				login: ctx.login(Staffs, { token: staffToken }),
+				refresh: ctx.refresh(Staffs, { token: staffToken }),
+			}),
+		});
+		return { Shop, Backoffice };
+	};
+
+	test("SEC-42: the refresh of another entity refuses it as any invalid token", async () => {
+		const { Shop, Backoffice } = setup();
+		const staff = await Backoffice.run("register", {
+			name: "Root",
+			email: "root@shop.dev",
+			password: strong,
+		});
+		const customer = await Shop.run("register", {
+			name: "Eve",
+			email: "eve@shop.dev",
+			password: strong,
+		});
+		expect(String(customer.item.id)).toBe(String(staff.item.id));
+		const { refreshToken } = await Shop.run("login", {
+			email: "eve@shop.dev",
+			password: strong,
+		});
+		const crossed = await failure(
+			Backoffice.run("refresh", { refreshToken: refreshToken as string }),
+		);
+		const garbage = await failure(
+			Backoffice.run("refresh", { refreshToken: "not.a.token" }),
+		);
+		expect(crossed.name).toBe(garbage.name);
+		expect(statusOf(crossed as Error)).toBe(statusOf(garbage as Error));
+		expect(statusOf(crossed as Error)).toBe(401);
+	});
+
+	test("SEC-42: each entity still refreshes its own tokens", async () => {
+		const { Shop, Backoffice } = setup();
+		await Backoffice.run("register", {
+			name: "Root",
+			email: "root@shop.dev",
+			password: strong,
+		});
+		await Shop.run("register", {
+			name: "Eve",
+			email: "eve@shop.dev",
+			password: strong,
+		});
+		for (const [A, email] of [
+			[Shop, "eve@shop.dev"],
+			[Backoffice, "root@shop.dev"],
+		] as const) {
+			const { refreshToken } = await A.run("login", {
+				email,
+				password: strong,
+			});
+			const renewed = await A.run("refresh", {
+				refreshToken: refreshToken as string,
+			});
+			expect(typeof renewed.token).toBe("string");
+			const again = await A.run("refresh", {
+				refreshToken: renewed.refreshToken,
+			});
+			expect(typeof again.token).toBe("string");
+		}
 	});
 });
