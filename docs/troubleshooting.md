@@ -186,7 +186,7 @@ See [Files](std-properties.md#files) and [Outputs](outputs.md).
 
 ## Testing
 
-**`spyOn` on a repository method throws** (`RepositoryIsFrozen`; or, from the engine, `TypeError: Cannot redefine property: findMany` in vitest and jest, `Attempted to assign to readonly property` in bun:test). A repository is frozen on purpose: it is shared by every use case and application that names it, so a patched method would leak into other tests. Spy on the provider instead, with `spyProvider` of `@afora/core/testing`, or replace the method for one call with `execute({ Users: { findById: ... } })`. See [Spying on the database](testing.md#spying-on-the-database).
+**`spyOn` on a repository method throws** (`RepositoryIsFrozen`; or, from the engine, `TypeError: Cannot redefine property: findMany` in vitest and jest, `spyOn(target, prop) does not support accessor properties yet` in bun:test). A repository is frozen on purpose: it is shared by every use case and application that names it, so a patched method would leak into other tests. Spy on the provider instead, with `spyProvider` of `@afora/core/testing`, or replace the method for one call with `execute({ Users: { findById: ... } })`. See [Spying on the database](testing.md#spying-on-the-database).
 
 ## Issue codes of `safeParse`
 
