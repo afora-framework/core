@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 27.0.0-rc.5 — 2026-11-24
 
 ### Fixed
 

@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 27.0.0-rc.5 — 2026-11-24
+
+The fifth candidate of 27.0.0: security fixes from a hunt of 27.0.0-rc.4, and the fix of #199, a blocking issue of the 27.0 milestone. Every finding has a regression test named `SEC-<n>`. Two are breaking, before the contract freezes: a standard `register` no longer takes the keys a token is made from, and a webhook of `@afora/hono` reads its input from the signed body only (see Migration below). The public API gains one optional field, `hooks` on `StageDescription` (#199); nothing else in it changes (see [Release candidates](VERSIONING.md#release-candidates)).
 
 ### Security
 
@@ -18,7 +20,7 @@
 - The OpenAPI document of an output marks `writeOnly` every key a use case response is sent masked by: where the response is a record's blueprint (`response: Account.blueprint`), the keys the record declares `sensitive`, at any depth of blueprints, lists and variants, as well as every `sensitive` property. See [Outputs](docs/outputs.md). (SEC-34)
 - `@afora/codegen` and `@afora/mcp`: `output.dir` and `confinePath` refuse `node_modules` and `.git` in the spellings Windows reads as them too: with trailing dots or spaces, with a stream suffix (`:...`) and as a short name (`NODE_M~1`, `GIT~1`), on every platform. (SEC-40)
 - `@afora/mcp`: `afora_generate` type-checks with the TypeScript installed in the project (`node_modules/typescript` of the project directory), run by the server's own runtime, and only with it: a `tsc` of a parent directory, the `PATH` or a package cache is never run. A project without TypeScript gets `typecheck: { ran: false }` with the reason. See [Building with an agent](docs/building-with-an-agent.md). (SEC-41)
-- The default route of an operation (`/{command}/{operation}` in kebab case, in `openapi` and the sinks that serve HTTP) is computed in linear time; a name with a long run of capitals took seconds. Routes are unchanged.
+- The default route of an operation (`/{command}/{operation}` in kebab case, in `openapi` and the sinks that serve HTTP) is computed in linear time. Routes are unchanged.
 - `findBy<Key>` and `findManyBy<Key>` take one value: `{ in: [...] }` throws `InvalidRepositoryQuery` instead of being read as a membership, which only the queries (`findMany`, `exists`, `findPage`, `count`) take. (SEC-21)
 - `PlainPassword` and `Password.hash` apply the same password rules to a value with line breaks: the schema pattern of `PlainPassword` looks for each required character across the whole value, as `Password.hash` does.
 - `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: they give an issue at the property's path. (SEC-27)
@@ -46,7 +48,28 @@
 
 ### Migration
 
+**`register` does not take the keys a token is made from.** Before:
+
+```ts
+useCases: (ctx) => ({
+	register: ctx.register(Users), // the input took `roles`
+	login: ctx.login(Users, { token: { secret: { env: "JWT_SECRET" }, scopesFrom: "roles" } }),
+}),
+```
+
+After:
+
+```ts
+useCases: (ctx) => ({
+	register: ctx.register(Users, { values: { roles: [] } }),
+	login: ctx.login(Users, { token: { secret: { env: "JWT_SECRET" }, scopesFrom: "roles" } }),
+}),
+```
+
+Roles are then given by a use case only an administrator can call (`ctx.create` or `ctx.update` with `access`). An optional key can be left out with `omit` instead.
+
 **A webhook reads its input from the body only.** Before:
+
 ```ts
 class PaymentReceived extends useCaseOf({
 	name: "PaymentReceived",
@@ -57,7 +80,9 @@ class PaymentReceived extends useCaseOf({
 	route: { method: "post", path: "/tenants/{tenant}/stripe" },
 }) {}
 ```
+
 After:
+
 ```ts
 class PaymentReceived extends useCaseOf({
 	name: "PaymentReceived",
@@ -69,6 +94,7 @@ class PaymentReceived extends useCaseOf({
 	route: { method: "post", path: "/stripe" },
 }) {}
 ```
+
 A value that only the URL or a header carries is not signed: send it in the body, or check it against the body in `execute`.
 
 ## 27.0.0-rc.4 — 2026-11-16
