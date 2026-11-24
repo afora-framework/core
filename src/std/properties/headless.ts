@@ -1,5 +1,6 @@
 import { type TSchema, Type } from "typebox";
 import { Meta } from "typebox/schema";
+import { takesAnyValue } from "../../core/property/define-property";
 import { InvalidPropertyValue } from "../../core/property/exceptions";
 import { propertyOf } from "../../core/property/property";
 import { schemaOf } from "../../core/schema/schema";
@@ -28,7 +29,10 @@ export class SchemaProperty extends propertyOf({
 	name: "schema",
 	schema: JSON_SCHEMA,
 	default: Type.String(),
-	preHandle: (value) => assertDepth(value, MAX_SCHEMA_DEPTH),
+	// The depth first, of any value: the check of the shape walks it all.
+	preHandle: takesAnyValue(
+		(value: TSchema): TSchema => assertDepth(value, MAX_SCHEMA_DEPTH),
+	),
 }) {
 	private compiled?: ISchema<TSchema>;
 
