@@ -14,6 +14,7 @@
 - `blueprint.safeParse`, `~standard.validate` and the records that parse through them never throw for a value too deep for the stack in a property with a recursive schema: they give an issue at the property's path. (SEC-27)
 - `jsonOf` checks the depth of a value (1000 at most, `is nested too deeply`) before its schema walks it, for a recursive schema too, as [Properties](docs/properties.md#json) says. (SEC-28)
 - `SchemaProperty` (`ctx.schema`) rejects a schema nested more than 128 JSON levels deep, with an `is nested too deeply` issue at its path, in `safeParse`, the constructor and `deserialize`, so a schema it holds can always be checked against quickly, on Bun, Node and browsers. See [Standard properties](docs/std-properties.md#json-and-schemas). (SEC-29)
+- `@afora/ws`: a session holds at most 1000 topics. Past the limit a new subscription is a 403 `WsTopicForbidden`, the answer to a topic that is not allowed; a topic the session already holds does not count twice, and unsubscribing frees a place. See [the ws README](packages/ws/README.md#protocol). (SEC-30)
 
 ### Repository
 
