@@ -44,7 +44,9 @@ export interface HonoOptions extends HttpOptions {
 	/**
 	 * Operations that receive webhooks, by operation id: the signature of each
 	 * request is verified over the raw body before it is parsed (a 401 problem
-	 * otherwise). See {@link WebhookOptions}.
+	 * otherwise). Every input key comes from the signed body: a webhook route
+	 * that reads one from the path, the query, a header or a cookie throws
+	 * `InvalidOutputStage` at build. See {@link WebhookOptions}.
 	 */
 	readonly webhooks?: { readonly [operationId: string]: WebhookOptions };
 }
@@ -325,11 +327,23 @@ export const hono = sinkOf<Hono, HonoOptions, HonoHooks>({
 		const routes = operationRoutes(operations, options, "hono");
 		for (const id of Object.keys(webhooks)) {
 			const route = routes.get(id);
+			// The signature covers only the body: an input key the route places
+			// from the path, the query, a header or a cookie would be unsigned.
+			const placed = route
+				? [
+						...route.parameters,
+						...route.query,
+						...Object.keys(route.requestHeaders),
+						...Object.keys(route.cookies),
+					]
+				: [];
 			const reason = !route
 				? `hono.webhooks["${id}"] names no operation of the output.`
 				: !route.body
 					? `hono.webhooks["${id}"] is routed with "${route.method}", which has no body to sign; route it with "post" (or a "delete" with body: true).`
-					: undefined;
+					: placed.length > 0
+						? `hono.webhooks["${id}"] reads the input keys ${placed.map((key) => `"${key}"`).join(", ")} from the path, the query, headers or cookies, which the signature does not cover; a webhook takes its whole input from the signed body.`
+						: undefined;
 			if (reason) {
 				throw new InvalidOutputStage({ source: "hono", details: { reason } });
 			}
