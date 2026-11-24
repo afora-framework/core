@@ -23,9 +23,10 @@
  *
  * `detect` reads BRANCH, RUN_NUMBER, EVENT and BEFORE from the environment;
  * `prepare` reads --branch, else BRANCH, else the current branch. Both ask
- * npm for the dist-tags and git for the tags; DIST_TAGS (`latest=0.0.13,rc=...`),
- * TAGS (a comma list) and CHANGED_FILES (a comma list) replace them for a dry
- * run on a machine. They write their outputs to $GITHUB_OUTPUT when it is set.
+ * npm for the dist-tags and git for the tags and the release branches;
+ * DIST_TAGS (`latest=0.0.13,rc=...`), TAGS, RELEASE_LINES (`27.0` for
+ * release/27.0) and CHANGED_FILES (comma lists) replace them for a dry run on
+ * a machine. They write their outputs to $GITHUB_OUTPUT when it is set.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -165,13 +166,14 @@ export interface ChannelInput {
 /** How `version` is released from `branch`. Throws when it may not be. */
 export function channelOf(input: ChannelInput): Channel {
 	const distTags = input.distTags ?? {};
-	return checked(decide(input, distTags.latest), distTags, input.version);
+	return checked(decide(input, distTags), distTags, input.version);
 }
 
 function decide(
 	{ version, branch, tagExists }: ChannelInput,
-	latest: string | undefined,
+	distTags: Readonly<Record<string, string>>,
 ): Channel {
+	const latest = distTags.latest;
 	const parsed = parseOrThrow(version);
 	const prerelease = parsed.kind !== "stable" && parsed.kind !== "zero";
 	const mapped = TAG_OF[parsed.kind];
@@ -229,11 +231,10 @@ function decide(
 		if (
 			parsed.kind === "zero" ||
 			parsed.major !== Number(major) ||
-			parsed.minor !== Number(minor) ||
-			parsed.patch === 0
+			parsed.minor !== Number(minor)
 		) {
 			throw new Error(
-				`${branch} publishes only patches of its line, ${major}.${minor}.<patch> with a patch of 1 or more, not ${version}`,
+				`${branch} publishes only versions of its line, ${major}.${minor}.<patch>, not ${version}`,
 			);
 		}
 		if (parsed.kind !== "stable" && parsed.kind !== "rc") {
@@ -244,6 +245,23 @@ function decide(
 		if (tagExists) return skip(`v${version} is already released`);
 		// The tag of the line: never a semver range such as v27.0, which npm refuses.
 		const lineTag = `release-${major}.${minor}`;
+		// A candidate of the first release of the line (`27.0.0-rc.7`, once the
+		// line has its branch) is the rc of the next release: it goes to rc, as
+		// from main, unless rc already holds a newer candidate.
+		const rcAhead =
+			behind(version, distTags.rc) &&
+			parseVersion(distTags.rc as string)?.kind === "rc";
+		if (parsed.patch === 0 && prerelease && !rcAhead) {
+			return {
+				publish: true,
+				distTag: "rc",
+				prerelease: true,
+				makeLatest: false,
+				gitRelease: true,
+				bench: true,
+				reason: `${version} is a candidate of the first release of ${major}.${minor}, so it goes to rc`,
+			};
+		}
 		// A candidate of a patch, and a patch behind latest, get the tag of their
 		// line, so that neither rc nor latest move to an older line.
 		if (prerelease || behind(version, latest)) {
@@ -255,7 +273,9 @@ function decide(
 				gitRelease: true,
 				bench: false,
 				reason: prerelease
-					? `${version} is a candidate of a patch, so it goes to ${lineTag}`
+					? parsed.patch === 0
+						? `${version} is behind ${distTags.rc}, the rc on npm, so it goes to ${lineTag}`
+						: `${version} is a candidate of a patch, so it goes to ${lineTag}`
 					: `${version} is behind ${latest}, the latest on npm, so it goes to ${lineTag}`,
 			};
 		}
@@ -282,17 +302,21 @@ export interface NextInput {
 	readonly stableTags: readonly string[];
 	/** The number of the run (GITHUB_RUN_NUMBER), which only grows. */
 	readonly run: number;
+	/** The lines with a release branch (`27.0` for release/27.0). */
+	readonly lines?: readonly string[];
 }
 
 /**
  * The version of the Next: the version of package.json without its
  * prerelease, with the minor raised while that one is already released as
- * stable, and `-alpha.<run>`.
+ * stable or its line has a release branch (it is finished there, while dev
+ * moves on), and `-alpha.<run>`.
  */
 export function nextVersion({
 	pkgVersion,
 	stableTags,
 	run,
+	lines = [],
 }: NextInput): string {
 	const parsed = parseOrThrow(pkgVersion);
 	if (parsed.kind === "zero") {
@@ -304,8 +328,12 @@ export function nextVersion({
 		throw new Error(`the run number must be a whole number, not ${run}`);
 	}
 	const released = new Set(stableTags.map((tag) => tag.replace(/^v/, "")));
+	const branched = new Set(lines);
 	let { minor, patch } = parsed;
-	while (released.has(`${parsed.major}.${minor}.${patch}`)) {
+	while (
+		released.has(`${parsed.major}.${minor}.${patch}`) ||
+		branched.has(`${parsed.major}.${minor}`)
+	) {
 		minor += 1;
 		patch = 0;
 	}
@@ -429,15 +457,17 @@ export interface PrepareInput {
 	readonly tags: readonly string[];
 	/** The dist-tags of `@afora/core` on npm. */
 	readonly distTags?: Readonly<Record<string, string>>;
-	/** The base of the bump: dev, or release/<YY>.<minor> for a patch. */
+	/** The base of the bump: dev, or release/<YY>.<minor> for its line. */
 	readonly branch: string;
+	/** The lines with a release branch (`27.0` for release/27.0). */
+	readonly lines?: readonly string[];
 	/** A version to use instead of the computed one (empty means none). */
 	readonly explicit?: string;
 }
 
 export interface Prepared {
 	readonly version: string;
-	/** The branch whose push publishes it: main from dev, the release branch for a patch. */
+	/** The branch whose push publishes it: main from dev, the release branch itself. */
 	readonly publishBranch: string;
 	/** How it is published from `publishBranch`. */
 	readonly channel: Channel;
@@ -464,10 +494,16 @@ const PREPARED_KINDS: Record<PrepareChannel, readonly VersionKind[]> = {
  * - rc and beta: the next candidate of the target (`27.0.0-rc.1` →
  *   `27.0.0-rc.2`), or its first (`<target>-rc.1`). The target is the version
  *   without its prerelease, with the minor raised while it is released as
- *   stable. A beta after an rc of the same target is refused.
+ *   stable or its line has a release branch (on dev), or the patch raised
+ *   while it is released (on release/<YY>.<minor>). A beta after an rc of the
+ *   same target is refused.
  * - stable: the prerelease stripped (`27.0.0-rc.3` → `27.0.0`).
  * - patch, on release/<YY>.<minor> only: `YY.m.p` → `YY.m.(p+1)`, and the rc
  *   of a patch → that patch.
+ *
+ * beta is prepared on dev only; rc and stable on dev, or on the release
+ * branch of their line, which publishes them itself. Once a line has its
+ * release branch, dev prepares nothing of that line.
  *
  * Every version, computed or `explicit`, is checked: in the scheme, of the
  * kind of its channel, after the version of package.json, not released, and
@@ -488,11 +524,17 @@ export function preparedVersion(input: PrepareInput): Prepared {
 			`a patch is prepared on release/<YY>.<minor>, not on ${branch}`,
 		);
 	}
-	if (kind !== "patch" && branch !== "dev") {
+	if (kind === "beta" && branch !== "dev") {
 		throw new Error(
-			`the channel ${kind} is prepared on dev (and published from main), not on ${branch}; release/<YY>.<minor> takes the channel patch`,
+			`the channel beta is prepared on dev (and published from main), not on ${branch}; release/<YY>.<minor> takes rc, stable and patch`,
 		);
 	}
+	if ((kind === "rc" || kind === "stable") && branch !== "dev" && !line) {
+		throw new Error(
+			`the channel ${kind} is prepared on dev (and published from main) or on release/<YY>.<minor>, not on ${branch}`,
+		);
+	}
+	const lines = new Set(input.lines ?? []);
 	const current = parseOrThrow(pkgVersion);
 	const released = new Set(input.tags.map((tag) => tag.replace(/^v/, "")));
 	const explicit = input.explicit?.trim();
@@ -514,9 +556,15 @@ export function preparedVersion(input: PrepareInput): Prepared {
 
 	const version = explicit
 		? explicit
-		: computedVersion(kind, pkgVersion, current, released, line);
+		: computedVersion(kind, pkgVersion, current, released, line, lines);
 
 	const parsed = parseOrThrow(version);
+	const ofLine = `${parsed.major}.${parsed.minor}`;
+	if (!line && lines.has(ofLine)) {
+		throw new Error(
+			`the line ${ofLine} has its branch release/${ofLine}: prepare ${version} there, not on ${branch}`,
+		);
+	}
 	if (!PREPARED_KINDS[kind].includes(parsed.kind)) {
 		throw new Error(
 			`${version} is not a version of the channel ${kind} (${PREPARED_KINDS[kind].join(" or ")})`,
@@ -539,7 +587,7 @@ export function preparedVersion(input: PrepareInput): Prepared {
 	if (released.has(version)) {
 		throw new Error(`v${version} is already released`);
 	}
-	const publishBranch = kind === "patch" ? branch : "main";
+	const publishBranch = line ? branch : "main";
 	return {
 		version,
 		publishBranch,
@@ -558,6 +606,7 @@ function computedVersion(
 	current: ParsedVersion,
 	released: ReadonlySet<string>,
 	line: RegExpExecArray | null,
+	lines: ReadonlySet<string>,
 ): string {
 	if (kind === "patch") {
 		const [, major, minor] = line as RegExpExecArray;
@@ -596,9 +645,23 @@ function computedVersion(
 		);
 	}
 	let { minor, patch } = current;
-	while (released.has(`${current.major}.${minor}.${patch}`)) {
-		minor += 1;
-		patch = 0;
+	if (line) {
+		const [, major, lineMinor] = line;
+		if (current.major !== Number(major) || minor !== Number(lineMinor)) {
+			throw new Error(
+				`${pkgVersion} is not of the line ${major}.${lineMinor} of release/${major}.${lineMinor}`,
+			);
+		}
+		// a release branch stays on its line: the next patch, never a minor
+		while (released.has(`${current.major}.${minor}.${patch}`)) patch += 1;
+	} else {
+		while (
+			released.has(`${current.major}.${minor}.${patch}`) ||
+			lines.has(`${current.major}.${minor}`)
+		) {
+			minor += 1;
+			patch = 0;
+		}
 	}
 	const target = `${current.major}.${minor}.${patch}`;
 	if (current.kind === kind && triple(current) === target) {
@@ -779,6 +842,30 @@ async function readTags(): Promise<string[]> {
 		.filter((tag): tag is string => Boolean(tag));
 }
 
+/**
+ * The lines with a release branch on origin (`27.0` for release/27.0), or
+ * those of RELEASE_LINES (a comma list).
+ */
+async function readLines(): Promise<string[]> {
+	const list = process.env.RELEASE_LINES;
+	if (list !== undefined) return list.split(",").filter(Boolean);
+	return linesOf(
+		(
+			await Bun.$`git ls-remote --heads origin refs/heads/release/*`.quiet()
+		).text(),
+	);
+}
+
+/** The lines of the release branches in the output of `git ls-remote --heads`. */
+export function linesOf(lsRemote: string): string[] {
+	return lsRemote
+		.split("\n")
+		.map((entry) => entry.split("refs/heads/")[1] ?? "")
+		.map((branch) => RELEASE_BRANCH.exec(branch))
+		.filter((match): match is RegExpExecArray => match !== null)
+		.map(([, major, minor]) => `${major}.${minor}`);
+}
+
 async function detect(): Promise<Record<string, string>> {
 	const env = process.env;
 	const branch = env.BRANCH ?? env.GITHUB_REF_NAME ?? "";
@@ -807,6 +894,7 @@ async function detect(): Promise<Record<string, string>> {
 				(tag) => parseVersion(tag.slice(1))?.kind === "stable",
 			),
 			run: Number(env.RUN_NUMBER ?? env.GITHUB_RUN_NUMBER ?? 0),
+			lines: await readLines(),
 		});
 		return outputs(
 			version,
@@ -961,6 +1049,7 @@ async function prepare(
 		explicit: flags.version,
 		tags: await readTags(),
 		distTags: await readDistTags(),
+		lines: await readLines(),
 	});
 	const { version } = prepared;
 	const changelogs = changelogsOf(root).map((path) => ({

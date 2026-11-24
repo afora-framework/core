@@ -1,6 +1,6 @@
 ---
 name: rc-hunt
-description: Runs a vulnerability and bug hunt on the latest afora release candidate (or a given tag) — scopes the tag, runs the baseline checks, fans out afora-hunter agents per attack surface, verifies each finding with afora-verifier, fixes the confirmed ones with SEC-NN tests, files private draft advisories, and prepares the next rc patch with a dev → main release PR. Trigger with /rc-hunt [tag] [--surfaces a,b] [--no-fix] [--no-release].
+description: Runs a vulnerability and bug hunt on the latest afora release candidate (or a given tag) — scopes the tag, runs the baseline checks, fans out afora-hunter agents per attack surface, verifies each finding with afora-verifier, fixes the confirmed ones with SEC-NN tests, files private draft advisories, and prepares the next rc patch (on release/<YY>.<minor> when the line has its branch, else with a dev → main release PR). Trigger with /rc-hunt [tag] [--surfaces a,b] [--no-fix] [--no-release].
 ---
 
 # /rc-hunt: hunt the latest release candidate
@@ -88,13 +88,13 @@ For each CONFIRMED finding, blocking ones first, then most severe first:
 
 ## Phase 7: integrate into `dev`
 
-Show the user the list of branches to push and the neutral PR titles, and wait for the go-ahead (or the choice of the private fork for a given advisory). Then, for each branch: `git push -u origin <branch>`, `gh pr create --base dev` with a neutral body ending with the PR attribution line, and `gh pr checks <n> --watch`. Merging is the user's call: offer `! gh pr merge <n> --merge`, or merge only on their explicit approval.
+Show the user the list of branches to push and the neutral PR titles, and wait for the go-ahead (or the choice of the private fork for a given advisory). When the line of the rc has its branch (`git ls-remote --heads origin release/<YY>.<minor>`), a blocking fix is branched from and opened against `release/<YY>.<minor>` instead, and carried to `dev` in a second pull request (`git cherry-pick -x`, without its CHANGELOG entry); a fix that does not block goes to `dev` only. Then, for each branch: `git push -u origin <branch>`, `gh pr create --base <dev or release/<YY>.<minor>>` with a neutral body ending with the PR attribution line, and `gh pr checks <n> --watch`. Merging is the user's call: offer `! gh pr merge <n> --merge`, or merge only on their explicit approval.
 
 ## Phase 8: prepare the rc patch and open `dev` → `main` (skipped with `--no-release` or when no blocking fix was merged)
 
 Only a blocking fix makes a new candidate. When every fix merged is not blocking, skip this phase: the fixes stay in `dev` for the first patch (put their issues in the `27.0.1` milestone), the rc is not extended, and the summary says so.
 
-The `prepare-release.yml` workflow has no secrets; prepare locally:
+The `prepare-release.yml` workflow has no secrets; prepare locally. **When the line has its branch** (`release/27.0`, see [VERSIONING.md](../../../VERSIONING.md#a-release-candidate-on-its-own-branch)), use it as the base instead of `dev` in steps 1, 2 and 5 (`BRANCH=release/27.0 bun scripts/release-channel.ts prepare --channel rc`, `gh pr create --base release/27.0`) and skip step 6: merging the bump into `release/27.0` publishes, so the merge in step 5 is the user's, as in step 7. After the publish, copy the dated section into the CHANGELOG of `dev`, below `## Unreleased`, in a pull request against `dev`.
 
 1. `git fetch origin` and `git worktree add ../afora-release-<v> -b chore/release-<v> origin/dev`, then `bun install`.
 2. `BRANCH=dev bun scripts/release-channel.ts prepare --channel rc` gives the next candidate (`27.0.0-rc.<n+1>`), dates the changelogs and sets the version (and peer ranges) in every `package.json`. Read `<v>` from `package.json` afterwards.
