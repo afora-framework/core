@@ -32,6 +32,7 @@
 
 ### Documentation
 
+- [Outputs](docs/outputs.md) says that a key a route sends with `setCookie` keeps its real value in the cookie (masking applies to the body), and that a blueprint shared by several records masks the `sensitive` keys of all of them in a response; [Standard use cases](docs/std-use-cases.md) describes at `register` the declaration check on the keys a token is made from.
 - [Blueprints](docs/blueprints.md#the-type-of-a-value) shows how to get the type of a blueprint's value: `StandardSchemaV1.InferOutput<typeof Task>`, and `InferInput` for what it accepts. `BlueprintValue` takes a collection of properties, not a blueprint.
 
 ## 27.0.0-rc.4 — 2026-11-16
