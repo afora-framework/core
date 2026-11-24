@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+
 ### Security
 
 - `findBy<Key>` and `findManyBy<Key>` give no entity for a missing value: `undefined` or `null` gives `undefined` and `[]` without calling the provider, on every provider, including a declarative use case step given an optional input that is absent. See [Repositories](docs/repositories.md). (SEC-20)
@@ -9,6 +10,7 @@
 ### Fixed
 
 - `findBy<Key>` and `findManyBy<Key>` take one value: `{ in: [...] }` throws `InvalidRepositoryQuery` instead of being read as a membership, which only the queries (`findMany`, `exists`, `findPage`, `count`) take. (SEC-21)
+- `PlainPassword` and `Password.hash` apply the same password rules to a value with line breaks: the schema pattern of `PlainPassword` looks for each required character across the whole value, as `Password.hash` does.
 
 ### Repository
 
