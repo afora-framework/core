@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validateInProject } from "../src/spec-file";
+import { redactMessage } from "../src/typecheck";
 import { type Connected, connect, makeProject, removeProject } from "./project";
 
 const dirs: string[] = [];
@@ -173,4 +174,120 @@ describe("SEC-18: the application an agent may import", () => {
 			expect(String(result.data)).toContain("import_failed");
 		}
 	}, 60_000);
+});
+
+describe("SEC-32: the diagnostics afora_generate returns", () => {
+	const projects: string[] = [];
+	afterAll(() => Promise.all(projects.map(removeProject)));
+
+	test("SEC-32: the literal values of a project module are not echoed back", async () => {
+		const dir = await makeProject({
+			"src/secrets.ts":
+				// biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal of the module
+				'export const config = { db: { url: "postgres://admin:hunter2@db/prod" }, key: "sk_live_LEAKME", pin: 98765, tag: `t_${"x"}` } as const;\n',
+		});
+		projects.push(dir);
+		const client = await connect({ project: dir });
+		clients.push(client);
+		const spec = {
+			version: 1,
+			services: { leak: { import: "../secrets#config" } },
+			useCases: {
+				Peek: {
+					input: { fields: { key: "string" } },
+					response: { fields: { value: "string" } },
+					dependencies: { leak: "leak" },
+					implementation: { import: "../secrets#config" },
+				},
+			},
+		};
+		expect((await client.call("afora_spec_write", { spec })).data.written).toBe(
+			true,
+		);
+		const result = await client.call("afora_generate", {});
+		const { typecheck } = result.data;
+		expect(typecheck.ran).toBe(true);
+		expect(typecheck.ok).toBe(false);
+		expect(typecheck.diagnostics.length).toBeGreaterThan(0);
+		for (const diagnostic of typecheck.diagnostics) {
+			expect(diagnostic.file).toMatch(/^src\/domain\//);
+			expect(diagnostic.line).toBeGreaterThan(0);
+			expect(diagnostic.code).toMatch(/^TS\d+$/);
+		}
+		// What the agent can act on stays: the type that was expected.
+		expect(JSON.stringify(typecheck)).toContain("'ServiceFactory'");
+		const text = JSON.stringify(result.data);
+		for (const secret of ["hunter2", "sk_live", "98765", "t_x", "postgres"]) {
+			expect(text).not.toContain(secret);
+		}
+	}, 120_000);
+});
+
+describe("SEC-32: redacting a tsc message", () => {
+	test("SEC-32: literals and quoted types are redacted, plain names kept", () => {
+		expect(
+			redactMessage(
+				// biome-ignore lint/suspicious/noTemplateCurlyInString: a template literal type as tsc prints it
+				"Type '{ readonly a: \"it's \\\" x\"; b: 5; c: `x${string}` }' is not assignable to type 'ServiceFactory'. Property 'x.y' is missing; '123'",
+			),
+		).toBe(
+			"Type '…' is not assignable to type 'ServiceFactory'. Property 'x.y' is missing; '…'",
+		);
+	});
+
+	test("SEC-32: a message full of escaped quotes is redacted in linear time", () => {
+		const start = performance.now();
+		for (const message of [
+			`"${'\\"'.repeat(100_000)}`,
+			`\`${"\\`".repeat(100_000)}`,
+			"'a".repeat(100_000),
+		]) {
+			redactMessage(message);
+		}
+		expect(performance.now() - start).toBeLessThan(200);
+	});
+});
+
+describe("SEC-33: a spec file that is not valid JSON", () => {
+	test("SEC-33: an extended file that is not JSON is reported without its text or the project path", async () => {
+		const { root } = await scratch();
+		await mkdir(join(root, "config"));
+		for (const text of [
+			'{"Stripe": sk_live_ABCDEFGHIJ0123}\n',
+			"{\"Stripe\": 'sk_live_ABCDEFGHIJ0123'}\n",
+		]) {
+			await writeFile(join(root, "config/appsettings.json"), text);
+			await expectNoText(root);
+		}
+	});
+
+	const expectNoText = async (root: string) => {
+		const { issues } = await validateInProject(
+			{ root },
+			{ version: 1, extends: ["./config/appsettings.json"] },
+		);
+		const unresolved = issues.find((i) => i.code === "unresolved_extends");
+		expect(unresolved?.message).toContain("config/appsettings.json");
+		expect(unresolved?.message).toContain("not valid JSON");
+		for (const text of ["sk_live", "Stripe", root]) {
+			expect(JSON.stringify(issues)).not.toContain(text);
+		}
+	};
+
+	test("SEC-33: an afora.json that is not JSON is reported without its text", async () => {
+		const dir = await makeProject({
+			"afora.json": '{"version": 1, "name": sk_live_ABCDEFGHIJ0123}\n',
+		});
+		const client = await connect({ project: dir });
+		clients.push(client);
+		try {
+			const result = await client.call("afora_spec_read", {});
+			expect(result.isError).toBe(true);
+			expect(String(result.data)).toContain("not valid JSON");
+			expect(String(result.data)).not.toContain("sk_live");
+			expect(String(result.data)).not.toContain("name");
+		} finally {
+			await removeProject(dir);
+		}
+	});
 });
