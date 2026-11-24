@@ -39,12 +39,16 @@ const usersOf = () => {
 		actions: ["findById", "findByEmail", "create"],
 	});
 };
-const routesOf = (token: Record<string, unknown>) => {
+const routesOf = (
+	token: Record<string, unknown>,
+	values: { roles: string[]; tenant: string } = { roles: [], tenant: "t" },
+) => {
 	const Users = usersOf();
 	const Auth = commandOf({
 		name: "Auth",
 		useCases: (ctx) => ({
 			register: ctx.register(Users, {
+				values,
 				route: { method: "post", path: "/users", status: 201 },
 			}),
 			login: ctx.login(Users, {
@@ -113,14 +117,12 @@ describe("SEC-23: scopes are scope tokens", () => {
 
 	test("SEC-23: login issues no token for an entity that holds a scope that is not a scope token", async () => {
 		process.env.SEC23_SECRET = secret;
-		const call = routesOf({
-			secret: { env: "SEC23_SECRET" },
-			scopesFrom: "roles",
-		});
-		const user = { email: "ana@x.dev", password: "S3nha!forte", tenant: "t" };
-		expect(
-			(await call("/users", { ...user, roles: ["posts:read admin"] })).status,
-		).toBe(201);
+		const call = routesOf(
+			{ secret: { env: "SEC23_SECRET" }, scopesFrom: "roles" },
+			{ roles: ["posts:read admin"], tenant: "t" },
+		);
+		const user = { email: "ana@x.dev", password: "S3nha!forte" };
+		expect((await call("/users", user)).status).toBe(201);
 		const login = await call("/login", {
 			email: user.email,
 			password: user.password,
