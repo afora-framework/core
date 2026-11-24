@@ -10,6 +10,7 @@ import {
 	loadEnvironments,
 } from "../environment/environment";
 import type { ILogger } from "../logger/logger";
+import type { RuntimeServices } from "../runtime-scope";
 import { RepositoryUsedOutsideApplication } from "./exceptions";
 import type { RepositoryIndex, RepositoryScans } from "./types/query.interface";
 import type {
@@ -36,6 +37,8 @@ export interface RepositoryState {
 	readonly scans: RepositoryScans;
 	/** The logger of the application that bound it, for `scans: "warn"`. */
 	readonly logger?: ILogger;
+	/** The runtime services of the application that bound it, in force for its calls. */
+	readonly runtime?: RuntimeServices;
 	context?: RepositoryContext;
 }
 
@@ -192,6 +195,7 @@ function bindState(
 	provider: IRepositoryProvider | undefined,
 	instances: ReadonlyMap<object, IRepositoryProvider> | undefined,
 	logger: ILogger | undefined,
+	runtime: RuntimeServices | undefined,
 	bound = new Map<RepositoryState, RepositoryState>(),
 ): RepositoryState {
 	const done = bound.get(state);
@@ -199,6 +203,7 @@ function bindState(
 	const copy: RepositoryState = {
 		...state,
 		logger,
+		runtime,
 		provider: state.explicitProvider
 			? (instances?.get(state.provider) ?? state.provider)
 			: (provider ?? state.provider),
@@ -206,7 +211,7 @@ function bindState(
 		relations: new Map(
 			[...state.relations].map(([target, related]) => [
 				target,
-				bindState(related, provider, instances, logger, bound),
+				bindState(related, provider, instances, logger, runtime, bound),
 			]),
 		),
 	};
@@ -250,19 +255,24 @@ export interface RepositoryBinding {
  * through `provider`, unless it declared a provider of its own; a declared
  * provider found in `instances` is replaced by its value. With `binding`,
  * the declaration (made by `repositoryOf`) throws
- * `RepositoryUsedOutsideApplication` from then on.
+ * `RepositoryUsedOutsideApplication` from then on. With `runtime`, its calls
+ * run with those services.
  */
 export function bindRepository<Repository extends object>(
 	repository: Repository,
 	provider: IRepositoryProvider | undefined,
 	instances?: ReadonlyMap<object, IRepositoryProvider>,
 	binding?: RepositoryBinding,
+	runtime?: RuntimeServices,
 ): Repository {
 	const state = stateOf(repository);
 	const Declared = repository.constructor as new () => object;
 	class Bound extends Declared {}
 	Object.defineProperty(Bound, "name", { value: Declared.name });
-	states.set(Bound, bindState(state, provider, instances, binding?.logger));
+	states.set(
+		Bound,
+		bindState(state, provider, instances, binding?.logger, runtime),
+	);
 	if (binding) {
 		owners.set(declarationOf(state), {
 			application: binding.application,

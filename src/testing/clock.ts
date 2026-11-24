@@ -31,7 +31,8 @@ function millisecondsOf(at: Date | number | string): number {
 }
 
 /**
- * A clock for `configure({ clock })` that only moves when told: `set` jumps
+ * A clock for the `runtime` of an application, `withRuntime` or
+ * `configure({ clock })` that only moves when told: `set` jumps
  * to a time, `advance` moves by milliseconds or by `{ minutes, days… }`.
  * It starts at `start` (2026-01-01T00:00:00.000Z by default).
  */

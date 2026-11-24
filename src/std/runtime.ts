@@ -1,25 +1,19 @@
-import { type Clock, currentTime, setClock } from "../core/clock";
+import { currentTime, setClock } from "../core/clock";
 import { ExceptionLayers } from "../core/exception/enums/exception-layers";
 import { exceptionOf } from "../core/exception/exception";
 import { markExported } from "../core/exception/exported";
+import {
+	activeRuntime,
+	type IdGenerator,
+	type PasswordHasher,
+	type RuntimeServices,
+} from "../core/runtime-scope";
 
-/** Hashes and checks passwords. `verifySync` is optional. */
-export interface PasswordHasher {
-	hash(plain: string): Promise<string>;
-	verify(plain: string, hash: string): Promise<boolean>;
-	verifySync?(plain: string, hash: string): boolean;
-}
-
-/** Makes a new id, as a UUID v7 string. */
-export type IdGenerator = () => string;
-
-/** The runtime services afora uses; each is replaceable. */
-export interface RuntimeServices {
-	hasher?: PasswordHasher;
-	idGenerator?: IdGenerator;
-	/** The current time in epoch milliseconds; `manualClock()` of `@afora/core/testing` is one. */
-	clock?: Clock;
-}
+export type {
+	IdGenerator,
+	PasswordHasher,
+	RuntimeServices,
+} from "../core/runtime-scope";
 
 /** No password hasher can run here; call `configure({ hasher })`. */
 export const PasswordHasherRequired = exceptionOf({
@@ -339,7 +333,10 @@ let hasher: PasswordHasher | undefined;
 const defaultIdGenerator: IdGenerator = () => uuidv7();
 let idGenerator: IdGenerator = defaultIdGenerator;
 
-/** Replaces the password hasher, the id generator and/or the clock. */
+/**
+ * Replaces the password hasher, the id generator and/or the clock of the
+ * process; `withRuntime` and the `runtime` of an application come first.
+ */
 export function configure(services: RuntimeServices): void {
 	if (services.hasher) hasher = services.hasher;
 	if (services.idGenerator) idGenerator = services.idGenerator;
@@ -372,8 +369,14 @@ function nodeCryptoOf(): Partial<Argon2Crypto> | undefined {
 		| undefined;
 }
 
-/** The hasher in use; the default is chosen on first call, not at import. */
+/**
+ * The hasher in use: that of the `withRuntime` or the application running
+ * the call, else the configured one; the default is chosen on first call, not
+ * at import.
+ */
 export function currentHasher(): PasswordHasher {
+	const scoped = activeRuntime()?.hasher;
+	if (scoped !== undefined) return scoped;
 	hasher ??= defaultHasherOf({
 		bun: (globalThis as { Bun?: HasherEnvironment["bun"] }).Bun,
 		crypto: nodeCryptoOf(),
@@ -387,12 +390,15 @@ export function currentHasher(): PasswordHasher {
  * @internal
  */
 export function makesDefaultIds(): boolean {
-	return idGenerator === defaultIdGenerator;
+	return (activeRuntime()?.idGenerator ?? idGenerator) === defaultIdGenerator;
 }
 
-/** Makes an id with the generator in use. */
+/**
+ * Makes an id with the generator in use: that of the `withRuntime` or the
+ * application running the call, else the configured one.
+ */
 export function generateId(): string {
-	return idGenerator();
+	return (activeRuntime()?.idGenerator ?? idGenerator)();
 }
 
 /** `verifySync` of the hasher in use, or throws `SyncVerifyUnsupported`. */

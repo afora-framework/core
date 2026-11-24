@@ -43,6 +43,11 @@ import { recordNameOf } from "../record/name";
 import { AbstractRepository, isRepository } from "../repository/repository";
 import { actionGetters } from "../repository/state";
 import type { AnyRepository } from "../repository/types/repository.interface";
+import {
+	ApplicationRuntimeKey,
+	type RuntimeHolder,
+	withApplicationRuntime,
+} from "../runtime-scope";
 import { Kind } from "../symbols/kind";
 import {
 	endSpan,
@@ -842,175 +847,175 @@ export abstract class AbstractUseCase<
 		}
 		Object.freeze(state.dependencies);
 		// Own, immutable wrapper: subclasses implement only the prototype method.
-		Object.defineProperty(this, "execute", {
-			value: async (overrides: unknown = {}) => {
-				if (state.started) throw new UseCaseAlreadyExecuted({ source });
-				state.started = true;
-				// The services of the call are made once for every use case it
-				// runs: the first that can make one keeps them in the scope.
+		const run = async (overrides: unknown = {}) => {
+			if (state.started) throw new UseCaseAlreadyExecuted({ source });
+			state.started = true;
+			// The services of the call are made once for every use case it
+			// runs: the first that can make one keeps them in the scope.
+			if (
+				state.scope?.services === undefined &&
+				serviceFactoriesOf(state.owner) !== undefined
+			) {
+				state.scope = {
+					...state.scope,
+					providers: state.scope?.providers ?? new Map(),
+					services: new Map(),
+					context: state.scope?.context ?? state.context,
+				};
+			}
+			// Its span starts before the dependencies are resolved, so that
+			// their failures show.
+			const tracer = resolveTracer(state.scope?.tracer, state.owner);
+			const span =
+				tracer === undefined ? undefined : traceUseCase(tracer, state, source);
+			let resolved: Record<string, unknown> | undefined;
+			const services: [string, Promise<unknown>][] = [];
+			try {
 				if (
-					state.scope?.services === undefined &&
-					serviceFactoriesOf(state.owner) !== undefined
+					typeof overrides !== "object" ||
+					overrides === null ||
+					Array.isArray(overrides) ||
+					Reflect.ownKeys(overrides).some(
+						(key) =>
+							typeof key !== "string" ||
+							!Object.hasOwn(declaration.dependencies, key) ||
+							!isOverrideOf(
+								declaration.dependencies[key] as UseCaseDependency,
+								(overrides as Record<string, unknown>)[key],
+							),
+					)
 				) {
-					state.scope = {
-						...state.scope,
-						providers: state.scope?.providers ?? new Map(),
-						services: new Map(),
-						context: state.scope?.context ?? state.context,
+					throw new InvalidUseCaseDependencies({ source });
+				}
+				const replaced = overrides as Record<string, unknown>;
+				const dependencies: Record<string, unknown> = {};
+				for (const [key, dependency] of Object.entries(
+					declaration.dependencies,
+				)) {
+					if (Object.hasOwn(replaced, key)) continue;
+					if (isService(dependency)) {
+						const value = serviceOfCall(state, dependency);
+						if (value === undefined) {
+							Object.defineProperty(dependencies, key, {
+								get: unboundService(dependency, source),
+								enumerable: true,
+							});
+						} else {
+							services.push([key, value]);
+						}
+						continue;
+					}
+					dependencies[key] = state.dependencies[key];
+				}
+				for (const [key, substitute] of Object.entries(replaced)) {
+					const dependency = declaration.dependencies[key] as UseCaseDependency;
+					if (isRepository(dependency)) {
+						dependencies[key] = bindRepository(
+							dependency,
+							substitute as object,
+							state,
+							source,
+						);
+						continue;
+					}
+					if (isLoggerDeclaration(dependency) || isService(dependency)) {
+						dependencies[key] = substitute;
+						continue;
+					}
+					if (isEnvironment(dependency)) {
+						const parsed = dependency.blueprint.safeParse(substitute);
+						if (parsed.issues) throw new InvalidUseCaseDependencies({ source });
+						dependencies[key] = Object.freeze(parsed.value);
+						continue;
+					}
+					const Child = dependency as AnyUseCaseClass;
+					dependencies[key] = async (value: unknown) => {
+						if (!state.active) throw new InvalidUseCaseDependencies({ source });
+						const childSource = Child.useCaseName;
+						const input = Child.blueprint.safeParse(value);
+						if (input.issues) invalidValue(input.issues, childSource, "input");
+						const given = await guard(
+							{ layer: ExceptionLayers.UseCase, source: childSource },
+							() => (substitute as (input: unknown) => unknown)(input.value),
+						);
+						// A child gives its body only, whatever status it chose.
+						const output = parseResponse(
+							Child.response,
+							takeStatus(given).body,
+						);
+						if (output.issues)
+							invalidValue(output.issues, childSource, "response");
+						collectEvents(Child.response, output.value, state.events);
+						return output.value;
 					};
 				}
-				// Its span starts before the dependencies are resolved, so that
-				// their failures show.
-				const tracer = resolveTracer(state.scope?.tracer, state.owner);
-				const span =
-					tracer === undefined
-						? undefined
-						: traceUseCase(tracer, state, source);
-				let resolved: Record<string, unknown> | undefined;
-				const services: [string, Promise<unknown>][] = [];
-				try {
-					if (
-						typeof overrides !== "object" ||
-						overrides === null ||
-						Array.isArray(overrides) ||
-						Reflect.ownKeys(overrides).some(
-							(key) =>
-								typeof key !== "string" ||
-								!Object.hasOwn(declaration.dependencies, key) ||
-								!isOverrideOf(
-									declaration.dependencies[key] as UseCaseDependency,
-									(overrides as Record<string, unknown>)[key],
-								),
-						)
-					) {
-						throw new InvalidUseCaseDependencies({ source });
-					}
-					const replaced = overrides as Record<string, unknown>;
-					const dependencies: Record<string, unknown> = {};
-					for (const [key, dependency] of Object.entries(
-						declaration.dependencies,
-					)) {
-						if (Object.hasOwn(replaced, key)) continue;
-						if (isService(dependency)) {
-							const value = serviceOfCall(state, dependency);
-							if (value === undefined) {
-								Object.defineProperty(dependencies, key, {
-									get: unboundService(dependency, source),
-									enumerable: true,
-								});
-							} else {
-								services.push([key, value]);
-							}
-							continue;
-						}
-						dependencies[key] = state.dependencies[key];
-					}
-					for (const [key, substitute] of Object.entries(replaced)) {
-						const dependency = declaration.dependencies[
-							key
-						] as UseCaseDependency;
-						if (isRepository(dependency)) {
-							dependencies[key] = bindRepository(
-								dependency,
-								substitute as object,
-								state,
-								source,
-							);
-							continue;
-						}
-						if (isLoggerDeclaration(dependency) || isService(dependency)) {
-							dependencies[key] = substitute;
-							continue;
-						}
-						if (isEnvironment(dependency)) {
-							const parsed = dependency.blueprint.safeParse(substitute);
-							if (parsed.issues)
-								throw new InvalidUseCaseDependencies({ source });
-							dependencies[key] = Object.freeze(parsed.value);
-							continue;
-						}
-						const Child = dependency as AnyUseCaseClass;
-						dependencies[key] = async (value: unknown) => {
-							if (!state.active)
-								throw new InvalidUseCaseDependencies({ source });
-							const childSource = Child.useCaseName;
-							const input = Child.blueprint.safeParse(value);
-							if (input.issues)
-								invalidValue(input.issues, childSource, "input");
-							const given = await guard(
-								{ layer: ExceptionLayers.UseCase, source: childSource },
-								() => (substitute as (input: unknown) => unknown)(input.value),
-							);
-							// A child gives its body only, whatever status it chose.
-							const output = parseResponse(
-								Child.response,
-								takeStatus(given).body,
-							);
-							if (output.issues)
-								invalidValue(output.issues, childSource, "response");
-							collectEvents(Child.response, output.value, state.events);
-							return output.value;
-						};
-					}
-					resolved = dependencies;
-				} catch (error) {
-					if (tracer !== undefined) {
-						failSpan(span, error, ExceptionLayers.UseCase);
-						untrace(state);
-					}
-					throw error;
-				}
-				state.active = true;
-				const started = clock();
-				// The values of the services, then the implementation.
-				const perform = async () => {
-					for (const [key, value] of services) {
-						(resolved as Record<string, unknown>)[key] = await value;
-					}
-					state.resolved = Object.freeze(resolved);
-					return implementation.call(
-						this,
-						state.resolved as DependencyOverrides<Dependencies>,
-					);
-				};
-				try {
-					const returned = await guard(
-						{ layer: ExceptionLayers.UseCase, source },
-						() =>
-							span === undefined
-								? perform()
-								: runInSpan(tracer as ITracer, span, perform),
-					);
-					// The view `withStatus` made carries the status of this call.
-					const { status, body } = takeStatus(returned);
-					const parsed = parseResponse(declaration.response, body);
-					if (parsed.issues) invalidValue(parsed.issues, source, "response");
-					collectEvents(declaration.response, parsed.value, state.events);
-					writeLog(loggerOfCall(state), "debug", "use-case", {
-						useCase: source,
-						outcome: "ok",
-						ms: elapsed(started),
-					});
-					endSpan(span);
-					// Read by the command that runs it for an output; `execute`
-					// gives the body only.
-					state.status = status;
-					return parsed.value;
-				} catch (error) {
-					logFailure(
-						loggerOfCall(state),
-						"use-case-failed",
-						{ useCase: source, ms: elapsed(started) },
-						error,
-					);
+				resolved = dependencies;
+			} catch (error) {
+				if (tracer !== undefined) {
 					failSpan(span, error, ExceptionLayers.UseCase);
-					throw error;
-				} finally {
-					state.active = false;
-					state.resolved = undefined;
-					if (tracer !== undefined) untrace(state);
+					untrace(state);
 				}
-			},
+				throw error;
+			}
+			state.active = true;
+			const started = clock();
+			// The values of the services, then the implementation.
+			const perform = async () => {
+				for (const [key, value] of services) {
+					(resolved as Record<string, unknown>)[key] = await value;
+				}
+				state.resolved = Object.freeze(resolved);
+				return implementation.call(
+					this,
+					state.resolved as DependencyOverrides<Dependencies>,
+				);
+			};
+			try {
+				const returned = await guard(
+					{ layer: ExceptionLayers.UseCase, source },
+					() =>
+						span === undefined
+							? perform()
+							: runInSpan(tracer as ITracer, span, perform),
+				);
+				// The view `withStatus` made carries the status of this call.
+				const { status, body } = takeStatus(returned);
+				const parsed = parseResponse(declaration.response, body);
+				if (parsed.issues) invalidValue(parsed.issues, source, "response");
+				collectEvents(declaration.response, parsed.value, state.events);
+				writeLog(loggerOfCall(state), "debug", "use-case", {
+					useCase: source,
+					outcome: "ok",
+					ms: elapsed(started),
+				});
+				endSpan(span);
+				// Read by the command that runs it for an output; `execute`
+				// gives the body only.
+				state.status = status;
+				return parsed.value;
+			} catch (error) {
+				logFailure(
+					loggerOfCall(state),
+					"use-case-failed",
+					{ useCase: source, ms: elapsed(started) },
+					error,
+				);
+				failSpan(span, error, ExceptionLayers.UseCase);
+				throw error;
+			} finally {
+				state.active = false;
+				state.resolved = undefined;
+				if (tracer !== undefined) untrace(state);
+			}
+		};
+		// Bound by an application with a `runtime`: the call runs with its services.
+		const runtime = (state.owner as RuntimeHolder)[ApplicationRuntimeKey];
+		Object.defineProperty(this, "execute", {
+			value:
+				runtime === undefined
+					? run
+					: (...args: [unknown?]) =>
+							withApplicationRuntime(runtime, () => run(...args)),
 		});
 	}
 

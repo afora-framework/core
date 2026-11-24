@@ -1,16 +1,17 @@
 # Runtime
 
-afora runs on Bun (1.4.4 or later) and Node.js (22 or later), and loads in browsers and in Workers. The code you write is the same everywhere: what changes from one runtime to another is two services, password hashing and id generation, which `configure` replaces, and the server that feeds requests to an output.
+afora runs on Bun (1.4.4 or later) and Node.js (22 or later), and loads in browsers and in Workers. The code you write is the same everywhere: what changes from one runtime to another is two services, password hashing and id generation, which `configure` replaces (with the clock, a third service), and the server that feeds requests to an output.
 
 ## What runs where
 
-| Feature                                    | Bun            | Node 24.7+           | Node 22 to 24.6         | Browsers, Workers       |
-| ------------------------------------------ | -------------- | -------------------- | ----------------------- | ----------------------- |
-| Properties, blueprints, records, entities  | yes            | yes                  | yes                     | yes                     |
-| Repositories, use cases, commands, outputs | yes            | yes                  | yes                     | yes                     |
-| `Id.generate()` (UUID v7)                  | yes            | yes                  | yes                     | yes                     |
-| `Password.hash` and `verify` (argon2id)    | `Bun.password` | native `node:crypto` | `configure({ hasher })` | `configure({ hasher })` |
-| `password.verifySync`                      | yes            | yes                  | with a hasher that can  | with a hasher that can  |
+| Feature                                    | Bun            | Node 24.7+           | Node 22 to 24.6         | Browsers, Workers                                               |
+| ------------------------------------------ | -------------- | -------------------- | ----------------------- | --------------------------------------------------------------- |
+| Properties, blueprints, records, entities  | yes            | yes                  | yes                     | yes                                                             |
+| Repositories, use cases, commands, outputs | yes            | yes                  | yes                     | yes                                                             |
+| `Id.generate()` (UUID v7)                  | yes            | yes                  | yes                     | yes                                                             |
+| `Password.hash` and `verify` (argon2id)    | `Bun.password` | native `node:crypto` | `configure({ hasher })` | `configure({ hasher })`                                         |
+| `password.verifySync`                      | yes            | yes                  | with a hasher that can  | with a hasher that can                                          |
+| `withRuntime` and `runtime` across `await` | yes            | yes                  | yes                     | Workers with `nodejs_compat`; browsers: up to the first `await` |
 
 afora imports no `node:crypto`, no `Buffer` and no Bun API when it loads, so importing it never fails on a runtime that lacks them. What a runtime may lack is looked up on first use: the native argon2 of Node through `process.getBuiltinModule` (Node 22.3 and later), `Bun.password` on Bun. Ids use only `crypto.getRandomValues`, which every runtime has.
 
@@ -93,7 +94,38 @@ The logger's `at` keeps the real time: logs are about when things happened. The 
 
 `configure({ hasher, idGenerator, clock })` replaces any of the services; a service it is not given stays as it is. The services are global to the process (or the isolate), so call `configure` once, at start, before the first password or id is made, and not per request.
 
-`resetRuntime()` puts the services back to their defaults (the clock included), chooses the hasher again on its next use, and restarts the clock of the id generator. It is for tests: call it after each test that configures something, so one test's hasher does not leak into the next.
+`resetRuntime()` puts the services back to their defaults (the clock included), chooses the hasher again on its next use, and restarts the clock of the id generator. A test that needs its own services is better served by the `runtime` of its application or by `withRuntime` (below), which leave nothing to reset; `resetRuntime` is for a test that called `configure`, so that one test's hasher does not leak into the next.
+
+## Per application and per call
+
+`configure` is one set of services for the process. Two narrower places take the same services, `{ hasher, idGenerator, clock }`, and come before it, a service they do not give falling back to the next:
+
+1. `withRuntime(services, fn)`, for the code `fn` runs;
+2. the `runtime` of an application, for what the application runs: its use cases, commands, outputs and repositories, and the entities and passwords made in them (see [Applications](applications.md#runtime-services));
+3. `configure`;
+4. the defaults.
+
+`withRuntime` runs `fn`, sync or async, and gives back what it returns. Calls nest, the inner one winning each service it gives, and the services in force before come back when `fn` returns or throws:
+
+```ts
+import { blueprintOf, entityOf, withRuntime } from "@afora/core";
+import { manualClock } from "@afora/core/testing";
+
+class Note extends entityOf(blueprintOf((ctx) => ({ title: ctx.string }))) {}
+
+const note = withRuntime(
+	{
+		clock: manualClock("2030-01-01T00:00:00.000Z"),
+		idGenerator: () => "01890000-0000-7000-8000-000000000001",
+	},
+	() => new Note({ title: "a" }),
+);
+note.createdAt; // "2030-01-01T00:00:00.000Z"
+```
+
+The services follow `fn` and the application's calls across `await` through `AsyncLocalStorage` of `node:async_hooks`, which Bun, Node, Deno and Workers with `nodejs_compat` have; it is looked up the first time a scope is entered, never at import. Where there is none (a browser), they cover the synchronous part of `fn` or of a call, up to its first `await`; what runs after it reads the services of `configure`. The scopes cost nothing until the first one is entered: until then reading a service is one check.
+
+A different clock per application does not give the default ids a different order: the ids of one process stay in order whatever clock made them, so an id made after one of a later clock carries that later millisecond. Give each application its own `idGenerator` when its ids must follow its own clock.
 
 ## Deploying
 

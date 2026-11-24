@@ -430,6 +430,7 @@ export type {
 	ProviderResults,
 } from "./core/repository/types/wrap.interface";
 export { wrapProvider } from "./core/repository/wrap";
+export { withRuntime } from "./core/runtime-scope";
 export type {
 	ISchema,
 	ISchemaType,

@@ -77,6 +77,12 @@ import {
 import type { ProviderDescription } from "../repository/types/query.interface";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
 import type { SchemaMigrationOptions } from "../repository/types/schema.interface";
+import {
+	ApplicationRuntimeKey,
+	applicationRuntimeOf,
+	type RuntimeServices,
+	runtimeServicesProblem,
+} from "../runtime-scope";
 import { rawTypeOf } from "../schema/schema";
 import type { ISchema } from "../schema/types/schema.interface";
 import { Kind } from "../symbols/kind";
@@ -180,6 +186,8 @@ const internals = new WeakMap<object, Registry>();
 const logSettings = new WeakMap<object, LogSettings | LogFactory>();
 /** The `trace` each application was declared with (or inherited), for `extends`. */
 const traceSettings = new WeakMap<object, ITracer>();
+/** The `runtime` services each application has (its own over inherited ones), for `extends`. */
+const runtimeSettings = new WeakMap<object, RuntimeServices>();
 
 /** What `settings` holds for the last of `extended` that has something there. */
 function inherited<Value>(
@@ -1026,6 +1034,7 @@ function describeRegistry(
 	publishers: Readonly<Record<string, string>>,
 	services: Readonly<Record<string, string>>,
 	traced: boolean,
+	runtime: RuntimeServices | undefined,
 ): ApplicationDescription {
 	const scope: Scope = {
 		properties: referencesOf(registry, "properties"),
@@ -1178,6 +1187,16 @@ function describeRegistry(
 						},
 					}),
 		...(traced ? { trace: { kind: "opaque" as const } } : {}),
+		...(runtime === undefined
+			? {}
+			: {
+					runtime: Object.fromEntries(
+						Object.keys(runtime).map((service) => [
+							service,
+							{ kind: "opaque" as const },
+						]),
+					),
+				}),
 		...(Object.keys(publishers).length === 0
 			? {}
 			: {
@@ -1651,6 +1670,15 @@ export function applicationOf<
 		settings.trace === undefined
 			? inherited(extended, traceSettings)
 			: checkTracer(settings.trace);
+	// The runtime services: those of the extended applications, in order, then its own.
+	if (settings.runtime !== undefined) {
+		const problem = runtimeServicesProblem(settings.runtime);
+		if (problem !== undefined) invalid(name, `runtime: ${problem}`);
+	}
+	const runtime = applicationRuntimeOf(
+		extended.map((application) => runtimeSettings.get(application)),
+		settings.runtime,
+	);
 	const { publishers, origins } = publishersOf(
 		name,
 		settings.publishers,
@@ -1679,6 +1707,7 @@ export function applicationOf<
 		bindsProviders ||
 		logger !== undefined ||
 		tracer !== undefined ||
+		runtime !== undefined ||
 		hasPublishers ||
 		hasServices;
 
@@ -1693,13 +1722,24 @@ export function applicationOf<
 	const boundByState = new Map<object, unknown>();
 	const repositories: Record<string, unknown> = {};
 	for (const entry of registry.repositories.values()) {
+		// With only a `runtime`, the declaration stays usable: it reads the same store.
 		const repository = bindsProviders
-			? bindRepository(entry.value as object, provider, instances, {
-					application: name,
-					key: entry.name,
-					logger,
-				})
-			: entry.value;
+			? bindRepository(
+					entry.value as object,
+					provider,
+					instances,
+					{ application: name, key: entry.name, logger },
+					runtime,
+				)
+			: runtime !== undefined
+				? bindRepository(
+						entry.value as object,
+						undefined,
+						undefined,
+						undefined,
+						runtime,
+					)
+				: entry.value;
 		bound.set(entry.value, repository);
 		boundByState.set(entry.key, repository);
 		repositories[entry.name] = repository;
@@ -1752,6 +1792,8 @@ export function applicationOf<
 			Object.defineProperty(Bound, ApplicationLoggerKey, { value: logger });
 		if (tracer)
 			Object.defineProperty(Bound, ApplicationTracerKey, { value: tracer });
+		if (runtime)
+			Object.defineProperty(Bound, ApplicationRuntimeKey, { value: runtime });
 		if (hasServices)
 			Object.defineProperty(Bound, ApplicationServicesKey, { value: services });
 		return Bound as unknown as AnyUseCaseClass;
@@ -1991,6 +2033,7 @@ export function applicationOf<
 					: { provider: defaultSlot ?? provider }),
 				...(declaredLog === undefined ? {} : { log: declaredLog }),
 				...(tracer === undefined ? {} : { trace: tracer }),
+				...(runtime === undefined ? {} : { runtime }),
 			} as never);
 		},
 		describe: () =>
@@ -2008,6 +2051,7 @@ export function applicationOf<
 				origins,
 				serviceFrom,
 				tracer !== undefined,
+				runtime,
 			),
 		get started() {
 			return started;
@@ -2108,6 +2152,7 @@ export function applicationOf<
 	if (defaultSlot !== undefined) defaultSlots.set(application, defaultSlot);
 	if (declaredLog !== undefined) logSettings.set(application, declaredLog);
 	if (tracer !== undefined) traceSettings.set(application, tracer);
+	if (runtime !== undefined) runtimeSettings.set(application, runtime);
 	publisherOrigins.set(application, Object.freeze(origins));
 	serviceSettings.set(application, services);
 	serviceOrigins.set(application, Object.freeze(serviceFrom));

@@ -34,6 +34,7 @@ import type {
 	SchemaMigrationOptions,
 	SchemaMigrationReport,
 } from "../../repository/types/schema.interface";
+import type { RuntimeServices } from "../../runtime-scope";
 import type { Kind } from "../../symbols/kind";
 import type { ITracer } from "../../tracing/tracing";
 import type { ServiceFactory } from "../../use-case/service";
@@ -155,6 +156,15 @@ export interface ApplicationSettings<
 	 * last extended application that has one; none by default.
 	 */
 	readonly trace?: ITracer;
+	/**
+	 * The runtime services of everything it runs: its use cases, commands and
+	 * outputs, the entities they build, its repositories. Each service given
+	 * (`clock`, `idGenerator`, `hasher`) replaces the one of `configure` for
+	 * them; one not given falls back to `configure`, then to the default, and
+	 * `withRuntime` comes before all. An application that extends it inherits
+	 * them, its own winning each service (see `docs/runtime.md`).
+	 */
+	readonly runtime?: RuntimeServices;
 	/**
 	 * Where event policies such as `publishEvents` publish, by key: a
 	 * WebSocket hub, a queue, a broker. Commands of the application find them
@@ -622,6 +632,12 @@ export interface ApplicationDescription {
 	readonly log?: LogDescription | { readonly kind: "opaque" };
 	/** Present, and opaque, only when it has a `trace` (its own or inherited). */
 	readonly trace?: { readonly kind: "opaque" };
+	/** Present only when it has runtime services (its own or inherited): each one given, opaque. */
+	readonly runtime?: {
+		readonly clock?: { readonly kind: "opaque" };
+		readonly idGenerator?: { readonly kind: "opaque" };
+		readonly hasher?: { readonly kind: "opaque" };
+	};
 	/** Its publishers (inherited ones included), by key, with the application that declared each; present only when it has some. */
 	readonly publishers?: Readonly<Record<string, { readonly from: string }>>;
 	/** Its services (inherited ones included), by name, with the application that declared each; present only when it has some. */

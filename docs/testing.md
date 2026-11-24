@@ -359,33 +359,58 @@ test("publishes order.placed after the call", async () => {
 
 ## Runtime services
 
-Three services depend on the runtime and are worth fixing in tests. `configure({ hasher })` swaps the password hasher (a fast fake keeps tests quick, or supplies one on a Node without argon2), `configure({ idGenerator })` makes ids predictable and `configure({ clock })` makes time a thing the test moves, with `manualClock()` of `@afora/core/testing` (see [Time](runtime.md#time)), instead of patching `Date` for the whole process. `resetRuntime()` puts the defaults back; call it in `afterEach`.
+Three services depend on the runtime and are worth fixing in tests: the password hasher (a fast fake keeps tests quick, or supplies one on a Node without argon2), the id generator (predictable ids) and the clock (time the test moves, with `manualClock()` of `@afora/core/testing`, see [Time](runtime.md#time), instead of patching `Date` for the whole process).
+
+Give them to the application under test, with `runtime`. They then belong to that application and to nothing else, so tests that run at the same time (`test.concurrent`, a runner that shares modules between files, two applications in one file) do not see each other's services, and nothing has to be reset after the test:
 
 ```ts
-import { afterEach, expect, test } from "bun:test";
-import { blueprintOf, configure, entityOf, resetRuntime } from "@afora/core";
+import { expect, test } from "bun:test";
+import { applicationOf, blueprintOf, entityOf, useCaseOf } from "@afora/core";
+import { manualClock } from "@afora/core/testing";
 
-class Note extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+const Title = blueprintOf((ctx) => ({ title: ctx.text }));
+class Note extends entityOf(Title) {}
 
-afterEach(() => resetRuntime());
+class AddNote extends useCaseOf({
+	name: "AddNote",
+	blueprint: Title,
+	response: blueprintOf(() => ({ note: Note })),
+}) {
+	override async execute() {
+		return { note: new Note(this.input) };
+	}
+}
 
-test("ids are predictable", () => {
-	configure({ idGenerator: () => "00000000-0000-7000-8000-000000000000" });
+const appWith = (start: string) =>
+	applicationOf({
+		name: "Notes",
+		entities: { Note },
+		useCases: { AddNote },
+		runtime: {
+			clock: manualClock(start),
+			idGenerator: () => "00000000-0000-7000-8000-000000000000",
+		},
+	});
 
-	expect(new Note({ title: "a" }).id).toBe(
-		"00000000-0000-7000-8000-000000000000",
-	);
+test.concurrent("stamps with its own clock", async () => {
+	const app = appWith("2030-01-01T00:00:00.000Z");
+	const { note } = await app.run(AddNote, { title: "a" });
+
+	expect(note.id).toBe("00000000-0000-7000-8000-000000000000");
+	expect(note.createdAt).toBe("2030-01-01T00:00:00.000Z");
 });
 ```
 
+For code outside an application (an entity or a password built in the test itself), `withRuntime(services, fn)` gives the services to what `fn` runs, and to nothing after it returns (see [Runtime](runtime.md#per-application-and-per-call)). `configure` still works, but it sets the services of the whole process: a test that calls it must call `resetRuntime()` in `afterEach`, and tests that run at the same time share what it set.
+
 ## What `@afora/core/testing` has
 
-| Export                 | For                                                                                                                              |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `memoryPublisher()`    | Testing an application: a publisher that keeps `{ topic, event }` in `published`.                                                |
-| `manualClock(start?)`  | Testing time: a clock for `configure({ clock })` with `now()`, `set(date \| ms \| iso)` and `advance(ms \| { minutes, days… })`. |
-| `spyProvider()`        | Testing an application: a provider that records its calls and fails on demand.                                                   |
-| `providerContract`     | Writing a repository provider: the cases every `IRepositoryProvider` must pass.                                                  |
-| `httpProviderContract` | Writing an HTTP sink for a server (as `@afora/hono` and `@afora/fastify` are): its cases.                                        |
+| Export                 | For                                                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `memoryPublisher()`    | Testing an application: a publisher that keeps `{ topic, event }` in `published`.                                                                            |
+| `manualClock(start?)`  | Testing time: a clock for `runtime`, `withRuntime` or `configure({ clock })` with `now()`, `set(date \| ms \| iso)` and `advance(ms \| { minutes, days… })`. |
+| `spyProvider()`        | Testing an application: a provider that records its calls and fails on demand.                                                                               |
+| `providerContract`     | Writing a repository provider: the cases every `IRepositoryProvider` must pass.                                                                              |
+| `httpProviderContract` | Writing an HTTP sink for a server (as `@afora/hono` and `@afora/fastify` are): its cases.                                                                    |
 
 The last two are tools for authors of packages. `providerContract({ describe, it, expect }, () => myProvider())` takes the functions of your test runner and a factory of fresh providers, and checks inserts, queries, unique keys, soft deletion, transactions, cursors and more; the [custom provider recipe](recipes/custom-provider.md) runs it. An application does not need them.

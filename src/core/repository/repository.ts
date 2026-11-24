@@ -38,6 +38,7 @@ import {
 	recordFieldDataOf,
 } from "../record/abstract-record";
 import { recordNameOf } from "../record/name";
+import { withApplicationRuntime } from "../runtime-scope";
 import { rawTypeOf } from "../schema/schema";
 import { Kind } from "../symbols/kind";
 import { type ExecutionScope, ScopeKey } from "../use-case/scope";
@@ -298,13 +299,18 @@ function action(
 ): Method {
 	return function (this: object, ...args: never[]) {
 		const state = stateOf(this);
-		return guard(
-			{ layer: ExceptionLayers.Repository, source: state.name },
-			async () => {
-				assertUnbound(state);
-				return method(this as unknown as Internal, ...args);
-			},
-		);
+		const call = () =>
+			guard(
+				{ layer: ExceptionLayers.Repository, source: state.name },
+				async () => {
+					assertUnbound(state);
+					return method(this as unknown as Internal, ...args);
+				},
+			);
+		// Bound by an application with a `runtime`: the call runs with its services.
+		return state.runtime === undefined
+			? call()
+			: withApplicationRuntime(state.runtime, call);
 	} as Method;
 }
 

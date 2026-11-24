@@ -58,7 +58,7 @@ A record or entity that declares a `name` (`entityOf(blueprint, { name: "User" }
 
 Use cases are registered by name too: `useCases: { Register, CreateUser }` (concrete classes, keyed by their `useCaseName`) and `exceptions: { UserAlreadyExists }` (made by `exceptionOf`, keyed by their `name`); another key throws `InvalidApplicationDeclaration`. The resolved set (extended applications included) is checked: every dependency of a use case must be registered, a use case, repository or environment, or given, a service in `services` (`UnregisteredUseCaseDependency`, with `details.useCase` and `details.dependency`); records and entities held by its `blueprint`, `response` or `context` must be registered (`UnregisteredApplicationReference`); and each class in `errors` must be in `exceptions`, unless it is an exception exported by `@afora/core` such as `RepositoryUniqueViolation` (`UnregisteredApplicationReference` otherwise).
 
-With a `provider`, `providers`, `log`, `trace`, `publishers` or `services`, `app.useCases.Register` is a subclass of `Register` whose `dependencies` swap each repository for the application's bound one, through child use cases too; it is the same subclass every time, and `Register` itself is never changed. Without any of them, `app.useCases.Register === Register`. `app.useCase(Register)` gives the same class from the original, as `app.repository(Users)` does. So a use case that must read and write through the application runs as `new app.useCases.Register(input).execute()`, with no override, or in one call as `await app.run(Register, input)`; `new Register(input).execute()` on the module-level class reaches the module-level repositories, which throw `RepositoryUsedOutsideApplication` once an application bound them (see below), unless `execute` is given the application's (`execute({ users: app.repositories.Users })`).
+With a `provider`, `providers`, `log`, `trace`, `runtime`, `publishers` or `services`, `app.useCases.Register` is a subclass of `Register` whose `dependencies` swap each repository for the application's bound one, through child use cases too; it is the same subclass every time, and `Register` itself is never changed. Without any of them, `app.useCases.Register === Register`. `app.useCase(Register)` gives the same class from the original, as `app.repository(Users)` does. So a use case that must read and write through the application runs as `new app.useCases.Register(input).execute()`, with no override, or in one call as `await app.run(Register, input)`; `new Register(input).execute()` on the module-level class reaches the module-level repositories, which throw `RepositoryUsedOutsideApplication` once an application bound them (see below), unless `execute` is given the application's (`execute({ users: app.repositories.Users })`).
 
 `app.run(UseCase, input, options?)` builds the bound use case and executes it, returning its response: `options.context` is the context of the use case (required when it declares one) and `options.dependencies` is what its `execute` takes to replace dependencies. The input may be left out when none of its keys is required. It always rejects rather than throws: with `InvalidApplicationDeclaration` for a use case that is not registered, and with what the constructor (invalid input or context) or `execute` raise. The events the use case collected are not handled, since the instance is not returned; a [command](commands.md) is what dispatches them, and `new app.useCases.Register(input)` gives the instance to call `pullEvents()` on.
 
@@ -66,11 +66,54 @@ Commands are registered the same way (`commands: { Users }`, keyed by `commandNa
 
 Outputs are registered with `outputs: { Api }`, keyed by `outputName` (`InvalidApplicationDeclaration`, which also rejects unnamed outputs made by `.pipe`); every command of an output must be registered in `commands` (`UnregisteredApplicationReference`, `details: { output, command }`). When the commands are bound, `app.outputs.Api` (or `app.output(Api)`) is the output rebuilt over the application-bound commands, with the same name, statuses and stages, memoized, so `invoke` on its operations writes through the application provider. `app.describe().outputs` gives, for each output, `from`, `name`, `commands` (names), `statuses` and `pipe`: each stage as `{ kind: "transform" | "sink", name, options }` (plus `hooks: true` for a sink given hooks, which are code), or `{ kind: "opaque" }` for a hand-written stage.
 
-Repositories are module-level and may be shared, so an application does not change them: `app.repositories.Users` shares the declaration of `Users` but reads and writes through the `provider` of the application (or of the last application it extends that has one), unless `Users` declared its own. Two applications with different providers do not share data. Once an application binds `Users`, the module-level `Users` would read another store, so its methods throw `RepositoryUsedOutsideApplication` instead, pointing to `app.repositories.Users`, `app.run` and `execute` (see [Repositories](repositories.md)). Without a `provider`, `app.repositories.Users` is `Users` itself, nothing is bound, and records, entities and repositories work the same outside any application.
+Repositories are module-level and may be shared, so an application does not change them: `app.repositories.Users` shares the declaration of `Users` but reads and writes through the `provider` of the application (or of the last application it extends that has one), unless `Users` declared its own. Two applications with different providers do not share data. Once an application binds `Users`, the module-level `Users` would read another store, so its methods throw `RepositoryUsedOutsideApplication` instead, pointing to `app.repositories.Users`, `app.run` and `execute` (see [Repositories](repositories.md)). Without a `provider`, `app.repositories.Users` is `Users` itself, nothing is bound, and records, entities and repositories work the same outside any application; with only a `runtime`, it is a copy that runs with those services, and `Users` stays usable, since both reach the same store.
 
 `app.start()` also checks the provider it makes with `providerFrom`: when it does not read by cursor (`capabilities.keyset`) and a repository bound to it declares `findCursor`, it throws `InvalidApplicationDeclaration`, as it throws `InvalidCommandDeclaration` for a command whose transaction the provider cannot run.
 
 `app.describe()` gives a JSON-serializable graph (typed `ApplicationDescription`, from `@afora/core/adapters`), with the `from` of each declaration (the application that registered it): properties (name, flags, JSON Schema and `lineage`), blueprints, records and entities (fields, `options`, plugin descriptors), environments, repositories (entity, actions, `relations` and `environments` by name), use cases (`name`, `description`, `tags`, `deprecated`, `input`, `response`, optional `context`, `errors` as `{ kind: "exception", ref }` or `{ kind: "core", name }`, `dependencies` as `{ kind, ref }`, and `implementation`: `{ kind: "steps", steps }` or `{ kind: "opaque" }`) and exceptions (`layer` and, when declared as a string, `message`). A field is a reference by name (`{ kind: "entity", ref: "User" }`) when it holds a registered declaration. A property's `lineage` comes from `propertyLineageOf(Property)` (from `@afora/core/experimental`): `Integer.with({ min: 0 })` is `{ kind: "refined", base, options }`, `optionalOf` is `{ kind: "optional", base }` and `enumOf` is `{ kind: "factory", factory: "enumOf", args: { values } }`. A root property (declared with `propertyOf`) has no lineage and is identified by its `name`; one with custom handlers is described with what is known (name and schema), never an error.
+
+## Runtime services
+
+`runtime: { clock, idGenerator, hasher }` gives the application its own runtime services (see [Runtime](runtime.md#per-application-and-per-call)). Everything it runs uses them: its use cases (`app.run`, `app.useCases.X`), its commands and outputs, the entities they build and the passwords they hash, and its repositories, called through a use case or directly (`app.repositories.Items.create(...)`). A service it does not give falls back to `configure`, then to the default; `withRuntime` around a call comes before it. An application that extends it inherits them, its own winning each service, and `extend()` keeps them. Each service must be what `configure` takes (`InvalidApplicationDeclaration` otherwise).
+
+<!-- docs:code context
+export {};
+-->
+```ts
+import { applicationOf, blueprintOf, entityOf, useCaseOf } from "@afora/core";
+import { manualClock } from "@afora/core/testing";
+
+const Note = blueprintOf((ctx) => ({ title: ctx.string }));
+class Item extends entityOf(Note) {}
+
+class AddItem extends useCaseOf({
+	name: "AddItem",
+	blueprint: Note,
+	response: blueprintOf(() => ({ item: Item })),
+}) {
+	override async execute() {
+		return { item: new Item(this.input) };
+	}
+}
+
+let next = 0;
+const app = applicationOf({
+	name: "Notes",
+	entities: { Item },
+	useCases: { AddItem },
+	runtime: {
+		clock: manualClock("2030-01-01T00:00:00.000Z"),
+		idGenerator: () =>
+			`01890000-0000-7000-8000-${String(++next).padStart(12, "0")}`,
+	},
+});
+
+const { item } = await app.run(AddItem, { title: "a" });
+item.id; // "01890000-0000-7000-8000-000000000001"
+item.createdAt; // "2030-01-01T00:00:00.000Z"
+```
+
+The services travel with the call, not through the process, so two applications with different services can run at the same time, in one test or one server. Code the application does not run (an entity built in a test, outside any use case) keeps the services of `configure`. `describe().runtime` names each service given as `{ kind: "opaque" }`, as it does a `trace`.
 
 ## Starting
 
