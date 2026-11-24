@@ -4811,8 +4811,9 @@ not speak HTTP ignores it.
 *function* · tier: adapters · `import { problemOf } from "@afora/core/adapters"`
 
 An RFC 9457 problem for `error`. `issues` (`path`, `code`, `message`; no
-values or causes) is present only for a 400, `trace` only with `debug`,
-and the `detail` of a 5xx is `"Internal error."` unless `debug` is set or
+values or causes; the first `MAX_ISSUES` at most) is present only for a
+400, `trace` only with `debug`, and the `detail` of a 5xx is
+`"Internal error."` unless `debug` is set or
 the output declares the exception (its name in `statuses`, or a class of
 `operation.errors`, except afora's internal ones), so internal messages do not leak.
 An internal exception (`InvalidUseCaseResponse`, `InvalidUseCaseStep`, ...)
@@ -5131,7 +5132,8 @@ it cannot use, and when the secret of `{ env }` is missing or shorter than
 
 Whether `data` is a row of `query`: alive unless `withDeleted`, not expired
 by `expiry` (the key of `context.expiry`) unless `withExpired`, and matching
-`where`.
+`where`, where a missing value (`undefined` or `null`), also inside `in`,
+matches no row.
 
 ### prepareQuery
 
