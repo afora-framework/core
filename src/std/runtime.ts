@@ -1,3 +1,4 @@
+import { type Clock, currentTime, setClock } from "../core/clock";
 import { ExceptionLayers } from "../core/exception/enums/exception-layers";
 import { exceptionOf } from "../core/exception/exception";
 import { markExported } from "../core/exception/exported";
@@ -16,6 +17,8 @@ export type IdGenerator = () => string;
 export interface RuntimeServices {
 	hasher?: PasswordHasher;
 	idGenerator?: IdGenerator;
+	/** The current time in epoch milliseconds; `manualClock()` of `@afora/core/testing` is one. */
+	clock?: Clock;
 }
 
 /** No password hasher can run here; call `configure({ hasher })`. */
@@ -284,7 +287,7 @@ let randomAt = randomPool.length;
  * Ids made in the same millisecond count up in the 12-bit `rand_a` field,
  * so they sort in creation order.
  */
-export function uuidv7(now: number = Date.now()): string {
+export function uuidv7(now: number = currentTime()): string {
 	if (randomAt === randomPool.length) {
 		globalThis.crypto.getRandomValues(randomPool);
 		randomAt = 0;
@@ -336,16 +339,18 @@ let hasher: PasswordHasher | undefined;
 const defaultIdGenerator: IdGenerator = () => uuidv7();
 let idGenerator: IdGenerator = defaultIdGenerator;
 
-/** Replaces the password hasher and/or the id generator. */
+/** Replaces the password hasher, the id generator and/or the clock. */
 export function configure(services: RuntimeServices): void {
 	if (services.hasher) hasher = services.hasher;
 	if (services.idGenerator) idGenerator = services.idGenerator;
+	if (services.clock) setClock(services.clock);
 }
 
-/** Puts both services back to their defaults and restarts the id clock. */
+/** Puts the services back to their defaults and restarts the id clock. */
 export function resetRuntime(): void {
 	hasher = undefined;
 	idGenerator = defaultIdGenerator;
+	setClock(undefined);
 	lastTimestamp = 0;
 	sequence = 0;
 }

@@ -1,4 +1,5 @@
 import { blueprintBuilderOf } from "../core/blueprint/blueprint";
+import { currentTime } from "../core/clock";
 import { entityBuilderOf } from "../core/entity/entity";
 import { vouching } from "../core/entity/trust";
 import { Id } from "./properties/identity";
@@ -24,7 +25,7 @@ let lastTimestamp = "";
  * so the last one is kept.
  */
 function now(): string {
-	const millisecond = Date.now();
+	const millisecond = currentTime();
 	if (millisecond !== lastMillisecond) {
 		lastTimestamp = new Date(millisecond).toISOString();
 		lastMillisecond = millisecond;

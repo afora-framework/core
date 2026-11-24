@@ -1,3 +1,4 @@
+import { currentTime } from "../core/clock";
 import { recordPluginOf } from "../core/record/plugin";
 import { recordPluginCatalogOf } from "../core/record/plugin-catalog";
 import { recordOf } from "../core/record/record";
@@ -6,7 +7,7 @@ import { idKeyOf, OwnerId } from "./properties/identity";
 import { Password } from "./properties/password";
 
 /** The current date and time, as `DateTime` accepts it. */
-const now = (): string => new Date().toISOString();
+const now = (): string => new Date(currentTime()).toISOString();
 
 /**
  * A `publishedAt` absent while the record is a draft; `publish(at?)` sets it

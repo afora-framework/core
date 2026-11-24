@@ -4,6 +4,7 @@ import { isBlueprintList } from "../blueprint/list";
 import { recordFieldOf } from "../blueprint/record-field";
 import type { BlueprintField } from "../blueprint/types/blueprint.interface";
 import { isBlueprintVariant } from "../blueprint/variant";
+import { currentTime } from "../clock";
 import {
 	assignEntityId,
 	assignsIdsOnInsert,
@@ -667,7 +668,7 @@ function stopperOf(source: string, until: unknown): () => boolean {
 			},
 		});
 	}
-	return () => Date.now() >= deadline;
+	return () => currentTime() >= deadline;
 }
 
 const forEachPage = action(

@@ -1,4 +1,5 @@
 import { type TOptional, type TString, Type } from "typebox";
+import { currentTime } from "../../core/clock";
 import { type PropertyClass, propertyOf } from "../../core/property/property";
 
 const DEMO_DATE_TIME = "2026-01-01T00:00:00.000Z";
@@ -31,7 +32,7 @@ function dateTimeOf<Optional extends boolean = false>({
 	}) {
 		/** An instance holding the current date and time. */
 		static now<Self>(this: new (value: string) => Self): Self {
-			return new this(new Date().toISOString());
+			return new this(new Date(currentTime()).toISOString());
 		}
 	};
 }

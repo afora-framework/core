@@ -359,7 +359,7 @@ test("publishes order.placed after the call", async () => {
 
 ## Runtime services
 
-Two services depend on the runtime and are worth fixing in tests. `configure({ hasher })` swaps the password hasher (a fast fake keeps tests quick, or supplies one on a Node without argon2), and `configure({ idGenerator })` makes ids predictable. `resetRuntime()` puts the defaults back; call it in `afterEach`.
+Three services depend on the runtime and are worth fixing in tests. `configure({ hasher })` swaps the password hasher (a fast fake keeps tests quick, or supplies one on a Node without argon2), `configure({ idGenerator })` makes ids predictable and `configure({ clock })` makes time a thing the test moves, with `manualClock()` of `@afora/core/testing` (see [Time](runtime.md#time)), instead of patching `Date` for the whole process. `resetRuntime()` puts the defaults back; call it in `afterEach`.
 
 ```ts
 import { afterEach, expect, test } from "bun:test";
@@ -380,11 +380,12 @@ test("ids are predictable", () => {
 
 ## What `@afora/core/testing` has
 
-| Export                 | For                                                                                       |
-| ---------------------- | ----------------------------------------------------------------------------------------- |
-| `memoryPublisher()`    | Testing an application: a publisher that keeps `{ topic, event }` in `published`.         |
-| `spyProvider()`        | Testing an application: a provider that records its calls and fails on demand.            |
-| `providerContract`     | Writing a repository provider: the cases every `IRepositoryProvider` must pass.           |
-| `httpProviderContract` | Writing an HTTP sink for a server (as `@afora/hono` and `@afora/fastify` are): its cases. |
+| Export                 | For                                                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `memoryPublisher()`    | Testing an application: a publisher that keeps `{ topic, event }` in `published`.                                                |
+| `manualClock(start?)`  | Testing time: a clock for `configure({ clock })` with `now()`, `set(date \| ms \| iso)` and `advance(ms \| { minutes, days… })`. |
+| `spyProvider()`        | Testing an application: a provider that records its calls and fails on demand.                                                   |
+| `providerContract`     | Writing a repository provider: the cases every `IRepositoryProvider` must pass.                                                  |
+| `httpProviderContract` | Writing an HTTP sink for a server (as `@afora/hono` and `@afora/fastify` are): its cases.                                        |
 
 The last two are tools for authors of packages. `providerContract({ describe, it, expect }, () => myProvider())` takes the functions of your test runner and a factory of fresh providers, and checks inserts, queries, unique keys, soft deletion, transactions, cursors and more; the [custom provider recipe](recipes/custom-provider.md) runs it. An application does not need them.

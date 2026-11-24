@@ -2,6 +2,7 @@ import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import { recordFieldOf } from "../blueprint/record-field";
 import { isBlueprintVariant } from "../blueprint/variant";
+import { currentTime } from "../clock";
 import { InvalidRepositoryQuery } from "./exceptions";
 import type {
 	ProviderQuery,
@@ -163,7 +164,7 @@ function isExpired(value: unknown, now: number): boolean {
 /** The time of `query.now`, or the current one. */
 export function nowOf(query: ProviderQuery): number {
 	const now = query.now === undefined ? Number.NaN : Date.parse(query.now);
-	return Number.isNaN(now) ? Date.now() : now;
+	return Number.isNaN(now) ? currentTime() : now;
 }
 
 /**

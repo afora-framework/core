@@ -8,7 +8,7 @@ Every export of `@afora/core` belongs to one tier. The tier says where it is imp
 | ------------ | -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | stable       | `@afora/core`              | yes      | The reader path of the README and these docs: properties, blueprints, records, entities, repositories, use cases, commands, outputs, applications, environments, exceptions, logging, the Std catalog. |
 | adapters     | `@afora/core/adapters`     | yes      | The plumbing for authors of sinks, providers and code generators: the provider SPI, `sinkOf`, `problemOf`, `statusOf`, the route helpers, the `app.describe()` types, reserved keys.                   |
-| testing      | `@afora/core/testing`      | yes      | `providerContract` and `memoryPublisher`, which provider and publisher packages test against.                                                                                                          |
+| testing      | `@afora/core/testing`      | yes      | `providerContract` and `memoryPublisher`, which provider and publisher packages test against, and `manualClock`.                                                                                       |
 | experimental | `@afora/core/experimental` | no       | Features that may change in any release: slicing, description helpers that `app.describe()` covers, exports cut before 27.0.                                                                           |
 | internal     | nowhere                    | no       | Machinery of the core: base classes, runtime guards, constants of a rule. No longer exported.                                                                                                          |
 
@@ -594,6 +594,7 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `Publishable`                      | value | stable       | `@afora/core`              | Std instance of the core builders, the reader path of the [README](../README.md).                                      |
 | `StdRecordPlugins`                 | value | stable       | `@afora/core`              | Std instance of the core builders, the reader path of the [README](../README.md).                                      |
 | `Taggable`                         | value | stable       | `@afora/core`              | Std instance of the core builders, the reader path of the [README](../README.md).                                      |
+| `Clock`                            | type  | stable       | `@afora/core`              | Runtime configuration (`configure({ clock })`), in [Runtime](runtime.md#time).                                         |
 | `IdGenerator`                      | type  | stable       | `@afora/core`              | Runtime configuration (`configure`), in the [README](../README.md).                                                    |
 | `PasswordHasher`                   | type  | stable       | `@afora/core`              | Runtime configuration (`configure`), in the [README](../README.md).                                                    |
 | `RuntimeServices`                  | type  | stable       | `@afora/core`              | Runtime configuration (`configure`), in the [README](../README.md).                                                    |
@@ -660,6 +661,9 @@ Exports that are new since the audit, with their tier:
 
 | Export                    | Kind  | Tier    | Reason                                                                     |
 | ------------------------- | ----- | ------- | -------------------------------------------------------------------------- |
+| `ManualClock`             | type  | testing | Type of `manualClock`.                                                     |
+| `ClockSpan`               | type  | testing | The parts `manualClock().advance` takes.                                   |
+| `manualClock`             | value | testing | A clock for `configure({ clock })` that only moves when told.              |
 | `MemoryPublisher`         | type  | testing | Type of `memoryPublisher`.                                                 |
 | `memoryPublisher`         | value | testing | An in-memory `IEventPublisher` for tests of event policies and publishers. |
 | `ContractRunner`          | type  | testing | The contract test kit that provider packages run against.                  |

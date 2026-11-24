@@ -91,6 +91,7 @@ export type {
 	IBlueprintPlugin,
 } from "./core/blueprint/types/blueprint-plugin.interface";
 export { variantOf } from "./core/blueprint/variant";
+export type { Clock } from "./core/clock";
 export { commandBuilderOf, isCommand } from "./core/command/command";
 export {
 	CommandEventFailed,

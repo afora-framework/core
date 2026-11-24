@@ -71,11 +71,29 @@ Id.generate().value; // "01890000-0000-7000-8000-000000000001"
 resetRuntime(); // the default hasher and generator again, and the id clock restarted
 ```
 
+## Time
+
+Every read of the current time goes through one clock: the `createdAt`, `updatedAt` and `deletedAt` stamps, the time properties (`DateTime.now()`), `publish()` and `archive()`, the millisecond of a default UUID v7, the `iat`, `exp` and `nbf` of a JWT and their checks, the expiry of a query (unless `query.now` is given) and the `until` deadline of a walk. By default it is the platform's `Date.now()`. `configure({ clock })` takes a function that returns epoch milliseconds:
+
+```ts
+import { configure, resetRuntime } from "@afora/core";
+import { manualClock } from "@afora/core/testing";
+
+const clock = manualClock("2026-01-01T00:00:00.000Z");
+configure({ clock });
+
+clock.advance({ minutes: 16 }); // a token signed before this has expired now
+
+resetRuntime(); // the platform clock again
+```
+
+The logger's `at` keeps the real time: logs are about when things happened. The ids made with the default generator stay in order for the process even if the clock goes back: an id never takes a millisecond earlier than the last one, so moving the clock back does not reorder them.
+
 ## `configure` and `resetRuntime`
 
-`configure({ hasher, idGenerator })` replaces either service, or both; a service it is not given stays as it is. The services are global to the process (or the isolate), so call `configure` once, at start, before the first password or id is made, and not per request.
+`configure({ hasher, idGenerator, clock })` replaces any of the services; a service it is not given stays as it is. The services are global to the process (or the isolate), so call `configure` once, at start, before the first password or id is made, and not per request.
 
-`resetRuntime()` puts both back to their defaults, chooses the hasher again on its next use, and restarts the clock of the id generator. It is for tests: call it after each test that configures something, so one test's hasher does not leak into the next.
+`resetRuntime()` puts the services back to their defaults (the clock included), chooses the hasher again on its next use, and restarts the clock of the id generator. It is for tests: call it after each test that configures something, so one test's hasher does not leak into the next.
 
 ## Deploying
 
