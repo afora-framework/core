@@ -4,7 +4,8 @@ name: Prepare release
 #
 #   gh workflow run prepare-release.yml -f channel=rc
 #
-# 1. On the base (dev, or release/<YY>.<minor> for a patch), runs
+# 1. On the base (dev, or release/<YY>.<minor> for a patch, or for an rc or the
+#    stable of a line in its own branch), runs
 #    `bun scripts/release-channel.ts prepare`: it computes the version of the
 #    channel (preparedVersion: the next rc, beta, stable or patch, or the version
 #    given), writes it in every package.json with the peer ranges, runs
@@ -20,8 +21,8 @@ name: Prepare release
 #    by then (auto_merge_bump off, a review pending, CI red), the release pull
 #    request is still opened if dev is ahead of main, and auto-merge is left to
 #    a human.
-#    A patch has no such pull request: merging the bump into release/<YY>.<minor>
-#    publishes it.
+#    A release branch has no such pull request: merging the bump into
+#    release/<YY>.<minor> publishes it.
 #
 # The pull requests are opened with a GitHub App token (RELEASE_APP_CLIENT_ID and
 # RELEASE_APP_PRIVATE_KEY), or else a fine-grained token (RELEASE_TOKEN): those
@@ -43,7 +44,7 @@ on:
         type: string
         required: false
       base:
-        description: The branch to bump (release/<YY>.<minor> for a patch)
+        description: The branch to bump (release/<YY>.<minor> for a patch, or an rc or stable of its line)
         type: string
         default: dev
         required: true

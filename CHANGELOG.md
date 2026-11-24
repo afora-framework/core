@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+- [VERSIONING.md](VERSIONING.md#a-release-candidate-on-its-own-branch) lets a release candidate close on the branch of its line while `dev` moves on: once `release/27.0` exists, it publishes `27.0.0-rc.<n>` to `rc` and `27.0.0` to `latest`, the Next is `27.1.0-alpha.<n>`, and `dev` prepares the betas of `27.1.0` for `main`.
+
 ## 27.0.0-rc.6 — 2026-11-24
 
 The sixth candidate of 27.0.0: security fixes from a hunt of 27.0.0-rc.5. Every finding has a regression test named `SEC-<n>`. Seven are breaking, before the contract freezes, and each of those entries says what to change: a missing value in `where` matches no entity, a refresh token is accepted only by the `refresh` of its entity, a write checks that the entities it references exist, the HTTP sinks read a body only as JSON, a parse collects at most 100 issues, a held JSON Schema must be cheap to check, and `@afora/codegen` reads an `extends` package from the project only. No export is added or removed (see [Release candidates](VERSIONING.md#release-candidates)).

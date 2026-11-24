@@ -130,11 +130,11 @@ Each version is published under the npm dist-tag of its channel. Every channel i
 
 | Channel     | Version            | dist-tag       | From                | What it promises                                                                                   |
 | ----------- | ------------------ | -------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
-| Stable      | `27.1.0`           | `latest`       | `main`              | The contract of this file.                                                                         |
-| RC          | `27.1.0-rc.2`      | `rc`           | `main`              | The release as it will ship: only fixes land between two candidates.                               |
+| Stable      | `27.1.0`           | `latest`       | `main` or `release/27.1` | The contract of this file.                                                                  |
+| RC          | `27.1.0-rc.2`      | `rc`           | `main` or `release/27.1` | The release as it will ship: only fixes land between two candidates.                        |
 | Beta        | `27.1.0-beta.1`    | `beta`         | `main`              | The features of the next minor or major, to try out. It may still break from one beta to the next. |
 | Next        | `27.1.0-alpha.<n>` | `next`         | every push to `dev` | What is on `dev` right now, published on its own. It may break at any time.                        |
-| Maintenance | `27.0.4`           | `release-27.0` | `release/27.0`      | Patches of an older line, published while `dev` moves on. Only fixes.                              |
+| Maintenance | `27.0.4`           | `release-27.0` | `release/27.0`      | Patches of an older line, published while `dev` moves on. Only fixes.                            |
 
 ```bash
 npm install @afora/core          # stable (latest)
@@ -145,8 +145,9 @@ npm install @afora/core@release-27.0   # the newest patch of the 27.0 line
 ```
 
 - **Order.** In semver, a prerelease comes before its release, and the channels are ordered by how stable they are: `27.1.0-alpha.9 < 27.1.0-beta.1 < 27.1.0-rc.1 < 27.1.0`. A range such as `^27.0.0` never picks a prerelease.
-- **The Next.** Its version is the one of `package.json` on `dev` without its prerelease, with the minor raised when that version is already released as stable (`27.0.0` released gives `27.1.0`), then `-alpha.<n>`, where `n` is the number of the run of the workflow. It has no git tag and no GitHub release. A push to `dev` that changes nothing under `src/`, `packages/*/src/` or `package.json` publishes none.
-- **Maintenance.** A `release/<YY>.<minor>` branch publishes only patches of its line (`27.0.1` and up) and their candidates (`27.0.1-rc.1`); `27.0.0` and its candidates come from `main`. A patch goes to `latest` when it is the newest version, and otherwise to the dist-tag of its line (`release-27.0`; not `v27.0`, which npm reads as a version range and refuses as a tag), so `latest` never moves backwards; its GitHub release is then not marked as the latest. A candidate of a patch always goes to `release-27.0`, so `rc` stays on the next release.
+- **The Next.** Its version is the one of `package.json` on `dev` without its prerelease, with the minor raised when that version is already released as stable (`27.0.0` released gives `27.1.0`) or when its line has a release branch (`release/27.0` gives `27.1.0`), then `-alpha.<n>`, where `n` is the number of the run of the workflow. It has no git tag and no GitHub release. A push to `dev` that changes nothing under `src/`, `packages/*/src/` or `package.json` publishes none.
+- **Maintenance.** A `release/<YY>.<minor>` branch publishes only stable and rc versions of its line. A patch (`27.0.1` and up) goes to `latest` when it is the newest version, and otherwise to the dist-tag of its line (`release-27.0`; not `v27.0`, which npm reads as a version range and refuses as a tag), so `latest` never moves backwards; its GitHub release is then not marked as the latest. A candidate of a patch (`27.0.1-rc.1`) always goes to `release-27.0`, so `rc` stays on the next release.
+- **A line in its own branch.** `27.0.0` and its candidates come from `main`, until the line gets its branch: then `release/27.0` publishes them, a candidate to `rc` (or to `release-27.0` when `rc` already holds a newer one) and `27.0.0` to `latest`. This lets a release candidate close on its own branch while `dev` and `main` move on to the next minor: once `release/27.0` exists, the Next is `27.1.0-alpha.<n>`, `dev` prepares the betas of `27.1.0` for `main`, and nothing of the 27.0 line is prepared on `dev` anymore. See [A release candidate on its own branch](#a-release-candidate-on-its-own-branch).
 - **No tag moves backwards.** Before publishing, the release reads the dist-tags on npm and refuses a version behind the one its tag holds (`latest`, `rc`, `beta`, `next` or the tag of a line). A tag that holds a version of another channel, such as a `next` left on an rc, is taken over. When npm cannot be read, the release fails; only a package that is not on npm yet has no tags.
 - **Peer ranges.** A prerelease satisfies only a range that names a prerelease of the same `YY.minor.patch`: `@afora/core@27.1.0-rc.1` does not satisfy `>=27.0.0`. So every package of a prerelease needs `@afora/core >=<that version>`. A stable `YY.minor.patch` gets `^<that version>`, which stays within the major, so a package of 27 never accepts a core of 28; `0.0.<n>` gets `>=0.0.<n>`. `bun run release:version` writes the range. Install the packages of one channel together (`npm install @afora/core@rc @afora/hono@rc`).
 - **Moving a tag.** A tag that points to the wrong version is moved by hand, package by package: `npm dist-tag add @afora/core@27.1.0 latest`, or removed with `npm dist-tag rm @afora/core beta`.
@@ -159,7 +160,7 @@ A stable major or minor can go through release candidates, and the first stable 
 2. During the rc, only fixes land. No new exports, and no change to the contract, except to fix a blocking issue.
 3. Only a [blocking](#what-blocks-a-release) fix makes a new candidate (`27.0.0-rc.2`, and so on). Any other fix is merged into `dev` as usual and ships in the first patch (`27.0.1`), or rides along with the next candidate if a blocking fix makes one.
 4. The rc stays open for at least two weeks after the last candidate. A fix that does not block does not restart that time.
-5. It ends when no blocking issue is open. Then `27.0.0` is published to `latest`, with the code of the last candidate: it is prepared from `main` (the version and the dated changelog only), not from `dev`.
+5. It ends when no blocking issue is open. Then `27.0.0` is published to `latest`, with the code of the last candidate: it is prepared on the branch that holds that candidate (the version and the dated changelog only), not from `dev` once `dev` holds the next minor: see [A release candidate on its own branch](#a-release-candidate-on-its-own-branch).
 
 ### What blocks a release
 
@@ -173,6 +174,20 @@ Anything else does not block: a vulnerability of medium or low severity, a bug w
 
 Later majors can use the same flow (`28.0.0-rc.1`).
 
+### A release candidate on its own branch
+
+While the rc of `27.0.0` stays open, the work on `27.1` does not wait. The line moves to its own branch, and `dev` takes the next minor:
+
+| Branch         | Holds                                 | Publishes                                  |
+| -------------- | ------------------------------------- | ------------------------------------------ |
+| `release/27.0` | the last candidate, then only fixes   | `27.0.0-rc.<n>` to `rc`, `27.0.0` to `latest`, then the patches `27.0.<p>` |
+| `dev`          | the features of `27.1`                | `27.1.0-alpha.<n>` to `next` on every push   |
+| `main`         | what `dev` prepared for `27.1`          | `27.1.0-beta.<n>` to `beta`, later `27.1.0-rc.<n>` and `27.1.0` |
+
+1. Open the branch from `main` once the last candidate is published and tagged (a push of a candidate that has no tag yet would publish it from the new branch): `git switch -c release/27.0 v27.0.0-rc.<n> && git push -u origin release/27.0`.
+2. A blocking fix goes in a pull request against `release/27.0`. A new candidate is prepared on that branch: `prepare --channel rc` gives `27.0.0-rc.<n+1>`, and merging its bump publishes it to `rc`. `prepare --channel stable` gives `27.0.0`, which goes to `latest`. Every fix is carried to `dev` in its own pull request (`git cherry-pick -x`), without its CHANGELOG entry, and after each release of the line its dated section is copied into the CHANGELOG of `dev`, below `## Unreleased`.
+3. On `dev`, `prepare --channel beta` gives `27.1.0-beta.1`; the pull request `dev` → `main` publishes it to `beta`. `main` never takes the 27.0 line again: `dev` refuses to prepare a version of a line that has its branch.
+
 ## Releasing
 
 Releases are automatic. All the `@afora/*` packages share one version. [CONTRIBUTING.md](CONTRIBUTING.md#releases) has the steps.
@@ -182,7 +197,7 @@ Releases are automatic. All the `@afora/*` packages share one version. [CONTRIBU
 1. In a pull request, run `bun run release:version <version>`: it sets the version in `package.json` and in every `packages/*/package.json` (and, for a prerelease, the peer ranges on `@afora/core`), then runs `bun install` to update `bun.lock`. Date the release in `CHANGELOG.md`.
 2. Merge it to `main` (or to `release/<YY>.<minor>` for a patch of an older line). `.github/workflows/release.yml` reads the version and refuses one that is not `0.0.<n>` (before 27.0) or `<YY>.<minor>.<patch>` with an optional `-alpha.<n>`, `-beta.<n>` or `-rc.<n>`, with `YY` at 27 or more. If the version has no tag, it runs CI, publishes the packages to npm with provenance under the dist-tag of its [channel](#channels), then creates the `v<version>` tag and the GitHub release.
 
-`main` publishes stable, beta and rc versions; beta and rc are marked as prereleases. A `release/<YY>.<minor>` branch publishes only stable and rc versions of its line. The Next is published from `dev` without a pull request. A stable version behind the `latest` on npm (from `main`), packages at different versions, a peer range on `@afora/core` that does not accept the version, or a version of another line on a release branch fail the release. Running the workflow by hand with `dry-run` prints what it would publish and publishes nothing.
+`main` publishes stable, beta and rc versions; beta and rc are marked as prereleases. A `release/<YY>.<minor>` branch publishes only stable and rc versions of its line, including `<YY>.<minor>.0` and its candidates once the line has moved there. The Next is published from `dev` without a pull request. A stable version behind the `latest` on npm (from `main`), packages at different versions, a peer range on `@afora/core` that does not accept the version, or a version of another line on a release branch fail the release. Running the workflow by hand with `dry-run` prints what it would publish and publishes nothing.
 
 If a release fails halfway, run the workflow again from the Actions tab (`workflow_dispatch`). What is already on npm is skipped.
 

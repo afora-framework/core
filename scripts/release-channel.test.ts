@@ -8,6 +8,7 @@ import {
 	datedChangelog,
 	distTagsOf,
 	isSemverRange,
+	linesOf,
 	nextVersion,
 	packageIssues,
 	parseVersion,
@@ -184,10 +185,49 @@ describe("channelOf on release/<YY>.<m>", () => {
 		).toThrow("behind 27.0.3, the release-27.0 on npm");
 	});
 
-	test("x.y.0, its candidates and other majors are refused", () => {
-		expect(() => release("27.0.0", "0.0.13")).toThrow("only patches");
-		expect(() => release("27.0.0-rc.2", "0.0.13")).toThrow("only patches");
-		expect(() => release("28.0.1", "27.0.0")).toThrow("only patches");
+	test("a candidate of x.y.0 goes to rc, a prerelease, with the bench", () => {
+		expect(
+			release("27.0.0-rc.7", "0.0.13", false, { rc: "27.0.0-rc.6" }),
+		).toMatchObject({
+			publish: true,
+			distTag: "rc",
+			prerelease: true,
+			makeLatest: false,
+			gitRelease: true,
+			bench: true,
+		});
+		// rc held by a version of another channel is taken over
+		expect(
+			release("27.0.0-rc.7", "0.0.13", false, { rc: "27.0.0-alpha.3" }).distTag,
+		).toBe("rc");
+	});
+
+	test("a candidate of x.y.0 behind the rc on npm goes to the tag of its line", () => {
+		expect(
+			release("27.0.0-rc.8", "0.0.13", false, { rc: "27.1.0-rc.1" }),
+		).toMatchObject({
+			distTag: "release-27.0",
+			prerelease: true,
+			bench: false,
+		});
+	});
+
+	test("x.y.0 goes to latest, or to the tag of its line when behind", () => {
+		expect(
+			release("27.0.0", "0.0.13", false, { rc: "27.0.0-rc.7" }),
+		).toMatchObject({
+			distTag: "latest",
+			prerelease: false,
+			makeLatest: true,
+			bench: true,
+		});
+		expect(release("27.0.0", "27.1.0").distTag).toBe("release-27.0");
+	});
+
+	test("another major is refused", () => {
+		expect(() => release("28.0.1", "27.0.0")).toThrow(
+			"only versions of its line",
+		);
 	});
 
 	test("alpha, beta and 0.0.N are refused", () => {
@@ -197,12 +237,14 @@ describe("channelOf on release/<YY>.<m>", () => {
 		expect(() => release("27.0.1-beta.1", "27.0.0")).toThrow(
 			"publishes stable and rc",
 		);
-		expect(() => release("0.0.14", "0.0.13")).toThrow("only patches");
+		expect(() => release("0.0.14", "0.0.13")).toThrow(
+			"only versions of its line",
+		);
 	});
 
 	test("a version of another line is refused", () => {
 		expect(() => release("27.1.1", "27.0.0")).toThrow(
-			"release/27.0 publishes only patches of its line, 27.0.<patch> with a patch of 1 or more, not 27.1.1",
+			"release/27.0 publishes only versions of its line, 27.0.<patch>, not 27.1.1",
 		);
 	});
 
@@ -258,6 +300,20 @@ test("channelOf refuses other branches", () => {
 	}
 });
 
+test("linesOf reads the release branches of git ls-remote", () => {
+	expect(
+		linesOf(
+			[
+				"a1\trefs/heads/release/27.0",
+				"b2\trefs/heads/release/28.3",
+				"c3\trefs/heads/release/27",
+				"d4\trefs/heads/release/27.0.1",
+				"",
+			].join("\n"),
+		),
+	).toEqual(["27.0", "28.3"]);
+});
+
 describe("nextVersion", () => {
 	test("the base is package.json without its prerelease", () => {
 		expect(
@@ -279,6 +335,33 @@ describe("nextVersion", () => {
 				run: 41,
 			}),
 		).toBe("27.2.0-alpha.41");
+	});
+
+	test("a line with a release branch raises the minor", () => {
+		expect(
+			nextVersion({
+				pkgVersion: "27.0.0-rc.6",
+				stableTags: [],
+				run: 50,
+				lines: ["27.0"],
+			}),
+		).toBe("27.1.0-alpha.50");
+		expect(
+			nextVersion({
+				pkgVersion: "27.1.0-beta.1",
+				stableTags: ["v27.0.0"],
+				run: 51,
+				lines: ["27.0"],
+			}),
+		).toBe("27.1.0-alpha.51");
+		expect(
+			nextVersion({
+				pkgVersion: "27.0.0-rc.6",
+				stableTags: [],
+				run: 52,
+				lines: ["26.9"],
+			}),
+		).toBe("27.0.0-alpha.52");
 	});
 
 	test("0.0.N has no Next", () => {
@@ -544,6 +627,7 @@ describe("preparedVersion", () => {
 			branch = "dev",
 			explicit,
 			unreleased = false,
+			lines = [],
 		}: {
 			tags?: string[];
 			distTags?: Record<string, string>;
@@ -551,6 +635,7 @@ describe("preparedVersion", () => {
 			explicit?: string;
 			/** package.json holds a version never published (by default, it is tagged). */
 			unreleased?: boolean;
+			lines?: string[];
 		} = {},
 	) =>
 		preparedVersion({
@@ -560,6 +645,7 @@ describe("preparedVersion", () => {
 			distTags,
 			branch,
 			explicit,
+			lines,
 		});
 	const version = (...args: Parameters<typeof prepare>) =>
 		prepare(...args).version;
@@ -687,15 +773,80 @@ describe("preparedVersion", () => {
 		).toThrow("holds stable and rc versions");
 	});
 
-	test("rc, beta and stable only on dev", () => {
+	test("beta only on dev; rc and stable on dev or release/<YY>.<minor>", () => {
 		for (const channel of ["rc", "beta", "stable"]) {
-			expect(() =>
-				prepare(channel, "27.0.0-rc.1", { branch: "release/27.0" }),
-			).toThrow("is prepared on dev");
 			expect(() => prepare(channel, "27.0.0-rc.1", { branch: "main" })).toThrow(
 				"is prepared on dev",
 			);
 		}
+		expect(() =>
+			prepare("beta", "27.0.0-rc.1", { branch: "release/27.0" }),
+		).toThrow("the channel beta is prepared on dev");
+	});
+
+	describe("a line with a release branch", () => {
+		const onLine = {
+			branch: "release/27.0",
+			tags: [...TAGS, "v27.0.0-rc.6"],
+			distTags: { latest: "0.0.13", rc: "27.0.0-rc.6" },
+			lines: ["27.0"],
+		};
+
+		test("rc: the next candidate, published by the branch to rc", () => {
+			const prepared = prepare("rc", "27.0.0-rc.6", onLine);
+			expect(prepared).toMatchObject({
+				version: "27.0.0-rc.7",
+				publishBranch: "release/27.0",
+				channel: { distTag: "rc", prerelease: true },
+			});
+		});
+
+		test("stable: the prerelease stripped, to latest", () => {
+			expect(prepare("stable", "27.0.0-rc.6", onLine)).toMatchObject({
+				version: "27.0.0",
+				publishBranch: "release/27.0",
+				channel: { distTag: "latest", makeLatest: true },
+			});
+		});
+
+		test("rc after a stable: the candidate of the next patch, never a minor", () => {
+			expect(
+				prepare("rc", "27.0.0", {
+					...onLine,
+					tags: [...onLine.tags, "v27.0.0"],
+					distTags: { latest: "27.0.0", rc: "27.0.0-rc.6" },
+				}),
+			).toMatchObject({
+				version: "27.0.1-rc.1",
+				channel: { distTag: "release-27.0" },
+			});
+		});
+
+		test("rc of another line is refused on the branch", () => {
+			expect(() =>
+				prepare("rc", "27.1.0-beta.1", { ...onLine, unreleased: false }),
+			).toThrow("not of the line 27.0");
+		});
+
+		test("dev moves on to the next minor", () => {
+			const dev = { ...onLine, branch: "dev" };
+			expect(prepare("beta", "27.0.0-rc.6", dev)).toMatchObject({
+				version: "27.1.0-beta.1",
+				publishBranch: "main",
+				channel: { distTag: "beta" },
+			});
+			expect(version("rc", "27.0.0-rc.6", dev)).toBe("27.1.0-rc.1");
+		});
+
+		test("dev prepares nothing of the line", () => {
+			const dev = { ...onLine, branch: "dev" };
+			expect(() => prepare("stable", "27.0.0-rc.6", dev)).toThrow(
+				"the line 27.0 has its branch release/27.0: prepare 27.0.0 there, not on dev",
+			);
+			expect(() =>
+				prepare("rc", "27.0.0-rc.6", { ...dev, explicit: "27.0.0-rc.7" }),
+			).toThrow("has its branch release/27.0");
+		});
 	});
 
 	test("an unknown channel is refused", () => {
@@ -752,7 +903,7 @@ describe("preparedVersion", () => {
 				branch: "release/27.0",
 				explicit: "27.1.0",
 			}),
-		).toThrow("publishes only patches of its line");
+		).toThrow("publishes only versions of its line");
 	});
 
 	test("explicit: never backwards", () => {

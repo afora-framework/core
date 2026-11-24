@@ -6,9 +6,13 @@ name: Release
 # - main: the version of package.json, when it has no tag yet, to latest
 #   (stable), rc or beta. Bump it in a release pull request with
 #   `bun run release:version <v>`.
-# - release/<YY>.<minor>: the patches (<YY>.<minor>.<p>, p >= 1, or their rc)
-#   of that line; to latest, or to the dist-tag release-<YY>.<minor> for an rc
-#   or a version behind latest.
+# - release/<YY>.<minor>: the stable and rc versions of that line. A patch
+#   (<YY>.<minor>.<p>, p >= 1) goes to latest, or to the dist-tag
+#   release-<YY>.<minor> when it is behind latest or an rc of a patch;
+#   <YY>.<minor>.0 and its candidates, when the rc closes on that branch while
+#   dev moves on, go to latest and rc as from main.
+# - dev also reads the release branches: a line that has one is skipped by the
+#   version of the Next.
 # - dev: the Next, <base>-alpha.<run number>, to the next dist-tag, on every push
 #   that changes src/, packages/*/src/ or package.json. The version is written
 #   before the build and never committed; no git tag and no GitHub release.
