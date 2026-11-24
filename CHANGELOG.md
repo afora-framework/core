@@ -14,6 +14,7 @@
 ### Fixed
 
 - A query key named like a member of `Object.prototype` (`constructor`, `toString`, `hasOwnProperty`) on a route of an HTTP sink is read as any other key the input does not declare (a 400), and a file part of a multipart body whose declared type is such a name is read as a file, instead of a 500. (SEC-49)
+- **Breaking.** A parse collects at most 100 issues: `safeParse`, `~standard.validate`, a record's constructor and every input an operation parses stop at the hundredth issue and give the first 100 found, in order, so the issues of a value, and the memory and time they take, stay bounded whatever its size. `problemOf` lists at most 100 `issues`, for an exception raised with a longer `details.issues` too, and so does every sink of afora (`http`, `hono`, `express`, `fastify`, `elysia`, `websocket`, `mcpTools`). A value with fewer issues still gets every one. See [Standard Schema](docs/standard-schema.md) and [Outputs](docs/outputs.md). (SEC-50)
 
 ## 27.0.0-rc.5 — 2026-11-24
 

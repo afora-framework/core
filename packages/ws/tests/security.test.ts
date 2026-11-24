@@ -1,4 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import {
+	blueprintOf,
+	commandOf,
+	listOf,
+	outputOf,
+	useCaseOf,
+} from "@afora/core";
+import { websocket } from "../src/index";
 import { fakeSocket, realtime } from "./fixture";
 
 type Problem = { title: string; status: number; type: string };
@@ -172,5 +180,31 @@ describe("SEC-36: a topic has a bounded length", () => {
 			JSON.stringify({ id: 3, subscribe: topicOf(LIMIT + 2) }),
 		)) as { id: number; problem: Problem };
 		expect(reply.problem.status).toBe(400);
+	});
+});
+
+describe("SEC-50: a problem lists a bounded number of issues", () => {
+	test("SEC-50: a list of invalid items answers a bounded problem", async () => {
+		class Tag extends useCaseOf({
+			name: "Tag",
+			blueprint: blueprintOf((ctx) => ({ tags: listOf(ctx.string) })),
+			response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+		}) {
+			override async execute() {
+				return { ok: true };
+			}
+		}
+		const endpoint = outputOf({
+			name: "Live",
+			commands: [commandOf({ name: "Tags", useCases: { tag: Tag } })],
+			pipe: [websocket({})],
+		}).build();
+		const reply = (await endpoint.handle({
+			id: 1,
+			op: "Tags.tag",
+			input: { tags: Array.from({ length: 20_000 }, () => 0) },
+		})) as { problem: Problem & { issues: unknown[] } };
+		expect(reply.problem.status).toBe(400);
+		expect(reply.problem.issues).toHaveLength(100);
 	});
 });

@@ -1171,3 +1171,74 @@ describe("SEC-49: a key named like an Object.prototype member is read as any oth
 		}
 	});
 });
+
+describe("SEC-50: a problem lists a bounded number of issues", () => {
+	const MAX = 100;
+	class Tag extends useCaseOf({
+		name: "Tag",
+		blueprint: blueprintOf((ctx) => ({ tags: listOf(ctx.string) })),
+		response: blueprintOf((ctx) => ({ ok: ctx.boolean })),
+		route: { method: "post", path: "/tags" },
+	}) {
+		override async execute() {
+			return { ok: true };
+		}
+	}
+	const Tags = commandOf({ name: "Tags", useCases: { tag: Tag } });
+	const invalidInput = (count: number) =>
+		new Exception({
+			layer: "use-case" as never,
+			name: "InvalidUseCaseInput",
+			source: "Tag",
+			message: "Invalid UseCase input.",
+			details: {
+				issues: Array.from({ length: count }, (_, index) => ({
+					path: ["tags", index],
+					code: "invalid_type",
+					message: "must be string",
+					source: "string",
+				})),
+			},
+		});
+
+	test("SEC-50: problemOf keeps the first issues, up to the limit", () => {
+		const problem = problemOf(invalidInput(MAX * 10), { status: 400 });
+		expect(problem.issues).toHaveLength(MAX);
+		expect(problem.issues?.[0]?.path).toEqual(["tags", 0]);
+		expect(problem.issues?.at(-1)?.path).toEqual(["tags", MAX - 1]);
+	});
+
+	test("SEC-50: a problem under the limit keeps every issue", () => {
+		const problem = problemOf(invalidInput(MAX - 1), { status: 400 });
+		expect(problem.issues).toHaveLength(MAX - 1);
+	});
+
+	test("SEC-50: over HTTP, a list of invalid items answers a bounded problem", async () => {
+		const table = compileRoutes(
+			outputOf({ name: "T", commands: [Tags] }).operations,
+			{},
+			{ output: { name: "T", statuses: {} } },
+			{ source: "test" },
+		);
+		const route = table.routes.find(
+			({ operation }) => operation.id === "Tags.tag",
+		);
+		if (!route) throw new Error("route");
+		const items = 20_000;
+		const body = JSON.stringify({
+			tags: Array.from({ length: items }, () => 0),
+		});
+		const result = await route.handle({
+			param: () => undefined,
+			query: () => ({}),
+			header: (name) =>
+				name.toLowerCase() === "content-type" ? "application/json" : undefined,
+			text: () => body,
+			variable: () => undefined,
+		});
+		expect(result.status).toBe(400);
+		const problem = JSON.parse(result.body as string);
+		expect(problem.issues).toHaveLength(MAX);
+		expect((result.body as string).length).toBeLessThan(body.length);
+	});
+});

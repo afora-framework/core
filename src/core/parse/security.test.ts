@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import {
 	blueprintOf,
 	jsonOf,
+	listOf,
 	propertyOf,
 	ReservedBlueprintKey,
 	recordOf,
@@ -303,5 +304,46 @@ describe("SEC-27: values too deep for a recursive schema", () => {
 		expect(
 			Menu.safeParse({ title: "m", tree: deep(10) }).issues,
 		).toBeUndefined();
+	});
+});
+
+describe("SEC-50: a parse collects a bounded number of issues", () => {
+	const MAX = 100;
+	const Tags = blueprintOf((ctx) => ({ tags: listOf(ctx.string) }));
+	const many = { tags: Array.from({ length: 20_000 }, () => 0) };
+
+	test("SEC-50: safeParse gives the first issues of a long invalid list", () => {
+		bothPaths(() => {
+			const result = Tags.safeParse(many);
+			expect(result.issues).toHaveLength(MAX);
+			expect(result.issues?.[0]?.path).toEqual(["tags", 0]);
+			expect(result.issues?.at(-1)?.path).toEqual(["tags", MAX - 1]);
+		});
+	});
+
+	test("SEC-50: ~standard.validate and a record give the same bound", async () => {
+		const result = await Tags["~standard"].validate(many);
+		expect("issues" in result && result.issues).toHaveLength(MAX);
+		class Tagged extends recordOf(Tags) {}
+		expect(Tagged.safeParse(many).issues).toHaveLength(MAX);
+	});
+
+	test("SEC-50: undeclared keys are bounded too", () => {
+		bothPaths(() => {
+			const value: Record<string, unknown> = { tags: [] };
+			for (let index = 0; index < 20_000; index++) value[`k${index}`] = 0;
+			expect(Tags.safeParse(value).issues).toHaveLength(MAX);
+		});
+	});
+
+	test("SEC-50: a value with fewer issues keeps every one", () => {
+		bothPaths(() => {
+			const result = Tags.safeParse({ tags: [0, "a", 1, 2] });
+			expect(result.issues?.map((issue) => issue.path)).toEqual([
+				["tags", 0],
+				["tags", 2],
+				["tags", 3],
+			]);
+		});
 	});
 });

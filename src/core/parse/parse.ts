@@ -497,6 +497,18 @@ interface Run {
 	readonly freeze: boolean;
 }
 
+/**
+ * The most issues a parse collects: past them it stops, so the issues of a
+ * value are bounded whatever its size. A result holds the first ones found.
+ * @internal
+ */
+export const MAX_ISSUES = 100;
+
+/** Whether `run` has collected as many issues as it keeps. */
+function isFull(run: Run): boolean {
+	return run.issues !== undefined && run.issues.length >= MAX_ISSUES;
+}
+
 function runOf(base: Path, source: string, freeze: boolean): Run {
 	return { source, base, keys: [], issues: undefined, freeze };
 }
@@ -525,9 +537,11 @@ function reject(
 
 /** What a run made of a value: the value handled, or its issues. */
 function resultOf<Output>(run: Run, handled: unknown): ParseResult<Output> {
-	return handled === REJECTED
-		? { issues: run.issues ?? [] }
-		: { value: handled as Output };
+	if (handled !== REJECTED) return { value: handled as Output };
+	const issues = run.issues ?? [];
+	return {
+		issues: issues.length > MAX_ISSUES ? issues.slice(0, MAX_ISSUES) : issues,
+	};
 }
 
 /**
@@ -699,6 +713,7 @@ function collectionAt(
 					run.keys[depth] = name;
 					run.issues ??= [];
 					takeRejectionIssues(pathOf(run, depth + 1), run.issues);
+					if (isFull(run)) return REJECTED;
 				} else if (item !== undefined) {
 					handled[name] =
 						run.freeze && typeof item === "object" && item !== null
@@ -726,6 +741,7 @@ function collectionAt(
 			...pathOf(run, depth),
 			name,
 		]);
+		if (isFull(run)) return REJECTED;
 	}
 
 	// The key of a variant goes first, with the name that chose this collection.
@@ -759,8 +775,10 @@ function collectionAt(
 			run,
 			depth + 1,
 		);
-		if (item === REJECTED) rejected = true;
-		else if (item !== undefined) {
+		if (item === REJECTED) {
+			rejected = true;
+			if (isFull(run)) return REJECTED;
+		} else if (item !== undefined) {
 			if (guarded) put(handled, name, item);
 			else handled[name] = item;
 		}
@@ -877,8 +895,10 @@ function fieldAt(step: Step, value: unknown, run: Run, depth: number): unknown {
 			for (let index = 0; index < value.length; index++) {
 				run.keys[depth] = index;
 				const handled = fieldAt(item, itemAt(value, index), run, depth + 1);
-				if (handled === REJECTED) rejected = true;
-				else items.push(handled);
+				if (handled === REJECTED) {
+					rejected = true;
+					if (isFull(run)) break;
+				} else items.push(handled);
 			}
 			if (rejected) return REJECTED;
 			return run.freeze ? Object.freeze(items) : items;
