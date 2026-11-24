@@ -118,6 +118,18 @@ export const RepositoryUsedOutsideApplication = exceptionOf({
 		`"${source}" is bound to the application "${application}", and its declaration no longer reads or writes: use app.repositories.${repository}, run its use cases with app.run, or give the repository of the application to execute.`,
 });
 
+/**
+ * A repository no application bound was written to while an application of
+ * `testApplicationOf(app, { strict: true })` ran: its rows would outlive
+ * the test. `source` is the repository name.
+ */
+export const RepositoryWrittenOutsideApplication = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "RepositoryWrittenOutsideApplication",
+	message: ({ application }: { readonly application: string }, source) =>
+		`"${source}" is not bound to an application, and the test application "${application}" runs in strict mode: register it in the application and call it through app.repositories, the use cases of the application, or a repository given to execute.`,
+});
+
 /** No entity of the id was found; `source` is the repository name. */
 export const RepositoryEntityNotFound = exceptionOf({
 	layer: ExceptionLayers.Repository,

@@ -1,5 +1,5 @@
 import type { IdValue } from "../entity/types/id.interface";
-import { declaredRecordNameOf } from "../record/name";
+import { declaredRecordNameOf, recordNameOf } from "../record/name";
 import {
 	InvalidRepositoryDeclaration,
 	RepositoryConcurrencyConflict,
@@ -9,6 +9,7 @@ import {
 import { providerOf } from "./provider";
 import { matchesQuery, nowOf, sameValue, selectRows } from "./query";
 import type {
+	AnyRepositoryEntity,
 	IRepositoryProvider,
 	RepositoryContext,
 	RepositoryData,
@@ -20,6 +21,13 @@ import type {
  * out and assigns `Serial` ids.
  */
 export type InMemoryProvider = IRepositoryProvider & {
+	/**
+	 * Empties the provider once no transaction is running: every table, and
+	 * the `Serial` sequences start again at 1. With `entity` (the name an
+	 * entity declares, its class name without one, or the class itself),
+	 * only the table of that entity and its sequence.
+	 */
+	clear(entity?: string | AnyRepositoryEntity): Promise<void>;
 	readonly capabilities: {
 		readonly transactions: true;
 		readonly keyset: true;
@@ -277,6 +285,44 @@ function scopeOf(initial: Tables, root: boolean, counters: Counters) {
 			}
 		},
 	};
+
+	// The root alone can be emptied; the provider of a transaction cannot.
+	if (root) {
+		const matches = (key: string | object, entity: string | object) =>
+			typeof entity === "string"
+				? key === entity ||
+					(typeof key !== "string" && recordNameOf(key as never) === entity)
+				: key === tableKeyOf(entity);
+		Object.defineProperty(provider, "clear", {
+			enumerable: true,
+			value: (entity?: string | AnyRepositoryEntity) =>
+				whenIdle(() => {
+					if (entity === undefined) {
+						tables.clear();
+						counters.clear();
+						return;
+					}
+					if (
+						(typeof entity !== "string" && typeof entity !== "function") ||
+						entity === ""
+					) {
+						throw new InvalidRepositoryDeclaration({
+							source: "inMemory",
+							details: {
+								reason:
+									"Expected clear to take the name of an entity or its class.",
+							},
+						});
+					}
+					for (const key of [...tables.keys()]) {
+						if (matches(key, entity)) tables.delete(key);
+					}
+					for (const key of [...counters.keys()]) {
+						if (matches(key, entity)) counters.delete(key);
+					}
+				}),
+		});
+	}
 
 	return {
 		provider,

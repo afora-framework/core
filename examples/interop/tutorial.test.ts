@@ -1,23 +1,30 @@
 import { expect, test } from "bun:test";
+import { testApplicationOf } from "@afora/core/testing";
 
 process.env.JWT_SECRET = "a-secret-of-at-least-thirty-two-characters";
-const { api } = await import("./tutorial.ts");
+const { App } = await import("./tutorial.ts");
 
 const read = (path: string) => Bun.file(new URL(path, import.meta.url)).text();
-const send = (method: string, path: string, body?: unknown, token?: string) =>
-	api.request(path, {
-		method,
-		headers: {
-			"content-type": "application/json",
-			...(token ? { authorization: `Bearer ${token}` } : {}),
-		},
-		...(body === undefined ? {} : { body: JSON.stringify(body) }),
-	});
-const signIn = async (email: string) => {
-	const password = "Str0ng!Pass";
-	await send("POST", "/users", { name: "Ana", email, password });
-	const login = await send("POST", "/login", { email, password });
-	return (await login.json()) as { token: string; user: { id: string } };
+
+/** Requests to the API of `app`, and a user that signs in. */
+const clientOf = (app: typeof App) => {
+	const api = app.outputs.Api.build();
+	const send = (method: string, path: string, body?: unknown, token?: string) =>
+		api.request(path, {
+			method,
+			headers: {
+				"content-type": "application/json",
+				...(token ? { authorization: `Bearer ${token}` } : {}),
+			},
+			...(body === undefined ? {} : { body: JSON.stringify(body) }),
+		});
+	const signIn = async (email: string) => {
+		const password = "Str0ng!Pass";
+		await send("POST", "/users", { name: "Ana", email, password });
+		const login = await send("POST", "/login", { email, password });
+		return (await login.json()) as { token: string; user: { id: string } };
+	};
+	return { api, send, signIn };
 };
 
 test("tutorial: the docs show the code of tutorial.ts", async () => {
@@ -27,6 +34,10 @@ test("tutorial: the docs show the code of tutorial.ts", async () => {
 });
 
 test("tutorial: register, login and a masked password", async () => {
+	// An application of its own: no user and no post of another test.
+	await using app = await testApplicationOf(App);
+	const { send } = clientOf(app);
+
 	const created = await send("POST", "/users", {
 		name: "Bia",
 		email: "bia@example.com",
@@ -55,6 +66,10 @@ test("tutorial: register, login and a masked password", async () => {
 });
 
 test("tutorial: access is enforced before the use case runs", async () => {
+	// An application of its own: no user and no post of another test.
+	await using app = await testApplicationOf(App);
+	const { send } = clientOf(app);
+
 	const post = { title: "Hello", slug: "hello", body: "First." };
 	expect((await send("POST", "/posts", post)).status).toBe(401);
 	expect(
@@ -66,6 +81,10 @@ test("tutorial: access is enforced before the use case runs", async () => {
 });
 
 test("tutorial: the rule of the use case, with its statuses", async () => {
+	// An application of its own: no user and no post of another test.
+	await using app = await testApplicationOf(App);
+	const { send, signIn } = clientOf(app);
+
 	const author = await signIn("author@example.com");
 	const other = await signIn("other@example.com");
 	const created = await send(
@@ -115,6 +134,10 @@ test("tutorial: the rule of the use case, with its statuses", async () => {
 });
 
 test("tutorial: the document says who may call what", async () => {
+	// An application of its own: no user and no post of another test.
+	await using app = await testApplicationOf(App);
+	const { api } = clientOf(app);
+
 	const document = (await (await api.request("/openapi.json")).json()) as {
 		paths: Record<string, Record<string, { security?: unknown }>>;
 		components: { securitySchemes: object };

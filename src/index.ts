@@ -374,6 +374,7 @@ export {
 	RepositoryIsFrozen,
 	RepositoryUniqueViolation,
 	RepositoryUsedOutsideApplication,
+	RepositoryWrittenOutsideApplication,
 	UnstoredEntity,
 	UnsupportedIdentity,
 } from "./core/repository/exceptions";

@@ -70,6 +70,7 @@ import { providerDescriptionOf } from "../repository/provider";
 import { assertGeneratedIds, isRepository } from "../repository/repository";
 import {
 	bindRepository,
+	enterStrictWrites,
 	inspectRepository,
 	providerOfRepository,
 	type RepositoryInspection,
@@ -225,6 +226,24 @@ interface Replaced {
 
 /** The setting by which `app.with` gives `applicationOf` what it replaces. Internal. */
 const ReplacedKey: unique symbol = Symbol("afora.application.replaced");
+
+/** What `testApplicationOf` gives `applicationOf`. @internal */
+export interface TestApplicationSettings {
+	/** What every repository reads and writes through, whatever it declared. */
+	readonly provider: IRepositoryProvider;
+	/** Whether writes through a repository no application bound throw while it runs. */
+	readonly strict: boolean;
+}
+/** The key of `TestApplicationSettings` in the settings of `applicationOf`. @internal */
+export const TestApplicationKey: unique symbol = Symbol(
+	"afora.application.test",
+);
+/** The test settings of each application made by `testApplicationOf`, for `extends`. */
+const testSettings = new WeakMap<object, TestApplicationSettings>();
+/** `Symbol.asyncDispose`, or its registered stand-in where the runtime has none. */
+const asyncDispose: symbol =
+	(Symbol as { readonly asyncDispose?: symbol }).asyncDispose ??
+	Symbol.for("Symbol.asyncDispose");
 
 /** What each application replaces (inherited replacements included), for `extends`. */
 const replacedSettings = new WeakMap<object, Replaced>();
@@ -1702,9 +1721,32 @@ export function applicationOf<
 				: value,
 		});
 	}
+	// Made by `testApplicationOf` (or extending one): every provider, named,
+	// default or declared by a repository, is its own.
+	const test =
+		(settings as { readonly [TestApplicationKey]?: TestApplicationSettings })[
+			TestApplicationKey
+		] ?? inherited(extended, testSettings);
+	if (test !== undefined) {
+		for (const [key, entry] of named) {
+			named.set(key, { ...entry, instance: test.provider });
+		}
+	}
 	const instances = new Map<object, IRepositoryProvider>(
 		[...named.values()].map((entry) => [entry.slot, entry.instance]),
 	);
+	// What repositories are bound with: in a test application, the providers
+	// they declare are replaced too.
+	const bindingInstances = new Map(instances);
+	if (test !== undefined) {
+		for (const entry of registry.repositories.values()) {
+			const declared = (inspectRepository(entry.value) as RepositoryInspection)
+				.provider;
+			if (declared !== undefined && !isProviderSlot(declared)) {
+				bindingInstances.set(declared, test.provider);
+			}
+		}
+	}
 	const instanceOf = (slot: ProviderSlot, holder: string) => {
 		const instance = instances.get(slot);
 		if (instance === undefined) {
@@ -1731,13 +1773,13 @@ export function applicationOf<
 			? [...extended].reverse().find((other) => other.provider)
 			: undefined;
 	const declaredProvider: unknown =
-		settings.provider ?? inheritedFrom?.provider;
+		test?.provider ?? settings.provider ?? inheritedFrom?.provider;
 	if (declaredProvider !== undefined && typeof declaredProvider !== "object") {
 		invalid(name, "Expected `provider` to be a repository provider.");
 	}
 	const defaultSlot: ProviderSlot | undefined = isProviderSlot(declaredProvider)
 		? declaredProvider
-		: inheritedFrom === undefined
+		: inheritedFrom === undefined || test !== undefined
 			? undefined
 			: defaultSlots.get(inheritedFrom);
 	// A provider of `providerFrom` is made on start: until then the
@@ -1886,7 +1928,7 @@ export function applicationOf<
 			? bindRepository(
 					entry.value as object,
 					provider,
-					instances,
+					bindingInstances,
 					{ application: name, key: entry.name, logger },
 					runtime,
 					environmentsOfProviders,
@@ -2061,6 +2103,8 @@ export function applicationOf<
 
 	let starting: Promise<unknown> | undefined;
 	let started = false;
+	// In strict mode, ends the check of writes once it stops.
+	let leaveStrict: (() => void) | undefined;
 	const start = async (lock: unknown) => {
 		if (lock !== undefined) {
 			if (!isLock(lock)) {
@@ -2161,6 +2205,8 @@ export function applicationOf<
 		...(logger ? { [ApplicationLoggerKey]: logger } : {}),
 		...(tracer ? { [ApplicationTracerKey]: tracer } : {}),
 		...(hasPublishers ? { [ApplicationPublishersKey]: publishers } : {}),
+		// `await using app = await testApplicationOf(App)` stops it.
+		...(test === undefined ? {} : { [asyncDispose]: () => application.stop() }),
 		properties: collection("properties"),
 		blueprints: collection("blueprints"),
 		records: collection("records"),
@@ -2444,6 +2490,10 @@ export function applicationOf<
 				}
 				await start(lock);
 				if (register) setStartedApplication(application as never);
+				if (test?.strict) {
+					leaveStrict?.();
+					leaveStrict = enterStrictWrites(name);
+				}
 			})().then(
 				() => application,
 				async (error: unknown) => {
@@ -2462,6 +2512,8 @@ export function applicationOf<
 			starting = undefined;
 			started = false;
 			if (wasStarting) await wasStarting.catch(() => undefined);
+			leaveStrict?.();
+			leaveStrict = undefined;
 			if (startedApplication() === application)
 				setStartedApplication(undefined);
 			for (const instance of allProviders) await stopProvider(instance);
@@ -2507,6 +2559,7 @@ export function applicationOf<
 	if (tracer !== undefined) traceSettings.set(application, tracer);
 	if (runtime !== undefined) runtimeSettings.set(application, runtime);
 	if (replaced !== undefined) replacedSettings.set(application, replaced);
+	if (test !== undefined) testSettings.set(application, test);
 	publisherOrigins.set(application, Object.freeze(origins));
 	serviceSettings.set(application, services);
 	serviceOrigins.set(application, Object.freeze(serviceFrom));

@@ -66,6 +66,7 @@ import {
 import {
 	actionGetters,
 	assertUnbound,
+	assertWritable,
 	contextOf,
 	declareRepository,
 	type RepositoryState,
@@ -296,6 +297,7 @@ type Internal = {
 /** `method` run in the layer of repositories, as `this` gives it access to them. */
 function action(
 	method: (self: Internal, ...args: never[]) => Promise<unknown>,
+	writes = false,
 ): Method {
 	return function (this: object, ...args: never[]) {
 		const state = stateOf(this);
@@ -304,6 +306,7 @@ function action(
 				{ layer: ExceptionLayers.Repository, source: state.name },
 				async () => {
 					assertUnbound(state);
+					if (writes) assertWritable(state);
 					return method(this as unknown as Internal, ...args);
 				},
 			);
@@ -313,6 +316,11 @@ function action(
 			: withApplicationRuntime(state.runtime, call);
 	} as Method;
 }
+
+/** `method` as `action` makes it, for a method that writes. */
+const writeAction = (
+	method: (self: Internal, ...args: never[]) => Promise<unknown>,
+): Method => action(method, true);
 
 /** A value to look up `key` by: a record as its plain value, an entity as its id. */
 function queryValueOf(context: RepositoryContext, key: string, value: unknown) {
@@ -710,7 +718,7 @@ const forEachPage = action(
 	},
 );
 
-const create = action(async (self, input: unknown) => {
+const create = writeAction(async (self, input: unknown) => {
 	const { entity: Entity } = self.context;
 	const entity =
 		input instanceof Entity
@@ -867,7 +875,7 @@ async function writeEntity(
 	}
 }
 
-const update = action(async (self, entity: unknown) => {
+const update = writeAction(async (self, entity: unknown) => {
 	await writeEntity(self, entity);
 	return entity;
 });
@@ -1035,7 +1043,7 @@ async function bringUpRenamed(
 	}
 }
 
-const increment = action(
+const increment = writeAction(
 	async (self, target: unknown, deltas: unknown, options: unknown) => {
 		const { context } = self;
 		const id = isIdValue(target)
@@ -1077,7 +1085,7 @@ const increment = action(
 	},
 );
 
-const remove = action(async (self, target: unknown) => {
+const remove = writeAction(async (self, target: unknown) => {
 	const { context } = self;
 	let entity = target;
 	if (isIdValue(target)) {
@@ -1109,7 +1117,7 @@ const remove = action(async (self, target: unknown) => {
 	return entity;
 });
 
-const restore = action(async (self, target: unknown) => {
+const restore = writeAction(async (self, target: unknown) => {
 	const { context } = self;
 	const id = isIdValue(target)
 		? target

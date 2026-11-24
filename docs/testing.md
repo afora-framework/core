@@ -1,6 +1,6 @@
 # Testing an application
 
-This page is about testing the code you write with afora: records, entities, use cases, an application and its HTTP API. The examples use `bun:test`; `vitest` and `jest` take the same `test` and `expect`. Nothing here needs a database, a server or a mock library, because the default provider keeps data in memory and an output is a function you can call.
+This page is about testing the code you write with afora: records, entities, use cases, an application and its HTTP API. The examples use `bun:test`; `vitest` and `jest` take the same `test` and `expect`. Nothing here needs a database, a server or a mock library, because the default provider keeps data in memory and an output is a function you can call. A test of an application starts with `testApplicationOf(App)` from `@afora/core/testing`: the application on an empty store of its own, stopped when the test ends ([An application and its API](#an-application-and-its-api)).
 
 To test a repository **provider** you are writing, see [Testing a provider](repositories.md#testing-a-provider) and the last section of this page.
 
@@ -66,13 +66,14 @@ test("a new order queues order.placed", () => {
 
 ## Repositories
 
-`inMemoryProvider()` is the default, so a repository works in a test as it is. It enforces the same rules as any provider: `RepositoryUniqueViolation`, soft deletion, cursors, transactions, versions. Declare repositories in a function when each test needs an empty one, because a module-level repository keeps its rows for the whole process:
+`inMemoryProvider()` is the default, so a repository works in a test as it is. It enforces the same rules as any provider: `RepositoryUniqueViolation`, soft deletion, cursors, transactions, versions. A repository declared at module level keeps its rows for the whole process, so give the repositories of a test block one provider and empty it before each test with `clear()`, which also starts the `Serial` ids again at 1 (`clear("Note")` or `clear(Note)` empties one entity):
 
 ```ts
-import { expect, test } from "bun:test";
+import { beforeEach, expect, test } from "bun:test";
 import {
 	blueprintOf,
 	entityOf,
+	inMemoryProvider,
 	repositoryOf,
 	RepositoryUniqueViolation,
 } from "@afora/core";
@@ -81,19 +82,31 @@ class Note extends entityOf(
 	blueprintOf((ctx) => ({ title: ctx.text })),
 	{ unique: ["title"] },
 ) {}
-const makeNotes = () =>
-	repositoryOf({ entity: Note, actions: ["create", "findByTitle"] });
+const store = inMemoryProvider();
+const Notes = repositoryOf({
+	entity: Note,
+	actions: ["create", "findByTitle"],
+	provider: store,
+});
+
+beforeEach(() => store.clear());
 
 test("a title is unique", async () => {
-	const Notes = makeNotes();
-	await Notes.create({ title: "a" });
+	await Notes.create(new Note({ title: "a" }));
 
-	const error = await Notes.create({ title: "a" }).catch((caught) => caught);
+	const error = await Notes.create(new Note({ title: "a" })).catch(
+		(caught) => caught,
+	);
 
 	expect(error).toBeInstanceOf(RepositoryUniqueViolation);
-	expect(await makeNotes().findByTitle("a")).toBeUndefined();
+});
+
+test("starts empty", async () => {
+	expect(await Notes.findByTitle("a")).toBeUndefined();
 });
 ```
+
+`clear()` waits for a running transaction, and `spyProvider(inMemoryProvider())` has it too. Repositories that an application registers are tested through the application instead (below).
 
 ## Use cases
 
@@ -172,7 +185,15 @@ For a command, `run(operation, input, { env })` replaces environment variables f
 
 ## An application and its API
 
-An application runs everything in one context. In a test, give it its own `inMemoryProvider()` so each test starts with empty repositories, start it, and stop it afterwards. Without a `provider`, `app.repositories.X` is the module-level repository, and its rows are shared between applications.
+An application runs everything in one context. In a test, run it through `testApplicationOf(App, options?)` from `@afora/core/testing`. It gives an application that extends `App` (its declarations, log, services, publishers, runtime and `app.with` replacements) with:
+
+- **a store of its own**: every repository reads and writes through a new `inMemoryProvider()`, whatever provider it declares: the `provider` of the application (also one of `providerFrom`, which is never made), those of `providersOf` and one a repository names itself. So no row is shared with another test, and the test needs no database. `options.provider` gives another one, such as a [spy](#spying-on-the-database); `app.provider` is the one it uses, so `await app.provider.clear()` empties it in the middle of a test.
+- **already started**, without becoming the application of the process (`useApplication`), so tests that run at the same time do not take each other's place.
+- **`Symbol.asyncDispose`**, which stops it: with `await using`, the application stops when the test ends, also when an assertion throws before the end.
+- `options.seed(app)`, run once it has started, to insert fixtures through `app.repositories` or `app.run`. When `seed` throws, the application is stopped and `testApplicationOf` rejects with that error.
+- `options.runtime`, the [runtime services](#runtime-services) of the application, over those of `App`.
+
+Its type is `TestApplication<typeof App>`: `App`, with `provider` typed as the one given (`InMemoryProvider` by default); the options are `TestApplicationOptions`.
 
 An output built by the `hono` sink is a Hono app, whose `request(path, init)` calls the API without a socket. That is how the [tutorial](tutorial.md) is tested.
 
@@ -183,11 +204,11 @@ import {
 	blueprintOf,
 	commandOf,
 	entityOf,
-	inMemoryProvider,
 	outputOf,
 	repositoryOf,
 	resourceOf,
 } from "@afora/core";
+import { testApplicationOf } from "@afora/core/testing";
 import { hono } from "@afora/hono";
 
 class Note extends entityOf(
@@ -204,62 +225,77 @@ const Notebook = commandOf({
 });
 const Api = outputOf({ name: "Api", commands: [Notebook], pipe: [hono()] });
 
-// One application per test: its provider is empty
-const newApp = () =>
-	applicationOf({
-		name: "notes",
-		entities: { Note },
-		repositories: { Notes },
-		commands: { Notebook },
-		outputs: { Api },
-		provider: inMemoryProvider(),
-	});
+// The application as it ships: the tests give it its store
+const App = applicationOf({
+	name: "notes",
+	entities: { Note },
+	repositories: { Notes },
+	commands: { Notebook },
+	outputs: { Api },
+});
 
-const send = (app: ReturnType<typeof newApp>, path: string, body?: unknown) =>
+const post = (app: typeof App, path: string, body: unknown) =>
 	app.outputs.Api.build().request(path, {
-		method: body === undefined ? "GET" : "POST",
+		method: "POST",
 		headers: { "content-type": "application/json" },
-		...(body === undefined ? {} : { body: JSON.stringify(body) }),
+		body: JSON.stringify(body),
 	});
 
 test("creates a note, then refuses a duplicate with 409", async () => {
-	const app = newApp();
-	await app.start({ replace: true });
+	await using app = await testApplicationOf(App);
 
-	expect((await send(app, "/notes", { title: "a" })).status).toBe(201);
-	expect((await send(app, "/notes", { title: "a" })).status).toBe(409);
-	expect((await send(app, "/notes", { title: "b", extra: 1 })).status).toBe(
+	expect((await post(app, "/notes", { title: "a" })).status).toBe(201);
+	expect((await post(app, "/notes", { title: "a" })).status).toBe(409);
+	expect((await post(app, "/notes", { title: "b", extra: 1 })).status).toBe(
 		400,
 	);
+});
 
-	await app.stop();
+test("starts with the notes of seed, and no other", async () => {
+	await using app = await testApplicationOf(App, {
+		seed: (app) => app.repositories.Notes.create(new Note({ title: "a" })),
+	});
+
+	const page = await app.repositories.Notes.findPage();
+	expect(page.items.map((note) => note.title)).toEqual(["a"]);
 });
 ```
 
-`start({ replace: true })` takes the place of an application that a previous test left started, and `stop()` releases what the provider holds. The `statusOf` rules turn exceptions into statuses (400 for invalid input, 401, 403, 404, 409, 500); a test asserts the status and, for a problem, the `type` (`urn:afora:exception:<name>`) of the body. See [Outputs](outputs.md).
+The `statusOf` rules turn exceptions into statuses (400 for invalid input, 401, 403, 404, 409, 500); a test asserts the status and, for a problem, the `type` (`urn:afora:exception:<name>`) of the body. See [Outputs](outputs.md).
 
 To test as a signed-in caller, send the credentials the sink is configured for (a bearer token for `jwt`); to test a use case's rule without HTTP, call `app.run(UseCase, input, { context })`. See [Access](auth.md).
 
+`await using` needs TypeScript 5.2 or later with `esnext.disposable` (or `ESNext`) in `lib`, and a runtime that has `Symbol.asyncDispose` (Bun, Node 22). Without it, write `const app = await testApplicationOf(App)` and `await app.stop()` in a `finally` or an `afterEach`.
+
+**Strict mode.** A repository the application does not register still writes to a store of the process, which outlives the test: a use case that imports one directly, or a test that calls the module-level repository. With `testApplicationOf(App, { strict: true })`, while that application runs, a write (`create`, `update`, `delete`, `restore`, `increment`) through a repository no application bound throws `RepositoryWrittenOutsideApplication` (layer `repository`) naming the application; reads are left alone. The check is for the whole process, so a strict test also stops those writes in tests that run at the same time. A repository an application did bind already throws `RepositoryUsedOutsideApplication` when called at module level (see [Repositories](repositories.md)).
+
 ### Replacing registrations
 
-An integration test often needs the application as it is, with a few things swapped: a mailer that sends nothing, an environment with fixed variables, a repository that fails. `app.with` gives that application without declaring a second one: the registrations it names are replaced by key, in every use case at any depth and in the commands and outputs, so the real sink, statuses, auth and event policies run (see [Applications](applications.md#replacing-registrations)).
+An integration test often needs the application as it is, with a few things swapped: a mailer that sends nothing, an environment with fixed variables, a repository that fails. `app.with` gives that application without declaring a second one: the registrations it names are replaced by key, in every use case at any depth and in the commands and outputs, so the real sink, statuses, auth and event policies run (see [Applications](applications.md#replacing-registrations)). `testApplicationOf` takes the application `with` gives, and keeps its replacements over its own store.
 
+<!-- docs:code context
+import { expect, test } from "bun:test";
+import type { AnyApplication } from "@afora/core";
+import { testApplicationOf } from "@afora/core/testing";
+declare const Blog: AnyApplication;
+-->
 ```ts
 test("publishes and mails the editors", async () => {
 	const sent: string[] = [];
-	const app = Blog.with({
-		services: {
-			mailer: () => ({
-				send: (to: string, text: string) => {
-					sent.push(`${to}: ${text}`);
-					return `sent to ${to}`;
-				},
-			}),
-		},
-		environments: { Mail: { MAIL_TO: "editors@example.com" } },
-		repositories: { Posts: { findMany: async () => [] } },
-	});
-	await app.start({ register: false });
+	await using app = await testApplicationOf(
+		Blog.with({
+			services: {
+				mailer: () => ({
+					send: (to: string, text: string) => {
+						sent.push(`${to}: ${text}`);
+						return `sent to ${to}`;
+					},
+				}),
+			},
+			environments: { Mail: { MAIL_TO: "editors@example.com" } },
+			repositories: { Posts: { findMany: async () => [] } },
+		}),
+	);
 
 	const response = await app.outputs.Api.build().request("/posts/publish", {
 		method: "POST",
@@ -268,8 +304,6 @@ test("publishes and mails the editors", async () => {
 	});
 	expect(response.status).toBe(200);
 	expect(sent).toEqual(["editors@example.com: Hello"]);
-
-	await app.stop();
 });
 ```
 
@@ -279,7 +313,7 @@ A repository replacement gives only the methods the test changes; the others sti
 
 A repository is frozen: patching one of its methods fails, because the object cannot be changed. That is on purpose. Assigning a method (`Projects.findMany = ...`, which is what a spy that assigns does) throws `RepositoryIsFrozen`, whose message names `spyProvider`, `execute` and this section. A spy that redefines the property (`vi.spyOn`, `jest.spyOn`) is stopped by the engine before afora is asked, with `TypeError: Cannot redefine property: findMany`, or `Cannot define property findMany, object is not extensible`; `spyOn` of `bun:test` reports `spyOn(target, prop) does not support accessor properties yet`. Whichever message you got, the answer is the same. One repository is shared by every use case, command and application that names it, so a patched method would leak into every other test of the process; and an application with a `provider` does not even call it, since `app.repositories.Projects` is a copy bound to that provider. Spy on what lies under every repository instead: the provider.
 
-**Behind an HTTP sink**, where the test sends a request and never calls `execute`, wrap the provider with `spyProvider` from `@afora/core/testing` and give it to the application. The spy is the provider itself, plus three members:
+**Behind an HTTP sink**, where the test sends a request and never calls `execute`, wrap the provider with `spyProvider` from `@afora/core/testing` and give it to the application, as `testApplicationOf(App, { provider: spy })`. The spy is the provider itself, plus three members:
 
 - `calls(entity?, operation?)` gives the calls recorded so far, in order, as `{ operation, entity, args }`: `entity` is the name of the entity (`recordNameOf`, the `name` option when it has one), and the filter takes that name or the class; `operation` is one of the operations of [`wrapProvider`](repositories.md#wrapping-a-provider) (`findOne`, `findMany`, `insert`, `update`, `remove`, `count`, `increment`, `migrate`). The calls inside a transaction are recorded too.
 - `fail(entity, operation, error, { times })` makes that operation reject with `error` instead of reaching the provider: the next `times` calls, or every call until `reset()`. The call is still recorded. It throws `InvalidRepositoryDeclaration` when `times` is not a positive integer, or when the provider has no such operation (an `increment` on a provider without one would never fail).
@@ -301,7 +335,7 @@ import {
 	repositoryOf,
 	useCaseOf,
 } from "@afora/core";
-import { spyProvider } from "@afora/core/testing";
+import { spyProvider, testApplicationOf } from "@afora/core/testing";
 import { hono } from "@afora/hono";
 
 class Setting extends entityOf(blueprintOf((ctx) => ({ key: ctx.string }))) {}
@@ -331,18 +365,18 @@ const Api = outputOf({
 	pipe: [hono()],
 });
 
+const Cms = applicationOf({
+	name: "cms",
+	entities: { Setting },
+	repositories: { Settings },
+	useCases: { CountSettings },
+	commands: { Admin },
+	outputs: { Api },
+});
+
 test("a failing count is a 503", async () => {
 	const spy = spyProvider(inMemoryProvider());
-	const app = applicationOf({
-		name: "cms",
-		entities: { Setting },
-		repositories: { Settings },
-		useCases: { CountSettings },
-		commands: { Admin },
-		outputs: { Api },
-		provider: spy,
-	});
-	await app.start({ replace: true });
+	await using app = await testApplicationOf(Cms, { provider: spy });
 	const api = app.outputs.Api.build();
 
 	expect((await api.request("/settings/count")).status).toBe(200);
@@ -350,8 +384,6 @@ test("a failing count is a 503", async () => {
 
 	spy.fail(Setting, "count", new StoreDown({ source: "test" }));
 	expect((await api.request("/settings/count")).status).toBe(503);
-
-	await app.stop();
 });
 ```
 
@@ -393,7 +425,7 @@ import {
 	publishEvents,
 	repositoryOf,
 } from "@afora/core";
-import { memoryPublisher } from "@afora/core/testing";
+import { memoryPublisher, testApplicationOf } from "@afora/core/testing";
 
 class Order extends entityOf(
 	blueprintOf((ctx) => ({ item: ctx.text })),
@@ -409,19 +441,19 @@ const Shop = commandOf({
 
 test("publishes order.placed after the call", async () => {
 	const bus = memoryPublisher();
-	const app = applicationOf({
-		name: "shop",
-		entities: { Order },
-		repositories: { Orders },
-		commands: { Shop },
-		publishers: { bus },
-	});
-	await app.start({ replace: true });
+	await using app = await testApplicationOf(
+		applicationOf({
+			name: "shop",
+			entities: { Order },
+			repositories: { Orders },
+			commands: { Shop },
+			publishers: { bus },
+		}),
+	);
 
 	await app.commands.Shop.run("place", { item: "mug" });
 
 	expect(bus.published.map((entry) => entry.topic)).toEqual(["order.placed"]);
-	await app.stop();
 });
 ```
 
@@ -469,16 +501,17 @@ test.concurrent("stamps with its own clock", async () => {
 });
 ```
 
-For code outside an application (an entity or a password built in the test itself), `withRuntime(services, fn)` gives the services to what `fn` runs, and to nothing after it returns (see [Runtime](runtime.md#per-application-and-per-call)). `configure` still works, but it sets the services of the whole process: a test that calls it must call `resetRuntime()` in `afterEach`, and tests that run at the same time share what it set.
+`testApplicationOf(App, { runtime })` gives them to the test application the same way, over those of `App`. For code outside an application (an entity or a password built in the test itself), `withRuntime(services, fn)` gives the services to what `fn` runs, and to nothing after it returns (see [Runtime](runtime.md#per-application-and-per-call)). `configure` still works, but it sets the services of the whole process: a test that calls it must call `resetRuntime()` in `afterEach`, and tests that run at the same time share what it set.
 
 ## What `@afora/core/testing` has
 
-| Export                 | For                                                                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `memoryPublisher()`    | Testing an application: a publisher that keeps `{ topic, event }` in `published`.                                                                            |
-| `manualClock(start?)`  | Testing time: a clock for `runtime`, `withRuntime` or `configure({ clock })` with `now()`, `set(date \| ms \| iso)` and `advance(ms \| { minutes, days… })`. |
-| `spyProvider()`        | Testing an application: a provider that records its calls and fails on demand.                                                                               |
-| `providerContract`     | Writing a repository provider: the cases every `IRepositoryProvider` must pass.                                                                              |
-| `httpProviderContract` | Writing an HTTP sink for a server (as `@afora/hono` and `@afora/fastify` are): its cases.                                                                    |
+| Export                             | For                                                                                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `testApplicationOf(app, options?)` | Testing an application: `app` on a store of its own, started, `seed`ed, stopped by `await using`; `strict` catches writes through unbound repositories.      |
+| `memoryPublisher()`                | Testing an application: a publisher that keeps `{ topic, event }` in `published`.                                                                            |
+| `manualClock(start?)`              | Testing time: a clock for `runtime`, `withRuntime` or `configure({ clock })` with `now()`, `set(date \| ms \| iso)` and `advance(ms \| { minutes, days… })`. |
+| `spyProvider()`                    | Testing an application: a provider that records its calls and fails on demand.                                                                               |
+| `providerContract`                 | Writing a repository provider: the cases every `IRepositoryProvider` must pass.                                                                              |
+| `httpProviderContract`             | Writing an HTTP sink for a server (as `@afora/hono` and `@afora/fastify` are): its cases.                                                                    |
 
 The last two are tools for authors of packages. `providerContract({ describe, it, expect }, () => myProvider())` takes the functions of your test runner and a factory of fresh providers, and checks inserts, queries, unique keys, soft deletion, transactions, cursors and more; the [custom provider recipe](recipes/custom-provider.md) runs it. An application does not need them.

@@ -11,7 +11,10 @@ import {
 } from "../environment/environment";
 import type { ILogger } from "../logger/logger";
 import type { RuntimeServices } from "../runtime-scope";
-import { RepositoryUsedOutsideApplication } from "./exceptions";
+import {
+	RepositoryUsedOutsideApplication,
+	RepositoryWrittenOutsideApplication,
+} from "./exceptions";
 import type { RepositoryIndex, RepositoryScans } from "./types/query.interface";
 import type {
 	AnyRepositoryEntity,
@@ -267,6 +270,40 @@ export function assertUnbound(state: RepositoryState): void {
 			details: owner,
 		});
 	}
+}
+
+/** The names of the strict test applications running, the latest last. */
+const strictApplications: string[] = [];
+
+/**
+ * Makes every write through a repository no application bound throw
+ * `RepositoryWrittenOutsideApplication` until the returned function is
+ * called, for `testApplicationOf(app, { strict: true })`. Process-wide.
+ * @internal
+ */
+export function enterStrictWrites(application: string): () => void {
+	strictApplications.push(application);
+	let left = false;
+	return () => {
+		if (left) return;
+		left = true;
+		strictApplications.splice(strictApplications.lastIndexOf(application), 1);
+	};
+}
+
+/**
+ * Throws `RepositoryWrittenOutsideApplication` when a strict test
+ * application runs and `state` is a declaration, not a repository an
+ * application bound: its rows would outlive the test.
+ */
+export function assertWritable(state: RepositoryState): void {
+	if (strictApplications.length === 0 || origins.has(state)) return;
+	throw new RepositoryWrittenOutsideApplication({
+		source: state.name,
+		details: {
+			application: strictApplications[strictApplications.length - 1] as string,
+		},
+	});
 }
 
 /** Where the application binding a repository comes from. */
