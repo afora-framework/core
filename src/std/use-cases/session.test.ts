@@ -159,7 +159,9 @@ function build(cookies = false) {
 		const request: HttpRequest = {
 			param: () => undefined,
 			query: () => ({}),
-			header: (name) => given.headers?.[name],
+			header: (name) =>
+				given.headers?.[name] ??
+				(name === "content-type" ? "application/json" : undefined),
 			text: () => JSON.stringify(given.body ?? {}),
 		};
 		const result = await route.handle(request);
@@ -198,7 +200,8 @@ describe("session: tokens of login", () => {
 			claims: { tenant: "acme" },
 		});
 		expect(
-			(await jwt.verify(login.json.refreshToken, { use: "refresh" })).scopes,
+			(await jwt.verify(login.json.refreshToken, { use: "refresh:User" }))
+				.scopes,
 		).toEqual([]);
 		const wrong = await call("/login", {
 			body: { email: ana.email, password: "nope" },
@@ -468,7 +471,9 @@ describe("session: entities with integer ids", () => {
 			const result = await route.handle({
 				param: () => undefined,
 				query: () => ({}),
-				header: (name) => given.headers?.[name],
+				header: (name) =>
+					given.headers?.[name] ??
+					(name === "content-type" ? "application/json" : undefined),
 				text: () => JSON.stringify(given.body ?? {}),
 			});
 			return {

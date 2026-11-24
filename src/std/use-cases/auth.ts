@@ -137,6 +137,9 @@ function tokensOf(target: UseCaseTargetInfo, options: Options, verb: string) {
 	}
 	for (const [, key] of claimKeys) target.field(key);
 	const jwt = jwtOf(jwtOptions);
+	// A refresh token belongs to the entity it was issued for: the refresh
+	// of another entity sharing the secret refuses it, whatever the ids.
+	const refreshUse = `refresh:${target.entityName}`;
 	noTokenKeyInInput(
 		target,
 		"token",
@@ -168,7 +171,7 @@ function tokensOf(target: UseCaseTargetInfo, options: Options, verb: string) {
 				? {
 						refreshToken: await jwt.sign(
 							{ subject: subject.subject },
-							{ expiresIn: refresh.expiresIn, use: "refresh" },
+							{ expiresIn: refresh.expiresIn, use: refreshUse },
 						),
 					}
 				: {}),
@@ -176,7 +179,7 @@ function tokensOf(target: UseCaseTargetInfo, options: Options, verb: string) {
 	};
 	// The subject of a token is text; the id it names may be a number.
 	const verifyRefresh = async (token: string) => {
-		const caller = await jwt.verify(token, { use: "refresh" });
+		const caller = await jwt.verify(token, { use: refreshUse });
 		return {
 			...caller,
 			subject: coerceTextValues(target.entity.blueprint, {

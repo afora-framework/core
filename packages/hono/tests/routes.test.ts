@@ -269,7 +269,10 @@ describe("hono routes", () => {
 		const badJson = await server.request("/entries", {
 			method: "POST",
 			body: "{",
-			headers: { "x-request-id": "bad json" },
+			headers: {
+				"content-type": "application/json",
+				"x-request-id": "bad json",
+			},
 		});
 		expect(badJson.status).toBe(400);
 		// not a token: replaced by a new id

@@ -285,6 +285,7 @@ const isIn = (condition: unknown): condition is { in: readonly unknown[] } =>
 	Object.keys(condition).length === 1 &&
 	Array.isArray((condition as { in?: unknown }).in);
 
+/** The position of `value` on `column` in an order: a missing value ties with a missing one. */
 function equality(column: Column, value: unknown): SQL {
 	return isMissing(value)
 		? isNull(column)
@@ -292,14 +293,15 @@ function equality(column: Column, value: unknown): SQL {
 }
 
 function conditionOf(column: Column, condition: unknown): SQL {
-	if (!isIn(condition)) return equality(column, condition);
+	// A missing value (`undefined` or `null`), also inside `in`, matches no row.
+	if (!isIn(condition))
+		return isMissing(condition)
+			? sql`1 = 0`
+			: eq(column, toColumn(column, condition));
 	const present = condition.in
 		.filter((value) => !isMissing(value))
 		.map((value) => toColumn(column, value));
-	const parts: SQL[] = [];
-	if (present.length > 0) parts.push(inArray(column, present));
-	if (present.length < condition.in.length) parts.push(isNull(column));
-	return or(...parts) ?? sql`1 = 0`;
+	return present.length > 0 ? inArray(column, present) : sql`1 = 0`;
 }
 
 function whereOf(

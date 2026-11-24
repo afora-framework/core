@@ -137,3 +137,297 @@ describe("SEC-21: findBy<Key> and findManyBy<Key> take one value", () => {
 		).rejects.toBeInstanceOf(InvalidRepositoryQuery);
 	});
 });
+
+describe("SEC-47: a write checks that the entities it references exist", () => {
+	class Review extends entityOf(
+		blueprintOf((ctx) => ({
+			title: ctx.string,
+			owner: Member,
+			reviewers: ctx.listOf(Member),
+			score: ctx.number,
+		})),
+		{ name: "Review", change: ["score", "owner"] },
+	) {}
+
+	async function setup() {
+		const reads: string[] = [];
+		const Members = repositoryOf({
+			entity: Member,
+			actions: ["create", "delete"],
+		});
+		const ana = await Members.create({ name: "Ana", email: "ana@example.com" });
+		const bia = await Members.create({ name: "Bia", email: "bia@example.com" });
+		const provider = (Members as unknown as { provider: IRepositoryProvider })
+			.provider;
+		const findMany = provider.findMany;
+		provider.findMany = (...args) => {
+			reads.push("findMany");
+			return findMany.apply(provider, args);
+		};
+		const Tasks = repositoryOf({
+			entity: Task,
+			actions: ["create", "update", "findMany"],
+			relations: [Members],
+		});
+		const Reviews = repositoryOf({
+			entity: Review,
+			actions: ["create", "update", "findMany", "increment"],
+			relations: [Members],
+		});
+		return { Members, Tasks, Reviews, ana, bia, reads };
+	}
+
+	const unsaved = () => new Member({ name: "Caio", email: "caio@example.com" });
+
+	test("SEC-47: create rejects a reference to an id that was never stored", async () => {
+		const { Tasks, ana } = await setup();
+		await Tasks.create({ title: "Ship", owner: ana });
+		const error = await Tasks.create({ title: "Ghost", owner: unsaved() }).then(
+			() => undefined,
+			(caught: unknown) => caught,
+		);
+		expect((error as Error).name).toBe("RepositoryEntityNotFound");
+		const titles = (await Tasks.findMany({})).map((task) => task.title);
+		expect(titles).toEqual(["Ship"]);
+	});
+
+	test("SEC-47: update rejects a reference to an id that was never stored", async () => {
+		const { Reviews, ana, bia } = await setup();
+		const review = await Reviews.create({
+			title: "Draft",
+			owner: ana,
+			reviewers: [bia],
+			score: 1,
+		});
+		review.change.owner(unsaved());
+		await expect(Reviews.update(review)).rejects.toMatchObject({
+			name: "RepositoryEntityNotFound",
+		});
+		const [stored] = await Reviews.findMany({});
+		expect(stored?.owner.name).toBe("Ana");
+	});
+
+	test("SEC-47: a reference in a list is checked too", async () => {
+		const { Reviews, ana, bia } = await setup();
+		await expect(
+			Reviews.create({
+				title: "Draft",
+				owner: ana,
+				reviewers: [bia, unsaved()],
+				score: 1,
+			}),
+		).rejects.toMatchObject({ name: "RepositoryEntityNotFound" });
+		expect(await Reviews.findMany({})).toEqual([]);
+	});
+
+	test("SEC-47: the entity increment creates is checked", async () => {
+		const { Reviews, ana } = await setup();
+		const id = new Review({
+			title: "x",
+			owner: ana,
+			reviewers: [],
+			score: 0,
+		}).id;
+		await expect(
+			Reviews.increment(
+				id,
+				{ score: 1 },
+				{ create: { title: "New", owner: unsaved(), reviewers: [] } },
+			),
+		).rejects.toMatchObject({ name: "RepositoryEntityNotFound" });
+		expect(await Reviews.findMany({})).toEqual([]);
+	});
+
+	test("SEC-47: the references of a write are read in one batch per relation", async () => {
+		const { Reviews, ana, bia, reads } = await setup();
+		await Reviews.create({
+			title: "Draft",
+			owner: ana,
+			reviewers: [ana, bia],
+			score: 1,
+		});
+		expect(reads).toEqual(["findMany"]);
+	});
+
+	test("SEC-47: a soft-deleted entity can still be referenced", async () => {
+		const Members = repositoryOf({
+			entity: Member,
+			actions: ["create", "delete"],
+			deletion: "soft",
+		});
+		const Tasks = repositoryOf({
+			entity: Task,
+			actions: ["create", "findMany"],
+			relations: [Members],
+		});
+		const ana = await Members.create({ name: "Ana", email: "ana@example.com" });
+		await Members.delete(ana);
+		await Tasks.create({ title: "Ship", owner: ana });
+		expect((await Tasks.findMany({}))[0]?.owner.name).toBe("Ana");
+	});
+
+	test("SEC-47: a use case given a plain entity value of an unknown id stores nothing", async () => {
+		const { Tasks } = await setup();
+		class AddTask extends useCaseOf({
+			name: "AddTask",
+			blueprint: blueprintOf((ctx) => ({ title: ctx.string, owner: Member })),
+			response: blueprintOf((ctx) => ({ title: ctx.string })),
+			dependencies: { tasks: Tasks },
+			steps: [
+				{ create: "tasks", value: "$input", as: "task" },
+				{ return: { title: "$task.title" } },
+			],
+		}) {}
+		const owner = unsaved().toJSON();
+		await expect(
+			new AddTask({ title: "Ghost", owner } as never).execute(),
+		).rejects.toMatchObject({ name: "RepositoryEntityNotFound" });
+		expect(await Tasks.findMany({})).toEqual([]);
+	});
+});
+
+describe("SEC-46: a query with a missing value in where", () => {
+	async function invites() {
+		const Members = repositoryOf({
+			entity: Member,
+			actions: [
+				"create",
+				"findMany",
+				"exists",
+				"count",
+				"findPage",
+				"findCursor",
+			],
+		});
+		await Members.create({ name: "Ana", email: "ana@example.com" });
+		await Members.create({
+			name: "Bia",
+			email: "bia@example.com",
+			code: "code-bia",
+			team: "core",
+		});
+		return Members;
+	}
+
+	test("SEC-46: findMany, exists, count, findPage and findCursor match no entity for undefined or null", async () => {
+		const Members = await invites();
+		for (const missing of [undefined, null]) {
+			const where = { code: missing as never };
+			expect(await Members.findMany({ where })).toEqual([]);
+			expect(await Members.exists({ where })).toBe(false);
+			expect(await Members.count({ where })).toBe(0);
+			const page = await Members.findPage({ where });
+			expect(page.items).toEqual([]);
+			expect(page.total).toBe(0);
+			const cursor = await Members.findCursor({ where });
+			expect(cursor.items).toEqual([]);
+			expect(cursor.next).toBeUndefined();
+			expect(
+				await Members.findMany({
+					where: { name: "Ana", team: missing as never },
+				}),
+			).toEqual([]);
+		}
+		expect(
+			(await Members.findMany({ where: { code: "code-bia" } })).map(
+				(m) => m.name,
+			),
+		).toEqual(["Bia"]);
+	});
+
+	test("SEC-46: a missing value inside in matches no entity", async () => {
+		const Members = await invites();
+		expect(
+			await Members.findMany({
+				where: { code: { in: [undefined, null] as never } },
+			}),
+		).toEqual([]);
+		expect(
+			(
+				await Members.findMany({
+					where: { code: { in: [null, "code-bia"] as never } },
+				})
+			).map((m) => m.name),
+		).toEqual(["Bia"]);
+	});
+
+	test("SEC-46: the provider is not asked for a missing value", async () => {
+		const Members = await invites();
+		const provider = (Members as unknown as { provider: IRepositoryProvider })
+			.provider;
+		const reads: string[] = [];
+		for (const method of ["findOne", "findMany", "count"] as const) {
+			const original = provider[method] as (...args: unknown[]) => unknown;
+			(provider as unknown as Record<string, unknown>)[method] = (
+				...args: unknown[]
+			) => {
+				reads.push(method);
+				return original.apply(provider, args);
+			};
+		}
+		const where = { code: undefined };
+		await Members.findMany({ where });
+		await Members.exists({ where });
+		await Members.count({ where });
+		await Members.findPage({ where });
+		await Members.findCursor({ where });
+		expect(reads).toEqual([]);
+	});
+
+	test("SEC-46: a declarative use case given no value finds nothing", async () => {
+		const Members = await invites();
+		const NotFound = exceptionOf({
+			layer: ExceptionLayers.UseCase,
+			name: "NotFound",
+			message: "No member has this code.",
+		});
+		class WhoseCode extends useCaseOf({
+			name: "WhoseCode",
+			blueprint: blueprintOf((ctx) => ({ code: ctx.optional.string })),
+			response: blueprintOf((ctx) => ({ email: ctx.string })),
+			dependencies: { members: Members },
+			errors: [NotFound],
+			steps: [
+				{
+					find: "members.findMany",
+					args: [{ where: { code: "$input.code" }, limit: 1 }],
+					as: "found",
+				},
+				{ ensure: "exists", value: "$found.0", error: NotFound },
+				{ return: { email: "$found.0.email" } },
+			],
+		}) {}
+		class Known extends useCaseOf({
+			name: "Known",
+			blueprint: blueprintOf((ctx) => ({ code: ctx.optional.string })),
+			response: blueprintOf((ctx) => ({ known: ctx.boolean })),
+			dependencies: { members: Members },
+			steps: [
+				{
+					find: "members.exists",
+					args: [{ where: { code: "$input.code" } }],
+					as: "known",
+				},
+				{ return: { known: "$known" } },
+			],
+		}) {}
+		const run = async (UseCase: unknown, input: object) => {
+			try {
+				return await new (
+					UseCase as new (
+						input: object,
+					) => {
+						execute(): Promise<unknown>;
+					}
+				)(input).execute();
+			} catch (error) {
+				return (error as Error).name;
+			}
+		};
+		expect(await run(WhoseCode, { code: "code-bia" })).toEqual({
+			email: "bia@example.com",
+		});
+		expect(await run(WhoseCode, {})).toBe("NotFound");
+		expect(await run(Known, {})).toEqual({ known: false });
+	});
+});

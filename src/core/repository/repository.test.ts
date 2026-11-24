@@ -700,7 +700,8 @@ describe("references", () => {
 
 	test("in a use case, the events of an entity go up only through its own repository", async () => {
 		const { Users, Posts } = setup();
-		const author = person();
+		// Stored outside a use case, it keeps its events; a reference must exist.
+		const author = await Users.create(person());
 		const Output = blueprintOf(() => ({}));
 		class StorePost extends useCaseOf({
 			name: "StorePost",
@@ -776,7 +777,7 @@ describe("references", () => {
 			}
 		}
 		const authors = new Authors();
-		const author = person();
+		const author = await Users.create(person());
 		const stored = await authors.create(
 			postOf(await Users.create(person("Bia"))),
 		);

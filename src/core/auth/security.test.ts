@@ -69,7 +69,8 @@ const routesOf = (
 		const request: HttpRequest = {
 			param: () => undefined,
 			query: () => ({}),
-			header: () => undefined,
+			header: (name) =>
+				name === "content-type" ? "application/json" : undefined,
 			text: () => JSON.stringify(body),
 		};
 		const response = await (route as NonNullable<typeof route>).handle(request);

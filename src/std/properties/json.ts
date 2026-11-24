@@ -1,11 +1,13 @@
 import { type Static, type TOptional, type TSchema, Type } from "typebox";
 import { Meta } from "typebox/schema";
 import Value from "typebox/value";
+import { MAX_VALUE_DEPTH, TOO_DEEP_MESSAGE } from "../../core/parse/depth";
 import type { Issue, IssueCode } from "../../core/parse/types/parse.interface";
 import { takesAnyValue } from "../../core/property/define-property";
 import { recordPropertyLineage } from "../../core/property/lineage";
 import { type PropertyClass, propertyOf } from "../../core/property/property";
 import { InvalidJsonData, InvalidJsonSchema } from "./exceptions";
+import { assertHeldSchema, MAX_SCHEMA_DEPTH } from "./held-schema";
 
 /** A value JSON can hold, as `JSON.parse` gives it. */
 export type JsonValue =
@@ -21,9 +23,10 @@ type Path = readonly (string | number)[];
 /**
  * How deep JSON is read: a value nested deeper is rejected, so that a small
  * body (`[[[[...]]]]`) cannot make the walks over it (this one, the check of
- * a schema, the copy a record keeps) run long or overflow the stack.
+ * a schema, the copy a record keeps) run long or overflow the stack. The
+ * limit of every value a record keeps.
  */
-const MAX_JSON_DEPTH = 1000;
+const MAX_JSON_DEPTH = MAX_VALUE_DEPTH;
 
 /**
  * Throws, for the property to reject it, when `value` has an object or a list
@@ -78,7 +81,7 @@ function notJson(
 				return at(`is not JSON (${typeof item})`);
 		}
 		if (ancestors.has(item)) return at("is circular");
-		if (depth >= MAX_JSON_DEPTH) return at("is nested too deeply");
+		if (depth >= MAX_JSON_DEPTH) return at(TOO_DEEP_MESSAGE);
 		if (Array.isArray(item)) {
 			ancestors.add(item);
 			for (let index = 0; index < item.length; index++) {
@@ -127,6 +130,31 @@ function assertJsonSchema(schema: unknown, source: string): TSchema {
 		throw new InvalidJsonSchema({ source });
 	}
 	checked.add(schema as object);
+	return schema as TSchema;
+}
+
+/** Schemas given at runtime found to be JSON Schemas of bounded cost, so each is checked once. */
+const checkedHeld = new WeakSet<object>();
+
+/**
+ * `assertJsonSchema` for a schema given at runtime, which may come from
+ * anywhere: its depth, then its shape, then what checking data against it
+ * costs (its references and patterns) are checked. Throws only
+ * `InvalidJsonSchema`.
+ */
+function assertHeldJsonSchema(schema: unknown, source: string): TSchema {
+	if (typeof schema !== "object" || schema === null) {
+		throw new InvalidJsonSchema({ source });
+	}
+	if (checkedHeld.has(schema)) return schema as TSchema;
+	try {
+		assertDepth(schema, MAX_SCHEMA_DEPTH);
+		if (!Value.Check(JSON_SCHEMA, schema)) throw new Error("not a schema");
+		assertHeldSchema(schema);
+	} catch {
+		throw new InvalidJsonSchema({ source });
+	}
+	checkedHeld.add(schema);
 	return schema as TSchema;
 }
 
@@ -200,7 +228,7 @@ export function jsonSchemaIssues(
 	value: unknown,
 	{ source = "json" }: { readonly source?: string } = {},
 ): readonly Issue[] {
-	const checkedSchema = assertJsonSchema(schema, source);
+	const checkedSchema = assertHeldJsonSchema(schema, source);
 	const found = notJson(value);
 	if (found) {
 		return [
@@ -212,11 +240,16 @@ export function jsonSchemaIssues(
 			},
 		];
 	}
-	if (Value.Check(checkedSchema, value)) return [];
-	return issuesOfErrors(
-		Value.Errors(checkedSchema, value) as unknown as readonly SchemaError[],
-		source,
-	);
+	try {
+		if (Value.Check(checkedSchema, value)) return [];
+		return issuesOfErrors(
+			Value.Errors(checkedSchema, value) as unknown as readonly SchemaError[],
+			source,
+		);
+	} catch {
+		// What the schema accepted cannot be checked: the schema is at fault.
+		throw new InvalidJsonSchema({ source });
+	}
 }
 
 /**

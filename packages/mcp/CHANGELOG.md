@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- `afora_generate` runs `tsc` with `--pretty false`, so a project whose tsconfig sets `pretty` gets its diagnostics parsed and redacted like any other, and a `tsc` that fails without a diagnostic is reported by its exit code, never with what it printed. (SEC-53)
+- **Breaking.** A package named by `extends` is looked up in the `node_modules` of the project only, never in a parent directory, a package cache or the registry, and its spec, with what that spec extends, must really be inside `<project>/node_modules`; otherwise the issue is `unresolved_extends`. Gets the fix of `@afora/codegen`. (SEC-54)
+- `unresolved_extends` names a file from the project root, never by an absolute path. (SEC-55)
+- Gets the fix of `@afora/codegen` for a free-form JSON key printed as a shorthand property (SEC-56).
+
 ## 27.0.0-rc.5 — 2026-11-24
 
 ### Security

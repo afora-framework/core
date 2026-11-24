@@ -1,6 +1,7 @@
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import { isRecordClass, recordFieldOf } from "../blueprint/record-field";
+import { blueprintSourcesOf } from "../blueprint/sources";
 import type {
 	BlueprintField,
 	IBlueprintCollection,
@@ -10,6 +11,7 @@ import {
 	variantNameOf,
 	variantOfValue,
 } from "../blueprint/variant";
+import { MAX_VALUE_DEPTH } from "../parse/depth";
 import { isMarked } from "./marks";
 
 /** What a masked value becomes, whatever its length, so none is told apart. */
@@ -34,33 +36,47 @@ export function markSensitiveKeys(
 
 /**
  * The keys the records of `blueprint` declare `sensitive`, which a value of
- * it is masked by outside them (none when no record is of it).
+ * it is masked by outside them (none when no record is of it): also those of
+ * the blueprints it was derived from (`optionalOf`, `join`, `sliceOf`)
+ * that it still has.
  * @internal
  */
 export function sensitiveKeysOf(blueprint: object): readonly string[] {
-	return sensitiveByBlueprint.get(blueprint) ?? [];
+	const own = sensitiveByBlueprint.get(blueprint) ?? [];
+	const sources = blueprintSourcesOf(blueprint);
+	if (sources.length === 0) return own;
+	const properties =
+		(blueprint as { readonly properties?: object }).properties ?? {};
+	const inherited = sources
+		.flatMap(sensitiveKeysOf)
+		.filter((key) => Object.hasOwn(properties, key));
+	return inherited.length === 0 ? own : [...new Set([...own, ...inherited])];
 }
 
 /**
  * `value` with every leaf, at any depth, replaced by `MASK`: strings, numbers,
  * booleans and bigints; `null` and `undefined` as is. A record is masked by
- * its `toJSON`.
+ * its `toJSON`. An object or a list deeper than `MAX_VALUE_DEPTH` (which a
+ * record keeps only inside an object of a class) is one `MASK`, so the walk
+ * stays within the stack.
  */
-function maskAll(value: unknown): unknown {
+function maskAll(value: unknown, depth = 0): unknown {
 	if (value === undefined || value === null) return value;
-	if (Array.isArray(value)) return Object.freeze(value.map(maskAll));
+	if (typeof value !== "object") return MASK;
+	if (depth >= MAX_VALUE_DEPTH) return MASK;
+	const next = depth + 1;
+	if (Array.isArray(value)) {
+		return Object.freeze(value.map((item) => maskAll(item, next)));
+	}
 	// Record keys are prototype getters; metadata is stored under a symbol.
-	if (typeof value === "object" && isRecordClass(value.constructor)) {
-		return maskAll((value as { toJSON(): unknown }).toJSON());
+	if (isRecordClass(value.constructor)) {
+		return maskAll((value as { toJSON(): unknown }).toJSON(), depth);
 	}
-	if (typeof value === "object") {
-		return Object.freeze(
-			Object.fromEntries(
-				Object.entries(value).map(([key, item]) => [key, maskAll(item)]),
-			),
-		);
-	}
-	return MASK;
+	return Object.freeze(
+		Object.fromEntries(
+			Object.entries(value).map(([key, item]) => [key, maskAll(item, next)]),
+		),
+	);
 }
 
 /**
@@ -97,10 +113,14 @@ function maskField(
 		);
 	}
 	if (isBlueprint(field) && typeof value === "object" && value !== null) {
+		// A record has no keys of its own: it is read by its `toJSON`.
+		const plain = isRecordClass(value.constructor)
+			? (value as { toJSON(): unknown }).toJSON()
+			: value;
 		return maskCollection(
 			field.properties,
-			value as Readonly<Record<string, unknown>>,
-			byBlueprint ? sensitiveByBlueprint.get(field) : undefined,
+			plain as Readonly<Record<string, unknown>>,
+			byBlueprint ? sensitiveKeysOf(field) : undefined,
 			byBlueprint,
 		);
 	}
@@ -111,7 +131,7 @@ function maskField(
 			? maskCollection(
 					variant.properties,
 					value as Readonly<Record<string, unknown>>,
-					byBlueprint ? sensitiveByBlueprint.get(variant) : undefined,
+					byBlueprint ? sensitiveKeysOf(variant) : undefined,
 					byBlueprint,
 				)
 			: value;

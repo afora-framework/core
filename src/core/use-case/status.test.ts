@@ -72,7 +72,8 @@ const request = (query: Record<string, string>, body?: unknown) =>
 	({
 		param: () => undefined,
 		query: () => query,
-		header: () => undefined,
+		header: (name) =>
+			name === "content-type" ? "application/json" : undefined,
 		text: () => JSON.stringify(body ?? {}),
 	}) satisfies HttpRequest;
 const routeOf = (id: string, options?: HttpOptions) => {

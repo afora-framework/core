@@ -118,6 +118,11 @@ export function prepareQuery(
 	return { ...input, ...(where ? { where } : {}) } as RepositoryQuery;
 }
 
+/** Whether `value` is missing (`undefined` or `null`), which no row of a `where` matches. */
+export function isMissingValue(value: unknown): value is undefined | null {
+	return value === undefined || value === null;
+}
+
 /** Structural JSON/data equality without depending on object key insertion order. */
 export function sameValue(a: unknown, b: unknown): boolean {
 	if (a === b) return true;
@@ -164,7 +169,8 @@ export function nowOf(query: ProviderQuery): number {
 /**
  * Whether `data` is a row of `query`: alive unless `withDeleted`, not expired
  * by `expiry` (the key of `context.expiry`) unless `withExpired`, and matching
- * `where`.
+ * `where`, where a missing value (`undefined` or `null`), also inside `in`,
+ * matches no row.
  */
 export function matchesQuery(
 	data: RepositoryData,
@@ -179,8 +185,11 @@ export function matchesQuery(
 			!isExpired(data[expiry], now)) &&
 		Object.entries(query.where ?? {}).every(([key, value]) =>
 			isMembership(value)
-				? value.in.some((candidate) => sameValue(data[key], candidate))
-				: sameValue(data[key], value),
+				? value.in.some(
+						(candidate) =>
+							!isMissingValue(candidate) && sameValue(data[key], candidate),
+					)
+				: !isMissingValue(value) && sameValue(data[key], value),
 		)
 	);
 }

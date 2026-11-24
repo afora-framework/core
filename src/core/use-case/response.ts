@@ -11,6 +11,7 @@ import type {
 import { parseField } from "../parse/parse";
 import type { ParseResult } from "../parse/types/parse.interface";
 import { maskValueOf } from "../record/mask";
+import { takeStatus } from "./status";
 
 /**
  * What the `response` of a use case says it gives: the fields of an object
@@ -84,6 +85,30 @@ export function parseResponse(
 
 /** The `response` each value `parseResponse` gave was handled by. */
 const responses = new WeakMap<object, AnyUseCaseResponse>();
+
+/**
+ * `value`, what an operation whose response is `response` resolved with (its
+ * body, when it carries a status), noted as handled by `response` unless it
+ * already is, so that it is sent masked by the response the operation
+ * declares even when it is not the value `parseResponse` gave (a copy a
+ * transform made of it, say).
+ * @internal
+ */
+export function respondedWith<Value>(
+	response: AnyUseCaseResponse | undefined,
+	value: Value,
+): Value {
+	const { body } = takeStatus(value);
+	if (
+		response !== undefined &&
+		typeof body === "object" &&
+		body !== null &&
+		!responses.has(body)
+	) {
+		responses.set(body, response);
+	}
+	return value;
+}
 
 /**
  * What `value` sends out of the process: a value `parseResponse` gave, with

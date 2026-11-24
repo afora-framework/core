@@ -145,8 +145,13 @@ async function extendedOf(
 				{
 					path: ["extends"],
 					code: "unresolved_extends",
-					// Paths in the project are given from its root.
-					message: error.message.split(`${project.root}${sep}`).join(""),
+					// Paths in the project are given from its root (the loader
+					// already does; the root itself is ".").
+					message: error.message
+						.split(`${project.root}${sep}`)
+						.join("")
+						.split(project.root)
+						.join("."),
 				},
 			],
 		};

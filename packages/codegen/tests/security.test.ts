@@ -8,7 +8,7 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, win32 } from "node:path";
+import { dirname, join, win32 } from "node:path";
 import {
 	confinePath,
 	generate,
@@ -345,6 +345,239 @@ describe("SEC-40: tooling directories spelled as Windows also reads them", () =>
 		const { project } = await scratch();
 		for (const dir of TOOLING) {
 			expect((await confinePath(project, `${dir}/x.ts`)).ok, dir).toBe(false);
+		}
+	});
+});
+
+/** A package `name` in `dir`/node_modules with this afora.json and package.json. */
+async function aforaPackage(
+	dir: string,
+	name: string,
+	spec: unknown,
+	manifest: Record<string, unknown> = {},
+): Promise<string> {
+	const pkg = join(dir, "node_modules", name);
+	await mkdir(pkg, { recursive: true });
+	await writeFile(
+		join(pkg, "package.json"),
+		JSON.stringify({ name, ...manifest }),
+	);
+	await writeFile(
+		join(pkg, "afora.json"),
+		typeof spec === "string" ? spec : JSON.stringify(spec),
+	);
+	return pkg;
+}
+
+const failure = (promise: Promise<unknown>): Promise<unknown> =>
+	promise.then(
+		() => undefined,
+		(caught: unknown) => caught,
+	);
+
+describe("SEC-54: a package named by extends, with a project root", () => {
+	const outsideSpec = {
+		version: 1,
+		name: "OUTSIDE-SPEC",
+		blueprints: { Outside: { fields: { a: "string" } } },
+	};
+	const extend = (project: string, ...refs: string[]) =>
+		resolveExtended(
+			{ version: 1, extends: refs },
+			join(project, "afora.json"),
+			{ root: project },
+		);
+
+	test("SEC-54: a package in a parent directory's node_modules is not read", async () => {
+		const { project } = await scratch();
+		await aforaPackage(dirname(project), "parentpkg", outsideSpec);
+		const error = await failure(extend(project, "parentpkg"));
+		expect(error).toBeInstanceOf(SpecLoadError);
+		expect(String(error)).not.toContain("OUTSIDE-SPEC");
+		// With node_modules in the project, still only its own packages.
+		await mkdir(join(project, "node_modules"));
+		expect(await failure(extend(project, "parentpkg"))).toBeInstanceOf(
+			SpecLoadError,
+		);
+	});
+
+	test("SEC-54: a package installed nowhere in the project is not looked up elsewhere", async () => {
+		const { project } = await scratch();
+		for (const name of ["typescript", "left-pad", "@types/bun"]) {
+			expect(await failure(extend(project, name)), name).toBeInstanceOf(
+				SpecLoadError,
+			);
+		}
+	});
+
+	test("SEC-54: a package of the project's node_modules that links out is not read", async () => {
+		const { project, outside } = await scratch();
+		await writeFile(join(outside, "package.json"), '{"name":"linked"}');
+		await writeFile(join(outside, "afora.json"), JSON.stringify(outsideSpec));
+		await mkdir(join(project, "node_modules"));
+		await symlink(outside, join(project, "node_modules/linked"));
+		const error = await failure(extend(project, "linked"));
+		expect(error).toBeInstanceOf(SpecLoadError);
+	});
+
+	test("SEC-54: what a package spec extends stays in the project's node_modules", async () => {
+		const { project, outside } = await scratch();
+		await writeFile(join(outside, "afora.json"), JSON.stringify(outsideSpec));
+		await aforaPackage(dirname(project), "parentpkg", outsideSpec);
+		await aforaPackage(project, "by-path", {
+			version: 1,
+			extends: ["../../../outside"],
+		});
+		await aforaPackage(project, "by-package", {
+			version: 1,
+			extends: ["parentpkg"],
+		});
+		await mkdir(join(project, "config"));
+		await writeFile(
+			join(project, "config/afora.json"),
+			JSON.stringify(outsideSpec),
+		);
+		await aforaPackage(project, "into-project", {
+			version: 1,
+			extends: ["../../config"],
+		});
+		for (const name of ["by-path", "by-package", "into-project"]) {
+			const error = await failure(extend(project, name));
+			expect(error, name).toBeInstanceOf(SpecLoadError);
+		}
+	});
+
+	test("SEC-54: a package of the project is read, with what it extends from there", async () => {
+		const { project } = await scratch();
+		await aforaPackage(
+			project,
+			"@acme/auth",
+			{ version: 1, name: "auth", extends: ["base-spec", "./more"] },
+			{ exports: { ".": "./index.js", "./afora.json": "./afora.json" } },
+		);
+		await mkdir(join(project, "node_modules/@acme/auth/more"));
+		await writeFile(
+			join(project, "node_modules/@acme/auth/more/afora.json"),
+			JSON.stringify({ version: 1, name: "more" }),
+		);
+		await aforaPackage(project, "base-spec", { version: 1, name: "base" });
+		const extended = await extend(project, "@acme/auth");
+		const nameOf = (resolved: unknown) =>
+			(resolved as { spec?: { name?: string } } | undefined)?.spec?.name;
+		const auth = extended["@acme/auth"];
+		expect(nameOf(auth)).toBe("auth");
+		expect(nameOf(auth?.extends?.["base-spec"])).toBe("base");
+		expect(nameOf(auth?.extends?.["./more"])).toBe("more");
+		// A package that does not export ./afora.json is not read.
+		await aforaPackage(
+			project,
+			"closed",
+			{ version: 1 },
+			{ exports: { ".": "./index.js" } },
+		);
+		expect(await failure(extend(project, "closed"))).toBeInstanceOf(
+			SpecLoadError,
+		);
+	});
+});
+
+describe("SEC-55: the messages of resolveExtended with a project root", () => {
+	test("SEC-55: no message carries an absolute path", async () => {
+		const { project } = await scratch();
+		const base = dirname(project);
+		await aforaPackage(base, "brokenpkg", "{ not json");
+		await aforaPackage(project, "broken-inside", "{ not json");
+		await mkdir(join(project, "node_modules/linked-out"), { recursive: true });
+		for (const ref of [
+			"no-such-package-xyz",
+			"brokenpkg",
+			"broken-inside",
+			"./missing.json",
+			"./missing",
+		]) {
+			const error = await failure(
+				resolveExtended(
+					{ version: 1, extends: [ref] },
+					join(project, "afora.json"),
+					{ root: project },
+				),
+			);
+			expect(error, ref).toBeInstanceOf(SpecLoadError);
+			const message = (error as Error).message;
+			expect(message, ref).not.toContain(base);
+			expect(message, ref).not.toContain(tmpdir());
+		}
+	});
+});
+
+describe("SEC-56: a free-form JSON object printed as a literal", () => {
+	test("SEC-56: a key whose value prints as the same token is not a shorthand", () => {
+		const spec = {
+			version: 1,
+			name: "blog",
+			output: { dir: "src/domain" },
+			provider: "inMemory",
+			entities: {
+				Post: { fields: { title: "text", slug: "slug" }, unique: ["slug"] },
+			},
+			repositories: {
+				Posts: { entity: "Post", actions: ["findById", "create"] },
+			},
+			useCases: {
+				Publish: {
+					input: { fields: { title: "text", slug: "slug" } },
+					response: { fields: { post: "Post" } },
+					dependencies: { posts: "Posts" },
+					implementation: {
+						steps: [
+							{
+								build: "Post",
+								values: { title: "$input.title", slug: "$input.slug" },
+								as: "post",
+							},
+							{ create: "posts", value: "$post", as: "saved" },
+							{ return: { post: "$saved" } },
+						],
+					},
+				},
+			},
+			commands: { Blog: { useCases: { publish: "Publish" } } },
+			outputs: {
+				Api: {
+					commands: ["Blog"],
+					pipe: [
+						{
+							sink: "openapi",
+							options: {
+								info: { title: "x", version: "1" },
+								servers: [
+									{
+										url: "/",
+										"x-codes": {
+											"200": 200,
+											true: true,
+											null: null,
+											'"a"': "a",
+											"1.5": 1.5,
+										},
+									},
+								],
+							},
+						},
+					],
+				},
+			},
+		};
+		expect(validateSpec(spec)).toEqual([]);
+		const outputs = generate(spec as never).find((file) =>
+			file.path.endsWith("outputs.ts"),
+		);
+		const contents = outputs?.contents ?? "";
+		expect(contents).toContain('"x-codes"');
+		const transpiler = new Bun.Transpiler({ loader: "ts" });
+		expect(() => transpiler.transformSync(contents)).not.toThrow();
+		for (const property of ['"200": 200', "true: true", "null: null"]) {
+			expect(contents).toContain(property);
 		}
 	});
 });

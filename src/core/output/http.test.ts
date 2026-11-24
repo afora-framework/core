@@ -112,7 +112,9 @@ const request = (given: {
 }): HttpRequest => ({
 	param: (name) => given.params?.[name],
 	query: () => given.query ?? {},
-	header: (name) => given.headers?.[name],
+	header: (name) =>
+		given.headers?.[name] ??
+		(name === "content-type" ? "application/json" : undefined),
 	text: () =>
 		typeof given.body === "string"
 			? given.body
