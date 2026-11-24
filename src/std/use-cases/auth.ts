@@ -1,4 +1,9 @@
-import { jwtOf, jwtOptionsIssue } from "../../core/auth/jwt";
+import {
+	isScopeToken,
+	jwtOf,
+	jwtOptionsIssue,
+	REGISTERED,
+} from "../../core/auth/jwt";
 import type { JsonValue } from "../../core/json";
 import { coerceTextValues } from "../../core/output/coerce";
 import { outputValueOf } from "../../core/output/problem";
@@ -108,6 +113,12 @@ function tokensOf(target: UseCaseTargetInfo, options: Options, verb: string) {
 			"the option token.scopes must be a list of scopes",
 		);
 	}
+	const badScope = scopes?.find((scope) => !isScopeToken(scope));
+	if (badScope !== undefined) {
+		return target.unavailable(
+			`the scope ${JSON.stringify(badScope)} of the option token.scopes must be a scope token: not empty, without spaces or control characters`,
+		);
+	}
 	if (scopesFrom !== undefined) target.field(scopesFrom);
 	if (
 		claims !== undefined &&
@@ -118,6 +129,12 @@ function tokensOf(target: UseCaseTargetInfo, options: Options, verb: string) {
 		);
 	}
 	const claimKeys = Object.entries(claims ?? {});
+	const registered = claimKeys.find(([claim]) => REGISTERED.has(claim));
+	if (registered) {
+		return target.unavailable(
+			`the option token.claims cannot name the claim "${registered[0]}": it is registered (${[...REGISTERED].join(", ")})`,
+		);
+	}
 	for (const [, key] of claimKeys) target.field(key);
 	const jwt = jwtOf(jwtOptions);
 	noTokenKeyInInput(

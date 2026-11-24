@@ -2,7 +2,6 @@
 
 ## Unreleased
 
-
 ### Security
 
 - `findBy<Key>` and `findManyBy<Key>` give no entity for a missing value: `undefined` or `null` gives `undefined` and `[]` without calling the provider, on every provider, including a declarative use case step given an optional input that is absent. See [Repositories](docs/repositories.md). (SEC-20)
@@ -20,6 +19,9 @@
 - `jsonOf` checks the depth of a value (1000 at most, `is nested too deeply`) before its schema walks it, for a recursive schema too, as [Properties](docs/properties.md#json) says. (SEC-28)
 - `SchemaProperty` (`ctx.schema`) rejects a schema nested more than 128 JSON levels deep, with an `is nested too deeply` issue at its path, in `safeParse`, the constructor and `deserialize`, so a schema it holds can always be checked against quickly, on Bun, Node and browsers. See [Standard properties](docs/std-properties.md#json-and-schemas). (SEC-29)
 - `@afora/ws`: a session holds at most 1000 topics. Past the limit a new subscription is a 403 `WsTopicForbidden`, the answer to a topic that is not allowed; a topic the session already holds does not count twice, and unsubscribing frees a place. See [the ws README](packages/ws/README.md#protocol). (SEC-30)
+- `jwtOf`: a scope is a scope token (RFC 6749): `sign` rejects with `InvalidJwtOptions` a scope that is empty or holds a space or a control character, so the scopes a token is verified with are the ones it was signed with. The option `token` of `login` and `refresh` throws `UseCaseUnavailable` for such a fixed scope, and `login` gives no token to an entity that holds one. See [Access](docs/auth.md#tokens-and-sessions). (SEC-23)
+- `jwtOf`: `sign` leaves out of the token a claim named like a registered one (`sub`, `scope`, `iat`, `exp`, `nbf`, `iss`, `aud`, `use`), so `issuer`, `audience` and `use` come only from the options; the option `token.claims` of `login` and `refresh` throws `UseCaseUnavailable` for such a name. (SEC-24)
+- `jwtOf`: `verify` accepts a signature only in the base64url encoding `sign` gives (no padding, no other unused bits), so a token has one valid form. (SEC-25)
 
 ### Repository
 
