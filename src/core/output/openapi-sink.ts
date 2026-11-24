@@ -534,12 +534,22 @@ function wordsOf(text: string): string {
 	return words;
 }
 
+/** `text` without the `-` at its start and end, in one pass. */
+function trimDashes(text: string): string {
+	let start = 0;
+	let end = text.length;
+	while (start < end && text.charCodeAt(start) === 45) start++;
+	while (end > start && text.charCodeAt(end - 1) === 45) end--;
+	return text.slice(start, end);
+}
+
 /** `changePassword` -> `change-password`. */
 function kebab(text: string): string {
-	return wordsOf(text)
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
+	return trimDashes(
+		wordsOf(text)
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-"),
+	);
 }
 
 /** Where an operation is served, and how it answers. */

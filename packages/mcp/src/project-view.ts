@@ -118,12 +118,22 @@ const isCapital = (char: number) => char >= 65 && char <= 90;
 const isSmall = (char: number) => char >= 97 && char <= 122;
 const isDigit = (char: number) => char >= 48 && char <= 57;
 
+/** `text` without the `-` at its start and end, in one pass. */
+function trimDashes(text: string): string {
+	let start = 0;
+	let end = text.length;
+	while (start < end && text.charCodeAt(start) === 45) start++;
+	while (end > start && text.charCodeAt(end - 1) === 45) end--;
+	return text.slice(start, end);
+}
+
 /** `changePassword` -> `change-password`, as the sinks do. */
 export function kebab(text: string): string {
-	return wordsOf(text)
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
+	return trimDashes(
+		wordsOf(text)
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-"),
+	);
 }
 
 function accessText(access: Json | undefined): string {
