@@ -90,11 +90,37 @@ export interface ProjectView {
 	readonly notes: readonly string[];
 }
 
+/**
+ * `text` with `-` between its words, in one pass: before a capital that
+ * follows a small letter or a digit (`changePassword`, `v2Api`), and before
+ * the last capital of a run when a small letter follows (`HTTPServer`).
+ */
+function wordsOf(text: string): string {
+	let words = "";
+	for (let index = 0; index < text.length; index++) {
+		const char = text.charCodeAt(index);
+		if (index > 0 && isCapital(char)) {
+			const before = text.charCodeAt(index - 1);
+			if (
+				isSmall(before) ||
+				isDigit(before) ||
+				(isCapital(before) && isSmall(text.charCodeAt(index + 1)))
+			) {
+				words += "-";
+			}
+		}
+		words += text[index];
+	}
+	return words;
+}
+
+const isCapital = (char: number) => char >= 65 && char <= 90;
+const isSmall = (char: number) => char >= 97 && char <= 122;
+const isDigit = (char: number) => char >= 48 && char <= 57;
+
 /** `changePassword` -> `change-password`, as the sinks do. */
-function kebab(text: string): string {
-	return text
-		.replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+export function kebab(text: string): string {
+	return wordsOf(text)
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-+|-+$/g, "");

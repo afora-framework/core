@@ -29,13 +29,37 @@ export const GENERATED_FILES = [
 	"index.ts",
 ] as const;
 
+/**
+ * `text` with `-` between its words, in one pass: before a capital that
+ * follows a small letter or a digit (`changePassword`, `v2Api`), and before
+ * the last capital of a run when a small letter follows (`HTTPServer`).
+ */
+function wordsOf(text: string): string {
+	let words = "";
+	for (let index = 0; index < text.length; index++) {
+		const char = text.charCodeAt(index);
+		if (index > 0 && isCapital(char)) {
+			const before = text.charCodeAt(index - 1);
+			if (
+				isSmall(before) ||
+				isDigit(before) ||
+				(isCapital(before) && isSmall(text.charCodeAt(index + 1)))
+			) {
+				words += "-";
+			}
+		}
+		words += text[index];
+	}
+	return words;
+}
+
+const isCapital = (char: number) => char >= 65 && char <= 90;
+const isSmall = (char: number) => char >= 97 && char <= 122;
+const isDigit = (char: number) => char >= 48 && char <= 57;
+
 /** The file of a use case kept out of `use-cases.ts`: `RegisterUser` -> `register-user.use-case.ts`. */
-function useCaseFileOf(name: string): string {
-	const kebab = name
-		.replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
-		.replace(/_/g, "-")
-		.toLowerCase();
+export function useCaseFileOf(name: string): string {
+	const kebab = wordsOf(name).replace(/_/g, "-").toLowerCase();
 	return `${kebab}${USE_CASE_FILE_SUFFIX}`;
 }
 
