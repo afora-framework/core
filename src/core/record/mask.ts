@@ -11,6 +11,7 @@ import {
 	variantNameOf,
 	variantOfValue,
 } from "../blueprint/variant";
+import { MAX_VALUE_DEPTH } from "../parse/depth";
 import { isMarked } from "./marks";
 
 /** What a masked value becomes, whatever its length, so none is told apart. */
@@ -55,23 +56,27 @@ export function sensitiveKeysOf(blueprint: object): readonly string[] {
 /**
  * `value` with every leaf, at any depth, replaced by `MASK`: strings, numbers,
  * booleans and bigints; `null` and `undefined` as is. A record is masked by
- * its `toJSON`.
+ * its `toJSON`. An object or a list deeper than `MAX_VALUE_DEPTH` (which a
+ * record keeps only inside an object of a class) is one `MASK`, so the walk
+ * stays within the stack.
  */
-function maskAll(value: unknown): unknown {
+function maskAll(value: unknown, depth = 0): unknown {
 	if (value === undefined || value === null) return value;
-	if (Array.isArray(value)) return Object.freeze(value.map(maskAll));
+	if (typeof value !== "object") return MASK;
+	if (depth >= MAX_VALUE_DEPTH) return MASK;
+	const next = depth + 1;
+	if (Array.isArray(value)) {
+		return Object.freeze(value.map((item) => maskAll(item, next)));
+	}
 	// Record keys are prototype getters; metadata is stored under a symbol.
-	if (typeof value === "object" && isRecordClass(value.constructor)) {
-		return maskAll((value as { toJSON(): unknown }).toJSON());
+	if (isRecordClass(value.constructor)) {
+		return maskAll((value as { toJSON(): unknown }).toJSON(), depth);
 	}
-	if (typeof value === "object") {
-		return Object.freeze(
-			Object.fromEntries(
-				Object.entries(value).map(([key, item]) => [key, maskAll(item)]),
-			),
-		);
-	}
-	return MASK;
+	return Object.freeze(
+		Object.fromEntries(
+			Object.entries(value).map(([key, item]) => [key, maskAll(item, next)]),
+		),
+	);
 }
 
 /**

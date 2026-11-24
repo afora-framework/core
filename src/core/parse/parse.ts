@@ -25,6 +25,7 @@ import {
 import { isProperty } from "../property/is-property";
 import type { AnyPropertyConstructor } from "../property/types/property-collection.type";
 import { recordNameOf } from "../record/name";
+import { MAX_VALUE_DEPTH, TOO_DEEP_MESSAGE } from "./depth";
 import { movedIssue, REJECTED } from "./issue";
 import type { Issue, IssueCode, ParseResult } from "./types/parse.interface";
 
@@ -153,18 +154,41 @@ const frozenCopies = new WeakSet<object>();
  */
 const TRACK_AFTER = 32;
 
+/** What `frozenCopyOf` gives for a value nested deeper than `MAX_VALUE_DEPTH`. */
+const TOO_DEEP: object = Object.freeze({});
+
 /**
  * A copy of the value of a property, frozen at every depth, for a record to
  * keep: the plain objects and arrays in it (as JSON has) are copied, so the
  * caller's own cannot change the record. Other objects, such as a `File`, and
- * primitives are kept as they are.
+ * primitives are kept as they are. `TOO_DEEP` when the plain objects and
+ * arrays are nested deeper than `MAX_VALUE_DEPTH`, which a record does not
+ * keep: it could not output them.
  */
 function frozenCopyOf(value: unknown): unknown {
 	if (typeof value !== "object" || value === null) return value;
 	if (frozenCopies.has(value)) return value;
-	const copy = copyOf(value, 0, undefined);
+	let copy: object;
+	try {
+		copy = copyOf(value, 0, undefined);
+	} catch (error) {
+		if (error === TOO_DEEP) return TOO_DEEP;
+		throw error;
+	}
 	if (copy !== value) frozenCopies.add(copy);
 	return copy;
+}
+
+/**
+ * `value`, as a run keeps it: a frozen copy when it freezes, or `REJECTED`
+ * with an issue at `depth` when the copy finds it nested too deeply.
+ */
+function kept(run: Run, value: unknown, depth: number): unknown {
+	if (!run.freeze || typeof value !== "object" || value === null) return value;
+	const copy = frozenCopyOf(value);
+	return copy === TOO_DEEP
+		? reject(run, "invalid_value", TOO_DEEP_MESSAGE, pathOf(run, depth))
+		: copy;
 }
 
 function copyOf(
@@ -174,6 +198,8 @@ function copyOf(
 ): object {
 	const isArray = Array.isArray(value);
 	if (!isArray && !isPlainObject(value)) return value;
+	// Thrown, not returned, so that the copy of each level stays as it is.
+	if (depth >= MAX_VALUE_DEPTH) throw TOO_DEEP;
 	let copied = seen;
 	if (copied === undefined && depth >= TRACK_AFTER) copied = new Map();
 	if (copied !== undefined) {
@@ -673,10 +699,16 @@ function collectionAt(
 					inherited = true;
 					break;
 				}
-				handled[name] =
+				const copy =
 					run.freeze && typeof item === "object" && item !== null
 						? frozenCopyOf(item)
 						: item;
+				// Too deep to keep: the paths below give its issue.
+				if (copy === TOO_DEEP) {
+					inherited = true;
+					break;
+				}
+				handled[name] = copy;
 			}
 			if (!inherited) return run.freeze ? Object.freeze(handled) : handled;
 		}
@@ -715,10 +747,20 @@ function collectionAt(
 					takeRejectionIssues(pathOf(run, depth + 1), run.issues);
 					if (isFull(run)) return REJECTED;
 				} else if (item !== undefined) {
-					handled[name] =
+					const copy =
 						run.freeze && typeof item === "object" && item !== null
 							? frozenCopyOf(item)
 							: item;
+					if (copy === TOO_DEEP) {
+						rejected = true;
+						run.keys[depth] = name;
+						reject(
+							run,
+							"invalid_value",
+							TOO_DEEP_MESSAGE,
+							pathOf(run, depth + 1),
+						);
+					} else handled[name] = copy;
 				}
 			}
 			if (rejected) return REJECTED;
@@ -1033,9 +1075,7 @@ function propertyAt(
 		if (parser !== null) {
 			const handled = parser(value);
 			if (handled !== REJECTED) {
-				return run.freeze && typeof handled === "object" && handled !== null
-					? frozenCopyOf(handled)
-					: handled;
+				return kept(run, handled, depth);
 			}
 			run.issues ??= [];
 			takeRejectionIssues(pathOf(run, depth), run.issues);
@@ -1046,9 +1086,7 @@ function propertyAt(
 	const result = property.safeParse(value);
 	if (!result.issues) {
 		const handled: unknown = result.value;
-		return run.freeze && typeof handled === "object" && handled !== null
-			? frozenCopyOf(handled)
-			: handled;
+		return kept(run, handled, depth);
 	}
 
 	const path = pathOf(run, depth);

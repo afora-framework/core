@@ -347,3 +347,64 @@ describe("SEC-50: a parse collects a bounded number of issues", () => {
 		});
 	});
 });
+
+describe("SEC-52: depth of the values a record keeps", () => {
+	const Meta = propertyOf({ name: "meta", schema: Type.Unknown() });
+	const Plain = recordOf(
+		blueprintOf((ctx) => ({ title: ctx.string, meta: Meta })),
+		{ change: ["meta"] },
+	);
+	const Secret = recordOf(
+		blueprintOf((ctx) => ({ title: ctx.string, meta: Meta })),
+		{ sensitive: ["meta"] },
+	);
+	const deep = (depth: number): unknown =>
+		JSON.parse("[".repeat(depth) + "]".repeat(depth));
+
+	test("SEC-52: a value nested deeper than 1000 is an issue at the key, on every path", () => {
+		bothPaths(() => {
+			for (const Record of [Plain, Secret]) {
+				for (let index = 0; index < 20; index++) {
+					for (const depth of [1001, 5000, 50000]) {
+						const started = performance.now();
+						const issue = Record.safeParse({ title: "t", meta: deep(depth) })
+							.issues?.[0];
+						expect(performance.now() - started).toBeLessThan(100);
+						expect(issue?.message).toBe("is nested too deeply");
+						expect(issue?.path).toEqual(["meta"]);
+					}
+					expect(
+						Record.safeParse({ title: "t", meta: { a: [1] } }).issues,
+					).toBeUndefined();
+				}
+			}
+		});
+		const kept = new Plain({ title: "t", meta: [] });
+		expect(() => kept.change.meta(deep(5000))).toThrow("is nested too deeply");
+		expect(() => new Plain({ title: "t", meta: deep(5000) })).toThrow(
+			"is nested too deeply",
+		);
+	});
+
+	test("SEC-52: a value at the limit is kept and can be output", () => {
+		for (const Record of [Plain, Secret]) {
+			const result = Record.safeParse({ title: "t", meta: deep(1000) });
+			const value = parsedValue<{ toJSON(): unknown }>(result);
+			if (!value) throw new Error("expected the value to be kept");
+			expect(() => value.toJSON()).not.toThrow();
+			expect(() => JSON.stringify(value)).not.toThrow();
+		}
+	});
+
+	test("SEC-52: a sensitive key masks a deep object of any kind without throwing", () => {
+		class Box {
+			constructor(readonly inner: unknown) {}
+		}
+		let box: unknown = 1;
+		for (let index = 0; index < 50000; index++) box = new Box(box);
+		const result = Secret.safeParse({ title: "t", meta: box });
+		const value = parsedValue<{ toJSON(): { meta: unknown } }>(result);
+		if (!value) throw new Error("expected the value to be kept");
+		expect(() => JSON.stringify(value.toJSON())).not.toThrow();
+	});
+});
