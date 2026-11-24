@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- **Breaking.** A refresh token issued by the standard `login` or `refresh` of an entity is accepted only by the `refresh` of that entity: its `use` names the entity (`refresh:<Entity>`), and the `refresh` of another entity sharing the secret answers it as any invalid token, whatever the ids. A refresh token issued before this change is no longer accepted; signing in again gives a new one. [Tokens and sessions](docs/auth.md#tokens-and-sessions) says what an access token names. (SEC-42)
+
 ## 27.0.0-rc.5 — 2026-11-24
 
 The fifth candidate of 27.0.0: security fixes from a hunt of 27.0.0-rc.4, and the fix of #199, a blocking issue of the 27.0 milestone. Every finding has a regression test named `SEC-<n>`. Two are breaking, before the contract freezes: a standard `register` no longer takes the keys a token is made from, and a webhook of `@afora/hono` reads its input from the signed body only (see Migration below). The public API gains one optional field, `hooks` on `StageDescription` (#199); nothing else in it changes (see [Release candidates](VERSIONING.md#release-candidates)).

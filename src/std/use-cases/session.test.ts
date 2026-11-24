@@ -198,7 +198,8 @@ describe("session: tokens of login", () => {
 			claims: { tenant: "acme" },
 		});
 		expect(
-			(await jwt.verify(login.json.refreshToken, { use: "refresh" })).scopes,
+			(await jwt.verify(login.json.refreshToken, { use: "refresh:User" }))
+				.scopes,
 		).toEqual([]);
 		const wrong = await call("/login", {
 			body: { email: ana.email, password: "nope" },
