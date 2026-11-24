@@ -1,6 +1,7 @@
 import { isBlueprint } from "../blueprint/is-blueprint";
 import { isBlueprintList } from "../blueprint/list";
 import { isRecordClass, recordFieldOf } from "../blueprint/record-field";
+import { blueprintSourcesOf } from "../blueprint/sources";
 import type {
 	BlueprintField,
 	IBlueprintCollection,
@@ -34,11 +35,21 @@ export function markSensitiveKeys(
 
 /**
  * The keys the records of `blueprint` declare `sensitive`, which a value of
- * it is masked by outside them (none when no record is of it).
+ * it is masked by outside them (none when no record is of it): also those of
+ * the blueprints it was derived from (`optionalOf`, `join`, `sliceOf`)
+ * that it still has.
  * @internal
  */
 export function sensitiveKeysOf(blueprint: object): readonly string[] {
-	return sensitiveByBlueprint.get(blueprint) ?? [];
+	const own = sensitiveByBlueprint.get(blueprint) ?? [];
+	const sources = blueprintSourcesOf(blueprint);
+	if (sources.length === 0) return own;
+	const properties =
+		(blueprint as { readonly properties?: object }).properties ?? {};
+	const inherited = sources
+		.flatMap(sensitiveKeysOf)
+		.filter((key) => Object.hasOwn(properties, key));
+	return inherited.length === 0 ? own : [...new Set([...own, ...inherited])];
 }
 
 /**
@@ -97,10 +108,14 @@ function maskField(
 		);
 	}
 	if (isBlueprint(field) && typeof value === "object" && value !== null) {
+		// A record has no keys of its own: it is read by its `toJSON`.
+		const plain = isRecordClass(value.constructor)
+			? (value as { toJSON(): unknown }).toJSON()
+			: value;
 		return maskCollection(
 			field.properties,
-			value as Readonly<Record<string, unknown>>,
-			byBlueprint ? sensitiveByBlueprint.get(field) : undefined,
+			plain as Readonly<Record<string, unknown>>,
+			byBlueprint ? sensitiveKeysOf(field) : undefined,
 			byBlueprint,
 		);
 	}
@@ -111,7 +126,7 @@ function maskField(
 			? maskCollection(
 					variant.properties,
 					value as Readonly<Record<string, unknown>>,
-					byBlueprint ? sensitiveByBlueprint.get(variant) : undefined,
+					byBlueprint ? sensitiveKeysOf(variant) : undefined,
 					byBlueprint,
 				)
 			: value;

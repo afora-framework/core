@@ -6,6 +6,7 @@ import {
 	problemOf,
 	statusOf,
 } from "../../adapters";
+import { sliceOf } from "../../experimental";
 import {
 	blueprintOf,
 	commandOf,
@@ -16,10 +17,13 @@ import {
 	listOf,
 	MASK,
 	openapi,
+	operationOf,
+	optionalOf,
 	outputOf,
 	Password,
 	type Principal,
 	Route,
+	transformOf,
 	useCaseOf,
 	variantOf,
 	withStatus,
@@ -701,4 +705,276 @@ describe("SEC-34: the OpenAPI document marks write-only every key a response mas
 		expect(account.properties.token.writeOnly).toBe(true);
 		expect(other.properties.label.writeOnly).toBeUndefined();
 	});
+});
+
+/** What every output sends of `operations`: by `outputValueOf` and over HTTP. */
+async function sentOf(
+	operations: readonly import("./types/output.interface").OperationDescriptor[],
+): Promise<Record<string, { readonly value: unknown; readonly body: string }>> {
+	const table = compileRoutes(
+		operations,
+		{},
+		{ output: { name: "S", statuses: {} } },
+		{ source: "test" },
+	);
+	const request: HttpRequest = {
+		param: () => undefined,
+		query: () => ({}),
+		header: (name) =>
+			name.toLowerCase() === "content-type" ? "application/json" : undefined,
+		text: () => "{}",
+		variable: () => undefined,
+	};
+	const sent: Record<string, { value: unknown; body: string }> = {};
+	for (const route of table.routes) {
+		const { operation } = route;
+		const response = await route.handle(request);
+		expect(response.status).toBe(200);
+		sent[operation.name] = {
+			value: outputValueOf(await operation.invoke({})),
+			body: response.body as string,
+		};
+	}
+	return sent;
+}
+
+/** The response schemas of the OpenAPI document of `useCases`, by operation name. */
+function responseSchemasOf(
+	useCases: Record<string, ReturnType<typeof useCaseOf>>,
+): Record<string, unknown> {
+	const document = outputOf({
+		name: "D",
+		commands: [commandOf({ name: "D", useCases } as never)],
+		pipe: [openapi({ info: { title: "D", version: "1" } })],
+	}).build() as {
+		paths: Record<string, Record<string, unknown>>;
+		components?: { schemas?: Record<string, unknown> };
+	};
+	const schemas: Record<string, unknown> = {};
+	for (const slot of Object.values(document.paths)) {
+		for (const operation of Object.values(slot) as {
+			operationId: string;
+			responses: Record<
+				string,
+				{ content: Record<string, { schema: unknown }> }
+			>;
+		}[]) {
+			schemas[operation.operationId.replace(/^D_/, "")] =
+				operation.responses["200"]?.content["application/json"]?.schema;
+		}
+	}
+	return schemas;
+}
+
+/** Every schema under `schema` that describes `key`, at any depth. */
+// biome-ignore lint/suspicious/noExplicitAny: the document is read as JSON.
+function schemasOfKey(schema: any, key: string): any[] {
+	if (typeof schema !== "object" || schema === null) return [];
+	return Object.entries(schema).flatMap(([name, item]) => [
+		...(name === "properties" && (item as Record<string, unknown>)[key]
+			? [(item as Record<string, unknown>)[key]]
+			: []),
+		...schemasOfKey(item, key),
+	]);
+}
+
+describe("SEC-43: a record's sensitive keys stay masked through optionalOf", () => {
+	const Empty = blueprintOf(() => ({}));
+	const Fields = blueprintOf((ctx) => ({
+		email: ctx.email,
+		token: ctx.string,
+	}));
+	class Account extends entityOf(Fields, { sensitive: ["token"] }) {}
+	const account = new Account({ email: "a@b.co", token: "t0k3n" });
+	const raw = { email: "a@b.co", token: "t0k3n" };
+	const Other = blueprintOf((ctx) => ({ label: ctx.string }));
+	const declare = (name: string, response: unknown, value: () => unknown) =>
+		class extends useCaseOf({ name, blueprint: Empty, response } as never) {
+			override async execute() {
+				return value() as never;
+			}
+		};
+	const useCases = {
+		entity: declare(
+			"entity",
+			blueprintOf(() => ({ me: optionalOf(Account.blueprint) })),
+			() => ({ me: account }),
+		),
+		fields: declare(
+			"fields",
+			blueprintOf(() => ({ me: optionalOf(Fields) })),
+			() => ({ me: raw }),
+		),
+		many: declare(
+			"many",
+			listOf(blueprintOf(() => ({ me: optionalOf(Account.blueprint) }))),
+			() => [{ me: account }],
+		),
+		variant: declare(
+			"variant",
+			blueprintOf(() => ({
+				kind: variantOf("kind", { account: optionalOf(Fields), other: Other }),
+			})),
+			() => ({ kind: { kind: "account", ...raw } }),
+		),
+	};
+	const operations = outputOf({
+		name: "S",
+		commands: [commandOf({ name: "S", useCases })],
+	}).operations;
+
+	test("SEC-43: outputValueOf and HTTP mask them", async () => {
+		const sent = await sentOf(operations);
+		expect(Object.keys(sent).sort()).toEqual(Object.keys(useCases).sort());
+		for (const [name, { value, body }] of Object.entries(sent)) {
+			expect(JSON.stringify(value), name).not.toContain("t0k3n");
+			expect(body, name).not.toContain("t0k3n");
+			expect(body, name).toContain(MASK);
+		}
+	});
+
+	test("SEC-43: the OpenAPI document marks them write-only", () => {
+		const schemas = responseSchemasOf(useCases);
+		for (const name of Object.keys(useCases)) {
+			const tokens = schemasOfKey(schemas[name], "token");
+			expect(tokens.length, name).toBeGreaterThan(0);
+			for (const token of tokens) expect(token.writeOnly, name).toBe(true);
+		}
+	});
+});
+
+describe("SEC-44: a record's sensitive keys stay masked in a joined or sliced blueprint", () => {
+	const Empty = blueprintOf(() => ({}));
+	const Fields = blueprintOf((ctx) => ({
+		email: ctx.email,
+		token: ctx.string,
+	}));
+	class Account extends entityOf(Fields, { sensitive: ["token"] }) {}
+	const raw = { email: "a@b.co", token: "t0k3n" };
+	const Extra = blueprintOf((ctx) => ({ extra: ctx.string }));
+	const declare = (name: string, response: unknown, value: () => unknown) =>
+		class extends useCaseOf({ name, blueprint: Empty, response } as never) {
+			override async execute() {
+				return value() as never;
+			}
+		};
+	const useCases = {
+		joined: declare("joined", Fields.join(Extra), () => ({
+			...raw,
+			extra: "x",
+		})),
+		joinedAfter: declare("joinedAfter", Extra.join(Fields), () => ({
+			...raw,
+			extra: "x",
+		})),
+		sliced: declare(
+			"sliced",
+			sliceOf(Account.blueprint, { email: true, token: true }),
+			() => raw,
+		),
+		nested: declare(
+			"nested",
+			sliceOf(
+				blueprintOf(() => ({ me: Fields, other: Extra })),
+				{ me: { token: true } },
+			),
+			() => ({ me: { token: "t0k3n" } }),
+		),
+	};
+	const operations = outputOf({
+		name: "S",
+		commands: [commandOf({ name: "S", useCases })],
+	}).operations;
+
+	test("SEC-44: outputValueOf and HTTP mask them", async () => {
+		const sent = await sentOf(operations);
+		expect(Object.keys(sent).sort()).toEqual(Object.keys(useCases).sort());
+		for (const [name, { value, body }] of Object.entries(sent)) {
+			expect(JSON.stringify(value), name).not.toContain("t0k3n");
+			expect(body, name).not.toContain("t0k3n");
+			expect(body, name).toContain(MASK);
+		}
+	});
+
+	test("SEC-44: the OpenAPI document marks them write-only", () => {
+		const schemas = responseSchemasOf(useCases);
+		for (const name of Object.keys(useCases)) {
+			const tokens = schemasOfKey(schemas[name], "token");
+			expect(tokens.length, name).toBeGreaterThan(0);
+			for (const token of tokens) expect(token.writeOnly, name).toBe(true);
+		}
+	});
+
+	test("SEC-44: only the keys kept are marked, and the source keeps its own", () => {
+		const Sliced = sliceOf(Account.blueprint, { email: true });
+		const schemas = responseSchemasOf({
+			sliced: declare("sliced", Sliced, () => ({ email: "a@b.co" })),
+			fields: declare("fields", Fields, () => raw),
+		});
+		expect(schemasOfKey(schemas.sliced, "token")).toEqual([]);
+		expect(schemasOfKey(schemas.sliced, "email")[0].writeOnly).toBeUndefined();
+		expect(schemasOfKey(schemas.fields, "token")[0].writeOnly).toBe(true);
+	});
+});
+
+describe("SEC-45: a transform that copies the response leaves it masked", () => {
+	const HASH = Password.demo().value;
+	const Empty = blueprintOf(() => ({}));
+	const Credential = blueprintOf((ctx) => ({
+		email: ctx.email,
+		password: ctx.password,
+	}));
+	class Me extends useCaseOf({
+		name: "Me",
+		blueprint: Empty,
+		response: Credential,
+	}) {
+		override async execute() {
+			return { email: "a@b.co", password: HASH };
+		}
+	}
+	class All extends useCaseOf({
+		name: "All",
+		blueprint: Empty,
+		response: listOf(Credential),
+	}) {
+		override async execute() {
+			return [{ email: "a@b.co", password: HASH }];
+		}
+	}
+	const copying = (copy: (value: unknown) => unknown) =>
+		transformOf({
+			name: "copying",
+			apply: (operation) =>
+				operationOf(operation, {
+					invoke: async (input, call) =>
+						copy(await operation.invoke(input, call)),
+				}),
+		})();
+
+	for (const [name, copy] of [
+		["structuredClone", (value: unknown) => structuredClone(value)],
+		[
+			"spread",
+			(value: unknown) =>
+				Array.isArray(value)
+					? value.map((item) => ({ ...item }))
+					: { ...(value as object) },
+		],
+	] as const) {
+		test(`SEC-45: a copy by ${name} is masked by the declared response`, async () => {
+			const output = outputOf({
+				name: "S",
+				commands: [commandOf({ name: "S", useCases: { me: Me, all: All } })],
+				pipe: [copying(copy)],
+			});
+			const sent = await sentOf(output.operations);
+			expect(Object.keys(sent).sort()).toEqual(["all", "me"]);
+			for (const { value, body } of Object.values(sent)) {
+				expect(JSON.stringify(value)).not.toContain(HASH);
+				expect(body).not.toContain(HASH);
+				expect(body).toContain(MASK);
+			}
+		});
+	}
 });

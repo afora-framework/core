@@ -1,5 +1,5 @@
 import type { TSchema } from "typebox";
-import { blueprintFromProperties } from "../blueprint/blueprint";
+import { blueprintFromProperties, joinOf } from "../blueprint/blueprint";
 import { filePathOf } from "../blueprint/files";
 import { isRecordClass } from "../blueprint/record-field";
 import type {
@@ -134,7 +134,8 @@ export function entityBuilderOf<
 
 		const DeclaredEntity = declareRecord(
 			AbstractEntity,
-			ownIdentity.join(
+			joinOf([
+				ownIdentity,
 				...(versioned ? [VersionIdentity] : []),
 				...(expiring
 					? [
@@ -144,7 +145,7 @@ export function entityBuilderOf<
 						]
 					: []),
 				blueprint,
-			),
+			]),
 			{
 				...withoutStorage(options),
 				unique: ["id", ...(options.unique ?? [])],

@@ -14,6 +14,7 @@ import { isBlueprint } from "./is-blueprint";
 import { isBlueprintList, listOf } from "./list";
 import { optionalOf } from "./optional";
 import { recordFieldOf } from "./record-field";
+import { deriveBlueprint } from "./sources";
 import type {
 	AnyBlueprint,
 	BlueprintBuilder,
@@ -114,20 +115,34 @@ function create(
 		schema: new SchemaConstructor(),
 		optional: false,
 		safeParse,
-		join: ((...others: readonly AnyBlueprint[]) =>
-			create(
-				[blueprint, ...others].flatMap((source) => source.plugins),
-				// `fromEntries`, not `Object.assign`, so that a `__proto__` key stays a key
-				// (and is rejected) instead of setting the prototype.
-				Object.fromEntries(
-					[blueprint, ...others].flatMap((source) =>
-						Object.entries(source.properties),
-					),
-				),
-			)) as IBlueprint<IBlueprintCollection>["join"],
+		join: ((...others: readonly AnyBlueprint[]) => {
+			const joined = joinOf([blueprint, ...others]);
+			// What the records of each blueprint declare follows the join.
+			deriveBlueprint(joined, [blueprint, ...others]);
+			return joined;
+		}) as IBlueprint<IBlueprintCollection>["join"],
 	} as IBlueprint<IBlueprintCollection>;
 
 	return Object.freeze(withStandard(blueprint, safeParse));
+}
+
+/**
+ * The blueprint of the fields of `blueprints`, a later one replacing a key of
+ * an earlier one, with no lineage: the blueprint of a record or entity, which
+ * its own options mark, is joined with it (`blueprint.join` keeps the lineage).
+ * @internal
+ */
+export function joinOf(
+	blueprints: readonly AnyBlueprint[],
+): IBlueprint<IBlueprintCollection> {
+	return create(
+		blueprints.flatMap((source) => source.plugins),
+		// `fromEntries`, not `Object.assign`, so that a `__proto__` key stays a key
+		// (and is rejected) instead of setting the prototype.
+		Object.fromEntries(
+			blueprints.flatMap((source) => Object.entries(source.properties)),
+		),
+	);
 }
 
 /** Functions every context has, to make fields inline, as `ctx.listOf(ctx.id)`. */

@@ -1,6 +1,6 @@
 import { jwtOf, jwtOptionsIssue } from "../auth/jwt";
 import { Exception } from "../exception/exception";
-import { responseJsonOf } from "../use-case/response";
+import { respondedWith, responseJsonOf } from "../use-case/response";
 import { HEADER_NAME } from "../use-case/route";
 import { takeStatus } from "../use-case/status";
 import type { Principal } from "../use-case/types/access.interface";
@@ -520,8 +520,12 @@ export function compileRoutes(
 				}
 
 				// The status the use case chose: the route status or one it lists.
+				// Masked by the response the operation declares, whatever gave it.
 				const { status: chosen, body: response } = takeStatus(
-					await operation.invoke(input, call),
+					respondedWith(
+						operation.response,
+						await operation.invoke(input, call),
+					),
 				);
 				let sent: number = status;
 				if (chosen !== undefined) {
