@@ -1,5 +1,6 @@
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
+import * as nodePath from "node:path";
 import {
 	dirname,
 	extname,
@@ -10,19 +11,33 @@ import {
 	sep,
 } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isRooted } from "./rooted";
 import { issue } from "./scope";
 import type { SpecIssue } from "./spec/types";
 
 const DEFAULT_OUTPUT_DIR = "src/domain";
 
-/** Whether `path` is `root` or inside it. */
-export function isInside(root: string, path: string): boolean {
-	const rel = relative(root, path);
+type PathOf = Pick<typeof nodePath, "relative" | "isAbsolute" | "sep">;
+
+/** Whether `path` is `root` or inside it, by the rules of `paths` (`node:path`, or its `win32`). */
+export function isInsideWith(
+	paths: PathOf,
+	root: string,
+	path: string,
+): boolean {
+	const rel = paths.relative(root, path);
+	// On Windows a path on another drive stays absolute (`D:\\x`).
 	return (
 		rel === "" ||
-		(!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel))
+		(!rel.startsWith(`..${paths.sep}`) &&
+			rel !== ".." &&
+			!paths.isAbsolute(rel))
 	);
 }
+
+/** Whether `path` is `root` or inside it. */
+export const isInside = (root: string, path: string): boolean =>
+	isInsideWith(nodePath, root, path);
 const inside = isInside;
 
 /** The real path of the deepest part of `path` that exists, with the rest appended. */
@@ -48,21 +63,45 @@ const TOOLING_DIRS = new Set(["node_modules", ".git"]);
 /**
  * A path segment folded at least as far as a file system may compare it:
  * case (APFS and NTFS ignore it), compatibility forms (`ſ` is `s`, a
- * fullwidth `ｍ` is `m`) and combining marks. Folding too far only refuses more.
+ * fullwidth `ｍ` is `m`), combining marks, and what Windows drops from a
+ * name: a stream suffix (`:…`) and trailing dots and spaces. Folding too far
+ * only refuses more.
  */
-const fold = (part: string) =>
-	part
+const fold = (part: string) => {
+	const folded = part
 		.normalize("NFKD")
 		.replace(/\p{M}/gu, "")
 		.toLowerCase()
 		.replace(/\u0131/g, "i");
+	const colon = folded.indexOf(":");
+	let end = colon === -1 ? folded.length : colon;
+	while (end > 0 && (folded[end - 1] === "." || folded[end - 1] === " ")) end--;
+	return folded.slice(0, end);
+};
+
+/**
+ * Whether a folded segment may be a Windows short (8.3) name of a tooling
+ * directory: `NODE_M~1`, `GIT~1`.
+ */
+const shortTooling = (part: string) => {
+	const match = /^([^~]{1,6})~\d+$/.exec(part);
+	if (!match) return false;
+	const prefix = match[1] as string;
+	return [...TOOLING_DIRS].some(
+		(dir) =>
+			dir.startsWith(prefix) || dir.replace(/^\./, "").startsWith(prefix),
+	);
+};
 
 /**
  * Whether `path` has a segment naming a tooling directory (`node_modules`,
- * `.git`), however a case-insensitive file system may spell it.
+ * `.git`), however a case-insensitive file system or Windows may spell it.
  */
 export const inTooling = (path: string) =>
-	path.split(/[\\/]/).some((part) => TOOLING_DIRS.has(fold(part)));
+	path.split(/[\\/]/).some((part) => {
+		const folded = fold(part);
+		return TOOLING_DIRS.has(folded) || shortTooling(folded);
+	});
 
 /** The extensions a runtime tries after a relative module, in place of none. */
 const MODULE_EXTENSIONS = [
@@ -341,8 +380,7 @@ function issuesOf(
 	if (typeof given === "string") {
 		const climbs =
 			isAbsolute(given) ||
-			given.startsWith("/") ||
-			given.startsWith("\\") ||
+			isRooted(given) ||
 			/(^|[\\/])\.\.([\\/]|$)/.test(given) ||
 			!inside(base, outputDir);
 		if (climbs) {

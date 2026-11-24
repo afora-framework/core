@@ -7,8 +7,8 @@ import {
 	rm,
 	writeFile,
 } from "node:fs/promises";
-import { basename, dirname, relative, resolve, sep } from "node:path";
-import { inTooling } from "./boundary";
+import { basename, dirname, relative, resolve } from "node:path";
+import { isInside as inside, inTooling } from "./boundary";
 import { BANNER, type GeneratedFile } from "./generate";
 import { GENERATED_FILES, USE_CASE_FILE_SUFFIX } from "./use-case-files";
 
@@ -37,15 +37,6 @@ const exists = (path: string) =>
 		(stats) => stats,
 		() => undefined,
 	);
-
-/** Whether `path` is `root` or inside it. */
-function inside(root: string, path: string): boolean {
-	const rel = relative(root, path);
-	return (
-		rel === "" ||
-		(!rel.startsWith(`..${sep}`) && rel !== ".." && !rel.startsWith(sep))
-	);
-}
 
 /** The real path of the deepest part of `path` that exists, with the rest appended. */
 async function realWithin(path: string): Promise<string> {
