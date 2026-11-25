@@ -101,8 +101,21 @@ test("rejects indexes on unknown keys", () => {
 	);
 });
 
+test("accepts a sensitive key in where", () => {
+	for (const indexes of [
+		{ a: { where: ["secret"] } },
+		{ a: { where: ["type", "secret"], orderBy: "rank" } },
+	]) {
+		expect(validateSpec(spec({ indexes }))).toEqual([]);
+	}
+});
+
 for (const [name, indexes, path] of [
-	["sensitive", { a: { where: ["secret"] } }, ["a", "where", 0]],
+	[
+		"ordered by a sensitive key",
+		{ a: { where: ["type"], orderBy: "secret" } },
+		["a", "orderBy"],
+	],
 	["not scalar", { a: { where: ["type"], orderBy: "meta" } }, ["a", "orderBy"]],
 	["empty", { a: { where: [] } }, ["a"]],
 	["malformed", { a: { where: "type" } }, ["a"]],

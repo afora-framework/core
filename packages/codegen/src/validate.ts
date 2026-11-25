@@ -1023,12 +1023,12 @@ function checkIndexes(
 					),
 				);
 				valid = false;
-			} else if (sensitive.has(key)) {
+			} else if (at.at(-1) === "orderBy" && sensitive.has(key)) {
 				issues.push(
 					issue(
 						at,
 						"invalid_index",
-						`"${key}" is sensitive and cannot be indexed.`,
+						`"${key}" is sensitive and cannot order an index.`,
 					),
 				);
 				valid = false;

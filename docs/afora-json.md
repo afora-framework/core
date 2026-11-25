@@ -277,7 +277,7 @@ A repository declares its [indexes](repositories.md#indexes) and what it does wi
 }
 ```
 
-They are generated as `indexes` and `scans` of `repositoryOf`, given by `describe()` and extracted back; normalization leaves out no indexes and `"scans": "allow"`, the default. A key that is not a key of the entity is an `unknown_index_key` issue; a sensitive key, an `orderBy` that is not scalar, a key listed twice, an empty or malformed index and two indexes on the same keys and order are `invalid_index`.
+They are generated as `indexes` and `scans` of `repositoryOf`, given by `describe()` and extracted back; normalization leaves out no indexes and `"scans": "allow"`, the default. A key that is not a key of the entity is an `unknown_index_key` issue; a sensitive `orderBy` (a sensitive key may be in `where`), an `orderBy` that is not scalar, a key listed twice, an empty or malformed index and two indexes on the same keys and order are `invalid_index`.
 
 ## Records that expire
 

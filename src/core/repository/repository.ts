@@ -1224,8 +1224,9 @@ const INDEX_NAME = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 /**
  * The indexes of `settings.indexes`, checked against `entity` and frozen:
- * each holds known, distinct, non-sensitive `where` keys, at least one, and
- * an optional scalar `orderBy`; two indexes on the same keys and order throw.
+ * each holds known, distinct `where` keys, at least one, and an optional
+ * scalar `orderBy` that is not sensitive (a sensitive key may be looked up by
+ * equality, never ordered, as with a cursor); two indexes on the same keys and order throw.
  */
 function indexesOf(
 	name: string,
@@ -1244,17 +1245,17 @@ function indexesOf(
 		Record<string, BlueprintField | undefined>
 	>;
 	const sensitive = entity.options.sensitive as readonly string[];
-	const keyOf = (index: string, key: unknown): string => {
+	const keyOf = (index: string, key: unknown, ordering = false): string => {
 		if (typeof key !== "string" || !Object.hasOwn(properties, key)) {
 			invalid(
 				name,
 				`The index "${index}" names "${String(key)}", which is not a key of ${recordNameOf(entity)}.`,
 			);
 		}
-		if (sensitive.includes(key)) {
+		if (ordering && sensitive.includes(key)) {
 			invalid(
 				name,
-				`The index "${index}" names "${key}", which is sensitive and cannot be indexed.`,
+				`The index "${index}" orders by "${key}", which is sensitive and cannot be ordered.`,
 			);
 		}
 		return key;
@@ -1286,7 +1287,9 @@ function indexesOf(
 			invalid(name, `The index "${index}" names a key twice in where.`);
 		}
 		const orderBy =
-			value.orderBy === undefined ? undefined : keyOf(index, value.orderBy);
+			value.orderBy === undefined
+				? undefined
+				: keyOf(index, value.orderBy, true);
 		if (orderBy !== undefined) {
 			const field = properties[orderBy];
 			if (
