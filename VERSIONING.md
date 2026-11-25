@@ -46,6 +46,7 @@ These ship in a minor:
 - A new optional field in a descriptor or in the spec.
 - A new issue `code`. It is additive, and it is documented in the README and the CHANGELOG. Code that matches on `code` should have a fallback for unknown values.
 - A new exception class, in a layer that already exists.
+- A new exception layer. The set of layers is closed: a package cannot declare a layer of its own, and a new layer ships only in a minor and is recorded in the CHANGELOG. Code that switches on `layer` should have a fallback for unknown values.
 - A new member under a symbol key.
 
 ## Breaking changes

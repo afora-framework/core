@@ -15,4 +15,6 @@ export enum ExceptionLayers {
 	Application = "application",
 	/** Any way out of the application: HTTP, STDIO, a queue, ... */
 	Output = "output",
+	/** What happens while an interface runs: a page outside its router, a hook outside its provider, an invalid route parameter. */
+	Interface = "interface",
 }

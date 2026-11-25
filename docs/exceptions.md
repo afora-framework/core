@@ -1,6 +1,6 @@
 # Exceptions
 
-Every error the library raises is an `Exception` that knows its `layer` (`ExceptionLayers`: `Schema`, `Property`, `Blueprint`, `Record`, `Entity`, `UseCase`, `Repository`, `Environment`, `Event`, `Command`, `Application`, `Output`), its `name` and its `source` (who raised it). Passing it up keeps the whole `trace`:
+Every error the library raises is an `Exception` that knows its `layer` (`ExceptionLayers`: `Schema`, `Property`, `Blueprint`, `Record`, `Entity`, `UseCase`, `Repository`, `Environment`, `Event`, `Command`, `Application`, `Output`, `Interface`), its `name` and its `source` (who raised it). Passing it up keeps the whole `trace`:
 
 ```ts
 import {

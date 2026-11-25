@@ -582,7 +582,7 @@ const Exception = Type.Object(
 	{
 		layer: Type.String({
 			description:
-				"One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output (see afora_catalog).",
+				"One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output, interface (see afora_catalog).",
 		}),
 		message: Type.Optional(
 			Type.String({ description: 'The message. "<Name>." when omitted.' }),
