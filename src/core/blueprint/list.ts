@@ -1,4 +1,5 @@
 import { parseField } from "../parse/parse";
+import type { ParseResult } from "../parse/types/parse.interface";
 import type { StoredField } from "../property/types/property-options.interface";
 import { withStandard } from "../standard/standard";
 import { Kind } from "../symbols/kind";
@@ -27,13 +28,19 @@ export function listOf<Item extends BlueprintField>(
 	}) as IBlueprintList<StoredField<Item>>;
 }
 
-/** `list`, frozen, with the `~standard` that handles a value as `list` does. */
+/**
+ * `list`, frozen, with the `~standard` and the `safeParse` that handle a value
+ * as `list` does. Both close over `list` itself and are not enumerable, so a
+ * copy of it (`{ ...list, optional: true }`) gets its own, never this one.
+ */
 export function standardListOf<List extends object>(list: List): List {
-	return Object.freeze(
-		withStandard(list, (value) =>
-			parseField(list as unknown as AnyBlueprintList, value, [], "list"),
-		),
-	);
+	const parse = (value: unknown): ParseResult<unknown> =>
+		parseField(list as unknown as AnyBlueprintList, value, [], "list");
+	Object.defineProperty(list, "safeParse", {
+		value: parse,
+		enumerable: false,
+	});
+	return Object.freeze(withStandard(list, parse));
 }
 
 /** Whether `value` is a list made by `listOf`. */

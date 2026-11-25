@@ -1,4 +1,5 @@
 import { parseField } from "../parse/parse";
+import type { ParseResult } from "../parse/types/parse.interface";
 import { withStandard } from "../standard/standard";
 import { Kind } from "../symbols/kind";
 import { InvalidBlueprintVariant } from "./exceptions";
@@ -64,16 +65,14 @@ export function variantOf<
 export function standardVariantOf<Variant extends object>(
 	variant: Variant,
 ): Variant {
-	return Object.freeze(
-		withStandard(variant, (value) =>
-			parseField(
-				variant as unknown as AnyBlueprintVariant,
-				value,
-				[],
-				"variant",
-			),
-		),
-	);
+	const parse = (value: unknown): ParseResult<unknown> =>
+		parseField(variant as unknown as AnyBlueprintVariant, value, [], "variant");
+	// Not enumerable, so that a copy of `variant` never carries this closure.
+	Object.defineProperty(variant, "safeParse", {
+		value: parse,
+		enumerable: false,
+	});
+	return Object.freeze(withStandard(variant, parse));
 }
 
 type Variant = BlueprintVariants[string];

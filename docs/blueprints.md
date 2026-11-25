@@ -28,6 +28,8 @@ const Customer = User.join(Timestamps); // every field of both
 
 `join` takes any number of blueprints (`A.join(B, C)` is `A.join(B).join(C)`); a later one replaces a key of an earlier one, like plugins do. `listOf` takes a property, a blueprint or another list, and `optionalOf` makes it an optional key.
 
+What `listOf` and `variantOf` return (and their `optionalOf` forms) parse on their own: `safeParse(value)` gives `{ value }` or `{ issues }`, the same as `~standard.validate`, with issue paths that start at the index (`[1, "id"]`) for a list. There is no throwing `parse`. Code that takes anything that parses, a blueprint, a list, a variant or a record class, can type it as `AnyParsable`, which needs only `safeParse` and `~standard`.
+
 ## The type of a value
 
 Every blueprint is a [Standard Schema](standard-schema.md), so `StandardSchemaV1.InferOutput` gives the type of the value it parses, and `StandardSchemaV1.InferInput` the type of what it accepts:

@@ -55,7 +55,7 @@ const defaultValues: StandardSchemaV1.InferInput<typeof UserBlueprint> = {
 new FormApi({ defaultValues, validators: { onChange: UserBlueprint } });
 ```
 
-Without a framework, `safeParse` (on properties, blueprints and record classes) takes `unknown` and returns `{ value }` or `{ issues }`, never both and never throwing for an invalid value:
+Without a framework, `safeParse` (on properties, blueprints, lists, variants and record classes) takes `unknown` and returns `{ value }` or `{ issues }`, never both and never throwing for an invalid value:
 
 <!-- docs:code continue -->
 ```ts

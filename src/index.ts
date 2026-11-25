@@ -62,6 +62,7 @@ export type {
 	AnyBlueprintList,
 	AnyBlueprintVariant,
 	AnyOptionalRecord,
+	AnyParsable,
 	AnyRecordClass,
 	BlueprintBuilder,
 	BlueprintContext,

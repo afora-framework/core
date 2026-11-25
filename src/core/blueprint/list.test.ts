@@ -1,12 +1,14 @@
 import { expect, expectTypeOf, test } from "bun:test";
 import { blueprintOf } from "../../std/blueprint";
 import { Std } from "../../std/blueprint-plugin";
+import type { ParseResult } from "../parse/types/parse.interface";
 import { blueprintPluginOf } from "./blueprint-plugin";
 import { UndeclaredBlueprintProperty } from "./exceptions";
 import { isBlueprint } from "./is-blueprint";
 import { isBlueprintList, listOf } from "./list";
 import { optionalOf } from "./optional";
-import type { BlueprintValue } from "./types/blueprint.interface";
+import type { AnyParsable, BlueprintValue } from "./types/blueprint.interface";
+import { variantOf } from "./variant";
 
 const Address = blueprintOf((ctx) => ({
 	street: ctx.string,
@@ -189,4 +191,55 @@ test("lists and blueprints are told apart by their brand, not their shape", () =
 	expect(() => blueprintOf(() => ({ tags: lookalike as never }))).toThrow(
 		UndeclaredBlueprintProperty,
 	);
+});
+
+const Item = blueprintOf((ctx) => ({ id: ctx.string }));
+
+test("a list parses with safeParse as with ~standard.validate, paths from the index", async () => {
+	const Items = listOf(Item);
+
+	expect(Items.safeParse([{ id: "a" }])).toEqual({ value: [{ id: "a" }] });
+	const result = Items.safeParse([{ id: "a" }, { id: 1 }]);
+	expect(result.issues?.[0]?.path).toEqual([1, "id"]);
+	expect(result as unknown).toEqual(
+		await Items["~standard"].validate([{ id: "a" }, { id: 1 }]),
+	);
+	expect(Items.safeParse("x").issues).toBeDefined();
+	expectTypeOf(Items.safeParse([])).toEqualTypeOf<
+		ParseResult<{ id: string }[]>
+	>();
+});
+
+test("an optional list gets its own safeParse, which accepts undefined", () => {
+	const Items = listOf(Item);
+	const Optional = optionalOf(Items);
+
+	expect(Optional.safeParse(undefined)).toEqual({ value: undefined });
+	expect(Items.safeParse(undefined).issues).toBeDefined();
+	expect(Optional.safeParse([{ id: "a" }])).toEqual({ value: [{ id: "a" }] });
+	expect(Object.keys(Items)).not.toContain("safeParse");
+});
+
+test("a variant and its optional form parse with safeParse", () => {
+	const Shape = variantOf("kind", {
+		a: blueprintOf((ctx) => ({ n: ctx.integer })),
+	});
+	const Optional = optionalOf(Shape);
+
+	expect(Shape.safeParse({ kind: "a", n: 1 })).toEqual({
+		value: { kind: "a", n: 1 },
+	});
+	expect(Shape.safeParse({ kind: "a", n: "x" }).issues).toBeDefined();
+	expect(Shape.safeParse(undefined).issues).toBeDefined();
+	expect(Optional.safeParse(undefined)).toEqual({ value: undefined });
+});
+
+test("a list, a variant and a blueprint are all AnyParsable", () => {
+	const all: AnyParsable[] = [
+		Item,
+		listOf(Item),
+		optionalOf(listOf(Item)),
+		variantOf("kind", { a: Item }),
+	];
+	expect(all).toHaveLength(4);
 });

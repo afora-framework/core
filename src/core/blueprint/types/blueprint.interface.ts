@@ -44,6 +44,18 @@ export interface AnyBlueprintVariant {
 	readonly optional: boolean;
 	// biome-ignore lint/suspicious/noExplicitAny: whatever the field takes and gives
 	readonly "~standard": StandardSchemaV1.Props<any, any>;
+	safeParse(value: unknown): ParseResult<unknown>;
+}
+
+/**
+ * Anything that parses a value the same two ways: a blueprint, a list, a
+ * variant (optional or not), or a record class. `safeParse` and
+ * `~standard.validate` give the same result, never throw for an invalid value,
+ * and report issue paths from the value itself (a list starts at the index).
+ */
+export interface AnyParsable {
+	readonly "~standard": StandardSchemaV1.Props<unknown, unknown>;
+	safeParse(value: unknown): ParseResult<unknown>;
 }
 
 /** Any list, whatever its item, optional or not. */
@@ -635,6 +647,8 @@ export interface IBlueprintList<
 		ListShape<Item, "input", Optional>,
 		ListShape<Item, "value", Optional>
 	>;
+	/** Same result as `~standard.validate`: `{ value }` or `{ issues }`, paths from the index. */
+	safeParse(value: unknown): ParseResult<ListShape<Item, "value", Optional>>;
 }
 
 /** The value of a list, e.g. `Article[]` for `listOf(Article)`. */
@@ -679,6 +693,10 @@ export interface IBlueprintVariant<
 		VariantShape<Key, Variants, "input", Optional>,
 		VariantShape<Key, Variants, "value", Optional>
 	>;
+	/** Same result as `~standard.validate`: `{ value }` or `{ issues }`. */
+	safeParse(
+		value: unknown,
+	): ParseResult<VariantShape<Key, Variants, "value", Optional>>;
 }
 
 type VariantShape<
