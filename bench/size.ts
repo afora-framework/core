@@ -3,7 +3,8 @@
 // size is taken, and the bundle is imported in new processes of Bun and Node,
 // each running a file that does nothing else.
 import { gzipSync } from "node:zlib";
-import { LIBRARIES } from "./contenders.ts";
+import { BUNDLES } from "./contenders.ts";
+import { SIZE_LIMITS } from "./guard.limits.ts";
 
 const here = new URL(".", import.meta.url).pathname;
 const out = `${here}.dist/entries`;
@@ -67,36 +68,56 @@ const oneTypeBox: Bun.BunPlugin = {
 	},
 };
 
+/** Bundles `entries/<library>.ts` by itself; the file it wrote and its sizes. */
+async function bundleOf(
+	library: string,
+): Promise<{ file: string; min: number; gzip: number }> {
+	const built = await Bun.build({
+		entrypoints: [`${here}entries/${library}.ts`],
+		outdir: out,
+		target: "node",
+		format: "esm",
+		minify: true,
+		naming: `${library}.mjs`,
+		plugins: [oneTypeBox],
+	});
+	if (!built.success) {
+		throw new Error(`${library}: ${built.logs.join("\n")}`);
+	}
+	const file = `${out}/${library}.mjs`;
+	const bytes = await Bun.file(file).bytes();
+	return { file, min: bytes.length, gzip: gzipSync(bytes).length };
+}
+
+/**
+ * Whether every bundle with a budget in `SIZE_LIMITS` is within it, gzipped;
+ * logs each one. Part of `bun run bench:guard`.
+ */
+export async function sizeGuard(): Promise<boolean> {
+	let within = true;
+	for (const [library, { gzip: limit }] of Object.entries(SIZE_LIMITS)) {
+		const { gzip } = await bundleOf(library);
+		const ok = gzip <= limit;
+		within &&= ok;
+		console.log(
+			`${ok ? "ok  " : "OVER"} ${BUNDLES[library]?.label ?? library}: ${gzip} B gzipped (limit ${limit} B)`,
+		);
+	}
+	return within;
+}
+
 export async function footprints(
 	runtimes: ColdRuntime[],
 ): Promise<Footprint[]> {
 	const rows: Footprint[] = [];
-	for (const library of Object.keys(LIBRARIES)) {
-		const built = await Bun.build({
-			entrypoints: [`${here}entries/${library}.ts`],
-			outdir: out,
-			target: "node",
-			format: "esm",
-			minify: true,
-			naming: `${library}.mjs`,
-			plugins: [oneTypeBox],
-		});
-		if (!built.success) {
-			throw new Error(`${library}: ${built.logs.join("\n")}`);
-		}
+	for (const library of Object.keys(BUNDLES)) {
+		const { file, min, gzip } = await bundleOf(library);
 		await Bun.write(IMPORTER, IMPORTER_SOURCE);
-		const file = `${out}/${library}.mjs`;
-		const bytes = await Bun.file(file).bytes();
 		const cold: Record<string, number> = {};
 		for (const { label, command } of runtimes) {
 			cold[label] = await coldOf(command, file);
 		}
-		rows.push({
-			library,
-			min: bytes.length,
-			gzip: gzipSync(bytes).length,
-			cold,
-		});
+		rows.push({ library, min, gzip, cold });
 	}
 	return rows;
 }

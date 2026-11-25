@@ -4,6 +4,8 @@
 
 Testing an application without touching the process: a test application with a store of its own (`testApplicationOf`), registrations replaced across the graph (`app.with`, `replace`), a clock the test moves (`manualClock`) and runtime services per application and per call (`runtime`, `withRuntime`). A command now registers the use cases it holds, and a repository method that a spy tries to assign says what to do instead.
 
+The same blueprints on the server and in a client: `@afora/core/client`, `safeParse` on lists and variants, and an exception layer for interfaces. Money in Std, and an index that may look up a sensitive key by equality.
+
 ### Behavior changes
 
 - `invoke` of an output's operation without access rules passes only the context and the caller to its command, as an operation with `access` does (#175). See [Outputs](docs/outputs.md).
@@ -70,6 +72,34 @@ Testing an application without touching the process: a test application with a s
 ### `jwtOf` is stable (#186)
 
 - `jwtOf`, `InvalidJwtOptions` and the types `Jwt`, `JwtOptions`, `DescribedJwtOptions`, `JwtAlgorithm`, `JwtSubject` and `JwtTokenOptions` come from `@afora/core/adapters` and follow the compatibility policy. `@afora/core/experimental` still re-exports the same objects, each marked `@deprecated`: import them from `@afora/core/adapters`. The ready-made sessions (`login`, `refresh`, `logout` with `StdTokenOptions`) stay experimental. See [API tiers](docs/api-tiers.md) and [Tokens and sessions](docs/auth.md#tokens-and-sessions).
+
+### `safeParse` on lists and variants (#188)
+
+- What `listOf` and `variantOf` return, and their `optionalOf` forms, have `safeParse(value)`. It gives `{ value }` or `{ issues }`, the same result and the same issues as `~standard.validate`; for a list, the path of an issue starts at the index (`[1, "id"]`). There is no throwing `parse`. See [Blueprints](docs/blueprints.md).
+- `AnyParsable` is the type of anything that parses: a blueprint, a list, a variant or a record class. It needs only `safeParse` and `~standard`. `AnyBlueprint` does not change.
+
+### An exception layer for interfaces (#187)
+
+- `ExceptionLayers.Interface` is the layer of an error of an interface: a page used outside its router, a hook used outside its provider. An exception declares it as any other layer, `exceptionOf({ layer: ExceptionLayers.Interface, ... })`. See [Exceptions](docs/exceptions.md).
+- [VERSIONING.md](VERSIONING.md#additive-changes) says the set of layers is closed: a package cannot declare a layer of its own, and a new layer ships only in a minor and is listed in this CHANGELOG. Code that switches on `layer` should have a fallback for unknown values.
+
+### A sensitive key in an index (#195)
+
+- An index may name a sensitive key among its `where` keys, so a deterministic hash of a personal identifier, such as a national id, is looked up by equality and still stays out of `toJSON`, logs and responses. It cannot be the `orderBy` of an index, as it cannot order a cursor: that still throws `InvalidRepositoryDeclaration`. `repositoryOf` and `afora.json` accept it, and in `afora.json` only a sensitive `orderBy` is `invalid_index`.
+- The value never leaves the repository: exceptions (`RepositoryUniqueViolation`, `InvalidRepositoryQuery`), `explain`, scan logs and cursors name keys, not values. Masking does not change. See [Indexes](docs/repositories.md#indexes) and [Indexes and query cost](docs/afora-json.md#indexes-and-query-cost).
+
+### Money (#196)
+
+- `ctx.money` (`moneyOf`) holds an amount of money as an integer of the minor unit of its currency, so no floating point rounds it: `1999` is R$ 19.99. `ctx.money({ currency: "BRL" })` is an amount in one currency, and its value, on the wire and in a record, is the integer alone. `ctx.money({ currency: ["BRL", "USD"] })` carries one of the currencies listed, and `ctx.money()` any of them: the value is `{ amount, currency }` (`MoneyValue`). A currency is an ISO 4217 code of three upper-case letters.
+- `min` and `max` bound the amount in minor units, and `nonNegative: true` rejects one below zero; an amount is always a safe integer. A value that is not an integer, a currency that is not accepted, or a key missing or extra gives `invalid_value` issues. Options that are not valid (a currency such as `"R$"`, a `min` above `max`) throw `InvalidMoneyOptions` when the property is declared.
+- `currencyDecimals(code)` gives the decimals of a currency in ISO 4217 (`currencyDecimals("JPY")` is 0). The property checks and holds a value: no arithmetic, rounding, formatting or exchange.
+- `afora.json`: a field or a property declaration is `{ "money": { "currency": "BRL" } }`, with `min`, `max`, `nonNegative` and `name`; the validator checks the options as `moneyOf` does (`invalid_money`).
+- New exports of `@afora/core`: `moneyOf`, `currencyDecimals`, `InvalidMoneyOptions` and the types `MoneyOptions`, `MoneyValue` and `TMoney`. See [Money](docs/std-properties.md#money) and [Money in afora.json](docs/afora-json.md#money).
+
+### `@afora/core/client` (#185)
+
+- `@afora/core/client` is a stable entry with what a client needs to declare blueprints and parse values: `blueprintOf`, `listOf`, `optionalOf`, `variantOf`, `enumOf`, `propertyOf`, `exceptionOf`, `ExceptionLayers` and the types `StandardSchemaV1`, `Issue`, `IssueCode`, `ParseResult` and `AnyParsable`. They are the objects of `@afora/core`, so a blueprint made from either entry is a field, a list item or a record of the other, and a project declares its blueprints once for the API and the interface. See [In a client](docs/blueprints.md#in-a-client) and [API tiers](docs/api-tiers.md#the-tiers).
+- The entry reaches no module only a server runs (records, entities, repositories, use cases, outputs), and `src/client.test.ts` checks it. That is a guarantee about the module graph, for where nothing tree-shakes, such as an unbundled ESM dev server or a CDN. It does not make a smaller bundle: a bundler that drops unused modules gives the same size from either entry, about 60 kB gzipped, most of it TypeBox. `bun run bench:guard` holds the size of the client entry to a budget in `bench/guard.limits.ts`.
 
 ### Documentation
 

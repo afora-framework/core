@@ -150,6 +150,38 @@ const UploadMedia = blueprintOf((ctx) => ({
 }));
 ```
 
+### Money
+
+| Context     | Factory   | Holds                                                                                                  |
+| ----------- | --------- | ------------------------------------------------------------------------------------------------------ |
+| `ctx.money` | `moneyOf` | an amount of money as an integer of minor units: alone for one `currency`, else `{ amount, currency }` |
+
+An amount is held as an integer of the minor unit of its currency (cents for `BRL` and `USD`, yen for `JPY`), so no floating point ever rounds it: `1999` is R$ 19.99. `ctx.money({ currency: "BRL" })` is an amount in one currency, and its value, on the wire and in a record, is the integer alone (typed `number`). `ctx.money({ currency: ["BRL", "USD"] })` is an amount that carries one of the currencies listed, and `ctx.money()` one that carries any: the value is `{ amount, currency }` (`MoneyValue`, typed with the codes listed). A currency is an ISO 4217 code checked by its form, three upper-case letters (`"brl"` is rejected, not upper-cased), and by the list when there is one; no table of every currency ships with the library.
+
+`min` and `max` bound the amount, in minor units, and `nonNegative: true` rejects an amount below zero; an amount is always a safe integer (`Number.isSafeInteger`), so a larger one is rejected rather than rounded. `ctx.optionalOf(ctx.money(...))` (`optionalOf(moneyOf(...))`) accepts `undefined`, `ctx.listOf(ctx.money(...))` is a list, and `name` names the property. A value that is not an integer, a currency that is not accepted, a key missing or one more than `amount` and `currency` give `invalid_value` issues, at the key of the amount or below it (`["total", "amount"]`). Options that are not valid (a currency such as `"R$"`, a bound that is not an integer, a `min` above `max`) throw `InvalidMoneyOptions` when the property is declared. The demo value is 0, or the bound closest to it, in the first currency listed (`USD` when none is).
+
+`currencyDecimals(code)` gives the decimals of a currency in ISO 4217, what its minor unit is: 2 for any code but a few, 0 for `BIF`, `CLP`, `DJF`, `GNF`, `ISK`, `JPY`, `KMF`, `KRW`, `PYG`, `RWF`, `UGX`, `UYI`, `VND`, `VUV`, `XAF`, `XOF` and `XPF`, 3 for `BHD`, `IQD`, `JOD`, `KWD`, `LYD`, `OMR` and `TND`, and 4 for `CLF` and `UYW`. The property only checks and holds a value: no arithmetic, rounding, formatting or exchange. `MoneyOptions` is what `moneyOf` takes, and `TMoney` the schema of an amount that carries its currency; [OpenAPI](openapi.md) describes how both forms are documented.
+
+```ts
+import { blueprintOf, currencyDecimals, moneyOf } from "@afora/core";
+
+const Price = moneyOf({ currency: "BRL", nonNegative: true });
+
+const Order = blueprintOf((ctx) => ({
+	subtotal: Price,
+	tip: ctx.optionalOf(ctx.money({ currency: "BRL" })),
+	total: ctx.money({ currency: ["BRL", "USD"], max: 10_000_000 }),
+}));
+
+Order.safeParse({ subtotal: 1999, total: { amount: 2199, currency: "USD" } });
+// { value: { subtotal: 1999, total: { amount: 2199, currency: "USD" } } }
+Order.safeParse({ subtotal: 19.99, total: { amount: 2199, currency: "EUR" } })
+	.issues;
+// [{ path: ["subtotal"], code: "invalid_value", message: "must be integer", ... },
+//  { path: ["total", "currency"], code: "invalid_value", ... }]
+currencyDecimals("JPY"); // 0
+```
+
 ### Enumerations
 
 `ctx.enumOf(values, options?)` (`enumOf`) holds one of a list of strings or numbers, typed as their union; its demo is the first value unless `default` names another, and `{ optional: true }` accepts `undefined`. [Properties](properties.md) has the details.

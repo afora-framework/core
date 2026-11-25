@@ -1,5 +1,5 @@
 /**
- * Shared TypeScript program plumbing for the API checks: the four public
+ * Shared TypeScript program plumbing for the API checks: the five public
  * entries of the built package, their exports with their JSDoc, and a
  * type-checker for many virtual modules at once (documentation examples and
  * code blocks of the docs). Uses `typescript-language-service` (TS 5.9): the
@@ -28,6 +28,12 @@ export const entryPoints: EntryPoint[] = [
 		tier: "stable",
 		dts: join(root, "dist/index.d.ts"),
 		src: join(root, "src/index.ts"),
+	},
+	{
+		specifier: "@afora/core/client",
+		tier: "stable",
+		dts: join(root, "dist/client.d.ts"),
+		src: join(root, "src/client.ts"),
 	},
 	{
 		specifier: "@afora/core/adapters",

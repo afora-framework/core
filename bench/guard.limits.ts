@@ -29,3 +29,16 @@ export const ENTITY_LIMITS: Record<string, { limit: number; why: string }> = {
 		why: "A small object that fails: the cost is the exception-free rejection both pay, with the entity's four extra keys (about 1.6x).",
 	},
 };
+
+/**
+ * The most a bundle of `entries/` may weigh, gzipped, in bytes (`size.ts`
+ * bundles it minified, by itself). A limit is where the bundle is, plus room
+ * for small changes; it is raised only for code that is wanted, with the
+ * reason written next to it.
+ */
+export const SIZE_LIMITS: Record<string, { gzip: number; why: string }> = {
+	"afora-client": {
+		gzip: 62_000,
+		why: "`@afora/core/client` validating the flat object: 209 kB minified and 60.0 kB gzipped (November 2026), about 154 kB of it TypeBox and its formats; the limit is that plus 2 kB. A module only a server runs (records, entities, repositories, use cases, outputs) is kept out by `src/client.test.ts`, not by this limit.",
+	},
+};

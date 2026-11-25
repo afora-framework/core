@@ -55,10 +55,14 @@ a file of your own.
   \`{ "file": { "types": ["image/png", "image/*"], "maxBytes": 5000000 } }\`; \`optional\` and \`list\` apply. Only the
   input of a post, put or patch route (or a delete with body: true) can hold one, at the top level. An entity cannot
   hold a file (store its URL instead), and a file cannot be sensitive or unique.
+- Money (ctx.money), an integer of minor units (cents), never a float: \`{ "money": { "currency": "BRL" } }\` holds the
+  integer alone (1999 is R$ 19.99); \`{ "money": { "currency": ["BRL", "USD"] } }\` or \`{ "money": {} }\` (any ISO 4217 code)
+  holds \`{ "amount": 1999, "currency": "BRL" }\`. \`min\` and \`max\` are in minor units, \`nonNegative\` rejects below zero;
+  \`optional\` and \`list\` apply.
 - One of several objects (variantOf): \`{ "variant": { "key": "type", "of": { "click": "Click", "visit": { "fields": { "path": "string" } } } } }\`.
   Each value of \`of\` is a declared blueprint, record or entity, or fields in place; none declares \`key\`, which the field
   adds with the name of the variant (\`{ "type": "click", ... }\`). \`optional\` and \`list\` apply; an entity among them needs a relation.
-- A property of your own: \`{ "base": "integer", "with": {...} }\`, \`{ "enum": [...] }\`, \`{ "file": {...} }\`, or
+- A property of your own: \`{ "base": "integer", "with": {...} }\`, \`{ "enum": [...] }\`, \`{ "file": {...} }\`, \`{ "money": {...} }\`, or
   \`{ "opaque": true, "import": "./my-property" }\` for a hand-written one (imported as it is).
 
 ## Rules the validator enforces

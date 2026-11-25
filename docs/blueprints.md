@@ -28,6 +28,8 @@ const Customer = User.join(Timestamps); // every field of both
 
 `join` takes any number of blueprints (`A.join(B, C)` is `A.join(B).join(C)`); a later one replaces a key of an earlier one, like plugins do. `listOf` takes a property, a blueprint or another list, and `optionalOf` makes it an optional key.
 
+What `listOf` and `variantOf` return (and their `optionalOf` forms) parse on their own: `safeParse(value)` gives `{ value }` or `{ issues }`, the same as `~standard.validate`, with issue paths that start at the index (`[1, "id"]`) for a list. There is no throwing `parse`. Code that takes anything that parses, a blueprint, a list, a variant or a record class, can type it as `AnyParsable`, which needs only `safeParse` and `~standard`.
+
 ## The type of a value
 
 Every blueprint is a [Standard Schema](standard-schema.md), so `StandardSchemaV1.InferOutput` gives the type of the value it parses, and `StandardSchemaV1.InferInput` the type of what it accepts:
@@ -123,6 +125,21 @@ const Post = contentBlueprintOf((ctx) => ({
 	body: ctx.body,
 }));
 ```
+
+### In a client
+
+An interface that validates a form needs blueprints and parsing, not records, repositories or use cases. `@afora/core/client` exports `blueprintOf`, `listOf`, `optionalOf`, `variantOf`, `enumOf`, `propertyOf`, `exceptionOf`, `ExceptionLayers` and the Standard Schema and parse types, and reaches none of the modules only a server runs:
+
+```ts
+import { blueprintOf, listOf } from "@afora/core/client";
+
+const Tag = blueprintOf((ctx) => ({ label: ctx.string }));
+const Signup = blueprintOf((ctx) => ({ email: ctx.email, tags: listOf(Tag) }));
+
+Signup.safeParse({ email: "ADA@example.com", tags: [] }).issues; // undefined
+```
+
+They are the objects of `@afora/core`: a blueprint made from either entry is a field, a list item or a record of the other, so a project can declare its blueprints once and import them from the API and the interface. See [API tiers](api-tiers.md#the-tiers).
 
 Blueprints, lists, variants and records are told apart by a brand, not by their shape: each carries the `Kind` symbol (exported by `@afora/core/adapters`, for code that walks fields), so a plain object with a `schema` key is never taken for a blueprint.
 

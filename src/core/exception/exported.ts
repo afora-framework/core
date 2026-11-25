@@ -13,23 +13,15 @@ import * as Repository from "../repository/exceptions";
 import * as Tracing from "../tracing/exceptions";
 import * as UseCaseSteps from "../use-case/exceptions";
 import * as UseCase from "../use-case/use-case";
-import { isDeclaredException } from "./exception";
+import { isMarkedExported, markExported } from "./exported-mark";
 
 /**
  * The exceptions the package exports, to tell a use case's `errors` that need
  * no registration. The core lists the modules that declare them; modules the
- * core cannot import (`std`) add theirs with `markExported`, so the core
- * never reaches into `std`.
+ * core cannot import (`std`) add theirs with `markExported` (`exported-mark.ts`), so the core
+ * never reaches into `std`, and those modules do not reach the ones listed here.
  */
-const exported = new WeakSet<object>();
 let collected = false;
-
-/** Counts `Exception` classes the package exports from a module the core cannot import. */
-export function markExported(...classes: readonly unknown[]): void {
-	for (const Declared of classes) {
-		if (isDeclaredException(Declared)) exported.add(Declared);
-	}
-}
 
 /** Whether `Declared` is an exception class exported by the package. */
 export function isExportedException(Declared: unknown): boolean {
@@ -55,5 +47,5 @@ export function isExportedException(Declared: unknown): boolean {
 			markExported(...Object.values(module));
 		}
 	}
-	return typeof Declared === "function" && exported.has(Declared);
+	return isMarkedExported(Declared);
 }

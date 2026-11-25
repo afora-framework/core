@@ -12,6 +12,7 @@ import {
 	inMemoryProvider,
 	Key,
 	listOf,
+	moneyOf,
 	optionalOf,
 	propertyOf,
 	recordOf,
@@ -338,6 +339,81 @@ describe("round trip: spec -> generate -> import -> extractSpec", () => {
 });
 
 describe("hand-written application -> extractSpec -> generate", () => {
+	test("keeps amounts of money (ctx.money, moneyOf)", async () => {
+		const Price = moneyOf({ currency: "BRL", nonNegative: true });
+		const Fee = optionalOf(moneyOf({ currency: ["BRL", "USD"], max: 10_000 }));
+		const Order = blueprintOf((ctx) => ({
+			price: Price,
+			fee: Fee,
+			total: ctx.money(),
+			tip: ctx.money({ currency: "JPY", min: 0, max: 5000, name: "tip" }),
+			parts: ctx.listOf(ctx.money({ currency: ["EUR"] })),
+			refund: ctx.optionalOf(ctx.money({ currency: "BHD" })),
+		}));
+		const App = applicationOf({
+			name: "money",
+			properties: { Price, Fee },
+			blueprints: { Order },
+			provider: inMemoryProvider(),
+		});
+		const spec = extractSpec(App);
+		expect(validateSpec(spec)).toEqual([]);
+		expect(spec.properties).toEqual({
+			Price: { money: { currency: "BRL", nonNegative: true } },
+			Fee: { money: { currency: ["BRL", "USD"], max: 10_000 }, optional: true },
+		});
+		expect(spec.blueprints?.Order?.fields).toEqual({
+			price: "Price",
+			fee: "Fee",
+			total: { money: {} },
+			tip: { money: { currency: "JPY", min: 0, max: 5000, name: "tip" } },
+			parts: { money: { currency: ["EUR"] }, list: true },
+			refund: { money: { currency: "BHD" }, optional: true },
+		});
+		const dir = await generated({ ".": { spec } });
+		const source = await Bun.file(join(dir, "src/domain/blueprints.ts")).text();
+		expect(source).toContain('ctx.money({ currency: "JPY"');
+		expect(source).toContain("ctx.money()");
+		const domain = await import(join(dir, "src/domain/index.ts"));
+		expect(toOpenAPI({ Order: domain.Order })).toEqual(toOpenAPI({ Order }));
+		expect(normalizeSpec(extractSpec(domain.App))).toEqual(normalizeSpec(spec));
+	});
+
+	test("rejects money options that moneyOf rejects", () => {
+		const issues = validateSpec({
+			version: 1,
+			blueprints: {
+				Order: {
+					fields: {
+						a: { money: { currency: "brl" } },
+						b: { money: { currency: ["BRL", "BRL"] } },
+						c: { money: { min: 1.5 } },
+						d: { money: { min: 10, max: 1 } },
+						e: { money: { cents: true } },
+						f: { money: "BRL" },
+					},
+				},
+			},
+			environments: {
+				Settings: {
+					fields: {
+						limit: { money: { currency: "BRL" } },
+						total: { money: {} },
+					},
+				},
+			},
+		} as unknown as Spec);
+		expect(issues.map((found) => [found.path.join("."), found.code])).toEqual([
+			["blueprints.Order.fields.a.money.currency", "invalid_money"],
+			["blueprints.Order.fields.b.money.currency", "invalid_money"],
+			["blueprints.Order.fields.c.money.min", "invalid_money"],
+			["blueprints.Order.fields.d.money", "invalid_money"],
+			["blueprints.Order.fields.e.money.cents", "unknown_key"],
+			["blueprints.Order.fields.f.money", "invalid_money"],
+			["environments.Settings.fields.total", "invalid_environment_field"],
+		]);
+	});
+
 	test("keeps file fields and file properties (fileOf)", async () => {
 		const Avatar = fileOf({ types: ["image/png", "image/*"], maxBytes: 1000 });
 		const Upload = blueprintOf((ctx) => ({

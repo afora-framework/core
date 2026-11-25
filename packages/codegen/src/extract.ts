@@ -245,6 +245,29 @@ class Extraction {
 						...(name === undefined ? {} : { name }),
 					};
 				}
+				if (lineage.factory === "moneyOf") {
+					const { currency, min, max, nonNegative, name } = lineage.args as {
+						currency?: string | readonly string[];
+						min?: number;
+						max?: number;
+						nonNegative?: boolean;
+						name?: string;
+					};
+					return {
+						kind: "money",
+						optional: false,
+						...(currency === undefined
+							? {}
+							: {
+									currency:
+										typeof currency === "string" ? currency : [...currency],
+								}),
+						...(min === undefined ? {} : { min }),
+						...(max === undefined ? {} : { max }),
+						...(nonNegative === true ? { nonNegative: true } : {}),
+						...(name === undefined ? {} : { name }),
+					};
+				}
 				if (lineage.factory !== "enumOf") return this.opaqueFor(property);
 				const {
 					values,
@@ -388,6 +411,12 @@ class Extraction {
 				},
 				...(field.optional ? { optional: true } : {}),
 			};
+		}
+		if (field.kind === "money") {
+			const { money } = canonicalField({ ...field, optional: false }) as {
+				money: Json;
+			};
+			return { money, ...(field.optional ? { optional: true } : {}) };
 		}
 		return {
 			opaque: true,

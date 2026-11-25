@@ -22,7 +22,7 @@
  * - `yaml`: parsed.
  *
  * Resolution of ts imports:
- * - `@afora/core`, `/adapters`, `/experimental` and `/testing` resolve to
+ * - `@afora/core`, `/client`, `/adapters`, `/experimental` and `/testing` resolve to
  *   `src/`, and `@afora/<pkg>` to `packages/<pkg>/src/index.ts`.
  * - Other bare imports resolve from the root `node_modules`, then from each
  *   `packages/* /node_modules` and from `examples/interop/node_modules`, so a

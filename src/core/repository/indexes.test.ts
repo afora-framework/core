@@ -11,6 +11,7 @@ import {
 	providerOf,
 	RepositoryOf,
 	type RepositoryPlan,
+	RepositoryUniqueViolation,
 	RepositoryUsedOutsideApplication,
 	repositoryOf,
 	useCaseOf,
@@ -198,8 +199,8 @@ describe("declared indexes", () => {
 		expect(reason(declare({ a: { where: ["nope"] } }))).toBe(
 			'The index "a" names "nope", which is not a key of Entry.',
 		);
-		expect(reason(declare({ a: { where: ["secret"] } }))).toBe(
-			'The index "a" names "secret", which is sensitive and cannot be indexed.',
+		expect(reason(declare({ a: { where: ["type"], orderBy: "secret" } }))).toBe(
+			'The index "a" orders by "secret", which is sensitive and cannot be ordered.',
 		);
 		expect(reason(declare({ a: { where: ["type"], orderBy: "meta" } }))).toBe(
 			'The index "a" orders by "meta", which is not scalar.',
@@ -234,6 +235,159 @@ describe("declared indexes", () => {
 		expect(reason(declare(undefined, { scans: "never" }))).toBe(
 			'Expected scans to be "allow", "warn" or "reject".',
 		);
+	});
+});
+
+describe("an index on a sensitive key", () => {
+	const SECRET = "123.456.789-00";
+	const INDEXES = {
+		bySecret: { where: ["secret"] },
+		byTypeSecret: { where: ["type", "secret"] },
+	} as const;
+	const everything = (error: unknown) => {
+		const { message, details, trace } = error as {
+			message: string;
+			details: unknown;
+			trace: unknown;
+		};
+		return JSON.stringify({ message, details, trace, error });
+	};
+
+	test("is accepted for where and refused for orderBy", () => {
+		expect(() =>
+			repositoryOf({
+				entity: Entry,
+				actions: ["findMany"],
+				indexes: INDEXES,
+			}),
+		).not.toThrow();
+		expect(() =>
+			repositoryOf({
+				entity: Entry,
+				actions: ["findMany"],
+				indexes: { a: { where: ["type"], orderBy: "secret" } },
+			}),
+		).toThrow(InvalidRepositoryDeclaration);
+	});
+
+	test("serves an equality lookup and leaks the value nowhere", async () => {
+		const { provider, queries } = recording();
+		const memory = memoryLogProvider();
+		const Entries = repositoryOf({
+			entity: Entry,
+			actions: ["create", "findMany", "findCursor", "explain"],
+			provider,
+			indexes: INDEXES,
+			scans: "warn",
+		});
+		const app = applicationOf({
+			name: "cms",
+			entities: { Entry },
+			repositories: { Entries },
+			provider,
+			log: { providers: [memory] },
+		});
+		const Repo = app.repositories.Entries;
+		const created = await Repo.create(
+			new Entry(entry({ slug: "a", secret: SECRET })),
+		);
+		expect(JSON.stringify(created)).not.toContain(SECRET);
+
+		queries.length = 0;
+		const found = await Repo.findMany({ where: { secret: SECRET } });
+		expect(found).toHaveLength(1);
+		expect(queries.at(-1)?.query?.index).toBe("bySecret");
+
+		const plan = await Repo.explain({ where: { secret: SECRET } });
+		expect(plan).toEqual({ access: "index", index: "bySecret" });
+		expect(JSON.stringify(plan)).not.toContain(SECRET);
+
+		await Repo.create(new Entry(entry({ slug: "b", secret: SECRET })));
+		const page = await Repo.findCursor({
+			where: { secret: SECRET },
+			orderBy: [{ key: "type" }],
+			limit: 1,
+		});
+		expect(page.next).toBeDefined();
+		expect(
+			Buffer.from(String(page.next), "base64url").toString(),
+		).not.toContain(SECRET);
+		expect(String(page.next)).not.toContain(SECRET);
+
+		// A scan names keys, never values: in is a scan, and it is logged.
+		await Repo.findMany({ where: { secret: { in: [SECRET, "x"] } } });
+		expect(
+			memory.entries.some((line) => line.event === "repository-scan"),
+		).toBe(true);
+		expect(JSON.stringify(memory.entries)).not.toContain(SECRET);
+	});
+
+	test("an exception names the key, not the value", async () => {
+		const Entries = repositoryOf({
+			entity: Entry,
+			actions: ["create", "findMany", "findCursor"],
+			indexes: INDEXES,
+			scans: "reject",
+		});
+		const app = applicationOf({
+			name: "cms",
+			entities: { Entry },
+			repositories: { Entries },
+			provider: inMemoryProvider(),
+		});
+		const Repo = app.repositories.Entries;
+		await Repo.create(new Entry(entry({ slug: "a", secret: SECRET })));
+		const errors = [
+			await Repo.create(new Entry(entry({ slug: "a", secret: SECRET }))).then(
+				() => undefined,
+				(error: unknown) => error,
+			),
+			await Repo.findMany({ where: { secret: { in: [SECRET] } } }).then(
+				() => undefined,
+				(error: unknown) => error,
+			),
+			await Repo.findCursor({
+				where: { secret: SECRET },
+				orderBy: [{ key: "secret" }],
+			}).then(
+				() => undefined,
+				(error: unknown) => error,
+			),
+		];
+		for (const error of errors) {
+			expect(error).toBeInstanceOf(Error);
+			expect(everything(error)).not.toContain(SECRET);
+		}
+	});
+
+	test("a unique violation on the sensitive key names the key, not the value", async () => {
+		class Person extends entityOf(
+			blueprintOf((ctx) => ({ name: ctx.string, hash: ctx.string })),
+			{ sensitive: ["hash"], unique: ["hash"] },
+		) {}
+		const People = repositoryOf({
+			entity: Person,
+			actions: ["create", "findByHash"],
+			indexes: { byHash: { where: ["hash"] } },
+		});
+		const app = applicationOf({
+			name: "cms",
+			entities: { Person },
+			repositories: { People },
+			provider: inMemoryProvider(),
+		});
+		const Repo = app.repositories.People;
+		await Repo.create(new Person({ name: "a", hash: SECRET }));
+		expect((await Repo.findByHash(SECRET))?.name).toBe("a");
+		const error = await Repo.create(
+			new Person({ name: "b", hash: SECRET }),
+		).then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		expect(error).toBeInstanceOf(RepositoryUniqueViolation);
+		expect((error as { details: unknown }).details).toEqual({ key: "hash" });
+		expect(everything(error)).not.toContain(SECRET);
 	});
 });
 

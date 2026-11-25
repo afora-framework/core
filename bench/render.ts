@@ -1,5 +1,5 @@
 // Turns a report (results/latest.json) into RESULTS.md.
-import { GUARDED, LIBRARIES, REFERENCE } from "./contenders.ts";
+import { BUNDLES, GUARDED, LIBRARIES, REFERENCE } from "./contenders.ts";
 import { GUARD_DEFAULT, GUARD_LIMITS } from "./guard.limits.ts";
 import type { Row, RuntimeReport, Table } from "./harness.ts";
 import type { Footprint } from "./size.ts";
@@ -121,6 +121,9 @@ export function renderResults(report: Report): string {
 	}
 
 	if (report.footprints.length > 0) {
+		const hasClient = report.footprints.some(
+			(row) => row.library === "afora-client",
+		);
 		out.push(
 			"## Bundle size and cold start",
 			"",
@@ -132,10 +135,10 @@ export function renderResults(report: Report): string {
 				.sort((a, b) => a.gzip - b.gzip)
 				.map(
 					(row) =>
-						`| ${LIBRARIES[row.library]?.label ?? row.library} | ${fmtKb(row.min)} | ${fmtKb(row.gzip)} | ${runtimes.map((runtime) => `${(row.cold[runtime] ?? 0).toFixed(1)} ms`).join(" | ")} |`,
+						`| ${BUNDLES[row.library]?.label ?? row.library} | ${fmtKb(row.min)} | ${fmtKb(row.gzip)} | ${runtimes.map((runtime) => `${(row.cold[runtime] ?? 0).toFixed(1)} ms`).join(" | ")} |`,
 				),
 			"",
-			"afora is a framework with one entry point: its bundle carries TypeBox and the code of records, entities, repositories and use cases, whatever the file uses. Typia is small because its validator is generated at build time; Valibot because it is made to be tree-shaken.",
+			`Most of afora's bundle is TypeBox, its schemas and its formats, and the properties of the Std catalog; a bundler that drops unused modules leaves out records, entities, repositories and use cases. ${hasClient ? "afora (client) is the same file importing from `@afora/core/client`, the entry that reaches none of them (`src/client.test.ts`); `bun run bench:guard` holds its size to `SIZE_LIMITS` in `bench/guard.limits.ts`. " : "`@afora/core/client` is the entry that reaches none of them (`src/client.test.ts`); `bun run bench:guard` holds its size to `SIZE_LIMITS` in `bench/guard.limits.ts`. "}Typia is small because its validator is generated at build time; Valibot because it is made to be tree-shaken.`,
 			"",
 		);
 	}

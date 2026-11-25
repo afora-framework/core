@@ -5,6 +5,7 @@ import { FileProperty, fileOf } from "./properties/file";
 import { SchemaProperty } from "./properties/headless";
 import { Id, Slug } from "./properties/identity";
 import { JsonProperty, jsonOf } from "./properties/json";
+import { moneyOf } from "./properties/money";
 import { Password } from "./properties/password";
 import {
 	BooleanProperty,
@@ -23,7 +24,8 @@ import {
 
 /**
  * The standard properties, for blueprints to pick from, and the factories
- * `enumOf`, `jsonOf` and `fileOf`, as `ctx.enumOf(["draft", "published"])`.
+ * `enumOf`, `jsonOf`, `fileOf` and `money` (`moneyOf`), as
+ * `ctx.enumOf(["draft", "published"])` or `ctx.money({ currency: "BRL" })`.
  */
 export const Std = blueprintPluginOf(
 	"std",
@@ -49,5 +51,5 @@ export const Std = blueprintPluginOf(
 		json: JsonProperty,
 		file: FileProperty,
 	},
-	{ enumOf, jsonOf, fileOf },
+	{ enumOf, jsonOf, fileOf, money: moneyOf },
 );

@@ -62,6 +62,43 @@ const FileOptions = Type.Object(
 	},
 );
 
+/** An ISO 4217 code, as `moneyOf` checks it: three upper-case letters. */
+const Currency = Type.String({
+	pattern: "^[A-Z]{3}$",
+	description: 'An ISO 4217 code, "BRL".',
+});
+
+/** What an amount of money accepts, as `moneyOf` takes it. */
+const MoneyOptions = Type.Object(
+	{
+		currency: Type.Optional(
+			Type.Union([
+				Currency,
+				Type.Array(Currency, { minItems: 1, uniqueItems: true }),
+			]),
+		),
+		min: Type.Optional(
+			Type.Integer({
+				description: "The smallest amount, in minor units (cents).",
+			}),
+		),
+		max: Type.Optional(
+			Type.Integer({
+				description: "The largest amount, in minor units (cents).",
+			}),
+		),
+		nonNegative: Type.Optional(
+			Type.Boolean({ description: "Rejects an amount below zero." }),
+		),
+		name: Type.Optional(Type.String({ minLength: 1 })),
+	},
+	{
+		additionalProperties: false,
+		description:
+			'An amount of money (ctx.money), an integer of minor units: with one "currency" the value is the integer alone; with a list of currencies, or none (any ISO 4217 code), it is { amount, currency }.',
+	},
+);
+
 /** `fill` and `renamedFrom` of a type or enum field (not a list). */
 const Evolution = {
 	fill: Type.Optional(
@@ -117,6 +154,10 @@ export const fieldDefinition = Type.Union(
 		),
 		Type.Object(
 			{ file: FileOptions, ...Modifiers },
+			{ additionalProperties: false },
+		),
+		Type.Object(
+			{ money: MoneyOptions, ...Modifiers },
 			{ additionalProperties: false },
 		),
 		Type.Object(
@@ -207,6 +248,10 @@ const Property = Type.Union(
 			{ additionalProperties: false },
 		),
 		Type.Object(
+			{ money: MoneyOptions, optional: Type.Optional(Type.Boolean()) },
+			{ additionalProperties: false },
+		),
+		Type.Object(
 			{
 				opaque: Type.Literal(true),
 				ref: Type.Optional(
@@ -224,7 +269,7 @@ const Property = Type.Union(
 	],
 	{
 		description:
-			"A custom property: `base` + `with` (a refined Std property), an `enum`, a `file`, or an `opaque` import of a hand-written property.",
+			"A custom property: `base` + `with` (a refined Std property), an `enum`, a `file`, an amount of `money`, or an `opaque` import of a hand-written property.",
 	},
 );
 
@@ -582,7 +627,7 @@ const Exception = Type.Object(
 	{
 		layer: Type.String({
 			description:
-				"One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output (see afora_catalog).",
+				"One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output, interface (see afora_catalog).",
 		}),
 		message: Type.Optional(
 			Type.String({ description: 'The message. "<Name>." when omitted.' }),

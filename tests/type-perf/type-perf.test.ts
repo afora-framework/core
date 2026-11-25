@@ -29,22 +29,30 @@ if (!existsSync(join(import.meta.dir, "../../dist/index.d.ts")))
  * cost 8% more where it was). Measured plus 1%.
  */
 const CEILING: Record<string, number> = {
-	"bare blueprint": 35_900,
+	// Raised from 35_900 with `ctx.money` (#196): one more factory of the Std
+	// context costs about 30 instantiations (it was 6 under). Measured plus 1%.
+	"bare blueprint": 36_400,
 	// Raised from 46_700 and 55_200 with `ctx.file` and `ctx.fileOf` (#118):
 	// two more members of the Std context cost about 300 instantiations
 	// (0.6%) in every case; these two had less room. Measured plus 1%.
 	"quick start": 47_200,
 	entity: 55_800,
-	repository: 56_100,
+	// Raised from 56_100 and 40_200 with `ctx.money` (#196): one more factory
+	// of the Std context costs about 30 instantiations in every case (it takes
+	// no `optional` option, which cost 500 more); these two had less room.
+	// Measured plus 1%.
+	repository: 56_700,
 	"use case": 56_600,
-	"use case with a service": 40_200,
+	"use case with a service": 40_700,
 	queries: 53_700,
 	"steps use case": 55_800,
 	// Raised from 64_900 with the check of `return` against the response
 	// (about 1,900 instantiations, 3%, only with `strictSteps`). Measured plus 1%.
 	"strict steps use case": 66_900,
 	"command and output": 66_700,
-	"named providers": 52_700,
+	// Raised from 52_700: already over on dev (52720 measured); `ctx.money` (#196)
+	// adds about 30 more. Measured plus 1%.
+	"named providers": 53_300,
 	// 2% under the target: the next kind of field has to be paid for elsewhere.
 	"standard use cases": 99_000,
 };

@@ -556,6 +556,25 @@ describe("validation", () => {
 		});
 	}
 
+	test("follows the keys of an amount of money that carries its currency", () => {
+		const withMoney = (args: string[]) =>
+			codes(
+				edit((c) => {
+					c.useCases.Register.input.fields.total = { money: {} };
+					c.useCases.Register.input.fields.price = {
+						money: { currency: "BRL" },
+					};
+					steps(c)[0].args = args;
+				}),
+			).filter((code) => code.startsWith("unknown_key"));
+		expect(withMoney(["$input.total.amount"])).toEqual([]);
+		expect(withMoney(["$input.total.currency"])).toEqual([]);
+		expect(withMoney(["$input.price"])).toEqual([]);
+		const at = "unknown_key@useCases.Register.implementation.steps.0.args";
+		expect(withMoney(["$input.total.cents"])).toEqual([at]);
+		expect(withMoney(["$input.price.amount"])).toEqual([at]);
+	});
+
 	test("forEachPage is not a step, with the reason", () => {
 		const issues = validateSpec(
 			edit((c) => (steps(c)[0].find = "users.forEachPage")),

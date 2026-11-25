@@ -1078,6 +1078,13 @@ function missingInField(
 		return segment;
 	}
 	if (field.kind === "enum" || field.kind === "file") return segment;
+	if (field.kind === "money") {
+		// An amount in one currency is an integer; any other is { amount, currency }.
+		return typeof field.currency !== "string" &&
+			(segment === "amount" || segment === "currency")
+			? rest[0]
+			: segment;
+	}
 	const decl = scope.decls.get(field.type);
 	if (decl) {
 		const fields = fieldsOfDecl(decl);

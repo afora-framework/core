@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 566 exports.
+Tier: stable. 573 exports.
 
 ### Access
 
@@ -93,6 +93,15 @@ Any record made optional by `optionalOf`.
 *type* · tier: stable · `import type { AnyOutput } from "@afora/core"`
 
 Any output.
+
+### AnyParsable
+
+*interface* · tier: stable · `import type { AnyParsable } from "@afora/core"`
+
+Anything that parses a value the same two ways: a blueprint, a list, a
+variant (optional or not), or a record class. `safeParse` and
+`~standard.validate` give the same result, never throw for an invalid value,
+and report issue paths from the value itself (a list starts at the index).
 
 ### AnyPropertyConstructor
 
@@ -1367,6 +1376,14 @@ A schema given to `jsonOf` or `checkJsonSchema` that is not a JSON Schema (draft
 
 `logProviderOf`, `logFrom` or the `log` of an application got something it cannot use.
 
+### InvalidMoneyOptions
+
+*const* · tier: stable · `import { InvalidMoneyOptions } from "@afora/core"`
+
+Options of `moneyOf` that are not valid: a currency that is not an ISO
+4217 code, bounds that are not integers of minor units, or bounds that no
+amount meets.
+
 ### InvalidOpenAPIModel
 
 *const* · tier: stable · `import { InvalidOpenAPIModel } from "@afora/core"`
@@ -1688,6 +1705,19 @@ What the type of an argument shows when the entity lacks a record plugin.
 *interface* · tier: stable · `import type { MissingRepositoryAction } from "@afora/core"`
 
 What the type of an argument shows when the repository lacks an action.
+
+### MoneyOptions
+
+*interface* · tier: stable · `import type { MoneyOptions } from "@afora/core"`
+
+What `moneyOf` takes. An optional amount is `optionalOf(moneyOf(...))`
+(`ctx.optionalOf(ctx.money(...))` in a blueprint).
+
+### MoneyValue
+
+*interface* · tier: stable · `import type { MoneyValue } from "@afora/core"`
+
+An amount of money that carries its currency, as `moneyOf()` holds it.
 
 ### NumberConstraints
 
@@ -2693,7 +2723,8 @@ done.
 *const* · tier: stable · `import { Std } from "@afora/core"`
 
 The standard properties, for blueprints to pick from, and the factories
-`enumOf`, `jsonOf` and `fileOf`, as `ctx.enumOf(["draft", "published"])`.
+`enumOf`, `jsonOf`, `fileOf` and `money` (`moneyOf`), as
+`ctx.enumOf(["draft", "published"])` or `ctx.money({ currency: "BRL" })`.
 
 ### StdCreateOptions
 
@@ -2910,6 +2941,12 @@ The hasher in use cannot verify without waiting; use `verify` instead.
 *type* · tier: stable · `import type { TFile } from "@afora/core"`
 
 The schema of a file: `format: "binary"`, which OpenAPI documents as a binary string.
+
+### TMoney
+
+*type* · tier: stable · `import type { TMoney } from "@afora/core"`
+
+The schema of an amount that carries its currency.
 
 ### TagMaker
 
@@ -3477,6 +3514,23 @@ process; `withRuntime` and the `runtime` of an application come first.
 
 A readable line on the console, by level: for local development.
 
+### currencyDecimals
+
+*function* · tier: stable · `import { currencyDecimals } from "@afora/core"`
+
+The decimals of `currency` in ISO 4217, what its minor unit is: 0 for
+`"JPY"` (an amount of 500 is ¥500), 3 for `"BHD"`, 2 for `"BRL"` and
+any code not among the few with another number.
+
+**Example**
+
+```ts
+import { currencyDecimals } from "@afora/core";
+
+currencyDecimals("BRL"); // 2: an amount of 1999 is 19.99
+currencyDecimals("JPY"); // 0
+```
+
 ### entityBuilderOf
 
 *function* · tier: stable · `import { entityBuilderOf } from "@afora/core"`
@@ -3877,6 +3931,37 @@ Keeps every line in `entries`, for tests.
 *function* · tier: stable · `import { memoryTracer } from "@afora/core"`
 
 Keeps every span in `spans`, with its parent, for tests.
+
+### moneyOf
+
+*function* · tier: stable · `import { moneyOf } from "@afora/core"`
+
+An amount of money, held as an integer of minor units (cents for `"BRL"`,
+yen for `"JPY"`), so no floating point ever rounds it. With one
+`currency`, the value is the integer alone (`1999` for R$ 19.99); with a
+list of currencies, or none, it is `{ amount, currency }`, where
+`currency` is one of the list, or any ISO 4217 code by its form (three
+upper-case letters). `min` and `max` bound the amount, in minor units,
+and `nonNegative` rejects one below zero; an amount is always a safe
+integer. `optionalOf(moneyOf(...))` is an optional amount. Options that
+are not valid throw `InvalidMoneyOptions` when the property is declared.
+`currencyDecimals` gives the decimals of a currency.
+No arithmetic, rounding or exchange: the property checks a value.
+
+**Example**
+
+```ts
+import { blueprintOf, moneyOf } from "@afora/core";
+
+const Price = moneyOf({ currency: "BRL", nonNegative: true });
+new Price(1999).value; // 1999, R$ 19.99
+
+const Order = blueprintOf((ctx) => ({
+	total: ctx.money({ currency: ["BRL", "USD"] }),
+}));
+Order.safeParse({ total: { amount: 1999, currency: "USD" } });
+// { value: { total: { amount: 1999, currency: "USD" } } }
+```
 
 ### openapi
 
@@ -4424,6 +4509,181 @@ const logged = wrapProvider(inMemoryProvider(), {
   },
 });
 ```
+
+## @afora/core/client
+
+Tier: stable. 13 exports.
+
+### AnyParsable
+
+*interface* · tier: stable · `import type { AnyParsable } from "@afora/core/client"`
+
+Anything that parses a value the same two ways: a blueprint, a list, a
+variant (optional or not), or a record class. `safeParse` and
+`~standard.validate` give the same result, never throw for an invalid value,
+and report issue paths from the value itself (a list starts at the index).
+
+### ExceptionLayers
+
+*enum* · tier: stable · `import { ExceptionLayers } from "@afora/core/client"`
+
+The layer of the application an exception was raised or passed through.
+
+### Issue
+
+*interface* · tier: stable · `import type { Issue } from "@afora/core/client"`
+
+One reason a value was rejected, as a Standard Schema issue: `path` is where
+it is, e.g. `["addresses", 0, "zip"]`, empty for the value itself.
+
+### IssueCode
+
+*type* · tier: stable · `import type { IssueCode } from "@afora/core/client"`
+
+Why a value was rejected.
+
+### ParseResult
+
+*type* · tier: stable · `import type { ParseResult } from "@afora/core/client"`
+
+The result of a parse, in the shape of a Standard Schema result: the value,
+handled by its fields, or every issue found, never both.
+
+### StandardSchemaV1
+
+*interface* · tier: stable · `import type { StandardSchemaV1 } from "@afora/core/client"`
+
+The Standard Schema interface (https://standardschema.dev), version 1,
+copied from `@standard-schema/spec` as the spec recommends, so afora
+fields work with any library that accepts a Standard Schema (tRPC, Hono,
+TanStack Form...) without a dependency.
+
+### blueprintOf
+
+*const* · tier: stable · `import { blueprintOf } from "@afora/core/client"`
+
+Builds a blueprint from the standard properties, e.g.
+`blueprintOf((ctx) => ({ name: ctx.string }))`, and from `sources`, plugins
+or blueprints, given before the definition, which can replace any `Std` key.
+
+**Throws** {
+
+**Example**
+
+```ts
+import { blueprintOf } from "@afora/core";
+
+const Signup = blueprintOf((ctx) => ({
+	name: ctx.text,
+	email: ctx.email, // trimmed and lowercased
+	tags: ctx.listOf(ctx.string, { maxItems: 5 }),
+	nickname: ctx.optional.string,
+}));
+
+const parsed = Signup.safeParse({
+	name: "Ana",
+	email: " ANA@example.com ",
+	tags: [],
+});
+if (!parsed.issues) parsed.value.email; // "ana@example.com"
+```
+
+### enumOf
+
+*function* · tier: stable · `import { enumOf } from "@afora/core/client"`
+
+A property holding one of `values`, e.g.
+`enumOf(["draft", "published"])`. Its demo value is the first one unless
+`default` says otherwise.
+
+### exceptionOf
+
+*function* · tier: stable · `import { exceptionOf } from "@afora/core/client"`
+
+Declares an exception of `layer`, e.g.
+`throw new PropertyRequired({ source: "email" })`. Its `details` are typed
+by the parameter of `message`, when it is a function.
+
+**Example**
+
+```ts
+import { ExceptionLayers, exceptionOf } from "@afora/core";
+
+const UserNotFound = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "UserNotFound",
+	message: ({ id }: { id: string }) => `There is no user ${id}.`,
+});
+
+const error = new UserNotFound({ source: "FindUser", details: { id: "42" } });
+error.message; // "There is no user 42."
+error.layer; // ExceptionLayers.UseCase
+```
+
+### listOf
+
+*function* · tier: stable · `import { listOf } from "@afora/core/client"`
+
+A field holding an array of `item`, e.g. `listOf(Address)` or
+`listOf(ctx.string, { minItems: 1 })`.
+
+### optionalOf
+
+*function* · tier: stable · `import { optionalOf } from "@afora/core/client"`
+
+The version of `Property` that accepts `undefined`. Returns `Property` itself
+when it is already optional, and the same class for the same `Property`.
+The version of `blueprint` that, as a field of another blueprint, accepts
+`undefined`. Returns `blueprint` itself when it is already optional.
+The version of `list` that, as a field of a blueprint, accepts `undefined`.
+The version of `variant` that, as a field of a blueprint, accepts `undefined`.
+The version of `record` that, as a field of a blueprint, accepts `undefined`
+or an instance of `record`. Returns `record` itself when it is already optional.
+The version of any blueprint field that accepts `undefined`.
+
+### propertyOf
+
+*function* · tier: stable · `import { propertyOf } from "@afora/core/client"`
+
+Declares a property: a class that holds one value, run through
+`preHandle`, the validation against the TypeBox `schema` and
+`afterHandle`. `optional`, `sensitive` and `unique` flag it for the
+blueprints and records that hold it, and `default` is its `demo()` value.
+Extend the class to add behavior, or narrow it with `.with(options)`. A
+value its schema rejects makes the constructor throw
+{@link InvalidPropertyValue }, and `undefined` for a required one
+{@link PropertyRequired }.
+
+**Example**
+
+```ts
+import { propertyOf } from "@afora/core";
+import { Type } from "typebox";
+
+const Name = propertyOf({
+	name: "name",
+	schema: Type.String({ minLength: 3 }),
+	preHandle: (value) => value.trim(),
+	default: "Jane", // used by Name.demo()
+});
+
+new Name("  Alice ").value; // "Alice"
+Name.demo().value; // "Jane"
+// new Name("a") throws InvalidPropertyValue
+```
+
+### variantOf
+
+*function* · tier: stable · `import { variantOf } from "@afora/core/client"`
+
+A field holding one of several objects, told apart by the value of `key`:
+`variantOf("type", { click: Click, signup: Signup })` takes
+`{ type: "click", ...a Click }` or `{ type: "signup", ...a Signup }`. Each
+variant is a blueprint, which does not declare `key`: the field adds it,
+with the name of the variant for its value. A variant can also be a record
+class (an entity too): the value is then an instance of it, told apart by
+its class, and the key is only in what is given, in `toJSON` and in what is
+stored.
 
 ## @afora/core/adapters
 

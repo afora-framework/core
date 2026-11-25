@@ -865,6 +865,39 @@ export function providerContract(
 					).toBe((await provider.findOne(context, query))?.id);
 				}
 			});
+
+			indexed(
+				"an index on a key whose value must stay private serves its lookup and leaks nothing",
+				async () => {
+					const { provider, context: base } = await fixture();
+					// Stands for a sensitive key: the provider knows only its name.
+					const context: RepositoryContext = {
+						...base,
+						indexes: { byEmail: { where: ["email"] } },
+					};
+					const value = "private-value@example.com";
+					const data = row({ email: value });
+					await provider.insert(context, data);
+					await provider.insert(context, row());
+					const query: ProviderQuery = { where: { email: value } };
+					expect(
+						ids(
+							await provider.findMany(context, { ...query, index: "byEmail" }),
+						),
+					).toEqual([data.id]);
+					const error = await failure(
+						provider.insert(context, row({ email: value })),
+					);
+					expect(error instanceof RepositoryUniqueViolation).toBe(true);
+					const { message, details } = error as {
+						message: string;
+						details: unknown;
+					};
+					expect(
+						JSON.stringify({ message, details, error }).includes(value),
+					).toBe(false);
+				},
+			);
 		});
 
 		const withTransactions = async () => {
