@@ -420,6 +420,58 @@
 						},
 						{
 							"type": "object",
+							"required": ["money"],
+							"properties": {
+								"money": {
+									"type": "object",
+									"properties": {
+										"currency": {
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[A-Z]{3}$",
+													"description": "An ISO 4217 code, \"BRL\"."
+												},
+												{
+													"type": "array",
+													"items": {
+														"type": "string",
+														"pattern": "^[A-Z]{3}$",
+														"description": "An ISO 4217 code, \"BRL\"."
+													},
+													"minItems": 1,
+													"uniqueItems": true
+												}
+											]
+										},
+										"min": {
+											"type": "integer",
+											"description": "The smallest amount, in minor units (cents)."
+										},
+										"max": {
+											"type": "integer",
+											"description": "The largest amount, in minor units (cents)."
+										},
+										"nonNegative": {
+											"type": "boolean",
+											"description": "Rejects an amount below zero."
+										},
+										"name": {
+											"type": "string",
+											"minLength": 1
+										}
+									},
+									"additionalProperties": false,
+									"description": "An amount of money (ctx.money), an integer of minor units: with one \"currency\" the value is the integer alone; with a list of currencies, or none (any ISO 4217 code), it is { amount, currency }."
+								},
+								"optional": {
+									"type": "boolean"
+								}
+							},
+							"additionalProperties": false
+						},
+						{
+							"type": "object",
 							"required": ["opaque", "import"],
 							"properties": {
 								"opaque": {
@@ -438,7 +490,7 @@
 							"additionalProperties": false
 						}
 					],
-					"description": "A custom property: `base` + `with` (a refined Std property), an `enum`, a `file`, or an `opaque` import of a hand-written property."
+					"description": "A custom property: `base` + `with` (a refined Std property), an `enum`, a `file`, an amount of `money`, or an `opaque` import of a hand-written property."
 				}
 			},
 			"additionalProperties": false,
@@ -1435,7 +1487,7 @@
 					"properties": {
 						"layer": {
 							"type": "string",
-							"description": "One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output (see afora_catalog)."
+							"description": "One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output, interface (see afora_catalog)."
 						},
 						"message": {
 							"type": "string",
@@ -2869,6 +2921,82 @@
 							},
 							"additionalProperties": false,
 							"description": "A file (fileOf), sent in a multipart/form-data body: the media types it accepts and its largest size. {} takes any file."
+						},
+						"optional": {
+							"type": "boolean",
+							"description": "The key may be absent."
+						},
+						"list": {
+							"anyOf": [
+								{
+									"type": "boolean"
+								},
+								{
+									"type": "object",
+									"properties": {
+										"minItems": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"maxItems": {
+											"type": "integer",
+											"minimum": 0
+										}
+									},
+									"additionalProperties": false,
+									"description": "Bounds of a list."
+								}
+							],
+							"description": "A list of the type (the options in `with` apply to each item). `true` or { minItems, maxItems }."
+						}
+					},
+					"additionalProperties": false
+				},
+				{
+					"type": "object",
+					"required": ["money"],
+					"properties": {
+						"money": {
+							"type": "object",
+							"properties": {
+								"currency": {
+									"anyOf": [
+										{
+											"type": "string",
+											"pattern": "^[A-Z]{3}$",
+											"description": "An ISO 4217 code, \"BRL\"."
+										},
+										{
+											"type": "array",
+											"items": {
+												"type": "string",
+												"pattern": "^[A-Z]{3}$",
+												"description": "An ISO 4217 code, \"BRL\"."
+											},
+											"minItems": 1,
+											"uniqueItems": true
+										}
+									]
+								},
+								"min": {
+									"type": "integer",
+									"description": "The smallest amount, in minor units (cents)."
+								},
+								"max": {
+									"type": "integer",
+									"description": "The largest amount, in minor units (cents)."
+								},
+								"nonNegative": {
+									"type": "boolean",
+									"description": "Rejects an amount below zero."
+								},
+								"name": {
+									"type": "string",
+									"minLength": 1
+								}
+							},
+							"additionalProperties": false,
+							"description": "An amount of money (ctx.money), an integer of minor units: with one \"currency\" the value is the integer alone; with a list of currencies, or none (any ISO 4217 code), it is { amount, currency }."
 						},
 						"optional": {
 							"type": "boolean",

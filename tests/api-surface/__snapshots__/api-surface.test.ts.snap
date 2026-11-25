@@ -804,7 +804,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export type AnyBlueprintList = IBlueprintList<any, boolean>;",
   ],
   "AnyBlueprintVariant": [
-    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; }",
+    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; safeParse(value: unknown): ParseResult<unknown>; }",
   ],
   "AnyCommand": [
     "export type AnyCommand = CommandOf<any, any, any>;",
@@ -823,6 +823,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "AnyOutput": [
     "export type AnyOutput = OutputOf<any>;",
+  ],
+  "AnyParsable": [
+    "export interface AnyParsable { readonly "~standard": StandardSchemaV1.Props<unknown, unknown>; safeParse(value: unknown): ParseResult<unknown>; }",
   ],
   "AnyPropertyConstructor": [
     "export type AnyPropertyConstructor = { new (value: any): AbstractProperty<any, any>; readonly type: IPropertyType<any, any>; safeParse(value: unknown): ParseResult<any>; readonly "~standard": StandardSchemaV1.Props<any, any>; };",
@@ -1197,7 +1200,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface ExceptionInit<Details = unknown> extends ExceptionScope { readonly name: string; readonly message: string; readonly details?: Details; readonly cause?: unknown; }",
   ],
   "ExceptionLayers": [
-    "export declare enum ExceptionLayers { Schema = "schema", Property = "property", Blueprint = "blueprint", Record = "record", Entity = "entity", UseCase = "use-case", Repository = "repository", Environment = "environment", Event = "event", Command = "command", Application = "application", Output = "output" }",
+    "export declare enum ExceptionLayers { Schema = "schema", Property = "property", Blueprint = "blueprint", Record = "record", Entity = "entity", UseCase = "use-case", Repository = "repository", Environment = "environment", Event = "event", Command = "command", Application = "application", Output = "output", Interface = "interface" }",
   ],
   "ExceptionMessage": [
     "export type ExceptionMessage<Details> = string | ((details: Details, source: string) => string);",
@@ -1245,13 +1248,13 @@ exports[`exports of the package and their declarations 1`] = `
     "export type IBlueprintFactories = Record<string, BlueprintFactory>;",
   ],
   "IBlueprintList": [
-    "export interface IBlueprintList<Item extends BlueprintField, Optional extends boolean = false> extends BlueprintListOptions { readonly [Kind]: "list"; readonly item: Item; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<ListShape<Item, "input", Optional>, ListShape<Item, "value", Optional>>; }",
+    "export interface IBlueprintList<Item extends BlueprintField, Optional extends boolean = false> extends BlueprintListOptions { readonly [Kind]: "list"; readonly item: Item; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<ListShape<Item, "input", Optional>, ListShape<Item, "value", Optional>>; safeParse(value: unknown): ParseResult<ListShape<Item, "value", Optional>>; }",
   ],
   "IBlueprintPlugin": [
     "export interface IBlueprintPlugin<Properties extends IBlueprintCollection = IBlueprintCollection, Factories extends IBlueprintFactories = IBlueprintFactories> { readonly name: string; readonly properties: Properties; readonly factories?: Factories; }",
   ],
   "IBlueprintVariant": [
-    "export interface IBlueprintVariant<Key extends string, Variants extends BlueprintVariants, Optional extends boolean = false> { readonly [Kind]: "variant"; readonly key: Key; readonly variants: Variants; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<VariantShape<Key, Variants, "input", Optional>, VariantShape<Key, Variants, "value", Optional>>; }",
+    "export interface IBlueprintVariant<Key extends string, Variants extends BlueprintVariants, Optional extends boolean = false> { readonly [Kind]: "variant"; readonly key: Key; readonly variants: Variants; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<VariantShape<Key, Variants, "input", Optional>, VariantShape<Key, Variants, "value", Optional>>; safeParse(value: unknown): ParseResult<VariantShape<Key, Variants, "value", Optional>>; }",
   ],
   "IDefineProperty": [
     "export interface IDefineProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { [State]: PropertyStates; get type(): IPropertyType<SchemaType, Value>; make(value: Value): Value; parse(value: unknown): ParseResult<Value>; }",
@@ -1397,6 +1400,9 @@ exports[`exports of the package and their declarations 1`] = `
   "InvalidLogDeclaration": [
     "InvalidLogDeclaration: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
   ],
+  "InvalidMoneyOptions": [
+    "InvalidMoneyOptions: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
   "InvalidOpenAPIModel": [
     "InvalidOpenAPIModel: import("../../index.js").DeclaredExceptionClass<{ readonly name: string; }>",
   ],
@@ -1540,6 +1546,12 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "MissingRepositoryAction": [
     "export interface MissingRepositoryAction<Action extends string> { readonly "this use case needs the repository to declare the action": Action; }",
+  ],
+  "MoneyOptions": [
+    "export interface MoneyOptions<Currencies extends string | readonly string[] = string | readonly string[]> { readonly currency?: Currencies; readonly min?: number; readonly max?: number; readonly nonNegative?: boolean; readonly name?: string; }",
+  ],
+  "MoneyValue": [
+    "export interface MoneyValue<Currency extends string = string> { readonly amount: number; readonly currency: Currency; }",
   ],
   "NumberConstraints": [
     "export interface NumberConstraints { readonly min?: number; readonly max?: number; readonly exclusiveMin?: number; readonly exclusiveMax?: number; readonly multipleOf?: number; }",
@@ -1980,7 +1992,7 @@ exports[`exports of the package and their declarations 1`] = `
     "State: unique symbol",
   ],
   "Std": [
-    "Std: import("../index.js").IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: typeof Url; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof DateTime; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; schema: typeof SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof enumOf; jsonOf: typeof jsonOf; fileOf: typeof fileOf; }> & { readonly factories: { enumOf: typeof enumOf; jsonOf: typeof jsonOf; fileOf: typeof fileOf; }; }",
+    "Std: import("../index.js").IBlueprintPlugin<{ id: typeof Id; slug: typeof Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: typeof Url; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof DateTime; createdAt: typeof CreatedAt; updatedAt: typeof UpdatedAt; deletedAt: typeof DeletedAt; schema: typeof SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof enumOf; jsonOf: typeof jsonOf; fileOf: typeof fileOf; money: typeof moneyOf; }> & { readonly factories: { enumOf: typeof enumOf; jsonOf: typeof jsonOf; fileOf: typeof fileOf; money: typeof moneyOf; }; }",
   ],
   "StdCreateOptions": [
     "export interface StdCreateOptions<Repository> extends StdEntityOptions<Repository> { readonly omit?: readonly KeyOf<Repository>[]; readonly values?: { readonly [Key in KeyOf<Repository>]?: unknown; }; readonly relations?: { readonly [Key in KeyOf<Repository>]?: { readonly shared?: boolean; }; }; }",
@@ -2080,6 +2092,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "TFile": [
     "export type TFile = TUnsafe<File>;",
+  ],
+  "TMoney": [
+    "export type TMoney = TObject<{ amount: TInteger; currency: TString | TEnum<string[]>; }>;",
   ],
   "TagMaker": [
     "export type TagMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", { tag(...tags: string[]): unknown; untag(...tags: string[]): unknown; }, "taggable">, options?: Options & Hookable<Repository, TagInput<Repository>, never, None, Owner, Dependencies, true>) => EntityUseCase<Repository, Options, TagInput<Repository>, Dependencies>;",
@@ -2271,7 +2286,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export declare function blueprintBuilderOf<const Base extends readonly BlueprintSource[]>(...base: Base): BlueprintBuilder<Base>;",
   ],
   "blueprintOf": [
-    "blueprintOf: import("../index.js").BlueprintBuilder<readonly [ import("../index.js").IBlueprintPlugin<{ id: typeof import("../index.js").Id; slug: typeof import("../index.js").Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: typeof import("../index.js").Url; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof import("../index.js").Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof import("../index.js").DateTime; createdAt: typeof import("../index.js").CreatedAt; updatedAt: typeof import("../index.js").UpdatedAt; deletedAt: typeof import("../index.js").DeletedAt; schema: typeof import("../index.js").SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; }> & { readonly factories: { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; }; } ]>",
+    "blueprintOf: import("../index.js").BlueprintBuilder<readonly [ import("../index.js").IBlueprintPlugin<{ id: typeof import("../index.js").Id; slug: typeof import("../index.js").Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: typeof import("../index.js").Url; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof import("../index.js").Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof import("../index.js").DateTime; createdAt: typeof import("../index.js").CreatedAt; updatedAt: typeof import("../index.js").UpdatedAt; deletedAt: typeof import("../index.js").DeletedAt; schema: typeof import("../index.js").SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; money: typeof import("../index.js").moneyOf; }> & { readonly factories: { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; money: typeof import("../index.js").moneyOf; }; } ]>",
   ],
   "blueprintPluginOf": [
     "export declare function blueprintPluginOf<Properties extends IBlueprintCollection, Factories extends Record<keyof Factories, BlueprintFactory>>(name: string, properties: Properties, factories: Factories): IBlueprintPlugin<Properties, Factories> & { readonly factories: Factories; };",
@@ -2292,6 +2307,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "consoleLogProvider": [
     "export declare function consoleLogProvider(): ILogProvider;",
+  ],
+  "currencyDecimals": [
+    "export declare function currencyDecimals(currency: string): number;",
   ],
   "entityBuilderOf": [
     "export declare function entityBuilderOf<Identity extends IEntityIdentity, const Catalogs extends readonly IRecordPluginCatalog[] = [ ]>(settings: EntityBuilderSettings<Identity, Catalogs>): EntityBuilder<Identity, RecordPluginContext<Catalogs>>;",
@@ -2393,6 +2411,10 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "memoryTracer": [
     "export declare function memoryTracer(): MemoryTracer;",
+  ],
+  "moneyOf": [
+    "export declare function moneyOf<const Currency extends string = string>(options?: MoneyOptions<readonly Currency[]>): PropertyClass<TMoney, MoneyValue<Currency>>;",
+    "export declare function moneyOf<const Currency extends string>(options: MoneyOptions<Currency> & { readonly currency: Currency; }): PropertyClass<TInteger, number>;",
   ],
   "openapi": [
     "openapi: import("./types/output.interface.js").SinkFactory<OpenAPIDocument, OpenAPISinkOptions, never>",
@@ -2503,6 +2525,477 @@ exports[`exports of the package and their declarations 1`] = `
 }
 `;
 
+exports[`client entry (contract) 1`] = `
+{
+  "(internal) AbstractDefineProperty": [
+    "export declare abstract class AbstractDefineProperty<SchemaType extends TSchema, Value = Static<SchemaType>> implements IDefineProperty<SchemaType, Value> { [State]: PropertyStates; abstract get type(): IPropertyType<SchemaType, Value>; make(value: Value): Value; parse(value: unknown): ParseResult<Value>; protected preHandle(value: Value): Value; protected afterHandle(value: Value): Value; protected handle(value: Value): Value; private attemptWithoutThrowing; private attempt; private runHandler; private invalidValue; private raise; private mismatch; }",
+  ],
+  "(internal) AbstractProperty": [
+    "export declare abstract class AbstractProperty<SchemaType extends TSchema, Value = Static<SchemaType>> implements IProperty<SchemaType, Value> { get [State](): PropertyStates; readonly definition: AbstractDefineProperty<SchemaType, Value>; readonly value: PropertyValue<SchemaType, Value>; constructor(value: PropertyValue<SchemaType, Value>); static demo<Self extends AbstractProperty<any>>(this: new (value: never) => Self): Self; static safeParse<Self extends new (value: never) => AbstractProperty<any>>(this: Self, value: unknown): ParseResult<InstanceType<Self>["value"]>; static with<Self extends AnyPropertyConstructor>(this: Self, options: Self["type"] extends IPropertyType<infer SchemaType, infer Value> ? PropertyOptions<SchemaType, Value> : never): Self; static get "~standard"(): StandardSchemaV1.Props<any, any>; protected abstract createDefinition(): AbstractDefineProperty<SchemaType, Value>; }",
+  ],
+  "(internal) AcceptedBy": [
+    "type AcceptedBy<Record> = Record extends { readonly [RecordAccepts]?: infer Accepts; } ? unknown extends Accepts ? never : NonNullable<Accepts> : never;",
+  ],
+  "(internal) AnyBlueprint": [
+    "export type AnyBlueprint = IBlueprint<any, boolean>;",
+  ],
+  "(internal) AnyBlueprintList": [
+    "export type AnyBlueprintList = IBlueprintList<any, boolean>;",
+  ],
+  "(internal) AnyBlueprintVariant": [
+    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; safeParse(value: unknown): ParseResult<unknown>; }",
+  ],
+  "(internal) AnyOptionalRecord": [
+    "export type AnyOptionalRecord = OptionalRecord<AnyRecordClass>;",
+  ],
+  "(internal) AnyPropertyConstructor": [
+    "export type AnyPropertyConstructor = { new (value: any): AbstractProperty<any, any>; readonly type: IPropertyType<any, any>; safeParse(value: unknown): ParseResult<any>; readonly "~standard": StandardSchemaV1.Props<any, any>; };",
+  ],
+  "(internal) AnyRecordClass": [
+    "export interface AnyRecordClass { readonly [Kind]: "record"; readonly blueprint: AnyBlueprint; new (value: any): object; safeParse(value: unknown): ParseResult<object>; readonly "~standard": StandardSchemaV1.Props; }",
+  ],
+  "(internal) BlueprintBuilder": [
+    "export interface BlueprintBuilder<Base extends readonly BlueprintSource[]> { <Properties extends IBlueprintCollection>(define: BlueprintDefinition<Base, Properties>): IBlueprint<StoredFields<Properties>>; <const Sources extends readonly BlueprintSource[], Properties extends IBlueprintCollection>(sources: Sources, define: BlueprintDefinition<readonly [ ...Base, ...Sources ], Properties>): IBlueprint<StoredFields<Properties>>; }",
+  ],
+  "(internal) BlueprintContext": [
+    "export type BlueprintContext<Sources extends readonly BlueprintSource[]> = CallableProperties<ContextFields<Sources>> & BlueprintFactoryContext<Sources> & BlueprintHelpers & { readonly optional: CallableProperties<OptionalProperties<ContextFields<Sources>>>; readonly list: ListProperties<ContextFields<Sources>> & { readonly optional: OptionalProperties<ListProperties<ContextFields<Sources>>>; }; };",
+  ],
+  "(internal) BlueprintData": [
+    "export type BlueprintData<Properties extends IBlueprintCollection> = CollectionValue<Properties, "data">;",
+  ],
+  "(internal) BlueprintDefinition": [
+    "export type BlueprintDefinition<Sources extends readonly BlueprintSource[], Properties extends IBlueprintCollection> = (ctx: BlueprintContext<Sources>) => Properties;",
+  ],
+  "(internal) BlueprintFactory": [
+    "export type BlueprintFactory = (...args: any[]) => BlueprintField;",
+  ],
+  "(internal) BlueprintFactoryContext": [
+    "export type BlueprintFactoryContext<Sources extends readonly BlueprintSource[]> = Sources extends readonly [ infer Head, ...infer Tail extends readonly BlueprintSource[] ] ? Override<Head extends { readonly factories?: infer Factories; } ? NonNullable<Factories> extends infer Defined extends IBlueprintFactories ? string extends keyof Defined ? Record<never, never> : Defined : Record<never, never> : Record<never, never>, BlueprintFactoryContext<Tail>> : Record<never, never>;",
+  ],
+  "(internal) BlueprintField": [
+    "export type BlueprintField = AnyPropertyConstructor | AnyBlueprint | AnyBlueprintList | AnyRecordClass | AnyOptionalRecord | AnyBlueprintVariant;",
+  ],
+  "(internal) BlueprintHelpers": [
+    "export interface BlueprintHelpers { readonly listOf: typeof listOf; readonly optionalOf: typeof optionalOf; readonly propertyOf: typeof propertyOf; readonly variantOf: typeof variantOf; }",
+  ],
+  "(internal) BlueprintInput": [
+    "export type BlueprintInput<Properties extends IBlueprintCollection> = CollectionValue<Properties, "input">;",
+  ],
+  "(internal) BlueprintListOptions": [
+    "export interface BlueprintListOptions { readonly minItems?: number; readonly maxItems?: number; }",
+  ],
+  "(internal) BlueprintPluginContext": [
+    "export type BlueprintPluginContext<Sources extends readonly { readonly properties: IBlueprintCollection; }[]> = Sources extends readonly [ infer Head extends { readonly properties: IBlueprintCollection; }, ...infer Tail extends readonly { readonly properties: IBlueprintCollection; }[] ] ? Override<Head["properties"], BlueprintPluginContext<Tail>> : Record<never, never>;",
+  ],
+  "(internal) BlueprintSchema": [
+    "export type BlueprintSchema<Properties extends IBlueprintCollection> = CollectionSchema<Properties, "data">;",
+  ],
+  "(internal) BlueprintSource": [
+    "export type BlueprintSource = IBlueprintPlugin | AnyBlueprint;",
+  ],
+  "(internal) BlueprintValue": [
+    "export type BlueprintValue<Properties extends IBlueprintCollection> = CollectionValue<Properties, "value">;",
+  ],
+  "(internal) BlueprintVariants": [
+    "export type BlueprintVariants = Readonly<Record<string, AnyBlueprint | AnyRecordClass>>;",
+  ],
+  "(internal) Callable": [
+    "Callable: unique symbol",
+  ],
+  "(internal) CallableKey": [
+    "export type CallableKey = typeof Callable;",
+  ],
+  "(internal) CallableProperties": [
+    "export type CallableProperties<Fields> = { readonly [Key in keyof Fields]: Fields[Key] extends AnyPropertyConstructor ? CallableProperty<Fields[Key]> : Fields[Key]; };",
+  ],
+  "(internal) CallableProperty": [
+    "export type CallableProperty<Property extends { readonly type: IPropertyType<TSchema>; }> = Property & { (options?: OptionsOfProperty<Property>): Property; readonly [Callable]: Property; };",
+  ],
+  "(internal) CollectionSchema": [
+    "type CollectionSchema<Properties extends IBlueprintCollection, Mode extends FieldMode> = TObject<{ [Key in keyof Properties]: FieldSchema<Properties[Key], Mode>; }>;",
+  ],
+  "(internal) CollectionValue": [
+    "type CollectionValue<Properties extends IBlueprintCollection, Mode extends FieldMode, Schemas = { [Key in keyof Properties]: FieldSchema<Properties[Key], Mode>; }, Values extends Record<PropertyKey, unknown> = { [Key in keyof Properties]: FieldValue<Properties[Key], Mode>; }, WithModifiers extends Record<PropertyKey, unknown> = Evaluate<Readonly<Partial<Pick<Values, ReadonlyOptionalKeys<Schemas>>>> & Readonly<Pick<Values, ReadonlyKeys<Schemas>>> & Partial<Pick<Values, OptionalKeys<Schemas>>> & Required<Pick<Values, RequiredKeys<Schemas>>>>, Result = keyof Properties extends never ? object : { [Key in keyof WithModifiers]: WithModifiers[Key]; }> = Result;",
+  ],
+  "(internal) ContextFields": [
+    "type ContextFields<Sources extends readonly BlueprintSource[]> = Omit<BlueprintPluginContext<Sources>, keyof BlueprintFactoryContext<Sources>>;",
+  ],
+  "(internal) CreatedAt": [
+    "export declare class CreatedAt extends CreatedAt_base { }",
+  ],
+  "(internal) CreatedAt_base": [
+    "CreatedAt_base: DateTimeClass<false>",
+  ],
+  "(internal) DateTime": [
+    "export declare class DateTime extends DateTime_base { }",
+  ],
+  "(internal) DateTimeClass": [
+    "interface DateTimeClass<Optional extends boolean> extends PropertyClass<Optional extends true ? TOptional<TString> : TString, string> { now<Self>(this: new (value: string) => Self): Self; }",
+  ],
+  "(internal) DateTime_base": [
+    "DateTime_base: DateTimeClass<false>",
+  ],
+  "(internal) DeclaredExceptionClass": [
+    "export interface DeclaredExceptionClass<Details = undefined> { new (args: ExceptionArgs<Details>): Exception<Details>; readonly prototype: Exception<Details>; readonly layer: ExceptionLayers; from: typeof Exception.from; }",
+  ],
+  "(internal) DeclaredProperty": [
+    "export declare class DeclaredProperty<SchemaType extends TSchema, Value = Static<SchemaType>> extends AbstractProperty<SchemaType, Value> { protected createDefinition(): AbstractDefineProperty<SchemaType, Value>; }",
+  ],
+  "(internal) DeletedAt": [
+    "export declare class DeletedAt extends DeletedAt_base { }",
+  ],
+  "(internal) DeletedAt_base": [
+    "DeletedAt_base: DateTimeClass<true>",
+  ],
+  "(internal) Demo": [
+    "Demo: unique symbol",
+  ],
+  "(internal) EnumClass": [
+    "export type EnumClass<Values extends TEnumValue[], Optional extends boolean = false> = PropertyClass<Optional extends true ? TOptional<TEnum<Values>> : TEnum<Values>, Values[number]>;",
+  ],
+  "(internal) Evaluate": [
+    "type Evaluate<Type> = { [Key in keyof Type]: Type[Key]; } & {};",
+  ],
+  "(internal) Exception": [
+    "export declare class Exception<Details = unknown> extends Error { readonly name: string; readonly layer: ExceptionLayers; readonly source: string; readonly details: Details; readonly cause?: unknown; constructor({ layer, name, source, message, details, cause, }: ExceptionInit<Details>); static from(error: unknown, scope: ExceptionScope): Exception; get frame(): ExceptionFrame<Details>; get trace(): readonly ExceptionFrame[]; get origin(): Exception; find<Instance extends Exception>(target: ExceptionClass<Instance> | string): Instance | undefined; is(target: ExceptionClass | string): boolean; passedThrough(layer: ExceptionLayers): boolean; propagate(scope: ExceptionScope & { readonly name?: undefined; readonly message?: string; readonly details?: undefined; }): Exception<Details>; propagate<Next = undefined>(scope: ExceptionPropagation<Next>): Exception<Next>; toJSON(): ExceptionFrame<Details> & { trace: readonly ExceptionFrame[]; }; toString(): string; private chain; }",
+  ],
+  "(internal) ExceptionArgs": [
+    "export type ExceptionArgs<Details> = { readonly source: string; readonly cause?: unknown; readonly message?: string; } & (undefined extends Details ? { readonly details?: Details; } : { readonly details: Details; });",
+  ],
+  "(internal) ExceptionClass": [
+    "export type ExceptionClass<Instance = any> = abstract new (...args: never[]) => Instance;",
+  ],
+  "(internal) ExceptionDeclaration": [
+    "export interface ExceptionDeclaration<Details> { readonly layer: ExceptionLayers; readonly name: string; readonly message: ExceptionMessage<Details>; }",
+  ],
+  "(internal) ExceptionFrame": [
+    "export interface ExceptionFrame<Details = unknown> extends ExceptionScope { readonly name: string; readonly message: string; readonly details: Details; }",
+  ],
+  "(internal) ExceptionInit": [
+    "export interface ExceptionInit<Details = unknown> extends ExceptionScope { readonly name: string; readonly message: string; readonly details?: Details; readonly cause?: unknown; }",
+  ],
+  "(internal) ExceptionMessage": [
+    "export type ExceptionMessage<Details> = string | ((details: Details, source: string) => string);",
+  ],
+  "(internal) ExceptionPropagation": [
+    "export interface ExceptionPropagation<Details = unknown> extends ExceptionScope { readonly name?: string; readonly message?: string; readonly details?: Details; }",
+  ],
+  "(internal) ExceptionScope": [
+    "export interface ExceptionScope { readonly layer: ExceptionLayers; readonly source: string; }",
+  ],
+  "(internal) FailureResult": [
+    "interface FailureResult { readonly issues: ReadonlyArray<Issue>; }",
+  ],
+  "(internal) FieldMode": [
+    "type FieldMode = "data" | "value" | "input";",
+  ],
+  "(internal) FieldSchema": [
+    "type FieldSchema<Field, Mode extends FieldMode> = 0 extends 1 & Field ? TSchema : Field extends { readonly type: IPropertyType<infer SchemaType extends TSchema, any>; } ? SchemaType : Field extends AnyRecordClass ? RecordSchema<Field, Mode> : Field extends OptionalRecord<infer Record> ? TOptional<RecordSchema<Record, Mode>> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; readonly optional: infer Optional; } ? Optional extends true ? TOptional<CollectionSchema<Properties, Mode>> : CollectionSchema<Properties, Mode> : Field extends { readonly item: infer Item; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TArray<FieldSchema<Item, Mode>>> : TArray<FieldSchema<Item, Mode>> : VariantSchema<Field, Mode>;",
+  ],
+  "(internal) FieldValue": [
+    "type FieldValue<Field, Mode extends FieldMode> = 0 extends 1 & Field ? Static<TSchema> : Field extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? 0 extends 1 & SchemaType ? Static<TSchema> : Value : Field extends AnyRecordClass ? RecordValueOf<Field, Mode> : Field extends OptionalRecord<infer Record> ? RecordValueOf<Record, Mode> : Field extends { readonly properties: infer Properties extends IBlueprintCollection; } ? CollectionValue<Properties, Mode> : Field extends { readonly item: infer Item; } ? FieldValue<Item, Mode>[] : Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; } ? VariantValue<Key, Variants, Mode> : never;",
+  ],
+  "(internal) FileClass": [
+    "export type FileClass<Optional extends boolean = false> = PropertyClass<Optional extends true ? TOptional<TFile> : TFile, File>;",
+  ],
+  "(internal) FileOptions": [
+    "export interface FileOptions<Optional extends boolean = false> { readonly types?: readonly string[]; readonly maxBytes?: number; readonly name?: string; readonly optional?: Optional; }",
+  ],
+  "(internal) IBlueprint": [
+    "export interface IBlueprint<Properties extends IBlueprintCollection, Optional extends boolean = false> { readonly [Kind]: "blueprint"; readonly plugins: readonly IBlueprintPlugin[]; readonly properties: Properties; readonly schema: ISchema<BlueprintSchema<Properties>, BlueprintData<Properties>>; readonly optional: Optional; safeParse(value: unknown): ParseResult<Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; readonly "~standard": StandardSchemaV1.Props<Optional extends true ? BlueprintInput<Properties> | undefined : BlueprintInput<Properties>, Optional extends true ? BlueprintValue<Properties> | undefined : BlueprintValue<Properties>>; join<const Blueprints extends readonly AnyBlueprint[]>(...blueprints: Blueprints): IBlueprint<JoinedProperties<readonly [ { readonly properties: Properties; }, ...Blueprints ]>>; }",
+  ],
+  "(internal) IBlueprintCollection": [
+    "export type IBlueprintCollection = Record<string, BlueprintField>;",
+  ],
+  "(internal) IBlueprintFactories": [
+    "export type IBlueprintFactories = Record<string, BlueprintFactory>;",
+  ],
+  "(internal) IBlueprintList": [
+    "export interface IBlueprintList<Item extends BlueprintField, Optional extends boolean = false> extends BlueprintListOptions { readonly [Kind]: "list"; readonly item: Item; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<ListShape<Item, "input", Optional>, ListShape<Item, "value", Optional>>; safeParse(value: unknown): ParseResult<ListShape<Item, "value", Optional>>; }",
+  ],
+  "(internal) IBlueprintPlugin": [
+    "export interface IBlueprintPlugin<Properties extends IBlueprintCollection = IBlueprintCollection, Factories extends IBlueprintFactories = IBlueprintFactories> { readonly name: string; readonly properties: Properties; readonly factories?: Factories; }",
+  ],
+  "(internal) IBlueprintVariant": [
+    "export interface IBlueprintVariant<Key extends string, Variants extends BlueprintVariants, Optional extends boolean = false> { readonly [Kind]: "variant"; readonly key: Key; readonly variants: Variants; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<VariantShape<Key, Variants, "input", Optional>, VariantShape<Key, Variants, "value", Optional>>; safeParse(value: unknown): ParseResult<VariantShape<Key, Variants, "value", Optional>>; }",
+  ],
+  "(internal) IDefineProperty": [
+    "export interface IDefineProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { [State]: PropertyStates; get type(): IPropertyType<SchemaType, Value>; make(value: Value): Value; parse(value: unknown): ParseResult<Value>; }",
+  ],
+  "(internal) IProperty": [
+    "export interface IProperty<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly definition: AbstractDefineProperty<SchemaType, Value>; readonly value: PropertyValue<SchemaType, Value>; }",
+  ],
+  "(internal) IPropertyInput": [
+    "export interface IPropertyInput<Value = unknown> { readonly accepts: AnyPropertyConstructor; convert(value: Value): Value | Promise<Value>; }",
+  ],
+  "(internal) IPropertyType": [
+    "export interface IPropertyType<SchemaType extends TSchema, Value = Static<SchemaType>> { readonly [Demo]: Value | undefined; readonly name: string; readonly schema: ISchema<SchemaType, Value>; readonly optional?: boolean; readonly sensitive?: boolean; readonly unique?: boolean; readonly fill?: Value; readonly renamedFrom?: string; }",
+  ],
+  "(internal) ISchema": [
+    "export interface ISchema<SchemaType extends TSchema, Value = Static<SchemaType>> { match(value: unknown): value is Value; matchShape(value: unknown): boolean; errors(value: unknown): string[]; toString(): string; get type(): ISchemaType<SchemaType, Value>; }",
+  ],
+  "(internal) ISchemaType": [
+    "export type ISchemaType<SchemaType extends TSchema, Value = Static<SchemaType>> = Validator<Record<string, TSchema>, SchemaType, Value, Value>;",
+  ],
+  "(internal) Id": [
+    "export declare class Id extends Id_base { static generate(): Id; }",
+  ],
+  "(internal) Id_base": [
+    "Id_base: import("../../index.js").PropertyClass<Type.TString, string>",
+  ],
+  "(internal) InferInput": [
+    "type InferInput<Schema extends StandardSchemaV1> = NonNullable<Schema["~standard"]["types"]>["input"];",
+  ],
+  "(internal) Issue": [
+    "interface Issue { readonly message: string; readonly path?: ReadonlyArray<PropertyKey | PathSegment> | undefined; }",
+  ],
+  "(internal) JoinedProperties": [
+    "export type JoinedProperties<Blueprints extends readonly { readonly properties: IBlueprintCollection; }[]> = BlueprintPluginContext<Blueprints> extends infer Properties extends IBlueprintCollection ? Properties : never;",
+  ],
+  "(internal) JsonClass": [
+    "export type JsonClass<Schema extends TSchema, Optional extends boolean = false> = PropertyClass<Optional extends true ? TOptional<Schema> : Schema, Static<Schema>>;",
+  ],
+  "(internal) JsonValue": [
+    "export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };",
+  ],
+  "(internal) Kind": [
+    "Kind: unique symbol",
+  ],
+  "(internal) ListProperties": [
+    "export type ListProperties<Properties> = { readonly [Key in keyof Properties]: Properties[Key] extends BlueprintField ? IBlueprintList<Properties[Key]> : never; };",
+  ],
+  "(internal) ListShape": [
+    "type ListShape<Item, Mode extends FieldMode, Optional extends boolean> = Optional extends true ? FieldValue<Item, Mode>[] | undefined : FieldValue<Item, Mode>[];",
+  ],
+  "(internal) MoneyOptions": [
+    "export interface MoneyOptions<Currencies extends string | readonly string[] = string | readonly string[]> { readonly currency?: Currencies; readonly min?: number; readonly max?: number; readonly nonNegative?: boolean; readonly name?: string; }",
+  ],
+  "(internal) MoneyValue": [
+    "export interface MoneyValue<Currency extends string = string> { readonly amount: number; readonly currency: Currency; }",
+  ],
+  "(internal) NumberConstraints": [
+    "export interface NumberConstraints { readonly min?: number; readonly max?: number; readonly exclusiveMin?: number; readonly exclusiveMax?: number; readonly multipleOf?: number; }",
+  ],
+  "(internal) OptionalBlueprint": [
+    "export type OptionalBlueprint<Blueprint extends AnyBlueprint> = Blueprint extends IBlueprint<infer Properties, boolean> ? IBlueprint<Properties, true> : never;",
+  ],
+  "(internal) OptionalBlueprintList": [
+    "export type OptionalBlueprintList<List extends AnyBlueprintList> = List extends IBlueprintList<infer Item, boolean> ? IBlueprintList<Item, true> : never;",
+  ],
+  "(internal) OptionalBlueprintVariant": [
+    "export type OptionalBlueprintVariant<Variant extends AnyBlueprintVariant> = Variant extends IBlueprintVariant<infer Key, infer Variants, boolean> ? IBlueprintVariant<Key, Variants, true> : never;",
+  ],
+  "(internal) OptionalKeys": [
+    "type OptionalKeys<Schemas> = { [Key in keyof Schemas]: Schemas[Key] extends TOptional<TSchema> ? Schemas[Key] extends TReadonly<Schemas[Key]> ? never : Key : never; }[keyof Schemas];",
+  ],
+  "(internal) OptionalProperties": [
+    "export type OptionalProperties<Properties> = { readonly [Key in keyof Properties]: Properties[Key] extends AnyPropertyConstructor ? OptionalProperty<Properties[Key]> : Properties[Key] extends AnyBlueprint ? OptionalBlueprint<Properties[Key]> : Properties[Key] extends AnyBlueprintList ? OptionalBlueprintList<Properties[Key]> : Properties[Key] extends AnyRecordClass ? OptionalRecord<Properties[Key]> : Properties[Key] extends AnyOptionalRecord ? Properties[Key] : Properties[Key] extends { readonly key: infer Name extends string; readonly variants: infer Variants extends BlueprintVariants; } ? IBlueprintVariant<Name, Variants, true> : never; };",
+  ],
+  "(internal) OptionalProperty": [
+    "export type OptionalProperty<Property extends AnyPropertyConstructor> = Property extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? SchemaType extends TOptional<TSchema> ? StoredField<Property> : Omit<Property, "type" | "prototype" | "safeParse" | "~standard" | CallableKey> & { new (value: PropertyValue<TOptional<SchemaType>, Value>): AbstractProperty<TOptional<SchemaType>, Value> & Omit<InstanceType<Property>, keyof AbstractProperty<TSchema>>; readonly type: IPropertyType<TOptional<SchemaType>, Value> & UniqueTypeOf<Property> & SensitiveTypeOf<Property>; safeParse(value: unknown): ParseResult<PropertyValue<TOptional<SchemaType>, Value>>; readonly "~standard": StandardSchemaV1.Props<PropertyValue<TOptional<SchemaType>, Value>, PropertyValue<TOptional<SchemaType>, Value>>; } : never;",
+  ],
+  "(internal) OptionalRecord": [
+    "export interface OptionalRecord<Record extends AnyRecordClass> { readonly [Kind]: "record"; readonly record: Record; readonly optional: true; readonly "~standard": StandardSchemaV1.Props<StandardSchemaV1.InferInput<Record> | undefined, InstanceType<Record> | undefined>; }",
+  ],
+  "(internal) OptionsOfProperty": [
+    "type OptionsOfProperty<Property> = Property extends { readonly type: IPropertyType<infer SchemaType, infer Value>; } ? PropertyOptions<SchemaType, Value> : PropertyOptions<TSchema>;",
+  ],
+  "(internal) Override": [
+    "type Override<Base, Overrides> = { [Key in keyof Base | keyof Overrides]: Key extends keyof Overrides ? Overrides[Key] : Key extends keyof Base ? Base[Key] : never; };",
+  ],
+  "(internal) Password": [
+    "export declare class Password extends Password_base { static readonly [PropertyInput]: IPropertyInput<string>; static hash(plain: string): Promise<Password>; verify(input: string): Promise<boolean>; verifySync(input: string): boolean; }",
+  ],
+  "(internal) Password_base": [
+    "Password_base: import("../../index.js").PropertyClass<Type.TString, string> & { readonly type: { readonly sensitive: true; }; }",
+  ],
+  "(internal) PathSegment": [
+    "interface PathSegment { readonly key: PropertyKey; }",
+  ],
+  "(internal) PropertyClass": [
+    "export interface PropertyClass<SchemaType extends TSchema, Value = Static<SchemaType>> { new (value: PropertyValue<SchemaType, Value>): DeclaredProperty<SchemaType, Value>; readonly type: IPropertyType<SchemaType, Value>; safeParse(value: unknown): ParseResult<PropertyValue<SchemaType, Value>>; readonly "~standard": StandardSchemaV1.Props<PropertyValue<SchemaType, Value>, PropertyValue<SchemaType, Value>>; with<Self extends AnyPropertyConstructor>(this: Self, options: PropertyOptions<SchemaType, Value>): Self; demo<Self extends AbstractProperty<any>>(this: new (value: never) => Self): Self; }",
+  ],
+  "(internal) PropertyInput": [
+    "PropertyInput: unique symbol",
+  ],
+  "(internal) PropertyMetadata": [
+    "export interface PropertyMetadata<Value> { readonly title?: string; readonly description?: string; readonly examples?: readonly Value[]; readonly deprecated?: boolean; readonly readOnly?: boolean; readonly writeOnly?: boolean; readonly default?: Value; readonly fill?: Value; readonly renamedFrom?: string; }",
+  ],
+  "(internal) PropertyOfArgs": [
+    "type PropertyOfArgs<SchemaType extends TSchema, Optional extends boolean = false, Unique extends boolean = false, Sensitive extends boolean = false, Value = Static<SchemaType>> = { name: string; schema: SchemaType; default?: NoInfer<Value>; optional?: Optional; sensitive?: Sensitive; unique?: Unique; preHandle?: (value: NoInfer<Value>) => NoInfer<Value>; afterHandle?: (value: NoInfer<Value>) => NoInfer<Value>; };",
+  ],
+  "(internal) PropertyOptions": [
+    "export type PropertyOptions<SchemaType extends TSchema, Value = Static<SchemaType>> = PropertyMetadata<NonNullable<Value>> & (SchemaType extends TString ? StringConstraints : SchemaType extends TNumber | TInteger ? NumberConstraints : unknown);",
+  ],
+  "(internal) PropertyStates": [
+    "export declare enum PropertyStates { Declared = 0, PreHandling = 1, Handling = 2, AfterHandling = 3, Done = 4 }",
+  ],
+  "(internal) PropertyValue": [
+    "export type PropertyValue<SchemaType extends TSchema, Value = Static<SchemaType>> = SchemaType extends TOptional<TSchema> ? Value | undefined : Value;",
+  ],
+  "(internal) Props": [
+    "interface Props<Input = unknown, Output = Input> { readonly version: 1; readonly vendor: string; readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>; readonly types?: Types<Input, Output> | undefined; }",
+  ],
+  "(internal) ReadonlyKeys": [
+    "type ReadonlyKeys<Schemas> = { [Key in keyof Schemas]: Schemas[Key] extends TReadonly<TSchema> ? Schemas[Key] extends TOptional<Schemas[Key]> ? never : Key : never; }[keyof Schemas];",
+  ],
+  "(internal) ReadonlyOptionalKeys": [
+    "type ReadonlyOptionalKeys<Schemas> = { [Key in keyof Schemas]: Schemas[Key] extends TReadonly<TSchema> ? Schemas[Key] extends TOptional<Schemas[Key]> ? Key : never : never; }[keyof Schemas];",
+  ],
+  "(internal) RecordAccepts": [
+    "RecordAccepts: unique symbol",
+  ],
+  "(internal) RecordInput": [
+    "type RecordInput<Record extends AnyRecordClass> = ConstructorParameters<Record>[0] extends infer Input ? 0 extends 1 & Input ? object : Input : never;",
+  ],
+  "(internal) RecordSchema": [
+    "type RecordSchema<Record extends AnyRecordClass, Mode extends FieldMode> = Mode extends "value" ? TUnsafe<InstanceType<Record>> : Mode extends "input" ? TUnsafe<InstanceType<Record> | RecordInput<Record> | AcceptedBy<Record>> : Record["blueprint"] extends IBlueprint<infer Properties, boolean> ? BlueprintSchema<Properties> : never;",
+  ],
+  "(internal) RecordValueOf": [
+    "type RecordValueOf<Record extends AnyRecordClass, Mode extends FieldMode> = Mode extends "value" ? InstanceType<Record> : Mode extends "input" ? InstanceType<Record> | RecordInput<Record> | AcceptedBy<Record> : Record["blueprint"] extends IBlueprint<infer Properties, boolean> ? CollectionValue<Properties, "data"> : never;",
+  ],
+  "(internal) RequiredKeys": [
+    "type RequiredKeys<Schemas> = keyof Omit<Schemas, ReadonlyOptionalKeys<Schemas> | ReadonlyKeys<Schemas> | OptionalKeys<Schemas>>;",
+  ],
+  "(internal) Result": [
+    "type Result<Output> = SuccessResult<Output> | FailureResult;",
+  ],
+  "(internal) SchemaProperty": [
+    "export declare class SchemaProperty extends SchemaProperty_base { private compiled?; static deserialize(json: string): SchemaProperty; serialize(): string; match(data: unknown): boolean; errors(data: unknown): string[]; private toSchema; }",
+  ],
+  "(internal) SchemaProperty_base": [
+    "SchemaProperty_base: import("../../index.js").PropertyClass<Type.TUnsafe<TSchema>, TSchema>",
+  ],
+  "(internal) SchemaValueType": [
+    "type SchemaValueType<SchemaType extends TSchema, Optional extends boolean = false> = Optional extends true ? TOptional<SchemaType> : SchemaType;",
+  ],
+  "(internal) SensitiveMark": [
+    "export type SensitiveMark<Sensitive extends boolean> = Sensitive extends true ? { readonly type: { readonly sensitive: true; }; } : unknown;",
+  ],
+  "(internal) SensitiveTypeOf": [
+    "export type SensitiveTypeOf<Property> = Property extends { readonly type: { readonly sensitive: true; }; } ? { readonly sensitive: true; } : unknown;",
+  ],
+  "(internal) Slug": [
+    "export declare class Slug extends Slug_base { }",
+  ],
+  "(internal) Slug_base": [
+    "Slug_base: import("../../index.js").PropertyClass<Type.TString, string> & { readonly type: { readonly unique: true; }; }",
+  ],
+  "(internal) State": [
+    "State: unique symbol",
+  ],
+  "(internal) StoredField": [
+    "export type StoredField<Field> = Field extends { readonly [Callable]: infer Property; } ? Property : Field;",
+  ],
+  "(internal) StoredFields": [
+    "export type StoredFields<Fields> = { [Key in keyof Fields]: StoredField<Fields[Key]>; };",
+  ],
+  "(internal) StringConstraints": [
+    "export interface StringConstraints { readonly min?: number; readonly max?: number; readonly pattern?: string | RegExp; }",
+  ],
+  "(internal) SuccessResult": [
+    "interface SuccessResult<Output> { readonly value: Output; readonly issues?: undefined; }",
+  ],
+  "(internal) TFile": [
+    "export type TFile = TUnsafe<File>;",
+  ],
+  "(internal) TMoney": [
+    "export type TMoney = TObject<{ amount: TInteger; currency: TString | TEnum<string[]>; }>;",
+  ],
+  "(internal) Types": [
+    "interface Types<Input = unknown, Output = Input> { readonly input: Input; readonly output: Output; }",
+  ],
+  "(internal) UniqueMark": [
+    "export type UniqueMark<Unique extends boolean> = Unique extends true ? { readonly type: { readonly unique: true; }; } : unknown;",
+  ],
+  "(internal) UniqueTypeOf": [
+    "export type UniqueTypeOf<Property> = Property extends { readonly type: { readonly unique: true; }; } ? { readonly unique: true; } : unknown;",
+  ],
+  "(internal) UpdatedAt": [
+    "export declare class UpdatedAt extends UpdatedAt_base { }",
+  ],
+  "(internal) UpdatedAt_base": [
+    "UpdatedAt_base: DateTimeClass<true>",
+  ],
+  "(internal) Url": [
+    "export declare class Url extends Url_base { static with<Self extends AnyPropertyConstructor>(this: Self, options: UrlOptions): Self; }",
+  ],
+  "(internal) UrlOptions": [
+    "export type UrlOptions = PropertyOptions<Type.TString, string> & { readonly protocols?: readonly string[]; };",
+  ],
+  "(internal) Url_base": [
+    "Url_base: import("../../index.js").PropertyClass<Type.TString, string>",
+  ],
+  "(internal) VariantMember": [
+    "type VariantMember<Key extends string, Tag, Variant, Mode extends FieldMode> = Variant extends AnyRecordClass ? Mode extends "value" ? InstanceType<Variant> : Mode extends "input" ? InstanceType<Variant> | Evaluate<{ readonly [Name in Key]: Tag; } & RecordInput<Variant>> : Evaluate<{ readonly [Name in Key]: Tag; } & RecordValueOf<Variant, "data">> : Evaluate<{ readonly [Name in Key]: Tag; } & FieldValue<Variant, Mode>>;",
+  ],
+  "(internal) VariantSchema": [
+    "type VariantSchema<Field, Mode extends FieldMode> = Field extends { readonly key: infer Key extends string; readonly variants: infer Variants; readonly optional: infer Optional; } ? Optional extends true ? TOptional<TUnsafe<VariantValue<Key, Variants, Mode>>> : TUnsafe<VariantValue<Key, Variants, Mode>> : never;",
+  ],
+  "(internal) VariantShape": [
+    "type VariantShape<Key extends string, Variants, Mode extends FieldMode, Optional extends boolean> = Optional extends true ? VariantValue<Key, Variants, Mode> | undefined : VariantValue<Key, Variants, Mode>;",
+  ],
+  "(internal) VariantValue": [
+    "type VariantValue<Key extends string, Variants, Mode extends FieldMode> = 0 extends 1 & Variants ? any : { [Tag in keyof Variants & string]: VariantMember<Key, Tag, Variants[Tag], Mode>; }[keyof Variants & string];",
+  ],
+  "(internal) fileOf": [
+    "export declare function fileOf<Optional extends boolean = false>(options?: FileOptions<Optional>): FileClass<Optional>;",
+  ],
+  "(internal) jsonOf": [
+    "export declare function jsonOf<const Schema extends TSchema, Optional extends boolean = false>({ schema, name, optional, default: _default, }: { readonly schema: Schema; readonly name?: string; readonly optional?: Optional; readonly default?: Static<Schema>; }): JsonClass<Schema, Optional>;",
+  ],
+  "(internal) moneyOf": [
+    "export declare function moneyOf<const Currency extends string = string>(options?: MoneyOptions<readonly Currency[]>): PropertyClass<TMoney, MoneyValue<Currency>>;",
+    "export declare function moneyOf<const Currency extends string>(options: MoneyOptions<Currency> & { readonly currency: Currency; }): PropertyClass<TInteger, number>;",
+  ],
+  "AnyParsable": [
+    "export interface AnyParsable { readonly "~standard": StandardSchemaV1.Props<unknown, unknown>; safeParse(value: unknown): ParseResult<unknown>; }",
+  ],
+  "ExceptionLayers": [
+    "export declare enum ExceptionLayers { Schema = "schema", Property = "property", Blueprint = "blueprint", Record = "record", Entity = "entity", UseCase = "use-case", Repository = "repository", Environment = "environment", Event = "event", Command = "command", Application = "application", Output = "output", Interface = "interface" }",
+  ],
+  "Issue": [
+    "export interface Issue extends StandardSchemaV1.Issue { readonly code: IssueCode; readonly path: readonly (string | number)[]; readonly source: string; readonly cause?: Exception; }",
+  ],
+  "IssueCode": [
+    "export type IssueCode = "required" | "invalid_type" | "invalid_value" | "undeclared_key" | "too_few_items" | "too_many_items" | "not_record";",
+  ],
+  "ParseResult": [
+    "export type ParseResult<Output> = { readonly value: Output; readonly issues?: undefined; } | { readonly issues: readonly Issue[]; };",
+  ],
+  "StandardSchemaV1": [
+    "export declare namespace StandardSchemaV1 { interface Props<Input = unknown, Output = Input> { readonly version: 1; readonly vendor: string; readonly validate: (value: unknown) => Result<Output> | Promise<Result<Output>>; readonly types?: Types<Input, Output> | undefined; } type Result<Output> = SuccessResult<Output> | FailureResult; interface SuccessResult<Output> { readonly value: Output; readonly issues?: undefined; } interface FailureResult { readonly issues: ReadonlyArray<Issue>; } interface Issue { readonly message: string; readonly path?: ReadonlyArray<PropertyKey | PathSegment> | undefined; } interface PathSegment { readonly key: PropertyKey; } interface Types<Input = unknown, Output = Input> { readonly input: Input; readonly output: Output; } type InferInput<Schema extends StandardSchemaV1> = NonNullable<Schema["~standard"]["types"]>["input"]; type InferOutput<Schema extends StandardSchemaV1> = NonNullable<Schema["~standard"]["types"]>["output"]; }",
+    "export interface StandardSchemaV1<Input = unknown, Output = Input> { readonly "~standard": StandardSchemaV1.Props<Input, Output>; }",
+  ],
+  "blueprintOf": [
+    "blueprintOf: import("../index.js").BlueprintBuilder<readonly [ import("../index.js").IBlueprintPlugin<{ id: typeof import("../index.js").Id; slug: typeof import("../index.js").Slug; email: import("../index.js").PropertyClass<import("typebox").TString, string>; phone: import("../index.js").PropertyClass<import("typebox").TString, string>; url: typeof import("../index.js").Url; ip: import("../index.js").PropertyClass<import("typebox").TUnion<[ import("typebox").TString, import("typebox").TString ]>, string>; password: typeof import("../index.js").Password; string: import("../index.js").PropertyClass<import("typebox").TString, string>; text: import("../index.js").PropertyClass<import("typebox").TString, string>; number: import("../index.js").PropertyClass<import("typebox").TNumber, number>; integer: import("../index.js").PropertyClass<import("typebox").TInteger, number>; boolean: import("../index.js").PropertyClass<import("typebox").TBoolean, boolean>; date: import("../index.js").PropertyClass<import("typebox").TString, string>; dateTime: typeof import("../index.js").DateTime; createdAt: typeof import("../index.js").CreatedAt; updatedAt: typeof import("../index.js").UpdatedAt; deletedAt: typeof import("../index.js").DeletedAt; schema: typeof import("../index.js").SchemaProperty; json: import("../index.js").PropertyClass<import("typebox").TUnsafe<import("../index.js").JsonValue>, import("../index.js").JsonValue>; file: import("../index.js").PropertyClass<import("typebox").TUnsafe<File>, File>; }, { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; money: typeof import("../index.js").moneyOf; }> & { readonly factories: { enumOf: typeof import("../index.js").enumOf; jsonOf: typeof import("../index.js").jsonOf; fileOf: typeof import("../index.js").fileOf; money: typeof import("../index.js").moneyOf; }; } ]>",
+  ],
+  "enumOf": [
+    "export declare function enumOf<const Values extends TEnumValue[], Optional extends boolean = false>(values: readonly [ ...Values ], { name, optional, default: _default, }?: { name?: string; optional?: Optional; default?: Values[number]; }): EnumClass<Values, Optional>;",
+  ],
+  "exceptionOf": [
+    "export declare function exceptionOf<Details = undefined>({ layer, name, message, }: ExceptionDeclaration<Details>): DeclaredExceptionClass<Details>;",
+  ],
+  "listOf": [
+    "export declare function listOf<Item extends BlueprintField>(item: Item, { minItems, maxItems }?: BlueprintListOptions): IBlueprintList<StoredField<Item>>;",
+  ],
+  "optionalOf": [
+    "export declare function optionalOf(field: BlueprintField): BlueprintField;",
+    "export declare function optionalOf<Blueprint extends AnyBlueprint>(blueprint: Blueprint): OptionalBlueprint<Blueprint>;",
+    "export declare function optionalOf<List extends AnyBlueprintList>(list: List): OptionalBlueprintList<List>;",
+    "export declare function optionalOf<Property extends AnyPropertyConstructor>(Property: Property): OptionalProperty<Property>;",
+    "export declare function optionalOf<Record extends AnyRecordClass>(record: Record | OptionalRecord<Record>): OptionalRecord<Record>;",
+    "export declare function optionalOf<Variant extends AnyBlueprintVariant>(variant: Variant): OptionalBlueprintVariant<Variant>;",
+  ],
+  "propertyOf": [
+    "export declare function propertyOf<SchemaType extends TSchema, Optional extends boolean = false, const Unique extends boolean = false, const Sensitive extends boolean = false>({ name, schema, optional, sensitive, unique, default: _default, preHandle: onPreHandle, afterHandle: onAfterHandle, }: PropertyOfArgs<SchemaType, Optional, Unique, Sensitive>): PropertyClass<SchemaValueType<SchemaType, Optional>, Static<SchemaType>> & UniqueMark<Unique> & SensitiveMark<Sensitive>;",
+  ],
+  "variantOf": [
+    "export declare function variantOf<const Key extends string, const Variants extends BlueprintVariants>(key: Key, variants: Variants): IBlueprintVariant<Key, Variants>;",
+  ],
+}
+`;
+
 exports[`adapters entry (contract) 1`] = `
 {
   "(internal) AbstractDefineProperty": [
@@ -2530,7 +3023,7 @@ exports[`adapters entry (contract) 1`] = `
     "export type AnyBlueprintList = IBlueprintList<any, boolean>;",
   ],
   "(internal) AnyBlueprintVariant": [
-    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; }",
+    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; safeParse(value: unknown): ParseResult<unknown>; }",
   ],
   "(internal) AnyEntityClass": [
     "export type AnyEntityClass = (abstract new (value: never) => object) & { readonly [EntityClassBrand]: true; };",
@@ -2647,7 +3140,7 @@ exports[`adapters entry (contract) 1`] = `
     "export interface ExceptionInit<Details = unknown> extends ExceptionScope { readonly name: string; readonly message: string; readonly details?: Details; readonly cause?: unknown; }",
   ],
   "(internal) ExceptionLayers": [
-    "export declare enum ExceptionLayers { Schema = "schema", Property = "property", Blueprint = "blueprint", Record = "record", Entity = "entity", UseCase = "use-case", Repository = "repository", Environment = "environment", Event = "event", Command = "command", Application = "application", Output = "output" }",
+    "export declare enum ExceptionLayers { Schema = "schema", Property = "property", Blueprint = "blueprint", Record = "record", Entity = "entity", UseCase = "use-case", Repository = "repository", Environment = "environment", Event = "event", Command = "command", Application = "application", Output = "output", Interface = "interface" }",
   ],
   "(internal) ExceptionPropagation": [
     "export interface ExceptionPropagation<Details = unknown> extends ExceptionScope { readonly name?: string; readonly message?: string; readonly details?: Details; }",
@@ -2677,7 +3170,7 @@ exports[`adapters entry (contract) 1`] = `
     "export type IBlueprintFactories = Record<string, BlueprintFactory>;",
   ],
   "(internal) IBlueprintList": [
-    "export interface IBlueprintList<Item extends BlueprintField, Optional extends boolean = false> extends BlueprintListOptions { readonly [Kind]: "list"; readonly item: Item; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<ListShape<Item, "input", Optional>, ListShape<Item, "value", Optional>>; }",
+    "export interface IBlueprintList<Item extends BlueprintField, Optional extends boolean = false> extends BlueprintListOptions { readonly [Kind]: "list"; readonly item: Item; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<ListShape<Item, "input", Optional>, ListShape<Item, "value", Optional>>; safeParse(value: unknown): ParseResult<ListShape<Item, "value", Optional>>; }",
   ],
   "(internal) IBlueprintPlugin": [
     "export interface IBlueprintPlugin<Properties extends IBlueprintCollection = IBlueprintCollection, Factories extends IBlueprintFactories = IBlueprintFactories> { readonly name: string; readonly properties: Properties; readonly factories?: Factories; }",
@@ -3266,7 +3759,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type AnyBlueprintList = IBlueprintList<any, boolean>;",
   ],
   "(internal) AnyBlueprintVariant": [
-    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; }",
+    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; safeParse(value: unknown): ParseResult<unknown>; }",
   ],
   "(internal) AnyCommand": [
     "export type AnyCommand = CommandOf<any, any, any>;",
@@ -3494,7 +3987,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export interface ExceptionInit<Details = unknown> extends ExceptionScope { readonly name: string; readonly message: string; readonly details?: Details; readonly cause?: unknown; }",
   ],
   "(internal) ExceptionLayers": [
-    "export declare enum ExceptionLayers { Schema = "schema", Property = "property", Blueprint = "blueprint", Record = "record", Entity = "entity", UseCase = "use-case", Repository = "repository", Environment = "environment", Event = "event", Command = "command", Application = "application", Output = "output" }",
+    "export declare enum ExceptionLayers { Schema = "schema", Property = "property", Blueprint = "blueprint", Record = "record", Entity = "entity", UseCase = "use-case", Repository = "repository", Environment = "environment", Event = "event", Command = "command", Application = "application", Output = "output", Interface = "interface" }",
   ],
   "(internal) ExceptionPropagation": [
     "export interface ExceptionPropagation<Details = unknown> extends ExceptionScope { readonly name?: string; readonly message?: string; readonly details?: Details; }",
@@ -3530,7 +4023,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type IBlueprintFactories = Record<string, BlueprintFactory>;",
   ],
   "(internal) IBlueprintList": [
-    "export interface IBlueprintList<Item extends BlueprintField, Optional extends boolean = false> extends BlueprintListOptions { readonly [Kind]: "list"; readonly item: Item; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<ListShape<Item, "input", Optional>, ListShape<Item, "value", Optional>>; }",
+    "export interface IBlueprintList<Item extends BlueprintField, Optional extends boolean = false> extends BlueprintListOptions { readonly [Kind]: "list"; readonly item: Item; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<ListShape<Item, "input", Optional>, ListShape<Item, "value", Optional>>; safeParse(value: unknown): ParseResult<ListShape<Item, "value", Optional>>; }",
   ],
   "(internal) IBlueprintPlugin": [
     "export interface IBlueprintPlugin<Properties extends IBlueprintCollection = IBlueprintCollection, Factories extends IBlueprintFactories = IBlueprintFactories> { readonly name: string; readonly properties: Properties; readonly factories?: Factories; }",
@@ -4161,7 +4654,7 @@ exports[`testing entry (contract) 1`] = `
     "export type AnyBlueprintList = IBlueprintList<any, boolean>;",
   ],
   "(internal) AnyBlueprintVariant": [
-    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; }",
+    "export interface AnyBlueprintVariant { readonly [Kind]: "variant"; readonly key: string; readonly variants: any; readonly optional: boolean; readonly "~standard": StandardSchemaV1.Props<any, any>; safeParse(value: unknown): ParseResult<unknown>; }",
   ],
   "(internal) AnyCommand": [
     "export type AnyCommand = CommandOf<any, any, any>;",
@@ -4407,7 +4900,7 @@ exports[`testing entry (contract) 1`] = `
     "export interface ExceptionInit<Details = unknown> extends ExceptionScope { readonly name: string; readonly message: string; readonly details?: Details; readonly cause?: unknown; }",
   ],
   "(internal) ExceptionLayers": [
-    "export declare enum ExceptionLayers { Schema = "schema", Property = "property", Blueprint = "blueprint", Record = "record", Entity = "entity", UseCase = "use-case", Repository = "repository", Environment = "environment", Event = "event", Command = "command", Application = "application", Output = "output" }",
+    "export declare enum ExceptionLayers { Schema = "schema", Property = "property", Blueprint = "blueprint", Record = "record", Entity = "entity", UseCase = "use-case", Repository = "repository", Environment = "environment", Event = "event", Command = "command", Application = "application", Output = "output", Interface = "interface" }",
   ],
   "(internal) ExceptionPropagation": [
     "export interface ExceptionPropagation<Details = unknown> extends ExceptionScope { readonly name?: string; readonly message?: string; readonly details?: Details; }",
@@ -4449,7 +4942,7 @@ exports[`testing entry (contract) 1`] = `
     "export type IBlueprintFactories = Record<string, BlueprintFactory>;",
   ],
   "(internal) IBlueprintList": [
-    "export interface IBlueprintList<Item extends BlueprintField, Optional extends boolean = false> extends BlueprintListOptions { readonly [Kind]: "list"; readonly item: Item; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<ListShape<Item, "input", Optional>, ListShape<Item, "value", Optional>>; }",
+    "export interface IBlueprintList<Item extends BlueprintField, Optional extends boolean = false> extends BlueprintListOptions { readonly [Kind]: "list"; readonly item: Item; readonly optional: Optional; readonly "~standard": StandardSchemaV1.Props<ListShape<Item, "input", Optional>, ListShape<Item, "value", Optional>>; safeParse(value: unknown): ParseResult<ListShape<Item, "value", Optional>>; }",
   ],
   "(internal) IBlueprintPlugin": [
     "export interface IBlueprintPlugin<Properties extends IBlueprintCollection = IBlueprintCollection, Factories extends IBlueprintFactories = IBlueprintFactories> { readonly name: string; readonly properties: Properties; readonly factories?: Factories; }",
@@ -5198,6 +5691,84 @@ exports[`afora.json schema 1`] = `
           },
           "required": [
             "file",
+          ],
+          "type": "object",
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "list": {
+              "anyOf": [
+                {
+                  "type": "boolean",
+                },
+                {
+                  "additionalProperties": false,
+                  "description": "Bounds of a list.",
+                  "properties": {
+                    "maxItems": {
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                    "minItems": {
+                      "minimum": 0,
+                      "type": "integer",
+                    },
+                  },
+                  "type": "object",
+                },
+              ],
+              "description": "A list of the type (the options in \`with\` apply to each item). \`true\` or { minItems, maxItems }.",
+            },
+            "money": {
+              "additionalProperties": false,
+              "description": "An amount of money (ctx.money), an integer of minor units: with one "currency" the value is the integer alone; with a list of currencies, or none (any ISO 4217 code), it is { amount, currency }.",
+              "properties": {
+                "currency": {
+                  "anyOf": [
+                    {
+                      "description": "An ISO 4217 code, "BRL".",
+                      "pattern": "^[A-Z]{3}$",
+                      "type": "string",
+                    },
+                    {
+                      "items": {
+                        "description": "An ISO 4217 code, "BRL".",
+                        "pattern": "^[A-Z]{3}$",
+                        "type": "string",
+                      },
+                      "minItems": 1,
+                      "type": "array",
+                      "uniqueItems": true,
+                    },
+                  ],
+                },
+                "max": {
+                  "description": "The largest amount, in minor units (cents).",
+                  "type": "integer",
+                },
+                "min": {
+                  "description": "The smallest amount, in minor units (cents).",
+                  "type": "integer",
+                },
+                "name": {
+                  "minLength": 1,
+                  "type": "string",
+                },
+                "nonNegative": {
+                  "description": "Rejects an amount below zero.",
+                  "type": "boolean",
+                },
+              },
+              "type": "object",
+            },
+            "optional": {
+              "description": "The key may be absent.",
+              "type": "boolean",
+            },
+          },
+          "required": [
+            "money",
           ],
           "type": "object",
         },
@@ -5955,7 +6526,7 @@ exports[`afora.json schema 1`] = `
           "additionalProperties": false,
           "properties": {
             "layer": {
-              "description": "One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output (see afora_catalog).",
+              "description": "One of the exception layers: schema, property, blueprint, record, entity, use-case, repository, environment, event, command, application, output, interface (see afora_catalog).",
               "type": "string",
             },
             "message": {
@@ -6284,6 +6855,60 @@ exports[`afora.json schema 1`] = `
             {
               "additionalProperties": false,
               "properties": {
+                "money": {
+                  "additionalProperties": false,
+                  "description": "An amount of money (ctx.money), an integer of minor units: with one "currency" the value is the integer alone; with a list of currencies, or none (any ISO 4217 code), it is { amount, currency }.",
+                  "properties": {
+                    "currency": {
+                      "anyOf": [
+                        {
+                          "description": "An ISO 4217 code, "BRL".",
+                          "pattern": "^[A-Z]{3}$",
+                          "type": "string",
+                        },
+                        {
+                          "items": {
+                            "description": "An ISO 4217 code, "BRL".",
+                            "pattern": "^[A-Z]{3}$",
+                            "type": "string",
+                          },
+                          "minItems": 1,
+                          "type": "array",
+                          "uniqueItems": true,
+                        },
+                      ],
+                    },
+                    "max": {
+                      "description": "The largest amount, in minor units (cents).",
+                      "type": "integer",
+                    },
+                    "min": {
+                      "description": "The smallest amount, in minor units (cents).",
+                      "type": "integer",
+                    },
+                    "name": {
+                      "minLength": 1,
+                      "type": "string",
+                    },
+                    "nonNegative": {
+                      "description": "Rejects an amount below zero.",
+                      "type": "boolean",
+                    },
+                  },
+                  "type": "object",
+                },
+                "optional": {
+                  "type": "boolean",
+                },
+              },
+              "required": [
+                "money",
+              ],
+              "type": "object",
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
                 "import": {
                   "description": "The module it is exported from, relative to the output directory.",
                   "type": "string",
@@ -6304,7 +6929,7 @@ exports[`afora.json schema 1`] = `
               "type": "object",
             },
           ],
-          "description": "A custom property: \`base\` + \`with\` (a refined Std property), an \`enum\`, a \`file\`, or an \`opaque\` import of a hand-written property.",
+          "description": "A custom property: \`base\` + \`with\` (a refined Std property), an \`enum\`, a \`file\`, an amount of \`money\`, or an \`opaque\` import of a hand-written property.",
         },
       },
       "type": "object",
