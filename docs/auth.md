@@ -250,7 +250,57 @@ The tokens then never reach the body, and `logout`, which answers empty tokens, 
 
 A browser sends the cookie with every request to the API, a form posted from another page included (with `SameSite=Lax`, the default, only from a page of the same site). The routes read a body only as JSON (see [Serving HTTP](outputs.md)): a form's `text/plain`, `application/x-www-form-urlencoded` or `multipart/form-data` body is a 415, and a page of another origin can send `application/json` only after a CORS preflight that the server allows. A request with no body and no `content-type` is still read as `{}`, so an operation whose input is all optional (`logout`, `refresh`) can be called that way: keep `SameSite` at `Lax` or `Strict`, and check the `Origin` of such requests in a middleware where the cookie is `SameSite=None` or other sites share the domain.
 
-**What it does not do.** Tokens are not stored, so there is no revocation: a token already issued is valid until it expires, and `logout` only removes cookies. Keep `expiresIn` short and let `refresh` renew it; a deleted entity cannot refresh. For revocation, rotation with reuse detection, asymmetric keys or an identity provider, write the `authenticator` hook and your own use cases; the declaration of access does not change.
+**Ending sessions.** Tokens are not stored, but a refresh token can carry a version kept on the entity. `token.versionFrom` names that key: a required integer key of the entity, in its `change` list. Give the same `token` to `login`, `refresh`, `logout` and `changePassword` of the entity:
+
+<!-- docs:code continue -->
+```ts
+class Member extends entityOf(
+	blueprintOf((ctx) => ({ name: ctx.text, sessionVersion: ctx.integer })),
+	{
+		change: ["name", "sessionVersion"],
+		sensitive: ["sessionVersion"], // never an input of update, masked in responses
+		plugins: (ctx) => [ctx.authenticatable],
+	},
+) {}
+const Members = repositoryOf({
+	entity: Member,
+	actions: ["findById", "findByEmail", "create", "update", "increment"],
+});
+
+const versioned = { ...token, versionFrom: "sessionVersion" } as const;
+const self = { key: "id", context: "userId" } as const; // the member is the caller
+const caller = { context: { userId: "subject" } } as const;
+
+const Sessions = commandOf({
+	name: "Sessions",
+	useCases: (ctx) => ({
+		register: ctx.register(Members, { values: { sessionVersion: 0 } }),
+		login: ctx.login(Members, { token: versioned }),
+		refresh: ctx.refresh(Members, { token: versioned }),
+		logout: ctx.logout(Members, {
+			token: versioned,
+			owner: self,
+			access: caller,
+			route: { method: "post", path: "/logout" },
+		}),
+		changePassword: ctx.changePassword(Members, {
+			token: versioned,
+			owner: self,
+			access: caller,
+		}),
+	}),
+});
+```
+
+- **A refresh token carries the version.** `login` and `refresh` copy the value of the key into the `ver` claim of each refresh token they issue. `refresh` loads the entity and compares: a refresh token whose version is not the stored one, or that has none (one issued before the option), is refused with `UseCaseInvalidCredentials` (401), the answer to any invalid token. `versionFrom` needs `refresh`.
+- **Adding 1 ends the sessions.** `logout` and `changePassword` given the option add 1 to the version with `increment` (atomic, so a login at the same time loses nothing), after the password is stored: every refresh token issued before stops refreshing. Any other use case can do the same (`Members.increment(id, { sessionVersion: 1 })`), to end the sessions of a member whose roles were taken away, say.
+- **`logout` needs the caller.** With the option, it takes `owner: { key: "id", context }`, and the access that fills that context: it ends the sessions of whoever calls it, never of an id the input names. A call with no caller is refused (401 over HTTP, an invalid context in process) and changes nothing, cookies included. A caller that is no longer stored has nothing to end, and gets the empty tokens. `logout` and `changePassword` read only `versionFrom` of `token`: the options of `login` as they are, or `{ versionFrom }` alone.
+- **Access tokens are not checked again.** An access token is verified by its signature only, with no read: one issued before a logout or a password change stays valid until it expires. Keep `expiresIn` short; a change takes effect for an access token within that time at most.
+- **`rotate: true` makes a refresh token single-use.** `refresh` then adds 1 to the version and issues the new refresh token with the new value, so the refresh token it was given stops working. Since the version belongs to the entity, not to a device, a refresh on one device ends the sessions of the others: each must log in again. Of two refreshes of the same token, however close, exactly one succeeds: the version is compared after the atomic increment, and only the one that took it from the version the token carries to the next is accepted. The others still added 1, so a token refreshed twice at once (two tabs, a replay) can end the new session too. A refresh token that was already rotated is refused before any increment. `rotate` needs `versionFrom`, and `refresh` then needs the action `increment`.
+
+A key that is not a required integer in the `change` list, `rotate` without `versionFrom`, a repository without `increment`, or a `logout` without `owner: { key: "id" }` throws `UseCaseUnavailable` when the use case is declared. Without `versionFrom` nothing changes: refresh tokens carry no version and `logout` only gives empty tokens.
+
+**What it does not do.** Tokens are not stored. Without `versionFrom`, a token already issued is valid until it expires, and `logout` only removes cookies; with it, refresh tokens can be ended, and access tokens still live until they expire. Keep `expiresIn` short and let `refresh` renew it; a deleted entity cannot refresh. For revoking access tokens before they expire, rotation by stored token ids with reuse detection, asymmetric keys or an identity provider, write the `authenticator` hook and your own use cases; the declaration of access does not change.
 
 **By hand.** `jwtOf(options)` is the same signer on its own: `sign({ subject, scopes?, claims? }, { expiresIn?, use? })`, `verify(token, { use? })` and `authenticator({ header?, cookie? })`. Here the secret may be the text itself. `sign` rejects with `InvalidJwtOptions` a scope that is not a scope token, and leaves out of the token a claim with a registered name: those are the token's own.
 

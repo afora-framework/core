@@ -228,6 +228,24 @@ describe("validation", () => {
 		expect(issuesOf(draft(change))).toContain(expected);
 	});
 
+	test("logout and changePassword take the token version", () => {
+		const versioned = draft((c) => {
+			c.entities.User.fields.sessionVersion = "integer";
+			c.entities.User.change = ["name", "sessionVersion"];
+			c.repositories.Users.actions.push("increment");
+			c.useCases.ChangePassword.options.token = {
+				versionFrom: "sessionVersion",
+			};
+			c.useCases.Logout = {
+				generic: "logout",
+				repository: "Users",
+				options: { owner: self, token: { versionFrom: "sessionVersion" } },
+			};
+		});
+		expect(issuesOf(versioned)).toEqual([]);
+		expect(Value.Check(specSchema, versioned)).toBe(true);
+	});
+
 	test("update of an entity whose only change key is sensitive is refused", () => {
 		const refused = draft((c) => {
 			c.entities.User.change = [];
