@@ -942,7 +942,7 @@ Each library validating the flat object, bundled by itself (minified, `bun build
 | afora         | 201.5 kB | 57.6 kB |                15.4 ms |                    14.5 ms |                    14.6 ms |
 | Joi           | 194.9 kB | 61.0 kB |                23.6 ms |                    19.9 ms |                    19.8 ms |
 
-afora is a framework with one entry point: its bundle carries TypeBox and the code of records, entities, repositories and use cases, whatever the file uses. Typia is small because its validator is generated at build time; Valibot because it is made to be tree-shaken.
+Most of afora's bundle is TypeBox, its schemas and its formats, and the properties of the Std catalog; a bundler that drops unused modules leaves out records, entities, repositories and use cases. afora (client) is the same file importing from `@afora/core/client`, the entry that reaches none of them (`src/client.test.ts`); `bun run bench:guard` holds its size to `SIZE_LIMITS` in `bench/guard.limits.ts`. Typia is small because its validator is generated at build time; Valibot because it is made to be tree-shaken.
 
 ## What CI holds
 

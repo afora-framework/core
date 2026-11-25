@@ -51,7 +51,13 @@ for (const file of files) {
 	bytes += code.length;
 }
 
-for (const entry of ["index", "adapters", "experimental", "testing/index"]) {
+for (const entry of [
+	"index",
+	"client",
+	"adapters",
+	"experimental",
+	"testing/index",
+]) {
 	if (!statSync(join(dist, `${entry}.js`), { throwIfNoEntry: false })) {
 		throw new Error(`dist/${entry}.js was not built`);
 	}

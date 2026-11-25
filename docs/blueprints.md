@@ -126,6 +126,21 @@ const Post = contentBlueprintOf((ctx) => ({
 }));
 ```
 
+### In a client
+
+An interface that validates a form needs blueprints and parsing, not records, repositories or use cases. `@afora/core/client` exports `blueprintOf`, `listOf`, `optionalOf`, `variantOf`, `enumOf`, `propertyOf`, `exceptionOf`, `ExceptionLayers` and the Standard Schema and parse types, and reaches none of the modules only a server runs:
+
+```ts
+import { blueprintOf, listOf } from "@afora/core/client";
+
+const Tag = blueprintOf((ctx) => ({ label: ctx.string }));
+const Signup = blueprintOf((ctx) => ({ email: ctx.email, tags: listOf(Tag) }));
+
+Signup.safeParse({ email: "ADA@example.com", tags: [] }).issues; // undefined
+```
+
+They are the objects of `@afora/core`: a blueprint made from either entry is a field, a list item or a record of the other, so a project can declare its blueprints once and import them from the API and the interface. See [API tiers](api-tiers.md#the-tiers).
+
 Blueprints, lists, variants and records are told apart by a brand, not by their shape: each carries the `Kind` symbol (exported by `@afora/core/adapters`, for code that walks fields), so a plain object with a `schema` key is never taken for a blueprint.
 
 A plugin can also take factories, functions that make a field from their arguments, as `Std` does with `enumOf`: `blueprintPluginOf("content", { title: Title }, { enumOf })` gives `ctx.enumOf`. A factory replaces a field with the same name.

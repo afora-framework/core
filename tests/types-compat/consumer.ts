@@ -33,6 +33,11 @@ import {
 	wrapProvider,
 } from "@afora/core";
 import type { IRepositoryProvider } from "@afora/core/adapters";
+import {
+	blueprintOf as clientBlueprintOf,
+	listOf as clientListOf,
+	type ParseResult,
+} from "@afora/core/client";
 import { type SliceMask, sliceOf } from "@afora/core/experimental";
 import { type ContractRunner, providerContract } from "@afora/core/testing";
 import { Type } from "typebox";
@@ -777,4 +782,19 @@ export const numberedRepository = repositoryOf({
 export const numberedFind: Equals<
 	Parameters<typeof numberedRepository.findById>[0],
 	number
+> = true;
+
+// The client entry gives the same blueprints: one made there is a field, a
+// list item and a record of the main entry, with the same inferred value.
+const ClientTag = clientBlueprintOf((ctx) => ({ label: ctx.string }));
+class Tagged extends recordOf(
+	blueprintOf(() => ({ tag: ClientTag, tags: clientListOf(ClientTag) })),
+) {}
+export const taggedLabel: string = new Tagged({
+	tag: { label: "a" },
+	tags: [],
+}).tag.label;
+export const clientParse: Equals<
+	ReturnType<typeof ClientTag.safeParse>,
+	ParseResult<{ label: string }>
 > = true;

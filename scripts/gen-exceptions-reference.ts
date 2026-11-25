@@ -1,6 +1,6 @@
 /**
  * Generates docs/reference/exceptions.md: every exception class exported by
- * `@afora/core`, `/adapters`, `/experimental` and `/testing` (found at
+ * `@afora/core`, `/client`, `/adapters`, `/experimental` and `/testing` (found at
  * runtime with `isDeclaredException`), grouped by layer, with what throws it
  * (its JSDoc summary), the status `statusOf` gives it and how to handle it
  * (`HANDLING` below), plus the names raised without a class. Reads `src/`,

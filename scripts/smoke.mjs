@@ -8,6 +8,7 @@ import {
 	outputValueOf,
 	RESERVED_RECORD_KEYS,
 } from "../dist/adapters.js";
+import * as client from "../dist/client.js";
 import { sliceOf, sliceValue } from "../dist/experimental.js";
 import {
 	blueprintOf,
@@ -113,6 +114,20 @@ assert.deepEqual(sliceValue(wrapped, { slim: { title: true } }), {
 });
 const Only = sliceOf(Wrapper.blueprint, { slim: true });
 assert.ok(Only.properties.slim === Slim);
+
+// client entry: the same objects as the main one, so blueprints cross over
+assert.equal(client.blueprintOf, blueprintOf);
+const Tag = client.blueprintOf((ctx) => ({ label: ctx.string }));
+const Tagged = client.blueprintOf(() => ({
+	user: UserBlueprint,
+	tags: client.listOf(Tag),
+}));
+assert.deepEqual(
+	Tagged.safeParse({ user: {}, tags: [{}] }).issues?.length > 0,
+	true,
+);
+class TagRecord extends recordOf(Tag) {}
+assert.equal(new TagRecord({ label: "a" }).label, "a");
 
 // adapters entry shares module state with the main one (records mask through it)
 assert.equal(outputValueOf({ user }).user.password, MASK);

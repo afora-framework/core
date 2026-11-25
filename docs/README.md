@@ -140,12 +140,13 @@ Every export belongs to a tier, and the tier says where to import it from. [API 
 | Tier         | Import from                | What it holds                                                                                                                            | Semver |
 | ------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | stable       | `@afora/core`              | The concepts of these pages: what application code declares, runs and catches.                                                           | yes    |
+| stable       | `@afora/core/client`       | For an interface: blueprints and parsing, the same objects as `@afora/core`, without the modules only a server runs.                     | yes    |
 | adapters     | `@afora/core/adapters`     | Plumbing for sinks, providers and code generators: `IRepositoryProvider`, `sinkOf`, `problemOf`, `statusOf`, the `app.describe()` types. | yes    |
 | testing      | `@afora/core/testing`      | `providerContract` and `memoryPublisher`, for packages that implement a provider or a publisher.                                         | yes    |
 | experimental | `@afora/core/experimental` | Slicing, and description helpers such as `stageDescriptionOf` and `useCaseTargetOf`.                                                     | no     |
 | internal     | not exported               | Base classes (`AbstractEntity`...), runtime guards, constants of a rule.                                                                 | no     |
 
-Only stable, adapters and testing are the contract of [VERSIONING.md](../VERSIONING.md): before 27.0 a break there is marked **Breaking.** in the CHANGELOG with a Migration block (before and after), and from 27.0 on it waits for the next year's major. Experimental exports may change in any release, and internal code is not the API. Application code needs only `@afora/core`.
+Only stable (with its client entry), adapters and testing are the contract of [VERSIONING.md](../VERSIONING.md): before 27.0 a break there is marked **Breaking.** in the CHANGELOG with a Migration block (before and after), and from 27.0 on it waits for the next year's major. Experimental exports may change in any release, and internal code is not the API. Application code needs only `@afora/core`.
 
 ## Project
 

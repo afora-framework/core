@@ -1,6 +1,6 @@
 /**
  * Generates docs/reference/api.md from the JSDoc of the built `.d.ts` of the
- * four entries: one section per entry, one `### Name` per export (sorted)
+ * five entries: one section per entry, one `### Name` per export (sorted)
  * with its kind, tier, import line and JSDoc (summary, @param, @returns,
  * @throws, @default, @deprecated, @example). Deterministic. Needs `dist/`:
  * run `bun run build` first.

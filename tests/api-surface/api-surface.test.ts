@@ -15,12 +15,14 @@ import { apiSurface } from "./surface";
 
 const root = join(import.meta.dir, "../..");
 const entry = join(root, "dist/index.d.ts");
+const clientEntry = join(root, "dist/client.d.ts");
 const adaptersEntry = join(root, "dist/adapters.d.ts");
 const experimentalEntry = join(root, "dist/experimental.d.ts");
 const testingEntry = join(root, "dist/testing/index.d.ts");
 
 if (
 	!existsSync(entry) ||
+	!existsSync(clientEntry) ||
 	!existsSync(adaptersEntry) ||
 	!existsSync(experimentalEntry) ||
 	!existsSync(testingEntry)
@@ -29,6 +31,14 @@ if (
 
 test("exports of the package and their declarations", () => {
 	const surface = apiSurface(entry);
+	expect(Object.keys(surface).length).toBeGreaterThan(0);
+	expect(surface).toMatchSnapshot();
+});
+
+// Part of the contract: `@afora/core/client` is the part of the main entry
+// a client needs, the same objects (see docs/api-tiers.md).
+test("client entry (contract)", () => {
+	const surface = apiSurface(clientEntry);
 	expect(Object.keys(surface).length).toBeGreaterThan(0);
 	expect(surface).toMatchSnapshot();
 });

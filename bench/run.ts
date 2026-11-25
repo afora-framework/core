@@ -238,7 +238,9 @@ if (process.env.BENCH_CHILD === "1") {
 	writeFileSync(process.env.BENCH_OUT as string, JSON.stringify(report));
 } else if (flag("--guard")) {
 	await installRoot();
-	process.exit(guard(await loadScenarios(only)) ? 0 : 1);
+	const { sizeGuard } = await import("./size.ts");
+	const sized = await sizeGuard();
+	process.exit(guard(await loadScenarios(only)) && sized ? 0 : 1);
 } else if (flag("--compare")) {
 	await installRoot();
 	const base = optionOf("--compare");

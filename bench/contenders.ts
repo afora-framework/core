@@ -57,6 +57,17 @@ export const LIBRARIES: Record<string, { label: string; package: string }> = {
 	joi: { label: "Joi", package: "joi" },
 };
 
+/**
+ * Every bundle `size.ts` measures, by its file in `entries/`: one per
+ * library, and the entries of afora that are not a library of their own
+ * (`@afora/core/client`). Only the libraries are compared in the tables of
+ * times.
+ */
+export const BUNDLES: Record<string, { label: string; package: string }> = {
+	...LIBRARIES,
+	"afora-client": { label: "afora (client)", package: "@afora/core" },
+};
+
 export const typebox = (compiled: {
 	Check(value: unknown): boolean;
 	Errors(value: unknown): Iterable<unknown>;

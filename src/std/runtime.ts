@@ -1,7 +1,7 @@
 import { currentTime, setClock } from "../core/clock";
 import { ExceptionLayers } from "../core/exception/enums/exception-layers";
 import { exceptionOf } from "../core/exception/exception";
-import { markExported } from "../core/exception/exported";
+import { markExported } from "../core/exception/exported-mark";
 import {
 	activeRuntime,
 	type IdGenerator,

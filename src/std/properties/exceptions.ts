@@ -1,6 +1,6 @@
 import { ExceptionLayers } from "../../core/exception/enums/exception-layers";
 import { exceptionOf } from "../../core/exception/exception";
-import { markExported } from "../../core/exception/exported";
+import { markExported } from "../../core/exception/exported-mark";
 import type { Issue } from "../../core/parse/types/parse.interface";
 
 /**
