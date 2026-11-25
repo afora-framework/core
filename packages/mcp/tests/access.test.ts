@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { blueprintOf, commandOf, outputOf, useCaseOf } from "@afora/core";
-import { jwtOf } from "@afora/core/experimental";
+import { jwtOf } from "@afora/core/adapters";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { type McpTools, type McpToolsHooks, mcpTools } from "../src/index";

@@ -63,8 +63,10 @@ export function createCompilation(
 	checks: (input: string) => readonly Step[] = () => [],
 	errors: readonly AnyExceptionClass[] = [],
 	taken?: (keys: readonly string[]) => void,
+	extraOptions: readonly string[] = [],
 ): UseCaseCompilation {
 	checkOptions(target, options, [
+		...extraOptions,
 		"as",
 		"owner",
 		"omit",

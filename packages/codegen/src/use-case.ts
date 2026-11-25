@@ -524,6 +524,21 @@ function checkGenericUseCase(
 		if (key === "as" && !(typeof value === "string" && isIdentifier(value))) {
 			invalid(key, '"as" must be an identifier: the key of the response.');
 		}
+		if (key === "takesTokenKeys") {
+			const scopes = isObject(spec.access) ? spec.access.scopes : undefined;
+			if (value !== true) invalid(key, '"takesTokenKeys" must be true.');
+			else if (
+				info?.name !== "register" ||
+				!Array.isArray(scopes) ||
+				scopes.length === 0
+			) {
+				invalid(
+					key,
+					'"takesTokenKeys" is for "register" and needs an "access" with "scopes": only a caller with a scope may choose the keys a token is made from.',
+				);
+			}
+			continue;
+		}
 		if (key === "owner") {
 			if (
 				!isObject(value) ||

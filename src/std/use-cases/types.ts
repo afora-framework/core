@@ -126,7 +126,32 @@ export interface StdTokenOptions extends DescribedJwtOptions {
 	readonly scopesFrom?: string;
 	/** Claims of the token, each from a key of the entity: `{ tenant: "tenantId" }`. */
 	readonly claims?: { readonly [claim: string]: string };
+	/**
+	 * A required integer key of the entity, in its `change` list and
+	 * `sensitive` (never an input of `update`): its token version. Each
+	 * refresh token carries the value it had when issued, and
+	 * `refresh` refuses one whose version is not the stored one. `logout`
+	 * and `changePassword` given it add 1 (with `increment`), so the
+	 * refresh tokens issued before no longer refresh. Access tokens are not
+	 * checked: each stays valid until it expires. Needs `refresh`.
+	 */
+	readonly versionFrom?: string;
+	/**
+	 * With `versionFrom`: `refresh` adds 1 to the version (with
+	 * `increment`) and issues the new refresh token with it, so a refresh
+	 * token is used once, and a refresh ends the sessions of the other
+	 * devices of the entity.
+	 */
+	readonly rotate?: boolean;
 }
+
+/**
+ * The option `token` of `logout` and `changePassword`, which read only its
+ * `versionFrom`: the token options of `login`, or `{ versionFrom }`.
+ */
+type TokenVersionOption =
+	| (StdTokenOptions & { readonly versionFrom: string })
+	| { readonly versionFrom: string };
 
 /** The response keys the `token` option adds. */
 type TokenResponse<Options> = Options extends {
@@ -182,6 +207,17 @@ export interface StdCreateOptions<Repository>
 	readonly relations?: {
 		readonly [Key in KeyOf<Repository>]?: { readonly shared?: boolean };
 	};
+}
+
+/** The options of `register`. */
+interface StdRegisterOptions<Repository> extends StdCreateOptions<Repository> {
+	/**
+	 * Lets the input take the keys a token is made from (`token.scopesFrom`,
+	 * `token.claims` of a `login` or `refresh`), which a public register
+	 * refuses. Only with an `access` that asks for `scopes`; the key of
+	 * `token.versionFrom` stays refused.
+	 */
+	readonly takesTokenKeys?: true;
 }
 
 /** The options of `publish`, `unpublish`, `archive` and `unarchive`. */
@@ -665,7 +701,10 @@ type ChangePasswordInput<Repository> = ById<Repository> & {
 /** `changePassword`: for an authenticatable entity, with `findById` and `update`. */
 export type ChangePasswordMaker = <
 	Repository extends AnyRepository,
-	const Options extends StdEntityOptions<Repository> = None,
+	const Options extends StdEntityOptions<Repository> & {
+		/** With `versionFrom`, adds 1 to the token version: the refresh tokens issued before no longer refresh. Needs `increment`. */
+		readonly token?: TokenVersionOption;
+	} = None,
 	const Owner = undefined,
 	const Dependencies extends UseCaseCollection = None,
 >(
@@ -696,7 +735,7 @@ export type ChangePasswordMaker = <
 /** `register`: for an authenticatable entity, with `findByEmail` and `create`. */
 export type RegisterMaker = <
 	Repository extends AnyRepository,
-	const Options extends StdCreateOptions<Repository> = None,
+	const Options extends StdRegisterOptions<Repository> = None,
 	const Omitted extends KeyOf<Repository> = never,
 	const Values = None,
 	const Owner = undefined,
@@ -769,17 +808,32 @@ export type RefreshMaker = <Repository extends AnyRepository>(
 	{ readonly repository: Repository }
 >;
 
-/** `logout`: gives empty tokens, which a route with `setCookie` turns into removed cookies. */
-export type LogoutMaker = <Repository extends AnyRepository>(
+/**
+ * `logout`: gives empty tokens, which a route with `setCookie` turns into
+ * removed cookies. With `token.versionFrom` and `owner: { key: "id",
+ * context }`, it first adds 1 to the token version of the caller; needs
+ * `increment`.
+ */
+export type LogoutMaker = <
+	Repository extends AnyRepository,
+	const Options extends StdUseCaseOptions &
+		StdOwnerOption<Repository> & {
+			/** Ends the sessions of the caller: see `StdTokenOptions.versionFrom`. */
+			readonly token?: TokenVersionOption;
+		} & StdNoHookOptions = None,
+>(
 	repository: Repository,
-	options?: StdUseCaseOptions & StdNoHookOptions,
+	options?: Options,
 ) => StepsUseCaseConstructor<
 	Record<never, never>,
 	{
 		readonly token: typeof StringProperty;
 		readonly refreshToken: typeof StringProperty;
 	},
-	Record<never, never>
+	Options extends { readonly token: object }
+		? { readonly repository: Repository }
+		: Record<never, never>,
+	OwnerContext<Repository, Options>
 >;
 
 /**

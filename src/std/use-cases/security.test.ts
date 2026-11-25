@@ -730,6 +730,216 @@ describe("SEC-22: register does not take the keys login makes tokens from", () =
 	});
 });
 
+describe("takesTokenKeys: an administrator-only register takes the token keys", () => {
+	const token = {
+		secret: { env: "AFORA_TAKES_TEST_SECRET" },
+		scopesFrom: "roles",
+		claims: { tenant: "tenant" },
+	} as const;
+	const member = () => {
+		class Member extends entityOf(
+			blueprintOf((ctx) => ({
+				name: ctx.string,
+				roles: ctx.list.string,
+				tenant: ctx.string,
+			})),
+			{ plugins: (ctx) => [ctx.authenticatable] },
+		) {}
+		return repositoryOf({
+			entity: Member,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findByEmail", "create"],
+		});
+	};
+	const versioned = () => {
+		class Member extends entityOf(
+			blueprintOf((ctx) => ({
+				name: ctx.string,
+				roles: ctx.list.string,
+				tenant: ctx.string,
+				sessionVersion: ctx.integer,
+			})),
+			{
+				plugins: (ctx) => [ctx.authenticatable],
+				change: ["sessionVersion"],
+				sensitive: ["sessionVersion"],
+			},
+		) {}
+		return repositoryOf({
+			entity: Member,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findByEmail", "create", "increment"],
+		});
+	};
+	const admin = { scopes: ["users:admin"] };
+
+	test("takes the keys of the token with an access that asks for scopes", async () => {
+		process.env.AFORA_TAKES_TEST_SECRET =
+			"a-secret-of-at-least-thirty-two-characters";
+		const Members = member();
+		const Auth = commandOf({
+			name: "Auth",
+			useCases: (ctx) => ({
+				register: ctx.register(Members, {
+					takesTokenKeys: true,
+					access: admin,
+				}),
+				login: ctx.login(Members, { token }),
+			}),
+		});
+		const { item } = await Auth.run("register", {
+			name: "Ada",
+			email: "ada@x.dev",
+			password: strong,
+			roles: ["admin"],
+			tenant: "acme",
+		});
+		expect(item.roles).toEqual(["admin"]);
+		expect(item.tenant).toBe("acme");
+	});
+
+	test("takes them when login is declared first, too", () => {
+		const Members = member();
+		commandOf({
+			name: "Auth",
+			useCases: (ctx) => ({
+				login: ctx.login(Members, { token }),
+				register: ctx.register(Members, {
+					takesTokenKeys: true,
+					access: admin,
+				}),
+			}),
+		});
+	});
+
+	test("is refused without an access that asks for scopes", () => {
+		for (const access of [
+			undefined,
+			{},
+			{ scopes: [] },
+			{ public: true },
+			{ context: { id: "subject" } },
+		]) {
+			expect(
+				make("register", member(), {
+					takesTokenKeys: true,
+					...(access === undefined ? {} : { access }),
+				}),
+			).toContain("takesTokenKeys");
+		}
+		expect(
+			make("register", member(), { takesTokenKeys: false, access: admin }),
+		).toContain("takesTokenKeys");
+	});
+
+	test("is no option of create", () => {
+		expect(
+			make("create", member(), { takesTokenKeys: true, access: admin }),
+		).toContain("takesTokenKeys");
+	});
+
+	test("a public register still refuses the token keys", () => {
+		const Members = member();
+		expect(
+			unavailable(() =>
+				commandOf({
+					name: "Auth",
+					useCases: (ctx) => ({
+						register: ctx.register(Members),
+						login: ctx.login(Members, { token }),
+					}),
+				}),
+			),
+		).toContain('"roles"');
+	});
+
+	test("a public register refuses the key of token.versionFrom, whichever is declared first", () => {
+		const refresh = {
+			secret: { env: "AFORA_TAKES_TEST_SECRET" },
+			refresh: { expiresIn: 60 },
+			versionFrom: "sessionVersion",
+		};
+		const First = versioned();
+		expect(
+			unavailable(() =>
+				commandOf({
+					name: "Auth",
+					useCases: (ctx) => ({
+						register: ctx.register(First, {
+							values: { roles: [], tenant: "t" },
+						}),
+						refresh: ctx.refresh(First, { token: refresh }),
+					}),
+				}),
+			),
+		).toContain("sessionVersion");
+		const Second = versioned();
+		expect(
+			unavailable(() =>
+				commandOf({
+					name: "Auth",
+					useCases: (ctx) => ({
+						refresh: ctx.refresh(Second, { token: refresh }),
+						register: ctx.register(Second, {
+							values: { roles: [], tenant: "t" },
+						}),
+					}),
+				}),
+			),
+		).toContain("sessionVersion");
+	});
+
+	test("still refuses the key of token.versionFrom, whichever is declared first", () => {
+		const refresh = {
+			...token,
+			refresh: { expiresIn: 60 },
+			versionFrom: "sessionVersion",
+		};
+		const First = versioned();
+		expect(
+			unavailable(() =>
+				commandOf({
+					name: "Auth",
+					useCases: (ctx) => ({
+						register: ctx.register(First, {
+							takesTokenKeys: true,
+							access: admin,
+						}),
+						refresh: ctx.refresh(First, { token: refresh }),
+					}),
+				}),
+			),
+		).toContain("sessionVersion");
+		const Second = versioned();
+		expect(
+			unavailable(() =>
+				commandOf({
+					name: "Auth",
+					useCases: (ctx) => ({
+						refresh: ctx.refresh(Second, { token: refresh }),
+						register: ctx.register(Second, {
+							takesTokenKeys: true,
+							access: admin,
+						}),
+					}),
+				}),
+			),
+		).toContain("sessionVersion");
+		const Third = versioned();
+		commandOf({
+			name: "Auth",
+			useCases: (ctx) => ({
+				register: ctx.register(Third, {
+					takesTokenKeys: true,
+					access: admin,
+					values: { sessionVersion: 0 },
+				}),
+				refresh: ctx.refresh(Third, { token: refresh }),
+			}),
+		});
+	});
+});
+
 describe("SEC-42: a refresh token is accepted only by the refresh of its entity", () => {
 	const token = {
 		secret: { env: "AFORA_SEC42_TEST_SECRET" },

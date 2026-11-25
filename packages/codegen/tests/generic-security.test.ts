@@ -228,6 +228,42 @@ describe("validation", () => {
 		expect(issuesOf(draft(change))).toContain(expected);
 	});
 
+	test("logout and changePassword take the token version", () => {
+		const versioned = draft((c) => {
+			c.entities.User.fields.sessionVersion = "integer";
+			c.entities.User.change = ["name", "sessionVersion"];
+			c.entities.User.sensitive = ["sessionVersion"];
+			c.repositories.Users.actions.push("increment");
+			c.useCases.ChangePassword.options.token = {
+				versionFrom: "sessionVersion",
+			};
+			c.useCases.Logout = {
+				generic: "logout",
+				repository: "Users",
+				options: { owner: self, token: { versionFrom: "sessionVersion" } },
+			};
+		});
+		expect(issuesOf(versioned)).toEqual([]);
+		expect(Value.Check(specSchema, versioned)).toBe(true);
+	});
+
+	test("register takes the token keys only with an access that asks for scopes", () => {
+		const keys = (c: Draft) => {
+			c.entities.User.fields.roles = "text";
+			c.useCases.Register.options = { takesTokenKeys: true };
+		};
+		const admin = draft((c) => {
+			keys(c);
+			c.useCases.Register.access = { scopes: ["users:admin"] };
+		});
+		expect(issuesOf(admin)).toEqual([]);
+		expect(Value.Check(specSchema, admin)).toBe(true);
+		const open = draft(keys);
+		expect(issuesOf(open)).toEqual([
+			"invalid_generic_option@useCases.Register.options.takesTokenKeys",
+		]);
+	});
+
 	test("update of an entity whose only change key is sensitive is refused", () => {
 		const refused = draft((c) => {
 			c.entities.User.change = [];

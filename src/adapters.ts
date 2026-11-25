@@ -26,6 +26,15 @@ export type {
 	UseCaseDependencyDescription,
 	UseCaseDescription,
 } from "./core/application/types/application.interface";
+export { InvalidJwtOptions, jwtOf } from "./core/auth/jwt";
+export type {
+	DescribedJwtOptions,
+	Jwt,
+	JwtAlgorithm,
+	JwtOptions,
+	JwtSubject,
+	JwtTokenOptions,
+} from "./core/auth/types/jwt.interface";
 export {
 	ENTITY_IDENTITY_KEYS,
 	RESERVED_ENTITY_KEYS,

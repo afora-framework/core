@@ -4427,7 +4427,7 @@ const logged = wrapProvider(inMemoryProvider(), {
 
 ## @afora/core/adapters
 
-Tier: adapters. 75 exports.
+Tier: adapters. 83 exports.
 
 ### ApplicationDescription
 
@@ -4474,6 +4474,13 @@ One operation, ready to serve: the server routes `method` and `path` to `handle`
 
 Given to the constructor of a property in place of a value, it builds the
 instance from the `default` of the property, as `demo()` does.
+
+### DescribedJwtOptions
+
+*interface* · tier: adapters · `import type { DescribedJwtOptions } from "@afora/core/adapters"`
+
+The options of `jwtOf` where they are described (`describe()`,
+`afora.json`): the secret is named by its environment variable.
 
 ### ENTITY_IDENTITY_KEYS
 
@@ -4551,6 +4558,42 @@ an implementation.
 **Throws** {
 
 **Throws** {
+
+### InvalidJwtOptions
+
+*const* · tier: adapters · `import { InvalidJwtOptions } from "@afora/core/adapters"`
+
+`jwtOf` got options it cannot use, its secret is missing, or `sign` got a scope that is not a scope token; `details.reason` says what.
+
+### Jwt
+
+*interface* · tier: adapters · `import type { Jwt } from "@afora/core/adapters"`
+
+Signs and verifies the tokens of one secret (see `jwtOf`).
+
+### JwtAlgorithm
+
+*type* · tier: adapters · `import type { JwtAlgorithm } from "@afora/core/adapters"`
+
+The algorithms `jwtOf` signs and verifies with: HMAC with a shared secret.
+
+### JwtOptions
+
+*interface* · tier: adapters · `import type { JwtOptions } from "@afora/core/adapters"`
+
+The options of `jwtOf`. JSON, so they can live in the options of a sink.
+
+### JwtSubject
+
+*interface* · tier: adapters · `import type { JwtSubject } from "@afora/core/adapters"`
+
+What a token is signed for.
+
+### JwtTokenOptions
+
+*interface* · tier: adapters · `import type { JwtTokenOptions } from "@afora/core/adapters"`
+
+What changes for one token.
 
 ### Kind
 
@@ -4904,6 +4947,28 @@ compared key by key. Ordered by entity name, then key.
 
 Why the {@link HttpOptions} are not valid, naming them `where.<option>`;
 `undefined` when they are. Other keys of `options` are not looked at.
+
+### jwtOf
+
+*function* · tier: adapters · `import { jwtOf } from "@afora/core/adapters"`
+
+Signs and verifies JSON Web Tokens with a shared secret (HMAC), on Web
+Crypto, so it runs on Bun, Node and Workers alike:
+
+```ts
+const jwt = jwtOf({ secret: { env: "JWT_SECRET" }, issuer: "blog" });
+const token = await jwt.sign({ subject: user.id, scopes: ["posts:write"] });
+const principal = await jwt.verify(token); // { subject, scopes, claims? }
+hono(options, { authenticator: jwt.authenticator() });
+```
+
+A token is refused (`Unauthenticated`) when it is malformed, signed with
+another algorithm or secret, expired, not yet valid, of another issuer,
+audience or use, or has no subject. `sign` leaves out a claim with a
+registered name and rejects a scope that is not a scope token (not empty,
+no space or control character). Throws `InvalidJwtOptions` for options
+it cannot use, and when the secret of `{ env }` is missing or shorter than
+32 characters, on the first token.
 
 ### operationRoutes
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { jwtOf } from "../experimental";
+import { jwtOf } from "../adapters";
 import {
 	Archivable,
 	blueprintOf,

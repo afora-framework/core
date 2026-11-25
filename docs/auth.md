@@ -123,7 +123,7 @@ const Account = commandOf({
 
 ## Tokens and sessions
 
-**Experimental.** What follows is imported from `@afora/core/experimental` or marked as such, and may change in any release (see [API tiers](api-tiers.md)). The declaration of access above is stable; how a caller gets and presents a token is what may still move.
+**Partly experimental.** `jwtOf`, its options and `InvalidJwtOptions` are stable and come from `@afora/core/adapters`: the signer, the verifier and the `authenticator` follow the compatibility policy (see [API tiers](api-tiers.md)). The ready-made sessions built on them, `login`, `refresh` and `logout` with `StdTokenOptions`, are marked **Experimental** where they are described and may change in any release.
 
 afora ships one ready-made way to authenticate: JSON Web Tokens signed with a shared secret (HMAC), on Web Crypto, so the same code runs on Bun, Node and Workers. It is three pieces that share one set of options.
 
@@ -193,7 +193,7 @@ const Api = outputOf({
 ```
 
 - **`login` with `token`** answers `{ item, token }`, and `refreshToken` too with `refresh`. The token is signed for the entity: its `id` is the subject, its scopes are `scopes` (a fixed list) plus the list held by the key `scopesFrom`, and `claims: { tenant: "tenantId" }` copies keys of the entity into claims. Each scope is a scope token: not empty, without spaces or control characters, since a token keeps its scopes space separated. A fixed scope that is not one throws `UseCaseUnavailable` when the use case is declared, and `login` gives no token to an entity that holds one (a 500). `claims` cannot name a registered claim (`sub`, `scope`, `iat`, `exp`, `nbf`, `iss`, `aud`, `use`): `UseCaseUnavailable` too.
-- **`register` does not take the keys a token is made from.** Whoever calls `register` would otherwise choose their own scopes and claims. So a `register` whose input takes a key that the `token.scopesFrom` or `token.claims` of a `login` or `refresh` of the same entity reads throws `UseCaseUnavailable` at declaration, whichever of them is declared first and in whatever command: set the key with `values` (or leave an optional one out with `omit`), and change it with a use case that only an administrator can call.
+- **`register` does not take the keys a token is made from.** Whoever calls `register` would otherwise choose their own scopes and claims. So a `register` whose input takes a key that the `token.scopesFrom` or `token.claims` of a `login` or `refresh` of the same entity reads, or the `token.versionFrom` key of any use case of the same entity, throws `UseCaseUnavailable` at declaration, whichever of them is declared first and in whatever command: set the key with `values` (or leave an optional one out with `omit`), and change it with a use case that only an administrator can call. A register that only an administrator can call may take them instead: `takesTokenKeys: true` lets its input take the keys a token is made from. It needs an `access` that asks for `scopes` (`authenticated: true` alone, no `access`, a public one or any other value of the option throws `UseCaseUnavailable` at declaration), and the use case is then enforced as any other with that access. It does not lift the refusal for the key of `token.versionFrom`, which every `register` refuses: a new entity starts at its default version (set it with `values`).
 - **`refresh`** takes `{ refreshToken }` and answers a new `{ token, refreshToken }`, if the entity still exists. A refresh token is signed for that use only: it is not accepted as an access token, nor the other way round.
 - **A refresh token belongs to its entity.** It is signed for the refresh of the entity that issued it (its `use` names the entity, `refresh:<Entity>`), so the `refresh` of another entity refuses it as it refuses any invalid token (`Unauthenticated`, 401), even when the two share the secret and an id. An access token names its entity by id only (the subject): where several authenticatable entities share a secret, scopes and owner checks read that id alone, so give such entities ids that cannot be the same (the default `Id`, a UUID v7) or tell them apart by their scopes.
 - **`auth.jwt`** in the options of a sink that serves HTTP is the authenticator: it reads `Authorization: Bearer <token>` (another header with `header`), verifies it and gives the `Principal` that the [access](#the-declaration) of each use case is checked against. The OpenAPI document gets the matching security scheme. An `authenticator` given in the hooks of the sink replaces it.
@@ -250,12 +250,63 @@ The tokens then never reach the body, and `logout`, which answers empty tokens, 
 
 A browser sends the cookie with every request to the API, a form posted from another page included (with `SameSite=Lax`, the default, only from a page of the same site). The routes read a body only as JSON (see [Serving HTTP](outputs.md)): a form's `text/plain`, `application/x-www-form-urlencoded` or `multipart/form-data` body is a 415, and a page of another origin can send `application/json` only after a CORS preflight that the server allows. A request with no body and no `content-type` is still read as `{}`, so an operation whose input is all optional (`logout`, `refresh`) can be called that way: keep `SameSite` at `Lax` or `Strict`, and check the `Origin` of such requests in a middleware where the cookie is `SameSite=None` or other sites share the domain.
 
-**What it does not do.** Tokens are not stored, so there is no revocation: a token already issued is valid until it expires, and `logout` only removes cookies. Keep `expiresIn` short and let `refresh` renew it; a deleted entity cannot refresh. For revocation, rotation with reuse detection, asymmetric keys or an identity provider, write the `authenticator` hook and your own use cases; the declaration of access does not change.
+**Ending sessions.** Tokens are not stored, but a refresh token can carry a version kept on the entity. `token.versionFrom` names that key: a required integer key of the entity, in its `change` list and `sensitive` (so `update` never takes it as input: a caller who could set it back would revive the refresh tokens a logout ended). Give the same `token` to `login`, `refresh`, `logout` and `changePassword` of the entity:
 
-**By hand.** `jwtOf(options)` is the same signer on its own: `sign({ subject, scopes?, claims? }, { expiresIn?, use? })`, `verify(token, { use? })` and `authenticator({ header?, cookie? })`. Here the secret may be the text itself. `sign` rejects with `InvalidJwtOptions` a scope that is not a scope token, and leaves out of the token a claim with a registered name: those are the token's own.
+<!-- docs:code continue -->
+```ts
+class Member extends entityOf(
+	blueprintOf((ctx) => ({ name: ctx.text, sessionVersion: ctx.integer })),
+	{
+		change: ["name", "sessionVersion"],
+		sensitive: ["sessionVersion"], // never an input of update, masked in responses
+		plugins: (ctx) => [ctx.authenticatable],
+	},
+) {}
+const Members = repositoryOf({
+	entity: Member,
+	actions: ["findById", "findByEmail", "create", "update", "increment"],
+});
+
+const versioned = { ...token, versionFrom: "sessionVersion" } as const;
+const self = { key: "id", context: "userId" } as const; // the member is the caller
+const caller = { context: { userId: "subject" } } as const;
+
+const Sessions = commandOf({
+	name: "Sessions",
+	useCases: (ctx) => ({
+		register: ctx.register(Members, { values: { sessionVersion: 0 } }),
+		login: ctx.login(Members, { token: versioned }),
+		refresh: ctx.refresh(Members, { token: versioned }),
+		logout: ctx.logout(Members, {
+			token: versioned,
+			owner: self,
+			access: caller,
+			route: { method: "post", path: "/logout" },
+		}),
+		changePassword: ctx.changePassword(Members, {
+			token: versioned,
+			owner: self,
+			access: caller,
+		}),
+	}),
+});
+```
+
+- **A refresh token carries the version.** `login` and `refresh` copy the value of the key into the `ver` claim of each refresh token they issue. `refresh` loads the entity and compares: a refresh token whose version is not the stored one, or that has none (one issued before the option), is refused with `UseCaseInvalidCredentials` (401), the answer to any invalid token. `versionFrom` needs `refresh`.
+- **Adding 1 ends the sessions.** `logout` and `changePassword` given the option add 1 to the version with `increment` (atomic, so a login at the same time loses nothing), after the password is stored: every refresh token issued before stops refreshing. Any other use case can do the same (`Members.increment(id, { sessionVersion: 1 })`), to end the sessions of a member whose roles were taken away, say.
+- **`logout` needs the caller.** With the option, it takes `owner: { key: "id", context }`, and the access that fills that context: it ends the sessions of whoever calls it, never of an id the input names. A call with no caller is refused (401 over HTTP, an invalid context in process) and changes nothing, cookies included. A caller that is no longer stored has nothing to end, and gets the empty tokens. `logout` and `changePassword` read only `versionFrom` of `token`: the options of `login` as they are, or `{ versionFrom }` alone.
+- **A write of the whole entity can undo an increment.** A use case that reads the entity and writes it back (`update`, `publish`, `tag`, one written by hand) stores the version it read: an increment that lands in between, a `logout` or a rotating `refresh`, is lost, and the refresh tokens it ended refresh again. `changePassword` reads the stored version again right before it writes, after the slow password checks, so the window is one read and one write. To close it, make the entity versioned (`versioned: true`, see [Entities](entities.md#versioned-entities)): such a write then fails with `RepositoryConcurrencyConflict` instead.
+- **Access tokens are not checked again.** An access token is verified by its signature only, with no read: one issued before a logout or a password change stays valid until it expires. Keep `expiresIn` short; a change takes effect for an access token within that time at most.
+- **`rotate: true` makes a refresh token single-use.** `refresh` then adds 1 to the version and issues the new refresh token with the new value, so the refresh token it was given stops working. Since the version belongs to the entity, not to a device, a refresh on one device ends the sessions of the others: each must log in again. Of two refreshes of the same token, however close, exactly one succeeds: the version is compared after the atomic increment, and only the one that took it from the version the token carries to the next is accepted. The others still added 1, so a token refreshed twice at once (two tabs, a replay) can end the new session too. A refresh token that was already rotated is refused before any increment. `rotate` needs `versionFrom`, and `refresh` then needs the action `increment`.
+
+A key that is not a required, sensitive integer in the `change` list, `rotate` without `versionFrom`, a repository without `increment`, or a `logout` without `owner: { key: "id" }` throws `UseCaseUnavailable` when the use case is declared. Without `versionFrom` nothing changes: refresh tokens carry no version and `logout` only gives empty tokens.
+
+**What it does not do.** Tokens are not stored. Without `versionFrom`, a token already issued is valid until it expires, and `logout` only removes cookies; with it, refresh tokens can be ended, and access tokens still live until they expire. Keep `expiresIn` short and let `refresh` renew it; a deleted entity cannot refresh. For revoking access tokens before they expire, rotation by stored token ids with reuse detection, asymmetric keys or an identity provider, write the `authenticator` hook and your own use cases; the declaration of access does not change.
+
+**By hand.** `jwtOf(options)` (stable, from `@afora/core/adapters`; `@afora/core/experimental` still re-exports the same objects, deprecated) is the same signer on its own: `sign({ subject, scopes?, claims? }, { expiresIn?, use? })`, `verify(token, { use? })` and `authenticator({ header?, cookie? })`. Here the secret may be the text itself. `sign` rejects with `InvalidJwtOptions` a scope that is not a scope token, and leaves out of the token a claim with a registered name: those are the token's own.
 
 ```ts
-import { jwtOf } from "@afora/core/experimental";
+import { jwtOf } from "@afora/core/adapters";
 import { hono } from "@afora/hono";
 
 declare const user: { id: string }; // the signed-in entity

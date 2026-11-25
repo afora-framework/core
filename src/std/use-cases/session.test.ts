@@ -3,18 +3,21 @@ import {
 	compileRoutes,
 	type HttpRequest,
 	httpOptionsIssue,
+	jwtOf,
 } from "../../adapters";
-import { jwtOf } from "../../experimental";
 import {
 	applicationOf,
 	blueprintOf,
 	commandOf,
+	configure,
 	entityOf,
 	Integer,
 	idOf,
 	inMemoryProvider,
 	outputOf,
 	repositoryOf,
+	resetRuntime,
+	StdUseCases,
 	UseCaseUnavailable,
 	useCaseOf,
 } from "../../index";
@@ -502,5 +505,469 @@ describe("session: entities with integer ids", () => {
 		expect(refreshed.status).toBe(200);
 		const jwt = jwtOf({ secret, issuer: "blog" });
 		expect((await jwt.verify(refreshed.json.token)).subject).toBe("1");
+	});
+});
+
+describe("session: token version", () => {
+	class Member extends entityOf(
+		blueprintOf((ctx) => ({ name: ctx.string, sessionVersion: ctx.integer })),
+		{
+			change: ["sessionVersion"],
+			sensitive: ["sessionVersion"],
+			plugins: (ctx) => [ctx.authenticatable],
+		},
+	) {}
+	const versioned = {
+		secret: named,
+		issuer: "blog",
+		expiresIn: 60,
+		refresh: { expiresIn: 3600 },
+		versionFrom: "sessionVersion",
+	} as const;
+	const self = { key: "id", context: "userId" } as const;
+
+	function buildVersioned(rotate = false) {
+		const Members = repositoryOf({
+			entity: Member,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findByEmail", "create", "update", "increment"],
+		});
+		const token = rotate ? { ...versioned, rotate: true } : versioned;
+		const Auth = commandOf({
+			name: "Auth",
+			useCases: (ctx) => ({
+				register: ctx.register(Members, {
+					as: "member",
+					values: { sessionVersion: 0 },
+				}),
+				login: ctx.login(Members, { as: "member", token }),
+				refresh: ctx.refresh(Members, { token }),
+				logout: ctx.logout(Members, { token, owner: self }),
+				changePassword: ctx.changePassword(Members, {
+					as: "member",
+					token: { versionFrom: "sessionVersion" },
+					owner: self,
+				}),
+			}),
+		});
+		return { Members, Auth };
+	}
+
+	const signIn = async (Auth: ReturnType<typeof buildVersioned>["Auth"]) => {
+		const { member } = await Auth.run("register", ana);
+		const login = await Auth.run("login", {
+			email: ana.email,
+			password: ana.password,
+		});
+		return { member, login, context: { userId: member.id } };
+	};
+
+	const refused = (promise: Promise<unknown>) =>
+		promise.then(
+			() => {
+				throw new Error("Expected the refresh token to be refused.");
+			},
+			(error: { readonly name: string }) => error.name,
+		);
+
+	test("a refresh token carries the version, which refresh compares with the stored one", async () => {
+		const { Auth, Members } = buildVersioned();
+		const { member, login } = await signIn(Auth);
+		const jwt = jwtOf({ secret, issuer: "blog" });
+		expect(
+			(await jwt.verify(login.refreshToken, { use: "refresh:Member" })).claims,
+		).toEqual({ ver: 0 });
+		// The access token says nothing of it.
+		expect((await jwt.verify(login.token)).claims).toBeUndefined();
+		const refreshed = await Auth.run("refresh", {
+			refreshToken: login.refreshToken,
+		});
+		// Without rotate, a refresh token refreshes again while the version holds.
+		await Auth.run("refresh", { refreshToken: login.refreshToken });
+		await Auth.run("refresh", { refreshToken: refreshed.refreshToken });
+		// Any other use case that increments the version ends the sessions too.
+		await Members.increment(member.id, { sessionVersion: 1 });
+		expect(
+			await refused(Auth.run("refresh", { refreshToken: login.refreshToken })),
+		).toBe("UseCaseInvalidCredentials");
+		// A refresh token with no version, issued before the option, is refused.
+		const old = await jwt.sign(
+			{ subject: member.id },
+			{ expiresIn: 3600, use: "refresh:Member" },
+		);
+		expect(await refused(Auth.run("refresh", { refreshToken: old }))).toBe(
+			"UseCaseInvalidCredentials",
+		);
+	});
+
+	test("a refresh rotated while changePassword hashes the new password is ended with the others", async () => {
+		const { Auth, Members } = buildVersioned(true);
+		let hold = false;
+		let open = () => {};
+		const opened = new Promise<void>((resolve) => {
+			open = resolve;
+		});
+		configure({
+			hasher: {
+				hash: async (plain: string) => {
+					if (hold) await opened;
+					return Bun.password.hash(plain, {
+						algorithm: "argon2id",
+						memoryCost: 1024,
+						timeCost: 1,
+					});
+				},
+				verify: (plain: string, hash: string) =>
+					Bun.password.verify(plain, hash),
+			},
+		});
+		try {
+			const { member, login, context } = await signIn(Auth);
+			hold = true;
+			const changed = Auth.run(
+				"changePassword",
+				{
+					id: member.id,
+					currentPassword: ana.password,
+					password: "An0ther!Passw0rd#2026",
+				},
+				{ context },
+			);
+			// The password is being hashed, after the entity was read: whoever
+			// holds the refresh token rotates it meanwhile.
+			await Bun.sleep(5);
+			const rotated = await Auth.run("refresh", {
+				refreshToken: login.refreshToken,
+			});
+			open();
+			await changed;
+			expect(
+				await refused(
+					Auth.run("refresh", { refreshToken: rotated.refreshToken }),
+				),
+			).toBe("UseCaseInvalidCredentials");
+			expect((await Members.findById(member.id))?.sessionVersion).toBe(2);
+		} finally {
+			resetRuntime();
+		}
+	});
+
+	test("a refresh token issued before logout is refused, one issued after refreshes", async () => {
+		const { Auth, Members } = buildVersioned();
+		const { member, login, context } = await signIn(Auth);
+		expect(await Auth.run("logout", {}, { context })).toEqual({
+			token: "",
+			refreshToken: "",
+		});
+		expect((await Members.findById(member.id))?.sessionVersion).toBe(1);
+		expect(
+			await refused(Auth.run("refresh", { refreshToken: login.refreshToken })),
+		).toBe("UseCaseInvalidCredentials");
+		const again = await Auth.run("login", {
+			email: ana.email,
+			password: ana.password,
+		});
+		const refreshed = await Auth.run("refresh", {
+			refreshToken: again.refreshToken,
+		});
+		expect(Object.keys(refreshed).sort()).toEqual(["refreshToken", "token"]);
+	});
+
+	test("a refresh token issued before changePassword is refused", async () => {
+		const { Auth } = buildVersioned();
+		const { member, login, context } = await signIn(Auth);
+		const changed = await Auth.run(
+			"changePassword",
+			{
+				id: member.id,
+				currentPassword: ana.password,
+				password: "Outra!senha9",
+			},
+			{ context },
+		);
+		// The entity given is the one stored, with the version it now has.
+		expect(changed.member.sessionVersion).toBe(1);
+		expect(changed.member.toJSON().sessionVersion).toBe("********");
+		expect(
+			await refused(Auth.run("refresh", { refreshToken: login.refreshToken })),
+		).toBe("UseCaseInvalidCredentials");
+		const again = await Auth.run("login", {
+			email: ana.email,
+			password: "Outra!senha9",
+		});
+		await Auth.run("refresh", { refreshToken: again.refreshToken });
+	});
+
+	test("with rotate a refresh token is used once, and a refresh ends the other sessions", async () => {
+		const { Auth } = buildVersioned(true);
+		const { login } = await signIn(Auth);
+		const other = await Auth.run("login", {
+			email: ana.email,
+			password: ana.password,
+		});
+		const refreshed = await Auth.run("refresh", {
+			refreshToken: login.refreshToken,
+		});
+		expect(
+			await refused(Auth.run("refresh", { refreshToken: login.refreshToken })),
+		).toBe("UseCaseInvalidCredentials");
+		// The session of the other device carried the same version.
+		expect(
+			await refused(Auth.run("refresh", { refreshToken: other.refreshToken })),
+		).toBe("UseCaseInvalidCredentials");
+		const next = await Auth.run("refresh", {
+			refreshToken: refreshed.refreshToken,
+		});
+		await Auth.run("refresh", { refreshToken: next.refreshToken });
+	});
+
+	test("with rotate two concurrent refreshes of one token give exactly one success", async () => {
+		const { Auth, Members } = buildVersioned(true);
+		const { member, login } = await signIn(Auth);
+		const results = await Promise.allSettled(
+			Array.from({ length: 2 }, () =>
+				Auth.run("refresh", { refreshToken: login.refreshToken }),
+			),
+		);
+		const won = results.filter((result) => result.status === "fulfilled");
+		expect(won).toHaveLength(1);
+		for (const result of results) {
+			if (result.status === "rejected") {
+				expect(result.reason.name).toBe("UseCaseInvalidCredentials");
+			}
+		}
+		const [first] = won as PromiseFulfilledResult<{ refreshToken: string }>[];
+		const winner = first?.value.refreshToken as string;
+		// Each refresh that got past the first check added 1: the new refresh
+		// token refreshes only if no other attempt added after it.
+		const stored = (await Members.findById(member.id))?.sessionVersion;
+		const carried = (
+			await jwtOf({ secret, issuer: "blog" }).verify(winner, {
+				use: "refresh:Member",
+			})
+		).claims?.ver;
+		expect(stored).toBeGreaterThanOrEqual(carried as number);
+		const again = Auth.run("refresh", { refreshToken: winner });
+		if (stored === carried) await again;
+		else expect(await refused(again)).toBe("UseCaseInvalidCredentials");
+	});
+
+	test("with rotate a refresh token used again after its rotation changes nothing", async () => {
+		const { Auth, Members } = buildVersioned(true);
+		const { member, login } = await signIn(Auth);
+		const refreshed = await Auth.run("refresh", {
+			refreshToken: login.refreshToken,
+		});
+		expect(
+			await refused(Auth.run("refresh", { refreshToken: login.refreshToken })),
+		).toBe("UseCaseInvalidCredentials");
+		// Refused before the increment: the session refreshed is not ended.
+		expect((await Members.findById(member.id))?.sessionVersion).toBe(1);
+		await Auth.run("refresh", { refreshToken: refreshed.refreshToken });
+	});
+
+	test("logout with the option ends only the sessions of the caller it is given", async () => {
+		const { Auth, Members } = buildVersioned();
+		const { login } = await signIn(Auth);
+		const { member: bob } = await Auth.run("register", {
+			name: "Bob",
+			email: "bob@x.dev",
+			password: ana.password,
+		});
+		await Auth.run("logout", {}, { context: { userId: bob.id } });
+		expect((await Members.findById(bob.id))?.sessionVersion).toBe(1);
+		await Auth.run("refresh", { refreshToken: login.refreshToken });
+		// No caller: the context is required, nothing is ended or answered.
+		const anonymous = await Auth.run("logout", {}, {
+			context: {},
+		} as never).then(
+			() => "answered",
+			(error: { readonly name: string }) => error.name,
+		);
+		expect(anonymous).not.toBe("answered");
+		// A caller that is no longer stored has no session to end.
+		expect(
+			await Auth.run(
+				"logout",
+				{},
+				{ context: { userId: "0190a6a0-0000-7000-8000-0000000000ff" } },
+			),
+		).toEqual({ token: "", refreshToken: "" });
+	});
+
+	test("over HTTP, logout needs an authenticated caller", async () => {
+		const { Auth } = buildVersioned();
+		const Members = repositoryOf({
+			entity: Member,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findByEmail", "create", "increment"],
+		});
+		const Http = commandOf({
+			name: "Http",
+			useCases: (ctx) => ({
+				register: ctx.register(Members, { values: { sessionVersion: 0 } }),
+				logout: ctx.logout(Members, {
+					token: versioned,
+					owner: self,
+					access: { context: { userId: "subject" } },
+					route: { method: "post", path: "/logout" },
+				}),
+			}),
+		});
+		expect(Auth.useCases.logout.context).toBeDefined();
+		const Api = outputOf({ name: "Api", commands: [Http] });
+		const table = compileRoutes(
+			Api.operations,
+			{ auth: { jwt: { secret: named, issuer: "blog" } } },
+			{ output: { name: "Api", statuses: Api.statuses } },
+			{ source: "test" },
+		);
+		const route = table.routes.find((entry) => entry.path === "/logout");
+		const call = (headers: Record<string, string>) =>
+			route?.handle({
+				param: () => undefined,
+				query: () => ({}),
+				header: (name) =>
+					headers[name] ??
+					(name === "content-type" ? "application/json" : undefined),
+				text: () => "{}",
+			});
+		expect((await call({}))?.status).toBe(401);
+		const { item: member } = await Http.run("register", ana);
+		const token = await jwtOf({ secret, issuer: "blog" }).sign({
+			subject: member.id,
+		});
+		const out = await call({ authorization: `Bearer ${token}` });
+		expect(out?.status).toBe(200);
+		expect((await Members.findById(member.id))?.sessionVersion).toBe(1);
+	});
+
+	test("without the options, tokens and logout are as before", async () => {
+		const { Users, Auth } = build();
+		await Auth.run("register", ana);
+		const login = await Auth.run("login", {
+			email: ana.email,
+			password: ana.password,
+		});
+		const jwt = jwtOf({ secret, issuer: "blog" });
+		expect(
+			(await jwt.verify(login.refreshToken, { use: "refresh:User" })).claims,
+		).toBeUndefined();
+		expect(Auth.useCases.logout.context).toBeUndefined();
+		expect(Users.actions).not.toContain("increment");
+		await Auth.run("logout", {});
+		await Auth.run("refresh", { refreshToken: login.refreshToken });
+	});
+
+	test("rejects version options it cannot use, at declaration", () => {
+		const Members = repositoryOf({
+			entity: Member,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findByEmail", "update", "increment"],
+		});
+		class Loose extends entityOf(
+			blueprintOf((ctx) => ({
+				label: ctx.string,
+				count: ctx.integer,
+				maybe: ctx.optional.integer,
+				amount: ctx.number,
+				level: ctx.integer,
+			})),
+			{
+				change: ["label", "maybe", "amount", "level"],
+				plugins: (ctx) => [ctx.authenticatable],
+			},
+		) {}
+		const Loosely = repositoryOf({
+			entity: Loose,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findByEmail", "update", "increment"],
+		});
+		const NoIncrement = repositoryOf({
+			entity: Member,
+			provider: inMemoryProvider(),
+			actions: ["findById", "findByEmail", "update"],
+		});
+		const reason = (name: string, repository: unknown, options: unknown) => {
+			try {
+				(
+					StdUseCases.context as unknown as Record<
+						string,
+						(repository: unknown, options?: unknown) => unknown
+					>
+				)[name]?.(repository, options);
+			} catch (error) {
+				expect(error).toBeInstanceOf(UseCaseUnavailable);
+				return (error as Error).message;
+			}
+			throw new Error("Expected UseCaseUnavailable.");
+		};
+		const { versionFrom: _, ...plain } = versioned;
+		expect(
+			reason("refresh", Members, { token: { ...plain, rotate: true } }),
+		).toContain("token.rotate needs token.versionFrom");
+		expect(
+			reason("login", Members, { token: { ...plain, rotate: false } }),
+		).toContain("token.rotate needs token.versionFrom");
+		for (const key of ["label", "maybe", "amount"]) {
+			expect(
+				reason("login", Loosely, { token: { ...plain, versionFrom: key } }),
+			).toContain("must name a required integer key");
+		}
+		expect(
+			reason("refresh", Loosely, { token: { ...plain, versionFrom: "count" } }),
+		).toContain("must be in the change list");
+		// A change key that is not sensitive is an input of update, so the
+		// caller could set the version back after a logout.
+		for (const name of ["login", "refresh"]) {
+			expect(
+				reason(name, Loosely, { token: { ...plain, versionFrom: "level" } }),
+			).toContain("must be a sensitive key");
+		}
+		expect(
+			reason("logout", Loosely, {
+				token: { versionFrom: "level" },
+				owner: self,
+			}),
+		).toContain("must be a sensitive key");
+		expect(
+			reason("login", Members, { token: { ...plain, versionFrom: "nope" } }),
+		).toContain("nope");
+		expect(
+			reason("login", Members, {
+				token: { secret: named, versionFrom: "sessionVersion" },
+			}),
+		).toContain("it needs token.refresh");
+		expect(
+			reason("refresh", NoIncrement, { token: { ...versioned, rotate: true } }),
+		).toContain('"increment"');
+		expect(
+			reason("logout", NoIncrement, { token: versioned, owner: self }),
+		).toContain('"increment"');
+		expect(
+			reason("changePassword", NoIncrement, {
+				token: { versionFrom: "sessionVersion" },
+			}),
+		).toContain('"increment"');
+		expect(reason("logout", Members, { token: versioned })).toContain(
+			"it needs the option owner",
+		);
+		expect(
+			reason("logout", Members, {
+				token: versioned,
+				owner: { key: "ownerId", context: "userId" },
+			}),
+		).toBeString();
+		expect(reason("logout", Members, { owner: self })).toContain(
+			"it needs token.versionFrom",
+		);
+		expect(reason("logout", Members, { token: plain, owner: self })).toContain(
+			"token.versionFrom",
+		);
+		expect(
+			reason("changePassword", Members, {
+				token: { versionFrom: "sessionVersion", scopes: [] },
+			}),
+		).toContain("{ versionFrom }");
 	});
 });
