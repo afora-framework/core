@@ -5,6 +5,8 @@
 ### Changed
 
 - The guide of the server says that registering a command in an application registers the use cases it holds, so an agent no longer lists them in `useCases` as well (#194).
+- The `mcpTools` sink imports `jwtOf` from `@afora/core/adapters`, where it is now stable, and [the README](README.md#expose-an-output-as-mcp-tools) no longer calls the `auth` option experimental (#186).
+- Gets the options of `@afora/codegen` for ending sessions (`token.versionFrom`, `token.rotate`, `owner` and `token` of `logout`, `token` of `changePassword`) and `takesTokenKeys` of `register` (#193, #215, #216).
 
 ## 27.0.0-rc.6 — 2026-11-24
 

@@ -57,6 +57,20 @@ Testing an application without touching the process: a test application with a s
 - `strict: true`: while the application runs, a write (`create`, `update`, `delete`, `restore`, `increment`) through a repository that no application bound throws `RepositoryWrittenOutsideApplication`, naming the application. Reads are left alone. With `AsyncLocalStorage`, the check covers the test that made the application and every use case of that application. Without it, the check applies to the whole process until the application stops.
 - `inMemoryProvider().clear(entity?)` empties one entity (`clear("Note")` or `clear(Note)`), or every entity when given no argument. With no argument it also starts the `Serial` ids again at 1. It waits for a running transaction, and `spyProvider` has it too. See [Repositories](docs/testing.md#repositories).
 
+### Ending sessions (#193, #215)
+
+- `token.versionFrom`, a new option of the `token` of `login`, `refresh`, `logout` and `changePassword`, names a required, integer, `sensitive` key in the `change` list of the entity. `login` and `refresh` copy its value into each refresh token, and `refresh` refuses a refresh token whose version is no longer the stored one with `UseCaseInvalidCredentials` (401), the answer to any invalid token. `logout` (with `owner: { key: "id", context }`, so it ends the sessions of the caller) and `changePassword` add 1 to it with `increment`, so every refresh token issued before stops refreshing. Access tokens are not read again: one issued before stays valid until it expires, so keep `expiresIn` short. A key that does not fit, or a repository without `increment`, throws `UseCaseUnavailable` at declaration. Without the option nothing changes; turning it on refuses the refresh tokens issued before it, which carry no version, so their sessions sign in again. See [Tokens and sessions](docs/auth.md#tokens-and-sessions).
+- `token.rotate: true` (needs `versionFrom`) makes `refresh` add 1 too, so a refresh token is used once. The version belongs to the entity, not to a device: a refresh ends the sessions of the other devices. Of two concurrent refreshes of one token, exactly one succeeds.
+- `afora.json`: `logout` takes `owner` and `token`, and `changePassword` takes `token`. See [Standard use cases](docs/std-use-cases.md#options).
+
+### An administrator-only register can take the token keys (#216)
+
+- `register` takes `takesTokenKeys: true`, which lets its input take the keys a token is made from (`token.scopesFrom`, `token.claims`). It is accepted only with an `access` that asks for `scopes`: no `access`, a public one, `authenticated: true` alone or any value other than `true` throws `UseCaseUnavailable` at declaration. A public `register` keeps refusing those keys, and every `register` refuses the key of `token.versionFrom`: a new entity starts at its default version (set it with `values`). `afora.json` takes the option too, checked against the access of the use case. See [Tokens and sessions](docs/auth.md#tokens-and-sessions) and [Standard use cases](docs/std-use-cases.md#options).
+
+### `jwtOf` is stable (#186)
+
+- `jwtOf`, `InvalidJwtOptions` and the types `Jwt`, `JwtOptions`, `DescribedJwtOptions`, `JwtAlgorithm`, `JwtSubject` and `JwtTokenOptions` come from `@afora/core/adapters` and follow the compatibility policy. `@afora/core/experimental` still re-exports the same objects, each marked `@deprecated`: import them from `@afora/core/adapters`. The ready-made sessions (`login`, `refresh`, `logout` with `StdTokenOptions`) stay experimental. See [API tiers](docs/api-tiers.md) and [Tokens and sessions](docs/auth.md#tokens-and-sessions).
+
 ### Documentation
 
 - [Testing](docs/testing.md) is rewritten around `testApplicationOf`, `app.with`, `spyProvider` and the runtime services, and the tests of the [tutorial](docs/tutorial.md) use `testApplicationOf`.

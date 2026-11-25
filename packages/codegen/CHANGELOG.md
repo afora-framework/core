@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `logout` takes `owner` and `token`, and `changePassword` takes `token`; the description of the `token` option covers `versionFrom` (a required, integer, sensitive key in the `change` list) and `rotate` (#193, #215).
+- `register` takes `takesTokenKeys: true`, accepted only with an `access` that asks for `scopes` (#216).
+
 ## 27.0.0-rc.6 — 2026-11-24
 
 ### Security
