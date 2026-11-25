@@ -127,8 +127,9 @@ export interface StdTokenOptions extends DescribedJwtOptions {
 	/** Claims of the token, each from a key of the entity: `{ tenant: "tenantId" }`. */
 	readonly claims?: { readonly [claim: string]: string };
 	/**
-	 * A required integer key of the entity, in its `change` list: its token
-	 * version. Each refresh token carries the value it had when issued, and
+	 * A required integer key of the entity, in its `change` list and
+	 * `sensitive` (never an input of `update`): its token version. Each
+	 * refresh token carries the value it had when issued, and
 	 * `refresh` refuses one whose version is not the stored one. `logout`
 	 * and `changePassword` given it add 1 (with `increment`), so the
 	 * refresh tokens issued before no longer refresh. Access tokens are not

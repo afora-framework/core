@@ -6,15 +6,24 @@
 
 // JSON Web Tokens moved to the stable `@afora/core/adapters` (#186). These are
 // the same objects, kept here for one release so imports keep working.
-/** @deprecated Import from `@afora/core/adapters`. */
-export { InvalidJwtOptions, jwtOf } from "./core/auth/jwt";
-/** @deprecated Import from `@afora/core/adapters`. */
+export {
+	/** @deprecated Import from `@afora/core/adapters`. */
+	InvalidJwtOptions,
+	/** @deprecated Import from `@afora/core/adapters`. */
+	jwtOf,
+} from "./core/auth/jwt";
 export type {
+	/** @deprecated Import from `@afora/core/adapters`. */
 	DescribedJwtOptions,
+	/** @deprecated Import from `@afora/core/adapters`. */
 	Jwt,
+	/** @deprecated Import from `@afora/core/adapters`. */
 	JwtAlgorithm,
+	/** @deprecated Import from `@afora/core/adapters`. */
 	JwtOptions,
+	/** @deprecated Import from `@afora/core/adapters`. */
 	JwtSubject,
+	/** @deprecated Import from `@afora/core/adapters`. */
 	JwtTokenOptions,
 } from "./core/auth/types/jwt.interface";
 export { sliceOf, sliceValue } from "./core/blueprint/slice";

@@ -762,6 +762,7 @@ describe("takesTokenKeys: an administrator-only register takes the token keys", 
 			{
 				plugins: (ctx) => [ctx.authenticatable],
 				change: ["sessionVersion"],
+				sensitive: ["sessionVersion"],
 			},
 		) {}
 		return repositoryOf({

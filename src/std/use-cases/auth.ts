@@ -204,6 +204,13 @@ function versionOf(
 			`token.versionFrom "${versionFrom}" must be in the change list of the entity, so that increment can add to it`,
 		);
 	}
+	// A change key that is not sensitive is an input of update: the caller
+	// could set the version back and refresh with a token logout ended.
+	if (!plan.sensitive) {
+		return target.unavailable(
+			`token.versionFrom "${versionFrom}" must be a sensitive key of the entity (sensitive: ["${versionFrom}"]), so that update never takes it as input and responses mask it`,
+		);
+	}
 	noVersionInInput(target, "version", [versionFrom], by);
 	return { key: versionFrom, rotate: rotate === true };
 }
@@ -235,6 +242,23 @@ const isNotFound = (error: unknown): boolean =>
 const endSessionsOf =
 	(version: TokenVersion) => (id: unknown, options: RunOptions) =>
 		incrementOf(options)(id, version.key);
+
+/**
+ * The function of a `run` step that gives the token version stored now for
+ * an entity read before, or the one it holds when it is no longer stored.
+ */
+const storedVersionOf =
+	(version: TokenVersion) =>
+	async (
+		item: Readonly<Record<string, unknown>>,
+		{ dependencies }: RunOptions,
+	) => {
+		const repository = dependencies.repository as {
+			findById(id: unknown): Promise<Record<string, unknown> | undefined>;
+		};
+		const stored = await repository.findById(item.id);
+		return (stored ?? item)[version.key];
+	};
 
 /**
  * `token` of `logout` and `changePassword`, which read only `versionFrom`:
@@ -634,6 +658,17 @@ export const changePassword = useCasePluginOf<
 				},
 				...(version
 					? [
+							// The write stores the whole entity: it takes the version
+							// stored now, not the one read before the password was
+							// checked and hashed, so a refresh that added 1 meanwhile
+							// (token.rotate) is not undone and its token is ended too.
+							{
+								run: "storedTokenVersion",
+								fn: storedVersionOf(version),
+								args: ["$item"],
+								as: "storedVersion",
+							},
+							{ change: "$item", key: version.key, value: "$storedVersion" },
 							{ update: "repository", value: "$item", as: "updated" },
 							// After the write: a refresh token issued before it, with
 							// the password changed or not yet, no longer refreshes.

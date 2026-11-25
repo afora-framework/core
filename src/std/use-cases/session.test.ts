@@ -9,12 +9,14 @@ import {
 	applicationOf,
 	blueprintOf,
 	commandOf,
+	configure,
 	entityOf,
 	Integer,
 	idOf,
 	inMemoryProvider,
 	outputOf,
 	repositoryOf,
+	resetRuntime,
 	StdUseCases,
 	UseCaseUnavailable,
 	useCaseOf,
@@ -598,6 +600,58 @@ describe("session: token version", () => {
 		);
 	});
 
+	test("a refresh rotated while changePassword hashes the new password is ended with the others", async () => {
+		const { Auth, Members } = buildVersioned(true);
+		let hold = false;
+		let open = () => {};
+		const opened = new Promise<void>((resolve) => {
+			open = resolve;
+		});
+		configure({
+			hasher: {
+				hash: async (plain: string) => {
+					if (hold) await opened;
+					return Bun.password.hash(plain, {
+						algorithm: "argon2id",
+						memoryCost: 1024,
+						timeCost: 1,
+					});
+				},
+				verify: (plain: string, hash: string) =>
+					Bun.password.verify(plain, hash),
+			},
+		});
+		try {
+			const { member, login, context } = await signIn(Auth);
+			hold = true;
+			const changed = Auth.run(
+				"changePassword",
+				{
+					id: member.id,
+					currentPassword: ana.password,
+					password: "An0ther!Passw0rd#2026",
+				},
+				{ context },
+			);
+			// The password is being hashed, after the entity was read: whoever
+			// holds the refresh token rotates it meanwhile.
+			await Bun.sleep(5);
+			const rotated = await Auth.run("refresh", {
+				refreshToken: login.refreshToken,
+			});
+			open();
+			await changed;
+			expect(
+				await refused(
+					Auth.run("refresh", { refreshToken: rotated.refreshToken }),
+				),
+			).toBe("UseCaseInvalidCredentials");
+			expect((await Members.findById(member.id))?.sessionVersion).toBe(2);
+		} finally {
+			resetRuntime();
+		}
+	});
+
 	test("a refresh token issued before logout is refused, one issued after refreshes", async () => {
 		const { Auth, Members } = buildVersioned();
 		const { member, login, context } = await signIn(Auth);
@@ -817,9 +871,10 @@ describe("session: token version", () => {
 				count: ctx.integer,
 				maybe: ctx.optional.integer,
 				amount: ctx.number,
+				level: ctx.integer,
 			})),
 			{
-				change: ["label", "maybe", "amount"],
+				change: ["label", "maybe", "amount", "level"],
 				plugins: (ctx) => [ctx.authenticatable],
 			},
 		) {}
@@ -862,6 +917,19 @@ describe("session: token version", () => {
 		expect(
 			reason("refresh", Loosely, { token: { ...plain, versionFrom: "count" } }),
 		).toContain("must be in the change list");
+		// A change key that is not sensitive is an input of update, so the
+		// caller could set the version back after a logout.
+		for (const name of ["login", "refresh"]) {
+			expect(
+				reason(name, Loosely, { token: { ...plain, versionFrom: "level" } }),
+			).toContain("must be a sensitive key");
+		}
+		expect(
+			reason("logout", Loosely, {
+				token: { versionFrom: "level" },
+				owner: self,
+			}),
+		).toContain("must be a sensitive key");
 		expect(
 			reason("login", Members, { token: { ...plain, versionFrom: "nope" } }),
 		).toContain("nope");

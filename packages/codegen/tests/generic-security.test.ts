@@ -232,6 +232,7 @@ describe("validation", () => {
 		const versioned = draft((c) => {
 			c.entities.User.fields.sessionVersion = "integer";
 			c.entities.User.change = ["name", "sessionVersion"];
+			c.entities.User.sensitive = ["sessionVersion"];
 			c.repositories.Users.actions.push("increment");
 			c.useCases.ChangePassword.options.token = {
 				versionFrom: "sessionVersion",
