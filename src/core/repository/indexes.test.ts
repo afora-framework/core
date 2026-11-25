@@ -11,6 +11,7 @@ import {
 	providerOf,
 	RepositoryOf,
 	type RepositoryPlan,
+	RepositoryUniqueViolation,
 	RepositoryUsedOutsideApplication,
 	repositoryOf,
 	useCaseOf,
@@ -357,6 +358,36 @@ describe("an index on a sensitive key", () => {
 			expect(error).toBeInstanceOf(Error);
 			expect(everything(error)).not.toContain(SECRET);
 		}
+	});
+
+	test("a unique violation on the sensitive key names the key, not the value", async () => {
+		class Person extends entityOf(
+			blueprintOf((ctx) => ({ name: ctx.string, hash: ctx.string })),
+			{ sensitive: ["hash"], unique: ["hash"] },
+		) {}
+		const People = repositoryOf({
+			entity: Person,
+			actions: ["create", "findByHash"],
+			indexes: { byHash: { where: ["hash"] } },
+		});
+		const app = applicationOf({
+			name: "cms",
+			entities: { Person },
+			repositories: { People },
+			provider: inMemoryProvider(),
+		});
+		const Repo = app.repositories.People;
+		await Repo.create(new Person({ name: "a", hash: SECRET }));
+		expect((await Repo.findByHash(SECRET))?.name).toBe("a");
+		const error = await Repo.create(
+			new Person({ name: "b", hash: SECRET }),
+		).then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		expect(error).toBeInstanceOf(RepositoryUniqueViolation);
+		expect((error as { details: unknown }).details).toEqual({ key: "hash" });
+		expect(everything(error)).not.toContain(SECRET);
 	});
 });
 

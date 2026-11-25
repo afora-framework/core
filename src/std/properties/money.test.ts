@@ -49,6 +49,14 @@ describe("moneyOf with one currency", () => {
 		expect(Price.safeParse(2 ** 53).issues?.[0]?.code).toBe("invalid_value");
 	});
 
+	test("holds -0 as 0", () => {
+		expect(Object.is(parsedValue(Price.safeParse(-0)), 0)).toBe(true);
+		const amount = parsedValue(
+			moneyOf({ nonNegative: true }).safeParse({ amount: -0, currency: "BRL" }),
+		).amount;
+		expect(Object.is(amount, 0)).toBe(true);
+	});
+
 	test("is an integer in its schema, documented with its currency", () => {
 		expect(Price.type.schema.type.Type()).toMatchObject({
 			type: "integer",

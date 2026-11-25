@@ -222,7 +222,13 @@ export function moneyOf(
 	});
 	const demoAmount = Math.min(Math.max(0, minimum), maximum);
 	const Property = fixed
-		? propertyOf({ name, schema: amount, default: demoAmount })
+		? propertyOf({
+				name,
+				schema: amount,
+				default: demoAmount,
+				// -0 is an integer, and would show as "-0.00" once formatted.
+				afterHandle: (value: number) => value + 0,
+			})
 		: propertyOf({
 				name,
 				schema: Type.Object(
@@ -245,6 +251,8 @@ export function moneyOf(
 					},
 				),
 				default: { amount: demoAmount, currency: currency?.[0] ?? "USD" },
+				afterHandle: (value: MoneyValue) =>
+					Object.is(value.amount, -0) ? { ...value, amount: 0 } : value,
 			});
 	recordPropertyLineage(Property, {
 		kind: "factory",

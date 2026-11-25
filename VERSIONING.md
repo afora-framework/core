@@ -17,7 +17,7 @@ Versions are `YY.minor.patch`, for example `27.1.3`, with an optional prerelease
 - The runtime behavior documented in `README.md` and the docs.
 - Every exported value and type of these entries, except what is listed below as not the contract:
   - `@afora/core` (`src/index.ts`): the stable API, what application code imports;
-  - `@afora/core/client` (`src/client.ts`): the part of the stable API a client needs to declare blueprints and parse values, the same objects as `@afora/core`; that it reaches no module of records, entities, repositories, use cases or outputs is part of the contract too;
+  - `@afora/core/client` (`src/client.ts`): the part of the stable API a client needs to declare blueprints and parse values, the same objects as `@afora/core`; that it reaches none of the code of records, entities, repositories, use cases or outputs is part of the contract too (`src/client.test.ts` names the few leaf modules of those folders it shares, such as the check of a declared name);
   - `@afora/core/adapters` (`src/adapters.ts`): the plumbing for sinks, providers and code generators, such as `IRepositoryProvider`, `sinkOf`, `problemOf` and the `app.describe()` types;
   - `@afora/core/testing` (`src/testing/index.ts`): `providerContract` and `memoryPublisher`.
 
