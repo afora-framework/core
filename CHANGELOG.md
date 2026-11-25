@@ -2,8 +2,64 @@
 
 ## Unreleased
 
+Testing an application without touching the process: a test application with a store of its own (`testApplicationOf`), registrations replaced across the graph (`app.with`, `replace`), a clock the test moves (`manualClock`) and runtime services per application and per call (`runtime`, `withRuntime`). A command now registers the use cases it holds, and a repository method that a spy tries to assign says what to do instead.
+
+### Behavior changes
+
+- `invoke` of an output's operation without access rules passes only the context and the caller to its command, as an operation with `access` does (#175). See [Outputs](docs/outputs.md).
+- Assigning a method of a repository (`Users.findMany = ...`) throws `RepositoryIsFrozen` instead of the engine's `TypeError`. The actions of a repository are now accessors on the prototype of its declared class, and they cannot be configured (#177). See [Spying on the database](docs/testing.md#spying-on-the-database).
+
+### A command registers its use cases (#194)
+
+- Registering a command in `applicationOf({ commands })` also registers the use cases it holds, whether written by hand or made by a use case plugin (`ctx.create(Posts)`), under their `useCaseName`. They go through the checks of any other use case: their dependencies must be registered, and two different use cases with one name throw `ApplicationConflict`. Listing one in `useCases` as well stays valid, and the class is registered once. The type of `app.useCases` does not change: reach such a use case as `app.commands.Blog.useCases.create`. See [Commands](docs/commands.md) and [Applications](docs/applications.md).
+
+### A repository says why it cannot be patched (#177)
+
+- `RepositoryIsFrozen` (layer `repository`, `details: { repository, member }`) is thrown when a method of a repository is assigned. Its message names `spyProvider`, the overrides of `execute` and [Spying on the database](docs/testing.md#spying-on-the-database). A spy that redefines the property (`vi.spyOn`, `jest.spyOn`, `spyOn` of `bun:test`) is stopped by the engine before afora is asked. [Troubleshooting](docs/troubleshooting.md#testing) lists the message of each runner, and the answer is the same for all of them: spy on the provider, or replace the method for one call.
+
+### A clock (#172)
+
+- `configure({ clock })` takes a `Clock`, a function that returns epoch milliseconds. Every read of the current time goes through it: the `createdAt`, `updatedAt` and `deletedAt` stamps, `DateTime.now()`, `publish()` and `archive()`, the millisecond of a default UUID v7, the `iat`, `exp` and `nbf` of a JWT and their checks, the expiry of a query (unless `query.now` is given) and the `until` deadline of a walk. `resetRuntime()` restores the platform clock. The logger's `at` keeps the real time. The ids of the default generator stay in order for the process even when the clock goes back: an id never takes a millisecond earlier than the last one. See [Time](docs/runtime.md#time).
+- `manualClock(start?)` in `@afora/core/testing` gives a `ManualClock` that moves only when told: `now()`, `set(date | ms | iso)` and `advance(ms | ClockSpan)`, where a `ClockSpan` is something like `{ minutes: 16 }`.
+
+### Runtime services per application and per call (#173)
+
+- `applicationOf({ runtime: { clock, idGenerator, hasher } })` gives one application its own services. Its use cases, commands, outputs and repositories use them, as do the entities they build and the passwords they hash. An application that extends it inherits them, its own winning each service, and `extend()` keeps them. A service that is not what `configure` takes throws `InvalidApplicationDeclaration`. `describe().runtime` names each service given as `{ kind: "opaque" }`. See [Runtime services](docs/applications.md#runtime-services).
+- `withRuntime(services, fn)` gives the services to what `fn` runs, sync or async, and returns what `fn` returns. Calls nest. A service comes from, in order: `withRuntime`, then the application's `runtime`, then `configure`, then the default. The services follow `await` through `AsyncLocalStorage` where the runtime has it (Bun, Node, Deno, Workers with `nodejs_compat`). It is looked up the first time a scope is entered, never at import. Where there is none (a browser), the services cover only the synchronous part of `fn`, up to its first `await`. See [Per application and per call](docs/runtime.md#per-application-and-per-call).
+- A sink's authenticator runs before any use case, so a JWT it verifies reads the clock of `withRuntime` around the request, or of `configure`, never the clock of the application's `runtime`.
+
+### Run and replace (#175)
+
+- `UseCase.run(input, { context, dependencies, replace, events })` builds a new instance and executes it. With `events: true` it gives `{ value, events }` (`UseCaseExecution`). See [Run and replace](docs/use-cases.md#run-and-replace).
+- `replace` is a list of `[declaration, replacement]` pairs (`UseCaseReplacements`). A replacement reaches every use case of the call that declares it, at any depth: a use case, a repository (some of its methods), an environment (its variables), `Logger` or a service. Replacements are checked as direct overrides are (`InvalidUseCaseDependencies`), and a replaced use case has its input and response validated. A replacement that no use case of the call declares rejects with `UnusedUseCaseReplacement`, whose `details.replacements` names it, so a renamed dependency cannot leave a test passing against the real one. `app.run`, `command.run` and `command.execute` take the same `replace`. See [the recipe](docs/recipes/override-repository-method.md) and [Troubleshooting](docs/troubleshooting.md#unusedusecasereplacement).
+
+### Replacing registrations (#176)
+
+- `app.with({ repositories, useCases, environments, services, publishers })` gives an application that extends `app`, with the registrations it names replaced by key everywhere in the graph: every use case at any depth, the commands and outputs, `app.repositories`, `context.env` and `get`. `app` itself is left as it is.
+  - A repository replacement gives only the methods it changes.
+  - A use case is replaced by a function of its input, checked as `execute` is.
+  - An environment is checked by its blueprint when `with` is called.
+  - A key the application does not register throws `UnregisteredApplicationReference`, and a value of the wrong kind throws `InvalidApplicationDeclaration`.
+  - `describe().replacements` gives each one as `{ kind: "opaque" }`.
+  - The derived application shares the providers of `app`, as `extend()` does, so in a test give it to `testApplicationOf` for a store of its own.
+
+  See [Replacing registrations](docs/applications.md#replacing-registrations) and [Testing](docs/testing.md#replacing-registrations).
+
+### A test application (#174)
+
+- `testApplicationOf(app, { provider, runtime, seed, strict })` in `@afora/core/testing` gives an application that extends `app`:
+  - It has a new `inMemoryProvider()` in place of every provider the app declares, or the `provider` you give, such as a `spyProvider`.
+  - It is already started, without becoming the application of the process.
+  - It is stopped by `await using`, also when an assertion throws.
+  - `seed(app)` runs once it has started. When `seed` throws, the application is stopped and `testApplicationOf` rejects with that error.
+
+  Its type is `TestApplication<typeof App>`, and its options are `TestApplicationOptions`. See [An application and its API](docs/testing.md#an-application-and-its-api).
+- `strict: true`: while the application runs, a write (`create`, `update`, `delete`, `restore`, `increment`) through a repository that no application bound throws `RepositoryWrittenOutsideApplication`, naming the application. Reads are left alone. With `AsyncLocalStorage`, the check covers the test that made the application and every use case of that application. Without it, the check applies to the whole process until the application stops.
+- `inMemoryProvider().clear(entity?)` empties one entity (`clear("Note")` or `clear(Note)`), or every entity when given no argument. With no argument it also starts the `Serial` ids again at 1. It waits for a running transaction, and `spyProvider` has it too. See [Repositories](docs/testing.md#repositories).
+
 ### Documentation
 
+- [Testing](docs/testing.md) is rewritten around `testApplicationOf`, `app.with`, `spyProvider` and the runtime services, and the tests of the [tutorial](docs/tutorial.md) use `testApplicationOf`.
 - [VERSIONING.md](VERSIONING.md#a-release-candidate-on-its-own-branch) lets a release candidate close on the branch of its line while `dev` moves on: once `release/27.0` exists, it publishes `27.0.0-rc.<n>` to `rc` and `27.0.0` to `latest`, the Next is `27.1.0-alpha.<n>`, and `dev` prepares the betas of `27.1.0` for `main`.
 
 ## 27.0.0-rc.6 — 2026-11-24
