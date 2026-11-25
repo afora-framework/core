@@ -208,6 +208,17 @@ export interface StdCreateOptions<Repository>
 	};
 }
 
+/** The options of `register`. */
+interface StdRegisterOptions<Repository> extends StdCreateOptions<Repository> {
+	/**
+	 * Lets the input take the keys a token is made from (`token.scopesFrom`,
+	 * `token.claims` of a `login` or `refresh`), which a public register
+	 * refuses. Only with an `access` that asks for `scopes`; the key of
+	 * `token.versionFrom` stays refused.
+	 */
+	readonly takesTokenKeys?: true;
+}
+
 /** The options of `publish`, `unpublish`, `archive` and `unarchive`. */
 export interface StdLifecycleOptions<Repository>
 	extends StdEntityOptions<Repository> {
@@ -723,7 +734,7 @@ export type ChangePasswordMaker = <
 /** `register`: for an authenticatable entity, with `findByEmail` and `create`. */
 export type RegisterMaker = <
 	Repository extends AnyRepository,
-	const Options extends StdCreateOptions<Repository> = None,
+	const Options extends StdRegisterOptions<Repository> = None,
 	const Omitted extends KeyOf<Repository> = never,
 	const Values = None,
 	const Owner = undefined,

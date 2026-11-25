@@ -72,6 +72,53 @@ const isTexts = (value: unknown): value is string[] =>
  */
 const tokenKeys = new WeakMap<object, Map<string, string>>();
 const inputKeys = new WeakMap<object, Map<string, string>>();
+/**
+ * By entity, the key of its token version (`token.versionFrom`), and the
+ * keys the registers that take token keys (`takesTokenKeys`) read from their
+ * input: a caller of register never chooses the version a session starts at.
+ */
+const versionKeys = new WeakMap<object, Map<string, string>>();
+const versionInput = new WeakMap<object, Map<string, string>>();
+
+/** Records `keys` in `own` for `by`, and the first of `keys` that `other` holds, with its owner. */
+function crossed(
+	target: UseCaseTargetInfo,
+	own: WeakMap<object, Map<string, string>>,
+	other: WeakMap<object, Map<string, string>>,
+	keys: readonly string[],
+	by: string,
+): { key: string; by: string } | undefined {
+	const known = other.get(target.entity);
+	const key = keys.find((item) => known?.has(item));
+	let recorded = own.get(target.entity);
+	if (!recorded) {
+		recorded = new Map();
+		own.set(target.entity, recorded);
+	}
+	for (const item of keys) if (!recorded.has(item)) recorded.set(item, by);
+	return key === undefined ? undefined : { key, by: known?.get(key) ?? "" };
+}
+
+/** Throws `UseCaseUnavailable` when a register that takes token keys takes the token version key, whichever is declared first. */
+function noVersionInInput(
+	target: UseCaseTargetInfo,
+	side: "version" | "input",
+	keys: readonly string[],
+	by: string,
+): void {
+	const [own, other] =
+		side === "version"
+			? [versionKeys, versionInput]
+			: [versionInput, versionKeys];
+	const clash = crossed(target, own, other, keys, by);
+	if (clash) {
+		const [register, token] =
+			side === "version" ? [clash.by, by] : [by, clash.by];
+		target.unavailable(
+			`the refresh tokens of ${token} carry the token version "${clash.key}" (token.versionFrom), so ${register} cannot take it from its input (takesTokenKeys does not lift this): a new entity starts at its default version, set it with values`,
+		);
+	}
+}
 
 /**
  * Records `keys` of the entity of `target` as made into tokens by `by`, or
@@ -129,6 +176,7 @@ function isIntegerPlan(plan: UseCaseFieldPlan): boolean {
 function versionOf(
 	target: UseCaseTargetInfo,
 	given: { readonly versionFrom?: unknown; readonly rotate?: unknown },
+	by: string,
 ): TokenVersion | undefined {
 	const { versionFrom, rotate } = given;
 	if (rotate !== undefined && typeof rotate !== "boolean") {
@@ -156,6 +204,7 @@ function versionOf(
 			`token.versionFrom "${versionFrom}" must be in the change list of the entity, so that increment can add to it`,
 		);
 	}
+	noVersionInInput(target, "version", [versionFrom], by);
 	return { key: versionFrom, rotate: rotate === true };
 }
 
@@ -212,7 +261,7 @@ function versionOptionOf(
 			"the option token must be the token options of login, or { versionFrom }",
 		);
 	}
-	const version = versionOf(target, given);
+	const version = versionOf(target, given, metaOf(target, options, verb).name);
 	if (!version) {
 		return target.unavailable(
 			`the option token of ${verb} is for token.versionFrom, the token version it adds 1 to`,
@@ -256,7 +305,11 @@ function tokensOf(target: UseCaseTargetInfo, options: Options, verb: string) {
 			"the option token.refresh must be { expiresIn }, a whole number of seconds above 0",
 		);
 	}
-	const version = versionOf(target, { versionFrom, rotate });
+	const version = versionOf(
+		target,
+		{ versionFrom, rotate },
+		metaOf(target, options, verb).name,
+	);
 	if (version && refresh === undefined) {
 		return target.unavailable(
 			"the option token.versionFrom is carried by the refresh tokens: it needs token.refresh",
@@ -379,12 +432,43 @@ const authenticatable = (actions: readonly string[]) => ({
 	requires: { actions, plugins: ["authenticatable"] },
 });
 
+/**
+ * The option `takesTokenKeys` of register, checked: `true` only with an
+ * `access` that asks for scopes, so that whoever may call it is an
+ * administrator and not the public.
+ */
+function takesTokenKeysOf(
+	target: UseCaseTargetInfo,
+	options: Options,
+): boolean {
+	const { takesTokenKeys, access } = options;
+	if (takesTokenKeys === undefined) return false;
+	if (takesTokenKeys !== true) {
+		return target.unavailable("the option takesTokenKeys must be true");
+	}
+	const scopes = isPlain(access)
+		? (access as { public?: unknown; scopes?: unknown }).scopes
+		: undefined;
+	if (
+		!isPlain(access) ||
+		(access as { public?: unknown }).public === true ||
+		!Array.isArray(scopes) ||
+		scopes.length === 0
+	) {
+		return target.unavailable(
+			"the option takesTokenKeys needs an access that asks for scopes ({ scopes: [...] }): only a caller with a scope may choose the keys a token is made from",
+		);
+	}
+	return true;
+}
+
 /** Stores an authenticatable entity, unless its email is taken. */
 export const register = useCasePluginOf<"register", RegisterMaker>("register", {
 	description:
 		"Stores an authenticatable entity built from the input, its password given plain and stored as a hash, unless the email is taken.",
 	...authenticatable(["findByEmail", "create"]),
 	compile: (target, options) => {
+		const takes = takesTokenKeysOf(target, options);
 		const conflict = errorOf(
 			target,
 			options,
@@ -404,13 +488,12 @@ export const register = useCasePluginOf<"register", RegisterMaker>("register", {
 				{ ensure: "absent", value: "$existing", error: conflict },
 			],
 			[conflict],
-			(keys) =>
-				noTokenKeyInInput(
-					target,
-					"input",
-					keys,
-					metaOf(target, options, "Register").name,
-				),
+			(keys) => {
+				const name = metaOf(target, options, "Register").name;
+				noVersionInInput(target, "input", keys, name);
+				if (!takes) noTokenKeyInInput(target, "input", keys, name);
+			},
+			["takesTokenKeys"],
 		);
 	},
 });
