@@ -6,6 +6,12 @@
 
 - `logout` takes `owner` and `token`, and `changePassword` takes `token`; the description of the `token` option covers `versionFrom` (a required, integer, sensitive key in the `change` list) and `rotate` (#193, #215).
 - `register` takes `takesTokenKeys: true`, accepted only with an `access` that asks for `scopes` (#216).
+- A field or a property declaration takes `{ "money": { "currency", "min", "max", "nonNegative", "name" } }`, generated as `ctx.money(...)` (`moneyOf` for a declaration) and extracted back from `describe()`. `validateSpec` checks the options as `moneyOf` does (`invalid_money`): a currency of three upper-case letters or a non-empty list of different ones, bounds that are safe integers, a `min` no greater than `max` (#196).
+
+### Changed
+
+- The description of an exception's `layer` lists `interface` (#187).
+- An index may name a sensitive key among its keys; only a sensitive `orderBy` is `invalid_index` (#195).
 
 ## 27.0.0-rc.6 — 2026-11-24
 
