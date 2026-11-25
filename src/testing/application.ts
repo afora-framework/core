@@ -1,5 +1,6 @@
 import {
 	applicationOf,
+	applicationRuntimeServicesOf,
 	isApplication,
 	TestApplicationKey,
 	type TestApplicationSettings,
@@ -11,7 +12,10 @@ import {
 	inMemoryProvider,
 } from "../core/repository/in-memory";
 import type { IRepositoryProvider } from "../core/repository/types/repository.interface";
-import type { RuntimeServices } from "../core/runtime-scope";
+import {
+	type RuntimeServices,
+	withApplicationRuntime,
+} from "../core/runtime-scope";
 
 /** The options of `testApplicationOf`. */
 export interface TestApplicationOptions<
@@ -29,8 +33,11 @@ export interface TestApplicationOptions<
 	readonly seed?: (app: TestApplication<App, Provider>) => unknown;
 	/**
 	 * While it runs, a write through a repository no application bound (one
-	 * the application does not register, called at module level) throws
-	 * `RepositoryWrittenOutsideApplication`. Process-wide. `false` by default.
+	 * it binds, called at module level, or one no application registers)
+	 * throws `RepositoryWrittenOutsideApplication`. Where the runtime has
+	 * `AsyncLocalStorage`, only in the async context that called
+	 * `testApplicationOf` (the test); elsewhere process-wide, until it stops.
+	 * `false` by default.
 	 */
 	readonly strict?: boolean;
 }
@@ -120,7 +127,13 @@ export async function testApplicationOf<
 	} as never) as unknown as TestApplication<App, Provider>;
 	await application.start({ register: false });
 	try {
-		await seed?.(application);
+		if (seed !== undefined) {
+			// Run with the runtime services of the application, as its calls are.
+			const services = applicationRuntimeServicesOf(application);
+			await (services === undefined
+				? seed(application)
+				: withApplicationRuntime(services, () => seed(application)));
+		}
 	} catch (error) {
 		await application.stop();
 		throw error;

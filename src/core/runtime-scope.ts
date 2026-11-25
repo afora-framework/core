@@ -45,11 +45,13 @@ export type RuntimeHolder = {
 	readonly [ApplicationRuntimeKey]?: RuntimeServices;
 };
 
-/** The slice of `AsyncLocalStorage` the scopes use. */
-interface AsyncStorage {
-	run<Value>(store: RuntimeFrame, fn: () => Value): Value;
-	getStore(): RuntimeFrame | undefined;
+/** The slice of `AsyncLocalStorage` afora uses. @internal */
+export interface AsyncContextStorage<Store> {
+	run<Value>(store: Store, fn: () => Value): Value;
+	getStore(): Store | undefined;
+	enterWith(store: Store): void;
 }
+type AsyncStorage = AsyncContextStorage<RuntimeFrame>;
 
 /** Whether a scope was ever entered: until then, no read looks for one. */
 let used = false;
@@ -59,17 +61,19 @@ let storage: AsyncStorage | null | undefined;
 let current: RuntimeFrame | undefined;
 
 /**
- * `AsyncLocalStorage` of `node:async_hooks`, looked up when a scope is first
- * entered and not at import, so that afora loads where there is none.
+ * A new `AsyncLocalStorage` of `node:async_hooks`, looked up when it is
+ * first needed and not at import, so that afora loads where there is none;
+ * `null` where the runtime has none.
+ * @internal
  */
-function asyncStorageOf(): AsyncStorage | null {
+export function newAsyncStorage<Store>(): AsyncContextStorage<Store> | null {
 	const process = (
 		globalThis as {
 			process?: { getBuiltinModule?: (id: string) => unknown };
 		}
 	).process;
 	const hooks = process?.getBuiltinModule?.("node:async_hooks") as
-		| { AsyncLocalStorage?: new () => AsyncStorage }
+		| { AsyncLocalStorage?: new () => AsyncContextStorage<Store> }
 		| undefined;
 	return typeof hooks?.AsyncLocalStorage === "function"
 		? new hooks.AsyncLocalStorage()
@@ -89,7 +93,7 @@ export function activeRuntime(): RuntimeFrame | undefined {
 
 /** Runs `fn` in `frame`, and gives back the scope that was in force once it returns or throws. */
 function enter<Value>(frame: RuntimeFrame, fn: () => Value): Value {
-	if (storage === undefined) storage = asyncStorageOf();
+	if (storage === undefined) storage = newAsyncStorage<RuntimeFrame>();
 	used = true;
 	if (storage) return storage.run(frame, fn);
 	const previous = current;

@@ -41,7 +41,12 @@ import { parseField } from "../parse/parse";
 import type { Issue } from "../parse/types/parse.interface";
 import { recordNameOf } from "../record/name";
 import { AbstractRepository, isRepository } from "../repository/repository";
-import { actionGetters, repositoryDeclarationOf } from "../repository/state";
+import {
+	actionGetters,
+	repositoryDeclarationOf,
+	type StrictWritesHolder,
+	StrictWritesKey,
+} from "../repository/state";
 import type { AnyRepository } from "../repository/types/repository.interface";
 import {
 	ApplicationRuntimeKey,
@@ -1292,12 +1297,24 @@ export abstract class AbstractUseCase<
 		};
 		// Bound by an application with a `runtime`: the call runs with its services.
 		const runtime = (state.owner as RuntimeHolder)[ApplicationRuntimeKey];
+		const withRuntime =
+			runtime === undefined
+				? run
+				: (...args: [unknown?]) =>
+						withApplicationRuntime(runtime, () => run(...args));
+		// Bound by a strict test application: its writes are checked, from
+		// whatever async context the use case is called.
+		const strict = (state.owner as StrictWritesHolder)[StrictWritesKey];
 		Object.defineProperty(this, "execute", {
 			value:
-				runtime === undefined
-					? run
-					: (...args: [unknown?]) =>
-							withApplicationRuntime(runtime, () => run(...args)),
+				strict === undefined
+					? withRuntime
+					: (...args: [unknown?]) => {
+							const writes = strict();
+							return writes === undefined
+								? withRuntime(...args)
+								: writes.run(() => withRuntime(...args));
+						},
 		});
 	}
 

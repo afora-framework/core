@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { IRepositoryProvider } from "../adapters";
+import { resetStrictWrites } from "../core/repository/state";
 import {
 	ApplicationNotStarted,
 	applicationOf,
@@ -164,6 +165,39 @@ describe("testApplicationOf", () => {
 		expect(seeded?.started).toBe(false);
 	});
 
+	test("runs seed with the runtime services of the application", async () => {
+		let seededAt: unknown;
+		await using _app = await testApplicationOf(Blog, {
+			runtime: { clock: manualClock("2030-01-01T00:00:00.000Z") },
+			seed: async (app) => {
+				const post = new Post({ name: "seeded" });
+				seededAt = post.createdAt;
+				await app.repositories.Posts.create(post);
+			},
+		});
+		expect(seededAt).toBe("2030-01-01T00:00:00.000Z");
+	});
+
+	test("leaves the application it extends as it was", async () => {
+		class Memo extends entityOf(Name) {}
+		const Memos = repositoryOf({ entity: Memo, actions: ["create", "count"] });
+		// No provider: `Plain.repositories.Memos` is the declaration itself.
+		const Plain = applicationOf({
+			name: "plain",
+			entities: { Memo },
+			repositories: { Memos },
+		});
+		{
+			await using app = await testApplicationOf(Plain);
+			await app.repositories.Memos.create(new Memo({ name: "test" }));
+			// While it runs, the original works and reads its own store.
+			expect(await Plain.repositories.Memos.count()).toBe(0);
+		}
+		await Plain.repositories.Memos.create(new Memo({ name: "kept" }));
+		expect(await Plain.repositories.Memos.count()).toBe(1);
+		expect(await Memos.count()).toBe(1);
+	});
+
 	test("takes a provider and a runtime", async () => {
 		const spy = spyProvider(inMemoryProvider());
 		const clock = manualClock("2026-01-02T03:04:05.000Z");
@@ -252,6 +286,95 @@ describe("strict mode", () => {
 		// Once it stopped, the module-level repository writes again.
 		await Notes.create(new Note({ name: "after" }));
 		expect(await Notes.count()).toBe(1);
+	});
+
+	test("rejects a write through a declaration it binds, called at module level", async () => {
+		class Memo extends entityOf(Name) {}
+		const Memos = repositoryOf({ entity: Memo, actions: ["create"] });
+		// No provider: the declaration stays usable outside the test.
+		const Plain = applicationOf({
+			name: "plain",
+			entities: { Memo },
+			repositories: { Memos },
+		});
+		await using _app = await testApplicationOf(Plain, { strict: true });
+		const error = await Memos.create(new Memo({ name: "leak" })).catch(
+			(caught) => caught,
+		);
+		expect(error).toBeInstanceOf(RepositoryWrittenOutsideApplication);
+		expect(error.message).toContain('"plain"');
+	});
+
+	test("leaves alone the repositories another application registers as they are", async () => {
+		class Memo extends entityOf(Name) {}
+		const Memos = repositoryOf({ entity: Memo, actions: ["create", "count"] });
+		const Plain = applicationOf({
+			name: "plain",
+			entities: { Memo },
+			repositories: { Memos },
+		});
+		await using _app = await testApplicationOf(Blog, { strict: true });
+		await Plain.repositories.Memos.create(new Memo({ name: "kept" }));
+		expect(await Memos.count()).toBe(1);
+	});
+
+	test("an application left running is strict only in the test that started it (1/2)", async () => {
+		// Not stopped, on purpose.
+		await testApplicationOf(Blog, { strict: true });
+		await expect(Notes.create(new Note({ name: "leak" }))).rejects.toThrow(
+			RepositoryWrittenOutsideApplication,
+		);
+	});
+
+	test("an application left running is strict only in the test that started it (2/2)", async () => {
+		await Notes.create(new Note({ name: "written" }));
+	});
+
+	test("checks its use cases called from another async context", async () => {
+		class Leaky extends useCaseOf({
+			name: "Leaky",
+			blueprint: Name,
+			response: Name,
+			dependencies: { posts: Posts },
+		}) {
+			override async execute() {
+				await Notes.create(new Note({ name: this.input.name }));
+				return { name: this.input.name };
+			}
+		}
+		const Leaking = applicationOf({
+			name: "leaking",
+			extends: [Blog],
+			useCases: { Leaky },
+		});
+		// Started in another context, as a `beforeEach` would.
+		const started = {
+			app: undefined as never as Awaited<
+				ReturnType<typeof testApplicationOf<typeof Leaking>>
+			>,
+		};
+		await (async () => {
+			started.app = await testApplicationOf(Leaking, { strict: true });
+		})();
+		await using app = started.app;
+		await expect(app.run(Leaky, { name: "leak" })).rejects.toThrow(
+			RepositoryWrittenOutsideApplication,
+		);
+	});
+
+	test("without AsyncLocalStorage, is process-wide until it stops", async () => {
+		resetStrictWrites({ asyncContext: false });
+		try {
+			const app = await (async () =>
+				testApplicationOf(Blog, { strict: true }))();
+			await expect(Notes.create(new Note({ name: "leak" }))).rejects.toThrow(
+				RepositoryWrittenOutsideApplication,
+			);
+			await app.stop();
+			await Notes.create(new Note({ name: "after" }));
+		} finally {
+			resetStrictWrites();
+		}
 	});
 
 	test("is off by default", async () => {

@@ -70,10 +70,13 @@ import { providerDescriptionOf } from "../repository/provider";
 import { assertGeneratedIds, isRepository } from "../repository/repository";
 import {
 	bindRepository,
-	enterStrictWrites,
 	inspectRepository,
+	markRegisteredRepository,
 	providerOfRepository,
 	type RepositoryInspection,
+	type StrictWrites,
+	StrictWritesKey,
+	strictWritesOf,
 } from "../repository/state";
 import type { ProviderDescription } from "../repository/types/query.interface";
 import type { IRepositoryProvider } from "../repository/types/repository.interface";
@@ -197,6 +200,13 @@ const logSettings = new WeakMap<object, LogSettings | LogFactory>();
 const traceSettings = new WeakMap<object, ITracer>();
 /** The `runtime` services each application has (its own over inherited ones), for `extends`. */
 const runtimeSettings = new WeakMap<object, RuntimeServices>();
+
+/** The runtime services of `application` (its own over inherited ones); `undefined` without any. @internal */
+export function applicationRuntimeServicesOf(
+	application: object,
+): RuntimeServices | undefined {
+	return runtimeSettings.get(application);
+}
 
 /** One registration an application made by `app.with` replaces: its key and what replaces it. */
 interface Replacement<Value> {
@@ -1929,7 +1939,13 @@ export function applicationOf<
 					entry.value as object,
 					provider,
 					bindingInstances,
-					{ application: name, key: entry.name, logger },
+					{
+						application: name,
+						key: entry.name,
+						logger,
+						// A test application leaves the declarations to the application it extends.
+						claim: test === undefined,
+					},
 					runtime,
 					environmentsOfProviders,
 				)
@@ -1948,6 +1964,9 @@ export function applicationOf<
 			fake === undefined
 				? repository
 				: replacedRepositoryOf(repository as object, fake);
+		// Registered by an application: strict mode leaves its writes alone,
+		// unless the strict application binds it.
+		if (test === undefined) markRegisteredRepository(entry.key);
 		bound.set(entry.value, shown);
 		boundByState.set(entry.key, repository);
 		repositories[entry.name] = repository;
@@ -2017,6 +2036,10 @@ export function applicationOf<
 			Object.defineProperty(Bound, ApplicationTracerKey, { value: tracer });
 		if (runtime)
 			Object.defineProperty(Bound, ApplicationRuntimeKey, { value: runtime });
+		if (test?.strict)
+			Object.defineProperty(Bound, StrictWritesKey, {
+				value: () => runningStrictWrites,
+			});
 		if (hasServices)
 			Object.defineProperty(Bound, ApplicationServicesKey, { value: services });
 		if (useCaseReplacements)
@@ -2105,6 +2128,8 @@ export function applicationOf<
 	let started = false;
 	// In strict mode, ends the check of writes once it stops.
 	let leaveStrict: (() => void) | undefined;
+	// In strict mode, the check while it runs, for its use cases.
+	let runningStrictWrites: StrictWrites | undefined;
 	const start = async (lock: unknown) => {
 		if (lock !== undefined) {
 			if (!isLock(lock)) {
@@ -2475,6 +2500,12 @@ export function applicationOf<
 			options: { replace?: boolean; register?: boolean; lock?: unknown } = {},
 		) {
 			const { replace = false, register = true, lock } = options ?? {};
+			// In strict mode, the check is entered here, synchronously, so that
+			// it covers the async context of the caller (the test).
+			const strictWrites =
+				starting === undefined && test?.strict
+					? strictWritesOf(name)
+					: undefined;
 			starting ??= (async () => {
 				if (register) {
 					const current = startedApplication();
@@ -2490,9 +2521,18 @@ export function applicationOf<
 				}
 				await start(lock);
 				if (register) setStartedApplication(application as never);
-				if (test?.strict) {
+				if (strictWrites !== undefined) {
 					leaveStrict?.();
-					leaveStrict = enterStrictWrites(name);
+					strictWrites.start(
+						[...registry.repositories.values()].map((entry) => entry.key),
+					);
+					runningStrictWrites = strictWrites;
+					leaveStrict = () => {
+						strictWrites.stop();
+						if (runningStrictWrites === strictWrites) {
+							runningStrictWrites = undefined;
+						}
+					};
 				}
 			})().then(
 				() => application,
