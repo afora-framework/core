@@ -76,6 +76,45 @@ Repositories are module-level and may be shared, so an application does not chan
 
 `app.with({ repositories, useCases, environments, services, publishers })` gives a new application that extends `app`, with the registrations it names replaced by key, everywhere: in every use case at any depth, in the commands and outputs, in `app.repositories`, `context.env` and `get`. `app` is left as it is, and `extend()` keeps the replacements. It is meant for integration tests (see [Testing](testing.md#replacing-registrations)).
 
+<!-- docs:code context
+import {
+	applicationOf,
+	blueprintOf,
+	entityOf,
+	environmentOf,
+	repositoryOf,
+	serviceOf,
+	useCaseOf,
+} from "@afora/core";
+const Amount = blueprintOf((ctx) => ({ amount: ctx.number }));
+class Payment extends entityOf(Amount) {}
+const Payments = repositoryOf({ entity: Payment, actions: ["create"] });
+const Mail = environmentOf(
+	blueprintOf((ctx) => ({ MAIL_TO: ctx.email })),
+	{ source: () => ({ MAIL_TO: "team@example.com" }) },
+);
+const Mailer = serviceOf<{ send(to: string): void }>("mailer");
+class Quote extends useCaseOf({
+	name: "Quote",
+	blueprint: Amount,
+	response: blueprintOf((ctx) => ({ total: ctx.number })),
+	dependencies: { mailer: Mailer },
+}) {
+	override async execute() {
+		return { total: this.input.amount };
+	}
+}
+const Blog = applicationOf({
+	name: "blog",
+	entities: { Payment },
+	environments: { Mail },
+	repositories: { Payments },
+	useCases: { Quote },
+	services: { mailer: () => ({ send: () => {} }) },
+});
+const fakeMailer = { send: (_to: string) => {} };
+export { TestBlog };
+-->
 ```ts
 const TestBlog = Blog.with({
 	services: { mailer: () => fakeMailer },
@@ -98,11 +137,13 @@ Each replacement is what that collection holds:
 - **An environment** gets its variables, checked by its blueprint once, when `with` is called (`InvalidApplicationEnvironment`). The use cases, the factories of services, the commands (`command.env` and the `env` of event policies), the providers of its repositories (`context.env`), `app.context.env` and `app.get` read them, and `start()` does not load that environment.
 - **A service** gets a factory and **a publisher** an `IEventPublisher`, as `services` and `publishers` take them.
 
-The checks are those of `applicationOf`: a key the application does not register throws `UnregisteredApplicationReference` (`details: { holder: "app.with", reference: 'repository "Payments"' }`); a value of the wrong kind, a method the repository does not have, or a collection `with` does not replace throws `InvalidApplicationDeclaration`. A call that replaces something itself (`app.run(..., { replace })`, `execute(dependencies)`, `run(op, input, { env })` of a command) wins over `with` for that call. The new application has the name, provider, log, trace and runtime of `app`, so it shares its store, as an application made by `extend()` does. `describe()` gives `replacements`, each one by collection and key as `{ kind: "opaque" }`; the declarations are described as they are.
+The checks are those of `applicationOf`: a key the application does not register throws `UnregisteredApplicationReference` (`details: { holder: "app.with", reference: 'repository "Payments"' }`); a value of the wrong kind, a method the repository does not have, or a collection `with` does not replace throws `InvalidApplicationDeclaration`. A call that replaces something itself (`app.run(..., { replace })`, `execute(dependencies)`, `run(op, input, { env })` of a command) wins over `with` for that call. The new application has the name, provider, log, trace and runtime of `app`, so it shares its store, as an application made by `extend()` does: the same providers, those made by `providerFrom` included, so stopping it (`stop()`) stops them for `app` too. For a test, `testApplicationOf(app.with(...))` (see [Testing](testing.md#replacing-registrations)) is the isolated way: its application has a store of its own and stops only that. The settings of `with` are typed `ApplicationReplacementSettings`. `describe()` gives `replacements`, each one by collection and key as `{ kind: "opaque" }`; the declarations are described as they are.
 
 ## Runtime services
 
 `runtime: { clock, idGenerator, hasher }` gives the application its own runtime services (see [Runtime](runtime.md#per-application-and-per-call)). Everything it runs uses them: its use cases (`app.run`, `app.useCases.X`), its commands and outputs, the entities they build and the passwords they hash, and its repositories, called through a use case or directly (`app.repositories.Items.create(...)`). A service it does not give falls back to `configure`, then to the default; `withRuntime` around a call comes before it. An application that extends it inherits them, its own winning each service, and `extend()` keeps them. Each service must be what `configure` takes (`InvalidApplicationDeclaration` otherwise).
+
+What runs before any use case is not run by the application: the authenticator of a sink (the `jwt` of `hono()`, say) verifies a token, its `exp` and `nbf` included, before the use case is called, so it reads the clock of `withRuntime` around the request, or of `configure`, and not that of the application's `runtime`. A test that moves the application's clock past the expiry of a token sees the token still accepted; move the clock of `configure({ clock })` (or wrap the request in `withRuntime`) for that.
 
 <!-- docs:code context
 export {};

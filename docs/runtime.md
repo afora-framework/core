@@ -74,7 +74,7 @@ resetRuntime(); // the default hasher and generator again, and the id clock rest
 
 ## Time
 
-Every read of the current time goes through one clock: the `createdAt`, `updatedAt` and `deletedAt` stamps, the time properties (`DateTime.now()`), `publish()` and `archive()`, the millisecond of a default UUID v7, the `iat`, `exp` and `nbf` of a JWT and their checks, the expiry of a query (unless `query.now` is given) and the `until` deadline of a walk. By default it is the platform's `Date.now()`. `configure({ clock })` takes a function that returns epoch milliseconds:
+Every read of the current time goes through one clock: the `createdAt`, `updatedAt` and `deletedAt` stamps, the time properties (`DateTime.now()`), `publish()` and `archive()`, the millisecond of a default UUID v7, the `iat`, `exp` and `nbf` of a JWT and their checks, the expiry of a query (unless `query.now` is given) and the `until` deadline of a walk. By default it is the platform's `Date.now()`. `configure({ clock })` takes a `Clock`, a function that returns epoch milliseconds; `manualClock()` of `@afora/core/testing` gives a `ManualClock`, one that moves only when told, by milliseconds or by a `ClockSpan` (`{ minutes: 16 }`):
 
 ```ts
 import { configure, resetRuntime } from "@afora/core";
@@ -124,6 +124,8 @@ note.createdAt; // "2030-01-01T00:00:00.000Z"
 ```
 
 The services follow `fn` and the application's calls across `await` through `AsyncLocalStorage` of `node:async_hooks`, which Bun, Node, Deno and Workers with `nodejs_compat` have; it is looked up the first time a scope is entered, never at import. Where there is none (a browser), they cover the synchronous part of `fn` or of a call, up to its first `await`; what runs after it reads the services of `configure`. The scopes cost nothing until the first one is entered: until then reading a service is one check.
+
+An application's services cover what it runs, from the use case on. What a sink does before calling a use case is not run by the application: the authenticator of a sink (a `jwt` verifying a bearer token, its `exp` and `nbf`) reads the clock of `withRuntime` around the request, or of `configure`, never the `runtime` clock of the application.
 
 A different clock per application does not give the default ids a different order: the ids of one process stay in order whatever clock made them, so an id made after one of a later clock carries that later millisecond. Give each application its own `idGenerator` when its ids must follow its own clock.
 
