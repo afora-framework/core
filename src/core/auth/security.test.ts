@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { compileRoutes, type HttpRequest } from "../../adapters";
-import { InvalidJwtOptions, jwtOf } from "../../experimental";
+import {
+	compileRoutes,
+	type HttpRequest,
+	InvalidJwtOptions,
+	jwtOf,
+} from "../../adapters";
 import {
 	blueprintOf,
 	commandOf,

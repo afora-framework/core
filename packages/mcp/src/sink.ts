@@ -4,6 +4,7 @@ import {
 	coerceTextValues,
 	type HttpOptions,
 	httpOptionsIssue,
+	jwtOf,
 	type OperationDescriptor,
 	outputValueOf,
 	problemOf,
@@ -11,7 +12,6 @@ import {
 	stageCatalogOf,
 	statusOf,
 } from "@afora/core/adapters";
-import { jwtOf } from "@afora/core/experimental";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
 	CallToolRequestSchema,
@@ -36,7 +36,7 @@ export interface McpToolsOptions {
 	readonly context?: { readonly [contextKey: string]: string };
 	/**
 	 * Who calls, from a JSON Web Token in the values of the call: the
-	 * `auth` of the sinks that serve HTTP (experimental). The token is read
+	 * `auth` of the sinks that serve HTTP. The token is read
 	 * from the value `authorization` (`Bearer <token>`; another with
 	 * `header`), which `register` fills from the HTTP headers and the
 	 * request `_meta`. An `authenticator` given in the hooks replaces it.

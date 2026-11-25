@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { InvalidJwtOptions, jwtOf } from "../../experimental";
+import { InvalidJwtOptions, jwtOf } from "../../adapters";
+import * as experimental from "../../experimental";
 import { Unauthenticated } from "../../index";
 
 const secret = "a-secret-of-at-least-thirty-two-characters";
@@ -167,5 +168,15 @@ describe("jwtOf", () => {
 		const session = jwt.authenticator({ cookie: "sid", header: "X-Token" });
 		expect((await session(request({}, { sid: token })))?.subject).toBe("u1");
 		expect((await session(request({ "x-token": token })))?.subject).toBe("u1");
+	});
+});
+
+describe("the entries of jwtOf", () => {
+	test("the deprecated experimental export is the same object as the stable one", () => {
+		expect(experimental.jwtOf).toBe(jwtOf);
+		expect(experimental.InvalidJwtOptions).toBe(InvalidJwtOptions);
+		expect(() => experimental.jwtOf({ secret: "short" })).toThrow(
+			InvalidJwtOptions,
+		);
 	});
 });

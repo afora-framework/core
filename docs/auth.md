@@ -123,7 +123,7 @@ const Account = commandOf({
 
 ## Tokens and sessions
 
-**Experimental.** What follows is imported from `@afora/core/experimental` or marked as such, and may change in any release (see [API tiers](api-tiers.md)). The declaration of access above is stable; how a caller gets and presents a token is what may still move.
+**Partly experimental.** `jwtOf`, its options and `InvalidJwtOptions` are stable and come from `@afora/core/adapters`: the signer, the verifier and the `authenticator` follow the compatibility policy (see [API tiers](api-tiers.md)). The ready-made sessions built on them, `login`, `refresh` and `logout` with `StdTokenOptions`, are marked **Experimental** where they are described and may change in any release.
 
 afora ships one ready-made way to authenticate: JSON Web Tokens signed with a shared secret (HMAC), on Web Crypto, so the same code runs on Bun, Node and Workers. It is three pieces that share one set of options.
 
@@ -302,10 +302,10 @@ A key that is not a required integer in the `change` list, `rotate` without `ver
 
 **What it does not do.** Tokens are not stored. Without `versionFrom`, a token already issued is valid until it expires, and `logout` only removes cookies; with it, refresh tokens can be ended, and access tokens still live until they expire. Keep `expiresIn` short and let `refresh` renew it; a deleted entity cannot refresh. For revoking access tokens before they expire, rotation by stored token ids with reuse detection, asymmetric keys or an identity provider, write the `authenticator` hook and your own use cases; the declaration of access does not change.
 
-**By hand.** `jwtOf(options)` is the same signer on its own: `sign({ subject, scopes?, claims? }, { expiresIn?, use? })`, `verify(token, { use? })` and `authenticator({ header?, cookie? })`. Here the secret may be the text itself. `sign` rejects with `InvalidJwtOptions` a scope that is not a scope token, and leaves out of the token a claim with a registered name: those are the token's own.
+**By hand.** `jwtOf(options)` (stable, from `@afora/core/adapters`; `@afora/core/experimental` still re-exports the same objects, deprecated) is the same signer on its own: `sign({ subject, scopes?, claims? }, { expiresIn?, use? })`, `verify(token, { use? })` and `authenticator({ header?, cookie? })`. Here the secret may be the text itself. `sign` rejects with `InvalidJwtOptions` a scope that is not a scope token, and leaves out of the token a claim with a registered name: those are the token's own.
 
 ```ts
-import { jwtOf } from "@afora/core/experimental";
+import { jwtOf } from "@afora/core/adapters";
 import { hono } from "@afora/hono";
 
 declare const user: { id: string }; // the signed-in entity

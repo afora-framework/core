@@ -3,8 +3,8 @@ import {
 	compileRoutes,
 	type HttpRequest,
 	httpOptionsIssue,
+	jwtOf,
 } from "../../adapters";
-import { jwtOf } from "../../experimental";
 import {
 	applicationOf,
 	blueprintOf,

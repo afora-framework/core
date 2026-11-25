@@ -4,9 +4,11 @@
  * `docs/api-tiers.md`.
  */
 
-// JSON Web Tokens for the `auth` option of the HTTP sinks and the tokens of
-// the standard `login`; the shape of the session may still change.
+// JSON Web Tokens moved to the stable `@afora/core/adapters` (#186). These are
+// the same objects, kept here for one release so imports keep working.
+/** @deprecated Import from `@afora/core/adapters`. */
 export { InvalidJwtOptions, jwtOf } from "./core/auth/jwt";
+/** @deprecated Import from `@afora/core/adapters`. */
 export type {
 	DescribedJwtOptions,
 	Jwt,

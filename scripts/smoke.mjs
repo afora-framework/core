@@ -4,10 +4,11 @@ import assert from "node:assert/strict";
 import { Type } from "typebox";
 import {
 	compileRoutes,
+	jwtOf,
 	outputValueOf,
 	RESERVED_RECORD_KEYS,
 } from "../dist/adapters.js";
-import { jwtOf, sliceOf, sliceValue } from "../dist/experimental.js";
+import { sliceOf, sliceValue } from "../dist/experimental.js";
 import {
 	blueprintOf,
 	commandOf,
