@@ -12,7 +12,9 @@ import {
 	inMemoryProvider,
 	RepositoryUniqueViolation,
 	repositoryOf,
+	Serial,
 } from "../../index";
+import { spyProvider } from "../../testing";
 
 class Item extends entityOf(
 	blueprintOf((ctx) => ({ name: ctx.string })),
@@ -307,5 +309,113 @@ describe("inMemoryProvider", () => {
 			);
 			expect(await provider.findMany(context)).toEqual([]);
 		});
+	});
+});
+
+describe("inMemoryProvider().clear", () => {
+	class Ticket extends entityOf(
+		blueprintOf((ctx) => ({ title: ctx.string })),
+		{ id: Serial },
+	) {}
+	class Named extends entityOf(
+		blueprintOf((ctx) => ({ title: ctx.string })),
+		{
+			name: "Note",
+		},
+	) {}
+
+	const setup = () => {
+		const provider = inMemoryProvider();
+		const Tickets = repositoryOf({
+			entity: Ticket,
+			actions: ["create", "count"],
+			provider,
+		});
+		const Items = repositoryOf({
+			entity: Item,
+			actions: ["create", "count"],
+			provider,
+		});
+		const Notes = repositoryOf({
+			entity: Named,
+			actions: ["create", "count"],
+			provider,
+		});
+		return { provider, Tickets, Items, Notes };
+	};
+
+	test("with no argument, empties every table and starts the Serial sequences again", async () => {
+		const { provider, Tickets, Items, Notes } = setup();
+		await Tickets.create(new Ticket({ title: "a" }));
+		await Tickets.create(new Ticket({ title: "b" }));
+		await Items.create(new Item({ name: "a" }));
+		await Notes.create(new Named({ title: "a" }));
+
+		await provider.clear();
+
+		expect(await Tickets.count()).toBe(0);
+		expect(await Items.count()).toBe(0);
+		expect(await Notes.count()).toBe(0);
+		// A unique value is free again, and ids start at 1.
+		await Items.create(new Item({ name: "a" }));
+		expect((await Tickets.create(new Ticket({ title: "c" }))).id).toBe(1);
+	});
+
+	test("with an entity, empties its table and its sequence only", async () => {
+		const { provider, Tickets, Items, Notes } = setup();
+		await Tickets.create(new Ticket({ title: "a" }));
+		await Items.create(new Item({ name: "a" }));
+		await Notes.create(new Named({ title: "a" }));
+
+		// By the name it declares, by the class name without one, or by class.
+		await provider.clear("Note");
+		expect(await Notes.count()).toBe(0);
+		expect(await Items.count()).toBe(1);
+		await provider.clear("Item");
+		expect(await Items.count()).toBe(0);
+		expect(await Tickets.count()).toBe(1);
+		await provider.clear(Ticket);
+		expect(await Tickets.count()).toBe(0);
+		expect((await Tickets.create(new Ticket({ title: "b" }))).id).toBe(1);
+		await provider.clear("Unknown");
+	});
+
+	test("waits for the running transaction", async () => {
+		const provider = inMemoryProvider();
+		let release!: () => void;
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const transaction = provider.transaction?.(async (child) => {
+			await child.insert(context, row("a"));
+			expect("clear" in child).toBe(false);
+			await held;
+		});
+		const cleared = provider.clear();
+		release();
+		await transaction;
+		await cleared;
+		expect(await provider.count(context)).toBe(0);
+	});
+
+	test("rejects what is not an entity or its name", async () => {
+		const provider = inMemoryProvider();
+		for (const entity of [1, "", {}]) {
+			await expect(provider.clear(entity as never)).rejects.toThrow(
+				InvalidRepositoryDeclaration,
+			);
+		}
+	});
+
+	test("goes through spyProvider and a spread provider", async () => {
+		const spy = spyProvider(inMemoryProvider());
+		await spy.insert(context, row("a"));
+		await spy.clear();
+		expect(await spy.count(context)).toBe(0);
+
+		const spread = { ...inMemoryProvider() };
+		await spread.insert(context, row("a"));
+		await spread.clear("Item");
+		expect(await spread.count(context)).toBe(0);
 	});
 });

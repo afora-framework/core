@@ -8,7 +8,7 @@ Every export of `@afora/core` belongs to one tier. The tier says where it is imp
 | ------------ | -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | stable       | `@afora/core`              | yes      | The reader path of the README and these docs: properties, blueprints, records, entities, repositories, use cases, commands, outputs, applications, environments, exceptions, logging, the Std catalog. |
 | adapters     | `@afora/core/adapters`     | yes      | The plumbing for authors of sinks, providers and code generators: the provider SPI, `sinkOf`, `problemOf`, `statusOf`, the route helpers, the `app.describe()` types, reserved keys.                   |
-| testing      | `@afora/core/testing`      | yes      | `providerContract` and `memoryPublisher`, which provider and publisher packages test against.                                                                                                          |
+| testing      | `@afora/core/testing`      | yes      | `providerContract` and `memoryPublisher`, which provider and publisher packages test against, `manualClock` and `testApplicationOf`.                                                                   |
 | experimental | `@afora/core/experimental` | no       | Features that may change in any release: slicing, description helpers that `app.describe()` covers, exports cut before 27.0.                                                                           |
 | internal     | nowhere                    | no       | Machinery of the core: base classes, runtime guards, constants of a rule. No longer exported.                                                                                                          |
 
@@ -594,6 +594,7 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 | `Publishable`                      | value | stable       | `@afora/core`              | Std instance of the core builders, the reader path of the [README](../README.md).                                      |
 | `StdRecordPlugins`                 | value | stable       | `@afora/core`              | Std instance of the core builders, the reader path of the [README](../README.md).                                      |
 | `Taggable`                         | value | stable       | `@afora/core`              | Std instance of the core builders, the reader path of the [README](../README.md).                                      |
+| `Clock`                            | type  | stable       | `@afora/core`              | Runtime configuration (`configure({ clock })`), in [Runtime](runtime.md#time).                                         |
 | `IdGenerator`                      | type  | stable       | `@afora/core`              | Runtime configuration (`configure`), in the [README](../README.md).                                                    |
 | `PasswordHasher`                   | type  | stable       | `@afora/core`              | Runtime configuration (`configure`), in the [README](../README.md).                                                    |
 | `RuntimeServices`                  | type  | stable       | `@afora/core`              | Runtime configuration (`configure`), in the [README](../README.md).                                                    |
@@ -631,6 +632,10 @@ Each export of `src/index.ts` at 0.0.8, in the order of the file.
 
 - **`@afora/core`** (#65): `memoryTracer`, `InvalidTraceDeclaration` and the types `ITracer`, `ITraceSpan`, `TraceAttributes`, `TraceStatus`, `MemoryTracer` and `MemorySpan`: the `trace` of an application, shown to application code in [Tracing](tracing.md) as `log` is in [Logging](logging.md) (`memoryTracer` is stable like `memoryLogProvider`). `ApplicationDescription` (`@afora/core/adapters`) gains `trace`, `{ kind: "opaque" }` when the application has one.
 - **`@afora/core`** (#119): the types `RouteFields` and `RouteBody`, the parts of `RouteDeclaration` and `RouteSettings` that allow `body` only on a `delete` route, stable as the route types are; see [Use cases](use-cases.md#routes).
+- **`@afora/core`** (#172, #173): `withRuntime`, the runtime services for the code a function runs, and the type `Clock`, the service `configure({ clock })` and the `runtime` of an application take; stable as `configure` is, shown to application code in [Runtime](runtime.md#per-application-and-per-call).
+- **`@afora/core`** (#175): the static `run` of a use case and the replacements it takes, with the types `UseCaseRunArgs`, `UseCaseRunOptions`, `UseCaseReplacements`, `ReplacementOf`, `UseCaseExecution` and `CommandReplaceOption` (the `replace` of a command's `run`), and the exception `UnusedUseCaseReplacement`; stable, shown in [Use cases](use-cases.md#run-and-replace).
+- **`@afora/core`** (#176): `app.with`, a member of every application, and the type of its settings, `ApplicationReplacementSettings`; stable, shown in [Applications](applications.md#replacing-registrations).
+- **`@afora/core`** (#174): the exceptions `RepositoryIsFrozen` and `RepositoryWrittenOutsideApplication`, raised to application code by a repository (see [Spying on the database](testing.md#spying-on-the-database) and [Testing an application](testing.md#an-application-and-its-api)); stable, siblings of `RepositoryUsedOutsideApplication`. **`@afora/core/testing`** (#174): `testApplicationOf` and the types `TestApplication` and `TestApplicationOptions`, how a test runs an application ([Testing](testing.md#an-application-and-its-api)).
 - **`@afora/core`** (#116): `withStatus` and `UndeclaredStatus`, a status a use case chooses at run time, shown to application code in [Use cases](use-cases.md#a-status-chosen-at-run-time). **`@afora/core/adapters`** (#116): `chosenStatusOf`, which only a sink that serves HTTP reads (`compileRoutes` does); see [Outputs](outputs.md).
 
 ## Added in 0.0.9
@@ -660,6 +665,12 @@ Exports that are new since the audit, with their tier:
 
 | Export                    | Kind  | Tier    | Reason                                                                     |
 | ------------------------- | ----- | ------- | -------------------------------------------------------------------------- |
+| `testApplicationOf`       | value | testing | An application for one test: a store of its own, started, stopped.         |
+| `TestApplication`         | type  | testing | Type of `testApplicationOf`.                                               |
+| `TestApplicationOptions`  | type  | testing | The options of `testApplicationOf`.                                        |
+| `ManualClock`             | type  | testing | Type of `manualClock`.                                                     |
+| `ClockSpan`               | type  | testing | The parts `manualClock().advance` takes.                                   |
+| `manualClock`             | value | testing | A clock for `configure({ clock })` that only moves when told.              |
 | `MemoryPublisher`         | type  | testing | Type of `memoryPublisher`.                                                 |
 | `memoryPublisher`         | value | testing | An in-memory `IEventPublisher` for tests of event policies and publishers. |
 | `ContractRunner`          | type  | testing | The contract test kit that provider packages run against.                  |

@@ -33,6 +33,20 @@ export const InvalidRepositoryDeclaration = exceptionOf({
 	message: ({ reason }: { readonly reason: string }) => reason,
 });
 
+/** A method of a repository was assigned or redefined, as `spyOn` does. */
+export const RepositoryIsFrozen = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "RepositoryIsFrozen",
+	message: ({
+		repository,
+		member,
+	}: {
+		readonly repository: string;
+		readonly member: string;
+	}) =>
+		`The repository ${repository} is frozen: "${member}" cannot be replaced. It is shared by every use case and application that names it. To observe it, wrap the provider with spyProvider from @afora/core/testing; to replace it for one call, override it in execute (execute({ ${repository}: { ${member}: ... } })). See docs/testing.md#spying-on-the-database.`,
+});
+
 /** A method of a repository got a value that is not an entity of it. */
 export const InvalidRepositoryEntity = exceptionOf({
 	layer: ExceptionLayers.Repository,
@@ -102,6 +116,18 @@ export const RepositoryUsedOutsideApplication = exceptionOf({
 		source,
 	) =>
 		`"${source}" is bound to the application "${application}", and its declaration no longer reads or writes: use app.repositories.${repository}, run its use cases with app.run, or give the repository of the application to execute.`,
+});
+
+/**
+ * A repository no application bound was written to while an application of
+ * `testApplicationOf(app, { strict: true })` ran: its rows would outlive
+ * the test. `source` is the repository name.
+ */
+export const RepositoryWrittenOutsideApplication = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "RepositoryWrittenOutsideApplication",
+	message: ({ application }: { readonly application: string }, source) =>
+		`"${source}" is not bound to an application, and the test application "${application}" runs in strict mode: register it in the application and call it through app.repositories, the use cases of the application, or a repository given to execute.`,
 });
 
 /** No entity of the id was found; `source` is the repository name. */

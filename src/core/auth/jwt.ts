@@ -1,3 +1,4 @@
+import { currentTime } from "../clock";
 import { ExceptionLayers } from "../exception/enums/exception-layers";
 import { exceptionOf } from "../exception/exception";
 import type { JsonValue } from "../json";
@@ -239,7 +240,7 @@ export function jwtOf(options: JwtOptions): Jwt {
 			for (const [key, value] of Object.entries(subject.claims ?? {})) {
 				if (isClaimName(key)) claims[key] = value;
 			}
-			const now = Math.floor(Date.now() / 1000);
+			const now = Math.floor(currentTime() / 1000);
 			const payload = {
 				...claims,
 				sub: subject.subject,
@@ -276,7 +277,7 @@ export function jwtOf(options: JwtOptions): Jwt {
 			);
 			const payload = valid ? jsonOf(body) : undefined;
 			if (!payload) return refused();
-			const now = Math.floor(Date.now() / 1000);
+			const now = Math.floor(currentTime() / 1000);
 			const { sub, scope, exp, nbf, iss, aud, use } = payload;
 			if (
 				typeof sub !== "string" ||

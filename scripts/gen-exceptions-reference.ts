@@ -121,10 +121,14 @@ const HANDLING: Record<string, string> = {
 	RepositoryConcurrencyConflict:
 		"An output answers 409. Reload the entity, apply the change again and retry, or ask the caller to.",
 	RepositoryEntityNotFound: "An output answers 404.",
+	RepositoryIsFrozen:
+		"Wrap the provider with `spyProvider` from `@afora/core/testing` to observe it, or override the member in `execute` for one call.",
 	RepositoryUniqueViolation:
 		"An output answers 409; `details.key` names the unique key.",
 	RepositoryUsedOutsideApplication:
 		"Call it through the application: `app.repositories.<key>`, its use cases, or a repository given to `execute`.",
+	RepositoryWrittenOutsideApplication:
+		"Register the repository in the application and call it through `app.repositories`, its use cases, or a repository given to `execute`.",
 	ReservedBlueprintKey: DECLARATION,
 	ReservedEntityKey: DECLARATION,
 	ReservedRecordKey: `${DECLARATION} Rename the key or the member.`,
@@ -146,6 +150,7 @@ const HANDLING: Record<string, string> = {
 	UnregisteredApplicationReference: `${DECLARATION} Register it in the application.`,
 	UnregisteredRepositoryDependency: `${DECLARATION} Register it in the application.`,
 	UnregisteredUseCaseDependency: `${DECLARATION} Register it in the application.`,
+	UnusedUseCaseReplacement: `${BUG} Replace only what a use case of the call declares; a renamed or removed dependency is listed in \`details.replacements\`.`,
 	UseCaseAlreadyExecuted: `${BUG} Create a new instance for each call (\`app.run\` and commands do).`,
 	UseCaseEntityConflict:
 		"An output answers 409. Pass your own error in the use case's options to name it in your domain.",

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The guide of the server says that registering a command in an application registers the use cases it holds, so an agent no longer lists them in `useCases` as well (#194).
+
 ## 27.0.0-rc.6 — 2026-11-24
 
 ### Security

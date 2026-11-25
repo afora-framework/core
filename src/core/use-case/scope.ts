@@ -42,6 +42,12 @@ export interface ExecutionScope {
 	readonly context?: unknown;
 	/** Who calls and the native request, for the factories of services. */
 	readonly origin?: CallOrigin;
+	/**
+	 * What the `replace` of the call gives in place of each declaration, by
+	 * the declaration it replaces (see `replacementKeyOf`): every use case
+	 * of the call that declares it gets the replacement. Validated already.
+	 */
+	readonly replacements?: ReadonlyMap<object, unknown>;
 }
 
 /**
@@ -62,6 +68,76 @@ export const OriginKey: unique symbol = Symbol("afora.call.origin");
  * output learns it. Not exported by the package.
  */
 export const StatusKey: unique symbol = Symbol("afora.call.status");
+
+/**
+ * What an application made by `app.with` (or extending one) replaces for
+ * the use cases it binds: the repositories, by the declaration they replace
+ * (as `ExecutionScope.replacements`), and the variables of the
+ * environments, by environment (as `ExecutionScope.environments`).
+ * Validated already.
+ */
+export interface ApplicationReplacements {
+	readonly replacements: ReadonlyMap<object, unknown>;
+	readonly environments: ReadonlyMap<object, Readonly<Record<string, unknown>>>;
+}
+
+/**
+ * Key of the `ApplicationReplacements` a use case class bound by an
+ * application carries. Not exported by the package: only the core sets it.
+ */
+export const ApplicationReplacementsKey: unique symbol = Symbol(
+	"afora.application.replacements",
+);
+
+/** The `ApplicationReplacements` `owner` (a use case class bound by an application) carries. */
+export function applicationReplacementsOf(
+	owner: unknown,
+): ApplicationReplacements | undefined {
+	return (
+		owner as {
+			readonly [ApplicationReplacementsKey]?: ApplicationReplacements;
+		}
+	)?.[ApplicationReplacementsKey];
+}
+
+/**
+ * `scope` with the replacements of the application under those of the call:
+ * what the call replaces itself (its `replace`, the variables a command
+ * was given) wins. `scope` itself when it holds them all already.
+ */
+export function withApplicationReplacements(
+	scope: ExecutionScope | undefined,
+	replaced: ApplicationReplacements,
+): ExecutionScope {
+	const missing = <Value>(
+		own: ReadonlyMap<object, Value>,
+		current: ReadonlyMap<object, Value> | undefined,
+	): ReadonlyMap<object, Value> | undefined => {
+		if (own.size === 0) return current;
+		let merged: Map<object, Value> | undefined;
+		for (const [key, value] of own) {
+			if (current?.has(key)) continue;
+			merged ??= new Map(current);
+			merged.set(key, value);
+		}
+		return merged ?? current;
+	};
+	const replacements = missing(replaced.replacements, scope?.replacements);
+	const environments = missing(replaced.environments, scope?.environments);
+	if (
+		scope !== undefined &&
+		replacements === scope.replacements &&
+		environments === scope.environments
+	) {
+		return scope;
+	}
+	return {
+		...scope,
+		providers: scope?.providers ?? new Map(),
+		...(replacements === undefined ? {} : { replacements }),
+		...(environments === undefined ? {} : { environments }),
+	};
+}
 
 /** The provider `scope` gives the call in place of `provider`. */
 export function scopedProvider<Provider extends IRepositoryProvider>(

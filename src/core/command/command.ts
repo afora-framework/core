@@ -36,6 +36,7 @@ import {
 } from "../tracing/tracing";
 import { isUseCaseCatalog } from "../use-case/plugin-catalog";
 import {
+	applicationReplacementsOf,
 	type CallOrigin,
 	type ExecutionScope,
 	OriginKey,
@@ -51,6 +52,7 @@ import {
 	type AnyUseCaseClass,
 	executionStatusOf,
 	isUseCaseClass,
+	replacementsOf,
 } from "../use-case/use-case";
 import {
 	CommandEventFailed,
@@ -201,12 +203,14 @@ interface CallEnvironment {
 
 /**
  * The variables of each of `environments` with `given` over them, validated
- * by its blueprint. An environment whose every key is given is not loaded.
+ * by its blueprint. An environment whose every key is given is not loaded;
+ * one `replaced` holds gives those variables instead.
  */
 function callEnvironment(
 	source: string,
 	environments: readonly AnyEnvironment[],
 	given: unknown,
+	replaced: ReadonlyMap<object, Readonly<Record<string, unknown>>> | undefined,
 ): CallEnvironment {
 	if (typeof given !== "object" || given === null || Array.isArray(given)) {
 		throw new InvalidCommandEnvironment({
@@ -237,7 +241,9 @@ function callEnvironment(
 		}
 		const complete = keys.every((key) => Object.hasOwn(picked, key));
 		const base =
-			Object.keys(picked).length === 0 || !complete ? environment.load() : {};
+			Object.keys(picked).length === 0 || !complete
+				? (replaced?.get(environment) ?? environment.load())
+				: {};
 		if (Object.keys(picked).length === 0) {
 			Object.assign(merged, base);
 			continue;
@@ -403,7 +409,12 @@ function declareCommand<
 		op: string,
 		input: unknown,
 		options:
-			| { context?: unknown; env?: unknown; [OriginKey]?: CallOrigin }
+			| {
+					context?: unknown;
+					env?: unknown;
+					replace?: unknown;
+					[OriginKey]?: CallOrigin;
+			  }
 			| undefined,
 		keepSpan: boolean,
 	): Promise<{
@@ -440,6 +451,7 @@ function declareCommand<
 		let callContext: unknown = options?.context;
 		let given: unknown = callContext;
 		let overrides: ReturnType<typeof callEnvironment> | undefined;
+		let replacements: ReadonlyMap<object, unknown> | undefined;
 		try {
 			if (context) {
 				const checked = context.safeParse(callContext);
@@ -456,7 +468,13 @@ function declareCommand<
 			overrides =
 				options?.env === undefined
 					? undefined
-					: callEnvironment(where, environments, options.env);
+					: callEnvironment(
+							where,
+							environments,
+							options.env,
+							applicationReplacementsOf(UseCase)?.environments,
+						);
+			replacements = replacementsOf(UseCase, options?.replace);
 		} catch (error) {
 			failSpan(span, error, ExceptionLayers.Command);
 			throw error;
@@ -473,10 +491,19 @@ function declareCommand<
 					: overrides.byEnvironment;
 			// The services of the call, made once for every use case it runs.
 			const services = serviceFactoriesOf(UseCase) !== undefined;
-			if (!environmentsOfCall && !logger && !tracer && !services) return scope;
+			if (
+				!environmentsOfCall &&
+				!logger &&
+				!tracer &&
+				!services &&
+				!replacements
+			) {
+				return scope;
+			}
 			return {
 				...scope,
 				providers: scope?.providers ?? new Map(),
+				...(replacements ? { replacements } : {}),
 				...(environmentsOfCall ? { environments: environmentsOfCall } : {}),
 				...(logger ? { logger } : {}),
 				...(tracer ? { tracer, ...(span ? { span } : {}) } : {}),
@@ -539,7 +566,12 @@ function declareCommand<
 		return {
 			...outcome,
 			context: callContext,
-			env: () => overrides?.merged ?? loadEnvironments(environments),
+			env: () =>
+				overrides?.merged ??
+				loadEnvironments(
+					environments,
+					applicationReplacementsOf(UseCase)?.environments,
+				),
 			logger: logger ?? silentLogger,
 			tracer,
 			span,
@@ -556,7 +588,12 @@ function declareCommand<
 		transaction,
 		environments,
 		get env() {
-			return loadEnvironments(environments);
+			// The use cases of a command an application rebuilt share its replacements.
+			return loadEnvironments(
+				environments,
+				applicationReplacementsOf(Object.values(frozenUseCases)[0])
+					?.environments,
+			);
 		},
 		events,
 		onEventError,
@@ -564,7 +601,7 @@ function declareCommand<
 		async execute(
 			op: string,
 			input: unknown,
-			options?: { context?: unknown; env?: unknown },
+			options?: { context?: unknown; env?: unknown; replace?: unknown },
 		) {
 			const { value, events } = await perform(op, input, options, false);
 			return { value, events } satisfies CommandExecution<unknown>;
@@ -572,7 +609,7 @@ function declareCommand<
 		async run(
 			op: string,
 			input: unknown,
-			options?: { context?: unknown; env?: unknown },
+			options?: { context?: unknown; env?: unknown; replace?: unknown },
 		) {
 			const {
 				value,

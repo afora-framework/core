@@ -99,6 +99,20 @@ export const UseCaseInvalidCredentials = exceptionOf({
 });
 
 /**
+ * The `replace` of a call (`UseCase.run`, `app.run`, `command.run` or
+ * `command.execute`) names declarations that no use case it runs declares,
+ * past those it replaces: a renamed or removed dependency is not silently
+ * left unreplaced. `details.replacements` names each one; `source` is the
+ * use case called.
+ */
+export const UnusedUseCaseReplacement = exceptionOf({
+	layer: ExceptionLayers.UseCase,
+	name: "UnusedUseCaseReplacement",
+	message: ({ replacements }: { readonly replacements: readonly string[] }) =>
+		`No use case of the call declares ${replacements.join(", ")}: replace only what one of them declares.`,
+});
+
+/**
  * A use case read a service (see `serviceOf`) that nothing gives it: no
  * application binds the name in its `services`, and `execute` was not given a
  * value for it. `details.service` is the name of the service.

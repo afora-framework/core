@@ -139,6 +139,7 @@ The rest of this page grows the same API: users that sign in, a rule of your own
 ```ts
 import {
 	Access,
+	applicationOf,
 	blueprintOf,
 	commandOf,
 	ExceptionLayers,
@@ -265,14 +266,29 @@ const Api = outputOf({
 	],
 });
 
-export const api = Api.build();
+// --- the application --------------------------------------------------------
 
-if (import.meta.main) Bun.serve({ fetch: api.fetch });
+// Everything above, in one place: started, it serves the API
+export const App = applicationOf({
+	name: "blog",
+	entities: { User, Post },
+	repositories: { Users, Posts },
+	commands: { Accounts, Blog },
+	outputs: { Api },
+	exceptions: { PostNotFound, NotTheAuthor },
+});
+
+if (import.meta.main) {
+	await App.start();
+	Bun.serve({ fetch: App.outputs.Api.build().fetch });
+}
 ```
 
 ```bash
 JWT_SECRET="a-secret-of-at-least-thirty-two-characters" bun blog.ts
 ```
+
+`applicationOf` gathers the declarations in one place and checks them as a whole: a use case that throws an exception the application does not register, or a repository whose entity it does not hold, fails when the file loads, not on a request. Started, it serves `App.outputs.Api`; its tests run it with storage of their own (section 10). See [Applications](applications.md).
 
 On Node 22 to 24.6, `register` answers a 500 `PasswordHasherRequired`: those versions have no argon2 of their own, so call `configure({ hasher })` once before the server starts ([Runtime](runtime.md)). Bun and Node 24.7 or later need nothing.
 
@@ -405,10 +421,33 @@ await FastifyApi.build().listen({ port: 3000 }); // a FastifyInstance: it runs o
 
 The options are the same and so is every response: the servers share one route table and one test suite. Each takes its own middlewares (CORS, rate limiting, logging) as a second argument. See [HTTP providers](providers.md).
 
+## 10. Testing it
+
+A test runs the API without a server: `testApplicationOf(App)` from `@afora/core/testing` gives the application with every repository on a new, empty in-memory store, already started, and `await using` stops it when the test ends, also when an assertion fails. Two tests never see each other's users or posts, and nothing has to be cleaned up:
+
+<!-- docs:code continue -->
+```ts
+import { expect, test } from "bun:test";
+import { testApplicationOf } from "@afora/core/testing";
+
+test("a post needs a signed-in author", async () => {
+	await using app = await testApplicationOf(App);
+	const response = await app.outputs.Api.build().request("/posts", {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ title: "Hello", slug: "hello", body: "First." }),
+	});
+
+	expect(response.status).toBe(401);
+});
+```
+
+`examples/interop/tutorial.test.ts` tests the whole file this way. See [Testing an application](testing.md).
+
 ## Where to go next
 
 - A real database: [Storing data](storing-data.md) moves this application to SQL with [`@afora/drizzle`](../packages/drizzle/README.md), or to DynamoDB.
-- [Testing an application](testing.md): the API without a server, and `spyProvider` to count reads or make the database fail.
+- [Testing an application](testing.md): `testApplicationOf`, replacing what a test swaps with `app.with`, and `spyProvider` to count reads or make the database fail.
 - More in a use case: a [list as the response](use-cases.md#a-list-as-the-response) (`response: listOf(PostSummary)`), [file uploads](std-properties.md#files) with `ctx.fileOf({ types: ["image/*"] })`, and [services](use-cases.md#services) (a cache, a storage, another API's client) given by the application.
 - [Real time](real-time.md): the same operations over a WebSocket, with domain events pushed to subscribers.
 - [Standard use cases](std-use-cases.md): ownership, soft deletion, publishing, tags.

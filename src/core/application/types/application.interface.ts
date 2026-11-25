@@ -34,6 +34,7 @@ import type {
 	SchemaMigrationOptions,
 	SchemaMigrationReport,
 } from "../../repository/types/schema.interface";
+import type { RuntimeServices } from "../../runtime-scope";
 import type { Kind } from "../../symbols/kind";
 import type { ITracer } from "../../tracing/tracing";
 import type { ServiceFactory } from "../../use-case/service";
@@ -43,7 +44,9 @@ import type { RouteDeclaration } from "../../use-case/types/route.interface";
 import type {
 	AnyExceptionClass,
 	AnyUseCaseClass,
+	ReplacementOf,
 	UseCaseInput,
+	UseCaseReplacements,
 	UseCaseResponse,
 } from "../../use-case/use-case";
 import type { ProviderSlot, ProviderStorage } from "../providers";
@@ -53,32 +56,42 @@ type Named<Value> = Readonly<Record<string, Value>>;
 
 /**
  * The options of `app.run`: the `context` of the use case, required when it
- * declares one, and `dependencies`, what its `execute` takes to replace them.
+ * declares one, `dependencies`, what its `execute` takes to replace them,
+ * and `replace`, declarations replaced in every use case of the call that
+ * declares them (see `UseCaseReplacements`).
  */
-export type ApplicationRunOptions<UseCase extends AnyUseCaseClass> =
-	(UseCase["context"] extends IBlueprint<infer Properties>
-		? { readonly context: BlueprintInput<Properties> }
-		: { readonly context?: undefined }) & {
-		readonly dependencies?: Parameters<InstanceType<UseCase>["execute"]>[0];
-	};
+export type ApplicationRunOptions<
+	UseCase extends AnyUseCaseClass,
+	Declarations extends readonly unknown[] = [],
+> = (UseCase["context"] extends IBlueprint<infer Properties>
+	? { readonly context: BlueprintInput<Properties> }
+	: { readonly context?: undefined }) & {
+	readonly dependencies?: Parameters<InstanceType<UseCase>["execute"]>[0];
+	readonly replace?: UseCaseReplacements<Declarations>;
+};
 
 /**
  * What `app.run` takes after the use case: its input, optional when no key
  * of it is required, and the options, required when it declares a context.
  */
-export type ApplicationRunArgs<UseCase extends AnyUseCaseClass> =
-	UseCase["context"] extends AnyBlueprint
-		? [input: UseCaseInput<UseCase>, options: ApplicationRunOptions<UseCase>]
-		: // biome-ignore lint/complexity/noBannedTypes: whether every key is optional
-			{} extends UseCaseInput<UseCase>
-			? [
-					input?: UseCaseInput<UseCase>,
-					options?: ApplicationRunOptions<UseCase>,
-				]
-			: [
-					input: UseCaseInput<UseCase>,
-					options?: ApplicationRunOptions<UseCase>,
-				];
+export type ApplicationRunArgs<
+	UseCase extends AnyUseCaseClass,
+	Declarations extends readonly unknown[] = [],
+> = UseCase["context"] extends AnyBlueprint
+	? [
+			input: UseCaseInput<UseCase>,
+			options: ApplicationRunOptions<UseCase, Declarations>,
+		]
+	: // biome-ignore lint/complexity/noBannedTypes: whether every key is optional
+		{} extends UseCaseInput<UseCase>
+		? [
+				input?: UseCaseInput<UseCase>,
+				options?: ApplicationRunOptions<UseCase, Declarations>,
+			]
+		: [
+				input: UseCaseInput<UseCase>,
+				options?: ApplicationRunOptions<UseCase, Declarations>,
+			];
 
 /** The declarations of an application, by name, one collection for each kind. */
 export interface ApplicationCollections {
@@ -118,7 +131,7 @@ export interface ApplicationSettings<
 	readonly repositories?: Collections["repositories"];
 	/** Use cases, keyed by their `useCaseName`. */
 	readonly useCases?: Collections["useCases"];
-	/** Commands, keyed by their `commandName`; every use case of each must be in `useCases`. */
+	/** Commands, keyed by their `commandName`; the use cases of each are registered with it. */
 	readonly commands?: Collections["commands"];
 	/** Outputs, keyed by their `outputName`; every command of each must be in `commands`. */
 	readonly outputs?: Collections["outputs"];
@@ -155,6 +168,15 @@ export interface ApplicationSettings<
 	 * last extended application that has one; none by default.
 	 */
 	readonly trace?: ITracer;
+	/**
+	 * The runtime services of everything it runs: its use cases, commands and
+	 * outputs, the entities they build, its repositories. Each service given
+	 * (`clock`, `idGenerator`, `hasher`) replaces the one of `configure` for
+	 * them; one not given falls back to `configure`, then to the default, and
+	 * `withRuntime` comes before all. An application that extends it inherits
+	 * them, its own winning each service (see `docs/runtime.md`).
+	 */
+	readonly runtime?: RuntimeServices;
 	/**
 	 * Where event policies such as `publishEvents` publish, by key: a
 	 * WebSocket hub, a queue, a broker. Commands of the application find them
@@ -213,6 +235,35 @@ export type MergedCollections<
 		UnionToIntersection<Extended[number][Key]>;
 };
 
+/**
+ * What `app.with` takes: the registrations it replaces, by collection and by
+ * the key they are registered under. A repository gets some of its methods
+ * (the others stay its own), a use case a function of its input that gives
+ * its response, an environment its variables, a service a factory and a
+ * publisher an `IEventPublisher`, as `applicationOf` takes them.
+ */
+export interface ApplicationReplacementSettings<
+	Collections extends ApplicationCollections,
+> {
+	readonly repositories?: {
+		readonly [Key in keyof Collections["repositories"]]?: ReplacementOf<
+			Collections["repositories"][Key]
+		>;
+	};
+	readonly useCases?: {
+		readonly [Key in keyof Collections["useCases"]]?: ReplacementOf<
+			Collections["useCases"][Key]
+		>;
+	};
+	readonly environments?: {
+		readonly [Key in keyof Collections["environments"]]?: ReplacementOf<
+			Collections["environments"][Key]
+		>;
+	};
+	readonly services?: Readonly<Record<string, ServiceFactory>>;
+	readonly publishers?: Readonly<Record<string, IEventPublisher>>;
+}
+
 /** A named, immutable manifest of what an application declares. */
 export interface IApplication<
 	Name extends string,
@@ -269,13 +320,18 @@ export interface IApplication<
 	useCase<UseCase extends AnyUseCaseClass>(useCase: UseCase): UseCase;
 	/**
 	 * Runs a use case registered in the application over its bound
-	 * repositories: `new (app.useCase(UseCase))(input, { context }).execute(dependencies)`.
-	 * It rejects with what the constructor or `execute` throw. The events the
-	 * use case collected are not handled; a command is what dispatches them.
+	 * repositories: `new (app.useCase(UseCase))(input, { context }).execute(dependencies)`,
+	 * with the declarations of `replace` replaced at any depth (see
+	 * `UseCase.run`). It rejects with what the constructor or `execute`
+	 * throw. The events the use case collected are not handled; a command is
+	 * what dispatches them.
 	 */
-	run<UseCase extends AnyUseCaseClass>(
+	run<
+		UseCase extends AnyUseCaseClass,
+		const Declarations extends readonly unknown[] = [],
+	>(
 		useCase: UseCase,
-		...args: ApplicationRunArgs<UseCase>
+		...args: ApplicationRunArgs<UseCase, Declarations>
 	): Promise<UseCaseResponse<UseCase>>;
 	/** The bound version of a command registered in the application. */
 	command<Command extends AnyCommand>(command: Command): Command;
@@ -285,6 +341,19 @@ export interface IApplication<
 	extend<const Others extends readonly AnyApplication[]>(
 		...others: Others
 	): IApplication<Name, MergedCollections<Collections, Others>>;
+	/**
+	 * A new application that extends this one with the registrations of
+	 * `replacements` replaced, by key, everywhere: in its use cases at any
+	 * depth, its commands and outputs, `repositories`, `context.env` and
+	 * `get`. This one is left as it is; `extend` keeps the replacements.
+	 *
+	 * @throws {@link UnregisteredApplicationReference} when a key is not registered.
+	 * @throws {@link InvalidApplicationDeclaration} when a replacement is of the wrong kind.
+	 * @throws {@link InvalidApplicationEnvironment} when the variables of an environment do not satisfy its blueprint.
+	 */
+	with(
+		replacements: ApplicationReplacementSettings<Collections>,
+	): IApplication<Name, Collections>;
 	/** A format-neutral, JSON-serializable graph of its declarations. */
 	describe(): ApplicationDescription;
 	/**
@@ -622,10 +691,28 @@ export interface ApplicationDescription {
 	readonly log?: LogDescription | { readonly kind: "opaque" };
 	/** Present, and opaque, only when it has a `trace` (its own or inherited). */
 	readonly trace?: { readonly kind: "opaque" };
+	/** Present only when it has runtime services (its own or inherited): each one given, opaque. */
+	readonly runtime?: {
+		readonly clock?: { readonly kind: "opaque" };
+		readonly idGenerator?: { readonly kind: "opaque" };
+		readonly hasher?: { readonly kind: "opaque" };
+	};
 	/** Its publishers (inherited ones included), by key, with the application that declared each; present only when it has some. */
 	readonly publishers?: Readonly<Record<string, { readonly from: string }>>;
 	/** Its services (inherited ones included), by name, with the application that declared each; present only when it has some. */
 	readonly services?: Readonly<Record<string, { readonly from: string }>>;
+	/** Present only on an application made by `app.with` (or extending one): what it replaces, by collection and key, each opaque. */
+	readonly replacements?: {
+		readonly repositories?: Readonly<
+			Record<string, { readonly kind: "opaque" }>
+		>;
+		readonly useCases?: Readonly<Record<string, { readonly kind: "opaque" }>>;
+		readonly environments?: Readonly<
+			Record<string, { readonly kind: "opaque" }>
+		>;
+		readonly services?: Readonly<Record<string, { readonly kind: "opaque" }>>;
+		readonly publishers?: Readonly<Record<string, { readonly kind: "opaque" }>>;
+	};
 	readonly properties: Readonly<
 		Record<string, PropertyDescription & { readonly from: string }>
 	>;

@@ -41,7 +41,18 @@ import { parseField } from "../parse/parse";
 import type { Issue } from "../parse/types/parse.interface";
 import { recordNameOf } from "../record/name";
 import { AbstractRepository, isRepository } from "../repository/repository";
+import {
+	actionGetters,
+	repositoryDeclarationOf,
+	type StrictWritesHolder,
+	StrictWritesKey,
+} from "../repository/state";
 import type { AnyRepository } from "../repository/types/repository.interface";
+import {
+	ApplicationRuntimeKey,
+	type RuntimeHolder,
+	withApplicationRuntime,
+} from "../runtime-scope";
 import { Kind } from "../symbols/kind";
 import {
 	endSpan,
@@ -53,7 +64,11 @@ import {
 	startSpan,
 } from "../tracing/tracing";
 import { accessDeclarationOf } from "./access";
-import { ServiceNotBound, ServiceOutsideExecution } from "./exceptions";
+import {
+	ServiceNotBound,
+	ServiceOutsideExecution,
+	UnusedUseCaseReplacement,
+} from "./exceptions";
 import {
 	type AnyUseCaseResponse,
 	isUseCaseResponse,
@@ -65,7 +80,12 @@ import {
 	type UseCaseOutput,
 } from "./response";
 import { routeDeclarationOf } from "./route";
-import { type ExecutionScope, ScopeKey } from "./scope";
+import {
+	applicationReplacementsOf,
+	type ExecutionScope,
+	ScopeKey,
+	withApplicationReplacements,
+} from "./scope";
 import {
 	type AnyService,
 	isService,
@@ -213,6 +233,88 @@ export type DependencyOverrides<Dependencies extends UseCaseCollection> = {
 		? Partial<Dependencies[Key]>
 		: DependencyOf<Dependencies[Key]>;
 };
+
+/**
+ * What replaces `Declaration` in a `replace`: a function for a use case,
+ * some of the methods of a repository, the variables of an environment, an
+ * `ILogger` or the value of a service, as an override of `execute` gives it.
+ */
+export type ReplacementOf<Declaration> = Declaration extends AnyRepository
+	? Partial<Declaration>
+	: DependencyOf<Declaration>;
+
+/** @internal */
+type ReplacedDeclaration<Declaration> = Declaration extends UseCaseDependency
+	? Declaration
+	: UseCaseDependency;
+
+/**
+ * The `replace` of a call, from the declarations it replaces: each entry is
+ * `[declaration, replacement]`, the replacement typed by {@link ReplacementOf}.
+ * Every use case of the call that declares `declaration` gets `replacement`.
+ */
+export type UseCaseReplacements<Declarations extends readonly unknown[]> = {
+	readonly [Index in keyof Declarations]: readonly [
+		declaration: ReplacedDeclaration<Declarations[Index]>,
+		replacement: ReplacementOf<NoInfer<Declarations[Index]>>,
+	];
+};
+
+/** What the static `run` of a use case gives with `events: true`: its response and the events it collected. */
+export interface UseCaseExecution<Value> {
+	readonly value: Value;
+	readonly events: EntityEvent[];
+}
+
+/**
+ * The options of the static `run` of a use case: its `context`, required
+ * when it declares one, the `dependencies` its `execute` takes, the
+ * `replace` of declarations at any depth, and `events: true` to get the
+ * events with the response.
+ */
+export type UseCaseRunOptions<
+	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined,
+	Declarations extends readonly unknown[] = [],
+	Events extends boolean = false,
+> = UseCaseOptions<Context> & {
+	readonly dependencies?: DependencyOverrides<Dependencies>;
+	readonly replace?: UseCaseReplacements<Declarations>;
+} & (Events extends true
+		? { readonly events: true }
+		: { readonly events?: false });
+
+/**
+ * What the static `run` of a use case takes: its input, optional when no key
+ * of it is required, and the options, required when it declares a context
+ * (or with `events: true`).
+ */
+export type UseCaseRunArgs<
+	Input extends IBlueprintCollection,
+	Dependencies extends UseCaseCollection,
+	Context extends IBlueprintCollection | undefined,
+	Declarations extends readonly unknown[] = [],
+	Events extends boolean = false,
+> = Context extends IBlueprintCollection
+	? [
+			input: BlueprintInput<Input>,
+			options: UseCaseRunOptions<Dependencies, Context, Declarations, Events>,
+		]
+	: Events extends true
+		? [
+				input: BlueprintInput<Input>,
+				options: UseCaseRunOptions<Dependencies, Context, Declarations, Events>,
+			]
+		: // biome-ignore lint/complexity/noBannedTypes: whether every key is optional
+			{} extends BlueprintInput<Input>
+			? [
+					input?: BlueprintInput<Input>,
+					options?: UseCaseRunOptions<Dependencies, Context, Declarations>,
+				]
+			: [
+					input: BlueprintInput<Input>,
+					options?: UseCaseRunOptions<Dependencies, Context, Declarations>,
+				];
 
 /**
  * What {@link useCaseOf} takes: the `name`, the `blueprint` of the input, the
@@ -462,7 +564,11 @@ function methodNamesOf(repository: object): string[] {
 	) {
 		for (const name of Object.getOwnPropertyNames(current)) {
 			const descriptor = Object.getOwnPropertyDescriptor(current, name);
-			if (name !== "constructor" && typeof descriptor?.value === "function") {
+			if (
+				name !== "constructor" &&
+				(typeof descriptor?.value === "function" ||
+					(descriptor?.get !== undefined && actionGetters.has(descriptor.get)))
+			) {
 				names.add(name);
 			}
 		}
@@ -718,6 +824,171 @@ function isOverrideOf(dependency: UseCaseDependency, value: unknown): boolean {
 	return typeof value === "function";
 }
 
+/** The declared use case each class an application bound comes from. */
+const boundFrom = new WeakMap<object, AnyUseCaseClass>();
+
+/** Keeps `Declared` as the use case `Bound` (made by an application) comes from. @internal */
+export function markBoundUseCase(
+	Bound: AnyUseCaseClass,
+	Declared: AnyUseCaseClass,
+): void {
+	boundFrom.set(Bound, Declared);
+}
+
+/**
+ * What identifies `dependency` in a `replace`: the declared use case of a
+ * bound one, the declaration of a repository (shared by the repositories
+ * that extend it or are bound from it), or the environment, the `Logger` or
+ * the service itself. `undefined` for what cannot be a dependency.
+ */
+function replacementKeyOf(dependency: unknown): object | undefined {
+	if (isUseCaseClass(dependency)) {
+		let Declared: AnyUseCaseClass = dependency;
+		for (
+			let from = boundFrom.get(Declared);
+			from !== undefined;
+			from = boundFrom.get(Declared)
+		) {
+			Declared = from;
+		}
+		return Declared;
+	}
+	if (isRepository(dependency)) return repositoryDeclarationOf(dependency);
+	return isEnvironment(dependency) ||
+		isLoggerDeclaration(dependency) ||
+		isService(dependency)
+		? (dependency as object)
+		: undefined;
+}
+
+/** How an unused replacement of `dependency` is named in `UnusedUseCaseReplacement`. */
+function replacementNameOf(dependency: UseCaseDependency): string {
+	if (isUseCaseClass(dependency))
+		return `the use case "${dependency.useCaseName}"`;
+	if (isRepository(dependency)) {
+		return `the repository of "${recordNameOf(dependency.entity)}"`;
+	}
+	if (isService(dependency)) return `the service "${dependency.name}"`;
+	if (isLoggerDeclaration(dependency)) return "Logger";
+	return `the environment of ${Object.keys(
+		(dependency as AnyEnvironment).blueprint.properties,
+	).join(", ")}`;
+}
+
+/**
+ * The replacements of a call of `UseCase`, by the declaration they replace
+ * (see `replacementKeyOf`), each checked as an override of it is (an
+ * environment's variables parsed once); `undefined` without any. Every one
+ * must be declared by a use case the call runs: `UseCase`, and the use
+ * cases it declares at any depth, except those replaced, by `replace` or by
+ * the direct `overrides` of `UseCase`.
+ *
+ * @throws {@link InvalidUseCaseDependencies} when `replace` is not a list of `[declaration, replacement]` pairs, names one twice, or gives the wrong kind of value.
+ * @throws {@link UnusedUseCaseReplacement} when no use case of the call declares one.
+ * @internal
+ */
+export function replacementsOf(
+	UseCase: AnyUseCaseClass,
+	replace: unknown,
+	overrides?: unknown,
+): ReadonlyMap<object, unknown> | undefined {
+	if (replace === undefined) return undefined;
+	const source = UseCase.useCaseName;
+	const invalid = (): never => {
+		throw new InvalidUseCaseDependencies({ source });
+	};
+	if (!Array.isArray(replace)) invalid();
+	const replacements = new Map<object, unknown>();
+	const declarations = new Map<object, UseCaseDependency>();
+	for (const entry of replace as unknown[]) {
+		if (!Array.isArray(entry) || entry.length !== 2) invalid();
+		const [declaration, replacement] = entry as [unknown, unknown];
+		const key = replacementKeyOf(declaration);
+		if (
+			key === undefined ||
+			replacements.has(key) ||
+			!isOverrideOf(declaration as UseCaseDependency, replacement)
+		) {
+			invalid();
+		}
+		let value = replacement;
+		if (isEnvironment(declaration)) {
+			const parsed = declaration.blueprint.safeParse(replacement);
+			if (parsed.issues) return invalid();
+			value = Object.freeze(parsed.value);
+		}
+		replacements.set(key as object, value);
+		declarations.set(key as object, declaration as UseCaseDependency);
+	}
+	if (replacements.size === 0) return undefined;
+	// The declarations the call can reach: a replaced use case runs no other.
+	const used = new Set<object>();
+	const visited = new Set<object>();
+	const visit = (Class: AnyUseCaseClass, skipped: object | undefined) => {
+		visited.add(Class);
+		for (const [name, dependency] of Object.entries(Class.dependencies)) {
+			if (skipped !== undefined && Object.hasOwn(skipped, name)) continue;
+			const key = replacementKeyOf(dependency);
+			if (key !== undefined && replacements.has(key)) {
+				used.add(key);
+			} else if (isUseCaseClass(dependency) && !visited.has(dependency)) {
+				visit(dependency, undefined);
+			}
+		}
+	};
+	visit(
+		UseCase,
+		typeof overrides === "object" && overrides !== null ? overrides : undefined,
+	);
+	if (used.size !== replacements.size) {
+		throw new UnusedUseCaseReplacement({
+			source,
+			details: {
+				replacements: [...declarations]
+					.filter(([key]) => !used.has(key))
+					.map(([, declaration]) => replacementNameOf(declaration)),
+			},
+		});
+	}
+	return replacements;
+}
+
+/**
+ * What the static `run` of a use case does: a new instance over the
+ * replacements of `options.replace`, executed with `options.dependencies`;
+ * its response, or with `events: true` the response and the events.
+ */
+async function runUseCase(
+	UseCase: AnyUseCaseClass,
+	input: unknown,
+	options: unknown,
+): Promise<unknown> {
+	const given = (options ?? {}) as {
+		readonly context?: unknown;
+		readonly dependencies?: unknown;
+		readonly replace?: unknown;
+		readonly events?: unknown;
+	};
+	const replacements = replacementsOf(
+		UseCase,
+		given.replace,
+		given.dependencies,
+	);
+	const instance = new UseCase(input, {
+		context: given.context,
+		...(replacements === undefined
+			? {}
+			: { [ScopeKey]: { providers: new Map(), replacements } }),
+	}) as unknown as {
+		execute(dependencies?: unknown): Promise<unknown>;
+		pullEvents(): EntityEvent[];
+	};
+	const value = await instance.execute(given.dependencies);
+	return given.events === true
+		? { value, events: instance.pullEvents() }
+		: value;
+}
+
 /** An operation with validated input, dependency functions and a drainable event queue. */
 export abstract class AbstractUseCase<
 	Input extends IBlueprintCollection,
@@ -735,7 +1006,13 @@ export abstract class AbstractUseCase<
 		const options = args[0] as
 			| { context?: unknown; [ScopeKey]?: ExecutionScope }
 			| undefined;
-		const scope = options?.[ScopeKey];
+		// Bound by an application made by `app.with`: its replacements reach
+		// every use case of the call, under those of the call itself.
+		const ofApplication = applicationReplacementsOf(this.constructor);
+		const scope =
+			ofApplication === undefined
+				? options?.[ScopeKey]
+				: withApplicationReplacements(options?.[ScopeKey], ofApplication);
 		let context: object | undefined;
 		if (declaration.context) {
 			// The context is shared by the use case and those it runs: frozen at every depth.
@@ -837,175 +1114,207 @@ export abstract class AbstractUseCase<
 		}
 		Object.freeze(state.dependencies);
 		// Own, immutable wrapper: subclasses implement only the prototype method.
-		Object.defineProperty(this, "execute", {
-			value: async (overrides: unknown = {}) => {
-				if (state.started) throw new UseCaseAlreadyExecuted({ source });
-				state.started = true;
-				// The services of the call are made once for every use case it
-				// runs: the first that can make one keeps them in the scope.
+		const run = async (overrides: unknown = {}) => {
+			if (state.started) throw new UseCaseAlreadyExecuted({ source });
+			state.started = true;
+			// The services of the call are made once for every use case it
+			// runs: the first that can make one keeps them in the scope.
+			if (
+				state.scope?.services === undefined &&
+				serviceFactoriesOf(state.owner) !== undefined
+			) {
+				state.scope = {
+					...state.scope,
+					providers: state.scope?.providers ?? new Map(),
+					services: new Map(),
+					context: state.scope?.context ?? state.context,
+				};
+			}
+			// Its span starts before the dependencies are resolved, so that
+			// their failures show.
+			const tracer = resolveTracer(state.scope?.tracer, state.owner);
+			const span =
+				tracer === undefined ? undefined : traceUseCase(tracer, state, source);
+			let resolved: Record<string, unknown> | undefined;
+			const services: [string, Promise<unknown>][] = [];
+			try {
 				if (
-					state.scope?.services === undefined &&
-					serviceFactoriesOf(state.owner) !== undefined
+					typeof overrides !== "object" ||
+					overrides === null ||
+					Array.isArray(overrides) ||
+					Reflect.ownKeys(overrides).some(
+						(key) =>
+							typeof key !== "string" ||
+							!Object.hasOwn(declaration.dependencies, key) ||
+							!isOverrideOf(
+								declaration.dependencies[key] as UseCaseDependency,
+								(overrides as Record<string, unknown>)[key],
+							),
+					)
 				) {
-					state.scope = {
-						...state.scope,
-						providers: state.scope?.providers ?? new Map(),
-						services: new Map(),
-						context: state.scope?.context ?? state.context,
-					};
+					throw new InvalidUseCaseDependencies({ source });
 				}
-				// Its span starts before the dependencies are resolved, so that
-				// their failures show.
-				const tracer = resolveTracer(state.scope?.tracer, state.owner);
-				const span =
-					tracer === undefined
-						? undefined
-						: traceUseCase(tracer, state, source);
-				let resolved: Record<string, unknown> | undefined;
-				const services: [string, Promise<unknown>][] = [];
-				try {
-					if (
-						typeof overrides !== "object" ||
-						overrides === null ||
-						Array.isArray(overrides) ||
-						Reflect.ownKeys(overrides).some(
-							(key) =>
-								typeof key !== "string" ||
-								!Object.hasOwn(declaration.dependencies, key) ||
-								!isOverrideOf(
-									declaration.dependencies[key] as UseCaseDependency,
-									(overrides as Record<string, unknown>)[key],
-								),
-						)
-					) {
-						throw new InvalidUseCaseDependencies({ source });
-					}
-					const replaced = overrides as Record<string, unknown>;
-					const dependencies: Record<string, unknown> = {};
-					for (const [key, dependency] of Object.entries(
-						declaration.dependencies,
-					)) {
-						if (Object.hasOwn(replaced, key)) continue;
-						if (isService(dependency)) {
-							const value = serviceOfCall(state, dependency);
-							if (value === undefined) {
-								Object.defineProperty(dependencies, key, {
-									get: unboundService(dependency, source),
-									enumerable: true,
-								});
-							} else {
-								services.push([key, value]);
-							}
+				const replaced = overrides as Record<string, unknown>;
+				const dependencies: Record<string, unknown> = {};
+				// What the `replace` of the call gives for a declaration, checked
+				// already: after the direct overrides, which win.
+				const replacements = state.scope?.replacements;
+				const substitutes: [string, unknown, boolean][] = Object.entries(
+					replaced,
+				).map(([key, value]) => [key, value, false]);
+				for (const [key, dependency] of Object.entries(
+					declaration.dependencies,
+				)) {
+					if (Object.hasOwn(replaced, key)) continue;
+					if (replacements !== undefined) {
+						const replacementKey = replacementKeyOf(dependency);
+						if (
+							replacementKey !== undefined &&
+							replacements.has(replacementKey)
+						) {
+							substitutes.push([key, replacements.get(replacementKey), true]);
 							continue;
 						}
-						dependencies[key] = state.dependencies[key];
 					}
-					for (const [key, substitute] of Object.entries(replaced)) {
-						const dependency = declaration.dependencies[
-							key
-						] as UseCaseDependency;
-						if (isRepository(dependency)) {
-							dependencies[key] = bindRepository(
-								dependency,
-								substitute as object,
-								state,
-								source,
-							);
-							continue;
+					if (isService(dependency)) {
+						const value = serviceOfCall(state, dependency);
+						if (value === undefined) {
+							Object.defineProperty(dependencies, key, {
+								get: unboundService(dependency, source),
+								enumerable: true,
+							});
+						} else {
+							services.push([key, value]);
 						}
-						if (isLoggerDeclaration(dependency) || isService(dependency)) {
+						continue;
+					}
+					dependencies[key] = state.dependencies[key];
+				}
+				for (const [key, substitute, checked] of substitutes) {
+					const dependency = declaration.dependencies[key] as UseCaseDependency;
+					if (isRepository(dependency)) {
+						dependencies[key] = bindRepository(
+							dependency,
+							substitute as object,
+							state,
+							source,
+						);
+						continue;
+					}
+					if (isLoggerDeclaration(dependency) || isService(dependency)) {
+						dependencies[key] = substitute;
+						continue;
+					}
+					if (isEnvironment(dependency)) {
+						if (checked) {
 							dependencies[key] = substitute;
 							continue;
 						}
-						if (isEnvironment(dependency)) {
-							const parsed = dependency.blueprint.safeParse(substitute);
-							if (parsed.issues)
-								throw new InvalidUseCaseDependencies({ source });
-							dependencies[key] = Object.freeze(parsed.value);
-							continue;
-						}
-						const Child = dependency as AnyUseCaseClass;
-						dependencies[key] = async (value: unknown) => {
-							if (!state.active)
-								throw new InvalidUseCaseDependencies({ source });
-							const childSource = Child.useCaseName;
-							const input = Child.blueprint.safeParse(value);
-							if (input.issues)
-								invalidValue(input.issues, childSource, "input");
-							const given = await guard(
-								{ layer: ExceptionLayers.UseCase, source: childSource },
-								() => (substitute as (input: unknown) => unknown)(input.value),
-							);
-							// A child gives its body only, whatever status it chose.
-							const output = parseResponse(
-								Child.response,
-								takeStatus(given).body,
-							);
-							if (output.issues)
-								invalidValue(output.issues, childSource, "response");
-							collectEvents(Child.response, output.value, state.events);
-							return output.value;
-						};
+						const parsed = dependency.blueprint.safeParse(substitute);
+						if (parsed.issues) throw new InvalidUseCaseDependencies({ source });
+						dependencies[key] = Object.freeze(parsed.value);
+						continue;
 					}
-					resolved = dependencies;
-				} catch (error) {
-					if (tracer !== undefined) {
-						failSpan(span, error, ExceptionLayers.UseCase);
-						untrace(state);
-					}
-					throw error;
+					const Child = dependency as AnyUseCaseClass;
+					dependencies[key] = async (value: unknown) => {
+						if (!state.active) throw new InvalidUseCaseDependencies({ source });
+						const childSource = Child.useCaseName;
+						const input = Child.blueprint.safeParse(value);
+						if (input.issues) invalidValue(input.issues, childSource, "input");
+						const given = await guard(
+							{ layer: ExceptionLayers.UseCase, source: childSource },
+							() => (substitute as (input: unknown) => unknown)(input.value),
+						);
+						// A child gives its body only, whatever status it chose.
+						const output = parseResponse(
+							Child.response,
+							takeStatus(given).body,
+						);
+						if (output.issues)
+							invalidValue(output.issues, childSource, "response");
+						collectEvents(Child.response, output.value, state.events);
+						return output.value;
+					};
 				}
-				state.active = true;
-				const started = clock();
-				// The values of the services, then the implementation.
-				const perform = async () => {
-					for (const [key, value] of services) {
-						(resolved as Record<string, unknown>)[key] = await value;
-					}
-					state.resolved = Object.freeze(resolved);
-					return implementation.call(
-						this,
-						state.resolved as DependencyOverrides<Dependencies>,
-					);
-				};
-				try {
-					const returned = await guard(
-						{ layer: ExceptionLayers.UseCase, source },
-						() =>
-							span === undefined
-								? perform()
-								: runInSpan(tracer as ITracer, span, perform),
-					);
-					// The view `withStatus` made carries the status of this call.
-					const { status, body } = takeStatus(returned);
-					const parsed = parseResponse(declaration.response, body);
-					if (parsed.issues) invalidValue(parsed.issues, source, "response");
-					collectEvents(declaration.response, parsed.value, state.events);
-					writeLog(loggerOfCall(state), "debug", "use-case", {
-						useCase: source,
-						outcome: "ok",
-						ms: elapsed(started),
-					});
-					endSpan(span);
-					// Read by the command that runs it for an output; `execute`
-					// gives the body only.
-					state.status = status;
-					return parsed.value;
-				} catch (error) {
-					logFailure(
-						loggerOfCall(state),
-						"use-case-failed",
-						{ useCase: source, ms: elapsed(started) },
-						error,
-					);
+				resolved = dependencies;
+			} catch (error) {
+				if (tracer !== undefined) {
 					failSpan(span, error, ExceptionLayers.UseCase);
-					throw error;
-				} finally {
-					state.active = false;
-					state.resolved = undefined;
-					if (tracer !== undefined) untrace(state);
+					untrace(state);
 				}
-			},
+				throw error;
+			}
+			state.active = true;
+			const started = clock();
+			// The values of the services, then the implementation.
+			const perform = async () => {
+				for (const [key, value] of services) {
+					(resolved as Record<string, unknown>)[key] = await value;
+				}
+				state.resolved = Object.freeze(resolved);
+				return implementation.call(
+					this,
+					state.resolved as DependencyOverrides<Dependencies>,
+				);
+			};
+			try {
+				const returned = await guard(
+					{ layer: ExceptionLayers.UseCase, source },
+					() =>
+						span === undefined
+							? perform()
+							: runInSpan(tracer as ITracer, span, perform),
+				);
+				// The view `withStatus` made carries the status of this call.
+				const { status, body } = takeStatus(returned);
+				const parsed = parseResponse(declaration.response, body);
+				if (parsed.issues) invalidValue(parsed.issues, source, "response");
+				collectEvents(declaration.response, parsed.value, state.events);
+				writeLog(loggerOfCall(state), "debug", "use-case", {
+					useCase: source,
+					outcome: "ok",
+					ms: elapsed(started),
+				});
+				endSpan(span);
+				// Read by the command that runs it for an output; `execute`
+				// gives the body only.
+				state.status = status;
+				return parsed.value;
+			} catch (error) {
+				logFailure(
+					loggerOfCall(state),
+					"use-case-failed",
+					{ useCase: source, ms: elapsed(started) },
+					error,
+				);
+				failSpan(span, error, ExceptionLayers.UseCase);
+				throw error;
+			} finally {
+				state.active = false;
+				state.resolved = undefined;
+				if (tracer !== undefined) untrace(state);
+			}
+		};
+		// Bound by an application with a `runtime`: the call runs with its services.
+		const runtime = (state.owner as RuntimeHolder)[ApplicationRuntimeKey];
+		const withRuntime =
+			runtime === undefined
+				? run
+				: (...args: [unknown?]) =>
+						withApplicationRuntime(runtime, () => run(...args));
+		// Bound by a strict test application: its writes are checked, from
+		// whatever async context the use case is called.
+		const strict = (state.owner as StrictWritesHolder)[StrictWritesKey];
+		Object.defineProperty(this, "execute", {
+			value:
+				strict === undefined
+					? withRuntime
+					: (...args: [unknown?]) => {
+							const writes = strict();
+							return writes === undefined
+								? withRuntime(...args)
+								: writes.run(() => withRuntime(...args));
+						},
 		});
 	}
 
@@ -1061,6 +1370,22 @@ type UseCaseStatics<
 	readonly route: RouteDeclaration | undefined;
 	/** Who may call it, from the `access` setting or `@Access`. */
 	readonly access: AccessDeclaration | undefined;
+	/**
+	 * Runs a new instance and gives its response:
+	 * `new UseCase(input, { context }).execute(dependencies)`, with every
+	 * declaration of `replace` replaced in each use case of the call that
+	 * declares it, at any depth. With `events: true`, gives
+	 * `{ value, events }`. Called on a concrete class.
+	 *
+	 * @throws {@link InvalidUseCaseDependencies} when an override or a replacement is of the wrong kind.
+	 * @throws {@link UnusedUseCaseReplacement} when no use case of the call declares a replaced declaration.
+	 */
+	run<const Declarations extends readonly unknown[] = []>(
+		...args: UseCaseRunArgs<Input, Dependencies, Context, Declarations, true>
+	): Promise<UseCaseExecution<ResponseValue<Output>>>;
+	run<const Declarations extends readonly unknown[] = []>(
+		...args: UseCaseRunArgs<Input, Dependencies, Context, Declarations>
+	): Promise<ResponseValue<Output>>;
 };
 
 /** What a use case instance carries beyond `AbstractUseCase`. */
@@ -1268,6 +1593,10 @@ export function useCaseOf(
 		]) as readonly AnyExceptionClass[];
 		static readonly route = route;
 		static readonly access = access;
+		static run(input: unknown = {}, options?: unknown): Promise<unknown> {
+			// biome-ignore lint/complexity/noThisInStatic: the class it is called on, a subclass
+			return runUseCase(this as unknown as AnyUseCaseClass, input, options);
+		}
 	}
 	Object.defineProperty(DeclaredUseCase, "name", { value: name });
 	if (settings.steps !== undefined) {

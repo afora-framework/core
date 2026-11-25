@@ -41,6 +41,7 @@ export type {
 	AnyApplication,
 	ApplicationCollections,
 	ApplicationContext,
+	ApplicationReplacementSettings,
 	ApplicationRunArgs,
 	ApplicationRunOptions,
 	ApplicationSettings,
@@ -91,6 +92,7 @@ export type {
 	IBlueprintPlugin,
 } from "./core/blueprint/types/blueprint-plugin.interface";
 export { variantOf } from "./core/blueprint/variant";
+export type { Clock } from "./core/clock";
 export { commandBuilderOf, isCommand } from "./core/command/command";
 export {
 	CommandEventFailed,
@@ -113,6 +115,7 @@ export type {
 	CommandOf,
 	CommandOperation,
 	CommandOptions,
+	CommandReplaceOption,
 	CommandResponse,
 	CommandSettings,
 	CommandUseCases,
@@ -368,8 +371,10 @@ export {
 	InvalidStoredSchemaVersion,
 	RepositoryConcurrencyConflict,
 	RepositoryEntityNotFound,
+	RepositoryIsFrozen,
 	RepositoryUniqueViolation,
 	RepositoryUsedOutsideApplication,
+	RepositoryWrittenOutsideApplication,
 	UnstoredEntity,
 	UnsupportedIdentity,
 } from "./core/repository/exceptions";
@@ -428,6 +433,7 @@ export type {
 	ProviderResults,
 } from "./core/repository/types/wrap.interface";
 export { wrapProvider } from "./core/repository/wrap";
+export { withRuntime } from "./core/runtime-scope";
 export type {
 	ISchema,
 	ISchemaType,
@@ -453,6 +459,7 @@ export {
 	ServiceNotBound,
 	ServiceOutsideExecution,
 	UnknownUseCasePlugin,
+	UnusedUseCaseReplacement,
 	UseCaseEntityConflict,
 	UseCaseEntityNotFound,
 	UseCaseInvalidCredentials,
@@ -531,6 +538,7 @@ export type {
 	DependencyFunctions,
 	DependencyOf,
 	DependencyOverrides,
+	ReplacementOf,
 	StepsUseCaseConstructor,
 	UseCaseCollection,
 	UseCaseConstructor,
@@ -538,9 +546,13 @@ export type {
 	UseCaseDeclaration,
 	UseCaseDependencies,
 	UseCaseDependency,
+	UseCaseExecution,
 	UseCaseInput,
 	UseCaseOptions,
+	UseCaseReplacements,
 	UseCaseResponse,
+	UseCaseRunArgs,
+	UseCaseRunOptions,
 	UseCaseSettings,
 	UseCaseStepsSettings,
 } from "./core/use-case/use-case";

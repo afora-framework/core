@@ -10,7 +10,15 @@ import {
 	loadEnvironments,
 } from "../environment/environment";
 import type { ILogger } from "../logger/logger";
-import { RepositoryUsedOutsideApplication } from "./exceptions";
+import {
+	type AsyncContextStorage,
+	newAsyncStorage,
+	type RuntimeServices,
+} from "../runtime-scope";
+import {
+	RepositoryUsedOutsideApplication,
+	RepositoryWrittenOutsideApplication,
+} from "./exceptions";
 import type { RepositoryIndex, RepositoryScans } from "./types/query.interface";
 import type {
 	AnyRepositoryEntity,
@@ -36,8 +44,18 @@ export interface RepositoryState {
 	readonly scans: RepositoryScans;
 	/** The logger of the application that bound it, for `scans: "warn"`. */
 	readonly logger?: ILogger;
+	/** The runtime services of the application that bound it, in force for its calls. */
+	readonly runtime?: RuntimeServices;
+	/** The variables an application made by `app.with` gives in place of its environments. */
+	readonly environments?: ReadonlyMap<
+		object,
+		Readonly<Record<string, unknown>>
+	>;
 	context?: RepositoryContext;
 }
+
+/** The getters that give the actions of a repository, which are not members of it a caller defines. */
+export const actionGetters = new WeakSet<object>();
 
 export const states = new WeakMap<object, RepositoryState>();
 
@@ -98,7 +116,7 @@ export function contextOf(state: RepositoryState): RepositoryContext {
 		indexes: state.indexes,
 		...(key === undefined ? {} : { expiry: Object.freeze({ key }) }),
 		...(schema === undefined ? {} : { schema }),
-		env: loadEnvironments(state.environment),
+		env: loadEnvironments(state.environment, state.environments),
 	});
 	return state.context;
 }
@@ -153,6 +171,18 @@ function declarationOf(state: RepositoryState): RepositoryState {
 	return origins.get(state) ?? state;
 }
 
+/**
+ * What identifies the declaration of `repository`, shared by every
+ * repository that extends or is bound from it (as `inspectRepository(...).state`),
+ * without the rest of the inspection; `undefined` when it is not one.
+ */
+export function repositoryDeclarationOf(
+	repository: unknown,
+): object | undefined {
+	const state = findState(repository);
+	return state === undefined ? undefined : declarationOf(state);
+}
+
 /** The repository `repositoryOf` made for each declaration. */
 const declared = new WeakMap<RepositoryState, object>();
 
@@ -189,6 +219,10 @@ function bindState(
 	provider: IRepositoryProvider | undefined,
 	instances: ReadonlyMap<object, IRepositoryProvider> | undefined,
 	logger: ILogger | undefined,
+	runtime: RuntimeServices | undefined,
+	environments:
+		| ReadonlyMap<object, Readonly<Record<string, unknown>>>
+		| undefined,
 	bound = new Map<RepositoryState, RepositoryState>(),
 ): RepositoryState {
 	const done = bound.get(state);
@@ -196,6 +230,8 @@ function bindState(
 	const copy: RepositoryState = {
 		...state,
 		logger,
+		runtime,
+		environments,
 		provider: state.explicitProvider
 			? (instances?.get(state.provider) ?? state.provider)
 			: (provider ?? state.provider),
@@ -203,7 +239,15 @@ function bindState(
 		relations: new Map(
 			[...state.relations].map(([target, related]) => [
 				target,
-				bindState(related, provider, instances, logger, bound),
+				bindState(
+					related,
+					provider,
+					instances,
+					logger,
+					runtime,
+					environments,
+					bound,
+				),
 			]),
 		),
 	};
@@ -232,6 +276,145 @@ export function assertUnbound(state: RepositoryState): void {
 	}
 }
 
+/** A strict test application: the declarations it binds, and whether it runs. */
+interface StrictScope {
+	readonly application: string;
+	readonly declarations: Set<object>;
+	running: boolean;
+}
+
+/** The check of strict writes, for `testApplicationOf(app, { strict: true })`. @internal */
+export interface StrictWrites {
+	/** Runs `fn` with the check, where the runtime has `AsyncLocalStorage` and it runs. */
+	run<Value>(fn: () => Value): Value;
+	/** Starts the check, `declarations` (the states of `inspectRepository`) being those the application binds. */
+	start(declarations: Iterable<object>): void;
+	/** Ends the check. */
+	stop(): void;
+}
+
+/**
+ * Key of the use case classes a strict test application binds: gives the
+ * check of the run of the application, so that its use cases run with it.
+ * @internal
+ */
+export const StrictWritesKey: unique symbol = Symbol(
+	"afora.application.strict",
+);
+
+/** What may carry the check of a strict test application. @internal */
+export type StrictWritesHolder = {
+	readonly [StrictWritesKey]?: () => StrictWrites | undefined;
+};
+
+/** Whether a strict application was ever started: until then, no write looks for one. */
+let strictUsed = false;
+/** The storage carrying the strict applications across awaits; `null` without `AsyncLocalStorage`, `undefined` until looked up. */
+let strictStorage:
+	| AsyncContextStorage<readonly StrictScope[]>
+	| null
+	| undefined;
+/** The strict applications running, the latest last, where there is no storage: process-wide. */
+const processStrict: StrictScope[] = [];
+
+/** The declarations an application registers without binding them: their writes are its own. */
+const registeredDeclarations = new WeakSet<object>();
+
+/**
+ * Keeps `declaration` (the state of `inspectRepository`) as registered by
+ * an application, which strict mode leaves alone unless the strict
+ * application binds it too.
+ * @internal
+ */
+export function markRegisteredRepository(declaration: object): void {
+	registeredDeclarations.add(declaration);
+}
+
+/**
+ * The check of writes of a strict test application named `application`.
+ * Where the runtime has `AsyncLocalStorage`, it covers the async context
+ * of the code calling this function (a test, and what it calls) once
+ * started; elsewhere it covers the whole process while it runs. To be called
+ * synchronously by what the test calls, so that the context is the test's.
+ * @internal
+ */
+export function strictWritesOf(application: string): StrictWrites {
+	const scope: StrictScope = {
+		application,
+		declarations: new Set(),
+		running: false,
+	};
+	if (strictStorage === undefined) {
+		strictStorage = newAsyncStorage<readonly StrictScope[]>();
+	}
+	strictUsed = true;
+	if (strictStorage) {
+		strictStorage.enterWith([...(strictStorage.getStore() ?? []), scope]);
+	}
+	return {
+		run(fn) {
+			if (!strictStorage || !scope.running) return fn();
+			const store = strictStorage.getStore() ?? [];
+			if (store.includes(scope)) return fn();
+			return strictStorage.run([...store, scope], fn);
+		},
+		start(declarations) {
+			for (const declaration of declarations) {
+				scope.declarations.add(declaration);
+			}
+			if (scope.running) return;
+			scope.running = true;
+			if (!strictStorage) processStrict.push(scope);
+		},
+		stop() {
+			if (!scope.running) return;
+			scope.running = false;
+			const index = processStrict.lastIndexOf(scope);
+			if (index !== -1) processStrict.splice(index, 1);
+		},
+	};
+}
+
+/**
+ * Forgets every strict application and, with `asyncContext: false`, acts as
+ * a runtime without `AsyncLocalStorage`. For the tests of afora.
+ * @internal
+ */
+export function resetStrictWrites(
+	options: { readonly asyncContext?: boolean } = {},
+): void {
+	strictUsed = false;
+	processStrict.length = 0;
+	strictStorage = options.asyncContext === false ? null : undefined;
+}
+
+/**
+ * Throws `RepositoryWrittenOutsideApplication` when a strict test
+ * application runs (in this async context, where there is one) and
+ * `state` is a declaration, not a repository an application bound: one
+ * the strict application binds, or one no application registers. Its rows
+ * would outlive the test.
+ */
+export function assertWritable(state: RepositoryState): void {
+	if (!strictUsed || origins.has(state)) return;
+	const scopes = strictStorage
+		? (strictStorage.getStore() ?? [])
+		: processStrict;
+	let latest: StrictScope | undefined;
+	let claimed: StrictScope | undefined;
+	for (const scope of scopes) {
+		if (!scope.running) continue;
+		latest = scope;
+		if (scope.declarations.has(state)) claimed = scope;
+	}
+	if (latest === undefined) return;
+	if (claimed === undefined && registeredDeclarations.has(state)) return;
+	throw new RepositoryWrittenOutsideApplication({
+		source: state.name,
+		details: { application: (claimed ?? latest).application },
+	});
+}
+
 /** Where the application binding a repository comes from. */
 export interface RepositoryBinding {
 	/** The name of the application. */
@@ -240,27 +423,47 @@ export interface RepositoryBinding {
 	readonly key: string;
 	/** The logger of the application, for `scans: "warn"`. */
 	readonly logger?: ILogger;
+	/**
+	 * Whether the declaration throws `RepositoryUsedOutsideApplication` from
+	 * then on; `true` by default, `false` for a test application, which
+	 * leaves the declarations as they were.
+	 */
+	readonly claim?: boolean;
 }
 
 /**
  * A repository sharing the declaration of `repository` that reads and writes
  * through `provider`, unless it declared a provider of its own; a declared
- * provider found in `instances` is replaced by its value. With `binding`,
- * the declaration (made by `repositoryOf`) throws
- * `RepositoryUsedOutsideApplication` from then on.
+ * provider found in `instances` is replaced by its value. With `binding`
+ * (unless `binding.claim` is `false`), the declaration (made by `repositoryOf`) throws
+ * `RepositoryUsedOutsideApplication` from then on. With `runtime`, its calls
+ * run with those services. With `environments`, its provider reads those
+ * variables in place of the environments they replace.
  */
 export function bindRepository<Repository extends object>(
 	repository: Repository,
 	provider: IRepositoryProvider | undefined,
 	instances?: ReadonlyMap<object, IRepositoryProvider>,
 	binding?: RepositoryBinding,
+	runtime?: RuntimeServices,
+	environments?: ReadonlyMap<object, Readonly<Record<string, unknown>>>,
 ): Repository {
 	const state = stateOf(repository);
 	const Declared = repository.constructor as new () => object;
 	class Bound extends Declared {}
 	Object.defineProperty(Bound, "name", { value: Declared.name });
-	states.set(Bound, bindState(state, provider, instances, binding?.logger));
-	if (binding) {
+	states.set(
+		Bound,
+		bindState(
+			state,
+			provider,
+			instances,
+			binding?.logger,
+			runtime,
+			environments,
+		),
+	);
+	if (binding && binding.claim !== false) {
 		owners.set(declarationOf(state), {
 			application: binding.application,
 			repository: binding.key,

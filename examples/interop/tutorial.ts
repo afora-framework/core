@@ -1,5 +1,6 @@
 import {
 	Access,
+	applicationOf,
 	blueprintOf,
 	commandOf,
 	ExceptionLayers,
@@ -126,6 +127,19 @@ const Api = outputOf({
 	],
 });
 
-export const api = Api.build();
+// --- the application --------------------------------------------------------
 
-if (import.meta.main) Bun.serve({ fetch: api.fetch });
+// Everything above, in one place: started, it serves the API
+export const App = applicationOf({
+	name: "blog",
+	entities: { User, Post },
+	repositories: { Users, Posts },
+	commands: { Accounts, Blog },
+	outputs: { Api },
+	exceptions: { PostNotFound, NotTheAuthor },
+});
+
+if (import.meta.main) {
+	await App.start();
+	Bun.serve({ fetch: App.outputs.Api.build().fetch });
+}
