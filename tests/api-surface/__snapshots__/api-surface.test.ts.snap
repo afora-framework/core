@@ -93,7 +93,7 @@ exports[`exports of the package and their declarations 1`] = `
     "type ChangePasswordInput<Repository> = ById<Repository> & { readonly currentPassword: typeof StringProperty; readonly password: typeof PlainPassword; };",
   ],
   "(internal) ChangePasswordMaker": [
-    "export type ChangePasswordMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", Authenticatable, "authenticatable">, options?: Options & Hookable<Repository, ChangePasswordInput<Repository>, never, None, Owner, Dependencies, true>) => EntityUseCase<Repository, Options, ChangePasswordInput<Repository>, Dependencies>;",
+    "export type ChangePasswordMaker = <Repository extends AnyRepository, const Options extends StdEntityOptions<Repository> & { readonly token?: TokenVersionOption; } = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "findById" | "update", Authenticatable, "authenticatable">, options?: Options & Hookable<Repository, ChangePasswordInput<Repository>, never, None, Owner, Dependencies, true>) => EntityUseCase<Repository, Options, ChangePasswordInput<Repository>, Dependencies>;",
   ],
   "(internal) ChangeStep": [
     "type ChangeStep<Step, Record, Scope> = [ Record ] extends [ never ] ? ValueStep<Step, "change", object, unknown, Scope> : [ Step ] extends [ { readonly key: infer Name; } ] ? Name extends keyof ChangeOf<Record> ? ValueStep<Step, "value", FirstParameter<ChangeOf<Record>[Name]>, Record, Scope> : [ { readonly [Key in keyof Step]: Key extends "key" ? keyof ChangeOf<Record> & string : Step[Key]; }, Record ] : [ Step, Record ];",
@@ -319,7 +319,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface LogDescription { readonly level: LogLevel; readonly providers: readonly ({ readonly kind: "log-provider"; readonly name: string; } | { readonly kind: "opaque"; })[]; }",
   ],
   "(internal) LogoutMaker": [
-    "export type LogoutMaker = <Repository extends AnyRepository>(repository: Repository, options?: StdUseCaseOptions & StdNoHookOptions) => StepsUseCaseConstructor<Record<never, never>, { readonly token: typeof StringProperty; readonly refreshToken: typeof StringProperty; }, Record<never, never>>;",
+    "export type LogoutMaker = <Repository extends AnyRepository, const Options extends StdUseCaseOptions & StdOwnerOption<Repository> & { readonly token?: TokenVersionOption; } & StdNoHookOptions = None>(repository: Repository, options?: Options) => StepsUseCaseConstructor<Record<never, never>, { readonly token: typeof StringProperty; readonly refreshToken: typeof StringProperty; }, Options extends { readonly token: object; } ? { readonly repository: Repository; } : Record<never, never>, OwnerContext<Repository, Options>>;",
   ],
   "(internal) METHODS": [
     "METHODS: readonly [ "get", "post", "put", "patch", "delete" ]",
@@ -668,8 +668,11 @@ exports[`exports of the package and their declarations 1`] = `
   "(internal) StageDescription": [
     "export type StageDescription = { readonly kind: "transform" | "sink"; readonly name: string; readonly options: StageOptions; readonly hooks?: true; } | { readonly kind: "opaque"; };",
   ],
+  "(internal) StdRegisterOptions": [
+    "interface StdRegisterOptions<Repository> extends StdCreateOptions<Repository> { readonly takesTokenKeys?: true; }",
+  ],
   "(internal) StdTokenOptions": [
-    "export interface StdTokenOptions extends DescribedJwtOptions { readonly refresh?: { readonly expiresIn: number; }; readonly scopes?: readonly string[]; readonly scopesFrom?: string; readonly claims?: { readonly [claim: string]: string; }; }",
+    "export interface StdTokenOptions extends DescribedJwtOptions { readonly refresh?: { readonly expiresIn: number; }; readonly scopes?: readonly string[]; readonly scopesFrom?: string; readonly claims?: { readonly [claim: string]: string; }; readonly versionFrom?: string; readonly rotate?: boolean; }",
   ],
   "(internal) StepInvokeMethod": [
     "type StepInvokeMethod<Record> = Record extends unknown ? { [Key in keyof Record & string]-?: Record[Key] extends Fn ? Key : never; }[Exclude<keyof Record & string, ForbiddenMethod>] : never;",
@@ -700,6 +703,9 @@ exports[`exports of the package and their declarations 1`] = `
   ],
   "(internal) TokenResponse": [
     "type TokenResponse<Options> = Options extends { readonly token: infer Token; } ? { readonly token: typeof StringProperty; } & (Token extends { readonly refresh: object; } ? { readonly refreshToken: typeof StringProperty; } : unknown) : unknown;",
+  ],
+  "(internal) TokenVersionOption": [
+    "type TokenVersionOption = (StdTokenOptions & { readonly versionFrom: string; }) | { readonly versionFrom: string; };",
   ],
   "(internal) Types": [
     "interface Types<Input = unknown, Output = Input> { readonly input: Input; readonly output: Output; }",
@@ -1755,7 +1761,7 @@ exports[`exports of the package and their declarations 1`] = `
     "export interface Register { }",
   ],
   "RegisterMaker": [
-    "export type RegisterMaker = <Repository extends AnyRepository, const Options extends StdCreateOptions<Repository> = None, const Omitted extends KeyOf<Repository> = never, const Values = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "findByEmail" | "create", Authenticatable, "authenticatable">, options?: Options & Hookable<Repository, CreateInput<Repository, Shape<Omitted, Values, Owner>>, Omitted, Values, Owner, Dependencies, false>) => EntityUseCase<Repository, Options, CreateInput<Repository, Options>, Dependencies>;",
+    "export type RegisterMaker = <Repository extends AnyRepository, const Options extends StdRegisterOptions<Repository> = None, const Omitted extends KeyOf<Repository> = never, const Values = None, const Owner = undefined, const Dependencies extends UseCaseCollection = None>(repository: Repository & UseCaseTarget<Repository, "findByEmail" | "create", Authenticatable, "authenticatable">, options?: Options & Hookable<Repository, CreateInput<Repository, Shape<Omitted, Values, Owner>>, Omitted, Values, Owner, Dependencies, false>) => EntityUseCase<Repository, Options, CreateInput<Repository, Options>, Dependencies>;",
   ],
   "RegisteredApplication": [
     "export type RegisteredApplication = Register extends { readonly application: infer Application extends AnyApplication; } ? Application : AnyApplication;",
@@ -2583,9 +2589,6 @@ exports[`adapters entry (contract) 1`] = `
   "(internal) DeclaredExceptionClass": [
     "export interface DeclaredExceptionClass<Details = undefined> { new (args: ExceptionArgs<Details>): Exception<Details>; readonly prototype: Exception<Details>; readonly layer: ExceptionLayers; from: typeof Exception.from; }",
   ],
-  "(internal) DescribedJwtOptions": [
-    "export interface DescribedJwtOptions extends Omit<JwtOptions, "secret"> { readonly secret: { readonly env: string; }; }",
-  ],
   "(internal) EntityClassBrand": [
     "EntityClassBrand: unique symbol",
   ],
@@ -2737,12 +2740,6 @@ exports[`adapters entry (contract) 1`] = `
   ],
   "(internal) JsonVariant": [
     "type JsonVariant<Key extends string, Variants, Data> = Data extends { readonly [Name in Key]: infer Tag extends keyof Variants; } ? Variants[Tag] extends AnyRecordClass ? { readonly [Name in Key]: Tag; } & JsonOfRecord<Variants[Tag], Data> : Variants[Tag] extends { readonly properties: infer Properties extends IBlueprintCollection; } ? JsonKeys<Properties, Data, never> : Data : Data;",
-  ],
-  "(internal) JwtAlgorithm": [
-    "export type JwtAlgorithm = "HS256" | "HS384" | "HS512";",
-  ],
-  "(internal) JwtOptions": [
-    "export interface JwtOptions { readonly secret: string | { readonly env: string; }; readonly issuer?: string; readonly audience?: string; readonly expiresIn?: number; readonly algorithm?: JwtAlgorithm; }",
   ],
   "(internal) ListShape": [
     "type ListShape<Item, Mode extends FieldMode, Optional extends boolean> = Optional extends true ? FieldValue<Item, Mode>[] | undefined : FieldValue<Item, Mode>[];",
@@ -3008,6 +3005,9 @@ exports[`adapters entry (contract) 1`] = `
   "Demo": [
     "Demo: unique symbol",
   ],
+  "DescribedJwtOptions": [
+    "export interface DescribedJwtOptions extends Omit<JwtOptions, "secret"> { readonly secret: { readonly env: string; }; }",
+  ],
   "ENTITY_IDENTITY_KEYS": [
     "ENTITY_IDENTITY_KEYS: readonly EntityIdentityKey[]",
   ],
@@ -3040,6 +3040,24 @@ exports[`adapters entry (contract) 1`] = `
   ],
   "IRepositoryProvider": [
     "export interface IRepositoryProvider<Environment = unknown> { findOne(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<RepositoryData | undefined>; findMany(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<readonly RepositoryData[]>; insert(context: RepositoryContext<Environment>, data: RepositoryData): Promise<void | { readonly id: IdValue; }>; update(context: RepositoryContext<Environment>, data: RepositoryData, options?: ProviderUpdateOptions): Promise<void>; remove(context: RepositoryContext<Environment>, id: IdValue): Promise<void>; increment?(context: RepositoryContext<Environment>, id: IdValue, deltas: Readonly<Record<string, number>>, options?: ProviderIncrementOptions): Promise<RepositoryData>; count(context: RepositoryContext<Environment>, query?: ProviderQuery): Promise<number>; readonly capabilities?: ProviderCapabilities; transaction?<Result>(run: (provider: IRepositoryProvider<Environment>) => Promise<Result>): Promise<Result>; close?(): void | Promise<void>; migrate?(context: RepositoryContext<Environment>, plan: SchemaPlan): Promise<void | ProviderMigrationResult>; }",
+  ],
+  "InvalidJwtOptions": [
+    "InvalidJwtOptions: import("../../index.js").DeclaredExceptionClass<{ readonly reason: string; }>",
+  ],
+  "Jwt": [
+    "export interface Jwt { sign(subject: JwtSubject, options?: JwtTokenOptions): Promise<string>; verify(token: string, options?: Pick<JwtTokenOptions, "use">): Promise<Principal>; authenticator(options?: { readonly header?: string; readonly cookie?: string; }): Authenticator; }",
+  ],
+  "JwtAlgorithm": [
+    "export type JwtAlgorithm = "HS256" | "HS384" | "HS512";",
+  ],
+  "JwtOptions": [
+    "export interface JwtOptions { readonly secret: string | { readonly env: string; }; readonly issuer?: string; readonly audience?: string; readonly expiresIn?: number; readonly algorithm?: JwtAlgorithm; }",
+  ],
+  "JwtSubject": [
+    "export interface JwtSubject { readonly subject: string; readonly scopes?: readonly string[]; readonly claims?: Principal["claims"]; }",
+  ],
+  "JwtTokenOptions": [
+    "export interface JwtTokenOptions { readonly expiresIn?: number; readonly use?: string; }",
   ],
   "Kind": [
     "Kind: unique symbol",
@@ -3178,6 +3196,9 @@ exports[`adapters entry (contract) 1`] = `
   ],
   "httpOptionsIssue": [
     "export declare function httpOptionsIssue(options: HttpOptions, where: string): string | undefined;",
+  ],
+  "jwtOf": [
+    "export declare function jwtOf(options: JwtOptions): Jwt;",
   ],
   "operationRoutes": [
     "export declare function operationRoutes(operations: readonly OperationDescriptor[], options: RouteOptions, source?: string): ReadonlyMap<string, OperationRoute>;",
@@ -4054,7 +4075,7 @@ exports[`experimental entry (not contract) 1`] = `
     "export type SlicedValue<Value, Mask> = Value extends readonly (infer Item)[] ? SlicedValue<Item, Mask>[] : Value extends { readonly [Meta]: { readonly blueprint: IBlueprint<infer Properties, boolean>; }; toJSON(): unknown; } ? SlicedValue<BlueprintData<Properties>, Mask> : Value extends { toJSON(): infer Json; } ? SlicedValue<Json, Mask> : Value extends object ? { [Key in keyof Value as Key extends keyof Mask ? Key : never]: Key extends keyof Mask ? Mask[Key] extends true ? Value[Key] : SlicedValue<Value[Key], Mask[Key]> : never; } : Value;",
   ],
   "StdTokenOptions": [
-    "export interface StdTokenOptions extends DescribedJwtOptions { readonly refresh?: { readonly expiresIn: number; }; readonly scopes?: readonly string[]; readonly scopesFrom?: string; readonly claims?: { readonly [claim: string]: string; }; }",
+    "export interface StdTokenOptions extends DescribedJwtOptions { readonly refresh?: { readonly expiresIn: number; }; readonly scopes?: readonly string[]; readonly scopesFrom?: string; readonly claims?: { readonly [claim: string]: string; }; readonly versionFrom?: string; readonly rotate?: boolean; }",
   ],
   "UseCaseOriginInfo": [
     "export interface UseCaseOriginInfo { readonly plugin: AnyUseCasePlugin; readonly repository: AnyRepository; readonly options: Readonly<Record<string, unknown>>; }",
@@ -8017,7 +8038,7 @@ exports[`afora.json schema 1`] = `
                   "type": "string",
                 },
                 "options": {
-                  "description": "Its options: "as" (the response key), "owner" ({ "key"?, "context" }; "key": "id" for an entity that is the caller, not for create and register), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "relations" (create and register: { <key>: { "shared": true } } lets the input name an entity of another owner), "set", "orderBy", "maxLimit" (list: the largest limit, 100 by default), and "token" for login and refresh ({ "secret": { "env": "NAME" }, "issuer"?, "audience"?, "expiresIn"?, "algorithm"?, "refresh"?: { "expiresIn" }, "scopes"?, "scopesFrom"?, "claims"? }: login then answers a token); those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").",
+                  "description": "Its options: "as" (the response key), "owner" ({ "key"?, "context" }; "key": "id" for an entity that is the caller, not for create and register), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "relations" (create and register: { <key>: { "shared": true } } lets the input name an entity of another owner), "takesTokenKeys" (register: true lets it take the keys a token is made from, which a public register refuses; only with an access that asks for scopes, and never the token version key), "set", "orderBy", "maxLimit" (list: the largest limit, 100 by default), and "token" for login and refresh ({ "secret": { "env": "NAME" }, "issuer"?, "audience"?, "expiresIn"?, "algorithm"?, "refresh"?: { "expiresIn" }, "scopes"?, "scopesFrom"?, "claims"?, "versionFrom"?, "rotate"? }: login then answers a token; "versionFrom" names a required, integer, sensitive key listed in change, the token version that each refresh token carries and refresh compares with the stored one; "rotate": true makes refresh add 1 to it, so a refresh token is used once), and for logout and changePassword (the same object, or { "versionFrom" }: they add 1 to the token version, ending the refresh tokens issued before; logout then needs "owner": { "key": "id", "context" }); those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").",
                   "patternProperties": {
                     "^[A-Za-z_$][A-Za-z0-9_$]*$": {},
                   },
