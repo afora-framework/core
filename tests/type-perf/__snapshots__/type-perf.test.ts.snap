@@ -159,7 +159,7 @@ hover L15:15 create: ctx.‸create(Posts, {
 hover L26:9 const { ‸post } = await Blog.run("create", { title: "Hi" });
   const post: Post
 signature L26:43 const { post } = await Blog.run("create", ‸{ title: "Hi" });
-  * run(op: "create", input: { readonly title: string; }): Promise<{ readonly post: Post; }>  [arg 1]
+  * run(op: "create", input: { readonly title: string; }, options?: CommandReplaceOption<[]> | undefined): Promise<{ readonly post: Post; }>  [arg 1]
 hover L27:9 const { ‸items } = await Blog.run("list", {});
   const items: Post[]
 complete L28:41 await Blog.run("update", { id: post.id, ‸ });
@@ -565,7 +565,7 @@ hover L15:15 create: ctx.‸create(Posts, {
 hover L26:9 const { ‸post } = await Blog.run("create", { title: "Hi" });
   const post: Post
 signature L26:43 const { post } = await Blog.run("create", ‸{ title: "Hi" });
-  * run(op: "create", input: { readonly title: string; }): Promise<{ readonly post: Post; }>  [arg 1]
+  * run(op: "create", input: { readonly title: string; }, options?: CommandReplaceOption<[]> | undefined): Promise<{ readonly post: Post; }>  [arg 1]
 hover L27:9 const { ‸items } = await Blog.run("list", {});
   const items: Post[]
 complete L28:41 await Blog.run("update", { id: post.id, ‸ });

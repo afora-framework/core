@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 554 exports.
+Tier: stable. 566 exports.
 
 ### Access
 
@@ -184,6 +184,16 @@ What an application gives the factories it runs on start (`providerFrom`,
 The application provider is made by `providerFrom` and the application has
 not been started: `await app.start()` creates it.
 
+### ApplicationReplacementSettings
+
+*interface* · tier: stable · `import type { ApplicationReplacementSettings } from "@afora/core"`
+
+What `app.with` takes: the registrations it replaces, by collection and by
+the key they are registered under. A repository gets some of its methods
+(the others stay its own), a use case a function of its input that gives
+its response, an environment its variables, a service a factory and a
+publisher an `IEventPublisher`, as `applicationOf` takes them.
+
 ### ApplicationRunArgs
 
 *type* · tier: stable · `import type { ApplicationRunArgs } from "@afora/core"`
@@ -196,7 +206,9 @@ of it is required, and the options, required when it declares a context.
 *type* · tier: stable · `import type { ApplicationRunOptions } from "@afora/core"`
 
 The options of `app.run`: the `context` of the use case, required when it
-declares one, and `dependencies`, what its `execute` takes to replace them.
+declares one, `dependencies`, what its `execute` takes to replace them,
+and `replace`, declarations replaced in every use case of the call that
+declares them (see `UseCaseReplacements`).
 
 ### ApplicationSettings
 
@@ -356,6 +368,12 @@ checked against the values in scope, and the `return` against what the
 response (the collection `Response`, or a list) takes. Steps that are not a tuple (built at
 run time) are checked only when the use case is declared.
 
+### Clock
+
+*type* · tier: stable · `import type { Clock } from "@afora/core"`
+
+Reads the current time as epoch milliseconds.
+
 ### CommandBuilder
 
 *type* · tier: stable · `import type { CommandBuilder } from "@afora/core"`
@@ -439,7 +457,15 @@ The names of the operations of a command.
 *type* · tier: stable · `import type { CommandOptions } from "@afora/core"`
 
 The options of a call: `{ context }` of the command when it declares one,
-otherwise those of the use case.
+otherwise those of the use case; the `env` of the call, and `replace`
+(see `UseCaseReplacements`).
+
+### CommandReplaceOption
+
+*interface* · tier: stable · `import type { CommandReplaceOption } from "@afora/core"`
+
+The `replace` a call can give: declarations replaced in every use case of
+the call that declares them, at any depth (see `UseCaseReplacements`).
 
 ### CommandResponse
 
@@ -2171,6 +2197,14 @@ declare module "@afora/core" {
 
 The application declared in `Register`, or any application.
 
+### ReplacementOf
+
+*type* · tier: stable · `import type { ReplacementOf } from "@afora/core"`
+
+What replaces `Declaration` in a `replace`: a function for a use case,
+some of the methods of a repository, the variables of an environment, an
+`ILogger` or the value of a service, as an override of `execute` gives it.
+
 ### RepositoryAction
 
 *type* · tier: stable · `import type { RepositoryAction } from "@afora/core"`
@@ -2243,6 +2277,12 @@ The options of `increment`.
 
 An access pattern a repository declares: queries whose `where` holds every
 key of `where` by equality, and whose first order (if any) is `orderBy`.
+
+### RepositoryIsFrozen
+
+*const* · tier: stable · `import { RepositoryIsFrozen } from "@afora/core"`
+
+A method of a repository was assigned or redefined, as `spyOn` does.
 
 ### RepositoryOf
 
@@ -2333,6 +2373,14 @@ What `forEachPage` did.
 *type* · tier: stable · `import type { RepositoryWhere } from "@afora/core"`
 
 Equality, or membership in a list. Conditions on different keys are ANDed.
+
+### RepositoryWrittenOutsideApplication
+
+*const* · tier: stable · `import { RepositoryWrittenOutsideApplication } from "@afora/core"`
+
+A repository no application bound was written to while an application of
+`testApplicationOf(app, { strict: true })` ran: its rows would outlive
+the test. `source` is the repository name.
 
 ### RequiredIdInput
 
@@ -3011,6 +3059,16 @@ not assign them (no `capabilities.generatedIds`), or gave no valid id for
 an entity it inserted; `source` is the repository name, or the
 application whose provider is made on start.
 
+### UnusedUseCaseReplacement
+
+*const* · tier: stable · `import { UnusedUseCaseReplacement } from "@afora/core"`
+
+The `replace` of a call (`UseCase.run`, `app.run`, `command.run` or
+`command.execute`) names declarations that no use case it runs declares,
+past those it replaces: a renamed or removed dependency is not silently
+left unreplaced. `details.replacements` names each one; `source` is the
+use case called.
+
 ### UpdateMaker
 
 *type* · tier: stable · `import type { UpdateMaker } from "@afora/core"`
@@ -3107,6 +3165,12 @@ What a use case made by a plugin throws for an entity that already exists, unles
 
 What a use case made by a plugin throws for an entity it did not find, unless given another error.
 
+### UseCaseExecution
+
+*interface* · tier: stable · `import type { UseCaseExecution } from "@afora/core"`
+
+What the static `run` of a use case gives with `events: true`: its response and the events it collected.
+
 ### UseCaseFieldPlan
 
 *interface* · tier: stable · `import type { UseCaseFieldPlan } from "@afora/core"`
@@ -3165,12 +3229,37 @@ What a use case plugin needs of the repository it is made for.
 
 What `useCasePluginOf` takes, after the name.
 
+### UseCaseReplacements
+
+*type* · tier: stable · `import type { UseCaseReplacements } from "@afora/core"`
+
+The `replace` of a call, from the declarations it replaces: each entry is
+`[declaration, replacement]`, the replacement typed by {@link ReplacementOf}.
+Every use case of the call that declares `declaration` gets `replacement`.
+
 ### UseCaseResponse
 
 *type* · tier: stable · `import type { UseCaseResponse } from "@afora/core"`
 
 The value `execute` of a use case class resolves with: the value of its
 `response` blueprint, or an array of the items of its `response` list.
+
+### UseCaseRunArgs
+
+*type* · tier: stable · `import type { UseCaseRunArgs } from "@afora/core"`
+
+What the static `run` of a use case takes: its input, optional when no key
+of it is required, and the options, required when it declares a context
+(or with `events: true`).
+
+### UseCaseRunOptions
+
+*type* · tier: stable · `import type { UseCaseRunOptions } from "@afora/core"`
+
+The options of the static `run` of a use case: its `context`, required
+when it declares one, the `dependencies` its `execute` takes, the
+`replace` of declarations at any depth, and `events: true` to get the
+events with the response.
 
 ### UseCaseSettings
 
@@ -3379,7 +3468,8 @@ an object of use case classes, or a function of the standard use cases
 
 *function* · tier: stable · `import { configure } from "@afora/core"`
 
-Replaces the password hasher and/or the id generator.
+Replaces the password hasher, the id generator and/or the clock of the
+process; `withRuntime` and the `runtime` of an application come first.
 
 ### consoleLogProvider
 
@@ -4060,7 +4150,7 @@ so that another one can start.
 
 *function* · tier: stable · `import { resetRuntime } from "@afora/core"`
 
-Puts both services back to their defaults and restarts the id clock.
+Puts the services back to their defaults and restarts the id clock.
 
 ### resourceOf
 
@@ -4228,6 +4318,37 @@ with the name of the variant for its value. A variant can also be a record
 class (an entity too): the value is then an instance of it, told apart by
 its class, and the key is only in what is given, in `toJSON` and in what is
 stored.
+
+### withRuntime
+
+*function* · tier: stable · `import { withRuntime } from "@afora/core"`
+
+Runs `fn` with `services` in place of those of the application running
+the call and of `configure`: the hasher, the id generator and the clock
+that `fn` and what it calls read, entities and repositories included. A
+service it is not given stays as it was. Calls nest, the inner one winning
+each service it gives, and the services in force before come back when
+`fn` returns or throws. Gives what `fn` returns, a promise included.
+
+Where the runtime has `AsyncLocalStorage` (Bun, Node, Deno, Workers with
+`nodejs_compat`), the services follow `fn` across awaits; elsewhere they
+cover only its synchronous part, up to its first `await`.
+
+**Throws** {TypeError} when `services` holds something other than a hasher, an id generator or a clock.
+
+**Example**
+
+```ts
+import { blueprintOf, entityOf, withRuntime } from "@afora/core";
+
+class Note extends entityOf(blueprintOf((ctx) => ({ title: ctx.string }))) {}
+
+const note = withRuntime(
+	{ idGenerator: () => "01890000-0000-7000-8000-000000000001" },
+	() => new Note({ title: "a" }),
+);
+note.id; // "01890000-0000-7000-8000-000000000001"
+```
 
 ### withStatus
 
@@ -5216,7 +5337,13 @@ who asks, in the `UseCaseUnavailable` it throws. Throws a `TypeError` when
 
 ## @afora/core/testing
 
-Tier: testing. 10 exports.
+Tier: testing. 16 exports.
+
+### ClockSpan
+
+*type* · tier: testing · `import type { ClockSpan } from "@afora/core/testing"`
+
+A span of time given by parts, as `advance` takes it.
 
 ### ContractRunner
 
@@ -5229,6 +5356,12 @@ The parts of a test runner the kit uses; `bun:test`, vitest and jest fit.
 *interface* · tier: testing · `import type { HttpProviderContractSettings } from "@afora/core/testing"`
 
 What the kit needs of a sink that serves HTTP.
+
+### ManualClock
+
+*interface* · tier: testing · `import type { ManualClock } from "@afora/core/testing"`
+
+A `Clock` that stands still until it is moved.
 
 ### MemoryPublisher
 
@@ -5256,6 +5389,19 @@ The members `spyProvider` adds to the provider it wraps.
 
 One call a `spyProvider` recorded.
 
+### TestApplication
+
+*type* · tier: testing · `import type { TestApplication } from "@afora/core/testing"`
+
+An application of `testApplicationOf`: `app` reading and writing
+through its own `provider`, which `await using` stops.
+
+### TestApplicationOptions
+
+*interface* · tier: testing · `import type { TestApplicationOptions } from "@afora/core/testing"`
+
+The options of `testApplicationOf`.
+
 ### httpProviderContract
 
 *function* · tier: testing · `import { httpProviderContract } from "@afora/core/testing"`
@@ -5276,6 +5422,15 @@ httpProviderContract(
 	{ describe, it, expect },
 );
 ```
+
+### manualClock
+
+*function* · tier: testing · `import { manualClock } from "@afora/core/testing"`
+
+A clock for the `runtime` of an application, `withRuntime` or
+`configure({ clock })` that only moves when told: `set` jumps
+to a time, `advance` moves by milliseconds or by `{ minutes, days… }`.
+It starts at `start` (2026-01-01T00:00:00.000Z by default).
 
 ### memoryPublisher
 
@@ -5316,4 +5471,37 @@ const spy = spyProvider(inMemoryProvider());
 // applicationOf({ ..., provider: spy }), then a request
 const reads = spy.calls("Project", "findMany").length;
 spy.fail("Setting", "count", new Error("down"), { times: 1 });
+```
+
+### testApplicationOf
+
+*function* · tier: testing · `import { testApplicationOf } from "@afora/core/testing"`
+
+An application for one test: it extends `app` (its declarations, log,
+services, publishers, runtime and `app.with` replacements) with every
+repository reading and writing through a new `inMemoryProvider()` (or
+`options.provider`): the default provider, those of `providersOf` and
+those repositories declare alike, so no row is shared with another test.
+It is started without becoming the application of the process
+(`useApplication`), so tests can run at once, `options.seed` has run,
+and `Symbol.asyncDispose` stops it, also when the test throws.
+
+**Throws** {
+
+**Example**
+
+```ts
+import { applicationOf, blueprintOf, entityOf, repositoryOf } from "@afora/core";
+import { testApplicationOf } from "@afora/core/testing";
+
+class Note extends entityOf(blueprintOf((ctx) => ({ title: ctx.text }))) {}
+const Notes = repositoryOf({ entity: Note, actions: ["create", "count"] });
+const App = applicationOf({ name: "notes", entities: { Note }, repositories: { Notes } });
+
+// In a test: stopped when the block ends, also when it throws.
+await using app = await testApplicationOf(App, {
+	seed: (app) => app.repositories.Notes.create(new Note({ title: "a" })),
+});
+await app.repositories.Notes.count(); // 1, in this application only
+await app.provider.clear(); // empties it, if the test needs to
 ```
