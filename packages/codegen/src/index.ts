@@ -51,6 +51,8 @@ export type {
 	ListBounds,
 	LogProviderSpec,
 	LogSpec,
+	MoneyField,
+	MoneyOptionsSpec,
 	OutputSpec,
 	PipeEntrySpec,
 	PropertySpec,

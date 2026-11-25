@@ -56,4 +56,21 @@ export const InvalidUrlOptions = exceptionOf({
 		`Invalid options for the URL property "${source}": ${reason}`,
 });
 
-markExported(InvalidFile, InvalidFileOptions, InvalidUrlOptions);
+/**
+ * Options of `moneyOf` that are not valid: a currency that is not an ISO
+ * 4217 code, bounds that are not integers of minor units, or bounds that no
+ * amount meets.
+ */
+export const InvalidMoneyOptions = exceptionOf({
+	layer: ExceptionLayers.Schema,
+	name: "InvalidMoneyOptions",
+	message: ({ reason }: { readonly reason: string }, source) =>
+		`Invalid options for the money property "${source}": ${reason}`,
+});
+
+markExported(
+	InvalidFile,
+	InvalidFileOptions,
+	InvalidMoneyOptions,
+	InvalidUrlOptions,
+);

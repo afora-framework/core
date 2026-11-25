@@ -579,6 +579,7 @@ export {
 	InvalidFileOptions,
 	InvalidJsonData,
 	InvalidJsonSchema,
+	InvalidMoneyOptions,
 	InvalidUrlOptions,
 } from "./std/properties/exceptions";
 export type { FileClass, FileOptions, TFile } from "./std/properties/file";
@@ -602,6 +603,12 @@ export {
 	jsonOf,
 	jsonSchemaIssues,
 } from "./std/properties/json";
+export type {
+	MoneyOptions,
+	MoneyValue,
+	TMoney,
+} from "./std/properties/money";
+export { currencyDecimals, moneyOf } from "./std/properties/money";
 export { Password, PlainPassword } from "./std/properties/password";
 export {
 	BooleanProperty,

@@ -35,9 +35,13 @@ const CEILING: Record<string, number> = {
 	// (0.6%) in every case; these two had less room. Measured plus 1%.
 	"quick start": 47_200,
 	entity: 55_800,
-	repository: 56_100,
+	// Raised from 56_100 and 40_200 with `ctx.money` (#196): one more factory
+	// of the Std context costs about 30 instantiations in every case (it takes
+	// no `optional` option, which cost 500 more); these two had less room.
+	// Measured plus 1%.
+	repository: 56_700,
 	"use case": 56_600,
-	"use case with a service": 40_200,
+	"use case with a service": 40_700,
 	queries: 53_700,
 	"steps use case": 55_800,
 	// Raised from 64_900 with the check of `return` against the response

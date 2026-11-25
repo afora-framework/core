@@ -7,6 +7,7 @@ import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
 import {
 	checkEnum,
 	checkFile,
+	checkMoney,
 	type Field,
 	parseFields,
 	targetOf,
@@ -223,6 +224,18 @@ function checkField(
 					path,
 					"invalid_environment_field",
 					"An environment variable cannot be a file.",
+				),
+			);
+		}
+		return;
+	}
+	if (field.kind === "money") {
+		if (owner === "environment" && typeof field.currency !== "string") {
+			issues.push(
+				issue(
+					path,
+					"invalid_environment_field",
+					'An environment variable is a property, not an object: an amount of money in one "currency" is an integer, and can be one.',
 				),
 			);
 		}
@@ -569,13 +582,15 @@ function checkStringList(
 function checkProperty(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 	const path = ["properties", decl.name];
 	const { spec } = decl;
-	const forms = ["base", "enum", "file", "opaque"].filter((key) => key in spec);
+	const forms = ["base", "enum", "file", "money", "opaque"].filter(
+		(key) => key in spec,
+	);
 	if (forms.length !== 1) {
 		issues.push(
 			issue(
 				path,
 				"invalid_property",
-				'A property declares exactly one of "base" (a Std or declared property), "enum", "file" or "opaque".',
+				'A property declares exactly one of "base" (a Std or declared property), "enum", "file", "money" or "opaque".',
 			),
 		);
 		return;
@@ -644,6 +659,11 @@ function checkProperty(decl: Decl, scope: Scope, issues: SpecIssue[]): void {
 	if (forms[0] === "file") {
 		allowKeys(["file", "optional"]);
 		checkFile(spec.file, [...path, "file"], issues);
+		return;
+	}
+	if (forms[0] === "money") {
+		allowKeys(["money", "optional"]);
+		checkMoney(spec.money, [...path, "money"], issues);
 		return;
 	}
 	allowKeys(["base", "with", "optional"]);
@@ -1074,7 +1094,12 @@ function checkIndexes(
 
 /** Whether `field` holds one scalar: not a list, an inline object, a variant, or a blueprint, record or entity. */
 function isScalarField(field: Field, scope: Scope): boolean {
-	if (field.list || field.kind === "inline" || field.kind === "variant")
+	if (
+		field.list ||
+		field.kind === "inline" ||
+		field.kind === "variant" ||
+		(field.kind === "money" && typeof field.currency !== "string")
+	)
 		return false;
 	if (field.kind !== "type" || !/^[A-Z]/.test(field.type)) return true;
 	const decl = scope.decls.get(field.type);

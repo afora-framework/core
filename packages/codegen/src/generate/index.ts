@@ -313,7 +313,8 @@ function evolutionOptions(field: Field): Record<string, unknown> {
 	if (
 		field.kind === "inline" ||
 		field.kind === "variant" ||
-		field.kind === "file"
+		field.kind === "file" ||
+		field.kind === "money"
 	)
 		return {};
 	return {
@@ -340,6 +341,34 @@ function fileArgs(file: {
 	return options.length > 0 ? [objectDoc(options)] : [];
 }
 
+/** The arguments of `moneyOf` for an amount of money: its options, none for any currency. */
+function moneyArgs(money: {
+	readonly currency?: string | readonly string[];
+	readonly min?: number;
+	readonly max?: number;
+	readonly nonNegative?: boolean;
+	readonly name?: string;
+}): Doc[] {
+	const options: [string, Doc][] = [];
+	if (money.currency !== undefined) {
+		options.push([
+			"currency",
+			literal(
+				typeof money.currency === "string"
+					? money.currency
+					: [...money.currency],
+			),
+		]);
+	}
+	if (money.min !== undefined) options.push(["min", literal(money.min)]);
+	if (money.max !== undefined) options.push(["max", literal(money.max)]);
+	if (money.nonNegative === true) {
+		options.push(["nonNegative", literal(true)]);
+	}
+	if (money.name !== undefined) options.push(["name", literal(money.name)]);
+	return options.length > 0 ? [objectDoc(options)] : [];
+}
+
 /** The property a field names, without optional or list. */
 function itemDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 	if (field.kind === "enum") {
@@ -359,6 +388,10 @@ function itemDoc(field: Field, e: Emitter, ctx: Ctx): Doc {
 	if (field.kind === "file") {
 		ctx.used = true;
 		return call("ctx.fileOf", fileArgs(field));
+	}
+	if (field.kind === "money") {
+		ctx.used = true;
+		return call("ctx.money", moneyArgs(field));
 	}
 	if (field.kind === "inline") return blueprintDoc(field.fields, e, false);
 	if (field.kind === "variant") {
@@ -465,6 +498,8 @@ function propertyDoc(decl: Decl, e: Emitter): Doc {
 		]);
 	} else if (typeof spec.file === "object" && spec.file !== null) {
 		expression = call(e.use("fileOf"), fileArgs(spec.file));
+	} else if (typeof spec.money === "object" && spec.money !== null) {
+		expression = call(e.use("moneyOf"), moneyArgs(spec.money));
 	} else {
 		const base = spec.base as string;
 		const root = /^[a-z]/.test(base)
@@ -859,6 +894,8 @@ function responseDoc(ref: unknown, e: Emitter): Doc {
 		]);
 	} else if (field.kind === "file") {
 		item = call(e.use("fileOf"), fileArgs(field));
+	} else if (field.kind === "money") {
+		item = call(e.use("moneyOf"), moneyArgs(field));
 	} else {
 		const type = (field as Extract<Field, { kind: "type" }>).type;
 		const root = /^[a-z]/.test(type)

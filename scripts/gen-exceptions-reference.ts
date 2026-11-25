@@ -85,6 +85,7 @@ const HANDLING: Record<string, string> = {
 		"Fix the schema; for a schema loaded at runtime, check it when it is saved, not when it is used.",
 	InvalidJwtOptions: `${DECLARATION} Set the secret in the environment.`,
 	InvalidLogDeclaration: DECLARATION,
+	InvalidMoneyOptions: DECLARATION,
 	InvalidTraceDeclaration: DECLARATION,
 	InvalidUrlOptions: DECLARATION,
 	InvalidOpenAPIModel: DECLARATION,

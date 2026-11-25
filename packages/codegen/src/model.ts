@@ -9,6 +9,7 @@ import type {
 	EnumValue,
 	FileOptionsSpec,
 	ListBounds,
+	MoneyOptionsSpec,
 	SpecIssue,
 	WithOptions,
 } from "./spec/types";
@@ -36,6 +37,7 @@ export type Field = {
 			readonly maxBytes?: number;
 			readonly name?: string;
 	  }
+	| ({ readonly kind: "money" } & MoneyOptionsSpec)
 	| {
 			readonly kind: "inline";
 			readonly fields: Readonly<Record<string, Field>>;
@@ -316,6 +318,120 @@ export function checkFile(
 	};
 }
 
+/** An ISO 4217 code, checked by its form, as `moneyOf` checks it. */
+const CURRENCY = /^[A-Z]{3}$/;
+
+/**
+ * The options of an amount of money (`{ "currency": "BRL", "min": 0 }`),
+ * checked as `moneyOf` checks them; `undefined` when invalid.
+ */
+export function checkMoney(
+	value: unknown,
+	path: readonly (string | number)[],
+	issues: SpecIssue[],
+): MoneyOptionsSpec | undefined {
+	if (!isObject(value)) {
+		issues.push(
+			issue(
+				path,
+				"invalid_money",
+				'"money" is an object: { "currency": "BRL" } for one currency, { "currency": ["BRL", "USD"] } for an amount that carries one of them, or {} for any currency.',
+			),
+		);
+		return undefined;
+	}
+	const before = issues.length;
+	checkKeys(
+		value,
+		["currency", "min", "max", "nonNegative", "name"],
+		path,
+		issues,
+	);
+	const { currency, min, max, nonNegative, name } = value;
+	const isCode = (code: unknown) =>
+		typeof code === "string" && CURRENCY.test(code);
+	if (
+		currency !== undefined &&
+		!isCode(currency) &&
+		(!Array.isArray(currency) ||
+			currency.length === 0 ||
+			!currency.every(isCode) ||
+			new Set(currency).size !== currency.length)
+	) {
+		issues.push(
+			issue(
+				[...path, "currency"],
+				"invalid_money",
+				'"currency" must be an ISO 4217 code of three upper-case letters ("BRL"), or a non-empty list of different codes.',
+			),
+		);
+	}
+	for (const [key, bound] of [
+		["min", min],
+		["max", max],
+	] as const) {
+		if (
+			bound !== undefined &&
+			(typeof bound !== "number" || !Number.isSafeInteger(bound))
+		) {
+			issues.push(
+				issue(
+					[...path, key],
+					"invalid_money",
+					`"${key}" must be an integer of minor units.`,
+				),
+			);
+		}
+	}
+	if (nonNegative !== undefined && typeof nonNegative !== "boolean") {
+		issues.push(
+			issue(
+				[...path, "nonNegative"],
+				"invalid_money",
+				'"nonNegative" must be a boolean.',
+			),
+		);
+	}
+	if (name !== undefined && (typeof name !== "string" || name === "")) {
+		issues.push(
+			issue(
+				[...path, "name"],
+				"invalid_money",
+				'"name" must be a non-empty string.',
+			),
+		);
+	}
+	if (issues.length > before) return undefined;
+	const lowest = Math.max(
+		(min as number | undefined) ?? -Number.MAX_SAFE_INTEGER,
+		nonNegative === true ? 0 : -Number.MAX_SAFE_INTEGER,
+	);
+	if (lowest > ((max as number | undefined) ?? Number.MAX_SAFE_INTEGER)) {
+		issues.push(
+			issue(
+				path,
+				"invalid_money",
+				'No amount is accepted: "min" (or 0, with "nonNegative") is greater than "max".',
+			),
+		);
+		return undefined;
+	}
+	return {
+		...(currency === undefined
+			? {}
+			: {
+					currency:
+						typeof currency === "string"
+							? currency
+							: [...(currency as string[])],
+				}),
+		...(min === undefined ? {} : { min: min as number }),
+		...(max === undefined ? {} : { max: max as number }),
+		...(nonNegative === true ? { nonNegative: true } : {}),
+		...(name === undefined ? {} : { name: name as string }),
+	};
+}
+
 /**
  * A field of a spec, parsed. Reports to `issues` what is malformed and gives
  * `undefined` when it cannot be used.
@@ -349,7 +465,7 @@ export function parseField(
 			issue(
 				path,
 				"invalid_field",
-				'A field is a string ("email", "Age?", "User[]") or an object ({ "type": ... }, { "enum": [...] }, { "file": {...} }, { "fields": {...} } or { "variant": {...} }).',
+				'A field is a string ("email", "Age?", "User[]") or an object ({ "type": ... }, { "enum": [...] }, { "file": {...} }, { "money": {...} }, { "fields": {...} } or { "variant": {...} }).',
 			),
 		);
 		return undefined;
@@ -364,7 +480,7 @@ export function parseField(
 		);
 		return undefined;
 	}
-	const forms = ["type", "enum", "file", "fields", "variant"].filter(
+	const forms = ["type", "enum", "file", "money", "fields", "variant"].filter(
 		(key) => key in value,
 	);
 	if (forms.length !== 1) {
@@ -372,7 +488,7 @@ export function parseField(
 			issue(
 				path,
 				"invalid_field",
-				'A field object has exactly one of "type", "enum", "file", "fields" or "variant".',
+				'A field object has exactly one of "type", "enum", "file", "money", "fields" or "variant".',
 			),
 		);
 		return undefined;
@@ -479,6 +595,13 @@ export function parseField(
 		const mods = modifiers();
 		if (!file || !mods) return undefined;
 		return { kind: "file", ...file, ...mods };
+	}
+	if (forms[0] === "money") {
+		checkKeys(value, ["money", ...MODIFIERS], path, issues);
+		const money = checkMoney(value.money, [...path, "money"], issues);
+		const mods = modifiers();
+		if (!money || !mods) return undefined;
+		return { kind: "money", ...money, ...mods };
 	}
 	if (forms[0] === "variant") {
 		checkKeys(value, ["variant", ...MODIFIERS], path, issues);

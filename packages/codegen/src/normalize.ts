@@ -40,9 +40,14 @@ export function canonicalField(field: Field): Json {
 					? { variant: canonicalVariant(field) }
 					: field.kind === "file"
 						? { file: canonicalFile(field) }
-						: { fields: canonicalFields(field.fields) };
+						: field.kind === "money"
+							? { money: canonicalMoney(field) }
+							: { fields: canonicalFields(field.fields) };
 	const evolution =
-		field.kind === "inline" || field.kind === "variant" || field.kind === "file"
+		field.kind === "inline" ||
+		field.kind === "variant" ||
+		field.kind === "file" ||
+		field.kind === "money"
 			? {}
 			: {
 					...(field.fill === undefined ? {} : { fill: field.fill }),
@@ -68,6 +73,30 @@ function canonicalFile(file: {
 		...(file.types === undefined ? {} : { types: [...file.types] }),
 		...(file.maxBytes === undefined ? {} : { maxBytes: file.maxBytes }),
 		...(file.name === undefined ? {} : { name: file.name }),
+	};
+}
+
+/** The options of an amount of money, in their order: only those given. */
+function canonicalMoney(money: {
+	readonly currency?: string | readonly string[];
+	readonly min?: number;
+	readonly max?: number;
+	readonly nonNegative?: boolean;
+	readonly name?: string;
+}): Json {
+	return {
+		...(money.currency === undefined
+			? {}
+			: {
+					currency:
+						typeof money.currency === "string"
+							? money.currency
+							: [...money.currency],
+				}),
+		...(money.min === undefined ? {} : { min: money.min }),
+		...(money.max === undefined ? {} : { max: money.max }),
+		...(money.nonNegative === true ? { nonNegative: true } : {}),
+		...(money.name === undefined ? {} : { name: money.name }),
 	};
 }
 
@@ -205,6 +234,9 @@ function canonicalProperty(name: string, value: Json): Json {
 	}
 	if (isObject(value.file)) {
 		return { file: canonicalFile(value.file), ...optional };
+	}
+	if (isObject(value.money)) {
+		return { money: canonicalMoney(value.money), ...optional };
 	}
 	if (Array.isArray(value.enum)) {
 		return {

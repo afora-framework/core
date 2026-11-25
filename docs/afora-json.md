@@ -141,6 +141,23 @@ A field that holds a file ([`fileOf`](std-properties.md#files)) is `"file"` for 
 }
 ```
 
+## Money
+
+A field that holds an amount of money ([`ctx.money`](std-properties.md#money)) is `{ "money": { "currency": "BRL" } }` for an amount in one currency, whose value is the integer of minor units alone, or `{ "money": { "currency": ["BRL", "USD"] } }` and `{ "money": {} }` (any ISO 4217 code) for one that carries its currency, `{ "amount": 1999, "currency": "BRL" }`. `min` and `max` (integers of minor units), `nonNegative` and `name` are the other options. `optional` and `list` apply; `with`, `fill` and `renamedFrom` do not. A property declaration takes the same form, `{ "money": {...}, "optional"?: true }`. It is generated as `ctx.money({ currency, min, max, nonNegative })` (`moneyOf` for a declaration) and extracted back from `describe()`. The validator checks the options as `moneyOf` does: a currency of three upper-case letters, or a non-empty list of different ones, bounds that are safe integers, a `min` (or 0, with `nonNegative`) no greater than `max`, and nothing else (`invalid_money`, `unknown_key`). An amount that carries its currency is an object: it cannot be an environment variable (`invalid_environment_field`) nor a key of an index, and `$input.<field>.amount` and `$input.<field>.currency` are its keys in a step; one in a single currency is an integer and can be both.
+
+```json
+{
+	"blueprints": {
+		"Checkout": {
+			"fields": {
+				"subtotal": { "money": { "currency": "BRL", "nonNegative": true } },
+				"total": { "money": { "currency": ["BRL", "USD"] } }
+			}
+		}
+	}
+}
+```
+
 ## A list as the response
 
 The `response` of a use case written in the spec is a blueprint (its name, or `{ "fields": {...} }`), or a list written as a list field, for a use case that [answers an array](use-cases.md#a-list-as-the-response):

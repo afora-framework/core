@@ -198,7 +198,9 @@ function build(): Catalog {
 						? '"json" for any JSON value; a property made by jsonOf({ schema }) is imported ({ "import": "./file.ts#Property" })'
 						: name === "fileOf"
 							? '{ "file": { "types": ["image/png", "image/*"], "maxBytes": 5000000 } } (a field or a property declaration), read from a multipart/form-data body; "file" for any file'
-							: name,
+							: name === "money"
+								? '{ "money": { "currency": "BRL", "min": 0 } } (a field or a property declaration): an integer of minor units for one currency; with a list of currencies, or none, { amount, currency }'
+								: name,
 		})),
 		recordPlugins: StdRecordPlugins.list.map((plugin) => {
 			const { description, ...rest } = plugin.toJSON();

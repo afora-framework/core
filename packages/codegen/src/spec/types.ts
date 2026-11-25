@@ -50,6 +50,26 @@ export interface FileField extends FieldModifiers {
 	readonly file: FileOptionsSpec;
 }
 
+/**
+ * What an amount of money accepts (`moneyOf`): one ISO 4217 code, a list of
+ * them, or none (any code), and bounds in minor units.
+ */
+export interface MoneyOptionsSpec {
+	readonly currency?: string | readonly string[];
+	readonly min?: number;
+	readonly max?: number;
+	readonly nonNegative?: boolean;
+	readonly name?: string;
+}
+
+/**
+ * A field holding an amount of money (`ctx.money`): the integer of minor
+ * units for one currency, `{ amount, currency }` otherwise.
+ */
+export interface MoneyField extends FieldModifiers {
+	readonly money: MoneyOptionsSpec;
+}
+
 /** A nested object, declared in place. */
 export interface InlineField extends FieldModifiers {
 	readonly fields: Readonly<Record<string, FieldSpec>>;
@@ -79,12 +99,13 @@ export type FieldSpec =
 	| TypeField
 	| EnumField
 	| FileField
+	| MoneyField
 	| InlineField
 	| VariantField;
 
 export type FieldsSpec = Readonly<Record<string, FieldSpec>>;
 
-/** A custom property: a Std/declared property with options, an enum, a file, or an import. */
+/** A custom property: a Std/declared property with options, an enum, a file, an amount of money, or an import. */
 export type PropertySpec =
 	| {
 			readonly base: string;
@@ -99,6 +120,10 @@ export type PropertySpec =
 	  }
 	| {
 			readonly file: FileOptionsSpec;
+			readonly optional?: boolean;
+	  }
+	| {
+			readonly money: MoneyOptionsSpec;
 			readonly optional?: boolean;
 	  }
 	| {
