@@ -29,7 +29,9 @@ if (!existsSync(join(import.meta.dir, "../../dist/index.d.ts")))
  * cost 8% more where it was). Measured plus 1%.
  */
 const CEILING: Record<string, number> = {
-	"bare blueprint": 35_900,
+	// Raised from 35_900 with `ctx.money` (#196): one more factory of the Std
+	// context costs about 30 instantiations (it was 6 under). Measured plus 1%.
+	"bare blueprint": 36_400,
 	// Raised from 46_700 and 55_200 with `ctx.file` and `ctx.fileOf` (#118):
 	// two more members of the Std context cost about 300 instantiations
 	// (0.6%) in every case; these two had less room. Measured plus 1%.
@@ -48,7 +50,9 @@ const CEILING: Record<string, number> = {
 	// (about 1,900 instantiations, 3%, only with `strictSteps`). Measured plus 1%.
 	"strict steps use case": 66_900,
 	"command and output": 66_700,
-	"named providers": 52_700,
+	// Raised from 52_700: already over on dev (52720 measured); `ctx.money` (#196)
+	// adds about 30 more. Measured plus 1%.
+	"named providers": 53_300,
 	// 2% under the target: the next kind of field has to be paid for elsewhere.
 	"standard use cases": 99_000,
 };
