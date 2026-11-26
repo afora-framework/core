@@ -259,7 +259,7 @@ ctx.list(Lessons, { where: ["moduleId"], orderBy: [{ key: "position" }] });
 
 Each key is a required key of the input, so it can be a path parameter, and goes to `findPage` as a `where` of equality. A missing value is invalid input: `undefined` and `null` never reach the query. It works with `owner` (the owner key is matched too, and cannot also be named in `where`), `orderBy` and `maxLimit`.
 
-A key the entity lacks, one named twice, one that is sensitive or does not hold a scalar value (a list, a blueprint, an entity), and `limit` or `offset` throw `UseCaseUnavailable` when the use case is declared. When a declared index of the repository serves the `where` keys (and the owner key) with the first `orderBy` as its order, `describe()` names it as `generic.index` of the use case (`"byModule"` above), and `afora.json` leaves it out, since it follows from the declaration.
+A key the entity lacks, one named twice, one that is optional (the input could leave it out), one that is sensitive or does not hold a scalar value (a list, a blueprint, an entity), and `limit` or `offset` throw `UseCaseUnavailable` when the use case is declared. When a declared index of the repository serves the `where` keys (and the owner key) with the first `orderBy` as its order, `describe()` names it as `generic.index` of the use case (`"byModule"` above), and `afora.json` leaves it out, since it follows from the declaration.
 
 ## Before and after
 

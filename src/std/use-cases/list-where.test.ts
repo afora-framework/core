@@ -215,6 +215,12 @@ describe("list where, at declaration", () => {
 		);
 	});
 
+	test("an optional key, which the input could leave out", () => {
+		expect(unavailable(() => ctx.list(Lessons, { where: ["note"] }))).toContain(
+			"required",
+		);
+	});
+
 	test("a list that is not made of keys, a repeated key, the owner key, a page key", () => {
 		expect(
 			unavailable(() =>

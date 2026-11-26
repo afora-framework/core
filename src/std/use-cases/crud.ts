@@ -363,6 +363,11 @@ export const list = useCasePluginOf<"list", ListMaker>("list", {
 					`where "${plan.key}" must be a key that holds a scalar value, which the input can match by equality`,
 				);
 			}
+			if (plan.optional) {
+				target.unavailable(
+					`where "${plan.key}" must be a required key of the entity, as the input requires it`,
+				);
+			}
 			if (owner?.plan.key === plan.key) {
 				target.unavailable(
 					`where "${plan.key}" is the owner key, which owner already matches`,

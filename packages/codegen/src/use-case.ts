@@ -699,6 +699,11 @@ function checkGenericUseCase(
 							key,
 							`"${name}" does not hold a scalar value, which the input can match by equality.`,
 						);
+					} else if (field?.optional === true) {
+						invalid(
+							key,
+							`"${name}" is optional, and the input requires each key of "where".`,
+						);
 					}
 				}
 			}

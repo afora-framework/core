@@ -565,6 +565,7 @@ describe("list with where", () => {
 					title: "text",
 					position: "integer",
 					tags: { type: "string", list: true },
+					note: "string?",
 				},
 				plugins: ["ownable"],
 			},
@@ -619,6 +620,7 @@ describe("list with where", () => {
 		expect(where(["nope"])).toEqual([expected]);
 		expect(where(["moduleId", "moduleId"])).toEqual([expected]);
 		expect(where(["tags"])).toEqual([expected]);
+		expect(where(["note"])).toEqual([expected]);
 		expect(where("moduleId")).toEqual([expected]);
 		expect(where(["moduleId"])).toEqual([]);
 	});
