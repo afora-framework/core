@@ -783,10 +783,82 @@
 											"minItems": 1
 										}
 									]
+								},
+								"emits": {
+									"anyOf": [
+										{
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+													"description": "An event without a handler."
+												},
+												{
+													"type": "object",
+													"required": ["name"],
+													"properties": {
+														"name": {
+															"type": "string",
+															"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+														},
+														"handler": {
+															"type": "object",
+															"required": ["import"],
+															"properties": {
+																"import": {
+																	"type": "string",
+																	"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+																	"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+																}
+															},
+															"additionalProperties": false
+														}
+													},
+													"additionalProperties": false
+												}
+											]
+										},
+										{
+											"type": "array",
+											"items": {
+												"anyOf": [
+													{
+														"type": "string",
+														"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+														"description": "An event without a handler."
+													},
+													{
+														"type": "object",
+														"required": ["name"],
+														"properties": {
+															"name": {
+																"type": "string",
+																"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+															},
+															"handler": {
+																"type": "object",
+																"required": ["import"],
+																"properties": {
+																	"import": {
+																		"type": "string",
+																		"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+																		"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+																	}
+																},
+																"additionalProperties": false
+															}
+														},
+														"additionalProperties": false
+													}
+												]
+											},
+											"minItems": 1
+										}
+									]
 								}
 							},
 							"additionalProperties": false,
-							"description": "Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name (\"created\"), raised for a policy such as publishEvents, or { \"name\": \"created\", \"handler\": { \"import\": \"./events.ts#onCreated\" } }."
+							"description": "Entities only: the events each cycle raises and, in emits, those its methods raise (this.emit), generated as <Name>Events with eventOf. An event is a name (\"created\"), raised for a policy such as publishEvents, or { \"name\": \"created\", \"handler\": { \"import\": \"./events.ts#onCreated\" } }."
 						},
 						"id": {
 							"anyOf": [
@@ -807,7 +879,7 @@
 									"const": "serial"
 								}
 							],
-							"description": "Entities only: how ids are made. \"uuid7\" (default) generates and accepts UUID v7; \"uuid\" accepts any UUID version (v4 from an existing database) and generates v7; \"key\" is a natural key (1 to 256 characters) the input must hold, never generated; \"serial\" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds."
+							"description": "Entities only: how ids are made. \"uuid7\" (default) generates and accepts UUID v7; \"uuid\" accepts any UUID version (v4 from an existing database) and generates v7; \"key\" is a natural key (1 to 256 characters) the input must hold, never generated; \"serial\" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds. On the wire the id is a string for \"uuid7\", \"uuid\" and \"key\", and an integer (a JSON number) for \"serial\": the type a client gives it, and the one toOpenAPI and jsonSchemaOf give it."
 						},
 						"versioned": {
 							"type": "boolean",
@@ -890,6 +962,19 @@
 								"type": "string"
 							},
 							"description": "Entities only: the names the entity had before; app.migrate moves their rows and start({ lock }) accepts the rename."
+						},
+						"implementation": {
+							"type": "object",
+							"required": ["import"],
+							"properties": {
+								"import": {
+									"type": "string",
+									"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+									"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+								}
+							},
+							"additionalProperties": false,
+							"description": "Entities only: the class written by hand that extends the generated <Name>Base, { \"import\": \"../domain/booking.ts#Booking\" }. Repositories, events, fields and the application use it."
 						}
 					},
 					"additionalProperties": false
@@ -1161,10 +1246,82 @@
 											"minItems": 1
 										}
 									]
+								},
+								"emits": {
+									"anyOf": [
+										{
+											"anyOf": [
+												{
+													"type": "string",
+													"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+													"description": "An event without a handler."
+												},
+												{
+													"type": "object",
+													"required": ["name"],
+													"properties": {
+														"name": {
+															"type": "string",
+															"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+														},
+														"handler": {
+															"type": "object",
+															"required": ["import"],
+															"properties": {
+																"import": {
+																	"type": "string",
+																	"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+																	"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+																}
+															},
+															"additionalProperties": false
+														}
+													},
+													"additionalProperties": false
+												}
+											]
+										},
+										{
+											"type": "array",
+											"items": {
+												"anyOf": [
+													{
+														"type": "string",
+														"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$",
+														"description": "An event without a handler."
+													},
+													{
+														"type": "object",
+														"required": ["name"],
+														"properties": {
+															"name": {
+																"type": "string",
+																"pattern": "^[A-Za-z_$][A-Za-z0-9_$]*$"
+															},
+															"handler": {
+																"type": "object",
+																"required": ["import"],
+																"properties": {
+																	"import": {
+																		"type": "string",
+																		"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+																		"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+																	}
+																},
+																"additionalProperties": false
+															}
+														},
+														"additionalProperties": false
+													}
+												]
+											},
+											"minItems": 1
+										}
+									]
 								}
 							},
 							"additionalProperties": false,
-							"description": "Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name (\"created\"), raised for a policy such as publishEvents, or { \"name\": \"created\", \"handler\": { \"import\": \"./events.ts#onCreated\" } }."
+							"description": "Entities only: the events each cycle raises and, in emits, those its methods raise (this.emit), generated as <Name>Events with eventOf. An event is a name (\"created\"), raised for a policy such as publishEvents, or { \"name\": \"created\", \"handler\": { \"import\": \"./events.ts#onCreated\" } }."
 						},
 						"id": {
 							"anyOf": [
@@ -1185,7 +1342,7 @@
 									"const": "serial"
 								}
 							],
-							"description": "Entities only: how ids are made. \"uuid7\" (default) generates and accepts UUID v7; \"uuid\" accepts any UUID version (v4 from an existing database) and generates v7; \"key\" is a natural key (1 to 256 characters) the input must hold, never generated; \"serial\" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds."
+							"description": "Entities only: how ids are made. \"uuid7\" (default) generates and accepts UUID v7; \"uuid\" accepts any UUID version (v4 from an existing database) and generates v7; \"key\" is a natural key (1 to 256 characters) the input must hold, never generated; \"serial\" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds. On the wire the id is a string for \"uuid7\", \"uuid\" and \"key\", and an integer (a JSON number) for \"serial\": the type a client gives it, and the one toOpenAPI and jsonSchemaOf give it."
 						},
 						"versioned": {
 							"type": "boolean",
@@ -1268,6 +1425,19 @@
 								"type": "string"
 							},
 							"description": "Entities only: the names the entity had before; app.migrate moves their rows and start({ lock }) accepts the rename."
+						},
+						"implementation": {
+							"type": "object",
+							"required": ["import"],
+							"properties": {
+								"import": {
+									"type": "string",
+									"pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$]*$",
+									"description": "A hand-written export: \"./file.ts#name\" or \"package#name\", relative to the output directory. Never evaluated by the validator."
+								}
+							},
+							"additionalProperties": false,
+							"description": "Entities only: the class written by hand that extends the generated <Name>Base, { \"import\": \"../domain/booking.ts#Booking\" }. Repositories, events, fields and the application use it."
 						}
 					},
 					"additionalProperties": false
@@ -1470,6 +1640,37 @@
 							],
 							"default": "allow",
 							"description": "A query only a scan serves: runs, logs repository-scan, or throws InvalidRepositoryQuery."
+						},
+						"parents": {
+							"type": "object",
+							"patternProperties": {
+								"^[A-Za-z_$][A-Za-z0-9_$]*$": {
+									"type": "object",
+									"required": ["repository", "onDelete"],
+									"properties": {
+										"repository": {
+											"type": "string",
+											"pattern": "^[A-Z][A-Za-z0-9]*$",
+											"description": "The repository of the parent."
+										},
+										"onDelete": {
+											"anyOf": [
+												{
+													"type": "string",
+													"const": "cascade"
+												},
+												{
+													"type": "string",
+													"const": "restrict"
+												}
+											],
+											"description": "What the delete of the parent does to the entities: deletes them with it, hard or soft as this repository deletes (cascade), or refuses with RepositoryDeleteRestricted, a 409, while any is left (restrict)."
+										}
+									},
+									"additionalProperties": false
+								}
+							},
+							"description": "The parents of its entities, by the key of the entity holding the id of the parent (a single value, not an entity). The delete of a parent repository walks them, at any depth, once the application registers them; they cannot form a cycle."
 						}
 					},
 					"additionalProperties": false
@@ -2264,7 +2465,7 @@
 									"patternProperties": {
 										"^[A-Za-z_$][A-Za-z0-9_$]*$": {}
 									},
-									"description": "Its options: \"as\" (the response key), \"owner\" ({ \"key\"?, \"context\" }; \"key\": \"id\" for an entity that is the caller, not for create and register), \"errors\" ({ \"notFound\" | \"conflict\" | \"invalid\" | \"owner\": an exception name }), and per use case \"omit\", \"values\", \"relations\" (create and register: { <key>: { \"shared\": true } } lets the input name an entity of another owner), \"takesTokenKeys\" (register: true lets it take the keys a token is made from, which a public register refuses; only with an access that asks for scopes, and never the token version key), \"set\", \"orderBy\", \"maxLimit\" (list: the largest limit, 100 by default), and \"token\" for login and refresh ({ \"secret\": { \"env\": \"NAME\" }, \"issuer\"?, \"audience\"?, \"expiresIn\"?, \"algorithm\"?, \"refresh\"?: { \"expiresIn\" }, \"scopes\"?, \"scopesFrom\"?, \"claims\"?, \"versionFrom\"?, \"rotate\"? }: login then answers a token; \"versionFrom\" names a required, integer, sensitive key listed in change, the token version that each refresh token carries and refresh compares with the stored one; \"rotate\": true makes refresh add 1 to it, so a refresh token is used once), and for logout and changePassword (the same object, or { \"versionFrom\" }: they add 1 to the token version, ending the refresh tokens issued before; logout then needs \"owner\": { \"key\": \"id\", \"context\" }); those that write also take \"before\" and \"after\" ({ \"import\": \"./file.ts#function\" }, run before and after the write), \"dependencies\" (key -> name of a use case, repository or environment, for them) and \"throws\" (the exceptions they throw, as in \"errors\")."
+									"description": "Its options: \"as\" (the response key), \"owner\" ({ \"key\"?, \"context\" }; \"key\": \"id\" for an entity that is the caller, not for create and register), \"errors\" ({ \"notFound\" | \"conflict\" | \"invalid\" | \"owner\": an exception name }), and per use case \"omit\", \"values\", \"relations\" (create and register: { <key>: { \"shared\": true } } lets the input name an entity of another owner), \"takesTokenKeys\" (register: true lets it take the keys a token is made from, which a public register refuses; only with an access that asks for scopes, and never the token version key), \"set\", \"computed\" (create: a list of keys of the entity that the input does not take and that \"before\", which it needs, gives back; they may be required keys of the entity), \"where\" (list: a list of keys of the entity, each a required key of the input matched by equality, e.g. the parent of the children it lists), \"orderBy\", \"maxLimit\" (list: the largest limit, 100 by default), and \"token\" for login and refresh ({ \"secret\": { \"env\": \"NAME\" }, \"issuer\"?, \"audience\"?, \"expiresIn\"?, \"algorithm\"?, \"refresh\"?: { \"expiresIn\" }, \"scopes\"?, \"scopesFrom\"?, \"claims\"?, \"versionFrom\"?, \"rotate\"? }: login then answers a token; \"versionFrom\" names a required, integer, sensitive key listed in change, the token version that each refresh token carries and refresh compares with the stored one; \"rotate\": true makes refresh add 1 to it, so a refresh token is used once), and for logout and changePassword (the same object, or { \"versionFrom\" }: they add 1 to the token version, ending the refresh tokens issued before; logout then needs \"owner\": { \"key\": \"id\", \"context\" }); those that write also take \"before\" and \"after\" ({ \"import\": \"./file.ts#function\" }, run before and after the write), \"dependencies\" (key -> name of a use case, repository or environment, for them) and \"throws\" (the exceptions they throw, as in \"errors\")."
 								},
 								"description": {
 									"type": "string"
