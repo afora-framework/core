@@ -660,16 +660,41 @@ function resolve(
 	// name, with the checks of any other use case.
 	for (const entry of [...registry.commands.values()]) {
 		for (const UseCase of Object.values((entry.value as AnyCommand).useCases)) {
-			if (byKey.has(UseCase)) {
-				continue;
+			if (!byKey.has(UseCase)) {
+				add({
+					collection: "useCases",
+					name: UseCase.useCaseName,
+					value: UseCase,
+					key: UseCase,
+					from: entry.from,
+				});
 			}
-			add({
-				collection: "useCases",
-				name: UseCase.useCaseName,
-				value: UseCase,
-				key: UseCase,
-				from: entry.from,
-			});
+			// The exceptions it declares (`errors`, `throws` of its hooks and the
+			// error of a step) are registered with it; the core's own need none.
+			const thrown = [
+				...UseCase.errors,
+				...(interpretedStepsOf(UseCase) ?? []).map((step) => step.error),
+			];
+			for (const Thrown of thrown as (
+				| AnyUseCaseClass["errors"][number]
+				| undefined
+			)[]) {
+				if (
+					Thrown === undefined ||
+					byKey.has(Thrown) ||
+					!isDeclaredException(Thrown) ||
+					isExportedException(Thrown)
+				) {
+					continue;
+				}
+				add({
+					collection: "exceptions",
+					name: Thrown.name,
+					value: Thrown,
+					key: Thrown,
+					from: entry.from,
+				});
+			}
 		}
 	}
 	return registry;
