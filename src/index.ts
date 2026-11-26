@@ -384,7 +384,10 @@ export {
 	inMemoryProvider,
 } from "./core/repository/in-memory";
 export { providerOf } from "./core/repository/provider";
-export type { RepositorySettings } from "./core/repository/repository";
+export type {
+	RepositoryInstance,
+	RepositorySettings,
+} from "./core/repository/repository";
 export { RepositoryOf, repositoryOf } from "./core/repository/repository";
 export type {
 	ProviderOption,

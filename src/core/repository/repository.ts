@@ -1515,6 +1515,14 @@ export type RepositoryOf<
 > = RepositoryType<Entity, Actions, Environment, Keyset>;
 
 /**
+ * The type of a repository `repositoryOf` made, from its declaration:
+ * `RepositoryInstance<typeof Users>`. It is what `this.dependencies.users`
+ * and `app.repositories.Users` are typed as, so a helper shared by use cases
+ * can take the repository as a parameter without restating its actions.
+ */
+export type RepositoryInstance<Repository extends AnyRepository> = Repository;
+
+/**
  * The class of `repository`, to extend: its instances share the entity,
  * actions, provider and environment of `repository`, e.g.
  * `class UsersRepository extends RepositoryOf(Users) { findActive() {...} }`,

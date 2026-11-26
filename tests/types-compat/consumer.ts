@@ -440,6 +440,7 @@ import {
 	entityOf as appEntityOf,
 	applicationOf as appOf,
 	repositoryOf as appRepositoryOf,
+	type RepositoryInstance,
 } from "@afora/core";
 
 const AppUser = appEntityOf(appBlueprintOf((ctx) => ({ name: ctx.string })));
@@ -454,6 +455,20 @@ const AuthApp = appOf({
 });
 const ChildApp = appOf({ name: "child", extends: [AuthApp] });
 const sameUsers: typeof AppUsers = ChildApp.repositories.AppUsers;
+const namedUsers: RepositoryInstance<typeof AppUsers> =
+	ChildApp.repositories.AppUsers;
+const namedFrom: Equals<
+	RepositoryInstance<typeof AppUsers>,
+	typeof AppUsers
+> = true;
+async function firstUser(users: RepositoryInstance<typeof AppUsers>) {
+	return users.create({ name: "Ana" });
+}
+void namedUsers;
+void namedFrom;
+void firstUser;
+// @ts-expect-error not a repository
+export type NotARepository = RepositoryInstance<string>;
 const extendedUsers: typeof AppUsers = appOf({ name: "x" }).extend(AuthApp)
 	.repositories.AppUsers;
 void sameUsers;

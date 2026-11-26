@@ -372,6 +372,18 @@ class UsersRepository extends RepositoryOf(Users) {
 
 As a type, `RepositoryOf<typeof User, ["findById", "create"]>` is the repository with those methods.
 
+To name a repository you already declared, give its declaration to `RepositoryInstance`: `RepositoryInstance<typeof Users>` is the type of `app.repositories.Users` and of a use case dependency, so a helper that takes a repository stays in step with the actions it declares.
+
+```ts
+import type { RepositoryInstance } from "@afora/core";
+
+async function currentSettings(
+	settings: RepositoryInstance<typeof SettingsRepo>,
+) {
+	return settings.findByKey("platform");
+}
+```
+
 **In use cases.** A repository (or an instance of a class extending one) and an environment are dependencies of a use case, next to other use cases. The use case gets the repository's methods, usable only during execution; the events of the entities they take and give move to the use case. In a class extending a repository, the methods call each other through the use case too (`this.create` inside `revokeAllOf`): their events move to it, and what `execute` replaces is replaced there as well. Only the events of entities of the repository's own class move; the entities it holds (`post.author`) leave theirs to their own repository. Two limits: `#private` members do not work in the methods the use case calls, and an arrow field calling `this.other` does not go through the use case (`super.other` does); a repository used by importing it is not tracked. It gets an environment's variables. `execute` replaces some methods of a repository with an object, and an environment with variables its blueprint accepts.
 
 <!-- docs:code continue -->
