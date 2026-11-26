@@ -272,6 +272,17 @@ hono(
 
 The context only reaches the use case for operations that declare one, so the key (`tenant` here) must be in the `context` blueprint of the command or use case.
 
+## Serve MCP tools on the same app
+
+`mountMcp(app, path, tools)` mounts the tools of an `@afora/mcp` output, Streamable HTTP and stateless, at a path of a Hono app, beside the routes of the `hono` sink. The tools answer 401, 403 and 405 themselves (see "Serve over HTTP" in [`@afora/mcp`](../mcp/README.md)).
+
+```ts
+import { mountMcp } from "@afora/hono";
+
+const app = Api.build(); // the Hono app of the `hono` output
+mountMcp(app, "/mcp", Tools.build()); // the `mcpTools` output
+```
+
 ## Catalog
 
 `HonoStages` is `stageCatalogOf(hono)` (from `@afora/core/adapters`), and `stages` are the entries codegen reads to resolve `{ "sink": "hono" }` in an `afora.json`:

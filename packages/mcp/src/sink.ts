@@ -13,6 +13,7 @@ import {
 	statusOf,
 } from "@afora/core/adapters";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import {
 	CallToolRequestSchema,
 	ListToolsRequestSchema,
@@ -42,6 +43,12 @@ export interface McpToolsOptions {
 	 * request `_meta`. An `authenticator` given in the hooks replaces it.
 	 */
 	readonly auth?: HttpOptions["auth"];
+	/**
+	 * Scopes the caller must hold to reach `fetch` at all: without every one
+	 * the endpoint answers 403 before the handshake. Needs an authenticator
+	 * (`auth` or the hook).
+	 */
+	readonly requiredScopes?: readonly string[];
 }
 
 /** What the `mcpTools` sink takes that JSON cannot hold: `mcpTools(options, hooks)`. */
@@ -109,6 +116,15 @@ export interface McpTools {
 	register(server: Server): Server;
 	/** A new `Server` (capability `tools`) with the tools registered. */
 	server(): Server;
+	/**
+	 * Stateless Streamable HTTP on web `Request`/`Response`: serve it at one
+	 * path (`app.all("/mcp", (c) => mcp.fetch(c.req.raw))`). Only `POST` is
+	 * accepted (405 otherwise). With an authenticator (`auth` or the hook) the
+	 * caller is asked before the handshake: no principal is a 401 with
+	 * `WWW-Authenticate`, a principal without the `requiredScopes` a 403.
+	 * Never rejects for a bad request: it answers a problem.
+	 */
+	fetch(request: Request): Promise<Response>;
 }
 
 type Obj = Record<string, unknown>;
@@ -120,7 +136,15 @@ function validate(options: McpToolsOptions): string | undefined {
 	const given = options as unknown as Obj;
 	for (const key of Object.keys(given)) {
 		if (
-			!["name", "version", "prefix", "include", "context", "auth"].includes(key)
+			![
+				"name",
+				"version",
+				"prefix",
+				"include",
+				"context",
+				"auth",
+				"requiredScopes",
+			].includes(key)
 		) {
 			return `mcpTools has no option "${key}".`;
 		}
@@ -153,7 +177,19 @@ function validate(options: McpToolsOptions): string | undefined {
 		}
 	}
 	if (given.auth !== undefined) {
-		return httpOptionsIssue({ auth: options.auth } as HttpOptions, "mcpTools");
+		const issue = httpOptionsIssue(
+			{ auth: options.auth } as HttpOptions,
+			"mcpTools",
+		);
+		if (issue) return issue;
+	}
+	const { requiredScopes } = given;
+	if (
+		requiredScopes !== undefined &&
+		(!Array.isArray(requiredScopes) ||
+			requiredScopes.some((scope) => typeof scope !== "string" || scope === ""))
+	) {
+		return "Expected mcpTools.requiredScopes to be a list of scopes.";
 	}
 	return undefined;
 }
@@ -173,6 +209,17 @@ const kebab = (text: string) =>
 		.replace(/([a-z0-9])([A-Z])/g, "$1_$2")
 		.replace(/[^A-Za-z0-9_.-]+/g, "_")
 		.toLowerCase();
+
+const problemResponse = (
+	status: number,
+	title: string,
+	detail: string,
+	headers: Record<string, string> = {},
+) =>
+	new Response(JSON.stringify({ type: "about:blank", title, status, detail }), {
+		status,
+		headers: { "content-type": "application/problem+json", ...headers },
+	});
 
 const text = (value: unknown, isError?: true): McpToolResult => ({
 	...(isError ? { isError } : {}),
@@ -207,6 +254,16 @@ export const mcpTools = sinkOf<McpTools, McpToolsOptions, McpToolsHooks>({
 			authenticator = jwtOf(jwt).authenticator({
 				...(header === undefined ? {} : { header }),
 				...(cookie === undefined ? {} : { cookie }),
+			});
+		}
+		const requiredScopes = options.requiredScopes ?? [];
+		if (requiredScopes.length > 0 && !authenticator) {
+			throw new InvalidOutputStage({
+				source: "mcpTools",
+				details: {
+					reason:
+						"mcpTools.requiredScopes needs an authenticator: give `auth` or the `authenticator` hook.",
+				},
 			});
 		}
 		const prefix = options.prefix ?? "";
@@ -353,17 +410,98 @@ export const mcpTools = sinkOf<McpTools, McpToolsOptions, McpToolsHooks>({
 			return server;
 		};
 
+		const challenge = (extra = "") => `Bearer realm="${options.name}"${extra}`;
+		const fetch: McpTools["fetch"] = async (request) => {
+			if (request.method !== "POST") {
+				return problemResponse(
+					405,
+					"MethodNotAllowed",
+					"This endpoint accepts POST only.",
+					{ allow: "POST" },
+				);
+			}
+			if (authenticator) {
+				const probe =
+					operations.find(
+						(operation) =>
+							(!include || include.includes(operation.id)) &&
+							operation.access &&
+							operation.access.public !== true,
+					) ?? operations[0];
+				let principal: Principal | null = null;
+				let refused = false;
+				try {
+					principal = probe
+						? await authenticator({
+								header: (name) => request.headers.get(name) ?? undefined,
+								cookie: () => undefined,
+								operation: probe,
+								native: request,
+							})
+						: null;
+				} catch (error) {
+					if (
+						error instanceof Error &&
+						(error as { name?: string }).name !== "Unauthenticated"
+					) {
+						return problemResponse(500, "InternalError", "Internal error.");
+					}
+					refused = true;
+				}
+				if (!principal) {
+					const sent = refused || request.headers.has("authorization");
+					return problemResponse(
+						401,
+						"Unauthorized",
+						"Authentication is required.",
+						{
+							"www-authenticate": challenge(
+								sent ? ', error="invalid_token"' : "",
+							),
+						},
+					);
+				}
+				const missing = requiredScopes.filter(
+					(scope) => !principal.scopes.includes(scope),
+				);
+				if (missing.length > 0) {
+					return problemResponse(
+						403,
+						"Forbidden",
+						"The caller lacks a required scope.",
+						{
+							"www-authenticate": challenge(
+								`, error="insufficient_scope", scope="${requiredScopes.join(" ")}"`,
+							),
+						},
+					);
+				}
+			}
+			const server = buildServer();
+			const transport = new WebStandardStreamableHTTPServerTransport({
+				enableJsonResponse: true,
+			});
+			await server.connect(transport);
+			try {
+				return await transport.handleRequest(request);
+			} finally {
+				void server.close();
+			}
+		};
+		const buildServer = () =>
+			register(
+				new Server(
+					{ name: options.name, version: options.version },
+					{ capabilities: { tools: {} } },
+				),
+			);
+
 		return {
 			tools,
 			call,
 			register,
-			server: () =>
-				register(
-					new Server(
-						{ name: options.name, version: options.version },
-						{ capabilities: { tools: {} } },
-					),
-				),
+			fetch,
+			server: buildServer,
 		};
 	},
 });

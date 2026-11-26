@@ -24,6 +24,25 @@ import {
 	type WebhookOptions,
 } from "./webhook";
 
+/** What `mountMcp` needs of the tools of `@afora/mcp`: its `fetch`. */
+export interface McpFetch {
+	fetch(request: Request): Promise<Response>;
+}
+
+/**
+ * Serves the MCP tools of an output (`app.outputs.Mcp.build()`) over
+ * Streamable HTTP at `path` of a Hono app. Every method reaches `tools.fetch`,
+ * which answers 401, 403 and 405 itself.
+ */
+export function mountMcp<App extends { all: Hono["all"] }>(
+	app: App,
+	path: string,
+	tools: McpFetch,
+): App {
+	app.all(path, (c) => tools.fetch(c.req.raw));
+	return app;
+}
+
 export { InvalidWebhookSignature, WebhookSecretMissing } from "./exceptions";
 export {
 	verifyWebhook,
