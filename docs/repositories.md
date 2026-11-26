@@ -374,6 +374,18 @@ As a type, `RepositoryOf<typeof User, ["findById", "create"]>` is the repository
 
 To name a repository you already declared, give its declaration to `RepositoryInstance`: `RepositoryInstance<typeof Users>` is the type of `app.repositories.Users` and of a use case dependency, so a helper that takes a repository stays in step with the actions it declares.
 
+<!-- docs:code context
+import { blueprintOf, entityOf, repositoryOf } from "@afora/core";
+
+class Setting extends entityOf(
+	blueprintOf((ctx) => ({ key: ctx.slug, value: ctx.text })),
+	{ unique: ["key"] },
+) {}
+const SettingsRepo = repositoryOf({
+	entity: Setting,
+	actions: ["findByKey", "create"],
+});
+-->
 ```ts
 import type { RepositoryInstance } from "@afora/core";
 

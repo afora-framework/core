@@ -276,6 +276,12 @@ The context only reaches the use case for operations that declare one, so the ke
 
 `mountMcp(app, path, tools)` mounts the tools of an `@afora/mcp` output, Streamable HTTP and stateless, at a path of a Hono app, beside the routes of the `hono` sink. The tools answer 401, 403 and 405 themselves (see "Serve over HTTP" in [`@afora/mcp`](../mcp/README.md)).
 
+<!-- docs:code context
+import type { Hono } from "hono";
+
+declare const Api: { build(): Hono }; // the `hono` output
+declare const Tools: { build(): { fetch(request: Request): Promise<Response> } }; // the `mcpTools` output
+-->
 ```ts
 import { mountMcp } from "@afora/hono";
 

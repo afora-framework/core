@@ -73,6 +73,9 @@ await mcp.server().connect(transport);
 
 `mcp.fetch(request)` serves the same tools to a remote client over Streamable HTTP, stateless, on web `Request` and `Response` (Bun, Node >= 22, Workers). Route one path to it:
 
+<!-- docs:code context
+declare const Tools: { build(): { fetch(request: Request): Promise<Response> } }; // the `mcpTools` output
+-->
 ```ts
 const mcp = Tools.build();
 

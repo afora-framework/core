@@ -246,6 +246,20 @@ await Blog.run("create", { title: "Mine" }, { context: { userId } });
 
 The most common listing in a content app is the children of a parent. `where` names keys of the entity, each matched by equality:
 
+<!-- docs:code context
+import { blueprintOf, commandOf, entityOf, repositoryOf } from "@afora/core";
+
+class Lesson extends entityOf(
+	blueprintOf((ctx) => ({ moduleId: ctx.id, position: ctx.integer })),
+) {}
+commandOf({
+	name: "Course",
+	useCases: (ctx) => {
+		/* block */
+		return {};
+	},
+});
+-->
 ```ts
 const Lessons = repositoryOf({
 	entity: Lesson,
@@ -350,6 +364,23 @@ The hooks are `run` steps of the use case (see [Steps](use-cases.md#steps)): `de
 
 A key the caller should not choose but the entity requires, such as the `position` of an item that goes at the end of its parent, is listed in `computed` (`create` only). The input does not take it (nor do the OpenAPI document and the MCP input schema show it), `before` must give it back with the input, and the entity validates it like any other key, so a key it can hold is a required key of the entity and not an optional one in disguise:
 
+<!-- docs:code context
+import { blueprintOf, commandOf, entityOf, repositoryOf } from "@afora/core";
+
+class Lesson extends entityOf(
+	blueprintOf((ctx) => ({ moduleId: ctx.id, position: ctx.integer })),
+) {}
+const Lessons = repositoryOf({
+	entity: Lesson,
+	actions: ["findPage", "create", "count"],
+});
+commandOf({
+	name: "Course",
+	useCases: (ctx) => ({
+		/* block */
+	}),
+});
+-->
 ```ts
 createLesson: ctx.create(Lessons, {
 	computed: ["position"],
