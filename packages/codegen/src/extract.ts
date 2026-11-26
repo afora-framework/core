@@ -15,7 +15,6 @@ import type {
 	ProviderReference,
 } from "@afora/core/adapters";
 import { genericUseCase, stdProperty } from "./catalog";
-
 import type { Field, VariantTarget } from "./model";
 import { canonicalField, compactSpec } from "./normalize";
 import { DEFAULT_OUTPUT_DIR, type Spec } from "./spec/types";

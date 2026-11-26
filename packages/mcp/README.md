@@ -87,7 +87,7 @@ Bun.serve({
 A client then connects with `claude mcp add --transport http blog https://example.com/mcp`.
 
 - Only `POST` is accepted; any other method is a 405 with `Allow: POST`.
-- With an authenticator (the `auth` option or the `authenticator` hook, the same ones a tool call asks) the caller is identified before the handshake: no principal is a 401 with `WWW-Authenticate: Bearer realm="<name>"`, so the client sees the refusal at once instead of listing tools and failing inside each result. The whole endpoint is then private; the authenticator is asked with the first operation that requires access.
+- With an authenticator (the `auth` option or the `authenticator` hook, the same ones a tool call asks) the caller is identified before the handshake: no principal is a 401 with `WWW-Authenticate: Bearer realm="<name>"`, so the client sees the refusal at once instead of listing tools and failing inside each result. The whole endpoint is then private: every request needs a principal, even when every tool it exposes is public; the authenticator is asked with the first operation that requires access. Only headers reach the authenticator (`Authorization` or the header `auth.jwt.header` names): a token read from a cookie alone (`auth.jwt.cookie`) does not apply to MCP, over HTTP or stdio.
 - `requiredScopes` (an option, a list of scopes) is a 403 with `error="insufficient_scope"` for a principal that lacks any of them. It needs an authenticator.
 - Each tool still checks the access its use case declares.
 - With `@afora/hono`, `mountMcp(app, "/mcp", mcp)` mounts it on a path of the app that serves the HTTP output.
