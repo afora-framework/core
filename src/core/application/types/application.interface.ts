@@ -547,6 +547,12 @@ export interface RecordDescription {
 	readonly upgrade?: readonly number[];
 	/** The `previousNames` of an entity; present only when it has some. */
 	readonly previousNames?: readonly string[];
+	/**
+	 * `"class"` when the registered class of an entity extends the class
+	 * `entityOf` made with members of its own (methods, getters); absent for
+	 * that class itself or an empty subclass of it.
+	 */
+	readonly implementation?: "class";
 }
 
 /** What a use case depends on, by the name it has in the application. */

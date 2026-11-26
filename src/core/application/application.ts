@@ -23,7 +23,7 @@ import {
 	identityKeysOf,
 	isVersionedEntityClass,
 } from "../entity/abstract-entity";
-import { isEntityClass } from "../entity/entity";
+import { declaresOwnMembers, isEntityClass } from "../entity/entity";
 import { eventHasHandler, lifecycleEventsOf } from "../entity/event";
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
 import type { IdStrategy } from "../entity/types/id.interface";
@@ -1145,6 +1145,9 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 		...(upgrade.length > 0 ? { upgrade } : {}),
 		...(settings !== undefined && settings.previousNames.length > 0
 			? { previousNames: [...settings.previousNames] }
+			: {}),
+		...(entry.collection === "entities" && declaresOwnMembers(Record)
+			? { implementation: "class" as const }
 			: {}),
 	};
 }

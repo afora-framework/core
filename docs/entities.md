@@ -43,6 +43,8 @@ The identity keys are read-only: `set` throws `ImmutableEntityKey` for them, and
 
 Entities can queue domain events for an external consumer. `eventOf` accepts an entity class (including subclasses) and an optional async handler returning `Promise<void>`, called with the entity and `{ logger }` (the logger of the application whose command raised the event; see [Logging](logging.md)); `event.handle({ logger })` can give another. Definitions are immutable; incompatible entity instances are rejected when emitting. An event without a handler (`eventOf("created", Post)`) only carries the entity, for a policy such as [`publishEvents`](commands.md#event-policies); its `handle()` does nothing. `app.describe().entities.<Name>.events` gives the lifecycle events of an entity by cycle, each `{ name, handler }` (whether it has one).
 
+State transitions belong in methods of a class that extends the one `entityOf` makes, where `change.<key>` and the protected `emit` are at hand; repositories take that class as their `entity` and give back instances of it. `app.describe().entities.<Name>.implementation` is `"class"` when the registered class adds members of its own (methods, getters) between itself and the class `entityOf` made; an empty subclass is described as the class it extends. In an `afora.json`, such a class is named with `implementation` (see [Entities with methods](afora-json.md#entities-with-methods)).
+
 ```ts
 import {
 	blueprintOf,

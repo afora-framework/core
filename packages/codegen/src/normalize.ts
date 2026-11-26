@@ -220,6 +220,9 @@ function canonicalRecord(
 		...(entity && value.versioned === true ? { versioned: true } : {}),
 		...(expires ? { expires: expires as Json } : {}),
 		...(entity ? canonicalEntitySchema(value) : {}),
+		...(entity && isObject(value.implementation)
+			? { implementation: { ...value.implementation } }
+			: {}),
 	};
 }
 

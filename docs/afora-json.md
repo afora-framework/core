@@ -184,7 +184,7 @@ The `response` of a use case written in the spec is a blueprint (its name, or `{
 
 ## Mapping what cannot be described
 
-Some things are code, not data: a provider made by hand, a `run` function, the `before` and `after` of a standard use case, an `execute`, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
+Some things are code, not data: a provider made by hand, a `run` function, the `before` and `after` of a standard use case, an `execute`, the methods of an entity, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
 
 | Key                                | Maps                                                                          |
 | ---------------------------------- | ----------------------------------------------------------------------------- |
@@ -201,6 +201,7 @@ Some things are code, not data: a provider made by hand, a `run` function, the `
 | `commands.<Name>.onEventError`     | the `onEventError` handler of a command                                       |
 | `publishers.<key>`                 | a publisher of the top-level `publishers`                                     |
 | `services.<name>`                  | the factory of a service of the top-level `services`                          |
+| `entities.<Name>`                  | an entity whose class declares methods of its own                             |
 | `entities.<Name>.events.<event>`   | the handler of a lifecycle event of an entity                                 |
 | `outputs.<Name>.pipe.<index>`      | a stage written by hand, or a sink given hooks, by its position in the `pipe` |
 | `<property name>`                  | the module of a property that cannot be recreated (see the limitations)       |
@@ -260,7 +261,7 @@ The events come from the lifecycle of the entities. An entity (not a record) dec
 }
 ```
 
-A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
+A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand (see [Entities with methods](#entities-with-methods)). Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
 
 ## Tracing
 
@@ -404,6 +405,60 @@ export class Reserve extends ReserveBase {
 
 The generated `use-cases.ts` imports `Reserve` from `../handlers/reserve` for it. So that this has no import cycle, every use case a hand-written class needs has a file of its own, `<kebab-name>.use-case.ts`: the base of each `import` use case, and each steps use case that such a class depends on, directly or through other steps use cases. None of these files imports `use-cases.ts`, which re-exports them all. Extraction needs `useCases.Reserve` in `imports`, and gives the same spec back.
 
+## Entities with methods
+
+State transitions belong in the entity, as methods that change it and raise events (see [Entities](entities.md)). A method is code, so an entity that has some names its class with `implementation`, the same way a use case names its `execute`; its fields, options and events stay in the spec:
+
+```json afora:entities
+"Booking": {
+	"fields": { "guest": "text", "status": { "enum": ["pending", "confirmed"] } },
+	"change": ["status"],
+	"events": { "onCreate": ["created"] },
+	"implementation": { "import": "../handlers/booking#Booking" }
+}
+```
+
+`generate` then writes `export class BookingBase extends entityOf(...) {}` in `src/domain/booking.entity.ts` (the file is named after the entity in kebab case), with `BookingEvents` bound to it. The class is written once, at the path the spec names (relative to the output directory), and extends the base:
+
+<!-- docs:code generate: hotel
+{
+	"version": 1,
+	"name": "hotel",
+	"output": { "dir": "src/domain" },
+	"entities": {
+		"Booking": {
+			"fields": { "guest": "text", "status": { "enum": ["pending", "confirmed"] } },
+			"change": ["status"],
+			"events": { "onCreate": ["created"] },
+			"implementation": { "import": "../handlers/booking#Booking" }
+		}
+	},
+	"repositories": { "Bookings": { "entity": "Booking", "actions": ["create", "findById", "update"] } }
+}
+-->
+
+<!-- docs:code file: hotel/src/handlers/booking.ts -->
+```ts
+// src/handlers/booking.ts
+import { eventOf } from "@afora/core";
+import { BookingBase } from "../domain/booking.entity";
+
+export const confirmed = eventOf("confirmed", BookingBase);
+
+export class Booking extends BookingBase {
+	confirm(): void {
+		this.change.status("confirmed");
+		this.emit(confirmed);
+	}
+}
+```
+
+Everything that names `Booking` uses this class: the repositories (so `findById` gives back instances with `confirm`), the fields and variants of other declarations, the `build` steps and `application.ts`. `index.ts` exports it as `Booking`, and the base and its events from `booking.entity.ts`. Import the base from `booking.entity.ts`: `entities.ts` can import your class (an entity there with a `Booking` field), so importing the base through it would be a loop.
+
+So that the base has no import cycle, every generated entity it needs through its fields, at any depth of blueprints and records, has a file of its own too, `<kebab-name>.entity.ts`, and leaves `entities.ts`; `index.ts` still exports it. What the generator cannot order is reported as `import_cycle`: a module that holds two classes where one names the other, an event handler or `upgrade` step in the module of the class, or a blueprint or record that names the entity while sharing its file with one the base needs. The fix is a module per class or function. Two entities whose files would have the same name are `file_collision`, and a declaration named `BookingBase` is `name_collision`.
+
+`app.describe().entities.Booking.implementation` is `"class"` when the registered class adds members of its own to the class `entityOf` made (an empty subclass, as generated code writes, does not). Extraction then needs `entities.Booking` in `imports`, and gives the same spec back.
+
 ## Standard use cases
 
 A use case that a [standard use case](std-use-cases.md) covers is declared by naming it and the repository it is for, in place of its input, response and steps:
@@ -525,6 +580,6 @@ What the spec and the round trip do not cover. Each is reported by an issue or a
 - **A `run` with `args` declares `params`.** `"params"` is a blueprint by name or `{ "fields": {...} }` whose fields match the `args` by position: the args are parsed before the function is called, and a wrong one throws `InvalidUseCaseStep` instead of reaching the function. `check` reports `run_without_params` for a `run` with `args` and no `params`, and `invalid_args` when the counts differ; a `run` without `args` needs no `params`. See [use cases](use-cases.md#steps).
 - **Transactions are checked at run time.** `"transaction": true` needs a provider with transactions; the provider is unknown when the spec is validated, so `commandOf` throws `InvalidCommandDeclaration` when the code runs, not `validateSpec`.
 - **Constructs the core does not describe.** A `change` on a plugin key and the order of `plugins` are not recovered.
-- **Repositories point at the generated classes.** To add behavior, extend the generated class in a file of your own.
+- **Entity methods are written by hand.** An entity with methods names its class with `implementation` (see [Entities with methods](#entities-with-methods)); records take no `implementation`, so a record with methods is extended in a file of your own, and the generated code uses the generated class.
 - **Generated code needs TypeScript 5.5 or newer** to type-check.
 - **Extension by path.** `"extends": ["../auth/afora.json", "@acme/auth"]` takes the declarations of other specs; the same name for different declarations is a conflict, and the same declaration reached twice is registered once. The generated `application.ts` extends their `App`.

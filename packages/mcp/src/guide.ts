@@ -168,7 +168,8 @@ a file of your own.
   The ones that write (all but get, list, login) also take \`before\` and \`after\` (\`{ "import": "./file.ts#fn" }\`, run before and
   after the write; \`before\` may give back the input to write), \`dependencies\` (key -> declared name, for them) and \`throws\`
   (the exceptions they throw). Write steps only for what no standard use case does, nor its \`before\`/\`after\`.
-- \`afora_extract\` needs \`imports\` for \`useCases.<Name>\` (hand-written execute) and \`useCases.<Name>.run.<name>\` (run functions);
+- \`afora_extract\` needs \`imports\` for \`useCases.<Name>\` (hand-written execute), \`useCases.<Name>.run.<name>\` (run functions) and
+  \`entities.<Name>\` (an entity class with methods);
   a standard use case needs none, but \`useCases.<Name>.before\` and \`.after\` for its hooks; a stage written by hand, or a sink given
   hooks in code (an authenticator, middlewares), needs \`outputs.<Name>.pipe.<index>\`.
 
@@ -281,6 +282,11 @@ export class Reserve extends ReserveBase {
 \`this.input\`, \`this.context\` and \`this.dependencies\` are typed from the spec. A dependency that is another use case is a function:
 \`await this.dependencies.charge(input)\`. Throw only exceptions the spec lists in \`errors\`. A steps use case may depend on an \`import\` one
 and \`call\` it, so moving one use case to code does not move the ones that use it.
+
+An entity with methods (a state transition that changes it and \`emit\`s an event) names its class the same way,
+\`"implementation": { "import": "../handlers/booking#Booking" }\` beside its fields: \`afora_generate\` writes
+\`export class BookingBase extends entityOf(...)\` in \`booking.entity.ts\`, your class extends it (import the base from that file),
+and repositories, fields, \`build\` steps and the application use your class. \`afora_extract\` needs \`imports\` for \`entities.<Name>\`.
 
 ## A project written in code
 

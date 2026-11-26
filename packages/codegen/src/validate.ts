@@ -21,10 +21,12 @@ import {
 } from "./policy";
 import {
 	checkCatalog,
+	checkImport,
 	checkLog,
 	checkProvider,
 	checkProviders,
 	checkTrace,
+	isImportObject,
 } from "./provider";
 import { isRooted } from "./rooted";
 import {
@@ -49,6 +51,9 @@ import {
 } from "./spec/types";
 import { checkException, checkUseCase } from "./use-case";
 import {
+	entityFileIssues,
+	entityFiles,
+	fileLayoutOf,
 	generatedFileIssues,
 	useCaseFileIssues,
 	useCaseFiles,
@@ -769,6 +774,7 @@ function checkFieldsOf(
 					"schemaVersion",
 					"upgrade",
 					"previousNames",
+					"implementation",
 				]
 			: owner === "record"
 				? ["fields", "sensitive", "unique", "change", "plugins"]
@@ -875,6 +881,31 @@ function checkRecord(
 
 	if (owner === "entity") {
 		checkEntitySchema(decl.name, decl.spec, path, issues);
+	}
+
+	if (owner === "entity" && decl.spec.implementation !== undefined) {
+		const implementation = decl.spec.implementation;
+		const implPath = [...path, "implementation"];
+		if (!isObject(implementation) || !isImportObject(implementation)) {
+			issues.push(
+				issue(
+					implPath,
+					"invalid_implementation",
+					'"implementation" of an entity is { "import": "./file.ts#Class" }: the class written by hand that extends the generated base.',
+				),
+			);
+		} else {
+			checkImport(implementation, implPath, issues);
+			if (scope.decls.has(`${decl.name}Base`)) {
+				issues.push(
+					issue(
+						implPath,
+						"name_collision",
+						`"${decl.name}Base" is the generated base of "${decl.name}" and is already a declaration.`,
+					),
+				);
+			}
+		}
 	}
 
 	if (owner === "entity" && decl.spec.expires !== undefined) {
@@ -1551,9 +1582,21 @@ function check(
 			),
 		);
 	}
-	// The files of the use cases hand-written classes need, and imports of generated files.
-	const files = useCaseFiles(own, scope);
-	issues.push(...useCaseFileIssues(files, scope));
+	// The files of the use cases and entities hand-written classes need, and imports of generated files.
+	const useCases = useCaseFiles(own, scope);
+	issues.push(...useCaseFileIssues(useCases, scope));
+	const entities = entityFiles(own, scope);
+	const files = new Map([...useCases, ...entities]);
+	if (!issues.some((i) => i.code === "cycle")) {
+		issues.push(
+			...entityFileIssues(
+				entities,
+				own,
+				scope,
+				fileLayoutOf(own, scope, files),
+			),
+		);
+	}
 	const dir = isObject(input.output) ? input.output.dir : DEFAULT_OUTPUT_DIR;
 	if (
 		!issues.some((i) => i.code === "invalid_output") &&

@@ -548,6 +548,16 @@ const RecordDeclaration = Type.Object(
 				"Entities only: the names the entity had before; app.migrate moves their rows and start({ lock }) accepts the rename.",
 			),
 		),
+		implementation: Type.Optional(
+			Type.Object(
+				{ import: ImportRef.properties.import },
+				{
+					additionalProperties: false,
+					description:
+						'Entities only: the class written by hand that extends the generated <Name>Base, { "import": "../domain/booking.ts#Booking" }. Repositories, events, fields and the application use it.',
+				},
+			),
+		),
 	},
 	{ additionalProperties: false },
 );

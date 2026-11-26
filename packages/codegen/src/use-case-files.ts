@@ -1,5 +1,5 @@
 import { posix } from "node:path";
-import { cyclesOf } from "./graph";
+import { cyclesOf, fieldsOfDecl, typesIn } from "./graph";
 import { isImportObject, parseImportRef } from "./provider";
 import type { Decl, Scope } from "./scope";
 import { isObject } from "./spec/field";
@@ -8,6 +8,9 @@ import { isGeneric, isImported } from "./use-case";
 
 /** The suffix of the file of a use case that hand-written code imports. */
 export const USE_CASE_FILE_SUFFIX = ".use-case.ts";
+
+/** The suffix of the file of an entity a hand-written class needs (its `<Name>Base`, or a generated entity). */
+const ENTITY_FILE_SUFFIX = ".entity.ts";
 
 /**
  * The names of the files `generate` can write, in the output directory, besides
@@ -57,10 +60,17 @@ const isCapital = (char: number) => char >= 65 && char <= 90;
 const isSmall = (char: number) => char >= 97 && char <= 122;
 const isDigit = (char: number) => char >= 48 && char <= 57;
 
+const kebabOf = (name: string): string =>
+	wordsOf(name).replace(/_/g, "-").toLowerCase();
+
 /** The file of a use case kept out of `use-cases.ts`: `RegisterUser` -> `register-user.use-case.ts`. */
 export function useCaseFileOf(name: string): string {
-	const kebab = wordsOf(name).replace(/_/g, "-").toLowerCase();
-	return `${kebab}${USE_CASE_FILE_SUFFIX}`;
+	return `${kebabOf(name)}${USE_CASE_FILE_SUFFIX}`;
+}
+
+/** The file of an entity kept out of `entities.ts`: `BookingSlot` -> `booking-slot.entity.ts`. */
+function entityFileOf(name: string): string {
+	return `${kebabOf(name)}${ENTITY_FILE_SUFFIX}`;
 }
 
 /** The names of the use cases a use case declaration depends on (its own or a standard one's options). */
@@ -268,7 +278,7 @@ function importedModules(
 /**
  * An import of the spec (relative to the output directory `dir`) that is a
  * file the generator writes there (`generated_file`): one of
- * `GENERATED_FILES`, or the `<kebab-name>.use-case.ts` of one of `files`. The
+ * `GENERATED_FILES`, or the `<kebab-name>.use-case.ts` or `<kebab-name>.entity.ts` of one of `files`. The
  * generator would overwrite it, so the hand-written code has to live in a file
  * of another name.
  */
@@ -298,5 +308,279 @@ export function generatedFileIssues(
 			message: `"${module}" is ${posix.join(outDir, file)}, which the generator writes and overwrites, so hand-written code cannot live there. Rename the hand-written file or move it out of the output directory (e.g. "../handlers/..."), and point the import at it.`,
 		});
 	}
+	return issues;
+}
+
+// ---------------------------------------------------------------- entities
+
+/** The file each kind of declaration is generated into, before files merge. */
+type KindFile =
+	| "properties.ts"
+	| "blueprints.ts"
+	| "records.ts"
+	| "entities.ts"
+	| "environments.ts"
+	| "repositories.ts"
+	| "exceptions.ts"
+	| "use-cases.ts"
+	| "commands.ts"
+	| "outputs.ts";
+
+const FILE_OF_KIND: Readonly<Record<Decl["kind"], KindFile>> = {
+	property: "properties.ts",
+	blueprint: "blueprints.ts",
+	record: "records.ts",
+	entity: "entities.ts",
+	environment: "environments.ts",
+	repository: "repositories.ts",
+	exception: "exceptions.ts",
+	useCase: "use-cases.ts",
+	command: "commands.ts",
+	output: "outputs.ts",
+};
+
+/** Where a file merged into another one goes: the later in this order. */
+const MERGE_ORDER: readonly KindFile[] = [
+	"blueprints.ts",
+	"records.ts",
+	"entities.ts",
+];
+
+/** Whether `decl` is an entity of this spec with a class written by hand. */
+export const isImportedEntity = (decl: Decl | undefined): boolean =>
+	decl?.kind === "entity" && decl.via === undefined && isImported(decl.spec);
+
+/** The names a declaration uses: a repository its entity, relations and environments; the others the types of their fields. */
+function namesUsedBy(decl: Decl): string[] {
+	if (decl.kind === "property") {
+		return typeof decl.spec.base === "string" ? [decl.spec.base] : [];
+	}
+	if (decl.kind === "repository") {
+		const list = (value: unknown): string[] =>
+			Array.isArray(value)
+				? value.filter((item): item is string => typeof item === "string")
+				: [];
+		return [
+			...(typeof decl.spec.entity === "string" ? [decl.spec.entity] : []),
+			...list(decl.spec.relations),
+			...list(decl.spec.environments),
+		];
+	}
+	const fields = fieldsOfDecl(decl);
+	return fields ? typesIn(fields) : [];
+}
+
+/**
+ * The file each own declaration is generated into: its own file (`files`)
+ * when it has one, else the file of its kind, where kinds that need each other
+ * share the later file of `MERGE_ORDER`. Declarations with a file of their own
+ * do not count for the merges.
+ */
+export function fileLayoutOf(
+	own: readonly Decl[],
+	scope: Scope,
+	files: ReadonlyMap<string, string>,
+): (name: string) => string {
+	const home = new Map<KindFile, KindFile>(
+		(Object.values(FILE_OF_KIND) as KindFile[]).map((file) => [file, file]),
+	);
+	const resolveHome = (file: KindFile): KindFile => {
+		let current = file;
+		while (home.get(current) !== current)
+			current = home.get(current) as KindFile;
+		return current;
+	};
+	const shared = own.filter((decl) => !files.has(decl.name));
+	const depsFiles = (decl: Decl): KindFile[] =>
+		namesUsedBy(decl).flatMap((name) => {
+			const dep = scope.decls.get(name);
+			return dep && dep.via === undefined && !files.has(dep.name)
+				? [FILE_OF_KIND[dep.kind]]
+				: [];
+		});
+	const needs = (from: KindFile, to: KindFile): boolean =>
+		shared.some(
+			(decl) =>
+				resolveHome(FILE_OF_KIND[decl.kind]) === from &&
+				depsFiles(decl).some((file) => resolveHome(file) === to),
+		);
+	let merged = true;
+	while (merged) {
+		merged = false;
+		for (const a of MERGE_ORDER) {
+			for (const b of MERGE_ORDER) {
+				if (a === b || resolveHome(a) === resolveHome(b)) continue;
+				if (
+					needs(resolveHome(a), resolveHome(b)) &&
+					needs(resolveHome(b), resolveHome(a))
+				) {
+					const [early, late] =
+						MERGE_ORDER.indexOf(resolveHome(a)) <
+						MERGE_ORDER.indexOf(resolveHome(b))
+							? [resolveHome(a), resolveHome(b)]
+							: [resolveHome(b), resolveHome(a)];
+					home.set(early, late);
+					merged = true;
+				}
+			}
+		}
+	}
+	return (name: string): string =>
+		files.get(name) ??
+		resolveHome(FILE_OF_KIND[(scope.decls.get(name) as Decl).kind]);
+}
+
+/**
+ * The entities that get a file of their own instead of `entities.ts`, by
+ * name: every one with a class written by hand (its `<Name>Base`, which the
+ * class extends), and every generated entity such a base needs through its
+ * fields, at any depth of blueprints and records. None of these files
+ * imports `entities.ts`, so `entities.ts` can name a class written by hand.
+ */
+export function entityFiles(
+	own: readonly Decl[],
+	scope: Scope,
+): Map<string, string> {
+	const files = new Map<string, string>();
+	const visitFields = (decl: Decl, seen: Set<string>): void => {
+		const fields = fieldsOfDecl(decl);
+		for (const name of fields ? typesIn(fields) : []) {
+			const target = scope.decls.get(name);
+			if (target === undefined || target.via !== undefined) continue;
+			if (target.kind === "entity") visitEntity(target);
+			else if (
+				(target.kind === "blueprint" || target.kind === "record") &&
+				!seen.has(name)
+			) {
+				seen.add(name);
+				visitFields(target, seen);
+			}
+		}
+	};
+	const visitEntity = (decl: Decl): void => {
+		if (files.has(decl.name)) return;
+		files.set(decl.name, entityFileOf(decl.name));
+		visitFields(decl, new Set());
+	};
+	for (const decl of own) if (isImportedEntity(decl)) visitEntity(decl);
+	return new Map([...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+}
+
+/** The module of the class written by hand of an entity. */
+function entityModule(decl: Decl): string | undefined {
+	const ref = parseImportRef(
+		(decl.spec.implementation as { import?: unknown } | undefined)?.import,
+	);
+	return ref ? moduleKey(ref.module) : undefined;
+}
+
+/** The modules of the hand-written functions an entity imports: event handlers and upgrade steps. */
+function entityFunctionModules(decl: Decl): string[] {
+	const found: { path: (string | number)[]; module: string }[] = [];
+	importedModules(decl.spec.events, [], found);
+	importedModules(decl.spec.upgrade, [], found);
+	return found.map(({ module }) => moduleKey(module));
+}
+
+/**
+ * The problems of the files of `entityFiles`: two entities whose files would
+ * have the same name (`file_collision`), and a loop of imports
+ * (`import_cycle`) between the files of blueprints, records and entities and
+ * the modules of the classes written by hand, as `fileOf` lays them out.
+ */
+export function entityFileIssues(
+	files: ReadonlyMap<string, string>,
+	own: readonly Decl[],
+	scope: Scope,
+	fileOf: (name: string) => string,
+): SpecIssue[] {
+	const issues: SpecIssue[] = [];
+	const byFile = new Map<string, string>();
+	for (const [name, file] of files) {
+		const seen = byFile.get(file);
+		if (seen !== undefined) {
+			issues.push({
+				path: ["entities", name],
+				code: "file_collision",
+				message: `"${name}" and "${seen}" would both be generated as ${file} (a class written by hand needs them, so each has a file of its own, named in lowercase kebab-case). Rename one of them.`,
+			});
+		} else byFile.set(file, name);
+	}
+	if (issues.length > 0) return issues;
+
+	const edges = new Map<string, Set<string>>();
+	const edge = (from: string, to: string): void => {
+		if (from === to) return;
+		const set = edges.get(from) ?? new Set<string>();
+		set.add(to);
+		edges.set(from, set);
+	};
+	// A module of a class written by hand -> the file of the base it extends.
+	const modules = new Set<string>();
+	for (const decl of own) {
+		if (!isImportedEntity(decl)) continue;
+		const module = entityModule(decl);
+		if (module === undefined) continue;
+		modules.add(module);
+		edge(`module ${module}`, fileOf(decl.name));
+	}
+	if (modules.size === 0) return issues;
+	for (const decl of own) {
+		if (
+			decl.kind !== "blueprint" &&
+			decl.kind !== "record" &&
+			decl.kind !== "entity"
+		) {
+			continue;
+		}
+		const from = fileOf(decl.name);
+		const fields = fieldsOfDecl(decl);
+		for (const name of fields ? typesIn(fields) : []) {
+			const target = scope.decls.get(name);
+			if (target === undefined || target.via !== undefined) continue;
+			if (isImportedEntity(target)) {
+				const module = entityModule(target);
+				if (module !== undefined) edge(from, `module ${module}`);
+			} else edge(from, fileOf(name));
+		}
+		if (decl.kind === "entity") {
+			for (const module of entityFunctionModules(decl)) {
+				if (modules.has(module)) edge(from, `module ${module}`);
+			}
+		}
+	}
+
+	const [found] = cyclesOf(
+		[...edges.keys()].sort(),
+		(node) => [...(edges.get(node) ?? [])].sort(),
+		true,
+	);
+	if (found === undefined) return issues;
+	// Where to report it: the entity whose class closes the loop, else the first entity file in it.
+	const entityOfFile = new Map([...files].map(([name, file]) => [file, name]));
+	const at = found.findIndex((node) => node.startsWith("module "));
+	const baseFile = at >= 0 ? found[at + 1] : undefined;
+	const name =
+		(baseFile !== undefined ? entityOfFile.get(baseFile) : undefined) ??
+		found.map((node) => entityOfFile.get(node)).find((n) => n !== undefined);
+	const imported = isImportedEntity(
+		name === undefined ? undefined : scope.decls.get(name),
+	);
+	issues.push({
+		path:
+			name === undefined
+				? ["entities"]
+				: imported && baseFile !== undefined
+					? ["entities", name, "implementation"]
+					: ["entities", name],
+		code: "import_cycle",
+		message: `The generated files would import each other in a loop: ${found
+			.map((node) =>
+				node.startsWith("module ") ? node.slice("module ".length) : node,
+			)
+			.join(
+				" -> ",
+			)}. A module that holds several classes or functions written by hand joins them, and a blueprint or record that names an entity shares its file with the others: move the class or function to a module of its own, or keep the blueprint or record out of the loop.`,
+	});
 	return issues;
 }

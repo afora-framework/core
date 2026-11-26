@@ -165,6 +165,12 @@ export interface RecordSpec {
 	readonly upgrade?: Readonly<Record<string, ImportRef>>;
 	/** Entities only: the names the entity had before. */
 	readonly previousNames?: readonly string[];
+	/**
+	 * Entities only: the class written by hand that extends the generated
+	 * `<Name>Base` (methods that change state and raise events). Everything
+	 * that names the entity uses it.
+	 */
+	readonly implementation?: ImportRef;
 }
 
 /** The id strategies a spec can name; `uuid7` is the default. */
