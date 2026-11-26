@@ -22,8 +22,12 @@ export async function makeProject(
 			noEmit: true,
 			skipLibCheck: true,
 			verbatimModuleSyntax: true,
+			allowImportingTsExtensions: true,
 			types: [],
-			paths: { "@afora/core": [join(ROOT, "src/index.ts")] },
+			paths: {
+				"@afora/core": [join(ROOT, "src/index.ts")],
+				"@afora/core/adapters": [join(ROOT, "src/adapters.ts")],
+			},
 		},
 		include,
 	};
