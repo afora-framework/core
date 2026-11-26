@@ -231,6 +231,13 @@ export interface StdLifecycleOptions<Repository>
 export interface StdListOptions<Repository>
 	extends StdUseCaseOptions,
 		StdOwnerOption<Repository> {
+	/**
+	 * Keys of the entity the page is filtered by, each matched by equality with
+	 * a required key of the input of the same name (a path parameter, for a
+	 * route): the children of a parent. A key must hold a scalar value; `owner`
+	 * and `orderBy` work with it.
+	 */
+	readonly where?: readonly KeyOf<Repository>[];
 	/** The order of the page; newest first (`createdAt`, descending) by default. */
 	readonly orderBy?: readonly {
 		readonly key: KeyOf<Repository>;
@@ -388,6 +395,13 @@ type OwnerContext<Repository, Options> = Options extends {
 	? { readonly [Name in Key]: IdField<Repository> }
 	: undefined;
 
+/** The keys the option `where` of `list` names. */
+type WhereKeys<Options> = Options extends {
+	readonly where: readonly (infer Key)[];
+}
+	? Key
+	: never;
+
 type OwnerKey<Options> = Options extends { readonly owner: infer Owner }
 	? Owner extends { readonly key: infer Key }
 		? Key
@@ -532,6 +546,11 @@ export type ListMaker = <
 	options?: Options,
 ) => StepsUseCaseConstructor<
 	{
+		readonly [Key in WhereKeys<Options> & KeyOf<Repository>]: FieldAt<
+			Props<Repository>,
+			Key
+		>;
+	} & {
 		readonly limit: OptionalProperty<typeof Integer>;
 		readonly offset: OptionalProperty<typeof Integer>;
 	},

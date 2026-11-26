@@ -1287,6 +1287,7 @@ function describeRegistry(
 				options: describeOption(origin.options) as Readonly<
 					Record<string, unknown>
 				>,
+				...(origin.index === undefined ? {} : { index: origin.index }),
 			},
 		};
 	};

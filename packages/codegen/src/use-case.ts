@@ -624,6 +624,35 @@ function checkGenericUseCase(
 				invalid(key, `"${key}" must be an object by key of the entity.`);
 			}
 		}
+		if (key === "where") {
+			const fields =
+				entity?.kind === "entity" ? fieldsOfDecl(entity) : undefined;
+			if (!Array.isArray(value) || !value.every(isKey)) {
+				invalid(
+					key,
+					'"where" must be a list of keys of the entity, each matched by equality with a required key of the input.',
+				);
+			} else if (new Set(value).size !== value.length) {
+				invalid(key, '"where" names a key twice.');
+			} else {
+				for (const name of value as string[]) {
+					const field = fields?.[name];
+					if (
+						field !== undefined &&
+						(field.list !== undefined ||
+							!(
+								field.kind === "enum" ||
+								(field.kind === "type" && stdProperty(field.type) !== undefined)
+							))
+					) {
+						invalid(
+							key,
+							`"${name}" does not hold a scalar value, which the input can match by equality.`,
+						);
+					}
+				}
+			}
+		}
 		if (key === "orderBy") {
 			if (
 				!Array.isArray(value) ||

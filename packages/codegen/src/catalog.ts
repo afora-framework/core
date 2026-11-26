@@ -357,7 +357,7 @@ const GENERIC_HOOKS = ["before", "after", "dependencies", "throws"];
 const GENERIC_OPTIONS: Readonly<Record<string, readonly string[]>> = {
 	create: ["as", "owner", "omit", "values", "relations", ...GENERIC_HOOKS],
 	get: ["as", "owner"],
-	list: ["owner", "orderBy", "maxLimit"],
+	list: ["owner", "where", "orderBy", "maxLimit"],
 	update: ["as", "owner", ...GENERIC_HOOKS],
 	delete: ["as", "owner", ...GENERIC_HOOKS],
 	restore: ["as", "owner", ...GENERIC_HOOKS],

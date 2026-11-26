@@ -627,6 +627,8 @@ export interface UseCaseDescription {
 		readonly version: string;
 		readonly repository: string;
 		readonly options: Readonly<Record<string, unknown>>;
+		/** The declared index of the repository that serves what it reads, when it says one does. */
+		readonly index?: string;
 	};
 }
 

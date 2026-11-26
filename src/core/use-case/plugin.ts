@@ -175,14 +175,14 @@ export function useCasePluginOf<
 				},
 			});
 		}
-		const UseCase = useCaseOf(
-			compile(target, options) as never,
-		) as unknown as AnyUseCaseClass;
+		const { index, ...settings } = compile(target, options);
+		const UseCase = useCaseOf(settings as never) as unknown as AnyUseCaseClass;
 		Object.defineProperty(UseCase, UseCaseOrigin, {
 			value: Object.freeze({
 				plugin,
 				repository: repository as AnyRepository,
 				options,
+				...(index === undefined ? {} : { index }),
 			}),
 		});
 		classes.set(key, UseCase);

@@ -179,6 +179,7 @@ A use case whose repository lacks an action, or whose entity lacks a record plug
 | `relations: { <key>: { shared: true } }`                        | `create`, `register`                                                          | with `owner`, lets the input name an entity of `<key>` that another owner has, see below                                                                                                                      |
 | `takesTokenKeys: true`                                          | `register`                                                                    | the input may take the keys a token is made from; only with an `access` that asks for `scopes`, see [Tokens and sessions](auth.md#tokens-and-sessions)                                                        |
 | `set: { ... }`                                                  | `publish`, `unpublish`, `archive`, `unarchive`                                | change keys set before the entity is stored, e.g. `{ status: "published" }`                                                                                                                                   |
+| `where: [key, ...]`                                             | `list`                                                                        | keys of the entity matched by equality: each becomes a required key of the input (a path parameter, for a route) and reaches `findPage` as a `where`, see [List by a key](#list-by-a-key)                     |
 | `orderBy: [{ key, direction? }]`                                | `list`                                                                        | the order of the page; newest first (`createdAt` descending) by default                                                                                                                                       |
 | `maxLimit`                                                      | `list`                                                                        | the largest `limit` the input takes, 100 by default; a larger one is `InvalidUseCaseInput` (400, issue `invalid_value`), and the input schema (OpenAPI) says `maximum`                                        |
 | `before: ({ input, entity?, dependencies, context }) => input?` | the use cases that write (all but `get`, `list`, `login`)                     | runs before the write and may give back the input to go on with, see [Before and after](#before-and-after)                                                                                                    |
@@ -237,6 +238,25 @@ await Blog.run("create", { title: "Mine" }, { context: { userId } });
 ```
 
 `restore` with `owner` checks the owner before the entity is back: `findById` does not see a deleted entity, so it reads it with `exists` (`{ where: { id, <key>: caller }, withDeleted: true }`), and the repository must declare the `exists` action (not for `key: "id"`, which compares the input with the context). A deleted entity of another owner throws `notFound` and stays deleted.
+
+### List by a key
+
+The most common listing in a content app is the children of a parent. `where` names keys of the entity, each matched by equality:
+
+```ts
+const Lessons = repositoryOf({
+	entity: Lesson,
+	actions: ["findPage", "create"],
+	indexes: { byModule: { where: ["moduleId"], orderBy: "position" } },
+});
+
+ctx.list(Lessons, { where: ["moduleId"], orderBy: [{ key: "position" }] });
+// input: { moduleId, limit?, offset? }, e.g. GET /modules/{moduleId}/lessons
+```
+
+Each key is a required key of the input, so it can be a path parameter, and goes to `findPage` as a `where` of equality. A missing value is invalid input: `undefined` and `null` never reach the query. It works with `owner` (the owner key is matched too, and cannot also be named in `where`), `orderBy` and `maxLimit`.
+
+A key the entity lacks, one named twice, one that is sensitive or does not hold a scalar value (a list, a blueprint, an entity), and `limit` or `offset` throw `UseCaseUnavailable` when the use case is declared. When a declared index of the repository serves the `where` keys (and the owner key) with the first `orderBy` as its order, `describe()` names it as `generic.index` of the use case (`"byModule"` above), and `afora.json` leaves it out, since it follows from the declaration.
 
 ## Before and after
 
@@ -330,6 +350,6 @@ A command registers the standard use cases it holds, under their names, so they 
 ## Limits
 
 - No pluralization: `ctx.list(Posts)` is `ListPost`; name it (`{ name: "ListPosts" }`).
-- `list` has no filters besides `owner`, and pages by `offset`, at most `maxLimit` entities a page.
+- `list` filters by `owner` and by the keys of `where`, all by equality, and pages by `offset`, at most `maxLimit` entities a page.
 - A key that holds an entity that may be absent, or a list of entities, is not taken by an input.
 - One behavior per property class: the input of a `Password` is always a plain password.

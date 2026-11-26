@@ -2,6 +2,8 @@ import { listOf } from "../../core/blueprint/list";
 import { optionalOf } from "../../core/blueprint/optional";
 import type { BlueprintField } from "../../core/blueprint/types/blueprint.interface";
 import { generatesIds } from "../../core/entity/abstract-entity";
+import { planQuery } from "../../core/repository/plan";
+import { inspectRepository } from "../../core/repository/state";
 import type { AnyRepository } from "../../core/repository/types/repository.interface";
 import { UseCaseEntityNotFound } from "../../core/use-case/exceptions";
 import { useCasePluginOf } from "../../core/use-case/plugin";
@@ -9,6 +11,7 @@ import { isPlain } from "../../core/use-case/steps/references";
 import { useCaseTargetOf } from "../../core/use-case/target";
 import type {
 	UseCaseCompilation,
+	UseCaseFieldPlan,
 	UseCaseTargetInfo,
 } from "../../core/use-case/types/plugin.interface";
 import type {
@@ -272,13 +275,64 @@ export const get = useCasePluginOf<"get", GetMaker>("get", {
 /** The largest `limit` of `list`, unless its option `maxLimit` says otherwise. */
 const MAX_LIMIT = 100;
 
+/**
+ * The declared index that serves the page of `list`: its `where` keys are
+ * all matched by equality (the owner key and those of the option `where`),
+ * and its `orderBy` is the first order. `undefined` when none does.
+ */
+function indexOf(
+	target: UseCaseTargetInfo,
+	owner: Owner | undefined,
+	filters: readonly UseCaseFieldPlan[],
+	orderBy: unknown,
+): string | undefined {
+	const indexes = inspectRepository(target.repository)?.indexes;
+	if (indexes === undefined || Object.keys(indexes).length === 0) {
+		return undefined;
+	}
+	const where: Record<string, unknown> = {};
+	for (const key of [owner?.plan.key, ...filters.map((plan) => plan.key)]) {
+		if (key !== undefined) where[key] = true;
+	}
+	if (Object.keys(where).length === 0) return undefined;
+	const first = (orderBy as readonly { readonly key: string }[])[0]?.key;
+	const plan = planQuery(
+		{ unique: [], indexes },
+		{ where, ...(first === undefined ? {} : { orderBy: [{ key: first }] }) },
+	);
+	return plan.access === "index" ? plan.index : undefined;
+}
+
 /** Gives a page of entities. */
 export const list = useCasePluginOf<"list", ListMaker>("list", {
 	description: "Gives a page of entities: { items, total, limit, offset }.",
 	requires: { actions: ["findPage"] },
 	compile: (target, options) => {
-		checkOptions(target, options, ["owner", "orderBy", "maxLimit"]);
+		checkOptions(target, options, ["owner", "where", "orderBy", "maxLimit"]);
 		const owner = ownerOf(target, options);
+		const filters = keysOf(target, options, "where");
+		const filtered = new Set<string>();
+		for (const plan of filters) {
+			if (filtered.has(plan.key)) {
+				target.unavailable(`where names "${plan.key}" twice`);
+			}
+			filtered.add(plan.key);
+			if (plan.kind !== "property" || plan.sensitive) {
+				target.unavailable(
+					`where "${plan.key}" must be a key that holds a scalar value, which the input can match by equality`,
+				);
+			}
+			if (owner?.plan.key === plan.key) {
+				target.unavailable(
+					`where "${plan.key}" is the owner key, which owner already matches`,
+				);
+			}
+			if (plan.key === "limit" || plan.key === "offset") {
+				target.unavailable(
+					`where "${plan.key}" would take the input of the page`,
+				);
+			}
+		}
 		const {
 			orderBy = [{ key: "createdAt", direction: "desc" }],
 			maxLimit = MAX_LIMIT,
@@ -293,9 +347,14 @@ export const list = useCasePluginOf<"list", ListMaker>("list", {
 		for (const order of orderBy as readonly { readonly key?: unknown }[]) {
 			target.field(String(order?.key));
 		}
+		const index = indexOf(target, owner, filters, orderBy);
 		return {
 			...metaOf(target, options, "List"),
+			...(index === undefined ? {} : { index }),
 			blueprint: fields(() => ({
+				...Object.fromEntries(
+					filters.map((plan) => [plan.input.key, plan.input.field]),
+				),
 				limit: optionalOf(Limit),
 				offset: optionalOf(Integer),
 			})),
@@ -312,10 +371,18 @@ export const list = useCasePluginOf<"list", ListMaker>("list", {
 					find: "repository.findPage",
 					args: [
 						{
-							...(owner
+							...(owner || filters.length > 0
 								? {
 										where: {
-											[owner.plan.key]: `$context.${owner.context}`,
+											...(owner
+												? { [owner.plan.key]: `$context.${owner.context}` }
+												: {}),
+											...Object.fromEntries(
+												filters.map((plan) => [
+													plan.key,
+													`$input.${plan.input.key}`,
+												]),
+											),
 										},
 									}
 								: {}),
