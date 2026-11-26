@@ -300,14 +300,16 @@ const JOURNAL_COLUMNS = {
 	checksum: snakeCaseOf("checksum"),
 	plan: snakeCaseOf("plan"),
 	appliedAt: snakeCaseOf("appliedAt"),
+	position: snakeCaseOf("position"),
 } as const;
 
 /**
  * The journal of the plans applied on `db`, in a table of its own
  * (`afora_migrations`) created with `CREATE TABLE IF NOT EXISTS` on first
  * use, the same on SQLite and Postgres: an entry is one row, keyed by entity
- * and checksum, with the plan as JSON text. Its shape is fixed, as it cannot
- * migrate itself through the plans it records.
+ * and checksum, with the plan as JSON text and its position among the plans
+ * of its entity (the highest is the last applied). Its shape is fixed, as it
+ * cannot migrate itself through the plans it records.
  */
 export function journalOf(
 	// biome-ignore lint/suspicious/noExplicitAny: dialect specific database
@@ -325,8 +327,11 @@ export function journalOf(
 	const ensure = () => {
 		ready ??= run(
 			sql.raw(
-				`CREATE TABLE IF NOT EXISTS ${table} (${Object.values(JOURNAL_COLUMNS)
-					.map((name) => `${quote(name)} text NOT NULL`)
+				`CREATE TABLE IF NOT EXISTS ${table} (${Object.entries(JOURNAL_COLUMNS)
+					.map(
+						([key, name]) =>
+							`${quote(name)} ${key === "position" ? "integer" : "text"} NOT NULL`,
+					)
 					.join(
 						", ",
 					)}, PRIMARY KEY (${quote(JOURNAL_COLUMNS.entity)}, ${quote(JOURNAL_COLUMNS.checksum)}))`,
@@ -337,18 +342,23 @@ export function journalOf(
 		});
 		return ready;
 	};
+	/** The checksum of the last plan recorded for `entity`. */
+	const latestOf = async (entity: string): Promise<unknown> => {
+		await ensure();
+		const found = await rows(
+			sql`SELECT ${column("checksum")} AS checksum FROM ${sql.raw(table)} WHERE ${column("entity")} = ${entity} ORDER BY ${column("position")} DESC LIMIT 1`,
+		);
+		return (found[0] as { checksum?: unknown } | undefined)?.checksum;
+	};
 	return Object.freeze({
 		async applied(entity: string, checksum: string) {
-			await ensure();
-			const found = await rows(
-				sql`SELECT 1 AS found FROM ${sql.raw(table)} WHERE ${column("entity")} = ${entity} AND ${column("checksum")} = ${checksum}`,
-			);
-			return found.length > 0;
+			return (await latestOf(entity)) === checksum;
 		},
 		async record(entry: MigrationJournalEntry) {
-			await ensure();
+			if ((await latestOf(entry.entity)) === entry.checksum) return;
+			// The last of its entity, also when it was recorded before another.
 			await run(
-				sql`INSERT INTO ${sql.raw(table)} (${column("entity")}, ${column("checksum")}, ${column("plan")}, ${column("appliedAt")}) VALUES (${entry.entity}, ${entry.checksum}, ${JSON.stringify(entry.plan)}, ${entry.appliedAt}) ON CONFLICT DO NOTHING`,
+				sql`INSERT INTO ${sql.raw(table)} (${column("entity")}, ${column("checksum")}, ${column("plan")}, ${column("appliedAt")}, ${column("position")}) VALUES (${entry.entity}, ${entry.checksum}, ${JSON.stringify(entry.plan)}, ${entry.appliedAt}, (SELECT COALESCE(MAX(${column("position")}), 0) + 1 FROM ${sql.raw(table)} WHERE ${column("entity")} = ${entry.entity})) ON CONFLICT (${column("entity")}, ${column("checksum")}) DO UPDATE SET ${column("plan")} = excluded.${column("plan")}, ${column("appliedAt")} = excluded.${column("appliedAt")}, ${column("position")} = excluded.${column("position")}`,
 			);
 		},
 	});

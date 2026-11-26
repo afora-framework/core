@@ -167,8 +167,10 @@ export interface MigrationJournalEntry {
 	readonly entity: string;
 	readonly plan: SchemaPlan;
 	/**
-	 * The SHA-256 of the plan as canonical JSON (keys sorted), in lowercase
-	 * hex: the same plan gives the same checksum on every runtime.
+	 * The SHA-256, in lowercase hex, of `{ from, plan }` as canonical JSON
+	 * (keys sorted), `from` being the entry of the lock the plan was diffed
+	 * from: the same plan from the same shape gives the same checksum on
+	 * every runtime.
 	 */
 	readonly checksum: string;
 	/** When it was applied, as an ISO 8601 string. */
@@ -177,12 +179,21 @@ export interface MigrationJournalEntry {
 
 /**
  * The record a provider keeps of the plans `app.migrate` applied through
- * it (`IRepositoryProvider.journal`), so a plan is applied once.
+ * it (`IRepositoryProvider.journal`), in order, so a plan is not applied
+ * twice in a row.
  */
 export interface MigrationJournal {
-	/** Whether the plan of `entity` with `checksum` was recorded. */
+	/**
+	 * Whether `checksum` is the last plan recorded for `entity`: the store is
+	 * already at it. A plan recorded before another one is not: applying it
+	 * again (a key dropped, then added back) is a change.
+	 */
 	applied(entity: string, checksum: string): Promise<boolean>;
-	/** Records an applied plan; recording the same entity and checksum again changes nothing. */
+	/**
+	 * Records an applied plan as the last one of its entity. Recording the
+	 * last one again changes nothing; recording one recorded before another
+	 * makes it the last again.
+	 */
 	record(entry: MigrationJournalEntry): Promise<void>;
 }
 

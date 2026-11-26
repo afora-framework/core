@@ -470,8 +470,8 @@ export interface IRepositoryProvider<Environment = unknown> {
 	): Promise<void | ProviderMigrationResult>;
 	/**
 	 * The plans `app.migrate({ mode: "apply" })` applied through this
-	 * provider. When present, a plan with changes whose checksum is recorded
-	 * for its entity is not given to `migrate` again, and a plan applied
+	 * provider. When present, a plan with changes whose checksum is the last
+	 * one recorded for its entity is not given to `migrate` again, and a plan applied
 	 * (not deferred) is recorded once its backfill ends. Without it every
 	 * run gives the plan to `migrate`, which must then skip what is applied.
 	 */

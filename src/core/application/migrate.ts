@@ -5,6 +5,7 @@ import type {
 	EntityMigrationReport,
 	MigrationJournal,
 	SchemaLock,
+	SchemaLockEntity,
 	SchemaMigrationOptions,
 	SchemaMigrationReport,
 	SchemaPlan,
@@ -81,10 +82,12 @@ export async function migrateApplication(
 		targets.push([name, state as RepositoryState]);
 	}
 
+	const current =
+		lock === undefined ? undefined : schemaLockOf(source.describe());
 	const changes =
-		lock === undefined
+		lock === undefined || current === undefined
 			? []
-			: diffSchemas(lock, schemaLockOf(source.describe()));
+			: diffSchemas(lock, current);
 	const entities: Record<string, EntityMigrationReport> = {};
 	for (const [name, state] of targets) {
 		const plan: SchemaPlan = Object.freeze({
@@ -96,7 +99,9 @@ export async function migrateApplication(
 			mode === "apply" && plan.changes.length > 0
 				? journalOf(state.provider, fail)
 				: undefined;
-		const checksum = journal ? await checksumOf(plan) : "";
+		const checksum = journal
+			? await checksumOf(plan, startingEntryOf(lock, current, name))
+			: "";
 		const alreadyApplied = journal
 			? (await journal.applied(name, checksum)) === true
 			: false;
@@ -153,11 +158,37 @@ function canonicalJsonOf(value: unknown): string {
 }
 
 /**
- * The checksum of `plan` in a journal: the SHA-256 of its canonical JSON,
- * in lowercase hex, through `crypto.subtle` (Bun, Node >= 22, browsers).
+ * The entry of the lock a plan of `name` starts from: the entity under its
+ * name, or under the first of its previous names the lock holds; `null`
+ * when the lock has neither.
  */
-export async function checksumOf(plan: SchemaPlan): Promise<string> {
-	const bytes = new TextEncoder().encode(canonicalJsonOf(plan));
+function startingEntryOf(
+	lock: SchemaLock | undefined,
+	current: SchemaLock | undefined,
+	name: string,
+): SchemaLockEntity | null {
+	if (lock === undefined) return null;
+	const names = [name, ...(current?.entities[name]?.previousNames ?? [])];
+	for (const candidate of names) {
+		if (Object.hasOwn(lock.entities, candidate)) {
+			return lock.entities[candidate] as SchemaLockEntity;
+		}
+	}
+	return null;
+}
+
+/**
+ * The checksum of `plan` in a journal: the SHA-256, in lowercase hex and
+ * through `crypto.subtle` (Bun, Node >= 22, browsers), of the canonical
+ * JSON (keys sorted) of `{ from, plan }`, `from` being the entry of the
+ * lock the plan was diffed from (`null` for none): the same changes from
+ * another starting shape are another plan.
+ */
+export async function checksumOf(
+	plan: SchemaPlan,
+	from: SchemaLockEntity | null = null,
+): Promise<string> {
+	const bytes = new TextEncoder().encode(canonicalJsonOf({ from, plan }));
 	const digest = await crypto.subtle.digest("SHA-256", bytes);
 	return [...new Uint8Array(digest)]
 		.map((byte) => byte.toString(16).padStart(2, "0"))

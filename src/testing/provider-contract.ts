@@ -89,8 +89,9 @@ export interface ProviderContractOptions {
 	readonly schemaVersionKey?: boolean;
 	/**
 	 * Run the cases of the migration journal (`provider.journal`): a plan
-	 * is applied once recorded, by entity and checksum, and `app.migrate`
-	 * records an applied plan and skips it on the next run. Defaults to
+	 * is applied once recorded, by entity and checksum, only the last plan
+	 * recorded for an entity counts as applied, and `app.migrate` records an
+	 * applied plan and skips it on the next run. Defaults to
 	 * whether the provider has a `journal`.
 	 */
 	readonly journal?: boolean;
@@ -1805,6 +1806,33 @@ export function providerContract(
 							false,
 						);
 						expect(await journal.applied("One", checksum("a"))).toBe(false);
+					},
+				);
+
+				journaled(
+					"only the last plan recorded for an entity counts as applied",
+					async () => {
+						const provider = await makeProvider();
+						const journal = provider.journal as MigrationJournal;
+						const entry = (digit: string, at: string) => ({
+							entity: "Accounts",
+							plan: { entity: "Accounts", changes: [], destructive: false },
+							checksum: checksum(digit),
+							appliedAt: at,
+						});
+						await journal.record(entry("a", "2026-01-01T00:00:00.000Z"));
+						// Another plan after it: a key dropped after it was added.
+						await journal.record(entry("b", "2026-01-01T00:00:00.000Z"));
+						expect(await journal.applied("Accounts", checksum("b"))).toBe(true);
+						expect(await journal.applied("Accounts", checksum("a"))).toBe(
+							false,
+						);
+						// The first one again, the key added back: the last again.
+						await journal.record(entry("a", "2026-01-02T00:00:00.000Z"));
+						expect(await journal.applied("Accounts", checksum("a"))).toBe(true);
+						expect(await journal.applied("Accounts", checksum("b"))).toBe(
+							false,
+						);
 					},
 				);
 

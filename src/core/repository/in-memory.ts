@@ -29,8 +29,8 @@ export type InMemoryProvider = IRepositoryProvider & {
 	 * Empties the provider once no transaction is running: every table, and
 	 * the `Serial` sequences start again at 1. With `entity` (the name an
 	 * entity declares, its class name without one, or the class itself),
-	 * only the table of that entity and its sequence. Emptying it all also
-	 * empties its `journal`.
+	 * only the table of that entity and its sequence. It also empties its
+	 * `journal`, or only the entries of that entity.
 	 */
 	clear(entity?: string | AnyRepositoryEntity): Promise<void>;
 	/** The plans `app.migrate` applied through it, kept in memory. */
@@ -296,17 +296,24 @@ function scopeOf(initial: Tables, root: boolean, counters: Counters) {
 	// The root alone can be emptied and keeps the journal; the provider of a
 	// transaction cannot and has none.
 	if (root) {
-		const journal = new Map<string, MigrationJournalEntry>();
-		const journalKey = (entity: string, checksum: string) =>
-			JSON.stringify([entity, checksum]);
+		// By entity, its plans by checksum in the order they were recorded:
+		// the last one is the plan its store is at.
+		const journal = new Map<string, Map<string, MigrationJournalEntry>>();
+		const latestOf = (entity: string): string | undefined => {
+			const plans = journal.get(entity);
+			return plans === undefined ? undefined : [...plans.keys()].at(-1);
+		};
 		Object.defineProperty(provider, "journal", {
 			enumerable: true,
 			value: Object.freeze({
 				applied: async (entity: string, checksum: string) =>
-					journal.has(journalKey(entity, checksum)),
+					latestOf(entity) === checksum,
 				record: async (entry: MigrationJournalEntry) => {
-					const key = journalKey(entry.entity, entry.checksum);
-					if (!journal.has(key)) journal.set(key, structuredClone(entry));
+					if (latestOf(entry.entity) === entry.checksum) return;
+					const plans = journal.get(entry.entity) ?? new Map();
+					plans.delete(entry.checksum);
+					plans.set(entry.checksum, structuredClone(entry));
+					journal.set(entry.entity, plans);
 				},
 			} satisfies MigrationJournal),
 		});
@@ -343,6 +350,9 @@ function scopeOf(initial: Tables, root: boolean, counters: Counters) {
 					for (const key of [...counters.keys()]) {
 						if (matches(key, entity)) counters.delete(key);
 					}
+					journal.delete(
+						typeof entity === "string" ? entity : recordNameOf(entity),
+					);
 				}),
 		});
 	}

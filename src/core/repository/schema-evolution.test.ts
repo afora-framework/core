@@ -4,6 +4,8 @@ import {
 	type RepositoryContext,
 	type RepositoryData,
 	SCHEMA_VERSION_KEY,
+	type SchemaLock,
+	type SchemaLockEntity,
 	schemaLockOf,
 } from "../../adapters";
 import {
@@ -711,7 +713,10 @@ describe("app.migrate", () => {
 				destructive: false,
 			};
 			expect(
-				await provider.journal.applied("Entry", await checksumOf(plan)),
+				await provider.journal.applied(
+					"Entry",
+					await checksumOf(plan, lock.entities.Entry as SchemaLockEntity),
+				),
 			).toBe(true);
 
 			const second = await app.migrate({ mode: "apply", lock });
@@ -832,7 +837,7 @@ describe("app.migrate", () => {
 			expect(error instanceof InvalidSchemaMigration).toBe(true);
 		});
 
-		test("the checksum is the SHA-256 of the plan as canonical JSON", async () => {
+		test("the checksum is the SHA-256 of the plan and the shape it starts from, as canonical JSON", async () => {
 			const plan = {
 				entity: "Entry",
 				destructive: false,
@@ -845,11 +850,94 @@ describe("app.migrate", () => {
 			};
 			const expected = new Bun.CryptoHasher("sha256")
 				.update(
-					'{"changes":[{"change":"added-required","entity":"Entry","key":"slug"}],"destructive":false,"entity":"Entry"}',
+					'{"from":null,"plan":{"changes":[{"change":"added-required","entity":"Entry","key":"slug"}],"destructive":false,"entity":"Entry"}}',
 				)
 				.digest("hex");
 			expect(await checksumOf(plan as never)).toBe(expected);
 			expect(await checksumOf(reordered as never)).toBe(expected);
+			// The same changes from another shape are another plan.
+			const from = lockOfV1().entities.Entry as SchemaLockEntity;
+			const other = { ...from, schemaVersion: from.schemaVersion + 1 };
+			expect(await checksumOf(plan as never, from)).not.toBe(expected);
+			expect(await checksumOf(plan as never, from)).not.toBe(
+				await checksumOf(plan as never, other),
+			);
+			expect(await checksumOf(plan as never, from)).toBe(
+				await checksumOf(reordered as never, structuredClone(from)),
+			);
+		});
+
+		test("a plan applied again after another one is applied again: a key dropped, then added back", async () => {
+			const seed = await seeded();
+			const { plans, provider } = counting(seed.provider);
+			const app = applicationOf({
+				name: "cms",
+				entities: { Entry },
+				repositories: { Entries },
+				provider,
+			});
+			const lock = lockOfV1();
+			const current = schemaLockOf(app.describe());
+			// Another starting shape, with a plan of its own in between.
+			const entry = current.entities.Entry as SchemaLockEntity;
+			const [key, field] = Object.entries(entry.fields)[0] as [
+				string,
+				{ schema: object },
+			];
+			const between: SchemaLock = {
+				...current,
+				entities: {
+					...current.entities,
+					Entry: {
+						...entry,
+						fields: {
+							...entry.fields,
+							[key]: {
+								...field,
+								schema: { ...field.schema, description: "old" },
+							} as never,
+						},
+					},
+				},
+			};
+			await app.migrate({ mode: "apply", lock });
+			await app.migrate({ mode: "apply", lock: between });
+			expect(plans).toHaveLength(2);
+			const again = await app.migrate({ mode: "apply", lock });
+			expect(plans).toHaveLength(3);
+			expect(again.entities.Entry?.alreadyApplied).toBe(false);
+			// Now the last one, it is skipped.
+			const rerun = await app.migrate({ mode: "apply", lock });
+			expect(plans).toHaveLength(3);
+			expect(rerun.entities.Entry?.alreadyApplied).toBe(true);
+		});
+
+		test("clear(entity) empties the journal of that entity only", async () => {
+			const provider = inMemoryProvider();
+			const entry = (entity: string) => ({
+				entity,
+				plan: { entity, changes: [], destructive: false },
+				checksum: "a".repeat(64),
+				appliedAt: "2026-01-01T00:00:00.000Z",
+			});
+			await provider.journal.record(entry("Entry"));
+			await provider.journal.record(entry("Other"));
+			await provider.clear("Entry");
+			expect(await provider.journal.applied("Entry", "a".repeat(64))).toBe(
+				false,
+			);
+			expect(await provider.journal.applied("Other", "a".repeat(64))).toBe(
+				true,
+			);
+			await provider.journal.record(entry("Entry"));
+			await provider.clear(EntryV1);
+			expect(await provider.journal.applied("Entry", "a".repeat(64))).toBe(
+				false,
+			);
+			await provider.clear();
+			expect(await provider.journal.applied("Other", "a".repeat(64))).toBe(
+				false,
+			);
 		});
 	});
 
