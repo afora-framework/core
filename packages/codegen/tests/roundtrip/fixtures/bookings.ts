@@ -31,7 +31,7 @@ export const bookingsSpec: Spec = {
 		Booking: {
 			fields: {
 				guest: "text",
-				status: { enum: ["pending", "confirmed"] },
+				status: { enum: ["pending", "confirmed"], default: "pending" },
 				hotel: "Hotel",
 			},
 			change: ["status"],
