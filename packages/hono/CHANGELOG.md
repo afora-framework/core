@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `mountMcp(app, path, tools)` mounts the tools of an `@afora/mcp` output, over Streamable HTTP and stateless, at a path of the Hono app of the `hono` sink, beside its routes. The tools answer 401, 403 and 405 themselves. See [Serve MCP tools on the same app](README.md#serve-mcp-tools-on-the-same-app) (#245).
+
 ## 27.0.0-rc.6 — 2026-11-24
 
 A candidate of 27.0.0, with no changes since 27.0.0-rc.5. See the [root CHANGELOG](../../CHANGELOG.md).

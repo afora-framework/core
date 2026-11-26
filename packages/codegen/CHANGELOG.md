@@ -7,11 +7,21 @@
 - `logout` takes `owner` and `token`, and `changePassword` takes `token`; the description of the `token` option covers `versionFrom` (a required, integer, sensitive key in the `change` list) and `rotate` (#193, #215).
 - `register` takes `takesTokenKeys: true`, accepted only with an `access` that asks for `scopes` (#216).
 - A field or a property declaration takes `{ "money": { "currency", "min", "max", "nonNegative", "name" } }`, generated as `ctx.money(...)` (`moneyOf` for a declaration) and extracted back from `describe()`. `validateSpec` checks the options as `moneyOf` does (`invalid_money`): a currency of three upper-case letters or a non-empty list of different ones, bounds that are safe integers, a `min` no greater than `max` (#196).
+- An entity takes `implementation`, a class written by hand (`{ "import": "../handlers/booking#Booking" }`): `generate` writes `export class <Name>Base extends entityOf(...) {}` in `<kebab-name>.entity.ts`, with its events bound to the base, and every generated entity the base needs through its fields gets a file of its own. The class extends the base, and the repositories, fields and variants, `build` steps, `application.ts` and `index.ts` use it. Issues: `invalid_implementation`, `invalid_import`, `name_collision`, `file_collision`, `import_cycle` and `generated_file`. Extraction needs the import key `entities.<Name>` for an entity `describe()` marks `implementation: "class"`. See [Entities with methods](../../docs/afora-json.md#entities-with-methods) (#200).
+- The `events` of an entity take `emits`, the events its methods raise, generated as the `emits` option of `entityOf` and extracted back (#201).
+- `idWireTypeOf(entity)` gives the type of an id on the wire, `"string"` for `"uuid7"`, `"uuid"` and `"key"` (and an `id` left out), `"integer"` for `"serial"`, and `catalog().idStrategies` lists each strategy with its `wire` type (types `IdWireType` and `IdStrategyInfo`). See [Ids](../../docs/afora-json.md#ids) (#189).
+- A repository takes `parents`, generated as the `parents` of `repositoryOf` (the parent repository declared first) and extracted back. Issues: `invalid_parents`, `unknown_repository` and `parent_cycle`. See [Parents](../../docs/afora-json.md#parents) (#244).
+- `list` takes `where` (#243), and `create` takes `computed`, written with `before` (#247). See [Standard use cases](../../docs/std-use-cases.md).
+- A provider entry with `tables: { export, module?, dialect }` makes the tables of the provider: one call of `export` per entity stored through it, with the `indexes` of its repositories, in `schema.ts` for one dialect (given to the provider as `tables` when its options have none) or in `schema.<dialect>.ts` for each of several. `drizzleCatalogOf` of `@afora/drizzle` gives such an entry. See [the README](README.md) and [`@afora/drizzle`](../drizzle/README.md#codegen-and-extraction) (#157).
 
 ### Changed
 
 - The description of an exception's `layer` lists `interface` (#187).
 - An index may name a sensitive key among its keys; only a sensitive `orderBy` is `invalid_index` (#195).
+
+### Fixed
+
+- `extractSpec` keeps the default of an enum declared inline in a field (#203).
 
 ## 27.0.0-rc.6 — 2026-11-24
 
