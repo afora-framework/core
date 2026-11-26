@@ -276,6 +276,16 @@ export interface StdHookArgs<Input, Dependencies, Context> {
 	readonly context: Context;
 }
 
+/** What `before` gives back: the input, or nothing when no key is left for it to give. */
+type HookResult<Input, Computed> = [Computed] extends [never]
+	? // biome-ignore lint/suspicious/noConfusingVoidType: a function that gives nothing back keeps the input
+		Input | void | Promise<Input | void>
+	: // biome-ignore lint/complexity/noBannedTypes: any object holds a type with no required key
+		{} extends Computed
+		? // biome-ignore lint/suspicious/noConfusingVoidType: a function that gives nothing back keeps the input
+			Input | void | Promise<Input | void>
+		: (Input & Computed) | Promise<Input & Computed>;
+
 /**
  * The options of a standard use case that writes: `before` runs before the
  * write and may give back the input to write in place of the one given;
@@ -298,15 +308,12 @@ export interface StdHookOptions<
 	 * Runs before the write (after the entity is loaded and its owner
 	 * checked, for a use case over one entity, which gets it as `entity`);
 	 * what it gives back, if anything, is the input the use case goes on with.
-	 * With `computed`, it must give back the input and the computed keys.
+	 * It must give back the keys of `computed` (required ones of `omit`) too.
 	 */
 	readonly before?: (
 		args: StdHookArgs<Input, Bound, Context> &
 			(Loaded extends true ? { readonly entity: Entity } : unknown),
-	) => [Computed] extends [never]
-		? // biome-ignore lint/suspicious/noConfusingVoidType: a function that gives nothing back keeps the input
-			Input | void | Promise<Input | void>
-		: (Input & Computed) | Promise<Input & Computed>;
+	) => HookResult<Input, Computed>;
 	/** Runs after the write, with the entity written, before the response is given. */
 	readonly after?: (
 		args: StdHookArgs<Input, Bound, Context> & { readonly entity: Entity },
@@ -330,19 +337,20 @@ type ContextValue<Repository, Options> =
 		: undefined;
 
 /** `Options` as `Hookable` infers them. */
-type Shape<Omitted, Values, Owner, Computed = never> = {
+type Shape<Omitted, Values, Owner> = {
 	readonly omit: readonly Omitted[];
 	readonly values: Values;
-} & ([Owner] extends [undefined] ? unknown : { readonly owner: Owner }) &
-	([Computed] extends [never]
-		? unknown
-		: { readonly computed: readonly Computed[] });
+} & ([Owner] extends [undefined] ? unknown : { readonly owner: Owner });
 
-/** What `before` gives back besides the input, for the keys of `computed`. */
-type ComputedValues<Repository, Computed> = [Computed] extends [never]
+/**
+ * What `before` gives back besides the input: the keys of `omit` and
+ * `computed` the entity holds, which the input does not take (optional ones
+ * stay optional).
+ */
+type Given<Repository, Omitted> = [Omitted] extends [never]
 	? never
 	: BlueprintValue<{
-			readonly [Key in Computed & KeyOf<Repository>]: Props<Repository>[Key];
+			readonly [Key in Omitted & KeyOf<Repository>]: Props<Repository>[Key];
 		}>;
 
 /** `StdHookOptions` for a use case over `Repository` that takes `Input` and has `Computed` given back by `before`. */
@@ -378,10 +386,11 @@ interface Hookable<
 	Owner,
 	Dependencies extends UseCaseCollection,
 	Loaded extends boolean,
-	Computed = never,
-	Given = never,
+	Computes extends boolean = false,
 > {
 	readonly omit?: readonly Omitted[];
+	/** `create`: keys the input does not take, which `before` gives back. */
+	readonly computed?: Computes extends true ? readonly Omitted[] : never;
 	readonly values?: Values;
 	readonly owner?: Owner;
 	readonly dependencies?: Dependencies;
@@ -389,21 +398,21 @@ interface Hookable<
 	readonly before?: NoInfer<
 		HookOptionsOf<
 			Repository,
-			Shape<Omitted, Values, Owner, Computed>,
+			Shape<Omitted, Values, Owner>,
 			Input,
 			Dependencies,
 			Loaded,
-			Given
+			Given<Repository, Omitted>
 		>["before"]
 	>;
 	readonly after?: NoInfer<
 		HookOptionsOf<
 			Repository,
-			Shape<Omitted, Values, Owner, Computed>,
+			Shape<Omitted, Values, Owner>,
 			Input,
 			Dependencies,
 			Loaded,
-			Given
+			Given<Repository, Omitted>
 		>["after"]
 	>;
 }
@@ -441,10 +450,10 @@ type LeftOut<Options> =
 	| EntityIdentityKey
 	| OwnerKey<Options>
 	| (Options extends { readonly omit: readonly (infer Key)[] } ? Key : never)
-	| (Options extends { readonly values: infer Values } ? keyof Values : never)
 	| (Options extends { readonly computed: readonly (infer Key)[] }
 			? Key
-			: never);
+			: never)
+	| (Options extends { readonly values: infer Values } ? keyof Values : never);
 
 /**
  * `"id"` when the entity does not make its id (a natural key, an `idOf`
@@ -542,21 +551,19 @@ export type CreateMaker = <
 	const Values = None,
 	const Owner = undefined,
 	const Dependencies extends UseCaseCollection = None,
-	const Computed extends KeyOf<Repository> = never,
 >(
 	repository: Repository & UseCaseTarget<Repository, "create">,
 	options?: Options &
 		Hookable<
 			Repository,
-			CreateInput<Repository, Shape<Omitted, Values, Owner, Computed>>,
+			CreateInput<Repository, Shape<Omitted, Values, Owner>>,
 			Omitted,
 			Values,
 			Owner,
 			Dependencies,
 			false,
-			Computed,
-			ComputedValues<Repository, Computed>
-		> & { readonly computed?: readonly Computed[] },
+			true
+		>,
 ) => EntityUseCase<
 	Repository,
 	Options,
@@ -573,6 +580,22 @@ export type GetMaker = <
 	options?: Options,
 ) => EntityUseCase<Repository, Options, ById<Repository>>;
 
+/** The input of `list`: the page, and a required key per key of `where`. */
+type ListInput<Repository, Options> = [WhereKeys<Options>] extends [never]
+	? {
+			readonly limit: OptionalProperty<typeof Integer>;
+			readonly offset: OptionalProperty<typeof Integer>;
+		}
+	: {
+			readonly [Key in WhereKeys<Options> & KeyOf<Repository>]: FieldAt<
+				Props<Repository>,
+				Key
+			>;
+		} & {
+			readonly limit: OptionalProperty<typeof Integer>;
+			readonly offset: OptionalProperty<typeof Integer>;
+		};
+
 /** `list`: for a repository with `findPage`. */
 export type ListMaker = <
 	Repository extends AnyRepository,
@@ -581,15 +604,7 @@ export type ListMaker = <
 	repository: Repository & UseCaseTarget<Repository, "findPage">,
 	options?: Options,
 ) => StepsUseCaseConstructor<
-	{
-		readonly [Key in WhereKeys<Options> & KeyOf<Repository>]: FieldAt<
-			Props<Repository>,
-			Key
-		>;
-	} & {
-		readonly limit: OptionalProperty<typeof Integer>;
-		readonly offset: OptionalProperty<typeof Integer>;
-	},
+	ListInput<Repository, Options>,
 	{
 		readonly items: IBlueprintList<EntityOf<Repository>>;
 		readonly total: typeof Integer;
