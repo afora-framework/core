@@ -164,7 +164,7 @@ a file of your own.
   owns the entity; \`"key": "id"\` when the entity is the caller, as a user changing itself, not for create and register; restore with
   \`owner\` needs the action \`exists\`), \`errors\` (\`{ "notFound" | "conflict" | "invalid" | "owner": an exception name }\`), and \`omit\`,
   \`values\`, \`relations\` (create, register: \`{ "<key>": { "shared": true } }\` lets the input name an entity of another owner),
-  \`set\` (publish, archive...), \`where\` (list: keys of the entity that become required input keys, matched by equality), \`orderBy\` and \`maxLimit\` (list: the largest \`limit\`, 100 by default). \`description\`, \`tags\` and \`deprecated\` go beside \`generic\`.
+  \`computed\` (create: keys the input does not take, which \`before\`, required with it, gives back; may be required keys of the entity), \`set\` (publish, archive...), \`where\` (list: keys of the entity that become required input keys, matched by equality), \`orderBy\` and \`maxLimit\` (list: the largest \`limit\`, 100 by default). \`description\`, \`tags\` and \`deprecated\` go beside \`generic\`.
   The ones that write (all but get, list, login) also take \`before\` and \`after\` (\`{ "import": "./file.ts#fn" }\`, run before and
   after the write; \`before\` may give back the input to write), \`dependencies\` (key -> declared name, for them) and \`throws\`
   (the exceptions they throw). Write steps only for what no standard use case does, nor its \`before\`/\`after\`.

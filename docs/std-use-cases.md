@@ -175,6 +175,7 @@ A use case whose repository lacks an action, or whose entity lacks a record plug
 | `as`                                                            | all but `list`                                                                | the response key that holds the entity, typed: `{ as: "post" }` gives `{ post }`                                                                                                                              |
 | `owner: { key?, context }`                                      | all but `login`, `refresh`; `logout` with `token.versionFrom` and `key: "id"` | the caller owns the entity, see below; `key: "id"` for an entity that is the caller (not for `create`, `register`)                                                                                            |
 | `omit: [...]`                                                   | `create`, `register`                                                          | optional keys the input does not take                                                                                                                                                                         |
+| `computed: [...]`                                               | `create`                                                                      | keys the input does not take and `before` (which it needs) gives back, see [Computed keys](#computed-keys)                                                                                                    |
 | `values: { ... }`                                               | `create`, `register`                                                          | values the entity is built with, in place of taking them from the input                                                                                                                                       |
 | `relations: { <key>: { shared: true } }`                        | `create`, `register`                                                          | with `owner`, lets the input name an entity of `<key>` that another owner has, see below                                                                                                                      |
 | `takesTokenKeys: true`                                          | `register`                                                                    | the input may take the keys a token is made from; only with an `access` that asks for `scopes`, see [Tokens and sessions](auth.md#tokens-and-sessions)                                                        |
@@ -342,6 +343,23 @@ const Cms = commandOf({
 ```
 
 The hooks are `run` steps of the use case (see [Steps](use-cases.md#steps)): `describe()` gives them as `{ run: "before", fn: { kind: "opaque" }, as: "prepared" }` and `{ run: "after" }`, with the steps after `before` reading `$prepared` in place of `$input`, and the options as `before: { kind: "opaque" }`, the dependencies by registered name and `throws` by exception name.
+
+### Computed keys
+
+A key the caller should not choose but the entity requires, such as the `position` of an item that goes at the end of its parent, is listed in `computed` (`create` only). The input does not take it (nor do the OpenAPI document and the MCP input schema show it), `before` must give it back with the input, and the entity validates it like any other key, so a key it can hold is a required key of the entity and not an optional one in disguise:
+
+```ts
+createLesson: ctx.create(Lessons, {
+	computed: ["position"],
+	dependencies: { lessons: Lessons },
+	before: async ({ input, dependencies }) => ({
+		...input,
+		position: await dependencies.lessons.count({ where: { moduleId: input.moduleId } }),
+	}),
+}),
+```
+
+The type of `before` is the input and the computed keys, and it cannot give nothing back. One that forgets a key is an invalid input, which names the key (`position`). `computed` without `before`, a key that is unknown, an identity key, the owner key, one that holds an entity or one also in `omit` or `values` throws `UseCaseUnavailable` at declaration. In an `afora.json`, `options.computed` and `options.before` are written together and survive the round trip.
 
 ## In an application
 

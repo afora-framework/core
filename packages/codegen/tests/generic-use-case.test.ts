@@ -662,3 +662,94 @@ describe("list with where", () => {
 		);
 	}, 120_000);
 });
+
+describe("create with computed", () => {
+	/** A lesson whose position is worked out in `before`, not given. */
+	const school: Spec = {
+		version: 1,
+		name: "school",
+		output: { dir: "src/domain" },
+		provider: "inMemory",
+		entities: {
+			Lesson: {
+				fields: { moduleId: "string", title: "text", position: "integer" },
+			},
+		},
+		repositories: {
+			Lessons: { entity: "Lesson", actions: ["create", "findPage"] },
+		},
+		useCases: {
+			AddLesson: {
+				generic: "create",
+				repository: "Lessons",
+				options: {
+					computed: ["position"],
+					before: { import: "../hooks#place" },
+				},
+			},
+		},
+		commands: { Course: { useCases: { add: "AddLesson" } } },
+	};
+	const HOOKS = `export function place({ input }: { input: { readonly moduleId: string; readonly title: string } }) {
+	return { ...input, position: input.title.length };
+}
+`;
+	const IMPORTS = { "useCases.AddLesson.before": "../hooks#place" };
+
+	test("validates, fits the schema and is catalogued", () => {
+		expect(validateSpec(school)).toEqual([]);
+		expect(Value.Check(specSchema, school)).toBe(true);
+		expect(
+			catalog().useCases.find((u) => u.name === "create")?.options,
+		).toContain("computed");
+	});
+
+	test("refuses what the use case would refuse", () => {
+		const options = (value: object) =>
+			codes({
+				...school,
+				useCases: {
+					AddLesson: {
+						generic: "create",
+						repository: "Lessons",
+						options: value,
+					},
+				},
+			});
+		const before = { import: "../hooks#place" };
+		const expected =
+			"invalid_generic_option@useCases.AddLesson.options.computed";
+		expect(options({ computed: ["position"] })).toEqual([expected]);
+		expect(options({ computed: ["nope"], before })).toEqual([expected]);
+		expect(options({ computed: ["position", "position"], before })).toEqual([
+			expected,
+		]);
+		expect(options({ computed: "position", before })).toEqual([expected]);
+		expect(
+			options({ computed: ["position"], values: { position: 1 }, before }),
+		).toEqual([expected]);
+		expect(options({ computed: ["position"], before })).toEqual([]);
+	});
+
+	test("generate -> run -> extract", async () => {
+		const files = generate(school);
+		const useCases = files.find(
+			(file) => file.path === "src/domain/use-cases.ts",
+		)?.contents as string;
+		expect(useCases).toContain('computed: ["position"]');
+		const dir = await makeProject(files, { "src/hooks.ts": HOOKS });
+		projects.push(dir);
+		const domain = await import(join(dir, "src/domain/index.ts"));
+		const { Course } = domain.App.commands;
+		const { item } = await Course.run("add", { moduleId: "m1", title: "abc" });
+		expect(item.position).toBe(3);
+		expect(Object.keys(domain.App.describe().useCases.AddLesson.input)).toEqual(
+			["moduleId", "title"],
+		);
+		const tsc = await run(dir, "bunx", "tsc", "--noEmit", "-p", dir);
+		expect(tsc.output).toBe("");
+		expect(
+			normalizeSpec(extractSpec(domain.App, { imports: IMPORTS })),
+		).toEqual(normalizeSpec(school));
+	}, 120_000);
+});

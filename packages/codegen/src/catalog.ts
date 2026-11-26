@@ -355,7 +355,15 @@ const GENERIC_HOOKS = ["before", "after", "dependencies", "throws"];
  * checked against the plugins themselves by the tests of the catalog.
  */
 const GENERIC_OPTIONS: Readonly<Record<string, readonly string[]>> = {
-	create: ["as", "owner", "omit", "values", "relations", ...GENERIC_HOOKS],
+	create: [
+		"as",
+		"owner",
+		"omit",
+		"computed",
+		"values",
+		"relations",
+		...GENERIC_HOOKS,
+	],
 	get: ["as", "owner"],
 	list: ["owner", "where", "orderBy", "maxLimit"],
 	update: ["as", "owner", ...GENERIC_HOOKS],

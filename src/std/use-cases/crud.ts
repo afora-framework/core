@@ -75,15 +75,52 @@ export function createCompilation(
 		"omit",
 		"values",
 		"relations",
+		...(verb === "Create" ? ["computed"] : []),
 		...HOOKS,
 	]);
 	const owner = ownerOf(target, options, { self: false });
 	const shared = sharedOf(target, options);
 	const hooks = hooksOf(target, options);
 	const omitted = keysOf(target, options, "omit");
+	const computed = keysOf(target, options, "computed");
 	const constants = valuesOf(target, options, "values");
 	const notFound = errorOf(target, options, "notFound", UseCaseEntityNotFound);
 	const ownerError = errorOf(target, options, "owner", notFound);
+
+	if (computed.length > 0) {
+		if (options.before === undefined) {
+			target.unavailable(
+				"the option computed needs a before, which gives the keys back",
+			);
+		}
+		for (const plan of computed) {
+			const { key } = plan;
+			if (new Set(computed).size !== computed.length) {
+				target.unavailable(`computed names "${key}" twice`);
+			}
+			if (plan.identity) {
+				target.unavailable(`computed "${key}" is an identity key`);
+			}
+			if (plan.kind === "entity" || plan.kind === "entity-list") {
+				target.unavailable(
+					`computed "${key}" holds an entity, which before cannot give back; it is loaded from an id of the input`,
+				);
+			}
+			if (plan.convert) {
+				target.unavailable(
+					`computed "${key}" is converted when it is taken from the input, which before's result is not`,
+				);
+			}
+			if (omitted.includes(plan) || Object.hasOwn(constants, key)) {
+				target.unavailable(
+					`computed "${key}" is also in omit or values, which already say where it comes from`,
+				);
+			}
+			if (owner?.plan.key === key) {
+				target.unavailable(`computed "${key}" is the owner key`);
+			}
+		}
+	}
 
 	const input: Record<string, BlueprintField> = {};
 	const values: Record<string, unknown> = {};
@@ -144,6 +181,10 @@ export function createCompilation(
 		}
 		if (Object.hasOwn(constants, key)) {
 			values[key] = literal(constants[key]);
+			continue;
+		}
+		if (computed.includes(plan)) {
+			values[key] = `${hooks.input}.${key}`;
 			continue;
 		}
 		if (owner?.plan.key === key) {

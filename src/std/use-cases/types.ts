@@ -209,6 +209,15 @@ export interface StdCreateOptions<Repository>
 	};
 }
 
+/** The option `computed` of `create`. */
+interface StdComputedOption<Repository> {
+	/**
+	 * Keys the input does not take, required or optional: `before` (which
+	 * `computed` requires) gives them back, and the entity validates them.
+	 */
+	readonly computed?: readonly KeyOf<Repository>[];
+}
+
 /** The options of `register`. */
 interface StdRegisterOptions<Repository> extends StdCreateOptions<Repository> {
 	/**
@@ -281,6 +290,7 @@ export interface StdHookOptions<
 	Bound,
 	Context,
 	Loaded extends boolean,
+	Computed = never,
 > {
 	/** Repositories, use cases or environments the hooks use, by name, beside those the use case makes. */
 	readonly dependencies?: Dependencies;
@@ -288,12 +298,15 @@ export interface StdHookOptions<
 	 * Runs before the write (after the entity is loaded and its owner
 	 * checked, for a use case over one entity, which gets it as `entity`);
 	 * what it gives back, if anything, is the input the use case goes on with.
+	 * With `computed`, it must give back the input and the computed keys.
 	 */
 	readonly before?: (
 		args: StdHookArgs<Input, Bound, Context> &
 			(Loaded extends true ? { readonly entity: Entity } : unknown),
-		// biome-ignore lint/suspicious/noConfusingVoidType: a function that gives nothing back keeps the input
-	) => Input | void | Promise<Input | void>;
+	) => [Computed] extends [never]
+		? // biome-ignore lint/suspicious/noConfusingVoidType: a function that gives nothing back keeps the input
+			Input | void | Promise<Input | void>
+		: (Input & Computed) | Promise<Input & Computed>;
 	/** Runs after the write, with the entity written, before the response is given. */
 	readonly after?: (
 		args: StdHookArgs<Input, Bound, Context> & { readonly entity: Entity },
@@ -317,25 +330,37 @@ type ContextValue<Repository, Options> =
 		: undefined;
 
 /** `Options` as `Hookable` infers them. */
-type Shape<Omitted, Values, Owner> = {
+type Shape<Omitted, Values, Owner, Computed = never> = {
 	readonly omit: readonly Omitted[];
 	readonly values: Values;
-} & ([Owner] extends [undefined] ? unknown : { readonly owner: Owner });
+} & ([Owner] extends [undefined] ? unknown : { readonly owner: Owner }) &
+	([Computed] extends [never]
+		? unknown
+		: { readonly computed: readonly Computed[] });
 
-/** `StdHookOptions` for a use case over `Repository` that takes `Input`. */
+/** What `before` gives back besides the input, for the keys of `computed`. */
+type ComputedValues<Repository, Computed> = [Computed] extends [never]
+	? never
+	: BlueprintValue<{
+			readonly [Key in Computed & KeyOf<Repository>]: Props<Repository>[Key];
+		}>;
+
+/** `StdHookOptions` for a use case over `Repository` that takes `Input` and has `Computed` given back by `before`. */
 type HookOptionsOf<
 	Repository extends AnyRepository,
 	Options,
 	Input extends IBlueprintCollection,
 	Dependencies extends UseCaseCollection,
 	Loaded extends boolean,
+	Computed = never,
 > = StdHookOptions<
 	BlueprintValue<Input>,
 	EntityInstanceOf<EntityOf<Repository>>,
 	Dependencies,
 	DependencyFunctions<{ readonly repository: Repository } & Dependencies>,
 	ContextValue<Repository, Options>,
-	Loaded
+	Loaded,
+	Computed
 >;
 
 /**
@@ -353,6 +378,8 @@ interface Hookable<
 	Owner,
 	Dependencies extends UseCaseCollection,
 	Loaded extends boolean,
+	Computed = never,
+	Given = never,
 > {
 	readonly omit?: readonly Omitted[];
 	readonly values?: Values;
@@ -362,19 +389,21 @@ interface Hookable<
 	readonly before?: NoInfer<
 		HookOptionsOf<
 			Repository,
-			Shape<Omitted, Values, Owner>,
+			Shape<Omitted, Values, Owner, Computed>,
 			Input,
 			Dependencies,
-			Loaded
+			Loaded,
+			Given
 		>["before"]
 	>;
 	readonly after?: NoInfer<
 		HookOptionsOf<
 			Repository,
-			Shape<Omitted, Values, Owner>,
+			Shape<Omitted, Values, Owner, Computed>,
 			Input,
 			Dependencies,
-			Loaded
+			Loaded,
+			Given
 		>["after"]
 	>;
 }
@@ -412,7 +441,10 @@ type LeftOut<Options> =
 	| EntityIdentityKey
 	| OwnerKey<Options>
 	| (Options extends { readonly omit: readonly (infer Key)[] } ? Key : never)
-	| (Options extends { readonly values: infer Values } ? keyof Values : never);
+	| (Options extends { readonly values: infer Values } ? keyof Values : never)
+	| (Options extends { readonly computed: readonly (infer Key)[] }
+			? Key
+			: never);
 
 /**
  * `"id"` when the entity does not make its id (a natural key, an `idOf`
@@ -504,23 +536,27 @@ type ById<Repository> = { readonly id: IdField<Repository> };
 /** `create`: for a repository with the `create` action. */
 export type CreateMaker = <
 	Repository extends AnyRepository,
-	const Options extends StdCreateOptions<Repository> = None,
+	const Options extends StdCreateOptions<Repository> &
+		StdComputedOption<Repository> = None,
 	const Omitted extends KeyOf<Repository> = never,
 	const Values = None,
 	const Owner = undefined,
 	const Dependencies extends UseCaseCollection = None,
+	const Computed extends KeyOf<Repository> = never,
 >(
 	repository: Repository & UseCaseTarget<Repository, "create">,
 	options?: Options &
 		Hookable<
 			Repository,
-			CreateInput<Repository, Shape<Omitted, Values, Owner>>,
+			CreateInput<Repository, Shape<Omitted, Values, Owner, Computed>>,
 			Omitted,
 			Values,
 			Owner,
 			Dependencies,
-			false
-		>,
+			false,
+			Computed,
+			ComputedValues<Repository, Computed>
+		> & { readonly computed?: readonly Computed[] },
 ) => EntityUseCase<
 	Repository,
 	Options,
