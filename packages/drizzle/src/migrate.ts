@@ -76,10 +76,39 @@ function invalid(reason: string): never {
 
 const quote = (name: string): string => `"${name.replaceAll('"', '""')}"`;
 
-/** `key` in snake_case, as Drizzle's `casing: "snake_case"` names its column. */
+const isLowerOrDigit = (char: string): boolean =>
+	(char >= "a" && char <= "z") || (char >= "0" && char <= "9");
+const isUpper = (char: string): boolean => char >= "A" && char <= "Z";
+
+/**
+ * `key` in snake_case, as Drizzle's `casing: "snake_case"` names its column.
+ * The words are those of `/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g`, found in
+ * one pass so the time stays linear in the length of the key.
+ */
 export function snakeCaseOf(key: string): string {
-	const words = key.match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
-	return words.map((word) => word.toLowerCase()).join("_");
+	const words: string[] = [];
+	const end = key.length;
+	let start = 0;
+	while (start < end) {
+		const char = key.charAt(start);
+		let next = start + 1;
+		if (isLowerOrDigit(char)) {
+			while (next < end && isLowerOrDigit(key.charAt(next))) next++;
+		} else if (isUpper(char)) {
+			while (next < end && isUpper(key.charAt(next))) next++;
+			const lower = key.charAt(next);
+			if (next < end && lower >= "a" && lower <= "z") {
+				if (next - start > 1) next--;
+				else while (next < end && isLowerOrDigit(key.charAt(next))) next++;
+			}
+		} else {
+			start = next;
+			continue;
+		}
+		words.push(key.slice(start, next).toLowerCase());
+		start = next;
+	}
+	return words.join("_");
 }
 
 /** A default of a Drizzle column as an SQL literal, when it is a plain value. */
