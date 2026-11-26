@@ -6,15 +6,12 @@ export const BOOKINGS_IMPORTS = {
 };
 
 /** The class written by hand: a state transition that raises an event of its own. */
-export const BOOKING_CLASS = `import { eventOf } from "@afora/core";
-import { BookingBase } from "../bookings/booking.entity";
-
-export const confirmed = eventOf("confirmed", BookingBase);
+export const BOOKING_CLASS = `import { BookingBase, BookingEvents } from "../bookings/booking.entity";
 
 export class Booking extends BookingBase {
 	confirm(): void {
 		this.change.status("confirmed");
-		this.emit(confirmed);
+		this.emit(BookingEvents.confirmed);
 	}
 }
 `;
@@ -38,7 +35,7 @@ export const bookingsSpec: Spec = {
 				hotel: "Hotel",
 			},
 			change: ["status"],
-			events: { onCreate: ["created"] },
+			events: { onCreate: ["created"], emits: ["confirmed"] },
 			implementation: { import: "../handlers/booking#Booking" },
 		},
 		Stay: { fields: { booking: "Booking", nights: "integer" } },

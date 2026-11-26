@@ -202,7 +202,7 @@ Some things are code, not data: a provider made by hand, a `run` function, the `
 | `publishers.<key>`                 | a publisher of the top-level `publishers`                                     |
 | `services.<name>`                  | the factory of a service of the top-level `services`                          |
 | `entities.<Name>`                  | an entity whose class declares methods of its own                             |
-| `entities.<Name>.events.<event>`   | the handler of a lifecycle event of an entity                                 |
+| `entities.<Name>.events.<event>`   | the handler of an event of an entity (a cycle or `emits`)                     |
 | `outputs.<Name>.pipe.<index>`      | a stage written by hand, or a sink given hooks, by its position in the `pipe` |
 | `<property name>`                  | the module of a property that cannot be recreated (see the limitations)       |
 
@@ -249,19 +249,20 @@ A use case that needs what is not a repository (a cache, a storage, a client of 
 
 `services.ts` exports the factory, `(scope: ServiceScope) => value`, maybe async. The use case is generated with `cache: serviceOf<Awaited<ReturnType<typeof cache>>>("cache")`, so its hand-written `execute` reads `this.dependencies.cache` typed by what the factory returns (imported with `import type`, so loading the use case never loads `services.ts`), and the application with `services: { cache }`. A spec that extends this one can name `cache` too, typed the same when this spec is extended by a relative path or the factory is imported from a package; a factory relative to a spec reached as a package, or one of a spec that an extended spec extends in turn, is not importable from the child, and the service is `unknown` there. Steps do not read a service. A name of `services` must be an identifier other than `Logger` (`invalid_name`) and cannot be the name of a declaration (`duplicate_name`); a dependency that names neither a declaration nor a service is `unknown_dependency`. Extraction needs `services.<name>` in `imports`.
 
-The events come from the lifecycle of the entities. An entity (not a record) declares them by cycle, each one event or a list:
+The events come from the lifecycle of the entities and from their methods. An entity (not a record) declares those of each cycle by `onCreate`, `onUpdate` and `onDelete`, and those its methods raise with `this.emit` in `emits`, each one event or a list:
 
 ```json afora:entities
 "Post": {
 	"fields": { "title": "text" },
 	"events": {
 		"onCreate": "created",
-		"onUpdate": ["changed", { "name": "audited", "handler": { "import": "../audit.ts#onAudited" } }]
+		"onUpdate": ["changed", { "name": "audited", "handler": { "import": "../audit.ts#onAudited" } }],
+		"emits": ["published"]
 	}
 }
 ```
 
-A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand (see [Entities with methods](#entities-with-methods)). Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
+A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). The entity gets `emits: () => [PostEvents.published]`, and `describe()` lists them. One name is one event: naming it in two keys (a cycle and `emits`, say) with different handlers is `event_conflict`. The methods that raise the events in `emits` need a class written by hand (see [Entities with methods](#entities-with-methods)), which raises them as `this.emit(BookingEvents.confirmed)`; `emit` still accepts an event that is not declared. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
 
 ## Tracing
 
@@ -413,7 +414,7 @@ State transitions belong in the entity, as methods that change it and raise even
 "Booking": {
 	"fields": { "guest": "text", "status": { "enum": ["pending", "confirmed"] } },
 	"change": ["status"],
-	"events": { "onCreate": ["created"] },
+	"events": { "onCreate": ["created"], "emits": ["confirmed"] },
 	"implementation": { "import": "../handlers/booking#Booking" }
 }
 ```
@@ -429,7 +430,7 @@ State transitions belong in the entity, as methods that change it and raise even
 		"Booking": {
 			"fields": { "guest": "text", "status": { "enum": ["pending", "confirmed"] } },
 			"change": ["status"],
-			"events": { "onCreate": ["created"] },
+			"events": { "onCreate": ["created"], "emits": ["confirmed"] },
 			"implementation": { "import": "../handlers/booking#Booking" }
 		}
 	},
@@ -440,15 +441,12 @@ State transitions belong in the entity, as methods that change it and raise even
 <!-- docs:code file: hotel/src/handlers/booking.ts -->
 ```ts
 // src/handlers/booking.ts
-import { eventOf } from "@afora/core";
-import { BookingBase } from "../domain/booking.entity";
-
-export const confirmed = eventOf("confirmed", BookingBase);
+import { BookingBase, BookingEvents } from "../domain/booking.entity";
 
 export class Booking extends BookingBase {
 	confirm(): void {
 		this.change.status("confirmed");
-		this.emit(confirmed);
+		this.emit(BookingEvents.confirmed);
 	}
 }
 ```

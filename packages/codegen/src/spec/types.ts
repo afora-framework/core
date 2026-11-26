@@ -146,7 +146,7 @@ export interface RecordSpec {
 	readonly change?: readonly string[];
 	/** Names of the Std record plugins (`authenticatable`...). */
 	readonly plugins?: readonly string[];
-	/** Entities only: the events each lifecycle cycle raises. */
+	/** Entities only: the events each lifecycle cycle raises, and those its methods raise (`emits`). */
 	readonly events?: EntityEventsSpec;
 	/**
 	 * Entities only: how its ids are made. `uuid7` (the default) generates and
@@ -196,11 +196,15 @@ export type EntityEventSpec =
 	| string
 	| { readonly name: string; readonly handler?: ImportRef };
 
-/** The lifecycle events of an entity, by cycle: one event or a list of them. */
+/**
+ * The events of an entity: those of each lifecycle cycle and, in `emits`,
+ * those its methods raise; each one event or a list of them.
+ */
 export interface EntityEventsSpec {
 	readonly onCreate?: EntityEventSpec | readonly EntityEventSpec[];
 	readonly onUpdate?: EntityEventSpec | readonly EntityEventSpec[];
 	readonly onDelete?: EntityEventSpec | readonly EntityEventSpec[];
+	readonly emits?: EntityEventSpec | readonly EntityEventSpec[];
 }
 
 export interface EnvironmentSpec {

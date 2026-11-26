@@ -2,9 +2,9 @@ import { posix } from "node:path";
 import { ExceptionLayers } from "@afora/core";
 import { catalog, stdProperty } from "../catalog";
 import {
-	CYCLES,
-	cyclesOf,
+	EVENT_KEYS,
 	eventEntriesOf,
+	eventListsOf,
 	eventsConstOf,
 } from "../entity-events";
 import { canonicalExpires } from "../entity-expires";
@@ -503,7 +503,7 @@ function propertyDoc(decl: Decl, e: Emitter): Doc {
 
 function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	const entity = decl.kind === "entity";
-	const cycles = entity ? cyclesOf(decl.spec.events) : {};
+	const cycles = entity ? eventListsOf(decl.spec.events) : {};
 	const holder = eventsConstOf(decl.name);
 	const fields = fieldsOfDecl(decl) as Record<string, Field>;
 	// The declared name, so the class can be renamed by a bundler.
@@ -577,13 +577,15 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 			options.push(["previousNames", literal(previousNames)]);
 		}
 	}
-	for (const cycle of CYCLES) {
+	for (const cycle of EVENT_KEYS) {
 		const list = cycles[cycle];
 		if (!list || list.length === 0) continue;
 		const refs = list.map((entry) => `${holder}.${entry.name}`);
 		options.push([
 			cycle,
-			refs.length === 1 ? `() => ${refs[0]}` : `() => [${refs.join(", ")}]`,
+			refs.length === 1 && cycle !== "emits"
+				? `() => ${refs[0]}`
+				: `() => [${refs.join(", ")}]`,
 		]);
 	}
 	const args: Doc[] = [

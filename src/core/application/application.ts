@@ -24,7 +24,12 @@ import {
 	isVersionedEntityClass,
 } from "../entity/abstract-entity";
 import { declaresOwnMembers, isEntityClass } from "../entity/entity";
-import { eventHasHandler, lifecycleEventsOf } from "../entity/event";
+import {
+	type EventDefinition,
+	emittedEventsOf,
+	eventHasHandler,
+	lifecycleEventsOf,
+} from "../entity/event";
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
 import type { IdStrategy } from "../entity/types/id.interface";
 import {
@@ -1115,15 +1120,21 @@ function recordDescriptionOf(entry: Entry, scope: Scope): RecordDescription {
 		});
 	const lifecycle =
 		entry.collection === "entities" ? lifecycleEventsOf(Record) : {};
-	const events = Object.fromEntries(
-		Object.entries(lifecycle).map(([cycle, list]) => [
-			cycle,
-			list.map((event) => ({
-				name: event.name,
-				handler: eventHasHandler(event),
-			})),
-		]),
-	);
+	const emitted =
+		entry.collection === "entities" ? emittedEventsOf(Record) : [];
+	const describedEvent = (event: EventDefinition) => ({
+		name: event.name,
+		handler: eventHasHandler(event),
+	});
+	const events = {
+		...Object.fromEntries(
+			Object.entries(lifecycle).map(([cycle, list]) => [
+				cycle,
+				list.map(describedEvent),
+			]),
+		),
+		...(emitted.length > 0 ? { emits: emitted.map(describedEvent) } : {}),
+	};
 	return {
 		from: entry.from,
 		fields: fieldsDescriptionOf(Record.blueprint.properties, scope, skip),

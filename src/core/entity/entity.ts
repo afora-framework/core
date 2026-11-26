@@ -191,6 +191,7 @@ export function entityBuilderOf<
 				onCreate: options.onCreate,
 				onUpdate: options.onUpdate,
 				onDelete: options.onDelete,
+				emits: options.emits,
 			}),
 		});
 

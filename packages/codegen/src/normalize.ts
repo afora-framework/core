@@ -1,5 +1,5 @@
 import { catalog, identityKeysOf, recordPlugin } from "./catalog";
-import { cyclesOf } from "./entity-events";
+import { eventListsOf } from "./entity-events";
 import { canonicalExpires } from "./entity-expires";
 import { canonicalEntitySchema } from "./entity-schema";
 import { flagOf } from "./graph";
@@ -193,9 +193,9 @@ function canonicalRecord(
 	];
 	void name;
 	const expires = entity ? canonicalExpires(value.expires) : undefined;
-	// Events: a list per cycle, each a name or { name, handler }.
+	// Events: a list per cycle and for `emits`, each a name or { name, handler }.
 	const events = Object.fromEntries(
-		Object.entries(entity ? cyclesOf(value.events) : {})
+		Object.entries(entity ? eventListsOf(value.events) : {})
 			.filter(([, list]) => list.length > 0)
 			.map(([cycle, list]) => [
 				cycle,

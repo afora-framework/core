@@ -41,7 +41,7 @@ An entity declared with `expires: { after }` gets a fifth one, `expiresAt` (see 
 
 The identity keys are read-only: `set` throws `ImmutableEntityKey` for them, and they get no `change.<key>` method. The blueprint cannot declare them, nor the members of an entity (`destroy`, `isDeleted`, `equals`, `onDestroy`, `emit`, `pullEvents`): `entityOf` throws `ReservedEntityKey`. Code that handles entities without knowing their class reads both lists from `@afora/core/adapters`: `ENTITY_IDENTITY_KEYS` (`id`, `createdAt`, `updatedAt`, `deletedAt`) and `RESERVED_ENTITY_KEYS` (those and the members above). An entity class also keeps its unique keys, as `options.unique` lists them, under the `EntityUniqueKeys` symbol: `repositoryOf` reads it to accept only classes made by `entityOf` and to generate a `findBy<Key>` for each unique key (and a `findManyBy<Key>` for the others). `user.equals(other)` compares entities of the same declaration by `id`. `isEntityClass` and `isEntity` tell entities apart from records. `entityBuilderOf({ identity, generateId, now, expiresAt })` makes an `entityOf` with your own identity fields and clock (`expiresAt`, a date and time property, is the field entities expiring `after` a duration get; without it such a declaration throws `InvalidEntityExpiry`).
 
-Entities can queue domain events for an external consumer. `eventOf` accepts an entity class (including subclasses) and an optional async handler returning `Promise<void>`, called with the entity and `{ logger }` (the logger of the application whose command raised the event; see [Logging](logging.md)); `event.handle({ logger })` can give another. Definitions are immutable; incompatible entity instances are rejected when emitting. An event without a handler (`eventOf("created", Post)`) only carries the entity, for a policy such as [`publishEvents`](commands.md#event-policies); its `handle()` does nothing. `app.describe().entities.<Name>.events` gives the lifecycle events of an entity by cycle, each `{ name, handler }` (whether it has one).
+Entities can queue domain events for an external consumer. `eventOf` accepts an entity class (including subclasses) and an optional async handler returning `Promise<void>`, called with the entity and `{ logger }` (the logger of the application whose command raised the event; see [Logging](logging.md)); `event.handle({ logger })` can give another. Definitions are immutable; incompatible entity instances are rejected when emitting. An event without a handler (`eventOf("created", Post)`) only carries the entity, for a policy such as [`publishEvents`](commands.md#event-policies); its `handle()` does nothing. `app.describe().entities.<Name>.events` gives the lifecycle events of an entity by cycle, and under `emits` those its methods declare (see below), each `{ name, handler }` (whether it has one).
 
 State transitions belong in methods of a class that extends the one `entityOf` makes, where `change.<key>` and the protected `emit` are at hand; repositories take that class as their `entity` and give back instances of it. `app.describe().entities.<Name>.implementation` is `"class"` when the registered class adds members of its own (methods, getters) between itself and the class `entityOf` made; an empty subclass is described as the class it extends. In an `afora.json`, such a class is named with `implementation` (see [Entities with methods](afora-json.md#entities-with-methods)).
 
@@ -59,6 +59,7 @@ class User extends entityOf(UserBlueprint, {
 	onCreate: () => UserCreated,
 	onUpdate: () => [UserUpdated],
 	onDelete: () => UserDeleted,
+	emits: () => [UserUpdated],
 }) {
 	announce(): void {
 		this.emit(UserUpdated);
@@ -96,6 +97,8 @@ for (const event of user.pullEvents()) {
 	await event.handle();
 }
 ```
+
+The events the methods raise can be declared with `emits`, beside `onCreate`, `onUpdate` and `onDelete`: a definition, a list, or a function returning either (so the definitions may follow the class). Nothing queues them; `emits` tells `describe()`, the spec and the tools built on it which events the entity can raise. It is optional and does not restrict: `emit` still accepts an event that is not listed. In the example, `emits: () => [UserUpdated]` would list `user.updated`, raised by `announce`.
 
 `emit` is protected and synchronous: it queues without executing the handler. `pullEvents()` immediately empties that instance's queue and returns occurrences with `name`, `entity`, and `handle(): Promise<void>`, in emission order, including duplicates. Each occurrence references the original entity and sees its state when handled, without making a snapshot. Events are excluded from `toJSON()` and JSON serialization. Records have no event API.
 

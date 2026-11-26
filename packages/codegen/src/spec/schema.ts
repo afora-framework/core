@@ -439,11 +439,12 @@ const EntityEvents = Type.Object(
 		onCreate: Type.Optional(EntityEventList),
 		onUpdate: Type.Optional(EntityEventList),
 		onDelete: Type.Optional(EntityEventList),
+		emits: Type.Optional(EntityEventList),
 	},
 	{
 		additionalProperties: false,
 		description:
-			'Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.',
+			'Entities only: the events each cycle raises and, in emits, those its methods raise (this.emit), generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.',
 	},
 );
 
