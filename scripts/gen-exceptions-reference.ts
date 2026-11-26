@@ -121,6 +121,8 @@ const HANDLING: Record<string, string> = {
 	RecordPluginConflict: DECLARATION,
 	RepositoryConcurrencyConflict:
 		"An output answers 409. Reload the entity, apply the change again and retry, or ask the caller to.",
+	RepositoryDeleteRestricted:
+		"An output answers 409; `details.child` names the entity that still references it. Delete or reassign the children first, or declare the parent with `onDelete: \"cascade\"`.",
 	RepositoryEntityNotFound: "An output answers 404.",
 	RepositoryIsFrozen:
 		"Wrap the provider with `spyProvider` from `@afora/core/testing` to observe it, or override the member in `execute` for one call.",
