@@ -1,9 +1,21 @@
 import { afterAll, describe, expect, it } from "bun:test";
-import type { RepositoryContext, SchemaPlan } from "@afora/core/adapters";
+import {
+	applicationOf,
+	blueprintOf,
+	entityOf,
+	repositoryOf,
+	Serial,
+} from "@afora/core";
+import {
+	type RepositoryContext,
+	type SchemaPlan,
+	schemaLockOf,
+} from "@afora/core/adapters";
 import { providerContract } from "@afora/core/testing";
 import { PGlite } from "@electric-sql/pglite";
 import {
 	boolean,
+	getTableConfig,
 	integer,
 	jsonb,
 	pgTable,
@@ -11,7 +23,7 @@ import {
 	text,
 } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
-import { drizzleProvider } from "./index";
+import { drizzleProvider, drizzleTableOf } from "./index";
 
 const accountTable = (name: string) =>
 	pgTable(name, {
@@ -423,5 +435,226 @@ describe("migrate on Postgres", () => {
 		}
 		// And again, with nothing left to drop.
 		await provider.migrate?.(contextOf("Handles"), plan);
+	});
+});
+
+// Tables derived from entities (drizzleTableOf).
+
+/** The CREATE TABLE and CREATE INDEX statements of a derived Postgres table. */
+function createStatementsOf(table: unknown): string[] {
+	const config = getTableConfig(table as never);
+	const columns = config.columns.map((column) => {
+		const parts = [`"${column.name}"`, column.getSQLType()];
+		const identity = (column as { generatedIdentity?: { type: string } })
+			.generatedIdentity;
+		if (identity)
+			parts.push(`GENERATED ${identity.type.toUpperCase()} AS IDENTITY`);
+		if (column.primary) parts.push("PRIMARY KEY");
+		if (column.notNull && !column.primary) parts.push("NOT NULL");
+		if (column.isUnique) parts.push("UNIQUE");
+		return parts.join(" ");
+	});
+	return [
+		`CREATE TABLE "${config.name}" (${columns.join(", ")})`,
+		...config.indexes.map(
+			(index) =>
+				`CREATE INDEX "${index.config.name}" ON "${config.name}" (${index.config.columns
+					.map((column) => `"${(column as { name: string }).name}"`)
+					.join(", ")})`,
+		),
+	];
+}
+
+class ContractAccount extends entityOf(
+	blueprintOf((ctx) => ({
+		email: ctx.optionalOf(ctx.string),
+		name: ctx.optionalOf(ctx.string),
+		age: ctx.optionalOf(ctx.integer),
+		active: ctx.optionalOf(ctx.boolean),
+		address: ctx.optionalOf(
+			blueprintOf((c) => ({ city: c.string, zip: c.optionalOf(c.string) })),
+		),
+		tags: ctx.optionalOf(ctx.listOf(ctx.string)),
+		group: ctx.optionalOf(ctx.integer),
+		n: ctx.optionalOf(ctx.integer),
+		visits: ctx.optionalOf(ctx.integer),
+	})),
+	{
+		name: "Accounts",
+		unique: ["email"],
+		versioned: true,
+		expires: { after: { days: 1 } },
+		schemaVersion: 2,
+	},
+) {}
+class ContractSerial extends entityOf(
+	blueprintOf((ctx) => ({
+		email: ctx.optionalOf(ctx.string),
+		name: ctx.optionalOf(ctx.string),
+	})),
+	{ name: "Serials", id: Serial, unique: ["email"] },
+) {}
+
+async function derivedDatabase() {
+	round += 1;
+	// The kit writes rows without createdAt nor version.
+	const overrides = () => ({
+		createdAt: text("createdAt"),
+		version: integer("version"),
+	});
+	const account = (name: string) =>
+		drizzleTableOf(ContractAccount, {
+			dialect: "postgres",
+			name: `${name}_${round}`,
+			overrides: overrides(),
+		});
+	const tables = {
+		Accounts: account("derived_accounts"),
+		One: account("derived_one"),
+		Two: account("derived_two"),
+		Serials: drizzleTableOf(ContractSerial, {
+			dialect: "postgres",
+			name: `derived_serials_${round}`,
+			overrides: { createdAt: text("createdAt") },
+		}),
+	};
+	for (const table of Object.values(tables))
+		for (const statement of createStatementsOf(table))
+			await client.exec(statement);
+	// Every case gets an empty journal, as the database is shared.
+	await client.exec("DROP TABLE IF EXISTS afora_migrations");
+	return { db: drizzle(client), tables };
+}
+
+describe("over tables derived by drizzleTableOf", () => {
+	providerContract(
+		{ describe, it, expect },
+		async () =>
+			drizzleProvider({ ...(await derivedDatabase()), migrations: "apply" }),
+		{ indexes: true },
+	);
+});
+
+describe("drizzleTableOf on Postgres", () => {
+	it("stores and reads every kind of key, and Serial ids, through repositories", async () => {
+		round += 1;
+		class Team extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string })),
+			{ name: "Team", id: Serial },
+		) {}
+		class Member extends entityOf(
+			blueprintOf((ctx) => ({
+				name: ctx.string,
+				email: ctx.email,
+				age: ctx.optionalOf(ctx.integer),
+				score: ctx.number,
+				active: ctx.boolean,
+				address: ctx.optionalOf(blueprintOf((c) => ({ city: c.string }))),
+				tags: ctx.listOf(ctx.string),
+				team: Team,
+			})),
+			{ name: "Member", unique: ["email"] },
+		) {}
+		const tables = {
+			Team: drizzleTableOf(Team, {
+				dialect: "postgres",
+				name: `team_${round}`,
+			}),
+			Member: drizzleTableOf(Member, {
+				dialect: "postgres",
+				name: `member_${round}`,
+				indexes: { byAge: { where: ["age"], orderBy: "name" } },
+			}),
+		};
+		for (const table of Object.values(tables))
+			for (const statement of createStatementsOf(table))
+				await client.exec(statement);
+		const provider = drizzleProvider({ db: drizzle(client), tables });
+		const Teams = repositoryOf({ entity: Team, provider, actions: ["create"] });
+		const Members = repositoryOf({
+			entity: Member,
+			provider,
+			relations: [Teams],
+			actions: ["create", "findByEmail"],
+		});
+		const team = await Teams.create(new Team({ title: "Core" }));
+		expect(typeof team.id).toBe("number");
+		await Members.create(
+			new Member({
+				name: "Ana",
+				email: "ana@example.com",
+				age: 30,
+				score: 9.5,
+				active: true,
+				address: { city: "Rio" },
+				tags: ["a", "b"],
+				team,
+			}),
+		);
+		expect(
+			(await Members.findByEmail("ana@example.com"))?.toJSON(),
+		).toMatchObject({
+			age: 30,
+			score: 9.5,
+			active: true,
+			address: { city: "Rio" },
+			tags: ["a", "b"],
+			team: { id: team.id, title: "Core" },
+		});
+	});
+});
+
+describe("the migration journal on Postgres", () => {
+	it("records each applied plan and skips it on the next run", async () => {
+		round += 1;
+		await client.exec("DROP TABLE IF EXISTS afora_migrations");
+		const name = `note_${round}`;
+		class NoteV1 extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string })),
+			{ name: "Note" },
+		) {}
+		class Note extends entityOf(
+			blueprintOf((ctx) => ({
+				title: ctx.string,
+				tags: ctx.optionalOf(ctx.listOf(ctx.string)),
+			})),
+			{ name: "Note" },
+		) {}
+		for (const statement of createStatementsOf(
+			drizzleTableOf(NoteV1, { dialect: "postgres", name }),
+		))
+			await client.exec(statement);
+		const appOf = (entity: typeof Note | typeof NoteV1) =>
+			applicationOf({
+				name: "notes",
+				entities: { Note: entity },
+				repositories: {
+					Notes: repositoryOf({
+						entity,
+						actions: ["findMany"],
+						provider: drizzleProvider({
+							db: drizzle(client),
+							tables: {
+								Note: drizzleTableOf(Note, { dialect: "postgres", name }),
+							},
+							migrations: "apply",
+						}),
+					}),
+				},
+			});
+		const lock = schemaLockOf(appOf(NoteV1).describe());
+		const first = await appOf(Note).migrate({ mode: "apply", lock });
+		expect(first.entities.Note?.alreadyApplied).toBe(false);
+		const columns = await client.query<{ column_name: string }>(
+			`SELECT column_name FROM information_schema.columns WHERE table_name = '${name}'`,
+		);
+		expect(columns.rows.map((row) => row.column_name)).toContain("tags");
+		// A new provider over the same database: the journal survives.
+		const again = await appOf(Note).migrate({ mode: "apply", lock });
+		expect(again.entities.Note?.alreadyApplied).toBe(true);
+		const journal = await client.query<{ entity: string; n: number }>(
+			"SELECT entity, count(*)::int AS n FROM afora_migrations GROUP BY entity",
+		);
+		expect(journal.rows).toEqual([{ entity: "Note", n: 1 }]);
 	});
 });

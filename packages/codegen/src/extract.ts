@@ -34,7 +34,9 @@ export interface ExtractOptions {
 	 * hand-written `execute` needs `useCases.<Name>`, a `run` function of a
 	 * steps use case `useCases.<Name>.run.<name>`, the `before` and `after` of
 	 * a standard use case `useCases.<Name>.before` and `.after`, a command with a handler
-	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, the handler of
+	 * `commands.<Name>.events` and `commands.<Name>.onEventError`, an entity
+	 * whose class declares methods of its own `entities.<Name>` (the class that
+	 * extends the generated `<Name>Base`), the handler of
 	 * an entity event `entities.<Name>.events.<event>`, a publisher
 	 * `publishers.<key>`, the factory of a service `services.<name>`, a tracer
 	 * `trace`, and a stage
@@ -551,6 +553,17 @@ export function extractSpec(
 		...(value.previousNames === undefined || value.previousNames.length === 0
 			? {}
 			: { previousNames: [...value.previousNames].sort() }),
+		...(value.implementation === "class"
+			? {
+					implementation: {
+						import: importFor(
+							options.imports,
+							`entities.${name}`,
+							`The entity "${name}" has a class with methods of its own, so it`,
+						),
+					},
+				}
+			: {}),
 		...(value.events === undefined
 			? {}
 			: {
@@ -611,6 +624,18 @@ export function extractSpec(
 		...(value.scans === "warn" || value.scans === "reject"
 			? { scans: value.scans }
 			: {}),
+		...(value.parents === undefined || Object.keys(value.parents).length === 0
+			? {}
+			: {
+					parents: Object.fromEntries(
+						Object.entries(value.parents).map(
+							([key, { repository, onDelete }]) => [
+								key,
+								{ repository, onDelete },
+							],
+						),
+					),
+				}),
 	}));
 
 	const exceptions = entries(description.exceptions, (value, name) => ({

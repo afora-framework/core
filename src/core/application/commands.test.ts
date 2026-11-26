@@ -126,6 +126,39 @@ describe("registration", () => {
 		expect(app.describe()).toEqual(listed.describe());
 	});
 
+	test("a command registers the exceptions its use cases declare", () => {
+		const { exceptions: _listed, ...without } = base;
+		const listed = applicationOf({ name: "a", ...base, commands: { Users } });
+		const app = applicationOf({ name: "a", ...without, commands: { Users } });
+		expect(app.describe()).toEqual(listed.describe());
+		expect(Object.keys(app.describe().exceptions)).toEqual(["Boom"]);
+		expect(() =>
+			applicationOf({ name: "a", ...without, useCases: { RegisterAndFail } }),
+		).toThrow(UnregisteredApplicationReference);
+	});
+
+	test("two different exceptions with one name conflict", () => {
+		const Other = exceptionOf({
+			layer: ExceptionLayers.UseCase,
+			name: "Boom",
+			message: "other",
+		});
+		class Clash extends useCaseOf({
+			name: "Clash",
+			blueprint: Empty,
+			response: Empty,
+			errors: [Other],
+		}) {
+			override async execute() {
+				return {};
+			}
+		}
+		const Dup = commandOf({ name: "Dup", useCases: { clash: Clash } });
+		expect(() =>
+			applicationOf({ name: "a", ...base, commands: { Users, Dup } }),
+		).toThrow(ApplicationConflict);
+	});
+
 	test("listing a use case in both places is the same class", () => {
 		expect(() =>
 			applicationOf({

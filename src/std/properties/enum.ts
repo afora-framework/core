@@ -24,13 +24,14 @@ export function enumOf<
 	{
 		name = "enum",
 		optional,
-		default: _default = values[0],
+		default: given,
 	}: {
 		name?: string;
 		optional?: Optional;
 		default?: Values[number];
 	} = {},
 ): EnumClass<Values, Optional> {
+	const _default = given ?? values[0];
 	const Enum = propertyOf({
 		name,
 		schema: Type.Enum(values),
@@ -44,7 +45,7 @@ export function enumOf<
 			values: Object.freeze([...values]),
 			...(name === "enum" ? {} : { name }),
 			...(optional ? { optional: true } : {}),
-			...(_default === values[0] ? {} : { default: _default }),
+			...(given === undefined ? {} : { default: given }),
 		}),
 	});
 	return Enum;

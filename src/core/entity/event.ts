@@ -56,7 +56,27 @@ export interface EntityEvents {
 	readonly onCreate?: EntityEventReference;
 	readonly onUpdate?: EntityEventReference;
 	readonly onDelete?: EntityEventReference;
+	/**
+	 * The events the methods of the entity raise with `emit`, declared so
+	 * `describe()` and the tools built on it know them. Declaring is optional:
+	 * `emit` still accepts an event that is not listed.
+	 */
+	readonly emits?: EntityEventReference;
 }
+
+/** The cycles of the lifecycle an entity can name events for. */
+export type EntityLifecycleCycle = "onCreate" | "onUpdate" | "onDelete";
+
+const settingsOf = (entityClass: object): EntityEvents | undefined =>
+	(entityClass as { readonly [EntityEventSettings]?: EntityEvents })[
+		EntityEventSettings
+	];
+
+/** A reference resolved to its definitions. */
+const definitionsOf = (reference: EntityEventReference): EventDefinition[] => {
+	const events = typeof reference === "function" ? reference() : reference;
+	return (Array.isArray(events) ? events : [events]) as EventDefinition[];
+};
 
 export const EntityEventSettings = Symbol("entityEvents");
 
@@ -148,22 +168,29 @@ export function eventHasHandler(event: EventDefinition): boolean {
  */
 export function lifecycleEventsOf(
 	entityClass: object,
-): Partial<Record<keyof EntityEvents, readonly EventDefinition[]>> {
-	const settings = (
-		entityClass as { readonly [EntityEventSettings]?: EntityEvents }
-	)[EntityEventSettings];
-	const found: Partial<Record<keyof EntityEvents, readonly EventDefinition[]>> =
-		{};
+): Partial<Record<EntityLifecycleCycle, readonly EventDefinition[]>> {
+	const settings = settingsOf(entityClass);
+	const found: Partial<
+		Record<EntityLifecycleCycle, readonly EventDefinition[]>
+	> = {};
 	for (const cycle of ["onCreate", "onUpdate", "onDelete"] as const) {
 		const reference = settings?.[cycle];
 		if (reference === undefined) continue;
-		const events = typeof reference === "function" ? reference() : reference;
-		const list = (
-			Array.isArray(events) ? events : [events]
-		) as EventDefinition[];
+		const list = definitionsOf(reference);
 		if (list.length > 0) found[cycle] = list;
 	}
 	return found;
+}
+
+/**
+ * The events an entity class declares its methods raise (`emits`), with the
+ * function reference resolved: what `describe()` lists. @internal
+ */
+export function emittedEventsOf(
+	entityClass: object,
+): readonly EventDefinition[] {
+	const reference = settingsOf(entityClass)?.emits;
+	return reference === undefined ? [] : definitionsOf(reference);
 }
 
 /** Queues `event` for `entity`; `first` puts it before those already queued. */
@@ -189,10 +216,22 @@ export function pullEntityEvents<Entity extends object>(
 	return queue as EntityEvent<Entity>[];
 }
 
+/**
+ * Moves the events queued for `from` to the end of the queue of `to`, so
+ * that they are pulled with those of `to`: what a delete does with the
+ * events of the children it cascades to. @internal
+ */
+export function moveEntityEvents(from: object, to: object): void {
+	const moved = queues.get(from);
+	if (moved === undefined || moved.length === 0) return;
+	queues.delete(from);
+	queues.set(to, [...(queues.get(to) ?? []), ...moved]);
+}
+
 /** Queues the `cycle` events of `entity`; `first` puts them before those already queued, in order. */
 export function enqueueLifecycle(
 	entity: object,
-	cycle: keyof EntityEvents,
+	cycle: EntityLifecycleCycle,
 	first = false,
 ): void {
 	const settings = (
@@ -202,8 +241,7 @@ export function enqueueLifecycle(
 	)[EntityEventSettings];
 	const reference = settings?.[cycle];
 	if (reference === undefined) return;
-	const events = typeof reference === "function" ? reference() : reference;
-	const list = (Array.isArray(events) ? events : [events]) as EventDefinition[];
+	const list = definitionsOf(reference);
 	if (first) {
 		for (let index = list.length - 1; index >= 0; index--) {
 			enqueueEvent(entity, list[index] as EventDefinition, true);

@@ -32,23 +32,16 @@ import {
 	Serial,
 	wrapProvider,
 } from "@afora/core";
-import { drizzleProvider } from "@afora/drizzle";
+import { drizzleProvider, drizzleTableOf } from "@afora/drizzle";
 import { drizzle } from "drizzle-orm/bun-sqlite";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-
-const tickets = sqliteTable("tickets", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt"),
-	deletedAt: text("deletedAt"),
-	title: text("title").notNull(),
-	code: text("code").notNull().unique(),
-});
 
 class Ticket extends entityOf(
 	blueprintOf((ctx) => ({ title: ctx.text, code: ctx.string })),
 	{ name: "Ticket", id: Serial, unique: ["code"] },
 ) {}
+
+// The Drizzle table, derived from the entity; drizzle-kit reads it as any other.
+const tickets = drizzleTableOf(Ticket, { dialect: "sqlite", name: "tickets" });
 
 const Tickets = repositoryOf({
 	entity: Ticket,
@@ -67,12 +60,13 @@ export const App = applicationOf({
 });
 ```
 
+- **The table.** `drizzleTableOf(Ticket, { dialect: "sqlite" })` builds the Drizzle table from the entity, by the mapping rules of the provider: a column for each key, the identity columns, `NOT NULL` unless the key is optional, `.unique()` for the unique keys, and `schema_version` for an entity with `schemaVersion`. `dialect: "postgres"` gives the Postgres table of the same entity, and `overrides` maps a key to the column an existing database has. A table written by hand works the same, as long as it follows the [mapping rules](../packages/drizzle/README.md#mapping-rules).
 - **Ids.** `id: Serial` lets the database assign the id: `create` inserts the row without it and sets the one `RETURNING` gives back. Leave it out for UUID v7 ids (a `text` column), or use `Uuid` for existing UUIDs of any version and `Key` for a natural key ([Entities](entities.md#ids)).
-- **Unique keys.** The provider checks `unique` keys before it writes, so a duplicate is a `RepositoryUniqueViolation` (a 409) with the key named. That check does not close the race between two writers: declare the unique index too, as `.unique()` does here, and the provider translates the database's error into the same exception.
+- **Unique keys.** The provider checks `unique` keys before it writes, so a duplicate is a `RepositoryUniqueViolation` (a 409) with the key named. That check does not close the race between two writers: declare the unique index too, as the derived table does with `.unique()`, and the provider translates the database's error into the same exception.
 - **Nested values.** A nested record or list goes in a JSON column (`text({ mode: "json" })` on SQLite, `jsonb` on Postgres). An entity held by another is stored by its id and loaded through `relations`.
 - **Transactions.** `commandOf({ transaction: true })` runs every use case of a call in one database transaction, and rolls it back when the call fails ([Commands](commands.md)).
 
-Create the tables with drizzle-kit or your own migrations: the provider changes no schema unless you opt in (step 5). The [package README](../packages/drizzle/README.md#mapping-rules) has the rest of the mapping rules: dates, booleans, versions and increments.
+Create the tables with drizzle-kit (point it at the module that exports them) or your own migrations: the provider changes no schema unless you opt in (step 5). `@afora/codegen` can write that module from `afora.json` ([Codegen and extraction](../packages/drizzle/README.md#codegen-and-extraction)). The [package README](../packages/drizzle/README.md#mapping-rules) has the rest of the mapping rules: dates, booleans, versions and increments.
 
 ## 3. Seeing what the database does
 
@@ -151,7 +145,7 @@ The table definition, its limits (400 KB per item, 100 items per write) and the 
 
 ## 5. Changing the shape later
 
-A blueprint change meets the rows written before it. The entity declares what the change needs (`fill`, `renamedFrom`, `upgrade`), `afora-codegen schema check` in CI catches a change that declares nothing, and `app.migrate` rewrites the stored rows. With Drizzle, `drizzleProvider({ db, tables, migrations: "apply" })` also adds and renames the columns, or `migrations: { file }` writes the SQL for drizzle-kit to apply; DynamoDB has no schema, so only the rows are rewritten. The steps, from commit to production, are in [Schema evolution](schema-evolution.md#from-commit-to-production).
+A blueprint change meets the rows written before it. The entity declares what the change needs (`fill`, `renamedFrom`, `upgrade`), `afora-codegen schema check` in CI catches a change that declares nothing, and `app.migrate` rewrites the stored rows. With Drizzle, `drizzleProvider({ db, tables, migrations: "apply" })` also adds and renames the columns, and keeps a journal of the plans it applied so a run applies each once, or `migrations: { file }` writes the SQL for drizzle-kit to apply; DynamoDB has no schema, so only the rows are rewritten. The steps, from commit to production, are in [Schema evolution](schema-evolution.md#from-commit-to-production).
 
 ## 6. Testing against the real thing
 

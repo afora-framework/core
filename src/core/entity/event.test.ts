@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import {
+	applicationOf,
 	blueprintOf,
 	type EventDefinition,
 	entityOf,
@@ -245,6 +246,61 @@ describe("entity events", () => {
 		user.publish(Created);
 		expect(JSON.stringify(user)).toBe(json);
 		expect(user.toJSON()).toEqual({ name: "Jane", id: ID, createdAt });
+	});
+});
+
+describe("declared events (emits)", () => {
+	class Ticket extends entityOf(Blueprint, {
+		emits: () => [Closed, Reopened],
+	}) {
+		close(): void {
+			this.emit(Closed);
+		}
+		other(): void {
+			this.emit(Undeclared);
+		}
+	}
+	const Closed: EventDefinition = eventOf("closed", Ticket, async () => {});
+	const Reopened: EventDefinition = eventOf("reopened", Ticket);
+	const Undeclared: EventDefinition = eventOf("undeclared", Ticket);
+
+	test("describe() lists them, with whether each has a handler", () => {
+		const app = applicationOf({ name: "tickets", entities: { Ticket } });
+		expect(app.describe().entities.Ticket?.events).toEqual({
+			emits: [
+				{ name: "closed", handler: true },
+				{ name: "reopened", handler: false },
+			],
+		});
+	});
+
+	test("they are listed beside the lifecycle ones, and a single definition is accepted", () => {
+		class Note extends entityOf(Blueprint, {
+			onCreate: () => NoteCreated,
+			emits: () => NoteCreated,
+		}) {}
+		const NoteCreated: EventDefinition = eventOf("created", Note);
+		const app = applicationOf({ name: "notes", entities: { Note } });
+		expect(app.describe().entities.Note?.events).toEqual({
+			onCreate: [{ name: "created", handler: false }],
+			emits: [{ name: "created", handler: false }],
+		});
+	});
+
+	test("nothing is queued by declaring, and emit accepts an undeclared event", () => {
+		const ticket = new Ticket({ name: "a" });
+		expect(ticket.pullEvents()).toEqual([]);
+		ticket.close();
+		ticket.other();
+		expect(ticket.pullEvents().map((event) => event.name)).toEqual([
+			"closed",
+			"undeclared",
+		]);
+	});
+
+	test("an entity without emits adds nothing to describe()", () => {
+		const app = applicationOf({ name: "users", entities: { User } });
+		expect(app.describe().entities.User?.events).not.toHaveProperty("emits");
 	});
 });
 

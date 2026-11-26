@@ -152,6 +152,8 @@ A use case whose repository lacks an action, or whose entity lacks a record plug
 
 **What follows the repository.** Only the use cases its actions allow exist. `delete` deletes as the repository does: with `deletion: "soft"` the response carries `deletedAt` and `get` and `list` stop seeing the entity; `restore` exists only for a repository that lists the `restore` action, which needs soft deletion (see [Repositories](repositories.md)), and `restore` of an unknown id throws `RepositoryEntityNotFound`.
 
+**Deleting a parent.** When the repositories of an application declare `parents` (see [Parents](repositories.md#parents)), `delete` of a parent deletes its children with it, at any depth, each hard or soft as its own repository deletes, inside the transaction of its command when it declares `transaction: true` (a failure rolls back the parent and every child; without one, a failure midway leaves the deletes already done). A child declared with `onDelete: "restrict"`, directly or below a cascade, refuses the delete while one is left: nothing is deleted and the call throws `RepositoryDeleteRestricted`, which an output answers with 409. The application adds it to the `errors` of that `delete`, so the OpenAPI document of the operation lists the 409; `describe()` gives the errors as declared, and the parents under `repositories`. A use case written by hand that deletes such a parent gets the same cascade from the repository, and lists `RepositoryDeleteRestricted` in its own `errors` to document it. `restore` brings back only the parent: the children stay deleted.
+
 **What follows the record plugins.** `publish` and `unpublish` call the methods of `publishable`, `archive` and `unarchive` those of `archivable` (`unarchive` calls its `restore`; the use case named `restore` is the one of soft deletion), `tag` and `untag` those of `taggable` with the tags of the input, and each stores the entity. `register`, `login` and `changePassword` are for `authenticatable`: `register` is `create` after checking that the email is free; it does not take the keys a token is made from: a `register` whose input takes a key that the `token.scopesFrom` or `token.claims` of a `login` or `refresh` of the same entity reads throws `UseCaseUnavailable` at declaration, whichever is declared first and in whatever command, so set the key with `values` (or leave an optional one out with `omit`; see [Tokens and sessions](auth.md#tokens-and-sessions)), or give an administrator-only `register` the option `takesTokenKeys: true`, which needs an `access` with `scopes` (the token version key stays refused). `login` gives the entity when `verifyPassword` accepts the password; an unknown email is checked against a password all the same, so that the time of the answer does not tell which emails are registered (see [Changing a password](auth.md#changing-a-password)). `changePassword` changes the password when `verifyPassword` accepts `currentPassword`, and throws `invalid` (`UseCaseInvalidCredentials`, the error of `login`) when it does not. `login` issues no token unless given `token`.
 
 **What follows the properties**, in the input of `create`, `register` and `update`:
@@ -175,10 +177,12 @@ A use case whose repository lacks an action, or whose entity lacks a record plug
 | `as`                                                            | all but `list`                                                                | the response key that holds the entity, typed: `{ as: "post" }` gives `{ post }`                                                                                                                              |
 | `owner: { key?, context }`                                      | all but `login`, `refresh`; `logout` with `token.versionFrom` and `key: "id"` | the caller owns the entity, see below; `key: "id"` for an entity that is the caller (not for `create`, `register`)                                                                                            |
 | `omit: [...]`                                                   | `create`, `register`                                                          | optional keys the input does not take                                                                                                                                                                         |
+| `computed: [...]`                                               | `create`                                                                      | keys the input does not take and `before` (which it needs) gives back, see [Computed keys](#computed-keys)                                                                                                    |
 | `values: { ... }`                                               | `create`, `register`                                                          | values the entity is built with, in place of taking them from the input                                                                                                                                       |
 | `relations: { <key>: { shared: true } }`                        | `create`, `register`                                                          | with `owner`, lets the input name an entity of `<key>` that another owner has, see below                                                                                                                      |
 | `takesTokenKeys: true`                                          | `register`                                                                    | the input may take the keys a token is made from; only with an `access` that asks for `scopes`, see [Tokens and sessions](auth.md#tokens-and-sessions)                                                        |
 | `set: { ... }`                                                  | `publish`, `unpublish`, `archive`, `unarchive`                                | change keys set before the entity is stored, e.g. `{ status: "published" }`                                                                                                                                   |
+| `where: [key, ...]`                                             | `list`                                                                        | keys of the entity matched by equality: each becomes a required key of the input (a path parameter, for a route) and reaches `findPage` as a `where`, see [List by a key](#list-by-a-key)                     |
 | `orderBy: [{ key, direction? }]`                                | `list`                                                                        | the order of the page; newest first (`createdAt` descending) by default                                                                                                                                       |
 | `maxLimit`                                                      | `list`                                                                        | the largest `limit` the input takes, 100 by default; a larger one is `InvalidUseCaseInput` (400, issue `invalid_value`), and the input schema (OpenAPI) says `maximum`                                        |
 | `before: ({ input, entity?, dependencies, context }) => input?` | the use cases that write (all but `get`, `list`, `login`)                     | runs before the write and may give back the input to go on with, see [Before and after](#before-and-after)                                                                                                    |
@@ -237,6 +241,39 @@ await Blog.run("create", { title: "Mine" }, { context: { userId } });
 ```
 
 `restore` with `owner` checks the owner before the entity is back: `findById` does not see a deleted entity, so it reads it with `exists` (`{ where: { id, <key>: caller }, withDeleted: true }`), and the repository must declare the `exists` action (not for `key: "id"`, which compares the input with the context). A deleted entity of another owner throws `notFound` and stays deleted.
+
+### List by a key
+
+The most common listing in a content app is the children of a parent. `where` names keys of the entity, each matched by equality:
+
+<!-- docs:code context
+import { blueprintOf, commandOf, entityOf, repositoryOf } from "@afora/core";
+
+class Lesson extends entityOf(
+	blueprintOf((ctx) => ({ moduleId: ctx.id, position: ctx.integer })),
+) {}
+commandOf({
+	name: "Course",
+	useCases: (ctx) => {
+		/* block */
+		return {};
+	},
+});
+-->
+```ts
+const Lessons = repositoryOf({
+	entity: Lesson,
+	actions: ["findPage", "create"],
+	indexes: { byModule: { where: ["moduleId"], orderBy: "position" } },
+});
+
+ctx.list(Lessons, { where: ["moduleId"], orderBy: [{ key: "position" }] });
+// input: { moduleId, limit?, offset? }, e.g. GET /modules/{moduleId}/lessons
+```
+
+Each key is a required key of the input, so it can be a path parameter, and goes to `findPage` as a `where` of equality. A missing value is invalid input: `undefined` and `null` never reach the query. It works with `owner` (the owner key is matched too, and cannot also be named in `where`), `orderBy` and `maxLimit`.
+
+A key the entity lacks, one named twice, one that is optional (the input could leave it out), one that is sensitive or does not hold a scalar value (a list, a blueprint, an entity), and `limit` or `offset` throw `UseCaseUnavailable` when the use case is declared. When a declared index of the repository serves the `where` keys (and the owner key) with the first `orderBy` as its order, `describe()` names it as `generic.index` of the use case (`"byModule"` above), and `afora.json` leaves it out, since it follows from the declaration.
 
 ## Before and after
 
@@ -323,6 +360,40 @@ const Cms = commandOf({
 
 The hooks are `run` steps of the use case (see [Steps](use-cases.md#steps)): `describe()` gives them as `{ run: "before", fn: { kind: "opaque" }, as: "prepared" }` and `{ run: "after" }`, with the steps after `before` reading `$prepared` in place of `$input`, and the options as `before: { kind: "opaque" }`, the dependencies by registered name and `throws` by exception name.
 
+### Computed keys
+
+A key the caller should not choose but the entity requires, such as the `position` of an item that goes at the end of its parent, is listed in `computed` (`create` only). The input does not take it (nor do the OpenAPI document and the MCP input schema show it), `before` must give it back with the input, and the entity validates it like any other key, so a key it can hold is a required key of the entity and not an optional one in disguise:
+
+<!-- docs:code context
+import { blueprintOf, commandOf, entityOf, repositoryOf } from "@afora/core";
+
+class Lesson extends entityOf(
+	blueprintOf((ctx) => ({ moduleId: ctx.id, position: ctx.integer })),
+) {}
+const Lessons = repositoryOf({
+	entity: Lesson,
+	actions: ["findPage", "create", "count"],
+});
+commandOf({
+	name: "Course",
+	useCases: (ctx) => ({
+		/* block */
+	}),
+});
+-->
+```ts
+createLesson: ctx.create(Lessons, {
+	computed: ["position"],
+	dependencies: { lessons: Lessons },
+	before: async ({ input, dependencies }) => ({
+		...input,
+		position: await dependencies.lessons.count({ where: { moduleId: input.moduleId } }),
+	}),
+}),
+```
+
+The type of `before` is the input and the computed keys, and it cannot give nothing back. One that forgets a key is an invalid input, which names the key (`position`). `computed` without `before`, a key that is unknown, an identity key, the owner key, one that holds an entity or one also in `omit` or `values` throws `UseCaseUnavailable` at declaration. In an `afora.json`, `options.computed` and `options.before` are written together and survive the round trip.
+
 ## In an application
 
 A command registers the standard use cases it holds, under their names, so they are not listed in `useCases` (see [Applications](applications.md)); their repositories, the repositories of the entities they load and the errors given in options are checked like the dependencies and errors of any use case. Two use cases with the same name, e.g. `ctx.list(Posts)` and `ctx.list(Posts, { owner })`, conflict until one is given a `name`. `describe()` gives each `generic: { name, version, repository, options }`.
@@ -330,6 +401,7 @@ A command registers the standard use cases it holds, under their names, so they 
 ## Limits
 
 - No pluralization: `ctx.list(Posts)` is `ListPost`; name it (`{ name: "ListPosts" }`).
-- `list` has no filters besides `owner`, and pages by `offset`, at most `maxLimit` entities a page.
+- `list` filters by `owner` and by the keys of `where`, all by equality, and pages by `offset`, at most `maxLimit` entities a page.
+- `restore` does not follow `parents`: the children a soft delete reached stay deleted.
 - A key that holds an entity that may be absent, or a list of entities, is not taken by an input.
 - One behavior per property class: the input of a `Password` is always a plain password.

@@ -29,6 +29,23 @@ export interface MigrationPlan {
  */
 export type MigrationResult = undefined | { readonly deferred: true };
 
+/**
+ * A plan `app.migrate` applied, as the journal keeps it: the
+ * `MigrationJournalEntry` of `@afora/core`, written out like `MigrationPlan`.
+ */
+interface MigrationJournalEntry {
+	readonly entity: string;
+	readonly plan: MigrationPlan;
+	readonly checksum: string;
+	readonly appliedAt: string;
+}
+
+/** The journal of a provider with `migrations: "apply"`. */
+export interface MigrationJournal {
+	applied(entity: string, checksum: string): Promise<boolean>;
+	record(entry: MigrationJournalEntry): Promise<void>;
+}
+
 /** The DDL of a plan, and notes on what it leaves to a migration of your own. */
 interface Migration {
 	readonly statements: readonly string[];
@@ -59,10 +76,39 @@ function invalid(reason: string): never {
 
 const quote = (name: string): string => `"${name.replaceAll('"', '""')}"`;
 
-/** `key` in snake_case, as Drizzle's `casing: "snake_case"` names its column. */
-function snakeCaseOf(key: string): string {
-	const words = key.match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
-	return words.map((word) => word.toLowerCase()).join("_");
+const isLowerOrDigit = (char: string): boolean =>
+	(char >= "a" && char <= "z") || (char >= "0" && char <= "9");
+const isUpper = (char: string): boolean => char >= "A" && char <= "Z";
+
+/**
+ * `key` in snake_case, as Drizzle's `casing: "snake_case"` names its column.
+ * The words are those of `/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g`, found in
+ * one pass so the time stays linear in the length of the key.
+ */
+export function snakeCaseOf(key: string): string {
+	const words: string[] = [];
+	const end = key.length;
+	let start = 0;
+	while (start < end) {
+		const char = key.charAt(start);
+		let next = start + 1;
+		if (isLowerOrDigit(char)) {
+			while (next < end && isLowerOrDigit(key.charAt(next))) next++;
+		} else if (isUpper(char)) {
+			while (next < end && isUpper(key.charAt(next))) next++;
+			const lower = key.charAt(next);
+			if (next < end && lower >= "a" && lower <= "z") {
+				if (next - start > 1) next--;
+				else while (next < end && isLowerOrDigit(key.charAt(next))) next++;
+			}
+		} else {
+			start = next;
+			continue;
+		}
+		words.push(key.slice(start, next).toLowerCase());
+		start = next;
+	}
+	return words.join("_");
 }
 
 /** A default of a Drizzle column as an SQL literal, when it is a plain value. */
@@ -272,6 +318,79 @@ async function apply(
 		db.run(sql`ROLLBACK`);
 		throw error;
 	}
+}
+
+/** The table of the journal: fixed, created by the provider, never migrated. */
+const JOURNAL_TABLE = "afora_migrations";
+
+/** The columns of the journal, by key of an entry. */
+const JOURNAL_COLUMNS = {
+	entity: snakeCaseOf("entity"),
+	checksum: snakeCaseOf("checksum"),
+	plan: snakeCaseOf("plan"),
+	appliedAt: snakeCaseOf("appliedAt"),
+	position: snakeCaseOf("position"),
+} as const;
+
+/**
+ * The journal of the plans applied on `db`, in a table of its own
+ * (`afora_migrations`) created with `CREATE TABLE IF NOT EXISTS` on first
+ * use, the same on SQLite and Postgres: an entry is one row, keyed by entity
+ * and checksum, with the plan as JSON text and its position among the plans
+ * of its entity (the highest is the last applied). Its shape is fixed, as it
+ * cannot migrate itself through the plans it records.
+ */
+export function journalOf(
+	// biome-ignore lint/suspicious/noExplicitAny: dialect specific database
+	db: any,
+): MigrationJournal {
+	const postgres = typeof db.all !== "function";
+	const table = quote(JOURNAL_TABLE);
+	const column = (key: keyof typeof JOURNAL_COLUMNS) =>
+		sql.raw(quote(JOURNAL_COLUMNS[key]));
+	const run = async (query: ReturnType<typeof sql>) =>
+		postgres ? db.execute(query) : db.run(query);
+	const rows = async (query: ReturnType<typeof sql>) =>
+		rowsOf(await (postgres ? db.execute(query) : db.all(query)));
+	let ready: Promise<unknown> | undefined;
+	const ensure = () => {
+		ready ??= run(
+			sql.raw(
+				`CREATE TABLE IF NOT EXISTS ${table} (${Object.entries(JOURNAL_COLUMNS)
+					.map(
+						([key, name]) =>
+							`${quote(name)} ${key === "position" ? "integer" : "text"} NOT NULL`,
+					)
+					.join(
+						", ",
+					)}, PRIMARY KEY (${quote(JOURNAL_COLUMNS.entity)}, ${quote(JOURNAL_COLUMNS.checksum)}))`,
+			),
+		).catch((error: unknown) => {
+			ready = undefined;
+			throw error;
+		});
+		return ready;
+	};
+	/** The checksum of the last plan recorded for `entity`. */
+	const latestOf = async (entity: string): Promise<unknown> => {
+		await ensure();
+		const found = await rows(
+			sql`SELECT ${column("checksum")} AS checksum FROM ${sql.raw(table)} WHERE ${column("entity")} = ${entity} ORDER BY ${column("position")} DESC LIMIT 1`,
+		);
+		return (found[0] as { checksum?: unknown } | undefined)?.checksum;
+	};
+	return Object.freeze({
+		async applied(entity: string, checksum: string) {
+			return (await latestOf(entity)) === checksum;
+		},
+		async record(entry: MigrationJournalEntry) {
+			if ((await latestOf(entry.entity)) === entry.checksum) return;
+			// The last of its entity, also when it was recorded before another.
+			await run(
+				sql`INSERT INTO ${sql.raw(table)} (${column("entity")}, ${column("checksum")}, ${column("plan")}, ${column("appliedAt")}, ${column("position")}) VALUES (${entry.entity}, ${entry.checksum}, ${JSON.stringify(entry.plan)}, ${entry.appliedAt}, (SELECT COALESCE(MAX(${column("position")}), 0) + 1 FROM ${sql.raw(table)} WHERE ${column("entity")} = ${entry.entity})) ON CONFLICT (${column("entity")}, ${column("checksum")}) DO UPDATE SET ${column("plan")} = excluded.${column("plan")}, ${column("appliedAt")} = excluded.${column("appliedAt")}, ${column("position")} = excluded.${column("position")}`,
+			);
+		},
+	});
 }
 
 /** drizzle-kit runs the statements of a migration file split by this line. */

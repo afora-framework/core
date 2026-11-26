@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `drizzleTableOf(Entity, { dialect, name, indexes, overrides, schemaVersionColumn })` gives the Drizzle table of an entity, `sqliteTable` for `"sqlite"` or `pgTable` for `"postgres"`, from the same entity, so the blueprint is the one description of the data. A key is `NOT NULL` unless it is optional, a unique key is `.unique()`, and each index of the repository is an index on its `where` keys, then its `orderBy` key. `overrides` gives a key the SQL name or the column of an existing database. A key whose value is not JSON, and an override or an index naming a key the entity lacks, throw `InvalidRepositoryDeclaration`. Types: `DrizzleTableOf`, `DrizzleTableOptions`, `DrizzleTableIndex`, `DrizzleColumnOverride` and `DrizzleDialect`. See [Tables from entities](README.md#tables-from-entities) (#157).
+- `drizzleCatalogOf({ dialect })` is the provider entry of `afora-codegen --providers` with the tables generated from the spec: `schema.ts` for one dialect, given to the provider as its `tables`, or `schema.sqlite.ts` and `schema.pg.ts` for both. See [Codegen and extraction](README.md#codegen-and-extraction) (#157).
+- With `migrations: "apply"` the provider has a `journal`: `app.migrate` records each plan it applied in a table of its own, `afora_migrations` (created with `CREATE TABLE IF NOT EXISTS` on first use, the same on SQLite and Postgres), and a later run, in this process or another over the same database, skips a plan that is still the last applied to its entity (`alreadyApplied: true`). Leave the table out of your drizzle-kit schema. With `{ file }` there is no journal: drizzle-kit keeps the history. See [Schema evolution](README.md#schema-evolution) and the [root CHANGELOG](../../CHANGELOG.md) (#157).
+
 ## 27.0.0-rc.6 — 2026-11-24
 
 ### Security

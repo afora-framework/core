@@ -379,6 +379,8 @@ export interface IApplication<
 	 * `schemaVersion` or with a `fill` or `renamedFrom` pending, and moves the
 	 * rows stored under `previousNames`. Keys no longer declared, and the
 	 * rows of the previous names, are only removed with `destructive: true`.
+	 * A provider with a `journal` records each plan it applied, and a later
+	 * run finds it there and skips `provider.migrate` for it.
 	 * Idempotent and resumable.
 	 */
 	migrate(options: SchemaMigrationOptions): Promise<SchemaMigrationReport>;
@@ -513,13 +515,14 @@ export interface RecordDescription {
 	};
 	readonly plugins: readonly RecordPluginDescriptor[];
 	/**
-	 * The lifecycle events of an entity, by cycle: each event's name and
-	 * whether `eventOf` was given a handler. Present only when it has some.
+	 * The events of an entity: those of each lifecycle cycle and those its
+	 * methods declare with `emits`, each with its name and whether `eventOf`
+	 * was given a handler. Present only when it has some.
 	 */
 	readonly events?: Readonly<
 		Partial<
 			Record<
-				"onCreate" | "onUpdate" | "onDelete",
+				"onCreate" | "onUpdate" | "onDelete" | "emits",
 				readonly { readonly name: string; readonly handler: boolean }[]
 			>
 		>
@@ -547,6 +550,12 @@ export interface RecordDescription {
 	readonly upgrade?: readonly number[];
 	/** The `previousNames` of an entity; present only when it has some. */
 	readonly previousNames?: readonly string[];
+	/**
+	 * `"class"` when the registered class of an entity extends the class
+	 * `entityOf` made with members of its own (methods, getters); absent for
+	 * that class itself or an empty subclass of it.
+	 */
+	readonly implementation?: "class";
 }
 
 /** What a use case depends on, by the name it has in the application. */
@@ -618,6 +627,8 @@ export interface UseCaseDescription {
 		readonly version: string;
 		readonly repository: string;
 		readonly options: Readonly<Record<string, unknown>>;
+		/** The declared index of the repository that serves what it reads, when it says one does. */
+		readonly index?: string;
 	};
 }
 
@@ -744,6 +755,20 @@ export interface ApplicationDescription {
 				readonly scans: RepositoryScans;
 				/** The names of the repositories of the entities its entity holds. */
 				readonly relations: readonly string[];
+				/**
+				 * Its parents, present only when it declares some: by the key of
+				 * its entity holding the id of the parent, the name of the parent
+				 * repository and what its delete does to the entities.
+				 */
+				readonly parents?: Readonly<
+					Record<
+						string,
+						{
+							readonly repository: string;
+							readonly onDelete: "cascade" | "restrict";
+						}
+					>
+				>;
 				/** The names of its `environmentDependencies`. */
 				readonly environments: readonly string[];
 				/** Its own provider, present only when it declared one; a provider of `providersOf` by its key. */

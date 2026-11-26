@@ -146,7 +146,7 @@ export interface RecordSpec {
 	readonly change?: readonly string[];
 	/** Names of the Std record plugins (`authenticatable`...). */
 	readonly plugins?: readonly string[];
-	/** Entities only: the events each lifecycle cycle raises. */
+	/** Entities only: the events each lifecycle cycle raises, and those its methods raise (`emits`). */
 	readonly events?: EntityEventsSpec;
 	/**
 	 * Entities only: how its ids are made. `uuid7` (the default) generates and
@@ -165,6 +165,12 @@ export interface RecordSpec {
 	readonly upgrade?: Readonly<Record<string, ImportRef>>;
 	/** Entities only: the names the entity had before. */
 	readonly previousNames?: readonly string[];
+	/**
+	 * Entities only: the class written by hand that extends the generated
+	 * `<Name>Base` (methods that change state and raise events). Everything
+	 * that names the entity uses it.
+	 */
+	readonly implementation?: ImportRef;
 }
 
 /** The id strategies a spec can name; `uuid7` is the default. */
@@ -190,11 +196,15 @@ export type EntityEventSpec =
 	| string
 	| { readonly name: string; readonly handler?: ImportRef };
 
-/** The lifecycle events of an entity, by cycle: one event or a list of them. */
+/**
+ * The events of an entity: those of each lifecycle cycle and, in `emits`,
+ * those its methods raise; each one event or a list of them.
+ */
 export interface EntityEventsSpec {
 	readonly onCreate?: EntityEventSpec | readonly EntityEventSpec[];
 	readonly onUpdate?: EntityEventSpec | readonly EntityEventSpec[];
 	readonly onDelete?: EntityEventSpec | readonly EntityEventSpec[];
+	readonly emits?: EntityEventSpec | readonly EntityEventSpec[];
 }
 
 export interface EnvironmentSpec {
@@ -257,6 +267,29 @@ export interface ProviderCatalogEntry {
 	readonly module: string;
 	/** The factory, called with the options object. */
 	readonly export: string;
+	/**
+	 * The tables the provider reads, which codegen generates from the
+	 * entities stored through it (`@afora/drizzle`'s `drizzleTableOf`).
+	 * Without it, the tables are written by hand.
+	 */
+	readonly tables?: ProviderTablesEntry;
+}
+
+/**
+ * How the tables of a catalog provider are made: one call of `export` per
+ * entity stored through the provider, `<export>(Entity, { dialect, indexes })`
+ * with the `indexes` of its repositories, in `schema.ts` for one dialect or
+ * `schema.<dialect>.ts` for each of several (`postgres`: `schema.pg.ts`).
+ * Each file exports the tables by entity name as `tables`; with one dialect,
+ * a provider without a `tables` option is given it.
+ */
+export interface ProviderTablesEntry {
+	/** The factory of a table. */
+	readonly export: string;
+	/** Where it comes from; the `module` of the provider by default. */
+	readonly module?: string;
+	/** The SQL dialect of the tables, or several (`["sqlite", "postgres"]`). */
+	readonly dialect: string | readonly string[];
 }
 
 /** A stage factory of the catalog supplied to codegen: where it comes from. */
@@ -306,6 +339,18 @@ export interface RepositorySpec {
 	readonly indexes?: Readonly<Record<string, RepositoryIndexSpec>>;
 	/** What a query only a scan serves does (default `"allow"`). */
 	readonly scans?: "allow" | "warn" | "reject";
+	/**
+	 * The parents of its entities, by the key of the entity that holds the id
+	 * of the parent: the parent repository, and what its delete does to them,
+	 * e.g. `{ "moduleId": { "repository": "Modules", "onDelete": "cascade" } }`.
+	 */
+	readonly parents?: Readonly<Record<string, RepositoryParentSpec>>;
+}
+
+/** A parent of the entities of a repository: its repository, and what its delete does to them. */
+export interface RepositoryParentSpec {
+	readonly repository: string;
+	readonly onDelete: "cascade" | "restrict";
 }
 
 /** An index of a repository: the keys matched by equality, and the order. */

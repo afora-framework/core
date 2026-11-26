@@ -371,6 +371,7 @@ export {
 	InvalidRepositoryQuery,
 	InvalidStoredSchemaVersion,
 	RepositoryConcurrencyConflict,
+	RepositoryDeleteRestricted,
 	RepositoryEntityNotFound,
 	RepositoryIsFrozen,
 	RepositoryUniqueViolation,
@@ -384,7 +385,10 @@ export {
 	inMemoryProvider,
 } from "./core/repository/in-memory";
 export { providerOf } from "./core/repository/provider";
-export type { RepositorySettings } from "./core/repository/repository";
+export type {
+	RepositoryInstance,
+	RepositorySettings,
+} from "./core/repository/repository";
 export { RepositoryOf, repositoryOf } from "./core/repository/repository";
 export type {
 	ProviderOption,
@@ -420,6 +424,7 @@ export type {
 	RepositoryFindManyBy,
 	RepositoryIncrementDeltas,
 	RepositoryIncrementOptions,
+	RepositoryParent,
 } from "./core/repository/types/repository.interface";
 export type {
 	EntityMigrationReport,

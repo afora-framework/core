@@ -619,9 +619,93 @@ function checkGenericUseCase(
 				invalid(key, '"omit" must be a list of keys of the entity.');
 			}
 		}
+		if (key === "computed") {
+			const fields =
+				entity?.kind === "entity" ? fieldsOfDecl(entity) : undefined;
+			if (!Array.isArray(value) || !value.every(isKey)) {
+				invalid(
+					key,
+					'"computed" must be a list of keys of the entity, which the input does not take and "before" gives back.',
+				);
+			} else if (new Set(value).size !== value.length) {
+				invalid(key, '"computed" names a key twice.');
+			} else if (options.before === undefined) {
+				invalid(
+					key,
+					'"computed" needs a "before": the function that gives the keys back.',
+				);
+			} else {
+				for (const name of value as string[]) {
+					if (
+						options.omit !== undefined &&
+						Array.isArray(options.omit) &&
+						options.omit.includes(name)
+					) {
+						invalid(
+							key,
+							`"${name}" is also in "omit", which says where it comes from.`,
+						);
+					} else if (
+						isObject(options.values) &&
+						Object.hasOwn(options.values, name)
+					) {
+						invalid(
+							key,
+							`"${name}" is also in "values", which says where it comes from.`,
+						);
+					}
+					const field = fields?.[name];
+					if (
+						field !== undefined &&
+						(field.list !== undefined ||
+							(field.kind === "type" &&
+								scope.decls.get(field.type)?.kind === "entity"))
+					) {
+						invalid(
+							key,
+							`"${name}" holds a list or an entity, which "before" cannot give back for the entity to validate; give it in "values" or load it from an id of the input.`,
+						);
+					}
+				}
+			}
+		}
 		if (key === "values" || key === "set") {
 			if (!isObject(value) || !Object.keys(value).every(isKey)) {
 				invalid(key, `"${key}" must be an object by key of the entity.`);
+			}
+		}
+		if (key === "where") {
+			const fields =
+				entity?.kind === "entity" ? fieldsOfDecl(entity) : undefined;
+			if (!Array.isArray(value) || !value.every(isKey)) {
+				invalid(
+					key,
+					'"where" must be a list of keys of the entity, each matched by equality with a required key of the input.',
+				);
+			} else if (new Set(value).size !== value.length) {
+				invalid(key, '"where" names a key twice.');
+			} else {
+				for (const name of value as string[]) {
+					const field = fields?.[name];
+					if (
+						field !== undefined &&
+						(field.list !== undefined ||
+							!(
+								field.kind === "enum" ||
+								(field.kind === "type" && stdProperty(field.type) !== undefined)
+							))
+					) {
+						invalid(
+							key,
+							`"${name}" does not hold a scalar value, which the input can match by equality.`,
+						);
+					} else if (field?.optional === true) {
+						invalid(
+							key,
+							`"${name}" is optional, and the input requires each key of "where".`,
+						);
+					}
+				}
 			}
 		}
 		if (key === "orderBy") {

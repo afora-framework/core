@@ -43,6 +43,19 @@ function stringsOf(value: unknown): string[] {
 		: [];
 }
 
+/** The names of the parent repositories of a repository spec (`parents.<key>.repository`). */
+export function parentRepositoriesOf(parents: unknown): string[] {
+	if (typeof parents !== "object" || parents === null || Array.isArray(parents))
+		return [];
+	return Object.values(parents)
+		.map((parent) =>
+			typeof parent === "object" && parent !== null
+				? (parent as { readonly repository?: unknown }).repository
+				: undefined,
+		)
+		.filter((name): name is string => typeof name === "string");
+}
+
 /** Everything a use case declaration refers to by name: blueprints, types of inline fields, dependencies, errors and the classes of its steps. */
 function useCaseNamesOf(decl: Decl): string[] {
 	const { spec } = decl;
@@ -103,6 +116,7 @@ function dependenciesOf(decl: Decl, scope: Scope): string[] {
 				...(typeof decl.spec.entity === "string" ? [decl.spec.entity] : []),
 				...stringsOf(decl.spec.relations),
 				...stringsOf(decl.spec.environments),
+				...parentRepositoriesOf(decl.spec.parents),
 			];
 			break;
 		case "exception":

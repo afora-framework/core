@@ -3,7 +3,14 @@ import { checkCommand } from "./command";
 import { checkEntityEvents } from "./entity-events";
 import { checkEntityExpires } from "./entity-expires";
 import { checkEntitySchema } from "./entity-schema";
-import { fieldsOfDecl, flagOf, orderOf, type Root, rootOf } from "./graph";
+import {
+	fieldsOfDecl,
+	flagOf,
+	orderOf,
+	parentRepositoriesOf,
+	type Root,
+	rootOf,
+} from "./graph";
 import {
 	checkEnum,
 	checkFile,
@@ -21,10 +28,12 @@ import {
 } from "./policy";
 import {
 	checkCatalog,
+	checkImport,
 	checkLog,
 	checkProvider,
 	checkProviders,
 	checkTrace,
+	isImportObject,
 } from "./provider";
 import { isRooted } from "./rooted";
 import {
@@ -49,6 +58,9 @@ import {
 } from "./spec/types";
 import { checkException, checkUseCase } from "./use-case";
 import {
+	entityFileIssues,
+	entityFiles,
+	fileLayoutOf,
 	generatedFileIssues,
 	useCaseFileIssues,
 	useCaseFiles,
@@ -769,6 +781,7 @@ function checkFieldsOf(
 					"schemaVersion",
 					"upgrade",
 					"previousNames",
+					"implementation",
 				]
 			: owner === "record"
 				? ["fields", "sensitive", "unique", "change", "plugins"]
@@ -875,6 +888,31 @@ function checkRecord(
 
 	if (owner === "entity") {
 		checkEntitySchema(decl.name, decl.spec, path, issues);
+	}
+
+	if (owner === "entity" && decl.spec.implementation !== undefined) {
+		const implementation = decl.spec.implementation;
+		const implPath = [...path, "implementation"];
+		if (!isObject(implementation) || !isImportObject(implementation)) {
+			issues.push(
+				issue(
+					implPath,
+					"invalid_implementation",
+					'"implementation" of an entity is { "import": "./file.ts#Class" }: the class written by hand that extends the generated base.',
+				),
+			);
+		} else {
+			checkImport(implementation, implPath, issues);
+			if (scope.decls.has(`${decl.name}Base`)) {
+				issues.push(
+					issue(
+						implPath,
+						"name_collision",
+						`"${decl.name}Base" is the generated base of "${decl.name}" and is already a declaration.`,
+					),
+				);
+			}
+		}
 	}
 
 	if (owner === "entity" && decl.spec.expires !== undefined) {
@@ -1130,13 +1168,14 @@ function checkRepository(
 				"environments",
 				"indexes",
 				"scans",
+				"parents",
 			].includes(key)
 		) {
 			issues.push(
 				issue(
 					[...path, key],
 					"unknown_key",
-					`"${key}" is not valid here. Valid keys: entity, actions, provider, deletion, relations, environments, indexes, scans.`,
+					`"${key}" is not valid here. Valid keys: entity, actions, provider, deletion, relations, environments, indexes, scans, parents.`,
 				),
 			);
 		}
@@ -1366,6 +1405,118 @@ function checkRepository(
 		scope,
 		issues,
 	);
+	checkParents(
+		decl,
+		target?.kind === "entity" ? target : undefined,
+		scope,
+		issues,
+	);
+}
+
+/**
+ * The `parents` of a repository: `{ key: { repository, onDelete } }`, each
+ * key holding one scalar of its entity (the id of the parent), each
+ * repository declared, and no repository above it of its own entity (a
+ * cycle, which a delete could not walk).
+ */
+function checkParents(
+	decl: Decl,
+	entity: Decl | undefined,
+	scope: Scope,
+	issues: SpecIssue[],
+): void {
+	const { parents } = decl.spec;
+	const path = ["repositories", decl.name, "parents"];
+	if (parents === undefined) return;
+	if (!isObject(parents)) {
+		issues.push(
+			issue(
+				path,
+				"invalid_parents",
+				'Expected an object of parents by the key holding the id of the parent: { "moduleId": { "repository": "Modules", "onDelete": "cascade" } }.',
+			),
+		);
+		return;
+	}
+	const fields = entity ? (fieldsOfDecl(entity) ?? {}) : undefined;
+	const identity = new Set(["id", "createdAt", "updatedAt", "deletedAt"]);
+	for (const [key, parent] of Object.entries(parents)) {
+		const here = [...path, key];
+		if (
+			!isObject(parent) ||
+			Object.keys(parent).some(
+				(option) => option !== "repository" && option !== "onDelete",
+			) ||
+			typeof parent.repository !== "string" ||
+			(parent.onDelete !== "cascade" && parent.onDelete !== "restrict")
+		) {
+			issues.push(
+				issue(
+					here,
+					"invalid_parents",
+					'Expected { "repository": name, "onDelete": "cascade" | "restrict" }.',
+				),
+			);
+			continue;
+		}
+		if (fields !== undefined) {
+			const field = Object.hasOwn(fields, key) ? fields[key] : undefined;
+			if (field === undefined || identity.has(key)) {
+				issues.push(
+					issue(
+						here,
+						"invalid_parents",
+						identity.has(key)
+							? `"${key}" is an identity key; a parent is held by a key of its own.`
+							: `"${key}" is not a key of "${entity?.name}". Keys: ${Object.keys(fields).join(", ")}.`,
+					),
+				);
+				continue;
+			}
+			if (!isScalarField(field, scope)) {
+				issues.push(
+					issue(
+						here,
+						"invalid_parents",
+						`"${key}" must hold the id of the parent, a single value, not an entity, a record or a list.`,
+					),
+				);
+				continue;
+			}
+		}
+		const other = scope.decls.get(parent.repository);
+		if (other?.kind !== "repository") {
+			issues.push(
+				issue(
+					[...here, "repository"],
+					"unknown_repository",
+					`"${parent.repository}" is not a declared repository.`,
+				),
+			);
+			continue;
+		}
+		// Walks the repositories above it: none may be of its own entity.
+		const above = [other];
+		for (let index = 0; index < above.length; index++) {
+			const current = above[index] as Decl;
+			if (current.spec.entity === decl.spec.entity) {
+				issues.push(
+					issue(
+						[...here, "repository"],
+						"parent_cycle",
+						`"${parent.repository}" makes a cycle: "${current.name}" is a repository of "${String(decl.spec.entity)}", the entity of this repository. A delete walks parents to children, so they cannot loop.`,
+					),
+				);
+				break;
+			}
+			for (const name of parentRepositoriesOf(current.spec.parents)) {
+				const next = scope.decls.get(name);
+				if (next?.kind === "repository" && !above.includes(next)) {
+					above.push(next);
+				}
+			}
+		}
+	}
 }
 
 /** Everything that makes `input` an invalid `afora.json`, never throwing. */
@@ -1551,9 +1702,21 @@ function check(
 			),
 		);
 	}
-	// The files of the use cases hand-written classes need, and imports of generated files.
-	const files = useCaseFiles(own, scope);
-	issues.push(...useCaseFileIssues(files, scope));
+	// The files of the use cases and entities hand-written classes need, and imports of generated files.
+	const useCases = useCaseFiles(own, scope);
+	issues.push(...useCaseFileIssues(useCases, scope));
+	const entities = entityFiles(own, scope);
+	const files = new Map([...useCases, ...entities]);
+	if (!issues.some((i) => i.code === "cycle")) {
+		issues.push(
+			...entityFileIssues(
+				entities,
+				own,
+				scope,
+				fileLayoutOf(own, scope, files),
+			),
+		);
+	}
 	const dir = isObject(input.output) ? input.output.dir : DEFAULT_OUTPUT_DIR;
 	if (
 		!issues.some((i) => i.code === "invalid_output") &&

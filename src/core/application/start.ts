@@ -221,6 +221,10 @@ export function deferredProvider(
 		get: () => state.provider?.capabilities,
 		enumerable: true,
 	});
+	Object.defineProperty(proxy, "journal", {
+		get: () => state.provider?.journal,
+		enumerable: true,
+	});
 	Object.freeze(proxy);
 	deferred.set(proxy, state);
 	return proxy as unknown as IRepositoryProvider;

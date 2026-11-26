@@ -4,8 +4,11 @@ import { isIdentifier, isObject } from "./spec/field";
 import type { SpecIssue } from "./spec/types";
 
 /** The lifecycle cycles an entity spec can name events for, in order. */
-export const CYCLES = ["onCreate", "onUpdate", "onDelete"] as const;
-export type Cycle = (typeof CYCLES)[number];
+const CYCLES = ["onCreate", "onUpdate", "onDelete"] as const;
+
+/** The keys of `events`: the cycles, then `emits`, the events the methods raise. */
+export const EVENT_KEYS = [...CYCLES, "emits"] as const;
+export type EventKey = (typeof EVENT_KEYS)[number];
 
 /** One event of an entity: its name and, when it has one, the import of its handler. */
 export interface EntityEventEntry {
@@ -27,13 +30,13 @@ function entryOf(value: unknown): EntityEventEntry | undefined {
 	return undefined;
 }
 
-/** The events of each cycle as written, a single event made a list. */
-export function cyclesOf(
+/** The events of each cycle and of `emits` as written, a single event made a list. */
+export function eventListsOf(
 	events: unknown,
-): Partial<Record<Cycle, readonly EntityEventEntry[]>> {
+): Partial<Record<EventKey, readonly EntityEventEntry[]>> {
 	if (!isObject(events)) return {};
-	const found: Partial<Record<Cycle, EntityEventEntry[]>> = {};
-	for (const cycle of CYCLES) {
+	const found: Partial<Record<EventKey, EntityEventEntry[]>> = {};
+	for (const cycle of EVENT_KEYS) {
 		const value = events[cycle];
 		if (value === undefined) continue;
 		found[cycle] = (Array.isArray(value) ? value : [value])
@@ -46,7 +49,7 @@ export function cyclesOf(
 /** Every distinct event of an entity spec, by name, in the order they appear. */
 export function eventEntriesOf(events: unknown): EntityEventEntry[] {
 	const byName = new Map<string, EntityEventEntry>();
-	for (const list of Object.values(cyclesOf(events))) {
+	for (const list of Object.values(eventListsOf(events))) {
 		for (const entry of list) {
 			if (!byName.has(entry.name)) byName.set(entry.name, entry);
 		}
@@ -55,8 +58,9 @@ export function eventEntriesOf(events: unknown): EntityEventEntry[] {
 }
 
 /**
- * Checks the `events` of an entity: an object of `onCreate`, `onUpdate`
- * and `onDelete`, each one event or a non-empty list of them; an event is
+ * Checks the `events` of an entity: an object of `onCreate`, `onUpdate`,
+ * `onDelete` and `emits` (the events its methods raise), each one event or a
+ * non-empty list of them; an event is
  * an identifier, or `{ name, handler: { import } }`. One name is one event,
  * so naming it twice with different handlers is `event_conflict`. The
  * events are generated in `<Name>Events`, which no declaration may take.
@@ -73,24 +77,24 @@ export function checkEntityEvents(
 			issue(
 				path,
 				"invalid_events",
-				'"events" is { "onCreate"?, "onUpdate"?, "onDelete"? }, each an event name or a list of them.',
+				'"events" is { "onCreate"?, "onUpdate"?, "onDelete"?, "emits"? }, each an event name or a list of them.',
 			),
 		);
 		return;
 	}
 	for (const key of Object.keys(events)) {
-		if (!(CYCLES as readonly string[]).includes(key)) {
+		if (!(EVENT_KEYS as readonly string[]).includes(key)) {
 			issues.push(
 				issue(
 					[...path, key],
 					"unknown_key",
-					`"${key}" is not a cycle. Valid keys: ${CYCLES.join(", ")}.`,
+					`"${key}" is not a cycle or "emits". Valid keys: ${EVENT_KEYS.join(", ")}.`,
 				),
 			);
 		}
 	}
 	const handlers = new Map<string, string | undefined>();
-	for (const cycle of CYCLES) {
+	for (const cycle of EVENT_KEYS) {
 		const value = events[cycle];
 		if (value === undefined) continue;
 		const list = Array.isArray(value) ? value : [value];

@@ -586,3 +586,45 @@ describe("applicationOf", () => {
 		});
 	});
 });
+
+describe("describe() of an entity with a class of its own", () => {
+	const Made = entityOf(
+		blueprintOf((ctx) => ({ status: ctx.string })),
+		{ name: "Booking", change: ["status"] },
+	);
+	const entitiesOf = (Booking: typeof Made) =>
+		describeOf(applicationOf({ name: "booking", entities: { Booking } }))
+			.entities.Booking;
+
+	test("the class entityOf made, or an empty subclass, is generated", () => {
+		class Empty extends Made {}
+		expect(entitiesOf(Made)).not.toHaveProperty("implementation");
+		expect(entitiesOf(Empty)).not.toHaveProperty("implementation");
+	});
+
+	test("a subclass with methods, directly or over an empty base, is a class", () => {
+		class Booking extends Made {
+			confirm() {
+				this.change.status("confirmed");
+			}
+		}
+		class Base extends Made {}
+		class Over extends Base {
+			get label() {
+				return "booking";
+			}
+		}
+		expect(entitiesOf(Booking).implementation).toBe("class");
+		expect(entitiesOf(Over).implementation).toBe("class");
+	});
+
+	test("a record is never marked", () => {
+		class Note extends recordOf(blueprintOf((ctx) => ({ body: ctx.string }))) {
+			shout() {
+				return "!";
+			}
+		}
+		const app = applicationOf({ name: "notes", records: { Note } });
+		expect(describeOf(app).records.Note).not.toHaveProperty("implementation");
+	});
+});

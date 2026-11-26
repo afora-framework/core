@@ -439,11 +439,12 @@ const EntityEvents = Type.Object(
 		onCreate: Type.Optional(EntityEventList),
 		onUpdate: Type.Optional(EntityEventList),
 		onDelete: Type.Optional(EntityEventList),
+		emits: Type.Optional(EntityEventList),
 	},
 	{
 		additionalProperties: false,
 		description:
-			'Entities only: the events each cycle raises, generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.',
+			'Entities only: the events each cycle raises and, in emits, those its methods raise (this.emit), generated as <Name>Events with eventOf. An event is a name ("created"), raised for a policy such as publishEvents, or { "name": "created", "handler": { "import": "./events.ts#onCreated" } }.',
 	},
 );
 
@@ -518,7 +519,7 @@ const RecordDeclaration = Type.Object(
 				],
 				{
 					description:
-						'Entities only: how ids are made. "uuid7" (default) generates and accepts UUID v7; "uuid" accepts any UUID version (v4 from an existing database) and generates v7; "key" is a natural key (1 to 256 characters) the input must hold, never generated; "serial" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds.',
+						'Entities only: how ids are made. "uuid7" (default) generates and accepts UUID v7; "uuid" accepts any UUID version (v4 from an existing database) and generates v7; "key" is a natural key (1 to 256 characters) the input must hold, never generated; "serial" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds. On the wire the id is a string for "uuid7", "uuid" and "key", and an integer (a JSON number) for "serial": the type a client gives it, and the one toOpenAPI and jsonSchemaOf give it.',
 				},
 			),
 		),
@@ -546,6 +547,16 @@ const RecordDeclaration = Type.Object(
 		previousNames: Type.Optional(
 			StringList(
 				"Entities only: the names the entity had before; app.migrate moves their rows and start({ lock }) accepts the rename.",
+			),
+		),
+		implementation: Type.Optional(
+			Type.Object(
+				{ import: ImportRef.properties.import },
+				{
+					additionalProperties: false,
+					description:
+						'Entities only: the class written by hand that extends the generated <Name>Base, { "import": "../domain/booking.ts#Booking" }. Repositories, events, fields and the application use it.',
+				},
 			),
 		),
 	},
@@ -602,6 +613,31 @@ const RepositoryDeclaration = Type.Object(
 					default: "allow",
 					description:
 						"A query only a scan serves: runs, logs repository-scan, or throws InvalidRepositoryQuery.",
+				},
+			),
+		),
+		parents: Type.Optional(
+			Type.Record(
+				Type.String({ pattern: KEY }),
+				Type.Object(
+					{
+						repository: Type.String({
+							pattern: NAME,
+							description: "The repository of the parent.",
+						}),
+						onDelete: Type.Union(
+							[Type.Literal("cascade"), Type.Literal("restrict")],
+							{
+								description:
+									"What the delete of the parent does to the entities: deletes them with it, hard or soft as this repository deletes (cascade), or refuses with RepositoryDeleteRestricted, a 409, while any is left (restrict).",
+							},
+						),
+					},
+					{ additionalProperties: false },
+				),
+				{
+					description:
+						"The parents of its entities, by the key of the entity holding the id of the parent (a single value, not an entity). The delete of a parent repository walks them, at any depth, once the application registers them; they cannot form a cycle.",
 				},
 			),
 		),
@@ -957,7 +993,7 @@ const GenericUseCaseDeclaration = Type.Object(
 		options: Type.Optional(
 			Type.Record(Type.String({ pattern: KEY }), Type.Unknown(), {
 				description:
-					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }; "key": "id" for an entity that is the caller, not for create and register), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "relations" (create and register: { <key>: { "shared": true } } lets the input name an entity of another owner), "takesTokenKeys" (register: true lets it take the keys a token is made from, which a public register refuses; only with an access that asks for scopes, and never the token version key), "set", "orderBy", "maxLimit" (list: the largest limit, 100 by default), and "token" for login and refresh ({ "secret": { "env": "NAME" }, "issuer"?, "audience"?, "expiresIn"?, "algorithm"?, "refresh"?: { "expiresIn" }, "scopes"?, "scopesFrom"?, "claims"?, "versionFrom"?, "rotate"? }: login then answers a token; "versionFrom" names a required, integer, sensitive key listed in change, the token version that each refresh token carries and refresh compares with the stored one; "rotate": true makes refresh add 1 to it, so a refresh token is used once), and for logout and changePassword (the same object, or { "versionFrom" }: they add 1 to the token version, ending the refresh tokens issued before; logout then needs "owner": { "key": "id", "context" }); those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").',
+					'Its options: "as" (the response key), "owner" ({ "key"?, "context" }; "key": "id" for an entity that is the caller, not for create and register), "errors" ({ "notFound" | "conflict" | "invalid" | "owner": an exception name }), and per use case "omit", "values", "relations" (create and register: { <key>: { "shared": true } } lets the input name an entity of another owner), "takesTokenKeys" (register: true lets it take the keys a token is made from, which a public register refuses; only with an access that asks for scopes, and never the token version key), "set", "computed" (create: a list of keys of the entity that the input does not take and that "before", which it needs, gives back; they may be required keys of the entity), "where" (list: a list of keys of the entity, each a required key of the input matched by equality, e.g. the parent of the children it lists), "orderBy", "maxLimit" (list: the largest limit, 100 by default), and "token" for login and refresh ({ "secret": { "env": "NAME" }, "issuer"?, "audience"?, "expiresIn"?, "algorithm"?, "refresh"?: { "expiresIn" }, "scopes"?, "scopesFrom"?, "claims"?, "versionFrom"?, "rotate"? }: login then answers a token; "versionFrom" names a required, integer, sensitive key listed in change, the token version that each refresh token carries and refresh compares with the stored one; "rotate": true makes refresh add 1 to it, so a refresh token is used once), and for logout and changePassword (the same object, or { "versionFrom" }: they add 1 to the token version, ending the refresh tokens issued before; logout then needs "owner": { "key": "id", "context" }); those that write also take "before" and "after" ({ "import": "./file.ts#function" }, run before and after the write), "dependencies" (key -> name of a use case, repository or environment, for them) and "throws" (the exceptions they throw, as in "errors").',
 			}),
 		),
 		description: Type.Optional(Type.String()),

@@ -98,6 +98,8 @@ export type {
 	RepositorySchema,
 } from "./core/repository/types/repository.interface";
 export type {
+	MigrationJournal,
+	MigrationJournalEntry,
 	SchemaChange,
 	SchemaChangeClass,
 	SchemaChangeKind,

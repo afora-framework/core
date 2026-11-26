@@ -18,7 +18,7 @@ claude mcp add afora -- bunx @afora/mcp --project .
 | Tool                  | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `afora_catalog`       | What a spec can use, read from `@afora/core`: Std properties (flags and the `with` options each takes), record plugins, reserved keys, repository action rules, exception layers, core exceptions.                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `afora_project`       | The project as a map, read-only: entities, repositories, every operation with how it is implemented, its declared route and access, and each output with the route every operation is served at and who may call it. Reads a TypeScript application directly (`--app` or `app`), with no `afora.json`, else the file; `source: "file"` reads `afora.json` even when there is an application. When the project has both, `drift` lists where they differ (declarations in only one, an operation implemented, routed or protected differently, another path in an output); `compare: false` skips it. |
+| `afora_project`       | The project as a map, read-only: entities, repositories, every operation with how it is implemented, its declared route and access, and each output with the route every operation is served at and who may call it. Reads a TypeScript application directly (`--app` or `app`), with no `afora.json`, else the file; `source: "file"` reads `afora.json` even when there is an application. When the project has both, `drift` lists where they differ (declarations in only one, an operation implemented, routed or protected differently, another path in an output); `compare: false` skips it. A stage that `afora.json` names by an import (`{ "import": "./stages.ts#api" }`) is read from the application when it is known, so its sink, options and hooks show as for a stage written in JSON; with `compare: false` the application is not imported and the stage stays opaque. |
 | `afora_spec_read`     | Reads `afora.json` with its issues; with no file and an `--app`, the spec extracted from that code (not written).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `afora_extract`       | Extracts the spec of an `Application` of the project (a Bun subprocess imports it). Writes nothing.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `afora_spec_validate` | Validates a draft `spec`, or the file on disk; returns `{ valid, issues }`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -60,7 +60,7 @@ const transport = new StdioServerTransport(); // or any transport of the MCP SDK
 await mcp.server().connect(transport);
 ```
 
-- Options (JSON, so the stage can live in `afora.json`): `name`, `version` (of the server `server()` creates), `prefix`, `include` (operation ids; all by default), `context` and `auth`.
+- Options (JSON, so the stage can live in `afora.json`): `name`, `version` (of the server `server()` creates), `prefix`, `include` (operation ids; all by default), `context`, `auth` and `requiredScopes`.
 - One tool per operation, named `{prefix}{command}_{operation}` in snake case (`blog_users_register`). The description is the operation one (plus `Deprecated.`) and `inputSchema` is the JSON Schema of the input, inline, with no `$ref`.
 - A call runs `operation.invoke(args, { context, principal })` and answers one text content with the response as JSON (an array for a use case whose response is a list; no `structuredContent`, so it needs no wrapping); sensitive values are masked.
 - **Access.** A tool whose use case declares an [`access`](../../docs/auth.md) checks the caller before it runs and answers a 401 or 403 problem. The caller is `extra.principal` of `call`, else what the `authenticator` hook gives (`mcpTools(options, { authenticator })`: its `request.header(name)` reads the values of the call), else the token of the `auth` option (`auth: { jwt: { secret: { env } } }`, read from the value `authorization`). With none of them such a tool always answers 401. Its description says what it requires, and a tool whose use case declares a route carries the hints `readOnlyHint` (a `get`) and `destructiveHint` (a `delete`).
@@ -68,6 +68,32 @@ await mcp.server().connect(transport);
 - Context: `context: { token: "authorization" }` fills `context.token` from the value named `authorization` in `extra.values` of `call(name, args, extra)`. With `register`/`server()`, the values are the HTTP headers of the request (lower-case) and the string entries of the request `_meta`.
 - The result is `{ tools, call(name, args, extra?), register(server), server() }`: `register` installs `tools/list` and `tools/call` on a low-level SDK `Server`, `server()` returns a new one with the `tools` capability.
 - For codegen, `stages` and `McpStages` are exported (re-export them from a module of the project, `export { stages } from "@afora/mcp";`, and pass `--stages ./stages.ts`; the CLIs read the flag as a file): `{ name: "mcpTools", module: "@afora/mcp", export: "mcpTools", kind: "sink" }`.
+
+## Serve over HTTP
+
+`mcp.fetch(request)` serves the same tools to a remote client over Streamable HTTP, stateless, on web `Request` and `Response` (Bun, Node >= 22, Workers). Route one path to it:
+
+<!-- docs:code context
+declare const Tools: { build(): { fetch(request: Request): Promise<Response> } }; // the `mcpTools` output
+-->
+```ts
+const mcp = Tools.build();
+
+Bun.serve({
+	fetch: (request) =>
+		new URL(request.url).pathname === "/mcp"
+			? mcp.fetch(request)
+			: new Response("Not found", { status: 404 }),
+});
+```
+
+A client then connects with `claude mcp add --transport http blog https://example.com/mcp`.
+
+- Only `POST` is accepted; any other method is a 405 with `Allow: POST`.
+- With an authenticator (the `auth` option or the `authenticator` hook, the same ones a tool call asks) the caller is identified before the handshake: no principal is a 401 with `WWW-Authenticate: Bearer realm="<name>"`, so the client sees the refusal at once instead of listing tools and failing inside each result. The whole endpoint is then private: every request needs a principal, even when every tool it exposes is public; the authenticator is asked with the first operation that requires access. Only headers reach the authenticator (`Authorization` or the header `auth.jwt.header` names): a token read from a cookie alone (`auth.jwt.cookie`) does not apply to MCP, over HTTP or stdio.
+- `requiredScopes` (an option, a list of scopes) is a 403 with `error="insufficient_scope"` for a principal that lacks any of them. It needs an authenticator.
+- Each tool still checks the access its use case declares.
+- With `@afora/hono`, `mountMcp(app, "/mcp", mcp)` mounts it on a path of the app that serves the HTTP output.
 
 ## A project written in code
 

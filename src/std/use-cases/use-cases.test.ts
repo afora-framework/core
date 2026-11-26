@@ -459,15 +459,14 @@ describe("in an application", () => {
 		});
 	});
 
-	test("an error given in options must be registered, as any other", () => {
-		expect(() =>
-			applicationOf({
-				name: "blog",
-				entities: { User, Post },
-				repositories: { Users, Posts },
-				commands: { Blog },
-			}),
-		).toThrow("PostNotFound");
+	test("an error given in options is registered by the command that holds it", () => {
+		const app = applicationOf({
+			name: "blog",
+			entities: { User, Post },
+			repositories: { Users, Posts },
+			commands: { Blog },
+		});
+		expect(Object.keys(app.describe().exceptions)).toContain("PostNotFound");
 	});
 
 	test("a use case written by hand can depend on one", async () => {

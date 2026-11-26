@@ -1,9 +1,12 @@
 import {
 	type IRepositoryProvider,
+	type MigrationJournal,
 	type ProviderQuery,
 	type RepositoryContext,
 	type RepositoryData,
 	SCHEMA_VERSION_KEY,
+	type SchemaLock,
+	schemaLockOf,
 } from "../adapters";
 import {
 	applicationOf,
@@ -84,6 +87,14 @@ export interface ProviderContractOptions {
 	 * @default true
 	 */
 	readonly schemaVersionKey?: boolean;
+	/**
+	 * Run the cases of the migration journal (`provider.journal`): a plan
+	 * is applied once recorded, by entity and checksum, only the last plan
+	 * recorded for an entity counts as applied, and `app.migrate` records an
+	 * applied plan and skips it on the next run. Defaults to
+	 * whether the provider has a `journal`.
+	 */
+	readonly journal?: boolean;
 }
 
 type GatedCapability = "versioning" | "atomic" | "expiry" | "generatedIds";
@@ -1756,6 +1767,116 @@ export function providerContract(
 				await app.migrate({ mode: "apply", destructive: true, pageSize: 1 });
 				expect(await provider.count(previous)).toBe(0);
 				expect(await provider.count(current)).toBe(2);
+			});
+
+			describe("journal", () => {
+				const journaled = (name: string, body: () => Promise<void>) =>
+					it(name, async () => {
+						const enabled =
+							options.journal ??
+							typeof (await makeProvider()).journal === "object";
+						if (enabled) await body();
+					});
+				const checksum = (digit: string) => digit.repeat(64);
+
+				journaled(
+					"a plan is applied once recorded, by entity and checksum",
+					async () => {
+						const provider = await makeProvider();
+						const journal = provider.journal as MigrationJournal;
+						const plan = {
+							entity: "Accounts",
+							changes: [],
+							destructive: false,
+						};
+						expect(await journal.applied("Accounts", checksum("a"))).toBe(
+							false,
+						);
+						const entry = {
+							entity: "Accounts",
+							plan,
+							checksum: checksum("a"),
+							appliedAt: "2026-01-01T00:00:00.000Z",
+						};
+						await journal.record(entry);
+						// Recording it again changes nothing.
+						await journal.record(entry);
+						expect(await journal.applied("Accounts", checksum("a"))).toBe(true);
+						expect(await journal.applied("Accounts", checksum("b"))).toBe(
+							false,
+						);
+						expect(await journal.applied("One", checksum("a"))).toBe(false);
+					},
+				);
+
+				journaled(
+					"only the last plan recorded for an entity counts as applied",
+					async () => {
+						const provider = await makeProvider();
+						const journal = provider.journal as MigrationJournal;
+						const entry = (digit: string, at: string) => ({
+							entity: "Accounts",
+							plan: { entity: "Accounts", changes: [], destructive: false },
+							checksum: checksum(digit),
+							appliedAt: at,
+						});
+						await journal.record(entry("a", "2026-01-01T00:00:00.000Z"));
+						// Another plan after it: a key dropped after it was added.
+						await journal.record(entry("b", "2026-01-01T00:00:00.000Z"));
+						expect(await journal.applied("Accounts", checksum("b"))).toBe(true);
+						expect(await journal.applied("Accounts", checksum("a"))).toBe(
+							false,
+						);
+						// The first one again, the key added back: the last again.
+						await journal.record(entry("a", "2026-01-02T00:00:00.000Z"));
+						expect(await journal.applied("Accounts", checksum("a"))).toBe(true);
+						expect(await journal.applied("Accounts", checksum("b"))).toBe(
+							false,
+						);
+					},
+				);
+
+				journaled(
+					"app.migrate records an applied plan and skips it on the next run",
+					async () => {
+						const { app } = await setup(accountsOf());
+						const current = schemaLockOf(
+							(app as unknown as { describe(): never }).describe(),
+						);
+						// A lock where a key had a description: a plan of one change
+						// with nothing to apply to the store.
+						const accounts = current.entities
+							.Accounts as SchemaLock["entities"][string];
+						const email = accounts.fields.email as { schema: object };
+						const lock: SchemaLock = {
+							...current,
+							entities: {
+								...current.entities,
+								Accounts: {
+									...accounts,
+									fields: {
+										...accounts.fields,
+										email: {
+											...email,
+											schema: { ...email.schema, description: "old" },
+										} as never,
+									},
+								},
+							},
+						};
+						const first = await app.migrate({ mode: "apply", lock });
+						expect(first.entities.Accounts?.alreadyApplied).toBe(false);
+						const second = await app.migrate({ mode: "apply", lock });
+						expect(second.entities.Accounts?.alreadyApplied).toBe(true);
+						expect(second.entities.Accounts?.upgraded).toBe(0);
+						const destructive = await app.migrate({
+							mode: "apply",
+							lock,
+							destructive: true,
+						});
+						expect(destructive.entities.Accounts?.alreadyApplied).toBe(false);
+					},
+				);
 			});
 		});
 	});

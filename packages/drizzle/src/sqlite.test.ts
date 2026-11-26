@@ -4,6 +4,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	applicationOf,
 	blueprintOf,
 	commandOf,
 	entityOf,
@@ -11,15 +12,27 @@ import {
 	Serial,
 	useCaseOf,
 } from "@afora/core";
-import type {
-	RepositoryContext,
-	SchemaChange,
-	SchemaPlan,
+import {
+	type RepositoryContext,
+	type SchemaChange,
+	type SchemaPlan,
+	schemaLockOf,
 } from "@afora/core/adapters";
 import { providerContract } from "@afora/core/testing";
 import { drizzle } from "drizzle-orm/bun-sqlite";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { drizzleProvider, providers } from "./index";
+import {
+	getTableConfig,
+	integer,
+	sqliteTable,
+	text,
+} from "drizzle-orm/sqlite-core";
+import {
+	type DrizzleProvider,
+	drizzleCatalogOf,
+	drizzleProvider,
+	drizzleTableOf,
+	providers,
+} from "./index";
 
 /** Tables for the contract kit: its entity has more keys than its blueprint. */
 const accountTable = (name: string) =>
@@ -75,6 +88,22 @@ describe("catalog", () => {
 		expect(providers).toEqual([
 			{ name: "drizzle", module: "@afora/drizzle", export: "drizzleProvider" },
 		]);
+	});
+
+	it("names the factory of the tables for one dialect or both", () => {
+		expect(drizzleCatalogOf({ dialect: "sqlite" })).toEqual([
+			{
+				name: "drizzle",
+				module: "@afora/drizzle",
+				export: "drizzleProvider",
+				tables: { export: "drizzleTableOf", dialect: "sqlite" },
+			},
+		]);
+		expect(
+			drizzleCatalogOf({ dialect: ["sqlite", "postgres"] })[0].tables.dialect,
+		).toEqual(["sqlite", "postgres"]);
+		expect(() => drizzleCatalogOf({ dialect: "mysql" as never })).toThrow();
+		expect(() => drizzleCatalogOf({ dialect: [] })).toThrow();
 	});
 });
 
@@ -859,5 +888,420 @@ describe("migrate", () => {
 		expect(await readFile(file, "utf8")).toEndWith(
 			'--> statement-breakpoint\nALTER TABLE "notes" DROP COLUMN "legacy";\n',
 		);
+	});
+});
+
+// Tables derived from entities (drizzleTableOf).
+
+/** The CREATE TABLE and CREATE INDEX statements of a derived SQLite table. */
+function createStatementsOf(table: unknown): string[] {
+	const config = getTableConfig(table as never);
+	const columns = config.columns.map((column) => {
+		const parts = [`"${column.name}"`, column.getSQLType()];
+		if (column.primary) parts.push("PRIMARY KEY");
+		if ((column as { autoIncrement?: boolean }).autoIncrement)
+			parts.push("AUTOINCREMENT");
+		if (column.notNull && !column.primary) parts.push("NOT NULL");
+		if (column.isUnique) parts.push("UNIQUE");
+		return parts.join(" ");
+	});
+	return [
+		`CREATE TABLE "${config.name}" (${columns.join(", ")})`,
+		...config.indexes.map(
+			(index) =>
+				`CREATE INDEX "${index.config.name}" ON "${config.name}" (${index.config.columns
+					.map((column) => `"${(column as { name: string }).name}"`)
+					.join(", ")})`,
+		),
+	];
+}
+
+/** The entity of the contract kit, with every key its rows hold. */
+class ContractAccount extends entityOf(
+	blueprintOf((ctx) => ({
+		email: ctx.optionalOf(ctx.string),
+		name: ctx.optionalOf(ctx.string),
+		age: ctx.optionalOf(ctx.integer),
+		active: ctx.optionalOf(ctx.boolean),
+		address: ctx.optionalOf(
+			blueprintOf((c) => ({ city: c.string, zip: c.optionalOf(c.string) })),
+		),
+		tags: ctx.optionalOf(ctx.listOf(ctx.string)),
+		group: ctx.optionalOf(ctx.integer),
+		n: ctx.optionalOf(ctx.integer),
+		visits: ctx.optionalOf(ctx.integer),
+	})),
+	{
+		name: "Accounts",
+		unique: ["email"],
+		versioned: true,
+		expires: { after: { days: 1 } },
+		schemaVersion: 2,
+	},
+) {}
+class ContractSerial extends entityOf(
+	blueprintOf((ctx) => ({
+		email: ctx.optionalOf(ctx.string),
+		name: ctx.optionalOf(ctx.string),
+	})),
+	{ name: "Serials", id: Serial, unique: ["email"] },
+) {}
+
+function derivedContractDatabase() {
+	const sqlite = new Database(":memory:");
+	// The kit writes rows without createdAt nor version.
+	const overrides = () => ({
+		createdAt: text("createdAt"),
+		version: integer("version"),
+	});
+	const account = (name: string) =>
+		drizzleTableOf(ContractAccount, {
+			dialect: "sqlite",
+			name,
+			overrides: overrides(),
+		});
+	const tables = {
+		Accounts: account("accounts"),
+		One: account("one"),
+		Two: account("two"),
+		Serials: drizzleTableOf(ContractSerial, {
+			dialect: "sqlite",
+			name: "serials",
+			overrides: { createdAt: text("createdAt") },
+		}),
+	};
+	for (const table of Object.values(tables))
+		for (const statement of createStatementsOf(table)) sqlite.run(statement);
+	return { sqlite, db: drizzle(sqlite), tables };
+}
+
+describe("over tables derived by drizzleTableOf", () => {
+	providerContract(
+		{ describe, it, expect },
+		() =>
+			drizzleProvider({ ...derivedContractDatabase(), migrations: "apply" }),
+		{ indexes: true },
+	);
+});
+
+describe("drizzleTableOf on SQLite", () => {
+	class Team extends entityOf(
+		blueprintOf((ctx) => ({ title: ctx.string })),
+		{
+			name: "Team",
+		},
+	) {}
+	class Member extends entityOf(
+		blueprintOf((ctx) => ({
+			name: ctx.string,
+			email: ctx.email,
+			age: ctx.optionalOf(ctx.integer),
+			score: ctx.number,
+			active: ctx.boolean,
+			born: ctx.optionalOf(ctx.date),
+			address: ctx.optionalOf(blueprintOf((c) => ({ city: c.string }))),
+			tags: ctx.listOf(ctx.string),
+			team: Team,
+		})),
+		{ name: "Member", unique: ["email"] },
+	) {}
+
+	it("stores and reads every kind of key through a repository", async () => {
+		const sqlite = new Database(":memory:");
+		const tables = {
+			Team: drizzleTableOf(Team, { dialect: "sqlite" }),
+			Member: drizzleTableOf(Member, {
+				dialect: "sqlite",
+				indexes: { byAge: { where: ["age"], orderBy: "name" } },
+			}),
+		};
+		for (const table of Object.values(tables))
+			for (const statement of createStatementsOf(table)) sqlite.run(statement);
+		const provider = drizzleProvider({ db: drizzle(sqlite), tables });
+		const Teams = repositoryOf({
+			entity: Team,
+			provider,
+			actions: ["create"],
+		});
+		const Members = repositoryOf({
+			entity: Member,
+			provider,
+			relations: [Teams],
+			indexes: { byAge: { where: ["age"], orderBy: "name" } },
+			actions: ["create", "findByEmail", "findMany"],
+		});
+		const team = await Teams.create(new Team({ title: "Core" }));
+		await Members.create(
+			new Member({
+				name: "Ana",
+				email: "ana@example.com",
+				age: 30,
+				score: 9.5,
+				active: true,
+				born: "1990-05-01",
+				address: { city: "Rio" },
+				tags: ["a", "b"],
+				team,
+			}),
+		);
+		const found = await Members.findByEmail("ana@example.com");
+		expect(found?.toJSON()).toMatchObject({
+			name: "Ana",
+			age: 30,
+			score: 9.5,
+			active: true,
+			born: "1990-05-01",
+			address: { city: "Rio" },
+			tags: ["a", "b"],
+			team: { id: team.id, title: "Core" },
+		});
+		expect(sqlite.query("SELECT team, active, tags FROM member").get()).toEqual(
+			{ team: team.id, active: 1, tags: '["a","b"]' },
+		);
+		expect(
+			(
+				await Members.findMany({
+					where: { age: 30 },
+					orderBy: [{ key: "name" }],
+				})
+			).length,
+		).toBe(1);
+		const indexes = sqlite.query("PRAGMA index_list(member)").all() as {
+			name: string;
+		}[];
+		expect(indexes.map((index) => index.name)).toContain("member_by_age");
+	});
+
+	it("gives Serial ids the database assigns", async () => {
+		class Ticket extends entityOf(
+			blueprintOf((ctx) => ({ title: ctx.string })),
+			{ name: "Ticket", id: Serial },
+		) {}
+		const sqlite = new Database(":memory:");
+		const table = drizzleTableOf(Ticket, { dialect: "sqlite" });
+		for (const statement of createStatementsOf(table)) sqlite.run(statement);
+		const Tickets = repositoryOf({
+			entity: Ticket,
+			provider: drizzleProvider({
+				db: drizzle(sqlite),
+				tables: { Ticket: table },
+			}),
+			actions: ["create"],
+		});
+		const first = await Tickets.create(new Ticket({ title: "a" }));
+		const second = await Tickets.create(new Ticket({ title: "b" }));
+		expect([first.id, second.id]).toEqual([1, 2]);
+	});
+});
+
+describe("the migration journal", () => {
+	class Note extends entityOf(
+		blueprintOf((ctx) => ({
+			title: ctx.string,
+			tags: ctx.optionalOf(ctx.listOf(ctx.string)),
+		})),
+		{ name: "Note" },
+	) {}
+	class NoteV1 extends entityOf(
+		blueprintOf((ctx) => ({ title: ctx.string })),
+		{ name: "Note" },
+	) {}
+	const appOf = (
+		entity: typeof Note | typeof NoteV1,
+		provider: DrizzleProvider,
+	) =>
+		applicationOf({
+			name: "notes",
+			entities: { Note: entity },
+			repositories: {
+				Notes: repositoryOf({ entity, provider, actions: ["findMany"] }),
+			},
+		});
+	const lock = schemaLockOf(
+		appOf(
+			NoteV1,
+			drizzleProvider({ db: drizzle(new Database(":memory:")), tables: {} }),
+		).describe(),
+	);
+	const database = () => {
+		const sqlite = new Database(":memory:");
+		for (const statement of createStatementsOf(
+			drizzleTableOf(NoteV1, { dialect: "sqlite", name: "note" }),
+		))
+			sqlite.run(statement);
+		return sqlite;
+	};
+	const tables = { Note: drizzleTableOf(Note, { dialect: "sqlite" }) };
+
+	it("records each applied plan in afora_migrations and skips it on the next run", async () => {
+		const sqlite = database();
+		const plans: unknown[] = [];
+		const provider = drizzleProvider({
+			db: drizzle(sqlite),
+			tables,
+			migrations: "apply",
+		});
+		const migrate = provider.migrate?.bind(provider);
+		Object.assign(provider, {
+			migrate: (...args: Parameters<NonNullable<typeof migrate>>) => {
+				plans.push(args[1]);
+				return migrate?.(...args);
+			},
+		});
+		const app = appOf(Note, provider);
+		const first = await app.migrate({ mode: "apply", lock });
+		expect(first.entities.Note?.alreadyApplied).toBe(false);
+		expect(
+			(sqlite.query("PRAGMA table_info(note)").all() as { name: string }[]).map(
+				(column) => column.name,
+			),
+		).toContain("tags");
+		const rows = sqlite
+			.query("SELECT entity, checksum, plan, applied_at FROM afora_migrations")
+			.all() as Record<string, string>[];
+		expect(rows).toHaveLength(1);
+		expect(rows[0]?.entity).toBe("Note");
+		expect(rows[0]?.checksum).toMatch(/^[0-9a-f]{64}$/);
+		expect(JSON.parse(rows[0]?.plan ?? "{}").changes[0].key).toBe("tags");
+
+		const second = await app.migrate({ mode: "apply", lock });
+		expect(second.entities.Note?.alreadyApplied).toBe(true);
+		expect(plans).toHaveLength(1);
+
+		// A new process over the same database finds the journal there.
+		const rerun = appOf(
+			Note,
+			drizzleProvider({ db: drizzle(sqlite), tables, migrations: "apply" }),
+		);
+		expect(
+			(await rerun.migrate({ mode: "apply", lock })).entities.Note
+				?.alreadyApplied,
+		).toBe(true);
+		expect(
+			sqlite.query("SELECT count(*) AS n FROM afora_migrations").get(),
+		).toEqual({ n: 1 });
+	});
+
+	it("is absent without migrations and with migrations: { file }", async () => {
+		const file = join(
+			await mkdtemp(join(tmpdir(), "afora-drizzle-")),
+			"0001_afora.sql",
+		);
+		const sqlite = database();
+		const written = drizzleProvider({
+			db: drizzle(sqlite),
+			tables,
+			migrations: { file },
+		});
+		expect(written.journal).toBeUndefined();
+		expect(
+			drizzleProvider({ db: drizzle(sqlite), tables }).journal,
+		).toBeUndefined();
+		await appOf(Note, written).migrate({ mode: "apply", lock });
+		expect(
+			sqlite
+				.query("SELECT name FROM sqlite_master WHERE name = 'afora_migrations'")
+				.all(),
+		).toEqual([]);
+	});
+});
+
+describe("parents on SQLite", () => {
+	class Course extends entityOf(
+		blueprintOf((ctx) => ({ title: ctx.string })),
+		{
+			name: "Course",
+		},
+	) {}
+	class Module extends entityOf(
+		blueprintOf((ctx) => ({ courseId: ctx.string, title: ctx.string })),
+		{ name: "Module" },
+	) {}
+	class Lesson extends entityOf(
+		blueprintOf((ctx) => ({ moduleId: ctx.string, title: ctx.string })),
+		{ name: "Lesson" },
+	) {}
+
+	/** A course, its modules (soft) and their lessons (hard), on one database. */
+	async function school(lessons: "cascade" | "restrict") {
+		const sqlite = new Database(":memory:");
+		const tables = {
+			Course: drizzleTableOf(Course, { dialect: "sqlite" }),
+			Module: drizzleTableOf(Module, {
+				dialect: "sqlite",
+				indexes: { byCourse: { where: ["courseId"] } },
+			}),
+			Lesson: drizzleTableOf(Lesson, {
+				dialect: "sqlite",
+				indexes: { byModule: { where: ["moduleId"] } },
+			}),
+		};
+		for (const table of Object.values(tables))
+			for (const statement of createStatementsOf(table)) sqlite.run(statement);
+		const Courses = repositoryOf({
+			entity: Course,
+			actions: ["create", "findById", "delete", "count"],
+		});
+		const Modules = repositoryOf({
+			entity: Module,
+			actions: ["create", "count"],
+			deletion: "soft",
+			parents: { courseId: { repository: Courses, onDelete: "cascade" } },
+		});
+		const Lessons = repositoryOf({
+			entity: Lesson,
+			actions: ["create", "count"],
+			parents: { moduleId: { repository: Modules, onDelete: lessons } },
+		});
+		const Content = commandOf({
+			name: "Content",
+			transaction: true,
+			useCases: (ctx) => ({ deleteCourse: ctx.delete(Courses) }),
+		});
+		const app = applicationOf({
+			name: "school",
+			provider: drizzleProvider({ db: drizzle(sqlite), tables }),
+			entities: { Course, Module, Lesson },
+			repositories: { Courses, Modules, Lessons },
+			commands: { Content },
+		});
+		const repositories = app.repositories;
+		const kept = await repositories.Courses.create({ title: "kept" });
+		const course = await repositories.Courses.create({ title: "course" });
+		for (const owner of [course, course, kept]) {
+			const module = await repositories.Modules.create({
+				courseId: owner.id,
+				title: "m",
+			});
+			await repositories.Lessons.create({ moduleId: module.id, title: "a" });
+			await repositories.Lessons.create({ moduleId: module.id, title: "b" });
+		}
+		return { app, sqlite, course };
+	}
+
+	it("the standard delete cascades through three levels in one transaction", async () => {
+		const { app, sqlite, course } = await school("cascade");
+		await app.commands.Content.run("deleteCourse", { id: course.id });
+		const { Courses, Modules, Lessons } = app.repositories;
+		expect(await Courses.count()).toBe(1);
+		expect(await Modules.count()).toBe(1);
+		// Soft: the modules of the course stay, with deletedAt.
+		expect(
+			sqlite
+				.query("SELECT COUNT(*) AS n FROM module WHERE deletedAt IS NOT NULL")
+				.get(),
+		).toEqual({ n: 2 });
+		expect(await Lessons.count()).toBe(2);
+	});
+
+	it("restrict refuses with RepositoryDeleteRestricted and changes nothing", async () => {
+		const { app, course } = await school("restrict");
+		await expect(
+			app.commands.Content.run("deleteCourse", { id: course.id }),
+		).rejects.toMatchObject({ name: "RepositoryDeleteRestricted" });
+		const { Courses, Modules, Lessons } = app.repositories;
+		expect(await Courses.count()).toBe(2);
+		expect(await Modules.count()).toBe(3);
+		expect(await Lessons.count()).toBe(6);
 	});
 });

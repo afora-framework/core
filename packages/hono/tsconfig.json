@@ -5,7 +5,8 @@
 			"@afora/core": ["../../src/index.ts"],
 			"@afora/core/adapters": ["../../src/adapters.ts"],
 			"@afora/core/experimental": ["../../src/experimental.ts"],
-			"@afora/core/testing": ["../../src/testing/index.ts"]
+			"@afora/core/testing": ["../../src/testing/index.ts"],
+			"@afora/codegen": ["../codegen/src/index.ts"]
 		}
 	},
 	"include": ["src", "scripts", "tests"],

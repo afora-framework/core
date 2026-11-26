@@ -54,6 +54,8 @@ A repository lists `"increment"` among its actions for atomic counters; the enti
 
 An entity takes `"id"`, how its ids are made: `"uuid7"` (the default, as when it is left out), `"uuid"` (any UUID version, a v4 from an existing database included; new ones are still v7), `"key"` (a natural key of 1 to 256 characters that the input of `create` must hold, never generated) or `"serial"` (a positive integer the database assigns on `create`, from an auto-increment, serial or identity column; the provider must assign ids, as the in-memory and Drizzle ones do, see [Entities](entities.md#ids-the-database-assigns)). They are generated as `entityOf(..., { id: Uuid })`, `{ id: Key }` and `{ id: Serial }` and extracted back from `describe()`; an entity whose id is a custom `idOf` cannot be extracted (`ExtractionError`). A record does not take it (`unknown_key`), and any other value is `invalid_option`.
 
+The spec therefore says the type of an id on the wire: a string for `"uuid7"`, `"uuid"` and `"key"`, and an integer (a JSON number) for `"serial"`. A client built from the spec types the `id` of an entity from it, as `string` or `number`, and need not accept any JSON. `catalog().idStrategies` lists the values with their `wire` type, and `idWireTypeOf(entity)` reads it from a declaration (`"string"` when `id` is left out). `toOpenAPI` and `jsonSchemaOf` give the generated entity the same type (`type: "string"` or `type: "integer"`), which the tests of `@afora/codegen` compare.
+
 ```json
 {
 	"entities": {
@@ -184,7 +186,7 @@ The `response` of a use case written in the spec is a blueprint (its name, or `{
 
 ## Mapping what cannot be described
 
-Some things are code, not data: a provider made by hand, a `run` function, the `before` and `after` of a standard use case, an `execute`, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
+Some things are code, not data: a provider made by hand, a `run` function, the `before` and `after` of a standard use case, an `execute`, the methods of an entity, a command's event handler, a stage. Extraction needs to know where each one is exported from. In the CLI it is `--import key=./file.ts#name`, in code `extractSpec(app, { imports: { key: "./file.ts#name" } })`.
 
 | Key                                | Maps                                                                          |
 | ---------------------------------- | ----------------------------------------------------------------------------- |
@@ -201,7 +203,8 @@ Some things are code, not data: a provider made by hand, a `run` function, the `
 | `commands.<Name>.onEventError`     | the `onEventError` handler of a command                                       |
 | `publishers.<key>`                 | a publisher of the top-level `publishers`                                     |
 | `services.<name>`                  | the factory of a service of the top-level `services`                          |
-| `entities.<Name>.events.<event>`   | the handler of a lifecycle event of an entity                                 |
+| `entities.<Name>`                  | an entity whose class declares methods of its own                             |
+| `entities.<Name>.events.<event>`   | the handler of an event of an entity (a cycle or `emits`)                     |
 | `outputs.<Name>.pipe.<index>`      | a stage written by hand, or a sink given hooks, by its position in the `pipe` |
 | `<property name>`                  | the module of a property that cannot be recreated (see the limitations)       |
 
@@ -248,19 +251,20 @@ A use case that needs what is not a repository (a cache, a storage, a client of 
 
 `services.ts` exports the factory, `(scope: ServiceScope) => value`, maybe async. The use case is generated with `cache: serviceOf<Awaited<ReturnType<typeof cache>>>("cache")`, so its hand-written `execute` reads `this.dependencies.cache` typed by what the factory returns (imported with `import type`, so loading the use case never loads `services.ts`), and the application with `services: { cache }`. A spec that extends this one can name `cache` too, typed the same when this spec is extended by a relative path or the factory is imported from a package; a factory relative to a spec reached as a package, or one of a spec that an extended spec extends in turn, is not importable from the child, and the service is `unknown` there. Steps do not read a service. A name of `services` must be an identifier other than `Logger` (`invalid_name`) and cannot be the name of a declaration (`duplicate_name`); a dependency that names neither a declaration nor a service is `unknown_dependency`. Extraction needs `services.<name>` in `imports`.
 
-The events come from the lifecycle of the entities. An entity (not a record) declares them by cycle, each one event or a list:
+The events come from the lifecycle of the entities and from their methods. An entity (not a record) declares those of each cycle by `onCreate`, `onUpdate` and `onDelete`, and those its methods raise with `this.emit` in `emits`, each one event or a list:
 
 ```json afora:entities
 "Post": {
 	"fields": { "title": "text" },
 	"events": {
 		"onCreate": "created",
-		"onUpdate": ["changed", { "name": "audited", "handler": { "import": "../audit.ts#onAudited" } }]
+		"onUpdate": ["changed", { "name": "audited", "handler": { "import": "../audit.ts#onAudited" } }],
+		"emits": ["published"]
 	}
 }
 ```
 
-A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). One name is one event: naming it in two cycles with different handlers is `event_conflict`. Events an entity raises from its own methods (`this.emit`) need a class written by hand. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
+A name alone is an event without a handler, raised to be published; `{ name, handler }` runs a handler written by hand first (with `publishEvents`, unless `handle: false`). They are generated as `export const PostEvents = { created: eventOf("created", Post), ... }`, and the entity gets `onCreate: () => PostEvents.created`; so no declaration may be called `PostEvents` (`name_collision`). The entity gets `emits: () => [PostEvents.published]`, and `describe()` lists them. One name is one event: naming it in two keys (a cycle and `emits`, say) with different handlers is `event_conflict`. The methods that raise the events in `emits` need a class written by hand (see [Entities with methods](#entities-with-methods)), which raises them as `this.emit(BookingEvents.confirmed)`; `emit` still accepts an event that is not declared. Extraction gives them back from `describe()`, and needs `entities.<Name>.events.<event>` in `imports` for each handler.
 
 ## Tracing
 
@@ -295,6 +299,29 @@ A repository declares its [indexes](repositories.md#indexes) and what it does wi
 ```
 
 They are generated as `indexes` and `scans` of `repositoryOf`, given by `describe()` and extracted back; normalization leaves out no indexes and `"scans": "allow"`, the default. A key that is not a key of the entity is an `unknown_index_key` issue; a sensitive `orderBy` (a sensitive key may be in `where`), an `orderBy` that is not scalar, a key listed twice, an empty or malformed index and two indexes on the same keys and order are `invalid_index`.
+
+## Parents
+
+A repository names the [parents](repositories.md#parents) of its entities as in TypeScript, by the key holding the id of the parent:
+
+```json afora:partial
+"repositories": {
+	"Courses": { "entity": "Course", "actions": ["create", "findById", "delete"] },
+	"Modules": {
+		"entity": "Module",
+		"actions": ["create"],
+		"deletion": "soft",
+		"parents": { "courseId": { "repository": "Courses", "onDelete": "cascade" } }
+	},
+	"Lessons": {
+		"entity": "Lesson",
+		"actions": ["create"],
+		"parents": { "moduleId": { "repository": "Modules", "onDelete": "restrict" } }
+	}
+}
+```
+
+They are generated as `parents` of `repositoryOf` (the parent repository is declared first), given by `describe()` and extracted back; normalization orders them by key and leaves out an empty `parents`. A malformed parent, a key that is not a key of the entity, an identity key or a key that does not hold a single value is `invalid_parents`; a repository that is not declared is `unknown_repository`; a parent whose repository, or one above it, stores the entity of the child is `parent_cycle`.
 
 ## Records that expire
 
@@ -404,6 +431,57 @@ export class Reserve extends ReserveBase {
 
 The generated `use-cases.ts` imports `Reserve` from `../handlers/reserve` for it. So that this has no import cycle, every use case a hand-written class needs has a file of its own, `<kebab-name>.use-case.ts`: the base of each `import` use case, and each steps use case that such a class depends on, directly or through other steps use cases. None of these files imports `use-cases.ts`, which re-exports them all. Extraction needs `useCases.Reserve` in `imports`, and gives the same spec back.
 
+## Entities with methods
+
+State transitions belong in the entity, as methods that change it and raise events (see [Entities](entities.md)). A method is code, so an entity that has some names its class with `implementation`, the same way a use case names its `execute`; its fields, options and events stay in the spec:
+
+```json afora:entities
+"Booking": {
+	"fields": { "guest": "text", "status": { "enum": ["pending", "confirmed"] } },
+	"change": ["status"],
+	"events": { "onCreate": ["created"], "emits": ["confirmed"] },
+	"implementation": { "import": "../handlers/booking#Booking" }
+}
+```
+
+`generate` then writes `export class BookingBase extends entityOf(...) {}` in `src/domain/booking.entity.ts` (the file is named after the entity in kebab case), with `BookingEvents` bound to it. The class is written once, at the path the spec names (relative to the output directory), and extends the base:
+
+<!-- docs:code generate: hotel
+{
+	"version": 1,
+	"name": "hotel",
+	"output": { "dir": "src/domain" },
+	"entities": {
+		"Booking": {
+			"fields": { "guest": "text", "status": { "enum": ["pending", "confirmed"] } },
+			"change": ["status"],
+			"events": { "onCreate": ["created"], "emits": ["confirmed"] },
+			"implementation": { "import": "../handlers/booking#Booking" }
+		}
+	},
+	"repositories": { "Bookings": { "entity": "Booking", "actions": ["create", "findById", "update"] } }
+}
+-->
+
+<!-- docs:code file: hotel/src/handlers/booking.ts -->
+```ts
+// src/handlers/booking.ts
+import { BookingBase, BookingEvents } from "../domain/booking.entity";
+
+export class Booking extends BookingBase {
+	confirm(): void {
+		this.change.status("confirmed");
+		this.emit(BookingEvents.confirmed);
+	}
+}
+```
+
+Everything that names `Booking` uses this class: the repositories (so `findById` gives back instances with `confirm`), the fields and variants of other declarations, the `build` steps and `application.ts`. `index.ts` exports it as `Booking`, and the base and its events from `booking.entity.ts`. Import the base from `booking.entity.ts`: `entities.ts` can import your class (an entity there with a `Booking` field), so importing the base through it would be a loop.
+
+So that the base has no import cycle, every generated entity it needs through its fields, at any depth of blueprints and records, has a file of its own too, `<kebab-name>.entity.ts`, and leaves `entities.ts`; `index.ts` still exports it. What the generator cannot order is reported as `import_cycle`: a module that holds two classes where one names the other, an event handler or `upgrade` step in the module of the class, or a blueprint or record that names the entity while sharing its file with one the base needs. The fix is a module per class or function. Two entities whose files would have the same name are `file_collision`, and a declaration named `BookingBase` is `name_collision`.
+
+`app.describe().entities.Booking.implementation` is `"class"` when the registered class adds members of its own to the class `entityOf` made (an empty subclass, as generated code writes, does not). Extraction then needs `entities.Booking` in `imports`, and gives the same spec back.
+
 ## Standard use cases
 
 A use case that a [standard use case](std-use-cases.md) covers is declared by naming it and the repository it is for, in place of its input, response and steps:
@@ -428,6 +506,8 @@ A use case that a [standard use case](std-use-cases.md) covers is declared by na
 
 It generates `export const CreatePost = StdUseCases.context.create(Posts, { name: "CreatePost", ... })`, the same class a command would pick with `ctx.create(Posts, ...)`, and commands name it as any other use case. The options are those of the TypeScript form, with the exceptions of `errors` by name (declared, or exported by `@afora/core`); the name is the key of the declaration, and `description`, `tags` and `deprecated` go beside `generic`. `catalog().useCases` lists the standard use cases with the `actions` the repository needs, the `plugins` the entity needs and the `options` each takes.
 
+`create` also takes `computed`, a list of keys of the entity the input does not take, which its `before` gives back (see [Computed keys](std-use-cases.md#computed-keys)).
+
 The use cases that write (all but `get`, `list` and `login`) take the [hooks](std-use-cases.md#before-and-after) too: `before` and `after` are imports, as the `fn` of a `run` step, `dependencies` name declared use cases, repositories, environments or `"Logger"`, as those of a use case written in the spec, and `throws` lists exceptions as `errors` does (a name, or `{ "core": "Name" }`):
 
 ```json afora:useCases
@@ -445,7 +525,7 @@ The use cases that write (all but `get`, `list` and `login`) take the [hooks](st
 
 They generate `before: checkEntry, after: recordEntry, dependencies: { contentTypes: ContentTypes, logger: Logger }, throws: [ContentTypeNotFound, InvalidJsonData]`, with the functions imported from their module. Extraction needs `useCases.<Name>.before` and `useCases.<Name>.after` in `imports`. A field of any JSON value is `"json"` (`ctx.json`); a property made by `jsonOf({ schema })` is not written in the spec: extraction gives it as an opaque import.
 
-The validator checks that the use case exists (`unknown_generic`), that the repository is declared (`unknown_repository`) and has the actions (`generic_requires_action`), that the entity has the plugins (`generic_requires_plugin`), and the shape of the options and the keys they name (`invalid_generic_option`; `invalid_import` for `before` or `after`, and the issues of a use case's `dependencies` for theirs). It also refuses what the use case would refuse when declared: `owner.key: "id"` on `create` or `register`, `owner` on `restore` without the action `exists`, a `maxLimit` that is not a whole number above 0 and `relations` on a key that holds no entity (`invalid_generic_option`), and an `update` with no change key an input can take, as for an entity whose only change key is sensitive (the `password` of `authenticatable`: use `changePassword`), or with `owner` on a change key that holds the owner (`generic_unavailable`). What else an option asks of the entity beyond its keys, such as omitting a required key, is checked by the use case itself when the generated code loads, which throws `UseCaseUnavailable`. `extractSpec` gives the declaration back as written, from `describe().useCases.<Name>.generic`, and needs no import mapped, a hashing function included, but for `before` and `after`.
+The validator checks that the use case exists (`unknown_generic`), that the repository is declared (`unknown_repository`) and has the actions (`generic_requires_action`), that the entity has the plugins (`generic_requires_plugin`), and the shape of the options and the keys they name (`invalid_generic_option`; `invalid_import` for `before` or `after`, and the issues of a use case's `dependencies` for theirs). It also refuses what the use case would refuse when declared: `owner.key: "id"` on `create` or `register`, `owner` on `restore` without the action `exists`, a `computed` without a `before`, one that names a key twice, an unknown key, one that holds an entity or a list, or one also in `omit` or `values`, a `maxLimit` that is not a whole number above 0, a `where` of `list` that names a key twice, an optional key or one that holds no scalar value, and `relations` on a key that holds no entity (`invalid_generic_option`), and an `update` with no change key an input can take, as for an entity whose only change key is sensitive (the `password` of `authenticatable`: use `changePassword`), or with `owner` on a change key that holds the owner (`generic_unavailable`). What else an option asks of the entity beyond its keys, such as omitting a required key, is checked by the use case itself when the generated code loads, which throws `UseCaseUnavailable`. `extractSpec` gives the declaration back as written, from `describe().useCases.<Name>.generic`, and needs no import mapped, a hashing function included, but for `before` and `after`.
 
 ## Routes and access
 
@@ -482,7 +562,7 @@ A use case in `afora.json` takes the same `route` and `access` as in TypeScript 
 - **Checked against the spec.** For a use case written in the spec, each key a route places must be a key of the input (`setCookie`, of the response), no key may have two places, the `owner` of an access must name an input key and its `context` keys must be in the context: `invalid_route` and `invalid_access`. For a standard use case only the shape is checked, since its input follows the repository; the generated code checks the rest when it loads.
 - **The route of a sink still wins.** The `route` option of a `hono` (or `fastify`, `express`, `elysia`, `openapi`) stage, by operation id, overrides the method, path, status, `statuses` and `body` (a `delete` that reads a JSON body), as in TypeScript.
 - **Tokens.** `login` and `refresh` take `"token": { "secret": { "env": "JWT_SECRET" }, ... }` in `options`, and a sink `"auth": { "jwt": { "secret": { "env": "JWT_SECRET" } } }`; the secret is always the name of an environment variable (see [Tokens and sessions](auth.md#tokens-and-sessions)). `"versionFrom"` and `"rotate"` in `token` end sessions: `logout` (with `"owner": { "key": "id", "context": "userId" }`) and `changePassword` take `"token": { "versionFrom": "sessionVersion" }` to add 1 to that version (a required integer of the entity, in its `change` and `sensitive`), and the repository lists `increment`.
-- **Hooks are code.** The middlewares and the authenticator of a sink are its second argument, which JSON cannot hold. A stage that needs them is written in a file and named with `{ "import": "./stages.ts#api" }`. `describe()` marks such a stage with `hooks: true`, so extraction throws an `ExtractionError` naming `outputs.<Name>.pipe.<index>` until it is mapped (`--import outputs.Api.pipe.0=./stages.ts#api`), and then writes `{ "import": "./stages.ts#api" }`: the generated code keeps the hooks instead of serving the output without them.
+- **Hooks are code.** The middlewares and the authenticator of a sink are its second argument, which JSON cannot hold. A stage that needs them is written in a file and named with `{ "import": "./stages.ts#api" }`. `describe()` marks such a stage with `hooks: true`, so extraction throws an `ExtractionError` naming `outputs.<Name>.pipe.<index>` until it is mapped (`--import outputs.Api.pipe.0=./stages.ts#api`), and then writes `{ "import": "./stages.ts#api" }`: the generated code keeps the hooks instead of serving the output without them. `afora_project` of [`@afora/mcp`](../packages/mcp/README.md) reads such a stage from the application when it can import it: the sink, its `basePath` and the hooks show as for a JSON stage, matched by the output name and the stage's position in the `pipe`.
 
 ## Catalogs: providers, stages and event policies
 
@@ -525,6 +605,6 @@ What the spec and the round trip do not cover. Each is reported by an issue or a
 - **A `run` with `args` declares `params`.** `"params"` is a blueprint by name or `{ "fields": {...} }` whose fields match the `args` by position: the args are parsed before the function is called, and a wrong one throws `InvalidUseCaseStep` instead of reaching the function. `check` reports `run_without_params` for a `run` with `args` and no `params`, and `invalid_args` when the counts differ; a `run` without `args` needs no `params`. See [use cases](use-cases.md#steps).
 - **Transactions are checked at run time.** `"transaction": true` needs a provider with transactions; the provider is unknown when the spec is validated, so `commandOf` throws `InvalidCommandDeclaration` when the code runs, not `validateSpec`.
 - **Constructs the core does not describe.** A `change` on a plugin key and the order of `plugins` are not recovered.
-- **Repositories point at the generated classes.** To add behavior, extend the generated class in a file of your own.
+- **Entity methods are written by hand.** An entity with methods names its class with `implementation` (see [Entities with methods](#entities-with-methods)); records take no `implementation`, so a record with methods is extended in a file of your own, and the generated code uses the generated class.
 - **Generated code needs TypeScript 5.5 or newer** to type-check.
 - **Extension by path.** `"extends": ["../auth/afora.json", "@acme/auth"]` takes the declarations of other specs; the same name for different declarations is a conflict, and the same declaration reached twice is registered once. The generated `application.ts` extends their `App`.

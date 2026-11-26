@@ -10,7 +10,11 @@ import {
 import { basename, dirname, relative, resolve } from "node:path";
 import { isInside as inside, inTooling } from "./boundary";
 import { BANNER, type GeneratedFile } from "./generate";
-import { GENERATED_FILES, USE_CASE_FILE_SUFFIX } from "./use-case-files";
+import {
+	GENERATED_FILES,
+	SCHEMA_FILES,
+	USE_CASE_FILE_SUFFIX,
+} from "./use-case-files";
 
 /** A file `writeGenerated` would not touch, and why. */
 export interface RefusedFile {
@@ -149,6 +153,7 @@ export async function writeGenerated(
 			: [];
 		const names = [
 			...GENERATED_FILES,
+			...SCHEMA_FILES,
 			...listed.filter((name) => name.endsWith(USE_CASE_FILE_SUFFIX)).sort(),
 		];
 		for (const name of names) {

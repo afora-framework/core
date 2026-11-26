@@ -257,6 +257,55 @@ export const App`,
 		]);
 	});
 
+	test("reads a stage named by an import from the application", async () => {
+		const hono = JSON.stringify(
+			resolve(import.meta.dir, "../../hono/src/index.ts"),
+		);
+		const app = APP_TS.replace(
+			"export const App",
+			`import { hono } from ${hono};
+export const Api = outputOf({
+	name: "Api",
+	commands: [Blog],
+	pipe: [hono({ basePath: "/v1" }, { authenticator: () => null })],
+});
+
+export const App`,
+		).replace("outputs: { Docs }", "outputs: { Api }");
+		const { dir, client } = await setup(
+			{ "src/app.ts": app },
+			{ app: "src/app.ts#App" },
+		);
+		await writeFile(
+			join(dir, "afora.json"),
+			JSON.stringify({
+				version: 1,
+				name: "blog",
+				commands: { Blog: { useCases: {} } },
+				outputs: {
+					Api: { commands: ["Blog"], pipe: [{ import: "../stages#api" }] },
+				},
+			}),
+		);
+		const view = await client.call("afora_project", { source: "file" });
+		expect(view.isError, JSON.stringify(view.data)).toBe(false);
+		const api = view.data.outputs.find(
+			(output: Record<string, unknown>) => output.name === "Api",
+		);
+		expect(api.sink).toBe("hono");
+		expect(api.hooks).toBe(true);
+		expect(api.authentication).toContain("hooks in code");
+		// Without the application there is nothing to read the stage from.
+		const skipped = await client.call("afora_project", {
+			source: "file",
+			compare: false,
+		});
+		const opaque = skipped.data.outputs.find(
+			(output: Record<string, unknown>) => output.name === "Api",
+		);
+		expect(opaque.sink).toBeUndefined();
+	});
+
 	test("reads an application given to the tool, and refuses one outside the project", async () => {
 		const { client } = await setup({ "src/app.ts": APP_TS });
 		const given = await client.call("afora_project", {

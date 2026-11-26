@@ -1,6 +1,10 @@
 import { issue } from "./scope";
 import { isIdentifier, isObject } from "./spec/field";
-import type { ProviderCatalogEntry, SpecIssue } from "./spec/types";
+import type {
+	ProviderCatalogEntry,
+	ProviderTablesEntry,
+	SpecIssue,
+} from "./spec/types";
 
 type Path = readonly (string | number)[];
 
@@ -152,6 +156,21 @@ export function checkProvider(
 			),
 		);
 	}
+	const tables = catalog.find((entry) => entry.name === use)?.tables;
+	if (
+		tables !== undefined &&
+		Array.isArray(tables.dialect) &&
+		tables.dialect.length > 1 &&
+		!(isObject(options) && Object.hasOwn(options, "tables"))
+	) {
+		issues.push(
+			issue(
+				[...path, "options", "tables"],
+				"missing_provider_tables",
+				`With the dialects ${tables.dialect.join(", ")}, codegen writes the tables of each in a file of its own (schema.<dialect>.ts) and cannot choose one: give "tables", e.g. { "import": "./tables.ts#tables" }, a module of yours that picks the tables of the database it connects to.`,
+			),
+		);
+	}
 	if (options === undefined) return;
 	if (!isObject(options)) {
 		issues.push(
@@ -245,6 +264,49 @@ export function checkCatalog(
 		if (typeof entry.export !== "string" || !isIdentifier(entry.export)) {
 			bad('"export" must be the name of the factory.');
 		}
+		if (entry.tables !== undefined) checkTablesEntry(entry.tables, bad);
+	}
+}
+
+/** The dialects of a `tables` entry of the catalog, as a list. */
+export function dialectsOf(tables: ProviderTablesEntry): readonly string[] {
+	return typeof tables.dialect === "string" ? [tables.dialect] : tables.dialect;
+}
+
+/** Problems of the `tables` of a catalog entry. */
+function checkTablesEntry(
+	tables: unknown,
+	bad: (message: string) => void,
+): void {
+	if (!isObject(tables)) {
+		bad('"tables" is { export, module?, dialect }.');
+		return;
+	}
+	if (typeof tables.export !== "string" || !isIdentifier(tables.export)) {
+		bad('"tables.export" must be the name of the factory of a table.');
+	}
+	if (
+		tables.module !== undefined &&
+		(typeof tables.module !== "string" || tables.module === "")
+	) {
+		bad(
+			'"tables.module" must be a package or a path relative to the output directory.',
+		);
+	}
+	const dialects =
+		typeof tables.dialect === "string" ? [tables.dialect] : tables.dialect;
+	if (
+		!Array.isArray(dialects) ||
+		dialects.length === 0 ||
+		dialects.some(
+			(dialect) =>
+				typeof dialect !== "string" || !/^[a-z][a-z0-9]*$/.test(dialect),
+		) ||
+		new Set(dialects).size !== dialects.length
+	) {
+		bad(
+			'"tables.dialect" must be a dialect ("sqlite") or a list of distinct ones (["sqlite", "postgres"]).',
+		);
 	}
 }
 

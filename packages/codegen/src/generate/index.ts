@@ -2,18 +2,18 @@ import { posix } from "node:path";
 import { ExceptionLayers } from "@afora/core";
 import { catalog, stdProperty } from "../catalog";
 import {
-	CYCLES,
-	cyclesOf,
+	EVENT_KEYS,
 	eventEntriesOf,
+	eventListsOf,
 	eventsConstOf,
 } from "../entity-events";
 import { canonicalExpires } from "../entity-expires";
 import { canonicalEntitySchema } from "../entity-schema";
-import { fieldsOfDecl, orderOf, typesIn } from "../graph";
+import { fieldsOfDecl, orderOf } from "../graph";
 import { type Field, parseField, parseFields } from "../model";
 import { defaultMessageOf, normalizeSpec } from "../normalize";
 import { pipeKindOf } from "../output";
-import { isImportObject, parseImportRef } from "../provider";
+import { dialectsOf, isImportObject, parseImportRef } from "../provider";
 import { type Decl, type Scope, scopeOf } from "../scope";
 import { isIdentifier, isListResponseSpec, isObject } from "../spec/field";
 import {
@@ -27,7 +27,15 @@ import {
 	type StageCatalogEntry,
 } from "../spec/types";
 import { errorNameOf, isGeneric, isImported } from "../use-case";
-import { GENERATED_FILES, useCaseFiles } from "../use-case-files";
+import {
+	entityFiles,
+	fileLayoutOf,
+	GENERATED_FILES,
+	isImportedEntity,
+	SCHEMA_FILES,
+	schemaFileOf,
+	useCaseFiles,
+} from "../use-case-files";
 import { validateSpec } from "../validate";
 import {
 	choice,
@@ -65,38 +73,6 @@ export class InvalidSpecError extends Error {
 		);
 	}
 }
-
-type KindFile =
-	| "properties.ts"
-	| "blueprints.ts"
-	| "records.ts"
-	| "entities.ts"
-	| "environments.ts"
-	| "repositories.ts"
-	| "exceptions.ts"
-	| "use-cases.ts"
-	| "commands.ts"
-	| "outputs.ts";
-
-const FILE_OF_KIND: Readonly<Record<Decl["kind"], KindFile>> = {
-	property: "properties.ts",
-	blueprint: "blueprints.ts",
-	record: "records.ts",
-	entity: "entities.ts",
-	environment: "environments.ts",
-	repository: "repositories.ts",
-	exception: "exceptions.ts",
-	useCase: "use-cases.ts",
-	command: "commands.ts",
-	output: "outputs.ts",
-};
-
-/** Where a file merged into another one goes: the later in this order. */
-const MERGE_ORDER: readonly KindFile[] = [
-	"blueprints.ts",
-	"records.ts",
-	"entities.ts",
-];
 
 type Json = unknown;
 
@@ -234,6 +210,12 @@ class Emitter {
 		readonly file: string,
 		private readonly scope: Scope,
 		private readonly fileOf: (name: string) => string,
+		/** The classes written by hand of entities, by entity name, which every reference to them imports. */
+		private readonly classes: ReadonlyMap<
+			string,
+			{ readonly module: string; readonly name: string }
+		> = new Map(),
+		private readonly taken: ReadonlySet<string> = new Set(),
 	) {}
 
 	use(name: string): string {
@@ -283,6 +265,13 @@ class Emitter {
 
 	ref(name: string): string {
 		const decl = this.scope.decls.get(name) as Decl;
+		const written = decl.via === undefined ? this.classes.get(name) : undefined;
+		if (written !== undefined) {
+			// The class written by hand, imported under the entity's name when free.
+			const taken = new Set(this.taken);
+			taken.delete(name);
+			return this.bind(written.module, written.name, taken);
+		}
 		if (decl.via !== undefined) {
 			const names = this.extended.get(decl.via) ?? new Set<string>();
 			names.add(name);
@@ -516,7 +505,7 @@ function propertyDoc(decl: Decl, e: Emitter): Doc {
 
 function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	const entity = decl.kind === "entity";
-	const cycles = entity ? cyclesOf(decl.spec.events) : {};
+	const cycles = entity ? eventListsOf(decl.spec.events) : {};
 	const holder = eventsConstOf(decl.name);
 	const fields = fieldsOfDecl(decl) as Record<string, Field>;
 	// The declared name, so the class can be renamed by a bundler.
@@ -590,13 +579,15 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 			options.push(["previousNames", literal(previousNames)]);
 		}
 	}
-	for (const cycle of CYCLES) {
+	for (const cycle of EVENT_KEYS) {
 		const list = cycles[cycle];
 		if (!list || list.length === 0) continue;
 		const refs = list.map((entry) => `${holder}.${entry.name}`);
 		options.push([
 			cycle,
-			refs.length === 1 ? `() => ${refs[0]}` : `() => [${refs.join(", ")}]`,
+			refs.length === 1 && cycle !== "emits"
+				? `() => ${refs[0]}`
+				: `() => [${refs.join(", ")}]`,
 		]);
 	}
 	const args: Doc[] = [
@@ -607,7 +598,7 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	const maker = e.use(entity ? "entityOf" : "recordOf");
 	return [
 		"export class ",
-		decl.name,
+		isImportedEntity(decl) ? `${decl.name}Base` : decl.name,
 		" extends ",
 		[
 			maker,
@@ -624,7 +615,7 @@ function recordDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 
 /**
  * `export const PostEvents: { readonly created: EventDefinition } = { created: eventOf("created", Post) };`
- * after an entity whose spec names events; the type breaks the circle between the class and its events.
+ * after an entity whose spec names events (bound to `PostBase` when the class is written by hand); the type breaks the circle between the class and its events.
  */
 function eventsDoc(decl: Decl, e: Emitter, providers: Providers): Doc[] {
 	const entries = eventEntriesOf(decl.spec.events);
@@ -633,7 +624,11 @@ function eventsDoc(decl: Decl, e: Emitter, providers: Providers): Doc[] {
 	const type = "EventDefinition";
 	const eventOf = e.use("eventOf");
 	const members = entries.map((entry): readonly [string, Doc] => {
-		const args = [literal(entry.name), decl.name];
+		// An entity with a class written by hand: its base, which that class extends.
+		const args = [
+			literal(entry.name),
+			isImportedEntity(decl) ? `${decl.name}Base` : decl.name,
+		];
 		if (entry.handler !== undefined) {
 			const { module, name } = parseImportRef(entry.handler) as {
 				module: string;
@@ -744,14 +739,23 @@ function providerDoc(value: unknown, e: Emitter, providers: Providers): Doc {
 		options?: Record<string, unknown>;
 	};
 	let factory: string;
+	let given = options;
 	if (use === "inMemory") {
 		factory = e.use("inMemoryProvider");
 	} else {
 		const entry = providers.catalog.get(use) as ProviderCatalogEntry;
 		factory = e.bind(entry.module, entry.export, providers.taken);
+		// The tables codegen generates, when it makes those of one dialect.
+		if (
+			entry.tables !== undefined &&
+			dialectsOf(entry.tables).length === 1 &&
+			!(given !== undefined && Object.hasOwn(given, "tables"))
+		) {
+			given = { ...given, tables: { import: "./schema#tables" } };
+		}
 	}
-	return options && Object.keys(options).length > 0
-		? callWithObject(factory, literal(options, imported))
+	return given && Object.keys(given).length > 0
+		? callWithObject(factory, literal(given as Json, imported))
 		: `${factory}()`;
 }
 
@@ -812,6 +816,28 @@ function repositoryDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	}
 	if (spec.scans === "warn" || spec.scans === "reject") {
 		props.push(["scans", literal(spec.scans)]);
+	}
+	const parents = spec.parents;
+	if (
+		typeof parents === "object" &&
+		parents !== null &&
+		!Array.isArray(parents) &&
+		Object.keys(parents).length > 0
+	) {
+		props.push([
+			"parents",
+			objectDoc(
+				Object.entries(
+					parents as Record<string, { repository: string; onDelete: string }>,
+				).map(([key, parent]): [string, Doc] => [
+					key,
+					objectDoc([
+						["repository", e.ref(parent.repository)],
+						["onDelete", literal(parent.onDelete)],
+					]),
+				]),
+			),
+		]);
 	}
 	return [
 		"export const ",
@@ -1427,67 +1453,24 @@ export function generate(
 	let dir = (spec.output?.dir ?? DEFAULT_OUTPUT_DIR).replace(/^\.\//, "");
 	while (dir.endsWith("/")) dir = dir.slice(0, -1);
 
-	// One file for each kind, but kinds that need each other share the later file.
-	const home = new Map<KindFile, KindFile>(
-		(Object.values(FILE_OF_KIND) as KindFile[]).map((file) => [file, file]),
-	);
-	const resolveHome = (file: KindFile): KindFile => {
-		let current = file;
-		while (home.get(current) !== current)
-			current = home.get(current) as KindFile;
-		return current;
-	};
-	const needs = (from: KindFile, to: KindFile): boolean =>
-		own.some(
-			(decl) =>
-				resolveHome(FILE_OF_KIND[decl.kind]) === from &&
-				depsFiles(decl).some((file) => resolveHome(file) === to),
+	// The use cases and entities hand-written classes need have a file each,
+	// which never imports `use-cases.ts` or `entities.ts`; the other
+	// declarations go to the file of their kind, kinds that need each other
+	// sharing the later file.
+	const useCaseOwnFiles = useCaseFiles(own, scope);
+	const entityOwnFiles = entityFiles(own, scope);
+	const ownFiles = new Map([...useCaseOwnFiles, ...entityOwnFiles]);
+	const fileOf = fileLayoutOf(own, scope, ownFiles);
+	const classes = new Map<string, { module: string; name: string }>();
+	for (const decl of own) {
+		if (!isImportedEntity(decl)) continue;
+		classes.set(
+			decl.name,
+			parseImportRef(
+				(decl.spec.implementation as { import: string }).import,
+			) as { module: string; name: string },
 		);
-	const depsFiles = (decl: Decl): KindFile[] => {
-		const names =
-			decl.kind === "property" ? [decl.spec.base] : namesUsedBy(decl);
-		return names.flatMap((name) => {
-			const dep = typeof name === "string" ? scope.decls.get(name) : undefined;
-			return dep && dep.via === undefined ? [FILE_OF_KIND[dep.kind]] : [];
-		});
-	};
-	const namesUsedBy = (decl: Decl): string[] => {
-		if (decl.kind === "repository") {
-			return [
-				decl.spec.entity as string,
-				...((decl.spec.relations as string[]) ?? []),
-				...((decl.spec.environments as string[]) ?? []),
-			];
-		}
-		const fields = fieldsOfDecl(decl);
-		return fields ? typesIn(fields) : [];
-	};
-	let merged = true;
-	while (merged) {
-		merged = false;
-		for (const a of MERGE_ORDER) {
-			for (const b of MERGE_ORDER) {
-				if (a === b || resolveHome(a) === resolveHome(b)) continue;
-				if (
-					needs(resolveHome(a), resolveHome(b)) &&
-					needs(resolveHome(b), resolveHome(a))
-				) {
-					const [early, late] =
-						MERGE_ORDER.indexOf(resolveHome(a)) <
-						MERGE_ORDER.indexOf(resolveHome(b))
-							? [resolveHome(a), resolveHome(b)]
-							: [resolveHome(b), resolveHome(a)];
-					home.set(early, late);
-					merged = true;
-				}
-			}
-		}
 	}
-	// The use cases hand-written classes need have a file each, which never imports `use-cases.ts`.
-	const ownFiles = useCaseFiles(own, scope);
-	const fileOf = (name: string): string =>
-		ownFiles.get(name) ??
-		resolveHome(FILE_OF_KIND[(scope.decls.get(name) as Decl).kind]);
 
 	// Extended specs: where to import them from, and under which name their App.
 	const takenNames = new Set(scope.decls.keys());
@@ -1522,7 +1505,11 @@ export function generate(
 			...catalog().reservedDeclarationNames,
 			...takenNames,
 			...own
-				.filter((decl) => decl.kind === "useCase" && isImported(decl.spec))
+				.filter(
+					(decl) =>
+						(decl.kind === "useCase" || decl.kind === "entity") &&
+						isImported(decl.spec),
+				)
 				.map((decl) => `${decl.name}Base`),
 		]),
 		keys: new Map(
@@ -1540,13 +1527,15 @@ export function generate(
 		inheritedServices: inheritedServicesOf(scope, extendedInfo),
 	};
 
+	const emitterOf = (file: string): Emitter =>
+		new Emitter(file, scope, fileOf, classes, providers.taken);
 	const emitters = new Map<string, Emitter>();
 	const bodies = new Map<string, Doc[]>();
 	for (const decl of order) {
 		const file = fileOf(decl.name);
 		let e = emitters.get(file);
 		if (!e) {
-			e = new Emitter(file, scope, fileOf);
+			e = emitterOf(file);
 			emitters.set(file, e);
 			bodies.set(file, []);
 		}
@@ -1602,7 +1591,7 @@ export function generate(
 
 	// providers.ts: the storage of the named providers of this spec.
 	if (isObject(spec.providers) && Object.keys(spec.providers).length > 0) {
-		const e = new Emitter("providers.ts", scope, fileOf);
+		const e = emitterOf("providers.ts");
 		emitters.set("providers.ts", e);
 		bodies.set("providers.ts", [
 			[
@@ -1622,6 +1611,81 @@ export function generate(
 				";",
 			],
 		]);
+	}
+
+	// schema.ts: the tables of the catalog providers that make them, one call
+	// of their factory per entity stored through them.
+	const tablesEntryOf = (value: unknown): ProviderCatalogEntry | undefined => {
+		let provider = value;
+		if (typeof provider === "string" && isObject(spec.providers)) {
+			provider = (spec.providers as Record<string, unknown>)[provider];
+		}
+		if (!isObject(provider) || typeof provider.use !== "string") return;
+		const entry = providers.catalog.get(provider.use);
+		return entry?.tables === undefined ? undefined : entry;
+	};
+	const repositoriesDecls = order.filter((decl) => decl.kind === "repository");
+	const tableEntries = new Set<ProviderCatalogEntry>();
+	for (const value of [
+		spec.provider,
+		...Object.values(isObject(spec.providers) ? spec.providers : {}),
+		...repositoriesDecls.map((decl) => decl.spec.provider),
+	]) {
+		const entry = tablesEntryOf(value);
+		if (entry) tableEntries.add(entry);
+	}
+	for (const entry of tableEntries) {
+		const tables = entry.tables as NonNullable<ProviderCatalogEntry["tables"]>;
+		// The entities stored through it, with the indexes of their repositories.
+		const stored = new Map<string, Record<string, unknown>>();
+		for (const decl of repositoriesDecls) {
+			if (tablesEntryOf(decl.spec.provider ?? spec.provider) !== entry)
+				continue;
+			const entity = decl.spec.entity as string;
+			const indexes = isObject(decl.spec.indexes) ? decl.spec.indexes : {};
+			stored.set(entity, { ...stored.get(entity), ...indexes });
+		}
+		const dialects = dialectsOf(tables);
+		for (const dialect of dialects) {
+			const name = schemaFileOf(dialect, dialects);
+			let e = emitters.get(name);
+			if (!e) {
+				e = emitterOf(name);
+				emitters.set(name, e);
+				bodies.set(name, []);
+			}
+			const body = bodies.get(name) as Doc[];
+			const factory = e.bind(
+				tables.module ?? entry.module,
+				tables.export,
+				providers.taken,
+			);
+			const declared: (readonly [string, Doc])[] = [];
+			for (const [entity, indexes] of stored) {
+				const local = `${entity.charAt(0).toLowerCase()}${entity.slice(1)}Table`;
+				const props: (readonly [string, Doc])[] = [
+					["dialect", literal(dialect)],
+				];
+				if (Object.keys(indexes).length > 0) {
+					props.push(["indexes", literal(indexes as Json)]);
+				}
+				body.push([
+					"export const ",
+					local,
+					" = ",
+					callHuggingLast(factory, [e.ref(entity)], props),
+					";",
+				]);
+				declared.push([entity, local]);
+			}
+			body.push([
+				"/** The table of each entity, by name, for the provider. */",
+				hardline,
+				"export const tables = ",
+				objectDoc(declared),
+				";",
+			]);
+		}
 	}
 
 	const importsOf = (e: Emitter): Doc[] => {
@@ -1665,12 +1729,12 @@ export function generate(
 		out.push({ path: posix.join(dir || ".", name), contents: print(doc) });
 	};
 	// `use-cases.ts` re-exports the use cases that have a file of their own.
-	if (ownFiles.size > 0) {
+	if (useCaseOwnFiles.size > 0) {
 		if (!emitters.has("use-cases.ts")) {
-			emitters.set("use-cases.ts", new Emitter("use-cases.ts", scope, fileOf));
+			emitters.set("use-cases.ts", emitterOf("use-cases.ts"));
 			bodies.set("use-cases.ts", []);
 		}
-		const reexports = [...ownFiles]
+		const reexports = [...useCaseOwnFiles]
 			.map(([name, file]) => {
 				const decl = scope.decls.get(name) as Decl;
 				const from = `./${file.replace(/\.ts$/, "")}`;
@@ -1690,9 +1754,13 @@ export function generate(
 		const e = emitters.get(name) as Emitter;
 		render(name, importsOf(e), bodies.get(name) as Doc[]);
 	}
+	for (const name of SCHEMA_FILES) {
+		const e = emitters.get(name);
+		if (e) render(name, importsOf(e), bodies.get(name) as Doc[]);
+	}
 
 	// application.ts
-	const app = new Emitter("application.ts", scope, fileOf);
+	const app = emitterOf("application.ts");
 	const appName = typeof spec.name === "string" ? spec.name : "app";
 	const props: (readonly [string, Doc])[] = [["name", literal(appName)]];
 	if (scope.extended.size > 0) {
@@ -1808,9 +1876,19 @@ export function generate(
 		const info = extendedInfo.get(ref) as { from: string };
 		exportsList.push([info.from, exportFromDoc(names, info.from)]);
 	}
+	// The entities with a file of their own: their bases, events and generated classes.
+	for (const file of entityOwnFiles.values()) {
+		const from = `./${file.replace(/\.ts$/, "")}`;
+		exportsList.push([from, ["export * from ", JSON.stringify(from), ";"]]);
+	}
 	const handlers = new Map<string, Set<string>>();
 	for (const decl of own) {
-		if (decl.kind !== "useCase" || !isImported(decl.spec)) continue;
+		if (
+			(decl.kind !== "useCase" && decl.kind !== "entity") ||
+			!isImported(decl.spec)
+		) {
+			continue;
+		}
 		const { module, name } = parseImportRef(
 			(decl.spec.implementation as { import: string }).import,
 		) as { module: string; name: string };

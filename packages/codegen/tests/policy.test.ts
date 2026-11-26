@@ -183,6 +183,16 @@ describe("event policies: validation", () => {
 			"event_conflict@entities.Post.events.onUpdate",
 		],
 		[
+			"emits is an event list like a cycle",
+			(c) => (c.entities.Post.events.emits = ["not ok"]),
+			"invalid_event@entities.Post.events.emits.0",
+		],
+		[
+			"a name in emits and a cycle is one event",
+			(c) => (c.entities.Post.events.emits = ["audited"]),
+			"event_conflict@entities.Post.events.emits.0",
+		],
+		[
 			"records have no events",
 			(c) => {
 				c.records = {

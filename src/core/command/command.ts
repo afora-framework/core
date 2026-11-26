@@ -129,6 +129,16 @@ function repositoryProvidersOf(
 				if (!state) continue;
 				add(state);
 				for (const related of state.relations.values()) add(related);
+				// What its delete cascades to, as an application bound it.
+				const below = [...(state.children ?? [])];
+				for (const child of below) {
+					const childState = findState(child.repository);
+					if (childState === undefined) continue;
+					add(childState);
+					for (const next of childState.children ?? []) {
+						if (!below.includes(next)) below.push(next);
+					}
+				}
 			}
 		}
 	};

@@ -149,6 +149,52 @@ export interface EntityMigrationReport {
 	 * count is 0. Run `app.migrate` again once the plan is applied.
 	 */
 	readonly deferred: boolean;
+	/**
+	 * Whether the journal of the provider (`IRepositoryProvider.journal`)
+	 * had this plan as applied already: `provider.migrate` was not called
+	 * for it, and the backfill ran as usual. Always false for a provider
+	 * without a journal, in `check` and for a plan without changes.
+	 */
+	readonly alreadyApplied: boolean;
+}
+
+/**
+ * A plan `app.migrate` applied, as the journal of a provider keeps it
+ * (`IRepositoryProvider.journal`).
+ */
+export interface MigrationJournalEntry {
+	/** The entity, by its current name (`plan.entity`). */
+	readonly entity: string;
+	readonly plan: SchemaPlan;
+	/**
+	 * The SHA-256, in lowercase hex, of `{ from, plan }` as canonical JSON
+	 * (keys sorted), `from` being the entry of the lock the plan was diffed
+	 * from: the same plan from the same shape gives the same checksum on
+	 * every runtime.
+	 */
+	readonly checksum: string;
+	/** When it was applied, as an ISO 8601 string. */
+	readonly appliedAt: string;
+}
+
+/**
+ * The record a provider keeps of the plans `app.migrate` applied through
+ * it (`IRepositoryProvider.journal`), in order, so a plan is not applied
+ * twice in a row.
+ */
+export interface MigrationJournal {
+	/**
+	 * Whether `checksum` is the last plan recorded for `entity`: the store is
+	 * already at it. A plan recorded before another one is not: applying it
+	 * again (a key dropped, then added back) is a change.
+	 */
+	applied(entity: string, checksum: string): Promise<boolean>;
+	/**
+	 * Records an applied plan as the last one of its entity. Recording the
+	 * last one again changes nothing; recording one recorded before another
+	 * makes it the last again.
+	 */
+	record(entry: MigrationJournalEntry): Promise<void>;
 }
 
 /** What `app.migrate` gives. */

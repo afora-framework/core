@@ -39,6 +39,11 @@ export interface RepositoryMigration {
 	readonly pageSize: number;
 	/** Given to `provider.migrate` in `apply`, before the rows are walked. */
 	readonly plan: SchemaPlan;
+	/**
+	 * The journal of the provider has `plan` as applied: `provider.migrate`
+	 * is not called, the rows are walked as usual.
+	 */
+	readonly alreadyApplied?: boolean;
 }
 
 /** The entity class `entity` as named `name`, for a provider that names tables by it. */
@@ -290,7 +295,8 @@ export async function migrateRepository(
 		invalid: [],
 		removedKeys: new Set(),
 	};
-	if (apply) {
+	const alreadyApplied = apply && options.alreadyApplied === true;
+	if (apply && !alreadyApplied) {
 		const migrated = await provider.migrate?.(context, options.plan);
 		// The plan was written for later: the store does not have the new
 		// shape (a column, the version key), so no row can be written in it.
@@ -299,7 +305,7 @@ export async function migrateRepository(
 			migrated !== null &&
 			migrated.deferred === true
 		) {
-			return { ...reportOf(tally), deferred: true };
+			return { ...reportOf(tally), deferred: true, alreadyApplied: false };
 		}
 	}
 
@@ -393,11 +399,13 @@ export async function migrateRepository(
 		});
 	}
 
-	return { ...reportOf(tally), deferred: false };
+	return { ...reportOf(tally), deferred: false, alreadyApplied };
 }
 
 /** The counts of `tally`. */
-function reportOf(tally: Tally): Omit<EntityMigrationReport, "deferred"> {
+function reportOf(
+	tally: Tally,
+): Omit<EntityMigrationReport, "deferred" | "alreadyApplied"> {
 	return {
 		scanned: tally.scanned,
 		upToDate: tally.upToDate,

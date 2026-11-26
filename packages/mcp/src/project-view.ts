@@ -280,8 +280,20 @@ function viewOf(facts: ProjectFacts): ProjectView {
 }
 
 /** The view of the project an `afora.json` describes. */
-export function projectViewOfSpec(spec: Spec): ProjectView {
+export function projectViewOfSpec(
+	spec: Spec,
+	/**
+	 * What the running application's `describe()` gives, to read the stages named by an
+	 * import (`{ "import": "./stages.ts#api" }`): they are matched by the output name and
+	 * their index in the pipe.
+	 */
+	description?: unknown,
+): ProjectView {
 	const source = spec as unknown as Json;
+	const described = isObject(description) ? description : {};
+	const describedOutputs = isObject(described.outputs)
+		? (described.outputs as Json)
+		: {};
 	const collection = (key: string): Json =>
 		isObject(source[key]) ? (source[key] as Json) : {};
 	const useCases: Record<string, UseCaseFacts> = {};
@@ -338,16 +350,32 @@ export function projectViewOfSpec(spec: Spec): ProjectView {
 			commands: Array.isArray(value.commands)
 				? (value.commands as string[])
 				: [],
-			stages: (Array.isArray(value.pipe) ? value.pipe : []).map((stage) => {
-				const entry = isObject(stage) ? stage : {};
-				const kind = typeof entry.sink === "string" ? "sink" : "transform";
-				const stageName = entry.sink ?? entry.transform;
-				return {
-					kind: typeof entry.import === "string" ? "opaque" : kind,
-					...(typeof stageName === "string" ? { name: stageName } : {}),
-					...(isObject(entry.options) ? { options: entry.options } : {}),
-				};
-			}),
+			stages: (Array.isArray(value.pipe) ? value.pipe : []).map(
+				(stage, index) => {
+					const entry = isObject(stage) ? stage : {};
+					if (typeof entry.import === "string") {
+						const output = describedOutputs[name];
+						const pipe =
+							isObject(output) && Array.isArray(output.pipe) ? output.pipe : [];
+						const seen = pipe[index];
+						if (isObject(seen) && typeof seen.kind === "string") {
+							return {
+								kind: seen.kind,
+								...(typeof seen.name === "string" ? { name: seen.name } : {}),
+								...(isObject(seen.options) ? { options: seen.options } : {}),
+								...(seen.hooks === true ? { hooks: true as const } : {}),
+							};
+						}
+					}
+					const kind = typeof entry.sink === "string" ? "sink" : "transform";
+					const stageName = entry.sink ?? entry.transform;
+					return {
+						kind: typeof entry.import === "string" ? "opaque" : kind,
+						...(typeof stageName === "string" ? { name: stageName } : {}),
+						...(isObject(entry.options) ? { options: entry.options } : {}),
+					};
+				},
+			),
 		};
 	}
 	return viewOf({

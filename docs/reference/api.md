@@ -6,7 +6,7 @@ Every export of `@afora/core`, by entry point, with its description and examples
 
 ## @afora/core
 
-Tier: stable. 573 exports.
+Tier: stable. 576 exports.
 
 ### Access
 
@@ -2270,6 +2270,17 @@ The query of `findCursor`: as `RepositoryQuery`, with the `next` of the
 previous page as `after` in place of `offset`. `where`, `orderBy`,
 `withDeleted` and `withExpired` must stay the same from one page to the next.
 
+### RepositoryDeleteRestricted
+
+*const* · tier: stable · `import { RepositoryDeleteRestricted } from "@afora/core"`
+
+`delete` found entities of a repository that declares the deleted entity
+its parent with `onDelete: "restrict"` (directly, or under a parent it
+cascades to), so it deleted nothing. `id` is the parent they hold,
+`child` the repository holding them and `key` the key holding its id;
+`source` is the repository whose `delete` was called. An output answers
+it with 409.
+
 ### RepositoryEntityNotFound
 
 *const* · tier: stable · `import { RepositoryEntityNotFound } from "@afora/core"`
@@ -2308,6 +2319,15 @@ The options of `increment`.
 An access pattern a repository declares: queries whose `where` holds every
 key of `where` by equality, and whose first order (if any) is `orderBy`.
 
+### RepositoryInstance
+
+*type* · tier: stable · `import type { RepositoryInstance } from "@afora/core"`
+
+The type of a repository `repositoryOf` made, from its declaration:
+`RepositoryInstance<typeof Users>`. It is what `this.dependencies.users`
+and `app.repositories.Users` are typed as, so a helper shared by use cases
+can take the repository as a parameter without restating its actions.
+
 ### RepositoryIsFrozen
 
 *const* · tier: stable · `import { RepositoryIsFrozen } from "@afora/core"`
@@ -2337,6 +2357,16 @@ Ordered lexicographically; ties retain provider order. Missing values sort first
 *interface* · tier: stable · `import type { RepositoryPage } from "@afora/core"`
 
 A page and the unpaginated number of matching live (or explicitly included) rows.
+
+### RepositoryParent
+
+*interface* · tier: stable · `import type { RepositoryParent } from "@afora/core"`
+
+A parent of the entities of a repository, under the key of its entity that
+holds the id of the parent: the repository of the parent, and what its
+`delete` does to them, once an application registers both: delete them
+with it (`"cascade"`, hard or soft as their repository deletes), or
+refuse with `RepositoryDeleteRestricted` while any is left (`"restrict"`).
 
 ### RepositoryPlan
 
@@ -3772,7 +3802,8 @@ declares (or per entity class, without one), enforcing its unique keys. Each `re
 own; repositories given the same one share the tables of their entities.
 Its `transaction` works on isolated snapshots: commits on success, discards
 on rejection, runs one at a time and makes other operations wait; nested
-transactions are savepoints.
+transactions are savepoints. Its `journal` keeps the plans `app.migrate`
+applied, in memory.
 
 ### isCommand
 
@@ -4687,7 +4718,7 @@ stored.
 
 ## @afora/core/adapters
 
-Tier: adapters. 83 exports.
+Tier: adapters. 85 exports.
 
 ### ApplicationDescription
 
@@ -4866,6 +4897,21 @@ Brands blueprints, lists, variants and records, so none is told apart by its sha
 *interface* · tier: adapters · `import type { LogDescription } from "@afora/core/adapters"`
 
 How `describe` gives the `log` of an application.
+
+### MigrationJournal
+
+*interface* · tier: adapters · `import type { MigrationJournal } from "@afora/core/adapters"`
+
+The record a provider keeps of the plans `app.migrate` applied through
+it (`IRepositoryProvider.journal`), in order, so a plan is not applied
+twice in a row.
+
+### MigrationJournalEntry
+
+*interface* · tier: adapters · `import type { MigrationJournalEntry } from "@afora/core/adapters"`
+
+A plan `app.migrate` applied, as the journal of a provider keeps it
+(`IRepositoryProvider.journal`).
 
 ### OperationDescriptor
 
@@ -5335,7 +5381,8 @@ name; 400 for invalid input or context (and any exception whose
 `details.issues` is a list, except the internal ones, such as
 `InvalidUseCaseResponse`, `InvalidUseCaseStep` and
 `InvalidCommandEnvironment`, a 500); 404 for a missing entity or operation; 409 for
-a unique violation, a concurrency conflict or an entity that already exists; 401 for
+a unique violation, a concurrency conflict, an entity that already exists
+or a delete its children restrict; 401 for
 `UseCaseInvalidCredentials` and `Unauthenticated`; 403 for `Forbidden`; 422 for a class in `operation.errors`; 500 for the
 rest, errors that are not exceptions included. Exceptions match by name,
 or by class for `operation.errors`.

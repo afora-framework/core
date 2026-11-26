@@ -146,7 +146,7 @@ export async function handler(_event: unknown, context: Context) {
 
 `findPage` reads the items and the total with two provider calls, so they are not an atomic snapshot unless the provider runs them in a transaction. `findBy<Key>`, `findManyBy<Key>` and `count` are queries too. By default reads leave out deleted rows when `deletion` is `"soft"`; with `"hard"` (the default) they see every row that exists, as before. `withDeleted: true` includes soft-deleted rows, and never makes a deleted entity mutable again.
 
-`create` takes an entity or the input that builds one. `delete` takes an entity or an id, calls `destroy()` (so `onDelete` is queued) and gives the entity. Entities read back are rebuilt from their stored value, with their identity, so they do not queue `onCreate` again. `update` and `delete` check that the entity they get is an instance of the repository's entity: `Posts.update(user)` throws `InvalidRepositoryEntity` (Repository layer) before the provider is called.
+`create` takes an entity or the input that builds one. `delete` takes an entity or an id, calls `destroy()` (so `onDelete` is queued) and gives the entity; in an application, it also deletes or is refused by the children of the entity (see [Parents](#parents)). Entities read back are rebuilt from their stored value, with their identity, so they do not queue `onCreate` again. `update` and `delete` check that the entity they get is an instance of the repository's entity: `Posts.update(user)` throws `InvalidRepositoryEntity` (Repository layer) before the provider is called.
 
 `repositoryOf({ entity, actions, deletion: "hard" | "soft" })` defaults to `"hard"`: deletion physically removes the stored row. With `"soft"`, deletion persists `deletedAt` through the provider's `update`. Finds and counts exclude these rows; unique values remain occupied. A relation pointing to a soft-deleted entity still loads it, deleted (`isDeleted` is true and it no longer changes): an order keeps its deleted product. Soft reads send `withDeleted: false` to the provider, and soft `delete` requires `update` instead of `remove`. `app.describe()` includes each repository's resolved `deletion` mode.
 
@@ -219,6 +219,7 @@ const real = (provider: Provider): IRepositoryProvider => provider;
 ```ts
 import type {
 	IRepositoryProvider,
+	MigrationJournal,
 	ProviderCapabilities,
 	ProviderIncrementOptions,
 	ProviderMigrationResult,
@@ -270,6 +271,7 @@ interface Provider<Environment = unknown> {
 		context: RepositoryContext<Environment>,
 		plan: SchemaPlan,
 	): Promise<void | ProviderMigrationResult>; // see Schema evolution
+	readonly journal?: MigrationJournal; // the plans app.migrate applied, see Schema evolution
 }
 ```
 
@@ -370,6 +372,30 @@ class UsersRepository extends RepositoryOf(Users) {
 
 As a type, `RepositoryOf<typeof User, ["findById", "create"]>` is the repository with those methods.
 
+To name a repository you already declared, give its declaration to `RepositoryInstance`: `RepositoryInstance<typeof Users>` is the type of `app.repositories.Users` and of a use case dependency, so a helper that takes a repository stays in step with the actions it declares.
+
+<!-- docs:code context
+import { blueprintOf, entityOf, repositoryOf } from "@afora/core";
+
+class Setting extends entityOf(
+	blueprintOf((ctx) => ({ key: ctx.slug, value: ctx.text })),
+	{ unique: ["key"] },
+) {}
+const SettingsRepo = repositoryOf({
+	entity: Setting,
+	actions: ["findByKey", "create"],
+});
+-->
+```ts
+import type { RepositoryInstance } from "@afora/core";
+
+async function currentSettings(
+	settings: RepositoryInstance<typeof SettingsRepo>,
+) {
+	return settings.findByKey("platform");
+}
+```
+
 **In use cases.** A repository (or an instance of a class extending one) and an environment are dependencies of a use case, next to other use cases. The use case gets the repository's methods, usable only during execution; the events of the entities they take and give move to the use case. In a class extending a repository, the methods call each other through the use case too (`this.create` inside `revokeAllOf`): their events move to it, and what `execute` replaces is replaced there as well. Only the events of entities of the repository's own class move; the entities it holds (`post.author`) leave theirs to their own repository. Two limits: `#private` members do not work in the methods the use case calls, and an arrow field calling `this.other` does not go through the use case (`super.other` does); a repository used by importing it is not tracked. It gets an environment's variables. `execute` replaces some methods of a repository with an object, and an environment with variables its blueprint accepts.
 
 <!-- docs:code continue -->
@@ -394,6 +420,62 @@ class Register extends useCaseOf({
 	}
 }
 ```
+
+## Parents
+
+A repository can name the parents of its entities: by the key of its entity that holds the id of the parent, the repository of the parent and what a delete of the parent does to them. Once an application registers both, the `delete` of the parent repository walks its children:
+
+```ts
+import {
+	applicationOf,
+	blueprintOf,
+	entityOf,
+	inMemoryProvider,
+	repositoryOf,
+} from "@afora/core";
+
+class Course extends entityOf(blueprintOf((ctx) => ({ title: ctx.string }))) {}
+class Module extends entityOf(
+	blueprintOf((ctx) => ({ courseId: ctx.string, title: ctx.string })),
+) {}
+class Lesson extends entityOf(
+	blueprintOf((ctx) => ({ moduleId: ctx.string, title: ctx.string })),
+) {}
+
+const Courses = repositoryOf({ entity: Course, actions: ["create", "delete"] });
+const Modules = repositoryOf({
+	entity: Module,
+	actions: ["create", "findMany"],
+	deletion: "soft",
+	parents: { courseId: { repository: Courses, onDelete: "cascade" } },
+});
+const Lessons = repositoryOf({
+	entity: Lesson,
+	actions: ["create", "findMany"],
+	parents: { moduleId: { repository: Modules, onDelete: "cascade" } },
+});
+
+const School = applicationOf({
+	name: "school",
+	provider: inMemoryProvider(),
+	entities: { Course, Module, Lesson },
+	repositories: { Courses, Modules, Lessons },
+});
+
+const course = await School.repositories.Courses.create({ title: "Algebra" });
+await School.repositories.Courses.delete(course); // its modules (soft) and their lessons (hard) go with it
+```
+
+- `onDelete: "cascade"` deletes the children with the parent, and theirs in turn, at any depth. Each child is deleted as its own repository deletes: soft-deleted (`deletedAt` set) when it declares `deletion: "soft"`, removed otherwise, whatever the parent does. A child already soft-deleted is left as it is. A child reached through two parents is deleted once, and an expired one is deleted too.
+- `onDelete: "restrict"` refuses the delete while any child is left: it throws `RepositoryDeleteRestricted` (Repository layer; an output answers it with 409), with `details.child` (the repository holding them), `details.key` and `details.id` (the parent they hold). A soft-deleted or expired child does not hold its parent back. A restriction below a cascade counts too: deleting a course whose modules cascade is refused when a module still has lessons that restrict.
+- The delete reads first and writes after: every child is read, level by level (one `findMany` with `in` for each child repository and level, `findOne` for a restriction), and every restriction checked before anything is written; then the children are deleted, the deepest first, and the parent last. The `onDelete` events of the children are queued on the parent, after its own, so a use case publishes them with it.
+- The key holding the parent is a key of the entity with a single value, the id of the parent (an `Id`, a string, an integer...), not an entity, a record or a list (an entity held as a field is a reference, stored by its id, which a delete does not follow), nor an identity key. It may be optional: an entity without a parent is no one's child.
+- The parents cannot form a cycle: a parent repository whose entity, or the entity of any repository above it, is the entity of the child throws `InvalidRepositoryDeclaration`, as do an unknown key, a key that does not hold a single value, a `repository` not made by `repositoryOf` and an `onDelete` other than `"cascade"` and `"restrict"`. A tree of one entity (a category with a `parentId`) is not covered: delete its branches in a use case written by hand.
+- The children are found through the application: its `delete` knows the registered repositories that declare it their parent, and only those. A registered child whose parent repository is not registered throws `UnregisteredRepositoryDependency`. A declaration called outside an application deletes only its own entity.
+- Within a command with `transaction: true`, the whole delete is one transaction: a failure anywhere rolls back the parent and every child. The children are then reached by the transaction of the command, so they need the provider of the parent; a child on another provider makes the command throw `InvalidCommandDeclaration` (`A transaction needs every repository to share one provider`). Without a transaction the restrictions are still checked before any write, but the writes run one after another, so a failure midway leaves the ones already done.
+- The cascade does not check who owns the children, as a foreign-key cascade does not: every child holding the parent is deleted (or restricts the delete), whoever owns it. An `owner` on the `delete` use case checks the parent only.
+- `restore` brings back only the entity it is given: the children a soft delete reached stay deleted, to be restored one by one (and a child its own repository removed for good is gone).
+- `describe()` gives the parents of each repository that declares some, `parents: { courseId: { repository: "Courses", onDelete: "cascade" } }`, so a child left out of a cascade can be seen; an `afora.json` writes them as `repositories.<Name>.parents` (see [afora.json](afora-json.md#parents)).
 
 ## Indexes
 
@@ -539,4 +621,4 @@ providerContract({ describe, it, expect }, () => myProvider());
 
 It checks `insert`, `findOne`, `findMany`, `update` (which also clears a value that is left out, as `restore` needs), `remove` and `count`; `RepositoryUniqueViolation` (soft-deleted rows keep their unique values) and `RepositoryEntityNotFound`; `where` equality, `in` and AND, and that a missing value matches no row; `orderBy`, `limit` and `offset`; `withDeleted`; that returned data is a copy; when the provider advertises `capabilities.transactions` (or with `{ transactions: true }`), commit, rollback, scoped-provider lifetime and nested savepoints; when it advertises `capabilities.keyset` (or with `{ keyset: true }`), `after`; when it advertises `capabilities.indexes` (or with `{ indexes: true }`), that a query given `index` (with `context.indexes`) answers what the same query without it does, on `findMany`, `count` and `findOne`; and, with `capabilities.expiry` (or `{ expiry: true }`), that `findOne`, `findMany`, `count` and reads after a position leave out rows whose `expiresAt` is at or before `now` (its table needs an `expiresAt` column), that a row without one never expires, that `withExpired` gives them back and that unique keys still count them. Likewise, `capabilities.versioning` (`{ versioning: true }`) runs the cases of `expectedVersion` (a stale version conflicts, two updates with the same one give exactly one conflict, no `expectedVersion` changes nothing), and `capabilities.atomic` (`{ atomic: true }`) those of `increment` (concurrent increments sum up, a missing id with and without `create`, concurrent creates, soft-deleted rows, and an increment of `version` making an update with the old one conflict). The rows of these cases use the columns `version` and `visits` (numbers). `capabilities.generatedIds` (`{ generatedIds: true }`) runs the cases of assigned ids (an insert without `id` gives a positive integer, increasing, that finds the row; unique keys still hold; integer ids order, and page after a position, as numbers) on an entity named `Serials`, whose table has an integer `id` the database assigns and the columns `email` (unique) and `name`.
 
-The schema evolution cases (on by default; `{ schemaEvolution: false }` skips them) use only the basic methods, through repositories and `app.migrate`: a row of an older shape read back with its `fill` and `renamedFrom` applied, the backfill in `check` (which writes nothing) and in `apply` (idempotent), and the rows of a previous name moved and then removed with `destructive`. Their entity is named `Accounts` (its previous name `One`; the context of a repository is named `<Name>Repository`, so a provider that finds tables by name finds them under either), with the keys `email`, `name`, `age`, `visits`, `n` and `active` (a boolean). The cases that store the schema version key `$v` (an entity with `schemaVersion`) also run unless `{ schemaVersionKey: false }`, for a provider with no column for it.
+The schema evolution cases (on by default; `{ schemaEvolution: false }` skips them) use only the basic methods, through repositories and `app.migrate`: a row of an older shape read back with its `fill` and `renamedFrom` applied, the backfill in `check` (which writes nothing) and in `apply` (idempotent), and the rows of a previous name moved and then removed with `destructive`. Their entity is named `Accounts` (its previous name `One`; the context of a repository is named `<Name>Repository`, so a provider that finds tables by name finds them under either), with the keys `email`, `name`, `age`, `visits`, `n` and `active` (a boolean). The cases that store the schema version key `$v` (an entity with `schemaVersion`) also run unless `{ schemaVersionKey: false }`, for a provider with no column for it. A provider with a `journal` (or with `{ journal: true }`) runs the journal cases: a plan is applied once recorded, by entity and checksum, only the last plan recorded for an entity counts as applied, and `app.migrate` with a `lock` records an applied plan of `Accounts` and skips it on the next run (`alreadyApplied: true`), while the same changes with `destructive` are another plan. Give each case an empty journal, as the factory gives an empty store.

@@ -191,6 +191,7 @@ export function entityBuilderOf<
 				onCreate: options.onCreate,
 				onUpdate: options.onUpdate,
 				onDelete: options.onDelete,
+				emits: options.emits,
 			}),
 		});
 
@@ -246,6 +247,30 @@ export function isEntityClass(
 	value: unknown,
 ): value is AnyRecordClass & AnyEntityClass {
 	return isRecordClass(value) && value.prototype instanceof AbstractEntity;
+}
+
+/**
+ * Whether `Class`, an entity class, declares members of its own between itself
+ * and the class `entityOf` made: a method, a getter or a field on a prototype
+ * in between (`constructor` aside). An empty subclass, as generated code
+ * writes, does not. @internal
+ */
+export function declaresOwnMembers(Class: object): boolean {
+	let current: unknown = Class;
+	while (
+		typeof current === "function" &&
+		!Object.hasOwn(current, EntityClassBrand)
+	) {
+		const prototype = (current as { prototype?: object }).prototype;
+		if (
+			prototype !== undefined &&
+			Reflect.ownKeys(prototype).some((key) => key !== "constructor")
+		) {
+			return true;
+		}
+		current = Object.getPrototypeOf(current);
+	}
+	return false;
 }
 
 /** Whether `value` is an entity, an instance of a class made by `entityOf`. */

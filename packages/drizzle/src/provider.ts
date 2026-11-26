@@ -27,7 +27,7 @@ import {
 } from "drizzle-orm";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
-import { migrateOf } from "./migrate";
+import { journalOf, migrateOf } from "./migrate";
 
 /** The Drizzle databases the provider supports: SQLite (any driver) and Postgres (any driver). */
 // biome-ignore-start lint/suspicious/noExplicitAny: the generics of Drizzle databases are driver specific
@@ -55,7 +55,9 @@ export interface DrizzleProviderOptions {
 	 * structural changes of an entity: `"apply"` runs the DDL on `db`,
 	 * `{ file }` writes it to a drizzle-kit compatible SQL migration file
 	 * instead. Without it the provider has no `migrate` and never changes the
-	 * schema.
+	 * schema. With `"apply"` the provider also has a `journal` of the plans
+	 * applied, in a table of its own (`afora_migrations`), so `app.migrate`
+	 * applies each plan once.
 	 */
 	readonly migrations?: "apply" | { readonly file: string };
 	/**
@@ -149,7 +151,7 @@ interface Mapping {
  * `entityOf`), which a bundler does not rename; the name of the class on a
  * version of `@afora/core` without it.
  */
-function entityNameOf(entity: object): string {
+export function entityNameOf(entity: object): string {
 	const { recordName, name } = entity as {
 		readonly recordName?: unknown;
 		readonly name: string;
@@ -887,7 +889,9 @@ export function drizzleProvider(
 				transaction: nestedTransactions(settings, db),
 			});
 	if (migrations === undefined) return provider as DrizzleProvider;
+	// A file is applied later by drizzle-kit, which keeps its own history.
 	return Object.assign(provider, {
 		migrate: migrateOf(settings, db, migrations),
+		...(migrations === "apply" ? { journal: journalOf(db) } : {}),
 	}) as DrizzleProvider;
 }

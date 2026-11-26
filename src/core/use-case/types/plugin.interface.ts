@@ -88,6 +88,11 @@ export interface UseCaseCompilation
 		"steps"
 	> {
 	readonly steps: readonly Readonly<Record<string, unknown>>[];
+	/**
+	 * The declared index of the repository that serves what the use case
+	 * reads, for `describe()` to say; it is no setting of `useCaseOf`.
+	 */
+	readonly index?: string;
 }
 
 /**
@@ -160,6 +165,8 @@ export interface UseCaseOriginInfo {
 	readonly plugin: AnyUseCasePlugin;
 	readonly repository: AnyRepository;
 	readonly options: Readonly<Record<string, unknown>>;
+	/** The declared index that serves what the use case reads, when the plugin says one does. */
+	readonly index?: string;
 }
 
 /** @internal */

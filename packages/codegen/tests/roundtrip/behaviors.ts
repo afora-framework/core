@@ -105,7 +105,7 @@ export async function storefrontBehavior(App: Any) {
 	process.env.CURRENCY = "BRL";
 	process.env.PORT = "3000";
 	const { Shop, Admin } = App.commands;
-	const { Products, Orders } = App.repositories;
+	const { Products, Orders, Reviews } = App.repositories;
 	const lamp = {
 		name: "Lamp",
 		sku: "lamp",
@@ -131,12 +131,15 @@ export async function storefrontBehavior(App: Any) {
 	const stored = (await Orders.findManyByProduct(added.product.id)).length;
 	const drafts = await Products.findMany({ where: { status: "draft" } });
 	const page = await Products.findPage({ orderBy: [{ key: "sku" }], limit: 1 });
+	await Reviews.create({ productId: added.product.id, stars: 5 });
+	await Reviews.create({ productId: "another", stars: 3 });
 	await Products.delete(added.product.id);
 	const afterDelete = {
 		found: (await Products.findById(added.product.id)) === undefined,
 		count: await Products.count(),
 		exists: await Products.exists({ where: { sku: "lamp" } }),
 		reuse: (await caught(Products.create(lamp)))?.name,
+		reviews: await Reviews.count(),
 	};
 
 	const { Api, Manual } = App.outputs;
@@ -182,6 +185,7 @@ export const STOREFRONT_EXPECTED = {
 		count: 1,
 		exists: false,
 		reuse: "RepositoryUniqueViolation",
+		reviews: 1,
 	},
 	operations: [
 		{ id: "Shop.addProduct", tags: ["public", "api"] },

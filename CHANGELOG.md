@@ -6,6 +6,8 @@ Testing an application without touching the process: a test application with a s
 
 The same blueprints on the server and in a client: `@afora/core/client`, `safeParse` on lists and variants, and an exception layer for interfaces. Money in Std, and an index that may look up a sensitive key by equality.
 
+An application that `afora.json` describes further: entities with methods and the events they raise, the wire type of an id, and the parents of an entity, which the delete of a parent cascades to or is refused by. A standard `list` filtered by the keys of a parent, a `create` whose `before` computes keys the input does not take, a journal of the migration plans a provider applied, and MCP tools served over HTTP.
+
 ### Behavior changes
 
 - `invoke` of an output's operation without access rules passes only the context and the caller to its command, as an operation with `access` does (#175). See [Outputs](docs/outputs.md).
@@ -14,6 +16,7 @@ The same blueprints on the server and in a client: `@afora/core/client`, `safePa
 ### A command registers its use cases (#194)
 
 - Registering a command in `applicationOf({ commands })` also registers the use cases it holds, whether written by hand or made by a use case plugin (`ctx.create(Posts)`), under their `useCaseName`. They go through the checks of any other use case: their dependencies must be registered, and two different use cases with one name throw `ApplicationConflict`. Listing one in `useCases` as well stays valid, and the class is registered once. The type of `app.useCases` does not change: reach such a use case as `app.commands.Blog.useCases.create`. See [Commands](docs/commands.md) and [Applications](docs/applications.md).
+- It registers the exceptions those use cases declare as well (their `errors`, and the `throws` of a standard use case and of its `before` and `after` hooks) under their `name`, so they need no listing in `exceptions`. Listing one there stays valid, and two different exceptions with one name throw `ApplicationConflict`. An exception that no registered command holds still has to be in `exceptions` (`UnregisteredApplicationReference`). See [Commands](docs/commands.md) and [Applications](docs/applications.md).
 
 ### A repository says why it cannot be patched (#177)
 
@@ -100,6 +103,50 @@ The same blueprints on the server and in a client: `@afora/core/client`, `safePa
 
 - `@afora/core/client` is a stable entry with what a client needs to declare blueprints and parse values: `blueprintOf`, `listOf`, `optionalOf`, `variantOf`, `enumOf`, `propertyOf`, `exceptionOf`, `ExceptionLayers` and the types `StandardSchemaV1`, `Issue`, `IssueCode`, `ParseResult` and `AnyParsable`. They are the objects of `@afora/core`, so a blueprint made from either entry is a field, a list item or a record of the other, and a project declares its blueprints once for the API and the interface. See [In a client](docs/blueprints.md#in-a-client) and [API tiers](docs/api-tiers.md#the-tiers).
 - The entry reaches no module only a server runs (records, entities, repositories, use cases, outputs), and `src/client.test.ts` checks it. That is a guarantee about the module graph, for where nothing tree-shakes, such as an unbundled ESM dev server or a CDN. It does not make a smaller bundle: a bundler that drops unused modules gives the same size from either entry, about 60 kB gzipped, most of it TypeBox. `bun run bench:guard` holds the size of the client entry to a budget in `bench/guard.limits.ts`.
+
+### Parents (#244)
+
+- `repositoryOf({ parents: { courseId: { repository: Courses, onDelete } } })` names the parents of its entities, by the key that holds the id of the parent. Once an application registers both repositories, the `delete` of the parent walks its children. `onDelete: "cascade"` deletes them, and theirs in turn, at any depth, each as its own repository deletes (soft-deleted with `deletion: "soft"`, removed otherwise). `onDelete: "restrict"` refuses the delete while a child is left, with `RepositoryDeleteRestricted` (layer `repository`, 409 from an output, `details: { child, key, id }`); a soft-deleted or expired child does not hold its parent back.
+- The delete reads first and writes after: every child is read level by level, and every restriction checked, before anything is written. Then the children are deleted, the deepest first, and the parent last, and their `onDelete` events are queued on the parent. In a command with `transaction: true` the whole delete is one transaction, and a child on another provider makes the command throw `InvalidCommandDeclaration`. Without a transaction, a failure midway leaves the writes already done.
+- It does not cover a tree of one entity (a category with a `parentId`), the owner of the children (an `owner` on `delete` checks the parent only) or `restore`, which brings back only the entity it is given. A cycle, an unknown key, a key that does not hold a single value or an `onDelete` other than `"cascade"` and `"restrict"` throws `InvalidRepositoryDeclaration`, and a registered child whose parent repository is not registered throws `UnregisteredRepositoryDependency`.
+- `describe()` gives the `parents` of each repository that declares some. `afora.json`: a repository takes `parents`, checked as `invalid_parents`, `unknown_repository` and `parent_cycle`.
+- New exports of `@afora/core`: `RepositoryDeleteRestricted` and the type `RepositoryParent`. See [Parents](docs/repositories.md#parents) and [Parents in afora.json](docs/afora-json.md#parents).
+
+### Naming a declared repository (#246)
+
+- `RepositoryInstance<typeof Users>` is the type of a repository `repositoryOf` made, from its declaration: the type of `app.repositories.Users` and of a use case dependency. A helper that takes a repository as a parameter stays in step with the actions it declares, without restating them. See [Repositories](docs/repositories.md).
+
+### A list by a key (#243)
+
+- `ctx.list(Lessons, { where: ["moduleId"] })` lists the children of a parent: each key of `where` is matched by equality, is a required key of the input (a path parameter, for a route) and reaches `findPage` as a `where`. A missing value is invalid input, so `undefined` and `null` never reach the query. It works with `owner`, `orderBy` and `maxLimit`.
+- A key the entity lacks, one named twice, one that is optional or sensitive, one that does not hold a scalar value, and `limit` or `offset` throw `UseCaseUnavailable` at declaration. When a declared index of the repository serves the keys with the first `orderBy` as its order, `describe()` names it as `generic.index`. `afora.json` takes `where` in the options of `list`. See [List by a key](docs/std-use-cases.md#list-by-a-key).
+
+### Computed keys (#247)
+
+- `ctx.create(Lessons, { computed: ["position"], before })` takes keys the caller should not choose but the entity requires: the input does not take them, nor do the OpenAPI document and the MCP input schema show them, and `before` gives them back with the input. The entity validates them as any other key. The type of `before` is the input and the computed keys, and it cannot give nothing back; one that forgets a key is an invalid input that names the key.
+- `computed` without `before`, a key that is unknown, an identity key, the owner key, a key that holds an entity or one also in `omit` or `values` throws `UseCaseUnavailable` at declaration. In `afora.json`, `options.computed` and `options.before` are written together and survive the round trip. See [Computed keys](docs/std-use-cases.md#computed-keys).
+
+### A journal of applied migrations (#157)
+
+- A provider may have a `journal` (`MigrationJournal`): `applied(entity, checksum)` says whether a plan is the last one recorded for the entity, and `record(entry)` records one. `app.migrate({ mode: "apply", lock })` records each plan it applied and did not defer, as `{ entity, plan, checksum, appliedAt }` (`MigrationJournalEntry`), and on a later run does not call `provider.migrate` for a plan that is still the last of its entity: the report says `alreadyApplied: true`, and the rows are walked as before, since the backfill is idempotent.
+- The checksum is the SHA-256 of `{ from, plan }` as canonical JSON, where `from` is the entry of the lock the plan was diffed from, so the same changes from another starting shape are another plan, and the checksum is the same on every run and runtime. Only the last plan recorded counts: a key added, dropped and added back is applied again. `check`, a plan without changes and a deferred plan never touch the journal, and a provider without one gets the plan on every run, as before.
+- `inMemoryProvider` keeps its journal in memory (emptied by `clear()`, and by `clear(entity)` for that entity). `@afora/drizzle` with `migrations: "apply"` keeps it in a table of its own, `afora_migrations`, so a run in another process over the same database skips the plan too. `providerContract` runs journal cases for a provider with a `journal` (or with `{ journal: true }`).
+- New types of `@afora/core/adapters`: `MigrationJournal` and `MigrationJournalEntry`. See [Providers](docs/schema-evolution.md#providers) in Schema evolution and [Storing data](docs/storing-data.md).
+
+### Entities with methods in afora.json (#200, #201)
+
+- `entityOf(blueprint, { emits })` declares the events the methods of an entity raise: a definition, a list, or a function that gives either, so the definitions may follow the class. Nothing queues them and `emit` still accepts an event that is not listed: `emits` tells `describe()`, the spec and the tools built on it which events the entity can raise. `describe().entities.<Name>.events` lists them under `emits`. See [Entities](docs/entities.md).
+- `describe().entities.<Name>.implementation` is `"class"` when the registered class adds members of its own (methods, getters) to the class `entityOf` made; an empty subclass is described as the class it extends.
+- `afora.json`: an entity names its class written by hand with `implementation` (`{ "import": "../handlers/booking#Booking" }`), and its events take `emits`. `generate` writes `<Name>Base` in `<kebab-name>.entity.ts`, your class extends it, and the repositories, fields, `build` steps and `application.ts` use your class. Extraction gives the same spec back. See [Entities with methods](docs/afora-json.md#entities-with-methods).
+
+### The wire type of an id (#189)
+
+- In `afora.json`, the `id` of an entity declares its type on the wire: a string for `"uuid7"`, `"uuid"` and `"key"`, an integer for `"serial"`. A client built from the spec types an `id` as `string` or `number`, and need not accept any JSON. `toOpenAPI` and `jsonSchemaOf` give the generated entity the same type, and `@afora/codegen` gives it with `idWireTypeOf(entity)` and `catalog().idStrategies`. See [Ids](docs/afora-json.md#ids).
+
+### MCP tools over HTTP (#245, #217)
+
+- `@afora/mcp`: `fetch(request)`, a new member of what an `mcpTools` output builds, serves its tools over Streamable HTTP, stateless, on web `Request` and `Response`. With an authenticator, a request without a principal is a 401 before the handshake, and `requiredScopes` refuses a principal that lacks a scope with a 403. `@afora/hono`: `mountMcp(app, "/mcp", tools)` mounts it on the app of the `hono` sink. See [Serve over HTTP](packages/mcp/README.md#serve-over-http).
+- `@afora/mcp`: `afora_project` reads a stage that `afora.json` names by an import from the application, so its sink, options and hooks show as for a stage written in JSON.
 
 ### Documentation
 

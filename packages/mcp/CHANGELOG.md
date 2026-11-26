@@ -2,12 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- `fetch(request)`, a new member of what an `mcpTools` output builds (`const mcp = Tools.build()`), serves the tools over Streamable HTTP, stateless, on web `Request` and `Response` (Bun, Node >= 22, Workers). Only `POST` is accepted (405 with `Allow: POST` otherwise). With an authenticator (the `auth` option or the `authenticator` hook), a request without a principal is a 401 with `WWW-Authenticate` before the handshake, so the whole endpoint is private; only headers reach the authenticator, so a token read from a cookie alone does not apply. Each tool still checks the access its use case declares. See [Serve over HTTP](README.md#serve-over-http) (#245).
+- `requiredScopes`, an option of `mcpTools`: a principal that lacks any of the scopes listed is a 403 with `error="insufficient_scope"`. It needs an authenticator (#245).
+- `afora_project` reads a stage that `afora.json` names by an import (`{ "import": "./stages.ts#api" }`) from the application when it is known, so its sink, options and hooks show as for a stage written in JSON. With `compare: false` the application is not imported and the stage stays opaque (#217).
+
 ### Changed
 
 - The guide of the server says that registering a command in an application registers the use cases it holds, so an agent no longer lists them in `useCases` as well (#194).
 - The `mcpTools` sink imports `jwtOf` from `@afora/core/adapters`, where it is now stable, and [the README](README.md#expose-an-output-as-mcp-tools) no longer calls the `auth` option experimental (#186).
 - Gets the options of `@afora/codegen` for ending sessions (`token.versionFrom`, `token.rotate`, `owner` and `token` of `logout`, `token` of `changePassword`) and `takesTokenKeys` of `register` (#193, #215, #216).
 - The guide and the descriptions of `afora_catalog` and `afora_spec_upsert` list the money form, `{ "money": { "currency": "BRL" } }`, an integer of minor units, and get the checks of `@afora/codegen` (`invalid_money`) (#196).
+- Gets the forms of `@afora/codegen` for entities with a class written by hand and the events they raise (`implementation`, `events.emits`), the wire type of an id, the `parents` of a repository, `where` of `list`, `computed` of `create` and the tables a provider entry makes, and the fix of extraction for the default of an inline enum (#157, #189, #200, #201, #203, #243, #244, #247).
 
 ## 27.0.0-rc.6 — 2026-11-24
 

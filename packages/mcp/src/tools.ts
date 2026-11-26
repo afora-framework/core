@@ -215,7 +215,7 @@ export const tools: readonly ToolDefinition[] = [
 	{
 		name: "afora_project",
 		description:
-			"The project as a map, without writing anything: its entities and repositories, every operation (command, use case, how it is implemented: steps, code or a standard use case, its declared route and access), and each output with the route every operation is served at (method, path, status, and whether the sink, the use case or the default decided it) and who may call it (public, open, authenticated, scopes, owner). `notes` point at what deserves a look: operations left open beside protected ones, operations that will answer 401 for lack of an authenticator, commands no output serves. Read from the running application when the server was started with --app or `app` is given (this imports the module in a Bun subprocess, and works on code written by hand, with no afora.json); from afora.json otherwise. `source` chooses: `file` reads afora.json even when there is an application, `app` the application. When the project has both, the result has `drift`: where the application and afora.json say different things (declarations in only one of them, an operation implemented, routed or protected differently, another path in an output), so a spec that fell behind the code, or code that was not regenerated, is seen at once; `compare: false` skips it (and does not import the application when reading the file). Call it before adding a use case or a route, to see what exists and which paths are taken.",
+			"The project as a map, without writing anything: its entities and repositories, every operation (command, use case, how it is implemented: steps, code or a standard use case, its declared route and access), and each output with the route every operation is served at (method, path, status, and whether the sink, the use case or the default decided it) and who may call it (public, open, authenticated, scopes, owner). `notes` point at what deserves a look: operations left open beside protected ones, operations that will answer 401 for lack of an authenticator, commands no output serves. Read from the running application when the server was started with --app or `app` is given (this imports the module in a Bun subprocess, and works on code written by hand, with no afora.json); from afora.json otherwise (a stage that afora.json names by an import is read from the application, when there is one and `compare` is not false, matched by output name and position in the pipe). `source` chooses: `file` reads afora.json even when there is an application, `app` the application. When the project has both, the result has `drift`: where the application and afora.json say different things (declarations in only one of them, an operation implemented, routed or protected differently, another path in an output), so a spec that fell behind the code, or code that was not regenerated, is seen at once; `compare: false` skips it (and does not import the application when reading the file). Call it before adding a use case or a route, to see what exists and which paths are taken.",
 		inputSchema: json(
 			Type.Object(
 				{
@@ -259,8 +259,33 @@ export const tools: readonly ToolDefinition[] = [
 				);
 			}
 			const spec = await readSpec(project);
-			const fromFile = spec ? projectViewOfSpec(spec) : undefined;
 			const inherits = (spec?.extends?.length ?? 0) > 0;
+			/** The description of the application, read once; undefined when it cannot be. */
+			let described: Promise<unknown> | undefined;
+			const describedApp = () => {
+				if (!app) return Promise.resolve(undefined);
+				described ??= describeApp(project.root, app);
+				return described;
+			};
+			/** Stages named by an import are opaque in the file: the application tells which they are. */
+			const hasImportedStage = Object.values(
+				(spec as { outputs?: Record<string, { pipe?: unknown[] }> } | undefined)
+					?.outputs ?? {},
+			).some((output) =>
+				(output?.pipe ?? []).some(
+					(stage) =>
+						typeof stage === "object" &&
+						stage !== null &&
+						typeof (stage as { import?: unknown }).import === "string",
+				),
+			);
+			const knownApplication =
+				spec && app && args.compare !== false && hasImportedStage
+					? await describedApp().catch(() => undefined)
+					: undefined;
+			const fromFile = spec
+				? projectViewOfSpec(spec, knownApplication)
+				: undefined;
 			/** The differences between the two, when the project has both and they can be read. */
 			const driftOf = async (
 				application?: ReturnType<typeof projectViewOfDescription>,
@@ -268,8 +293,7 @@ export const tools: readonly ToolDefinition[] = [
 				if (args.compare === false || !app || !fromFile) return {};
 				try {
 					const fromApp =
-						application ??
-						projectViewOfDescription(await describeApp(project.root, app));
+						application ?? projectViewOfDescription(await describedApp());
 					const differences = projectDifferences(fromApp, fromFile, inherits);
 					return {
 						drift: {
@@ -288,9 +312,7 @@ export const tools: readonly ToolDefinition[] = [
 				}
 			};
 			if (app && source !== "file") {
-				const view = projectViewOfDescription(
-					await describeApp(project.root, app),
-				);
+				const view = projectViewOfDescription(await describedApp());
 				return { source: "app", app, ...view, ...(await driftOf(view)) };
 			}
 			if (!spec) {
@@ -400,7 +422,7 @@ export const tools: readonly ToolDefinition[] = [
 				},
 				declaration: {
 					description:
-						'The declaration. property: { base, with? } | { enum } | { file } | { money } | { opaque, import }. blueprint/environment: { fields }. record/entity: { fields, unique?, sensitive?, change?, plugins? }; an entity also takes events?: { onCreate?, onUpdate?, onDelete? }, each "name" | { name, handler?: { import } } or a list of them. repository: { entity, actions, provider?, deletion?: hard | soft, relations?, environments? }. exception: { layer, message? }. useCase: { description?, tags?, deprecated?, input, response, context?, dependencies?, errors?, implementation: { steps: [...] } | { import: "../handlers/x.ts#Name" } } (see the guide for steps). command: { description?, tags?, context?, useCases: { op: "UseCaseName" }, transaction?, events?: "after-commit" | "manual" | { policy, options? } | { import }, onEventError?: { import } }. output: { commands: [names], statuses?: { ExceptionName: 400-599 }, pipe: [{ transform, options? } | { sink, options? } | { import }] }. provider: "inMemory" | { use, options? } | { import: "./file.ts#name" } | "<key>" of the top-level `providers` (the application provider and the named `providers` are top-level keys of the spec: afora_spec_write). A use case dependency can also be "Logger" or a key of the top-level `services` ({ name: { import } }, the factory of each service, run once per call); the top-level `log` is { level?, providers: ["json" | "console" | { import }] }; the top-level `publishers` is { key: { import } }, where event policies such as publishEvents publish.',
+						'The declaration. property: { base, with? } | { enum } | { file } | { money } | { opaque, import }. blueprint/environment: { fields }. record/entity: { fields, unique?, sensitive?, change?, plugins? }; an entity also takes events?: { onCreate?, onUpdate?, onDelete?, emits? }, each "name" | { name, handler?: { import } } or a list of them. repository: { entity, actions, provider?, deletion?: hard | soft, relations?, environments? }. exception: { layer, message? }. useCase: { description?, tags?, deprecated?, input, response, context?, dependencies?, errors?, implementation: { steps: [...] } | { import: "../handlers/x.ts#Name" } } (see the guide for steps). command: { description?, tags?, context?, useCases: { op: "UseCaseName" }, transaction?, events?: "after-commit" | "manual" | { policy, options? } | { import }, onEventError?: { import } }. output: { commands: [names], statuses?: { ExceptionName: 400-599 }, pipe: [{ transform, options? } | { sink, options? } | { import }] }. provider: "inMemory" | { use, options? } | { import: "./file.ts#name" } | "<key>" of the top-level `providers` (the application provider and the named `providers` are top-level keys of the spec: afora_spec_write). A use case dependency can also be "Logger" or a key of the top-level `services` ({ name: { import } }, the factory of each service, run once per call); the top-level `log` is { level?, providers: ["json" | "console" | { import }] }; the top-level `publishers` is { key: { import } }, where event policies such as publishEvents publish.',
 					anyOf: Object.values(declarationSchemas).map((schema) =>
 						json(schema),
 					),
