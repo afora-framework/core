@@ -519,7 +519,7 @@ const RecordDeclaration = Type.Object(
 				],
 				{
 					description:
-						'Entities only: how ids are made. "uuid7" (default) generates and accepts UUID v7; "uuid" accepts any UUID version (v4 from an existing database) and generates v7; "key" is a natural key (1 to 256 characters) the input must hold, never generated; "serial" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds.',
+						'Entities only: how ids are made. "uuid7" (default) generates and accepts UUID v7; "uuid" accepts any UUID version (v4 from an existing database) and generates v7; "key" is a natural key (1 to 256 characters) the input must hold, never generated; "serial" is a positive integer the database assigns on create (an auto-increment, serial or identity column), which needs a provider with capabilities.generatedIds. On the wire the id is a string for "uuid7", "uuid" and "key", and an integer (a JSON number) for "serial": the type a client gives it, and the one toOpenAPI and jsonSchemaOf give it.',
 				},
 			),
 		),

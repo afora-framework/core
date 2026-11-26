@@ -54,6 +54,8 @@ A repository lists `"increment"` among its actions for atomic counters; the enti
 
 An entity takes `"id"`, how its ids are made: `"uuid7"` (the default, as when it is left out), `"uuid"` (any UUID version, a v4 from an existing database included; new ones are still v7), `"key"` (a natural key of 1 to 256 characters that the input of `create` must hold, never generated) or `"serial"` (a positive integer the database assigns on `create`, from an auto-increment, serial or identity column; the provider must assign ids, as the in-memory and Drizzle ones do, see [Entities](entities.md#ids-the-database-assigns)). They are generated as `entityOf(..., { id: Uuid })`, `{ id: Key }` and `{ id: Serial }` and extracted back from `describe()`; an entity whose id is a custom `idOf` cannot be extracted (`ExtractionError`). A record does not take it (`unknown_key`), and any other value is `invalid_option`.
 
+The spec therefore says the type of an id on the wire: a string for `"uuid7"`, `"uuid"` and `"key"`, and an integer (a JSON number) for `"serial"`. A client built from the spec types the `id` of an entity from it, as `string` or `number`, and need not accept any JSON. `catalog().idStrategies` lists the values with their `wire` type, and `idWireTypeOf(entity)` reads it from a declaration (`"string"` when `id` is left out). `toOpenAPI` and `jsonSchemaOf` give the generated entity the same type (`type: "string"` or `type: "integer"`), which the tests of `@afora/codegen` compare.
+
 ```json
 {
 	"entities": {

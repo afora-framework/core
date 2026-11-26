@@ -21,6 +21,38 @@ export function identityKeysOf(spec: {
 	return spec.versioned === true ? [...keys, VERSION_KEY] : keys;
 }
 
+/** The type an id has on the wire, in JSON and in the schemas `toOpenAPI` and `jsonSchemaOf` give. */
+export type IdWireType = "string" | "integer";
+
+/** One value of `id` in an entity declaration, and what an id of it is. */
+export interface IdStrategyInfo {
+	/** The value of `entities.<Name>.id`. */
+	readonly name: "uuid7" | "uuid" | "key" | "serial";
+	/** The type of the id on the wire: what a client types it as (`string`, or `integer` for a `number`). */
+	readonly wire: IdWireType;
+	/** The export of `@afora/core` the generated entity passes as `id`; none for the default. */
+	readonly export?: "Uuid" | "Key" | "Serial";
+}
+
+/** The id strategies, in the order the schema lists them. */
+const ID_STRATEGIES: readonly IdStrategyInfo[] = [
+	{ name: "uuid7", wire: "string" },
+	{ name: "uuid", wire: "string", export: "Uuid" },
+	{ name: "key", wire: "string", export: "Key" },
+	{ name: "serial", wire: "integer", export: "Serial" },
+];
+
+/**
+ * The wire type of the id of an entity declaration: `"integer"` for a
+ * `serial`, `"string"` for the others (a left out `id` is `uuid7`).
+ */
+export function idWireTypeOf(spec: { readonly id?: unknown }): IdWireType {
+	return (
+		ID_STRATEGIES.find((strategy) => strategy.name === spec.id)?.wire ??
+		"string"
+	);
+}
+
 /** The kind of JSON Schema a Std property validates; it tells which `with` options apply. */
 export type SchemaKind = "string" | "number" | "integer" | "boolean" | "other";
 
@@ -90,6 +122,8 @@ export interface Catalog {
 	readonly reservedEntityKeys: readonly string[];
 	/** The keys an entity gets by itself. */
 	readonly identityKeys: readonly string[];
+	/** The values of an entity's `id` and the wire type of each. */
+	readonly idStrategies: readonly IdStrategyInfo[];
 	/** The actions a repository can list, and the rule of each. */
 	readonly repositoryActions: readonly { action: string; rule: string }[];
 	/** The values of `ExceptionLayers`: what an exception's `layer` may be. */
@@ -218,6 +252,7 @@ function build(): Catalog {
 		reservedRecordKeys: [...RESERVED_RECORD_KEYS],
 		reservedEntityKeys: [...RESERVED_ENTITY_KEYS],
 		identityKeys: [...ENTITY_IDENTITY_KEYS],
+		idStrategies: ID_STRATEGIES,
 		repositoryActions: [
 			{ action: "findById", rule: "Always available: `id` is unique." },
 			{
