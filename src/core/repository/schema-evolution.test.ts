@@ -15,11 +15,14 @@ import {
 	InvalidStoredSchemaVersion,
 	inMemoryProvider,
 	listOf,
+	providerFrom,
 	providersOf,
 	ReservedEntityKey,
 	repositoryOf,
 	SchemaLockMismatch,
 } from "../../index";
+import { InvalidSchemaMigration } from "../application/exceptions";
+import { checksumOf } from "../application/migrate";
 import type { Exception } from "../exception/exception";
 
 /** The rows of `name` in `provider`, as stored. */
@@ -396,6 +399,7 @@ describe("app.migrate", () => {
 					movedFromPreviousNames: 0,
 					removedKeys: ["draft"],
 					deferred: false,
+					alreadyApplied: false,
 				},
 			},
 		});
@@ -653,6 +657,200 @@ describe("app.migrate", () => {
 		const check = await app.migrate({ mode: "check" });
 		expect(check.entities.Entry?.deferred).toBe(false);
 		expect(check.entities.Entry?.upgraded).toBe(3);
+	});
+
+	describe("the migration journal", () => {
+		/** A provider over `provider` counting the plans given to `migrate`. */
+		function counting(
+			provider: ReturnType<typeof inMemoryProvider>,
+			migrate: () => Promise<
+				undefined | { readonly deferred: true }
+			> = async () => undefined,
+		) {
+			const plans: unknown[] = [];
+			return {
+				plans,
+				provider: {
+					...provider,
+					capabilities: provider.capabilities,
+					async migrate(_: RepositoryContext, plan: unknown) {
+						plans.push(plan);
+						return migrate();
+					},
+				},
+			};
+		}
+		const lockOfV1 = () =>
+			schemaLockOf(
+				applicationOf({
+					name: "cms",
+					entities: { Entry: EntryV1 },
+					repositories: {
+						Entries: repositoryOf({ entity: EntryV1, actions: ["findMany"] }),
+					},
+				}).describe(),
+			);
+
+		test("records an applied plan and skips it on the next run, whose backfill still runs", async () => {
+			const seed = await seeded();
+			const { plans, provider } = counting(seed.provider);
+			const app = applicationOf({
+				name: "cms",
+				entities: { Entry },
+				repositories: { Entries },
+				provider,
+			});
+			const lock = lockOfV1();
+			const first = await app.migrate({ mode: "apply", lock });
+			expect(plans).toHaveLength(1);
+			expect(first.entities.Entry?.alreadyApplied).toBe(false);
+			expect(first.entities.Entry?.upgraded).toBe(3);
+			const plan = {
+				entity: "Entry",
+				changes: diffSchemas(lock, schemaLockOf(app.describe())),
+				destructive: false,
+			};
+			expect(
+				await provider.journal.applied("Entry", await checksumOf(plan)),
+			).toBe(true);
+
+			const second = await app.migrate({ mode: "apply", lock });
+			expect(plans).toHaveLength(1);
+			expect(second.entities.Entry).toMatchObject({
+				alreadyApplied: true,
+				scanned: 3,
+				upgraded: 0,
+			});
+
+			// Another plan (destructive) has another checksum.
+			const destructive = await app.migrate({
+				mode: "apply",
+				lock,
+				destructive: true,
+			});
+			expect(plans).toHaveLength(2);
+			expect(destructive.entities.Entry?.alreadyApplied).toBe(false);
+		});
+
+		test("check, and a plan without changes, never read nor write the journal", async () => {
+			const seed = await seeded();
+			const calls: string[] = [];
+			const journal = {
+				async applied() {
+					calls.push("applied");
+					return false;
+				},
+				async record() {
+					calls.push("record");
+				},
+			};
+			const { plans, provider } = counting(seed.provider);
+			const app = applicationOf({
+				name: "cms",
+				entities: { Entry },
+				repositories: { Entries },
+				provider: { ...provider, journal },
+			});
+			await app.migrate({ mode: "check", lock: lockOfV1() });
+			await app.migrate({ mode: "apply" });
+			expect(calls).toEqual([]);
+			expect(plans).toHaveLength(1);
+			await app.migrate({ mode: "apply", lock: lockOfV1() });
+			expect(calls).toEqual(["applied", "record"]);
+		});
+
+		test("reaches the journal of a provider made on start", async () => {
+			const seed = await seeded();
+			const app = applicationOf({
+				name: "cms",
+				entities: { Entry },
+				repositories: { Entries },
+				provider: providerFrom(() => seed.provider),
+			});
+			await app.start();
+			const lock = lockOfV1();
+			await app.migrate({ mode: "apply", lock });
+			const again = await app.migrate({ mode: "apply", lock });
+			expect(again.entities.Entry?.alreadyApplied).toBe(true);
+			await app.stop();
+		});
+
+		test("a deferred plan is not recorded", async () => {
+			const seed = await seeded();
+			const { plans, provider } = counting(seed.provider, async () => ({
+				deferred: true,
+			}));
+			const app = applicationOf({
+				name: "cms",
+				entities: { Entry },
+				repositories: { Entries },
+				provider,
+			});
+			const lock = lockOfV1();
+			await app.migrate({ mode: "apply", lock });
+			const again = await app.migrate({ mode: "apply", lock });
+			expect(plans).toHaveLength(2);
+			expect(again.entities.Entry).toMatchObject({
+				deferred: true,
+				alreadyApplied: false,
+			});
+		});
+
+		test("a provider without a journal gets the plan on every run", async () => {
+			const seed = await seeded();
+			const { plans, provider } = counting(seed.provider);
+			const app = applicationOf({
+				name: "cms",
+				entities: { Entry },
+				repositories: { Entries },
+				provider: { ...provider, journal: undefined },
+			});
+			const lock = lockOfV1();
+			await app.migrate({ mode: "apply", lock });
+			const again = await app.migrate({ mode: "apply", lock });
+			expect(plans).toHaveLength(2);
+			expect(again.entities.Entry?.alreadyApplied).toBe(false);
+		});
+
+		test("a journal without applied or record is refused", async () => {
+			const seed = await seeded();
+			const app = applicationOf({
+				name: "cms",
+				entities: { Entry },
+				repositories: { Entries },
+				provider: {
+					...seed.provider,
+					journal: { applied: async () => false } as never,
+				},
+			});
+			let error: unknown;
+			try {
+				await app.migrate({ mode: "apply", lock: lockOfV1() });
+			} catch (caught) {
+				error = caught;
+			}
+			expect(error instanceof InvalidSchemaMigration).toBe(true);
+		});
+
+		test("the checksum is the SHA-256 of the plan as canonical JSON", async () => {
+			const plan = {
+				entity: "Entry",
+				destructive: false,
+				changes: [{ key: "slug", entity: "Entry", change: "added-required" }],
+			};
+			const reordered = {
+				changes: [{ change: "added-required", entity: "Entry", key: "slug" }],
+				destructive: false,
+				entity: "Entry",
+			};
+			const expected = new Bun.CryptoHasher("sha256")
+				.update(
+					'{"changes":[{"change":"added-required","entity":"Entry","key":"slug"}],"destructive":false,"entity":"Entry"}',
+				)
+				.digest("hex");
+			expect(await checksumOf(plan as never)).toBe(expected);
+			expect(await checksumOf(reordered as never)).toBe(expected);
+		});
 	});
 
 	test("rewrites a versioned entity at the version it read, which it keeps", async () => {

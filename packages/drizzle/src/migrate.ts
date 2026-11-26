@@ -29,6 +29,23 @@ export interface MigrationPlan {
  */
 export type MigrationResult = undefined | { readonly deferred: true };
 
+/**
+ * A plan `app.migrate` applied, as the journal keeps it: the
+ * `MigrationJournalEntry` of `@afora/core`, written out like `MigrationPlan`.
+ */
+interface MigrationJournalEntry {
+	readonly entity: string;
+	readonly plan: MigrationPlan;
+	readonly checksum: string;
+	readonly appliedAt: string;
+}
+
+/** The journal of a provider with `migrations: "apply"`. */
+export interface MigrationJournal {
+	applied(entity: string, checksum: string): Promise<boolean>;
+	record(entry: MigrationJournalEntry): Promise<void>;
+}
+
 /** The DDL of a plan, and notes on what it leaves to a migration of your own. */
 interface Migration {
 	readonly statements: readonly string[];
@@ -60,7 +77,7 @@ function invalid(reason: string): never {
 const quote = (name: string): string => `"${name.replaceAll('"', '""')}"`;
 
 /** `key` in snake_case, as Drizzle's `casing: "snake_case"` names its column. */
-function snakeCaseOf(key: string): string {
+export function snakeCaseOf(key: string): string {
 	const words = key.match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
 	return words.map((word) => word.toLowerCase()).join("_");
 }
@@ -272,6 +289,69 @@ async function apply(
 		db.run(sql`ROLLBACK`);
 		throw error;
 	}
+}
+
+/** The table of the journal: fixed, created by the provider, never migrated. */
+const JOURNAL_TABLE = "afora_migrations";
+
+/** The columns of the journal, by key of an entry. */
+const JOURNAL_COLUMNS = {
+	entity: snakeCaseOf("entity"),
+	checksum: snakeCaseOf("checksum"),
+	plan: snakeCaseOf("plan"),
+	appliedAt: snakeCaseOf("appliedAt"),
+} as const;
+
+/**
+ * The journal of the plans applied on `db`, in a table of its own
+ * (`afora_migrations`) created with `CREATE TABLE IF NOT EXISTS` on first
+ * use, the same on SQLite and Postgres: an entry is one row, keyed by entity
+ * and checksum, with the plan as JSON text. Its shape is fixed, as it cannot
+ * migrate itself through the plans it records.
+ */
+export function journalOf(
+	// biome-ignore lint/suspicious/noExplicitAny: dialect specific database
+	db: any,
+): MigrationJournal {
+	const postgres = typeof db.all !== "function";
+	const table = quote(JOURNAL_TABLE);
+	const column = (key: keyof typeof JOURNAL_COLUMNS) =>
+		sql.raw(quote(JOURNAL_COLUMNS[key]));
+	const run = async (query: ReturnType<typeof sql>) =>
+		postgres ? db.execute(query) : db.run(query);
+	const rows = async (query: ReturnType<typeof sql>) =>
+		rowsOf(await (postgres ? db.execute(query) : db.all(query)));
+	let ready: Promise<unknown> | undefined;
+	const ensure = () => {
+		ready ??= run(
+			sql.raw(
+				`CREATE TABLE IF NOT EXISTS ${table} (${Object.values(JOURNAL_COLUMNS)
+					.map((name) => `${quote(name)} text NOT NULL`)
+					.join(
+						", ",
+					)}, PRIMARY KEY (${quote(JOURNAL_COLUMNS.entity)}, ${quote(JOURNAL_COLUMNS.checksum)}))`,
+			),
+		).catch((error: unknown) => {
+			ready = undefined;
+			throw error;
+		});
+		return ready;
+	};
+	return Object.freeze({
+		async applied(entity: string, checksum: string) {
+			await ensure();
+			const found = await rows(
+				sql`SELECT 1 AS found FROM ${sql.raw(table)} WHERE ${column("entity")} = ${entity} AND ${column("checksum")} = ${checksum}`,
+			);
+			return found.length > 0;
+		},
+		async record(entry: MigrationJournalEntry) {
+			await ensure();
+			await run(
+				sql`INSERT INTO ${sql.raw(table)} (${column("entity")}, ${column("checksum")}, ${column("plan")}, ${column("appliedAt")}) VALUES (${entry.entity}, ${entry.checksum}, ${JSON.stringify(entry.plan)}, ${entry.appliedAt}) ON CONFLICT DO NOTHING`,
+			);
+		},
+	});
 }
 
 /** drizzle-kit runs the statements of a migration file split by this line. */

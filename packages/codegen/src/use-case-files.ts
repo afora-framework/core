@@ -33,6 +33,27 @@ export const GENERATED_FILES = [
 ] as const;
 
 /**
+ * The tables of a catalog provider with `tables` (`schema.ts`, or one file
+ * per dialect). Generated only for a spec that stores entities through such
+ * a provider, so a hand-written `schema.ts` of another spec stays its own
+ * (an import of it is not a `generated_file`).
+ */
+export const SCHEMA_FILES = [
+	"schema.ts",
+	"schema.sqlite.ts",
+	"schema.pg.ts",
+] as const;
+
+/** The file of the tables of `dialect`, among `dialects`, all a provider has. */
+export function schemaFileOf(
+	dialect: string,
+	dialects: readonly string[],
+): string {
+	if (dialects.length === 1) return "schema.ts";
+	return `schema.${dialect === "postgres" ? "pg" : dialect}.ts`;
+}
+
+/**
  * `text` with `-` between its words, in one pass: before a capital that
  * follows a small letter or a digit (`changePassword`, `v2Api`), and before
  * the last capital of a run when a small letter follows (`HTTPServer`).

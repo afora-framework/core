@@ -379,6 +379,8 @@ export interface IApplication<
 	 * `schemaVersion` or with a `fill` or `renamedFrom` pending, and moves the
 	 * rows stored under `previousNames`. Keys no longer declared, and the
 	 * rows of the previous names, are only removed with `destructive: true`.
+	 * A provider with a `journal` records each plan it applied, and a later
+	 * run finds it there and skips `provider.migrate` for it.
 	 * Idempotent and resumable.
 	 */
 	migrate(options: SchemaMigrationOptions): Promise<SchemaMigrationReport>;

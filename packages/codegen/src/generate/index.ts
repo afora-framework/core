@@ -13,7 +13,7 @@ import { fieldsOfDecl, orderOf } from "../graph";
 import { type Field, parseField, parseFields } from "../model";
 import { defaultMessageOf, normalizeSpec } from "../normalize";
 import { pipeKindOf } from "../output";
-import { isImportObject, parseImportRef } from "../provider";
+import { dialectsOf, isImportObject, parseImportRef } from "../provider";
 import { type Decl, type Scope, scopeOf } from "../scope";
 import { isIdentifier, isListResponseSpec, isObject } from "../spec/field";
 import {
@@ -32,6 +32,8 @@ import {
 	fileLayoutOf,
 	GENERATED_FILES,
 	isImportedEntity,
+	SCHEMA_FILES,
+	schemaFileOf,
 	useCaseFiles,
 } from "../use-case-files";
 import { validateSpec } from "../validate";
@@ -737,14 +739,23 @@ function providerDoc(value: unknown, e: Emitter, providers: Providers): Doc {
 		options?: Record<string, unknown>;
 	};
 	let factory: string;
+	let given = options;
 	if (use === "inMemory") {
 		factory = e.use("inMemoryProvider");
 	} else {
 		const entry = providers.catalog.get(use) as ProviderCatalogEntry;
 		factory = e.bind(entry.module, entry.export, providers.taken);
+		// The tables codegen generates, when it makes those of one dialect.
+		if (
+			entry.tables !== undefined &&
+			dialectsOf(entry.tables).length === 1 &&
+			!(given !== undefined && Object.hasOwn(given, "tables"))
+		) {
+			given = { ...given, tables: { import: "./schema#tables" } };
+		}
 	}
-	return options && Object.keys(options).length > 0
-		? callWithObject(factory, literal(options, imported))
+	return given && Object.keys(given).length > 0
+		? callWithObject(factory, literal(given as Json, imported))
 		: `${factory}()`;
 }
 
@@ -1580,6 +1591,81 @@ export function generate(
 		]);
 	}
 
+	// schema.ts: the tables of the catalog providers that make them, one call
+	// of their factory per entity stored through them.
+	const tablesEntryOf = (value: unknown): ProviderCatalogEntry | undefined => {
+		let provider = value;
+		if (typeof provider === "string" && isObject(spec.providers)) {
+			provider = (spec.providers as Record<string, unknown>)[provider];
+		}
+		if (!isObject(provider) || typeof provider.use !== "string") return;
+		const entry = providers.catalog.get(provider.use);
+		return entry?.tables === undefined ? undefined : entry;
+	};
+	const repositoriesDecls = order.filter((decl) => decl.kind === "repository");
+	const tableEntries = new Set<ProviderCatalogEntry>();
+	for (const value of [
+		spec.provider,
+		...Object.values(isObject(spec.providers) ? spec.providers : {}),
+		...repositoriesDecls.map((decl) => decl.spec.provider),
+	]) {
+		const entry = tablesEntryOf(value);
+		if (entry) tableEntries.add(entry);
+	}
+	for (const entry of tableEntries) {
+		const tables = entry.tables as NonNullable<ProviderCatalogEntry["tables"]>;
+		// The entities stored through it, with the indexes of their repositories.
+		const stored = new Map<string, Record<string, unknown>>();
+		for (const decl of repositoriesDecls) {
+			if (tablesEntryOf(decl.spec.provider ?? spec.provider) !== entry)
+				continue;
+			const entity = decl.spec.entity as string;
+			const indexes = isObject(decl.spec.indexes) ? decl.spec.indexes : {};
+			stored.set(entity, { ...stored.get(entity), ...indexes });
+		}
+		const dialects = dialectsOf(tables);
+		for (const dialect of dialects) {
+			const name = schemaFileOf(dialect, dialects);
+			let e = emitters.get(name);
+			if (!e) {
+				e = emitterOf(name);
+				emitters.set(name, e);
+				bodies.set(name, []);
+			}
+			const body = bodies.get(name) as Doc[];
+			const factory = e.bind(
+				tables.module ?? entry.module,
+				tables.export,
+				providers.taken,
+			);
+			const declared: (readonly [string, Doc])[] = [];
+			for (const [entity, indexes] of stored) {
+				const local = `${entity.charAt(0).toLowerCase()}${entity.slice(1)}Table`;
+				const props: (readonly [string, Doc])[] = [
+					["dialect", literal(dialect)],
+				];
+				if (Object.keys(indexes).length > 0) {
+					props.push(["indexes", literal(indexes as Json)]);
+				}
+				body.push([
+					"export const ",
+					local,
+					" = ",
+					callHuggingLast(factory, [e.ref(entity)], props),
+					";",
+				]);
+				declared.push([entity, local]);
+			}
+			body.push([
+				"/** The table of each entity, by name, for the provider. */",
+				hardline,
+				"export const tables = ",
+				objectDoc(declared),
+				";",
+			]);
+		}
+	}
+
 	const importsOf = (e: Emitter): Doc[] => {
 		const imports: [string, Doc][] = [];
 		if (e.core.size > 0)
@@ -1645,6 +1731,10 @@ export function generate(
 	for (const name of ownFiles.values()) {
 		const e = emitters.get(name) as Emitter;
 		render(name, importsOf(e), bodies.get(name) as Doc[]);
+	}
+	for (const name of SCHEMA_FILES) {
+		const e = emitters.get(name);
+		if (e) render(name, importsOf(e), bodies.get(name) as Doc[]);
 	}
 
 	// application.ts

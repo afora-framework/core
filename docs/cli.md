@@ -29,13 +29,13 @@ Problems print one per line to standard error as `path: [code] message`, then `N
 
 `--providers`, `--stages` and `--policies` give codegen the names a spec may use beyond the built-in ones. Each takes the path of a module (relative to the current directory) that exports `providers`, `stages` or `policies`, or a default export, as an array:
 
-| Flag          | Exports                                       | Built in            |
-| ------------- | --------------------------------------------- | ------------------- |
-| `--providers` | `providers`: `{ name, module, export }[]`     | `inMemory`          |
-| `--stages`    | `stages`: `{ name, module, export, kind? }[]` | `select`, `openapi` |
-| `--policies`  | `policies`: `{ name, module, export }[]`      | `publishEvents`     |
+| Flag          | Exports                                            | Built in            |
+| ------------- | -------------------------------------------------- | ------------------- |
+| `--providers` | `providers`: `{ name, module, export, tables? }[]` | `inMemory`          |
+| `--stages`    | `stages`: `{ name, module, export, kind? }[]`      | `select`, `openapi` |
+| `--policies`  | `policies`: `{ name, module, export }[]`           | `publishEvents`     |
 
-`module` is a package or a path relative to the output directory, and `export` is the factory. A module that does not export an array fails with `<path> must export <key> (or a default export): an array of { name, module, export }.` See [afora.json](afora-json.md#catalogs-providers-stages-and-event-policies).
+`module` is a package or a path relative to the output directory, and `export` is the factory. A provider with `tables` (`{ export, module?, dialect }`, as `drizzleCatalogOf` of `@afora/drizzle` gives) also has its tables generated from the entities stored through it, in `schema.ts` (one dialect) or `schema.<dialect>.ts` (several; `postgres` is `schema.pg.ts`). A module that does not export an array fails with `<path> must export <key> (or a default export): an array of { name, module, export }.` See [afora.json](afora-json.md#catalogs-providers-stages-and-event-policies).
 
 ### afora-codegen check
 

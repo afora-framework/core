@@ -23,7 +23,7 @@ import type {
 	RepositoryIndex,
 	RepositoryQuery,
 } from "./query.interface";
-import type { SchemaPlan } from "./schema.interface";
+import type { MigrationJournal, SchemaPlan } from "./schema.interface";
 
 /** Any class made by `entityOf`, or extending one, that a repository holds. */
 export type AnyRepositoryEntity = AnyRecordClass &
@@ -456,4 +456,12 @@ export interface IRepositoryProvider<Environment = unknown> {
 		plan: SchemaPlan,
 		// biome-ignore lint/suspicious/noConfusingVoidType: an `async migrate() {}` gives Promise<void>
 	): Promise<void | ProviderMigrationResult>;
+	/**
+	 * The plans `app.migrate({ mode: "apply" })` applied through this
+	 * provider. When present, a plan with changes whose checksum is recorded
+	 * for its entity is not given to `migrate` again, and a plan applied
+	 * (not deferred) is recorded once its backfill ends. Without it every
+	 * run gives the plan to `migrate`, which must then skip what is applied.
+	 */
+	readonly journal?: MigrationJournal;
 }

@@ -149,6 +149,41 @@ export interface EntityMigrationReport {
 	 * count is 0. Run `app.migrate` again once the plan is applied.
 	 */
 	readonly deferred: boolean;
+	/**
+	 * Whether the journal of the provider (`IRepositoryProvider.journal`)
+	 * had this plan as applied already: `provider.migrate` was not called
+	 * for it, and the backfill ran as usual. Always false for a provider
+	 * without a journal, in `check` and for a plan without changes.
+	 */
+	readonly alreadyApplied: boolean;
+}
+
+/**
+ * A plan `app.migrate` applied, as the journal of a provider keeps it
+ * (`IRepositoryProvider.journal`).
+ */
+export interface MigrationJournalEntry {
+	/** The entity, by its current name (`plan.entity`). */
+	readonly entity: string;
+	readonly plan: SchemaPlan;
+	/**
+	 * The SHA-256 of the plan as canonical JSON (keys sorted), in lowercase
+	 * hex: the same plan gives the same checksum on every runtime.
+	 */
+	readonly checksum: string;
+	/** When it was applied, as an ISO 8601 string. */
+	readonly appliedAt: string;
+}
+
+/**
+ * The record a provider keeps of the plans `app.migrate` applied through
+ * it (`IRepositoryProvider.journal`), so a plan is applied once.
+ */
+export interface MigrationJournal {
+	/** Whether the plan of `entity` with `checksum` was recorded. */
+	applied(entity: string, checksum: string): Promise<boolean>;
+	/** Records an applied plan; recording the same entity and checksum again changes nothing. */
+	record(entry: MigrationJournalEntry): Promise<void>;
 }
 
 /** What `app.migrate` gives. */

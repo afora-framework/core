@@ -11,21 +11,34 @@ bun add @afora/core typebox drizzle-orm @afora/drizzle
 
 ## Example
 
-`schema.ts`:
+`user.ts`, the entity:
+
+<!-- docs:code file: user.ts -->
+```ts
+import { blueprintOf, entityOf } from "@afora/core";
+
+export class User extends entityOf(
+	blueprintOf((ctx) => ({
+		name: ctx.string,
+		email: ctx.email,
+		age: ctx.optionalOf(ctx.integer),
+		address: ctx.optionalOf(blueprintOf((c) => ({ city: c.string }))),
+	})),
+	{ name: "User", unique: ["email"] },
+) {}
+```
+
+`schema.ts`, its table, derived from it (drizzle-kit reads this file as any other schema):
 
 <!-- docs:code file: schema.ts -->
 ```ts
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { drizzleTableOf } from "@afora/drizzle";
+import { User } from "./user";
 
-export const users = sqliteTable("users", {
-	id: text("id").primaryKey(),
-	createdAt: text("createdAt").notNull(),
-	updatedAt: text("updatedAt"),
-	deletedAt: text("deletedAt"),
-	name: text("name").notNull(),
-	email: text("email").notNull().unique(),
-	age: integer("age"),
-	address: text("address", { mode: "json" }),
+export const users = drizzleTableOf(User, {
+	dialect: "sqlite",
+	name: "users",
+	indexes: { byAge: { where: ["age"], orderBy: "name" } },
 });
 export const tables = { User: users };
 ```
@@ -44,25 +57,11 @@ export const db = drizzle(new Database("app.db"));
 
 <!-- docs:code file: app.ts -->
 ```ts
-import {
-	applicationOf,
-	blueprintOf,
-	entityOf,
-	repositoryOf,
-} from "@afora/core";
+import { applicationOf, repositoryOf } from "@afora/core";
 import { drizzleProvider } from "@afora/drizzle";
 import { db } from "./db";
 import { tables } from "./schema";
-
-class User extends entityOf(
-	blueprintOf((ctx) => ({
-		name: ctx.string,
-		email: ctx.email,
-		age: ctx.optionalOf(ctx.integer),
-		address: ctx.optionalOf(blueprintOf((c) => ({ city: c.string }))),
-	})),
-	{ unique: ["email"] },
-) {}
+import { User } from "./user";
 
 const provider = drizzleProvider({ db, tables });
 export const Users = repositoryOf({
@@ -105,11 +104,40 @@ await users.findPage({
 
 ## Mapping rules
 
+`drizzleTableOf(Entity, { dialect })` builds a table that follows every rule below, for `"sqlite"` or `"postgres"` from the same entity (see [Tables from entities](#tables-from-entities)). A table written by hand works too, as long as it follows them.
+
 - Column property names must equal the entity keys (`createdAt`, not `created_at`; the SQL name is free). The table needs an `id` column; `createdAt`, `updatedAt` and `deletedAt` are columns like the others, and `deletedAt` makes `withDeleted` and soft deletion work; an entity declared with `expires: { after }` also needs an `expiresAt` column. A stored key with no column throws `InvalidRepositoryDeclaration`.
 - Missing values (`undefined`) are `NULL`, so make optional keys nullable. An update replaces the whole row.
 - Nested records and lists are stored in JSON columns (`text({ mode: "json" })` on SQLite, `jsonb` on Postgres; not `json`, which has no equality). Nested entities are stored by id and loaded through `relations`. Filtering a structure compares the serialized JSON, so key order matters on SQLite.
 - Dates and timestamps: a stored date is an ISO 8601 string. Use a `text` column, or a timestamp with `{ mode: "date" }` (converted both ways; on Postgres use `withTimezone: true`). A Postgres `timestamp` in `mode: "string"` returns a non-ISO string that the entity rejects.
 - Booleans and numbers use the driver's column types (`integer({ mode: "boolean" })` on SQLite).
+
+## Tables from entities
+
+`drizzleTableOf(Entity, options)` gives the Drizzle table of an entity (`sqliteTable` or `pgTable`), so the blueprint is the one description of the data:
+
+| Key of the entity                                  | SQLite                                 | Postgres                        |
+| -------------------------------------------------- | -------------------------------------- | ------------------------------- |
+| `id` (UUID v7, `Uuid`, `Key`)                      | `text` primary key                     | `text` primary key              |
+| `id` with `Serial`                                 | `integer` primary key, `AUTOINCREMENT` | `bigint` primary key, identity  |
+| `createdAt`, `updatedAt`, `deletedAt`, `expiresAt` | `text` (`createdAt` `NOT NULL`)        | `text` (`createdAt` `NOT NULL`) |
+| `version` (`versioned: true`)                      | `integer NOT NULL`                     | `bigint NOT NULL`               |
+| a string, a date, an enum of strings               | `text`                                 | `text`                          |
+| an integer                                         | `integer`                              | `bigint` (`mode: "number"`)     |
+| a number                                           | `real`                                 | `double precision`              |
+| a boolean                                          | `integer({ mode: "boolean" })`         | `boolean`                       |
+| a nested record, a list, a variant, any JSON       | `text({ mode: "json" })`               | `jsonb`                         |
+| a nested entity                                    | the column of its id                   | the column of its id            |
+| the schema version (`schemaVersion`)               | `integer` named `schema_version`       | `bigint` named `schema_version` |
+
+A key is `NOT NULL` unless it is optional, and a unique key is `.unique()`. Each column is named as its key; the table is named after the entity in snake_case (`BlogPost`: `blog_post`) unless `name` says otherwise.
+
+- `dialect`: `"sqlite"` or `"postgres"`. The same entity gives both, for an application that runs SQLite in development and Postgres in production.
+- `indexes`: the `indexes` of the repository, each one an index named `<table>_<name in snake_case>` on its `where` keys, then its `orderBy` key (see [Indexes](#indexes)).
+- `overrides`: by key, `{ name }` for the SQL name of the derived column, or a Drizzle column of your own, for an existing database (`createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull()`). The keys of the table stay those of the entity.
+- `schemaVersionColumn`: the SQL name of the schema version column, as given to `drizzleProvider`.
+
+A key whose value is not JSON (a property of a `bigint`, say) has no column of its own: `drizzleTableOf` throws `InvalidRepositoryDeclaration` unless `overrides` gives it one, and so does an override or an index that names a key the entity does not have.
 
 ## Queries
 
@@ -120,7 +148,7 @@ await users.findPage({
 
 ## Indexes
 
-A repository's `indexes` (see [Indexes](../../docs/repositories.md#indexes)) reach the provider as `context.indexes`, and the index that serves a query as `query.index`. The provider takes them and gives the same rows: the SQL is the same, and the database picks its own index for the `WHERE` and `ORDER BY`. It does not create them, so declare the matching SQL index next to the table, with the `where` keys first and the `orderBy` key last:
+A repository's `indexes` (see [Indexes](../../docs/repositories.md#indexes)) reach the provider as `context.indexes`, and the index that serves a query as `query.index`. The provider takes them and gives the same rows: the SQL is the same, and the database picks its own index for the `WHERE` and `ORDER BY`. It does not create them: a table of `drizzleTableOf` declares them with its `indexes` option, given the same `indexes` as the repository. A table written by hand declares the matching SQL index next to it, with the `where` keys first and the `orderBy` key last:
 
 ```ts
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
@@ -182,6 +210,7 @@ export const tickets = sqliteTable("tickets", {
 - `migrations: "apply"` runs the DDL on `db`, in one transaction per entity, and `migrate` returns nothing, so `app.migrate` goes on with the backfill.
 - `migrations: { file: "drizzle/0007_afora.sql" }` writes it to that file instead, in the format of drizzle-kit (statements split by `--> statement-breakpoint`), and leaves the database alone. `migrate` then returns `{ deferred: true }`, so `app.migrate` skips the backfill of that entity: the new columns do not exist yet. Make the file a migration drizzle-kit knows with `drizzle-kit generate --custom --name=afora`, then point `file` at it; after `app.migrate` writes it, apply it with `drizzle-kit migrate`, then run `app.migrate({ mode: "apply", lock })` again: the table is up to date, so nothing is written (the file is left as it is), `migrate` returns nothing and the backfill runs.
 - The file holds one run of `app.migrate`: it calls `migrate` once per entity, so the plans of the entities of one run go to the file one after the other, and a plan for an entity the run has seen already is the start of the next run, which writes the file over instead of adding to it. A run that writes nothing leaves the file alone. Point `file` at a new path for each migration you keep (drizzle-kit records the files it applied).
+- **The journal.** With `migrations: "apply"` the provider also has a `journal`: `app.migrate` records each plan it applied (entity, the plan as JSON, its SHA-256 checksum, the time) in a table of its own, `afora_migrations`, which the provider creates with `CREATE TABLE IF NOT EXISTS` on first use, the same on SQLite and Postgres. A later run with the same plan finds it there and skips `migrate` (the report says `alreadyApplied: true`), in this process or another one over the same database. The table has a fixed shape, as it cannot migrate itself through the plans it records; leave it out of your drizzle-kit schema. With `{ file }` there is no journal: drizzle-kit keeps the history of the files it applied.
 
 The DDL comes from the Drizzle table, which already holds the new shape (update `schema.ts` first), compared with the columns the table has (`PRAGMA table_info` on SQLite, `information_schema.columns` in the current schema on Postgres):
 
@@ -221,8 +250,17 @@ so with a module of the project that re-exports it (`export { providers } from "
 }
 ```
 
-and generates `drizzleProvider({ db, tables })`. A Drizzle provider is an opaque provider: `db` and `tables` are not JSON, so `drizzleProvider` does not register a descriptor, and `extractSpec` needs an import mapping for it (`--import provider=./db.ts#provider`) instead of guessing options.
+and generates `drizzleProvider({ db, tables })`.
+
+`drizzleCatalogOf({ dialect })` gives the same entry with the tables generated from the spec too (`export const providers = drizzleCatalogOf({ dialect: "sqlite" });` in `providers.ts`). For each entity whose repository is stored through the provider, codegen writes a call of `drizzleTableOf` with the `indexes` of the repository:
+
+- with one dialect, in `schema.ts` of the output directory, which exports the tables and `tables`, by entity name; a provider without a `tables` option is given it, so `"options": { "db": { "import": "./db.ts#db" } }` is enough;
+- with both (`dialect: ["sqlite", "postgres"]`), in `schema.sqlite.ts` and `schema.pg.ts`, one for each drizzle-kit config; the provider needs a `tables` option of your own that picks the tables of the database it connects to (`afora-codegen check` says so).
+
+A spec that gives `tables` with the plain `providers` entry keeps its hand-written `schema.ts`: nothing is generated over it.
+
+A Drizzle provider is an opaque provider: `db` and `tables` are not JSON, so `drizzleProvider` does not register a descriptor, and `extractSpec` needs an import mapping for it (`--import provider=./db.ts#provider`) instead of guessing options.
 
 ## Tests
 
-`bun run test:drizzle` runs `providerContract` against in-memory `bun:sqlite` and PGlite, plus repository-level tests (relations, soft deletion, `findPage`, `findCursor`, a command with a transaction, records that expire over a Postgres timestamp).
+`bun run test:drizzle` runs `providerContract` against in-memory `bun:sqlite` and PGlite, over tables written by hand and over tables of `drizzleTableOf` (with `migrations: "apply"`, so the journal too), plus a test for each rule of `drizzleTableOf` and repository-level tests (relations, soft deletion, `findPage`, `findCursor`, a command with a transaction, records that expire over a Postgres timestamp).

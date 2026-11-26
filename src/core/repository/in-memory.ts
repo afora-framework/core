@@ -14,6 +14,10 @@ import type {
 	RepositoryContext,
 	RepositoryData,
 } from "./types/repository.interface";
+import type {
+	MigrationJournal,
+	MigrationJournalEntry,
+} from "./types/schema.interface";
 
 /**
  * The provider of `inMemoryProvider`: it runs transactions, reads by cursor,
@@ -25,9 +29,12 @@ export type InMemoryProvider = IRepositoryProvider & {
 	 * Empties the provider once no transaction is running: every table, and
 	 * the `Serial` sequences start again at 1. With `entity` (the name an
 	 * entity declares, its class name without one, or the class itself),
-	 * only the table of that entity and its sequence.
+	 * only the table of that entity and its sequence. Emptying it all also
+	 * empties its `journal`.
 	 */
 	clear(entity?: string | AnyRepositoryEntity): Promise<void>;
+	/** The plans `app.migrate` applied through it, kept in memory. */
+	readonly journal: MigrationJournal;
 	readonly capabilities: {
 		readonly transactions: true;
 		readonly keyset: true;
@@ -286,8 +293,23 @@ function scopeOf(initial: Tables, root: boolean, counters: Counters) {
 		},
 	};
 
-	// The root alone can be emptied; the provider of a transaction cannot.
+	// The root alone can be emptied and keeps the journal; the provider of a
+	// transaction cannot and has none.
 	if (root) {
+		const journal = new Map<string, MigrationJournalEntry>();
+		const journalKey = (entity: string, checksum: string) =>
+			JSON.stringify([entity, checksum]);
+		Object.defineProperty(provider, "journal", {
+			enumerable: true,
+			value: Object.freeze({
+				applied: async (entity: string, checksum: string) =>
+					journal.has(journalKey(entity, checksum)),
+				record: async (entry: MigrationJournalEntry) => {
+					const key = journalKey(entry.entity, entry.checksum);
+					if (!journal.has(key)) journal.set(key, structuredClone(entry));
+				},
+			} satisfies MigrationJournal),
+		});
 		const matches = (key: string | object, entity: string | object) =>
 			typeof entity === "string"
 				? key === entity ||
@@ -300,6 +322,7 @@ function scopeOf(initial: Tables, root: boolean, counters: Counters) {
 					if (entity === undefined) {
 						tables.clear();
 						counters.clear();
+						journal.clear();
 						return;
 					}
 					if (
@@ -340,7 +363,8 @@ function scopeOf(initial: Tables, root: boolean, counters: Counters) {
  * own; repositories given the same one share the tables of their entities.
  * Its `transaction` works on isolated snapshots: commits on success, discards
  * on rejection, runs one at a time and makes other operations wait; nested
- * transactions are savepoints.
+ * transactions are savepoints. Its `journal` keeps the plans `app.migrate`
+ * applied, in memory.
  */
 export function inMemoryProvider(): InMemoryProvider {
 	return providerOf({

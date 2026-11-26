@@ -63,6 +63,7 @@ export type {
 	ProviderKeySpec,
 	ProviderOptionSpec,
 	ProviderSpec,
+	ProviderTablesEntry,
 	RecordSpec,
 	RepositoryIndexSpec,
 	RepositorySpec,

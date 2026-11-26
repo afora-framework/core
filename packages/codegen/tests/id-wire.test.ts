@@ -59,7 +59,7 @@ describe("the wire type of an id", () => {
 			};
 			const fromOpenAPI = schemas[name]?.properties.id;
 			const fromJsonSchema = (
-				jsonSchemaOf(entity) as {
+				jsonSchemaOf(entity) as unknown as {
 					properties: { id: { type?: string } };
 				}
 			).properties.id;

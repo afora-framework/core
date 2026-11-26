@@ -267,6 +267,29 @@ export interface ProviderCatalogEntry {
 	readonly module: string;
 	/** The factory, called with the options object. */
 	readonly export: string;
+	/**
+	 * The tables the provider reads, which codegen generates from the
+	 * entities stored through it (`@afora/drizzle`'s `drizzleTableOf`).
+	 * Without it, the tables are written by hand.
+	 */
+	readonly tables?: ProviderTablesEntry;
+}
+
+/**
+ * How the tables of a catalog provider are made: one call of `export` per
+ * entity stored through the provider, `<export>(Entity, { dialect, indexes })`
+ * with the `indexes` of its repositories, in `schema.ts` for one dialect or
+ * `schema.<dialect>.ts` for each of several (`postgres`: `schema.pg.ts`).
+ * Each file exports the tables by entity name as `tables`; with one dialect,
+ * a provider without a `tables` option is given it.
+ */
+export interface ProviderTablesEntry {
+	/** The factory of a table. */
+	readonly export: string;
+	/** Where it comes from; the `module` of the provider by default. */
+	readonly module?: string;
+	/** The SQL dialect of the tables, or several (`["sqlite", "postgres"]`). */
+	readonly dialect: string | readonly string[];
 }
 
 /** A stage factory of the catalog supplied to codegen: where it comes from. */
