@@ -300,6 +300,29 @@ A repository declares its [indexes](repositories.md#indexes) and what it does wi
 
 They are generated as `indexes` and `scans` of `repositoryOf`, given by `describe()` and extracted back; normalization leaves out no indexes and `"scans": "allow"`, the default. A key that is not a key of the entity is an `unknown_index_key` issue; a sensitive `orderBy` (a sensitive key may be in `where`), an `orderBy` that is not scalar, a key listed twice, an empty or malformed index and two indexes on the same keys and order are `invalid_index`.
 
+## Parents
+
+A repository names the [parents](repositories.md#parents) of its entities as in TypeScript, by the key holding the id of the parent:
+
+```json afora:partial
+"repositories": {
+	"Courses": { "entity": "Course", "actions": ["create", "findById", "delete"] },
+	"Modules": {
+		"entity": "Module",
+		"actions": ["create"],
+		"deletion": "soft",
+		"parents": { "courseId": { "repository": "Courses", "onDelete": "cascade" } }
+	},
+	"Lessons": {
+		"entity": "Lesson",
+		"actions": ["create"],
+		"parents": { "moduleId": { "repository": "Modules", "onDelete": "restrict" } }
+	}
+}
+```
+
+They are generated as `parents` of `repositoryOf` (the parent repository is declared first), given by `describe()` and extracted back; normalization orders them by key and leaves out an empty `parents`. A malformed parent, a key that is not a key of the entity, an identity key or a key that does not hold a single value is `invalid_parents`; a repository that is not declared is `unknown_repository`; a parent whose repository, or one above it, stores the entity of the child is `parent_cycle`.
+
 ## Records that expire
 
 An entity (not a record) declares when its records expire with `expires`, generated as the [option of `entityOf`](entities.md#records-that-expire) and extracted back from `describe()`:

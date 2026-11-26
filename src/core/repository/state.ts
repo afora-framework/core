@@ -42,6 +42,18 @@ export interface RepositoryState {
 	readonly indexes: Readonly<Record<string, RepositoryIndex>>;
 	/** What it does with a query only a scan serves. */
 	readonly scans: RepositoryScans;
+	/**
+	 * Its declared parents, by the key of its entity that holds the id of the
+	 * parent: the state of the declaration of the parent repository, and what
+	 * a delete of the parent does to its entities.
+	 */
+	readonly parents: Readonly<Record<string, RepositoryParentState>>;
+	/**
+	 * The repositories that declare this one their parent, set by the
+	 * application that bound it (only on a bound state): what its `delete`
+	 * cascades to or is restricted by.
+	 */
+	children?: readonly RepositoryChild[];
 	/** The logger of the application that bound it, for `scans: "warn"`. */
 	readonly logger?: ILogger;
 	/** The runtime services of the application that bound it, in force for its calls. */
@@ -52,6 +64,22 @@ export interface RepositoryState {
 		Readonly<Record<string, unknown>>
 	>;
 	context?: RepositoryContext;
+}
+
+/** A parent of a repository, as its state holds it. */
+export interface RepositoryParentState {
+	/** The state of the declaration of the parent repository. */
+	readonly state: RepositoryState;
+	readonly onDelete: "cascade" | "restrict";
+}
+
+/** A repository that declares another its parent, as the bound state of the parent holds it. */
+export interface RepositoryChild {
+	/** The child repository, as the application bound it. */
+	readonly repository: object;
+	/** The key of its entity that holds the id of the parent. */
+	readonly key: string;
+	readonly onDelete: "cascade" | "restrict";
 }
 
 /** The getters that give the actions of a repository, which are not members of it a caller defines. */
@@ -134,6 +162,13 @@ export interface RepositoryInspection {
 	readonly environments: readonly object[];
 	/** The repository state of each related entity class; compare with `inspect(...).state`. */
 	readonly relations: readonly object[];
+	/** Its parents by key: the declaration of the parent repository (compare with `inspect(...).state`) and `onDelete`. */
+	readonly parents: Readonly<
+		Record<
+			string,
+			{ readonly repository: object; readonly onDelete: "cascade" | "restrict" }
+		>
+	>;
 	/** Identifies the declaration, shared by every repository that extends or is bound from it. */
 	readonly state: object;
 }
@@ -160,6 +195,12 @@ export function inspectRepository(
 					? environment
 					: [environment],
 		relations: [...state.relations.values()].map(declarationOf),
+		parents: Object.fromEntries(
+			Object.entries(state.parents).map(([key, parent]) => [
+				key,
+				{ repository: declarationOf(parent.state), onDelete: parent.onDelete },
+			]),
+		),
 		state: declarationOf(state),
 	};
 }
@@ -167,7 +208,8 @@ export function inspectRepository(
 /** The state a bound copy comes from, or the state itself. */
 const origins = new WeakMap<RepositoryState, RepositoryState>();
 
-function declarationOf(state: RepositoryState): RepositoryState {
+/** The state a bound copy comes from, or `state` itself: its declaration. @internal */
+export function declarationOf(state: RepositoryState): RepositoryState {
 	return origins.get(state) ?? state;
 }
 
@@ -236,6 +278,7 @@ function bindState(
 			? (instances?.get(state.provider) ?? state.provider)
 			: (provider ?? state.provider),
 		context: undefined,
+		children: undefined,
 		relations: new Map(
 			[...state.relations].map(([target, related]) => [
 				target,
@@ -470,6 +513,23 @@ export function bindRepository<Repository extends object>(
 		});
 	}
 	return Object.freeze(new Bound()) as Repository;
+}
+
+/**
+ * Gives `repository`, a repository an application bound, the repositories
+ * that declare it their parent, which its `delete` cascades to or is
+ * restricted by. Only an application calls it, on the copies it bound.
+ * @internal
+ */
+export function setRepositoryChildren(
+	repository: object,
+	children: readonly RepositoryChild[],
+): void {
+	const state = stateOf(repository);
+	if (!origins.has(state)) {
+		throw new TypeError("Expected a repository bound by an application");
+	}
+	state.children = Object.freeze([...children]);
 }
 
 /** The provider `repository` reads and writes through. @internal */

@@ -339,6 +339,18 @@ export interface RepositorySpec {
 	readonly indexes?: Readonly<Record<string, RepositoryIndexSpec>>;
 	/** What a query only a scan serves does (default `"allow"`). */
 	readonly scans?: "allow" | "warn" | "reject";
+	/**
+	 * The parents of its entities, by the key of the entity that holds the id
+	 * of the parent: the parent repository, and what its delete does to them,
+	 * e.g. `{ "moduleId": { "repository": "Modules", "onDelete": "cascade" } }`.
+	 */
+	readonly parents?: Readonly<Record<string, RepositoryParentSpec>>;
+}
+
+/** A parent of the entities of a repository: its repository, and what its delete does to them. */
+export interface RepositoryParentSpec {
+	readonly repository: string;
+	readonly onDelete: "cascade" | "restrict";
 }
 
 /** An index of a repository: the keys matched by equality, and the order. */

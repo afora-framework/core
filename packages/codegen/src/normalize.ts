@@ -159,6 +159,22 @@ function canonicalIndexes(indexes: unknown): { indexes?: unknown } {
 	return entries.length > 0 ? { indexes: Object.fromEntries(entries) } : {};
 }
 
+/** The parents of a repository, by key in order, each with its repository and onDelete; none when empty. */
+function canonicalParents(parents: unknown): { parents?: unknown } {
+	if (typeof parents !== "object" || parents === null || Array.isArray(parents))
+		return {};
+	const entries = Object.entries(parents as Record<string, unknown>)
+		.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+		.map(([key, parent]) => {
+			const { repository, onDelete } = (parent ?? {}) as {
+				repository?: unknown;
+				onDelete?: unknown;
+			};
+			return [key, { repository, onDelete }];
+		});
+	return entries.length > 0 ? { parents: Object.fromEntries(entries) } : {};
+}
+
 function canonicalRecord(
 	name: string,
 	value: Json,
@@ -601,6 +617,7 @@ export function normalizeSpec(
 								...(value.scans === "warn" || value.scans === "reject"
 									? { scans: value.scans }
 									: {}),
+								...canonicalParents(value.parents),
 							},
 						];
 					}

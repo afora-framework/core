@@ -146,7 +146,7 @@ export async function handler(_event: unknown, context: Context) {
 
 `findPage` reads the items and the total with two provider calls, so they are not an atomic snapshot unless the provider runs them in a transaction. `findBy<Key>`, `findManyBy<Key>` and `count` are queries too. By default reads leave out deleted rows when `deletion` is `"soft"`; with `"hard"` (the default) they see every row that exists, as before. `withDeleted: true` includes soft-deleted rows, and never makes a deleted entity mutable again.
 
-`create` takes an entity or the input that builds one. `delete` takes an entity or an id, calls `destroy()` (so `onDelete` is queued) and gives the entity. Entities read back are rebuilt from their stored value, with their identity, so they do not queue `onCreate` again. `update` and `delete` check that the entity they get is an instance of the repository's entity: `Posts.update(user)` throws `InvalidRepositoryEntity` (Repository layer) before the provider is called.
+`create` takes an entity or the input that builds one. `delete` takes an entity or an id, calls `destroy()` (so `onDelete` is queued) and gives the entity; in an application, it also deletes or is refused by the children of the entity (see [Parents](#parents)). Entities read back are rebuilt from their stored value, with their identity, so they do not queue `onCreate` again. `update` and `delete` check that the entity they get is an instance of the repository's entity: `Posts.update(user)` throws `InvalidRepositoryEntity` (Repository layer) before the provider is called.
 
 `repositoryOf({ entity, actions, deletion: "hard" | "soft" })` defaults to `"hard"`: deletion physically removes the stored row. With `"soft"`, deletion persists `deletedAt` through the provider's `update`. Finds and counts exclude these rows; unique values remain occupied. A relation pointing to a soft-deleted entity still loads it, deleted (`isDeleted` is true and it no longer changes): an order keeps its deleted product. Soft reads send `withDeleted: false` to the provider, and soft `delete` requires `update` instead of `remove`. `app.describe()` includes each repository's resolved `deletion` mode.
 
@@ -408,6 +408,61 @@ class Register extends useCaseOf({
 	}
 }
 ```
+
+## Parents
+
+A repository can name the parents of its entities: by the key of its entity that holds the id of the parent, the repository of the parent and what a delete of the parent does to them. Once an application registers both, the `delete` of the parent repository walks its children:
+
+```ts
+import {
+	applicationOf,
+	blueprintOf,
+	entityOf,
+	inMemoryProvider,
+	repositoryOf,
+} from "@afora/core";
+
+class Course extends entityOf(blueprintOf((ctx) => ({ title: ctx.string }))) {}
+class Module extends entityOf(
+	blueprintOf((ctx) => ({ courseId: ctx.string, title: ctx.string })),
+) {}
+class Lesson extends entityOf(
+	blueprintOf((ctx) => ({ moduleId: ctx.string, title: ctx.string })),
+) {}
+
+const Courses = repositoryOf({ entity: Course, actions: ["create", "delete"] });
+const Modules = repositoryOf({
+	entity: Module,
+	actions: ["create", "findMany"],
+	deletion: "soft",
+	parents: { courseId: { repository: Courses, onDelete: "cascade" } },
+});
+const Lessons = repositoryOf({
+	entity: Lesson,
+	actions: ["create", "findMany"],
+	parents: { moduleId: { repository: Modules, onDelete: "cascade" } },
+});
+
+const School = applicationOf({
+	name: "school",
+	provider: inMemoryProvider(),
+	entities: { Course, Module, Lesson },
+	repositories: { Courses, Modules, Lessons },
+});
+
+const course = await School.repositories.Courses.create({ title: "Algebra" });
+await School.repositories.Courses.delete(course); // its modules (soft) and their lessons (hard) go with it
+```
+
+- `onDelete: "cascade"` deletes the children with the parent, and theirs in turn, at any depth. Each child is deleted as its own repository deletes: soft-deleted (`deletedAt` set) when it declares `deletion: "soft"`, removed otherwise, whatever the parent does. A child already soft-deleted is left as it is. A child reached through two parents is deleted once, and an expired one is deleted too.
+- `onDelete: "restrict"` refuses the delete while any child is left: it throws `RepositoryDeleteRestricted` (Repository layer; an output answers it with 409), with `details.child` (the repository holding them), `details.key` and `details.id` (the parent they hold). A soft-deleted or expired child does not hold its parent back. A restriction below a cascade counts too: deleting a course whose modules cascade is refused when a module still has lessons that restrict.
+- The delete reads first and writes after: every child is read, level by level (one `findMany` with `in` for each child repository and level, `findOne` for a restriction), and every restriction checked before anything is written; then the children are deleted, the deepest first, and the parent last. The `onDelete` events of the children are queued on the parent, after its own, so a use case publishes them with it.
+- The key holding the parent is a key of the entity with a single value, the id of the parent (an `Id`, a string, an integer...), not an entity, a record or a list (an entity held as a field is a reference, stored by its id, which a delete does not follow), nor an identity key. It may be optional: an entity without a parent is no one's child.
+- The parents cannot form a cycle: a parent repository whose entity, or the entity of any repository above it, is the entity of the child throws `InvalidRepositoryDeclaration`, as do an unknown key, a key that does not hold a single value, a `repository` not made by `repositoryOf` and an `onDelete` other than `"cascade"` and `"restrict"`. A tree of one entity (a category with a `parentId`) is not covered: delete its branches in a use case written by hand.
+- The children are found through the application: its `delete` knows the registered repositories that declare it their parent, and only those. A registered child whose parent repository is not registered throws `UnregisteredRepositoryDependency`. A declaration called outside an application deletes only its own entity.
+- Within a command with `transaction: true`, the whole delete is one transaction: a failure anywhere rolls back the parent and every child. The children are then reached by the transaction of the command, so they need the provider of the parent; a child on another provider makes the command throw `InvalidCommandDeclaration` (`A transaction needs every repository to share one provider`). Without a transaction the restrictions are still checked before any write, but the writes run one after another, so a failure midway leaves the ones already done.
+- `restore` brings back only the entity it is given: the children a soft delete reached stay deleted, to be restored one by one (and a child its own repository removed for good is gone).
+- `describe()` gives the parents of each repository that declares some, `parents: { courseId: { repository: "Courses", onDelete: "cascade" } }`, so a child left out of a cascade can be seen; an `afora.json` writes them as `repositories.<Name>.parents` (see [afora.json](afora-json.md#parents)).
 
 ## Indexes
 

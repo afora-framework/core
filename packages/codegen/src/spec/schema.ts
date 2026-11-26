@@ -616,6 +616,31 @@ const RepositoryDeclaration = Type.Object(
 				},
 			),
 		),
+		parents: Type.Optional(
+			Type.Record(
+				Type.String({ pattern: KEY }),
+				Type.Object(
+					{
+						repository: Type.String({
+							pattern: NAME,
+							description: "The repository of the parent.",
+						}),
+						onDelete: Type.Union(
+							[Type.Literal("cascade"), Type.Literal("restrict")],
+							{
+								description:
+									"What the delete of the parent does to the entities: deletes them with it, hard or soft as this repository deletes (cascade), or refuses with RepositoryDeleteRestricted, a 409, while any is left (restrict).",
+							},
+						),
+					},
+					{ additionalProperties: false },
+				),
+				{
+					description:
+						"The parents of its entities, by the key of the entity holding the id of the parent (a single value, not an entity). The delete of a parent repository walks them, at any depth, once the application registers them; they cannot form a cycle.",
+				},
+			),
+		),
 	},
 	{ additionalProperties: false },
 );

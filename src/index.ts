@@ -371,6 +371,7 @@ export {
 	InvalidRepositoryQuery,
 	InvalidStoredSchemaVersion,
 	RepositoryConcurrencyConflict,
+	RepositoryDeleteRestricted,
 	RepositoryEntityNotFound,
 	RepositoryIsFrozen,
 	RepositoryUniqueViolation,
@@ -423,6 +424,7 @@ export type {
 	RepositoryFindManyBy,
 	RepositoryIncrementDeltas,
 	RepositoryIncrementOptions,
+	RepositoryParent,
 } from "./core/repository/types/repository.interface";
 export type {
 	EntityMigrationReport,

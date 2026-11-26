@@ -755,6 +755,20 @@ export interface ApplicationDescription {
 				readonly scans: RepositoryScans;
 				/** The names of the repositories of the entities its entity holds. */
 				readonly relations: readonly string[];
+				/**
+				 * Its parents, present only when it declares some: by the key of
+				 * its entity holding the id of the parent, the name of the parent
+				 * repository and what its delete does to the entities.
+				 */
+				readonly parents?: Readonly<
+					Record<
+						string,
+						{
+							readonly repository: string;
+							readonly onDelete: "cascade" | "restrict";
+						}
+					>
+				>;
 				/** The names of its `environmentDependencies`. */
 				readonly environments: readonly string[];
 				/** Its own provider, present only when it declared one; a provider of `providersOf` by its key. */

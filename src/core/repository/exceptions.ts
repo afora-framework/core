@@ -162,6 +162,32 @@ export const RepositoryConcurrencyConflict = exceptionOf({
 });
 
 /**
+ * `delete` found entities of a repository that declares the deleted entity
+ * its parent with `onDelete: "restrict"` (directly, or under a parent it
+ * cascades to), so it deleted nothing. `id` is the parent they hold,
+ * `child` the repository holding them and `key` the key holding its id;
+ * `source` is the repository whose `delete` was called. An output answers
+ * it with 409.
+ */
+export const RepositoryDeleteRestricted = exceptionOf({
+	layer: ExceptionLayers.Repository,
+	name: "RepositoryDeleteRestricted",
+	message: (
+		{
+			id,
+			child,
+			key,
+		}: {
+			readonly id: IdValue;
+			readonly child: string;
+			readonly key: string;
+		},
+		source,
+	) =>
+		`"${source}" deleted nothing: "${child}" holds entities whose "${key}" is "${id}", and it restricts the delete of their parent.`,
+});
+
+/**
  * `increment` got deltas it cannot apply: a key that is not a number in the
  * `change` list of the entity, or a value that is not a finite number. Its
  * `issues` name each, so an output answers it as invalid input.

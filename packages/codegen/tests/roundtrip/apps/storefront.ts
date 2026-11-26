@@ -20,7 +20,7 @@ import { keepAll, labeler } from "../support/stages";
 
 /**
  * A hand-written application (no codegen) with a catalog provider, soft
- * deletion, an environment, a hand-written `execute`, a `run` function and
+ * deletion, a child repository deleted with its parent, an environment, a hand-written `execute`, a `run` function and
  * outputs with a stage written by hand.
  */
 const UnknownProduct = exceptionOf({
@@ -45,6 +45,9 @@ class Product extends entityOf(
 ) {}
 class Order extends entityOf(
 	blueprintOf((ctx) => ({ product: Product, quantity: ctx.integer })),
+) {}
+class Review extends entityOf(
+	blueprintOf((ctx) => ({ productId: ctx.string, stars: ctx.integer })),
 ) {}
 
 const Settings = environmentOf(
@@ -71,6 +74,12 @@ const Orders = repositoryOf({
 	actions: ["findById", "findManyByProduct", "create"],
 	relations: [Products],
 	provider: memoryProvider({ label: "orders" }),
+});
+// Deleted with their product.
+const Reviews = repositoryOf({
+	entity: Review,
+	actions: ["create", "count"],
+	parents: { productId: { repository: Products, onDelete: "cascade" } },
 });
 
 const ProductInput = blueprintOf((ctx) => ({
@@ -195,9 +204,9 @@ export const StorefrontApp = applicationOf({
 	provider: memoryProvider({ label: "main" }),
 	properties: { Price, Status },
 	blueprints: { Dims, ProductInput },
-	entities: { Product, Order },
+	entities: { Product, Order, Review },
 	environments: { Settings },
-	repositories: { Products, Orders },
+	repositories: { Products, Orders, Reviews },
 	exceptions: { UnknownProduct },
 	useCases: { AddProduct, PlaceOrder, Sale, Echo },
 	commands: { Shop: ShopCommand, Admin },

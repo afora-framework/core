@@ -66,6 +66,7 @@ export type {
 	ProviderTablesEntry,
 	RecordSpec,
 	RepositoryIndexSpec,
+	RepositoryParentSpec,
 	RepositorySpec,
 	ResolvedSpec,
 	RouteSpec,

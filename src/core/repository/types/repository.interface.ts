@@ -297,6 +297,18 @@ export type RepositoryOf<
 // biome-ignore lint/suspicious/noExplicitAny: any repository
 export type AnyRepository = AbstractRepository<any, any, any>;
 
+/**
+ * A parent of the entities of a repository, under the key of its entity that
+ * holds the id of the parent: the repository of the parent, and what its
+ * `delete` does to them, once an application registers both: delete them
+ * with it (`"cascade"`, hard or soft as their repository deletes), or
+ * refuse with `RepositoryDeleteRestricted` while any is left (`"restrict"`).
+ */
+export interface RepositoryParent {
+	readonly repository: AnyRepository;
+	readonly onDelete: "cascade" | "restrict";
+}
+
 /** A value of an entity as a provider stores it: plain, unmasked. */
 export type RepositoryData = Readonly<Record<string, unknown>>;
 

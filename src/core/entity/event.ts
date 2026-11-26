@@ -216,6 +216,18 @@ export function pullEntityEvents<Entity extends object>(
 	return queue as EntityEvent<Entity>[];
 }
 
+/**
+ * Moves the events queued for `from` to the end of the queue of `to`, so
+ * that they are pulled with those of `to`: what a delete does with the
+ * events of the children it cascades to. @internal
+ */
+export function moveEntityEvents(from: object, to: object): void {
+	const moved = queues.get(from);
+	if (moved === undefined || moved.length === 0) return;
+	queues.delete(from);
+	queues.set(to, [...(queues.get(to) ?? []), ...moved]);
+}
+
 /** Queues the `cycle` events of `entity`; `first` puts them before those already queued, in order. */
 export function enqueueLifecycle(
 	entity: object,

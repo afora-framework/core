@@ -817,6 +817,28 @@ function repositoryDoc(decl: Decl, e: Emitter, providers: Providers): Doc {
 	if (spec.scans === "warn" || spec.scans === "reject") {
 		props.push(["scans", literal(spec.scans)]);
 	}
+	const parents = spec.parents;
+	if (
+		typeof parents === "object" &&
+		parents !== null &&
+		!Array.isArray(parents) &&
+		Object.keys(parents).length > 0
+	) {
+		props.push([
+			"parents",
+			objectDoc(
+				Object.entries(
+					parents as Record<string, { repository: string; onDelete: string }>,
+				).map(([key, parent]): [string, Doc] => [
+					key,
+					objectDoc([
+						["repository", e.ref(parent.repository)],
+						["onDelete", literal(parent.onDelete)],
+					]),
+				]),
+			),
+		]);
+	}
 	return [
 		"export const ",
 		decl.name,

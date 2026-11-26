@@ -16,7 +16,7 @@ import {
 	storeEntityVersion,
 } from "../entity/abstract-entity";
 import { isEntity, isEntityClass } from "../entity/entity";
-import { enqueueLifecycle } from "../entity/event";
+import { enqueueLifecycle, moveEntityEvents } from "../entity/event";
 import { InvalidEntitySchemaVersion } from "../entity/exceptions";
 import { isIdValue } from "../entity/id";
 import type { EntityStorageSettings } from "../entity/types/entity.interface";
@@ -41,7 +41,11 @@ import { recordNameOf } from "../record/name";
 import { withApplicationRuntime } from "../runtime-scope";
 import { rawTypeOf } from "../schema/schema";
 import { Kind } from "../symbols/kind";
-import { type ExecutionScope, ScopeKey } from "../use-case/scope";
+import {
+	type ExecutionScope,
+	ScopeKey,
+	scopedProvider,
+} from "../use-case/scope";
 import { decodeCursor, encodeCursor } from "./cursor";
 import {
 	InvalidRepositoryDeclaration,
@@ -49,6 +53,7 @@ import {
 	InvalidRepositoryIncrement,
 	InvalidRepositoryQuery,
 	RepositoryConcurrencyConflict,
+	RepositoryDeleteRestricted,
 	RepositoryEntityNotFound,
 	RepositoryIsFrozen,
 	UnstoredEntity,
@@ -68,7 +73,10 @@ import {
 	assertUnbound,
 	assertWritable,
 	contextOf,
+	declarationOf,
 	declareRepository,
+	findState,
+	type RepositoryParentState,
 	type RepositoryState,
 	stateOf,
 	states,
@@ -92,6 +100,7 @@ import type {
 	RepositoryAction,
 	RepositoryContext,
 	RepositoryData,
+	RepositoryParent,
 	RepositoryOf as RepositoryType,
 } from "./types/repository.interface";
 import {
@@ -131,6 +140,18 @@ export interface RepositorySettings<
 	 * loaded when read.
 	 */
 	readonly relations?: readonly AnyRepository[];
+	/**
+	 * The parents of its entities, by the key of its entity that holds the id
+	 * of the parent, e.g.
+	 * `{ moduleId: { repository: Modules, onDelete: "cascade" } }`. Once an
+	 * application registers both, the `delete` of the parent repository
+	 * deletes its entities with the parent (`"cascade"`, hard or soft as this
+	 * repository deletes, and on to their own children), or refuses with
+	 * `RepositoryDeleteRestricted` while any is left (`"restrict"`).
+	 */
+	readonly parents?: Readonly<
+		Partial<Record<EntityKeyOf<Entity>, RepositoryParent>>
+	>;
 	/**
 	 * Its access patterns, by name, e.g.
 	 * `{ byTypeStatus: { where: ["type", "status"], orderBy: "publishedAt" } }`:
@@ -1085,6 +1106,104 @@ const increment = writeAction(
 	},
 );
 
+/**
+ * A view of `repository` that reads and writes through the providers of
+ * `scope` (a transaction), as the repositories of a use case do.
+ */
+function viewOf(
+	repository: object,
+	scope: ExecutionScope | undefined,
+): Internal {
+	const view = Object.create(repository) as Internal;
+	if (scope !== undefined) {
+		Object.defineProperty(view, ScopeKey, { value: scope });
+		Object.defineProperty(view, "provider", {
+			value: scopedProvider(scope, stateOf(repository).provider),
+		});
+	}
+	return view;
+}
+
+/** The entities of a child repository a delete cascades to, with the view that deletes them. */
+interface Cascade {
+	readonly view: Internal;
+	readonly entities: readonly object[];
+}
+
+/**
+ * The entities the delete of the entities of `ids` (of `state`) cascades to,
+ * at any depth, parents before their children, read before anything is
+ * written. Throws `RepositoryDeleteRestricted` when a child that restricts
+ * the delete holds one of them. An entity reached twice is deleted once.
+ */
+async function cascadeOf(
+	source: string,
+	state: RepositoryState,
+	ids: readonly IdValue[],
+	scope: ExecutionScope | undefined,
+	plan: Cascade[],
+	seen: Map<RepositoryState, Set<unknown>>,
+): Promise<void> {
+	for (const child of state.children ?? []) {
+		const view = viewOf(child.repository, scope);
+		const childState = stateOf(view);
+		const query = {
+			where: { [child.key]: { in: ids } },
+			withDeleted: childState.deletion === "hard",
+		};
+		if (child.onDelete === "restrict") {
+			const held = await view.provider.findOne(view.context, {
+				...query,
+				...expiryOf(view, false),
+			});
+			if (held !== undefined) {
+				throw new RepositoryDeleteRestricted({
+					source,
+					details: {
+						id: held[child.key] as IdValue,
+						child: childState.name,
+						key: child.key,
+					},
+				});
+			}
+			continue;
+		}
+		const rows = await view.provider.findMany(view.context, {
+			...query,
+			...expiryOf(view, true),
+		});
+		const done = seen.get(childState) ?? new Set<unknown>();
+		seen.set(childState, done);
+		const fresh = rows.filter((row) => !done.has(row.id));
+		if (fresh.length === 0) continue;
+		for (const row of fresh) done.add(row.id);
+		const entities = await view.hydrateMany(fresh);
+		plan.push({ view, entities });
+		await cascadeOf(
+			source,
+			childState,
+			fresh.map((row) => row.id as IdValue),
+			scope,
+			plan,
+			seen,
+		);
+	}
+}
+
+/** Destroys `entity` and stores it so: hard or soft as the repository deletes. */
+async function deleteStored(self: Internal, entity: unknown): Promise<void> {
+	const destroyable = entity as {
+		readonly isDeleted: boolean;
+		destroy(): void;
+	};
+	if (!destroyable.isDeleted) destroyable.destroy();
+	if (stateOf(self).deletion === "soft") {
+		await writeEntity(self, entity, "delete");
+	} else {
+		await self.provider.remove(self.context, self.dataOf(entity).id as IdValue);
+	}
+}
+
 const remove = writeAction(async (self, target: unknown) => {
 	const { context } = self;
 	let entity = target;
@@ -1103,16 +1222,28 @@ const remove = writeAction(async (self, target: unknown) => {
 	}
 	const data = self.dataOf(entity);
 	// Checked before `destroy`, which would change the entity for nothing.
-	storedIdOf(self, data, "delete");
-	const destroyable = entity as {
-		readonly isDeleted: boolean;
-		destroy(): void;
-	};
-	if (!destroyable.isDeleted) destroyable.destroy();
-	if (stateOf(self).deletion === "soft") {
-		await writeEntity(self, entity, "delete");
-	} else {
-		await self.provider.remove(context, data.id as IdValue);
+	const id = storedIdOf(self, data, "delete");
+	// The children an application gave it: all read, and every restriction
+	// checked, before anything is written; then deleted, the deepest first.
+	const state = stateOf(self);
+	const plan: Cascade[] = [];
+	if (state.children !== undefined && state.children.length > 0) {
+		await cascadeOf(
+			context.name,
+			state,
+			[id],
+			(self as { [ScopeKey]?: ExecutionScope })[ScopeKey],
+			plan,
+			new Map(),
+		);
+		for (const { view, entities } of [...plan].reverse()) {
+			for (const child of entities) await deleteStored(view, child);
+		}
+	}
+	await deleteStored(self, entity);
+	// Their events go up with the entity deleted, after its own.
+	for (const { entities } of plan) {
+		for (const child of entities) moveEntityEvents(child, entity as object);
 	}
 	return entity;
 });
@@ -1319,6 +1450,107 @@ function indexesOf(
 }
 
 /**
+ * The parents of a repository of `entity` named `name`, validated: each by a
+ * key of its entity holding a single value (the id of the parent, not an
+ * entity, a record or a list), with a repository made by `repositoryOf` and
+ * `onDelete`. A parent that is, or has above it, a repository of `entity`
+ * makes a cycle, which a delete could not walk.
+ */
+function parentsOf(
+	name: string,
+	entity: AnyRepositoryEntity,
+	parents: unknown,
+): Readonly<Record<string, RepositoryParentState>> {
+	if (parents === undefined) return Object.freeze({});
+	if (
+		typeof parents !== "object" ||
+		parents === null ||
+		Array.isArray(parents)
+	) {
+		invalid(
+			name,
+			'Expected parents to be an object of { repository, onDelete } by the key holding the id of the parent, e.g. { moduleId: { repository: Modules, onDelete: "cascade" } }.',
+		);
+	}
+	const properties = entity.blueprint.properties as Readonly<
+		Record<string, BlueprintField | undefined>
+	>;
+	const identity = new Set<string>(identityKeysOf(entity));
+	const found: Record<string, RepositoryParentState> = {};
+	for (const [key, parent] of Object.entries(parents)) {
+		const field = Object.hasOwn(properties, key) ? properties[key] : undefined;
+		if (field === undefined) {
+			invalid(
+				name,
+				`The parent "${key}" is not a key of ${recordNameOf(entity)}.`,
+			);
+		}
+		if (identity.has(key)) {
+			invalid(
+				name,
+				`The parent "${key}" is an identity key; a parent is held by a key of its own.`,
+			);
+		}
+		if (
+			isBlueprintList(field) ||
+			isBlueprint(field) ||
+			isBlueprintVariant(field) ||
+			recordFieldOf(field) !== undefined
+		) {
+			invalid(
+				name,
+				`The parent "${key}" must hold the id of the parent, a single value, not an entity, a record or a list.`,
+			);
+		}
+		if (typeof parent !== "object" || parent === null) {
+			invalid(name, `Expected parents.${key} to be { repository, onDelete }.`);
+		}
+		const extra = Object.keys(parent).filter(
+			(option) => option !== "repository" && option !== "onDelete",
+		);
+		if (extra.length > 0) {
+			invalid(
+				name,
+				`parents.${key} takes repository and onDelete, not ${extra.join(", ")}.`,
+			);
+		}
+		const { repository, onDelete } = parent as {
+			readonly repository?: unknown;
+			readonly onDelete?: unknown;
+		};
+		const state = findState(repository);
+		if (state === undefined) {
+			invalid(
+				name,
+				`Expected parents.${key}.repository to be a repository made by repositoryOf.`,
+			);
+		}
+		if (onDelete !== "cascade" && onDelete !== "restrict") {
+			invalid(
+				name,
+				`Expected parents.${key}.onDelete to be "cascade" or "restrict".`,
+			);
+		}
+		const origin = declarationOf(state);
+		const above = [origin];
+		for (let index = 0; index < above.length; index++) {
+			const current = above[index] as RepositoryState;
+			if (current.entity === entity) {
+				invalid(
+					name,
+					`The parent "${key}" makes a cycle: ${current.name} holds ${recordNameOf(entity)}, the entity of this repository. A delete walks parents to children, so they cannot loop.`,
+				);
+			}
+			for (const next of Object.values(current.parents)) {
+				if (!above.includes(next.state)) above.push(next.state);
+			}
+		}
+		found[key] = Object.freeze({ state: origin, onDelete });
+	}
+	return Object.freeze(found);
+}
+
+/**
  * A repository of `entity` with the methods of `actions`: `findBy<Key>` for a
  * unique key (`id`, `options.unique`, a `unique` property), giving the entity
  * or `undefined`; `findManyBy<Key>` for any other key, giving a list;
@@ -1393,6 +1625,25 @@ export function repositoryOf<
 	}
 
 	const relations = relationsOf(name, entity, settings.relations);
+	const parents = parentsOf(name, entity, settings.parents);
+	if (
+		Object.keys(parents).length > 0 &&
+		(provider as { readonly [Kind]?: unknown })[Kind] !== "provider-slot"
+	) {
+		const needs = [
+			"findOne",
+			"findMany",
+			deletion === "soft" ? "update" : "remove",
+		] as const;
+		for (const need of needs) {
+			if (typeof provider?.[need] !== "function") {
+				invalid(
+					name,
+					`The provider has no "${need}", which a delete of its parents needs.`,
+				);
+			}
+		}
+	}
 	const indexes = indexesOf(name, entity, settings.indexes);
 	const unique = entity[EntityUniqueKeys];
 	const methods = new Map<string, readonly [string, Method]>();
@@ -1487,6 +1738,7 @@ export function repositoryOf<
 		explicitProvider: settings.provider !== undefined,
 		environment: environmentDependencies,
 		relations,
+		parents,
 		indexes,
 		scans,
 	};

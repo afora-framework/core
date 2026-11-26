@@ -71,16 +71,20 @@ import { isProperty } from "../property/is-property";
 import { type PropertyLineage, propertyLineageOf } from "../property/lineage";
 import { declaredRecordNameOf, recordNameOf } from "../record/name";
 import { pluginsOf } from "../record/plugin";
+import { RepositoryDeleteRestricted } from "../repository/exceptions";
 import { providerDescriptionOf } from "../repository/provider";
 import { assertGeneratedIds, isRepository } from "../repository/repository";
 import {
 	bindRepository,
+	findState,
 	inspectRepository,
 	markRegisteredRepository,
 	providerOfRepository,
+	type RepositoryChild,
 	type RepositoryInspection,
 	type StrictWrites,
 	StrictWritesKey,
+	setRepositoryChildren,
 	strictWritesOf,
 } from "../repository/state";
 import type { ProviderDescription } from "../repository/types/query.interface";
@@ -750,6 +754,15 @@ function validate(source: string, registry: Registry): void {
 				);
 			}
 		}
+		// The delete of a parent finds its children among the registered ones.
+		for (const [key, parent] of Object.entries(info.parents)) {
+			if (!repositories.has(parent.repository)) {
+				unregistered(
+					entry.name,
+					`the repository of its parent "${key}" (${recordNameOf((parent.repository as { entity: object }).entity)})`,
+				);
+			}
+		}
 		for (const environment of info.environments) {
 			if (!environments.has(environment)) {
 				unregistered(entry.name, "an environment");
@@ -1413,6 +1426,19 @@ function describeRegistry(
 				relations: info.relations.map(
 					(relation) => repositories.get(relation) as string,
 				),
+				...(Object.keys(info.parents).length === 0
+					? {}
+					: {
+							parents: Object.fromEntries(
+								Object.entries(info.parents).map(([key, parent]) => [
+									key,
+									{
+										repository: repositories.get(parent.repository) as string,
+										onDelete: parent.onDelete,
+									},
+								]),
+							),
+						}),
 				environments: info.environments.map(
 					(environment) => environmentRefs.get(environment) as string,
 				),
@@ -1923,8 +1949,18 @@ export function applicationOf<
 	// publishers or replacements. Repositories are bound for a provider, its
 	// own or one of `providersOf`.
 	const bindsProviders = provider !== undefined || instances.size > 0;
+	// A registered repository that declares parents: the repositories are
+	// bound, so that each parent learns its children without its declaration
+	// changing.
+	const hasParents = [...registry.repositories.values()].some(
+		(entry) =>
+			Object.keys(
+				(inspectRepository(entry.value) as RepositoryInspection).parents,
+			).length > 0,
+	);
 	const rebinds =
 		bindsProviders ||
+		hasParents ||
 		logger !== undefined ||
 		tracer !== undefined ||
 		runtime !== undefined ||
@@ -1964,7 +2000,9 @@ export function applicationOf<
 					runtime,
 					environmentsOfProviders,
 				)
-			: runtime !== undefined || environmentsOfProviders !== undefined
+			: runtime !== undefined ||
+					environmentsOfProviders !== undefined ||
+					hasParents
 				? bindRepository(
 						entry.value as object,
 						undefined,
@@ -2002,6 +2040,43 @@ export function applicationOf<
 			);
 		}
 	}
+
+	// Each parent gets the registered repositories that declare it: what its
+	// delete cascades to, or is restricted by.
+	if (hasParents) {
+		const children = new Map<object, RepositoryChild[]>();
+		for (const entry of registry.repositories.values()) {
+			const info = inspectRepository(entry.value) as RepositoryInspection;
+			for (const [key, parent] of Object.entries(info.parents)) {
+				const list = children.get(parent.repository) ?? [];
+				list.push({
+					repository: boundByState.get(entry.key) as object,
+					key,
+					onDelete: parent.onDelete,
+				});
+				children.set(parent.repository, list);
+			}
+		}
+		for (const [declaration, list] of children) {
+			setRepositoryChildren(boundByState.get(declaration) as object, list);
+		}
+	}
+	/**
+	 * Whether a delete of `repository` can be refused: a repository below it,
+	 * through those it cascades to, restricts the delete.
+	 */
+	const restrictsDelete = (
+		repository: unknown,
+		seen = new Set<unknown>(),
+	): boolean => {
+		for (const child of findState(repository)?.children ?? []) {
+			if (child.onDelete === "restrict") return true;
+			if (seen.has(child.repository)) continue;
+			seen.add(child.repository);
+			if (restrictsDelete(child.repository, seen)) return true;
+		}
+		return false;
+	};
 
 	// A use case is bound once: a subclass whose dependencies are the bound
 	// repositories and the bound use cases, never mutating the declared class.
@@ -2045,6 +2120,22 @@ export function applicationOf<
 		Object.defineProperty(Bound, "dependencies", {
 			value: Object.freeze(dependencies),
 		});
+		// A step deleting through a repository a child restricts can end in
+		// `RepositoryDeleteRestricted`: listed with its errors (an output
+		// answers it with 409).
+		if (
+			hasParents &&
+			!UseCase.errors.includes(RepositoryDeleteRestricted) &&
+			(interpretedStepsOf(UseCase) ?? []).some(
+				(step) =>
+					typeof step.delete === "string" &&
+					restrictsDelete(dependencies[step.delete]),
+			)
+		) {
+			Object.defineProperty(Bound, "errors", {
+				value: Object.freeze([...UseCase.errors, RepositoryDeleteRestricted]),
+			});
+		}
 		if (logger)
 			Object.defineProperty(Bound, ApplicationLoggerKey, { value: logger });
 		if (tracer)

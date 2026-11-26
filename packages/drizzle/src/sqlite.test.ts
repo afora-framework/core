@@ -1205,3 +1205,103 @@ describe("the migration journal", () => {
 		).toEqual([]);
 	});
 });
+
+describe("parents on SQLite", () => {
+	class Course extends entityOf(
+		blueprintOf((ctx) => ({ title: ctx.string })),
+		{
+			name: "Course",
+		},
+	) {}
+	class Module extends entityOf(
+		blueprintOf((ctx) => ({ courseId: ctx.string, title: ctx.string })),
+		{ name: "Module" },
+	) {}
+	class Lesson extends entityOf(
+		blueprintOf((ctx) => ({ moduleId: ctx.string, title: ctx.string })),
+		{ name: "Lesson" },
+	) {}
+
+	/** A course, its modules (soft) and their lessons (hard), on one database. */
+	async function school(lessons: "cascade" | "restrict") {
+		const sqlite = new Database(":memory:");
+		const tables = {
+			Course: drizzleTableOf(Course, { dialect: "sqlite" }),
+			Module: drizzleTableOf(Module, {
+				dialect: "sqlite",
+				indexes: { byCourse: { where: ["courseId"] } },
+			}),
+			Lesson: drizzleTableOf(Lesson, {
+				dialect: "sqlite",
+				indexes: { byModule: { where: ["moduleId"] } },
+			}),
+		};
+		for (const table of Object.values(tables))
+			for (const statement of createStatementsOf(table)) sqlite.run(statement);
+		const Courses = repositoryOf({
+			entity: Course,
+			actions: ["create", "findById", "delete", "count"],
+		});
+		const Modules = repositoryOf({
+			entity: Module,
+			actions: ["create", "count"],
+			deletion: "soft",
+			parents: { courseId: { repository: Courses, onDelete: "cascade" } },
+		});
+		const Lessons = repositoryOf({
+			entity: Lesson,
+			actions: ["create", "count"],
+			parents: { moduleId: { repository: Modules, onDelete: lessons } },
+		});
+		const Content = commandOf({
+			name: "Content",
+			transaction: true,
+			useCases: (ctx) => ({ deleteCourse: ctx.delete(Courses) }),
+		});
+		const app = applicationOf({
+			name: "school",
+			provider: drizzleProvider({ db: drizzle(sqlite), tables }),
+			entities: { Course, Module, Lesson },
+			repositories: { Courses, Modules, Lessons },
+			commands: { Content },
+		});
+		const repositories = app.repositories;
+		const kept = await repositories.Courses.create({ title: "kept" });
+		const course = await repositories.Courses.create({ title: "course" });
+		for (const owner of [course, course, kept]) {
+			const module = await repositories.Modules.create({
+				courseId: owner.id,
+				title: "m",
+			});
+			await repositories.Lessons.create({ moduleId: module.id, title: "a" });
+			await repositories.Lessons.create({ moduleId: module.id, title: "b" });
+		}
+		return { app, sqlite, course };
+	}
+
+	it("the standard delete cascades through three levels in one transaction", async () => {
+		const { app, sqlite, course } = await school("cascade");
+		await app.commands.Content.run("deleteCourse", { id: course.id });
+		const { Courses, Modules, Lessons } = app.repositories;
+		expect(await Courses.count()).toBe(1);
+		expect(await Modules.count()).toBe(1);
+		// Soft: the modules of the course stay, with deletedAt.
+		expect(
+			sqlite
+				.query("SELECT COUNT(*) AS n FROM module WHERE deletedAt IS NOT NULL")
+				.get(),
+		).toEqual({ n: 2 });
+		expect(await Lessons.count()).toBe(2);
+	});
+
+	it("restrict refuses with RepositoryDeleteRestricted and changes nothing", async () => {
+		const { app, course } = await school("restrict");
+		await expect(
+			app.commands.Content.run("deleteCourse", { id: course.id }),
+		).rejects.toMatchObject({ name: "RepositoryDeleteRestricted" });
+		const { Courses, Modules, Lessons } = app.repositories;
+		expect(await Courses.count()).toBe(2);
+		expect(await Modules.count()).toBe(3);
+		expect(await Lessons.count()).toBe(6);
+	});
+});

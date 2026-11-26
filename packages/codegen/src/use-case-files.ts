@@ -1,5 +1,5 @@
 import { posix } from "node:path";
-import { cyclesOf, fieldsOfDecl, typesIn } from "./graph";
+import { cyclesOf, fieldsOfDecl, parentRepositoriesOf, typesIn } from "./graph";
 import { isImportObject, parseImportRef } from "./provider";
 import type { Decl, Scope } from "./scope";
 import { isObject } from "./spec/field";
@@ -371,7 +371,7 @@ const MERGE_ORDER: readonly KindFile[] = [
 export const isImportedEntity = (decl: Decl | undefined): boolean =>
 	decl?.kind === "entity" && decl.via === undefined && isImported(decl.spec);
 
-/** The names a declaration uses: a repository its entity, relations and environments; the others the types of their fields. */
+/** The names a declaration uses: a repository its entity, relations, environments and parents; the others the types of their fields. */
 function namesUsedBy(decl: Decl): string[] {
 	if (decl.kind === "property") {
 		return typeof decl.spec.base === "string" ? [decl.spec.base] : [];
@@ -385,6 +385,7 @@ function namesUsedBy(decl: Decl): string[] {
 			...(typeof decl.spec.entity === "string" ? [decl.spec.entity] : []),
 			...list(decl.spec.relations),
 			...list(decl.spec.environments),
+			...parentRepositoriesOf(decl.spec.parents),
 		];
 	}
 	const fields = fieldsOfDecl(decl);

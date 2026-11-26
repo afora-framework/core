@@ -42,6 +42,7 @@ const CONFLICT = new Set([
 	"RepositoryUniqueViolation",
 	"RepositoryConcurrencyConflict",
 	"UseCaseEntityConflict",
+	"RepositoryDeleteRestricted",
 ]);
 
 /**
@@ -99,7 +100,8 @@ export function isDeclaredError(
  * `details.issues` is a list, except the internal ones, such as
  * `InvalidUseCaseResponse`, `InvalidUseCaseStep` and
  * `InvalidCommandEnvironment`, a 500); 404 for a missing entity or operation; 409 for
- * a unique violation, a concurrency conflict or an entity that already exists; 401 for
+ * a unique violation, a concurrency conflict, an entity that already exists
+ * or a delete its children restrict; 401 for
  * `UseCaseInvalidCredentials` and `Unauthenticated`; 403 for `Forbidden`; 422 for a class in `operation.errors`; 500 for the
  * rest, errors that are not exceptions included. Exceptions match by name,
  * or by class for `operation.errors`.

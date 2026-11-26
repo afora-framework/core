@@ -625,6 +625,18 @@ export function extractSpec(
 		...(value.scans === "warn" || value.scans === "reject"
 			? { scans: value.scans }
 			: {}),
+		...(value.parents === undefined || Object.keys(value.parents).length === 0
+			? {}
+			: {
+					parents: Object.fromEntries(
+						Object.entries(value.parents).map(
+							([key, { repository, onDelete }]) => [
+								key,
+								{ repository, onDelete },
+							],
+						),
+					),
+				}),
 	}));
 
 	const exceptions = entries(description.exceptions, (value, name) => ({
