@@ -8,7 +8,7 @@
 		"@hono/standard-validator": "^0.4.1",
 		"@hono/zod-validator": "^0.9.1",
 		"@standard-schema/utils": "^0.3.0",
-		"@tanstack/form-core": "^1.33.5",
+		"@tanstack/form-core": "^4.0.2",
 		"@trpc/server": "11",
 		"@types/bun": "^1.4.4",
 		"@types/cors": "^2.8.19",
