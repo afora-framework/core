@@ -8,9 +8,9 @@
 	},
 	"devDependencies": {
 		"@seriousme/openapi-schema-validator": "^2.12.0",
-		"@types/bun": "^1.4.4",
+		"@types/bun": "^1.4.5",
 		"drizzle-orm": "0.45.4",
-		"hono": "^4.13.18",
+		"hono": "^4.13.19",
 		"typebox": "^1.4.7"
 	}
 }
