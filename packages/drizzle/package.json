@@ -49,7 +49,7 @@
 		"test": "bun test"
 	},
 	"devDependencies": {
-		"@electric-sql/pglite": "0.5.16",
+		"@electric-sql/pglite": "0.5.17",
 		"@types/bun": "^1.4.4",
 		"drizzle-orm": "0.45.4",
 		"typebox": "^1.4.3"
